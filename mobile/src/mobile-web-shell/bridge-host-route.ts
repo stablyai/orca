@@ -10,6 +10,7 @@ import {
   ZERO_SAFE_AREA_INSETS,
   type BridgeSafeAreaInsets
 } from './bridge/bridge-safe-area-insets'
+import { BRIDGE_KEYBOARD_INSET_ACCEPT } from './bridge/bridge-keyboard-inset'
 
 /** The screen one host is serving, which is the one field of `init` that moves under a live page. */
 export type BridgeHostRoute = {
@@ -40,6 +41,10 @@ export type BridgeHostRoute = {
    * lane as a pane update: held either way, so the next `ready` carries them.
    */
   readonly publishSafeAreaInsets: (next: BridgeSafeAreaInsets, deliverable: boolean) => void
+  /** The keyboard height the next `init` carries. */
+  readonly keyboardInset: () => number
+  /** Moves the held keyboard height on the same lane as the insets, to a page that reads it. */
+  readonly publishKeyboardInset: (next: number, deliverable: boolean) => void
 }
 
 /**
@@ -65,11 +70,13 @@ export function createBridgeHostRoute(args: {
   sendInit: () => void
   onRefused: (issue: string) => void
   safeAreaInsets?: BridgeSafeAreaInsets
+  keyboardInset?: number
 }): BridgeHostRoute {
   const parsed = BridgeInitRouteSchema.safeParse(args.opened)
   let route = parsed.success && !args.refused ? parsed.data : null
   let accepts: readonly string[] = []
   let insets = args.safeAreaInsets ?? ZERO_SAFE_AREA_INSETS
+  let keyboard = args.keyboardInset ?? 0
   return {
     current: () => route,
     openIssue: () => (parsed.success ? 'unknown' : (parsed.error.issues[0]?.message ?? 'unknown')),
@@ -95,6 +102,16 @@ export function createBridgeHostRoute(args: {
       insets = next
       // Only to a page that reads them: a re-init to one that does not is a wasted frame per move.
       if (deliverable && accepts.includes(BRIDGE_SAFE_AREA_ACCEPT)) {
+        args.sendInit()
+      }
+    },
+    keyboardInset: () => keyboard,
+    publishKeyboardInset: (next, deliverable) => {
+      if (keyboard === next) {
+        return
+      }
+      keyboard = next
+      if (deliverable && accepts.includes(BRIDGE_KEYBOARD_INSET_ACCEPT)) {
         args.sendInit()
       }
     }

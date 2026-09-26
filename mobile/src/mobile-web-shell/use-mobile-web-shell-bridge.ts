@@ -62,6 +62,8 @@ export type MobileWebShellBridgeView = {
   readonly publishRoute: (route: BridgeInitRoute) => void
   /** Hands the mounted host moved safe-area insets; dropped with no host, as a route is. */
   readonly publishSafeAreaInsets: (insets: BridgeSafeAreaInsets) => void
+  /** Hands the mounted host a moved keyboard height; dropped with no host, as the insets are. */
+  readonly publishKeyboardInset: (height: number) => void
   /**
    * Hands the mounted host one Back press. False when there is no host, or when the document it
    * serves never said it takes one — the caller then leaves the key to the navigator.
@@ -86,6 +88,8 @@ export type MobileWebShellBridgeArgs = {
   route: BridgeInitRoute
   /** What the first `init` of a new host carries; later moves go through `publishSafeAreaInsets`. */
   safeAreaInsets: BridgeSafeAreaInsets
+  /** What the first `init` of a new host carries; later moves go through `publishKeyboardInset`. */
+  keyboardInset: number
   /** The route patterns the page keeps for itself; everything else comes back as `navigate`. */
   pageRoutes: readonly string[]
   pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
@@ -195,6 +199,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       sessionId,
       route: latest.route,
       safeAreaInsets: latest.safeAreaInsets,
+      keyboardInset: latest.keyboardInset,
       pageRoutes: latest.pageRoutes,
       pageRouteGrants: latest.pageRouteGrants,
       routeGrants: latest.routeGrants,
@@ -279,6 +284,15 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
         const mounted = hostRef.current
         if (mounted !== null && mounted.sessionId === sessionId) {
           mounted.host.publishSafeAreaInsets(insets)
+        }
+      },
+      [buildId, client, sessionId, snapshot]
+    ),
+    publishKeyboardInset: useCallback(
+      (height: number) => {
+        const mounted = hostRef.current
+        if (mounted !== null && mounted.sessionId === sessionId) {
+          mounted.host.publishKeyboardInset(height)
         }
       },
       [buildId, client, sessionId, snapshot]

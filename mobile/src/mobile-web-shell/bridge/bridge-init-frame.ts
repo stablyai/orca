@@ -57,6 +57,8 @@ export function createBridgeInitFrame(args: {
   pageRoutes: readonly string[]
   /** How much of the WebView sits under a system bar, for a page that pads for them itself. */
   safeAreaInsets?: BridgeSafeAreaInsets
+  /** How much of the WebView the software keyboard covers. */
+  keyboardInset?: number
   /** What each of those patterns declared, so the page can tell a hop it may keep from one it
    *  must hand back. Omitted by a shell that has none, which leaves the page on its old rule. */
   pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
@@ -94,6 +96,9 @@ export function createBridgeInitFrame(args: {
     sameSafeAreaInsets(args.safeAreaInsets, ZERO_SAFE_AREA_INSETS)
       ? {}
       : { safeAreaInsets: { ...args.safeAreaInsets } }),
+    ...(args.keyboardInset === undefined || args.keyboardInset === 0
+      ? {}
+      : { keyboardInset: args.keyboardInset }),
     pageRoutes: [...args.pageRoutes],
     // Omitted when empty for the reason `storageOversize` is: a shell that declares nothing and
     // one that declares an empty list are the same answer to the page's check.

@@ -3,6 +3,7 @@ import { BRIDGE_BACK_FRAME } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_ROUTE_UPDATE_ACCEPT } from './bridge-route-update'
 import { BRIDGE_SAFE_AREA_ACCEPT } from './bridge-safe-area-insets'
+import { BRIDGE_KEYBOARD_INSET_ACCEPT } from './bridge-keyboard-inset'
 
 /** The page asks again until the shell answers; a session has no other way to start. */
 export const BRIDGE_READY_RETRY_MIN_MS = 50
@@ -56,14 +57,20 @@ export function createBridgeInitHandshake(ask: () => void): BridgeInitHandshake 
 /**
  * What the page says on every ask, because the shell reads it off whichever `ready` it answers.
  * `accepts` is what this page build can be sent: a second `init` for the session it holds, the
- * Back frame, and insets it pads for itself. `reports` runs the other way: what a shell may wait
- * for this page to post, and the shell holds a frame over the view until it arrives.
+ * Back frame, insets it pads for itself, and the keyboard height it lifts by. `reports` runs the
+ * other way: what a shell may wait for this page to post, and the shell holds a frame over the view
+ * until it arrives.
  */
 export function createPageReadyFrame(): Extract<BridgeClientMessage, { type: 'ready' }> {
   return {
     v: BRIDGE_PROTOCOL_VERSION,
     type: 'ready',
-    accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT, BRIDGE_BACK_FRAME, BRIDGE_SAFE_AREA_ACCEPT],
+    accepts: [
+      BRIDGE_ROUTE_UPDATE_ACCEPT,
+      BRIDGE_BACK_FRAME,
+      BRIDGE_SAFE_AREA_ACCEPT,
+      BRIDGE_KEYBOARD_INSET_ACCEPT
+    ],
     reports: [BRIDGE_PAGE_PAINTED]
   }
 }

@@ -42,6 +42,8 @@ export type BridgeHost = {
   publishRoute: (next: BridgeInitRoute) => void
   /** Hands this session moved safe-area insets over the same re-sent `init` a route update takes. */
   publishSafeAreaInsets: (next: BridgeSafeAreaInsets) => void
+  /** Hands this session a moved keyboard height over the same re-sent `init`. */
+  publishKeyboardInset: (next: number) => void
   /**
    * Hands the page one Back press. False when this document never said it takes one, which is
    * every page older than the frame; the caller then leaves the key to the navigator.
@@ -87,7 +89,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       sendInit()
     },
     onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue }),
-    ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets })
+    ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
+    ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset })
   })
   let closed = false
   // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
@@ -163,6 +166,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           connection: snapshot(),
           route,
           safeAreaInsets: routes.safeAreaInsets(),
+          keyboardInset: routes.keyboardInset(),
           pageRoutes,
           ...(parsedRouteGrants?.success === true
             ? { pageRouteGrants: parsedRouteGrants.data }
@@ -336,6 +340,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishSafeAreaInsets: (next) => {
       routes.publishSafeAreaInsets(next, deliverable())
+    },
+    publishKeyboardInset: (next) => {
+      routes.publishKeyboardInset(next, deliverable())
     },
     sendBack: back.send,
     readSessionBack: back.read,

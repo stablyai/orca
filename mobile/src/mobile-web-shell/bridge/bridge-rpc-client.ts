@@ -77,6 +77,8 @@ export type BridgeRpcClient = RpcClient & {
   onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
   /** Fires when an `init` moved the safe-area insets; the value itself is on `getShellSession`. */
   onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
+  /** Fires when an `init` moved the keyboard height; the value itself is on `getShellSession`. */
+  onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
   getShellSession: () => BridgeShellSession | null
   /**
    * Asks the shell to open a screen this page does not render. False when the shell granted no
@@ -465,6 +467,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     onReady: shellSession.onReady,
     onRouteUpdate: shellSession.onRouteUpdate,
     onSafeAreaInsetsUpdate: shellSession.onSafeAreaInsetsUpdate,
+    onKeyboardInsetUpdate: shellSession.onKeyboardInsetUpdate,
     getShellSession: shellSession.current,
     clearRouteParam: (param, value) =>
       shellSession.current()?.accepts.includes(BRIDGE_ROUTE_PARAM_CLEAR) === true &&

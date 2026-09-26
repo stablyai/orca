@@ -16,6 +16,7 @@ import { BRIDGE_BACK_FRAME } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_ROUTE_UPDATE_ACCEPT } from './bridge-route-update'
 import { BRIDGE_SAFE_AREA_ACCEPT } from './bridge-safe-area-insets'
+import { BRIDGE_KEYBOARD_INSET_ACCEPT } from './bridge-keyboard-inset'
 import {
   BRIDGE_READY_RETRY_MAX_MS,
   BRIDGE_READY_RETRY_MIN_MS
@@ -49,7 +50,12 @@ describe('bridge client handshake', () => {
       {
         v: BRIDGE_PROTOCOL_VERSION,
         type: 'ready',
-        accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT, BRIDGE_BACK_FRAME, BRIDGE_SAFE_AREA_ACCEPT],
+        accepts: [
+          BRIDGE_ROUTE_UPDATE_ACCEPT,
+          BRIDGE_BACK_FRAME,
+          BRIDGE_SAFE_AREA_ACCEPT,
+          BRIDGE_KEYBOARD_INSET_ACCEPT
+        ],
         reports: [BRIDGE_PAGE_PAINTED]
       }
     ])
@@ -141,6 +147,7 @@ describe('bridge client handshake', () => {
       pageRouteGrants: null,
       // And no insets, which is the shell that reserves the bar strips outside the view.
       safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
+      keyboardInset: 0,
       // And no host and no stored keys, which is what `host-store.web.ts` then answers with.
       host: null,
       storage: {},

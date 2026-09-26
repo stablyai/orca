@@ -24,7 +24,7 @@ import type {
   MobileWebShellUpdateNotice,
   PageReadyDeclaration
 } from './mobile-web-shell-session-contract'
-import { shellPageOwnsSafeArea } from './page-document-state'
+import { shellPageOwnsSafeArea, shellPageReadsKeyboardInset } from './page-document-state'
 
 export type MobileWebShellSessionView = {
   readonly state: MobileWebShellSessionState
@@ -65,6 +65,7 @@ export type MobileWebShellSessionView = {
   /** Whether the document on screen pads for the system bars itself. Projected for the same
    *  reason as `backClaimed`. */
   readonly pageOwnsSafeArea: boolean
+  readonly pageReadsKeyboardInset: boolean
 }
 
 /**
@@ -98,6 +99,9 @@ export function useMobileWebShellSession(args: {
   const [pageOwnsSafeArea, setPageOwnsSafeArea] = useState(() =>
     shellPageOwnsSafeArea(sessionRef.current)
   )
+  const [pageReadsKeyboardInset, setPageReadsKeyboardInset] = useState(() =>
+    shellPageReadsKeyboardInset(sessionRef.current)
+  )
   const hostKey = useMemo(() => deriveHostCacheKey(hostId), [hostId])
   const startedAtRef = useRef(runtime.now())
   // Bumped by anything that invalidates work in flight; every dispatch out of an effect checks it.
@@ -122,6 +126,7 @@ export function useMobileWebShellSession(args: {
     setPageFrame(shellPageFrame(stepped.session))
     setBackClaimed(shellPageBackClaimed(stepped.session))
     setPageOwnsSafeArea(shellPageOwnsSafeArea(stepped.session))
+    setPageReadsKeyboardInset(shellPageReadsKeyboardInset(stepped.session))
     for (const effect of stepped.effects) {
       // Every effect of a step belongs to the flow that step produced, and its result carries that
       // number back, so a flow the session has since restarted reports into nothing.
@@ -315,6 +320,7 @@ export function useMobileWebShellSession(args: {
     reportPagePainted,
     reportPageBackClaim,
     backClaimed,
-    pageOwnsSafeArea
+    pageOwnsSafeArea,
+    pageReadsKeyboardInset
   }
 }

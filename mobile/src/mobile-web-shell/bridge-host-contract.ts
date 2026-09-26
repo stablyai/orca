@@ -133,6 +133,9 @@ export type BridgeHostOptions = {
   /** How much of the WebView sits under a system bar when it is drawn edge-to-edge. Zeros when
    *  absent; moved later with `publishSafeAreaInsets`. */
   safeAreaInsets?: BridgeSafeAreaInsets
+  /** How much of the WebView the software keyboard covers. 0 when absent; moved later with
+   *  `publishKeyboardInset`. */
+  keyboardInset?: number
   /**
    * This device's identity to that host, as the native screens already send it, swapped in for the
    * page's placeholder on the way out. Read at forward time rather than captured: the host outlives

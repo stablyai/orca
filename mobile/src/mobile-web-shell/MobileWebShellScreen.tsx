@@ -178,16 +178,6 @@ export function MobileWebShellScreen({
   runtime
 }: MobileWebShellScreenProps) {
   const insets = useSafeAreaInsets()
-  // The page cannot see the IME for itself: edge-to-edge makes the manifest's `adjustResize` inert,
-  // so the window never shrinks and `visualViewport` inside the WebView reads full height with the
-  // keyboard up — the session route lays its live input row out under the keys. The shell owns the
-  // window, so it takes the strip off the view and the page lays out in what is left.
-  const keyboardHeight = useKeyboardOcclusion()
-  const keyboardInset = softwareKeyboardWindowInset({
-    keyboardHeight,
-    bottomInset: insets.bottom,
-    platform: Platform.OS
-  })
   const router = useRouter()
   const navigation = useNavigation()
   const popShellStack = useShellStackPop()
@@ -208,16 +198,28 @@ export function MobileWebShellScreen({
     pageReady,
     pageFrame,
     backClaimed,
-    pageOwnsSafeArea
+    pageOwnsSafeArea,
+    pageReadsKeyboardInset
   } = useMobileWebShellSession({ hostId, routePathname: route.pathname, runtime })
   // Which mount the notice was dismissed on, not whether it was: a later refusal opens its own
   // generation under a new session id, so it is not silenced by a tap on the one before it.
   const [noticeDismissedFor, setNoticeDismissedFor] = useState<string | null>(null)
   const noticeShown =
     updateNotice !== null && state.kind === 'ready' && noticeDismissedFor !== state.sessionId
+  // The page cannot see the IME for itself: edge-to-edge makes `adjustResize` inert and the view's
+  // IME insets are zeroed, so `visualViewport` never shrinks. A page that reads the height from
+  // `init` is covered by the keyboard like a native screen; an older one gets a view ended above it.
+  const keyboardHeight = useKeyboardOcclusion()
+  const viewShortenedBy = pageReadsKeyboardInset
+    ? 0
+    : softwareKeyboardWindowInset({
+        keyboardHeight,
+        bottomInset: insets.bottom,
+        platform: Platform.OS
+      })
   const pageInsets = pageSafeAreaInsets({
     insets,
-    keyboardInset,
+    viewShortenedBy,
     topCovered: noticeShown
   })
   const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } = usePageHostSnapshot(
@@ -242,6 +244,7 @@ export function MobileWebShellScreen({
     hostId,
     route,
     safeAreaInsets: pageInsets,
+    keyboardInset: keyboardHeight,
     pageRoutes,
     pageRouteGrants,
     routeGrants,
@@ -323,6 +326,11 @@ export function MobileWebShellScreen({
   }, [publishRoute, route])
 
   usePublishedSafeAreaInsets(bridge.publishSafeAreaInsets, pageInsets)
+  // Every keyboard event, a height change while open included, so the page never holds a stale one.
+  const publishKeyboardInset = bridge.publishKeyboardInset
+  useEffect(() => {
+    publishKeyboardInset(keyboardHeight)
+  }, [publishKeyboardInset, keyboardHeight])
 
   // The navigation object rather than the router: what this takes away is this screen's own place
   // on the stack, which is a screen option, and the router has no member that says it.
@@ -373,11 +381,10 @@ export function MobileWebShellScreen({
       style={[
         styles.shellRoot,
         // Edge-to-edge like a native screen, for a page that pads for the bars itself; an older page
-        // keeps the strips. The keyboard strip stays off either way, since the page cannot see it,
-        // and the banner takes the status bar strip when it shows.
+        // keeps the strips. The banner takes the status bar strip when it shows.
         pageOwnsSafeArea
-          ? { paddingTop: noticeShown ? insets.top : 0, paddingBottom: keyboardInset }
-          : { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, keyboardInset) }
+          ? { paddingTop: noticeShown ? insets.top : 0, paddingBottom: viewShortenedBy }
+          : { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, viewShortenedBy) }
       ]}
       testID="mobile-web-shell-ready"
     >
