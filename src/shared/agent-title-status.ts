@@ -11,11 +11,11 @@ import {
   HERMES_AGENT_NAME_RE,
   QUARTER_CIRCLE_SPINNER_RE,
   STRONG_IDLE_KEYWORDS_RE,
+  STRONG_PERMISSION_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE_GLOBAL,
   containsAgentName,
   containsAgentSpinnerGlyph,
-  containsAny,
   containsQuarterCircleSpinner,
   containsLegacyAgentName,
   isClaudeManagementTitle,
@@ -237,7 +237,7 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   if (!hasLegacyAgentName && !hasDroidAgentName && !hasHermesAgentName && !hasAgyAgentName) {
     return null
   }
-  if (containsAny(title, ['action required', 'permission', 'waiting'])) {
+  if (STRONG_PERMISSION_KEYWORDS_RE.test(title)) {
     return 'permission'
   }
   // Why: boundary-aware regexes avoid cwd/path and substring false positives.
