@@ -114,9 +114,9 @@ describe('Electron Vite output contract', () => {
       'persistence/profile-state/profile-state-backup-path',
       'persistence/profile-state/profile-state-database-recovery',
       'persistence/profile-state/profile-state-domain-reader',
-      'persistence/profile-state/profile-state-export-path',
+      'persistence/profile-state/legacy-json/profile-state-export-path',
       'persistence/profile-state/profile-state-offline-settings',
-      'persistence/profile-state/profile-state-recovery',
+      'persistence/profile-state/legacy-json/profile-state-recovery',
       'persistence/profile-state/profile-state-recovery-command',
       'persistence/profile-state/profile-state-storage-classification',
       'startup/http1-compatibility-marker'

@@ -1,4 +1,3 @@
-import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
   setMigrationUnsupportedPty,
@@ -18,10 +17,9 @@ import {
 } from './store-domain-composition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { scheduleSave } from './write-scheduling'
-import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
 import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
-import { writeVersionedProfileStateExport } from '../profile-state/profile-state-versioned-export'
+import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
 import {
   beginProfileStateMaintenance,
   freezeProfileStateWrites,
@@ -74,6 +72,9 @@ export class Store {
     ) {
       throw new Error('Store initial authority state must belong to its profile-state authority')
     }
+    if (options.profileStateAuthority === undefined && options.serializedState === undefined) {
+      throw new Error('Writable Store construction requires a SQLite profile-state authority')
+    }
     const initial = options.initialAuthorityState
     const parsedState = initial?.takeParsedState?.()
     const imported = options.serializedState !== undefined
@@ -98,7 +99,7 @@ export class Store {
     } else if (options.serializedState !== undefined) {
       loaded = this.domains.loader.loadSerialized(options.serializedState)
     } else {
-      loaded = this.domains.loader.load()
+      throw new Error('Store requires an authority or a frozen serialized import')
     }
     const normalized = normalizePersistedPaneIdentityState(loaded, {
       registerAliases: !imported,
@@ -177,7 +178,7 @@ export class Store {
   }
 
   /** Publish an explicit rollback/compatibility export after flushing current state. */
-  writeProfileStateJsonExport(targetPath: string): number | undefined {
+  writeProfileStateJsonExport(targetPath: string): number {
     this.runtime.dirtyProfileStateDomains = null
     this.flushOrThrow()
     const authority = this.runtime.profileStateAuthority
@@ -188,11 +189,7 @@ export class Store {
       return authority.writeJsonExport(targetPath)
     }
 
-    const prepared = this.prepareProfileStateExport()
-    mkdirSync(dirname(targetPath), { recursive: true })
-    writeFileDurableSync(durableWriteTempPath(targetPath), targetPath, prepared.json)
-    prepared.commit()
-    return undefined
+    throw new Error('Profile state exports require a SQLite profile-state authority')
   }
 
   /** Publish the latest SQLite revision as a durable, versioned rollback export. */

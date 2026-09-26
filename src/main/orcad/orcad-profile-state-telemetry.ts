@@ -1,14 +1,13 @@
 import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
-import type { ProfileStateStoreAuthorityMode } from '../persistence/profile-state/profile-state-store-factory'
 
 /**
  * The low-cardinality profile-state selection facts that a headless host can publish safely.
  * Paths, profile IDs, and serialized state deliberately stay out of this record.
  */
 export type OrcadProfileStateAuthoritySelection = {
-  backend: 'json' | 'sqlite'
+  backend: 'sqlite'
   classification: ProfileStateStorageClassification
-  authority_mode: ProfileStateStoreAuthorityMode
+  authority_mode: 'sqlite-established'
   runtime: 'orcad'
   migrated: boolean
 }

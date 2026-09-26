@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * doc:94 pairs "return the typed `target_removed` conflict" with "record a
  * skipped-run reason". The scheduler already did both; a manual attempt used to
@@ -98,7 +99,7 @@ async function createStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
-  const store = new Store()
+  const store = createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
   const service = new AutomationService(store, { tickMs: 60_000 })
   // Manual runs arrive over the shared runtime RPC surface for every transport.
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
@@ -125,7 +126,8 @@ describe('manual run refused before dispatch', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'automation-refused-manual-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

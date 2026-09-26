@@ -1,6 +1,11 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { writeFileSync, readFileSync, rmSync, mkdtempSync, mkdirSync, existsSync } from 'node:fs'
-import type * as NodeFsPromises from 'node:fs/promises'
+import { writeFileSync, rmSync, mkdtempSync, mkdirSync, existsSync } from 'node:fs'
+import { ProfileStateSqliteAuthority } from './persistence/profile-state/profile-state-sqlite-authority'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
@@ -28,29 +33,6 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
 }))
-
-const asyncPrimaryWriteFailure = vi.hoisted(() => ({
-  error: null as Error | null,
-  targetPrefix: ''
-}))
-
-vi.mock('node:fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsPromises>()
-  return {
-    ...actual,
-    open: async (...args: Parameters<typeof actual.open>) => {
-      const target = args[0]
-      if (
-        asyncPrimaryWriteFailure.error &&
-        typeof target === 'string' &&
-        target.startsWith(asyncPrimaryWriteFailure.targetPrefix)
-      ) {
-        throw asyncPrimaryWriteFailure.error
-      }
-      return actual.open(...args)
-    }
-  }
-})
 
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
@@ -92,14 +74,11 @@ describe('Store', () => {
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
-    asyncPrimaryWriteFailure.error = null
-    asyncPrimaryWriteFailure.targetPrefix = ''
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-    asyncPrimaryWriteFailure.error = null
-    asyncPrimaryWriteFailure.targetPrefix = ''
   })
   // ── GitHub Cache ───────────────────────────────────────────────────
 
@@ -222,7 +201,7 @@ describe('Store', () => {
     // AppEnvironment — without this it points at the global fake's shared dir.
     installFakeAppEnvironment({ getPath: () => testState.dir })
     initDataPath()
-    const store = new Store({ dataFile: profileDataFile })
+    const store = createSqliteTestStore(Store, { dataFile: profileDataFile })
     store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
     const session = makeSessionWithTerminalBuffers()
     store.setWorkspaceSession({
@@ -253,7 +232,7 @@ describe('Store', () => {
     // AppEnvironment — without this it points at the global fake's shared dir.
     installFakeAppEnvironment({ getPath: () => testState.dir })
     initDataPath()
-    const store = new Store({ dataFile: profileDataFile })
+    const store = createSqliteTestStore(Store, { dataFile: profileDataFile })
 
     expect(store.readTerminalScrollbackSnapshot(ref)).toBe('legacy-scrollback')
   })
@@ -342,7 +321,8 @@ describe('Store', () => {
     })
 
     expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
-    const stillPublished = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const stillPublished = JSON.parse(readPersistedStateJson(dataFile())) as {
       workspaceSession: {
         terminalLayoutsByTabId: Record<string, { scrollbackRefsByLeafId?: Record<string, string> }>
       }
@@ -353,7 +333,7 @@ describe('Store', () => {
     ).toBe(ref)
   })
 
-  it('leaves durable JSON pointing at deleted scrollback when the replacement write fails', async () => {
+  it('leaves durable state pointing at deleted scrollback when the replacement write fails', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
     const session = makeSessionWithTerminalBuffers()
@@ -375,14 +355,17 @@ describe('Store', () => {
     }
     const snapshotPath = join(testState.dir, 'terminal-scrollback', `${ref}.bin`)
     store.flushOrThrow()
-    const durableBeforeRemoval = readFileSync(dataFile(), 'utf-8')
+    const durableBeforeRemoval = readPersistedStateJson(dataFile())
     expect(existsSync(snapshotPath)).toBe(true)
 
     const writeError = Object.assign(new Error('profile mount rejected replacement write'), {
       code: 'EIO'
     })
-    asyncPrimaryWriteFailure.error = writeError
-    asyncPrimaryWriteFailure.targetPrefix = `${dataFile()}.`
+    const failure = vi
+      .spyOn(ProfileStateSqliteAuthority.prototype, 'writeSerializedDomains')
+      .mockImplementation(() => {
+        throw writeError
+      })
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       store.setWorkspaceSession({
@@ -397,10 +380,11 @@ describe('Store', () => {
       expect(store.getWorkspaceSession().terminalLayoutsByTabId).toEqual({})
       await expect(store.flushPendingOrThrowAsync()).rejects.toBe(writeError)
     } finally {
+      failure.mockRestore()
       errors.mockRestore()
     }
 
-    expect(readFileSync(dataFile(), 'utf-8')).toBe(durableBeforeRemoval)
+    expect(readPersistedStateJson(dataFile())).toBe(durableBeforeRemoval)
     const stillPublished = JSON.parse(durableBeforeRemoval) as {
       workspaceSession: {
         terminalLayoutsByTabId: Record<string, { scrollbackRefsByLeafId?: Record<string, string> }>

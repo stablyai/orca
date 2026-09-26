@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, vi } from 'vitest'
@@ -100,10 +100,13 @@ export async function createWorkerMaintenanceFixture(
   return { ...input, store, authority, peer, readState }
 }
 
-export function createJsonMaintenanceFixture() {
+export function createSqliteMaintenanceFixture() {
   const input = paths()
-  writeFileSync(input.dataFile, JSON.stringify(buildProfileStateCutoverFixture(input.directory)))
-  const store = new Store({ dataFile: input.dataFile })
+  const authority = new ProfileStateSqliteAuthority(input.databaseFile, input.profileId)
+  authority.writeSerializedState(
+    Buffer.from(JSON.stringify(buildProfileStateCutoverFixture(input.directory)))
+  )
+  const store = new Store({ dataFile: input.dataFile, profileStateAuthority: authority })
   stores.push(store)
-  return { ...input, store }
+  return { ...input, store, authority }
 }

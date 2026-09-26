@@ -1,5 +1,10 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { readFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs'
+import { rmSync, mkdtempSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
@@ -55,7 +60,7 @@ async function createStore() {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 vi.mock('./telemetry/client', () => ({
@@ -74,7 +79,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── UI state ───────────────────────────────────────────────────────
@@ -165,7 +171,7 @@ describe('Store', () => {
       })
       vi.advanceTimersByTime(1000)
       await store.waitForPendingWrite()
-      const persistedBefore = readFileSync(dataFile(), 'utf-8')
+      const persistedBefore = readPersistedStateJson(dataFile())
       store.onUIChanged((ui) => notifications.push(ui))
 
       store.updateUI({
@@ -181,7 +187,7 @@ describe('Store', () => {
       await store.waitForPendingWrite()
 
       expect(notifications).toEqual([])
-      expect(readFileSync(dataFile(), 'utf-8')).toBe(persistedBefore)
+      expect(readPersistedStateJson(dataFile())).toBe(persistedBefore)
     } finally {
       vi.useRealTimers()
     }
@@ -193,7 +199,7 @@ describe('Store', () => {
     store.updateUI({ sidebarWidth: 321 })
     store.flush()
 
-    const raw = readFileSync(dataFile(), 'utf-8')
+    const raw = readPersistedStateJson(dataFile())
     // Compact payload: no newline-plus-indentation from JSON.stringify(_, null, 2).
     expect(raw).not.toMatch(/\n\s+"/)
     const parsed = JSON.parse(raw) as PersistedState
