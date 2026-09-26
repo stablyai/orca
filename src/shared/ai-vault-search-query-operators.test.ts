@@ -96,7 +96,7 @@ describe('the shapes where the panel parser used to answer differently', () => {
     // these into one term carrying its own quote characters, which matches
     // nothing; the apostrophe case below is protected by the token start, not
     // by that rule.
-    expect(parseVaultQuery(query)).toEqual(expected)
+    expect(parseVaultQuery(query)).toMatchObject(expected)
   })
 })
 

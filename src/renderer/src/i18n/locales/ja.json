@@ -13258,7 +13258,25 @@
             "sessionDeleteFailed": "セッションを削除できませんでした",
             "resumeInChatConflict": "別のチャットですでにこの会話が行われています。",
             "resumeInChatTranscriptMissing": "この会話の履歴を読み込めなかったため、チャットで再開できません。",
-            "resumeInChatFailed": "新規チャットでこのセッションを再開できませんでした。"
+            "resumeInChatFailed": "新規チャットでこのセッションを再開できませんでした。",
+            "askPastSessions": "過去のセッションについて質問",
+            "aiSearch": "AI 検索",
+            "aiRankedSessions": "AI がこれらのセッションを順位付けしました",
+            "aiSearchHint": "Enter で自動リネーム Agent による順位付け",
+            "searchSessionsWithAi": "セッションを AI で検索",
+            "searchingSessions": "検索中…",
+            "enterQueryToSearchWithAi": "AI でセッションを検索するにはクエリを入力してください。",
+            "searchWithAi": "AI で検索",
+            "searchingTranscripts": "トランスクリプトを検索中…",
+            "transcriptHits": "{{count}} 件のトランスクリプトヒット",
+            "searchScopeFull": "全文",
+            "searchScopeTitle": "タイトル",
+            "searchScopeSummary": "概要",
+            "searchScopeWithoutTools": "ツールなし",
+            "searchScopeUser": "ユーザー",
+            "searchScopeAssistant": "アシスタント",
+            "searchScopeErrors": "エラー",
+            "searchIn": "検索対象"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "セッションをスキャンしています",
@@ -13266,7 +13284,7 @@
             "currentWorkspaceLower": "現在のワークスペース",
             "currentWorktreeLower": "現在のワークツリー",
             "allSessionsLower": "すべてのセッション",
-            "thisScope": "This",
+            "thisScope": "この範囲",
             "allScope": "全て",
             "scope": "スコープ",
             "currentWorkspace": "現在のワークスペース",
@@ -13290,7 +13308,18 @@
             "currentProjectLower": "現在のプロジェクト",
             "project": "プロジェクト",
             "hostScopeAriaLabel": "セッション履歴のホスト: {{value0}}",
-            "host": "ホスト"
+            "host": "ホスト",
+            "updated": "更新",
+            "anyTime": "全期間",
+            "last24Hours": "過去 24 時間",
+            "last7Days": "過去 7 日間",
+            "last30Days": "過去 30 日間",
+            "wslHost": "WSL",
+            "localHost": "ローカル",
+            "searchIn": "検索対象"
+          },
+          "AiVaultSearchField": {
+            "65b6a40200": "設定 -> Git -> ソース管理 AI で Agent を選択してください。"
           },
           "AiVaultSessionDetails": {
             "updated": "更新済み",
@@ -13394,6 +13423,7 @@
             "deleteReasonNonLocalHost": "このデバイス上のセッションのみ削除できます。",
             "deleteReasonSyntheticPath": "このセッションは Orca では削除できません。",
             "deleteReasonUnsupportedAgent": "{{value0}} のセッションは Orca では削除できません。",
+            "errorRole": "エラー",
             "resumeInNewChat": "新規チャットで再開"
           },
           "AiVaultSessionDeleteDialog": {

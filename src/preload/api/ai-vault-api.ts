@@ -24,6 +24,14 @@ import type {
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
 import type { ExecutionHostId, ExecutionHostScope } from '../../shared/execution-host'
+import type {
+  AiVaultRankSessionsArgs,
+  AiVaultRankSessionsResult
+} from '../../shared/ai-vault-session-ai-query'
+import type {
+  AiVaultSearchSessionsArgs,
+  AiVaultSearchSessionsResult
+} from '../../shared/ai-vault-session-search-scope'
 
 export type AiVaultApi = {
   /** Omitted host means this host; `all` is merged by this desktop across every enumerated host. */
@@ -58,4 +66,8 @@ export type AiVaultApi = {
   deleteSession: (args: AiVaultDeleteSessionArgs) => Promise<AiVaultDeleteSessionResult>
   /** Fires when any app window regains OS focus; returns an unsubscribe. */
   onWindowFocused: (callback: () => void) => () => void
+  /** Rank currently shown Session History cards with the auto-rename branchName agent. */
+  rankSessions: (args: AiVaultRankSessionsArgs) => Promise<AiVaultRankSessionsResult>
+  /** Listed-file FTS/rg for Search-in scopes. Does not replace host-scoped searchSessions. */
+  searchListedSessions: (args: AiVaultSearchSessionsArgs) => Promise<AiVaultSearchSessionsResult>
 }

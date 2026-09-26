@@ -240,3 +240,14 @@ export function resolveSourceControlAiForOperation(
     }
   }
 }
+
+export function resolveBranchNameSourceControlAi(
+  input: Omit<ResolveSourceControlAiInput, 'operation'>
+): ResolveSourceControlAiResult {
+  // Why: auto-rename and Session History AI search must share this exact
+  // branchName resolution so a later commit-message default cannot drift them.
+  return resolveSourceControlAiForOperation({
+    ...input,
+    operation: 'branchName'
+  })
+}

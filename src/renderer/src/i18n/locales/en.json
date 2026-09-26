@@ -13414,7 +13414,25 @@
             "sessionDeleteFailed": "Couldn't delete the session",
             "resumeInChatConflict": "Another chat is already holding this conversation.",
             "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
-            "resumeInChatFailed": "Could not resume this session in a new chat."
+            "resumeInChatFailed": "Could not resume this session in a new chat.",
+            "askPastSessions": "Ask about past sessions",
+            "aiSearch": "AI search",
+            "aiRankedSessions": "AI ranked these sessions",
+            "aiSearchHint": "Press Enter to rank with the auto-rename agent",
+            "searchSessionsWithAi": "Search sessions with AI",
+            "searchingSessions": "Searching…",
+            "enterQueryToSearchWithAi": "Enter a query to search sessions with AI.",
+            "searchWithAi": "Search with AI",
+            "searchingTranscripts": "Searching transcripts…",
+            "transcriptHits": "{{count}} transcript hits",
+            "searchScopeFull": "Full text",
+            "searchScopeTitle": "Title",
+            "searchScopeSummary": "Summary",
+            "searchScopeWithoutTools": "Without tools",
+            "searchScopeUser": "User",
+            "searchScopeAssistant": "Assistant",
+            "searchScopeErrors": "Errors",
+            "searchIn": "Search in"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -13446,7 +13464,18 @@
             "currentProjectLower": "current project",
             "project": "Project",
             "hostScopeAriaLabel": "Session History host: {{value0}}",
-            "host": "Host"
+            "host": "Host",
+            "updated": "Updated",
+            "anyTime": "Any time",
+            "last24Hours": "Last 24 hours",
+            "last7Days": "Last 7 days",
+            "last30Days": "Last 30 days",
+            "wslHost": "WSL",
+            "localHost": "Local",
+            "searchIn": "Search in"
+          },
+          "AiVaultSearchField": {
+            "65b6a40200": "Pick an agent in Settings -> Git -> Source Control AI."
           },
           "AiVaultSessionDetails": {
             "originalAsk": "Original ask",

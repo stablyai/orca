@@ -47,6 +47,19 @@ export const AI_VAULT_SEARCH_SORTS = ['relevance', 'newest'] as const
 /** Order of full-text search results; the list above has its own `AiVaultSort`. */
 export type AiVaultSearchSort = (typeof AI_VAULT_SEARCH_SORTS)[number]
 export type AiVaultGroup = 'project' | 'folder' | 'agent'
+export type AiVaultTimeRange = 'all' | '24h' | '7d' | '30d'
+// Why: session records have no SSH host id; WSL vs local is all we can derive
+// cheaply from cwd/filePath (UNC mounts and scanner WSL homes).
+export type AiVaultSessionHost = 'local' | 'wsl'
+
+export type AiVaultSessionProjectRef = {
+  kind: 'repo' | 'folder' | 'unknown'
+  key: string
+  label: string
+}
+
+export const AI_VAULT_TIME_RANGES = ['all', '24h', '7d', '30d'] as const
+export const AI_VAULT_SESSION_HOSTS = ['local', 'wsl'] as const
 
 export const AI_VAULT_AGENT_LABELS = {
   claude: 'Claude',

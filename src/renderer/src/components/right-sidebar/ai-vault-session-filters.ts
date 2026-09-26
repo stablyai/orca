@@ -11,6 +11,7 @@ import {
 // repo:/path: operator values (e.g. path:"/a/My Project"), which the old
 // renderer tokenizer split on spaces.
 export type {
+  AiVaultSessionFilterOptions,
   AiVaultSessionProject,
   AiVaultSessionFilterState,
   AiVaultSessionGroup
