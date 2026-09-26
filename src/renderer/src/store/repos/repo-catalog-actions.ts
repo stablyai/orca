@@ -23,6 +23,7 @@ import {
   startLocalRepoCatalogFetch
 } from './repo-catalog-fencing'
 import {
+  dropWorktreeRowsForRemovedRepos,
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
   mergeFetchedRepoCatalog,
@@ -145,7 +146,11 @@ export function createRepoCatalogActions(
           return {
             repos: prunedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
+            ...dropWorktreeRowsForRemovedRepos(
+              reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
+              s.repos,
+              validRepoIds
+            ),
             ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(prunedRepos, s.repos)
               ? {}

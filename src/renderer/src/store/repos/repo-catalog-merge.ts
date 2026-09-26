@@ -120,6 +120,31 @@ export function reconcileReadoptedSshWorktreeState(
   }
 }
 
+// Why: a repo removed outside this window leaves only via refetch, and its rows would linger as "Unknown". Ids the store never had may still be hydrating.
+export function dropWorktreeRowsForRemovedRepos(
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>,
+  previousRepos: readonly Repo[],
+  validRepoIds: ReadonlySet<string>
+): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'> {
+  const removedRepoIds = previousRepos
+    .map((repo) => repo.id)
+    .filter(
+      (id) =>
+        !validRepoIds.has(id) &&
+        (id in state.worktreesByRepo || id in state.detectedWorktreesByRepo)
+    )
+  if (removedRepoIds.length === 0) {
+    return state
+  }
+  const worktreesByRepo = { ...state.worktreesByRepo }
+  const detectedWorktreesByRepo = { ...state.detectedWorktreesByRepo }
+  for (const id of removedRepoIds) {
+    delete worktreesByRepo[id]
+    delete detectedWorktreesByRepo[id]
+  }
+  return { worktreesByRepo, detectedWorktreesByRepo, sortEpoch: state.sortEpoch + 1 }
+}
+
 export function projectCompatibilityForReconciledRepos(
   repos: readonly Repo[],
   fetched: ProjectHostSetupProjection

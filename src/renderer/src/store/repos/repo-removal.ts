@@ -75,6 +75,31 @@ export function createRepoRemovalActions(
             )
           }
         }
+        // Why: read the repo's worktrees before removal; its repos:changed refetch can drop their rows mid-await.
+        const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
+        // A raw id can be published by two hosts. Keep the purge host-scoped for
+        // those twins so the sibling's qualified visit recency survives.
+        const knownRepoWorktrees = [
+          ...(get().worktreesByRepo[projectId] ?? []),
+          ...(get().detectedWorktreesByRepo[projectId]?.worktrees ?? [])
+        ]
+        const exactSiblingIds = new Set(
+          knownRepoWorktrees
+            .filter((worktree) => !worktreeBelongsToHost(worktree, ownerHostId))
+            .map((worktree) => worktree.id)
+        )
+        const purgeTargets = worktreeIds.map((id) =>
+          exactSiblingIds.has(id) ? { id, hostId: ownerHostId } : id
+        )
+        const localAgentContextProjectIds =
+          ownerHostId === LOCAL_EXECUTION_HOST_ID
+            ? [
+                projectId,
+                ...(get().worktreesByRepo[projectId] ?? [])
+                  .filter((worktree) => worktreeBelongsToHost(worktree, ownerHostId))
+                  .flatMap((worktree) => (worktree.projectId ? [worktree.projectId] : []))
+              ]
+            : []
         // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
         const target = getActiveRuntimeTarget(
           settingsForRepoOwner(get(), projectId, options?.hostId)
@@ -104,31 +129,6 @@ export function createRepoRemovalActions(
         const { clearRepoSlugCacheEntry } = await import('../../lib/repo-slug-index')
         clearRepoSlugCacheEntry(projectId)
 
-        // Kill PTYs for all worktrees belonging to this repo
-        const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
-        // A raw id can be published by two hosts. Keep the purge host-scoped for
-        // those twins so the sibling's qualified visit recency survives.
-        const knownRepoWorktrees = [
-          ...(get().worktreesByRepo[projectId] ?? []),
-          ...(get().detectedWorktreesByRepo[projectId]?.worktrees ?? [])
-        ]
-        const exactSiblingIds = new Set(
-          knownRepoWorktrees
-            .filter((worktree) => !worktreeBelongsToHost(worktree, ownerHostId))
-            .map((worktree) => worktree.id)
-        )
-        const purgeTargets = worktreeIds.map((id) =>
-          exactSiblingIds.has(id) ? { id, hostId: ownerHostId } : id
-        )
-        const localAgentContextProjectIds =
-          ownerHostId === LOCAL_EXECUTION_HOST_ID
-            ? [
-                projectId,
-                ...(get().worktreesByRepo[projectId] ?? [])
-                  .filter((worktree) => worktreeBelongsToHost(worktree, ownerHostId))
-                  .flatMap((worktree) => (worktree.projectId ? [worktree.projectId] : []))
-              ]
-            : []
         const killedTabIds = new Set<string>()
         if (target.kind === 'environment') {
           await Promise.allSettled(
