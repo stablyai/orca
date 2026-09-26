@@ -10,6 +10,7 @@ import {
   requestedExecutionHostScope,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
