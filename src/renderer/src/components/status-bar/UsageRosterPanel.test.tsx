@@ -172,6 +172,7 @@ describe('UsageRow', () => {
   })
 
   it('uses the same compact selection for Claude subscription windows', () => {
+    const fableResetsAt = mocks.now + 3 * 24 * 60 * 60_000 + 11 * 60 * 60_000
     const markup = renderToStaticMarkup(
       <UsageRow
         p={{
@@ -191,7 +192,7 @@ describe('UsageRow', () => {
           fableWeekly: {
             usedPercent: 75,
             windowMinutes: 10_080,
-            resetsAt: null,
+            resetsAt: fableResetsAt,
             resetDescription: null
           },
           updatedAt: 0,
@@ -208,7 +209,9 @@ describe('UsageRow', () => {
 
     expect(markup.match(/data-usage-window=/g)).toHaveLength(1)
     expect(markup).not.toContain('data-usage-bar')
-    expect(markup).toContain('Fable')
+    // Why (#13041): compact chips show remaining time like Codex/Grok, not the fixed "Fable" word.
+    expect(markup).not.toContain('Fable')
+    expect(markup).toContain('3d 11h')
     expect(markup).toContain('75%')
     expect(markup).not.toContain('25%')
     expect(markup).not.toContain('60%')
