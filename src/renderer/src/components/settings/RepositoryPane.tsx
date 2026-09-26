@@ -412,12 +412,12 @@ export function RepositoryPane({
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
       <McpConfigSection key="mcp-configs" repo={repo} />
     ) : null
-  ].filter(Boolean)
+  ].filter((section) => section !== null)
 
   return (
     <div ref={setRepositoryPaneRootRef} className="space-y-8">
       {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-8">
+        <div key={section.key} className="space-y-8">
           {index > 0 ? <Separator /> : null}
           {section}
         </div>
