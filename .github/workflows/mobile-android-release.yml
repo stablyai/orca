@@ -38,6 +38,9 @@ jobs:
     permissions:
       contents: write
 
+    outputs:
+      publish_release: ${{ steps.release.outputs.publish_release }}
+
     defaults:
       run:
         working-directory: mobile
@@ -162,4 +165,89 @@ jobs:
               --latest=false \
               --notes-file "$notes_file" \
               android/app/build/outputs/apk/release/*.apk
+          fi
+
+  # Why: desktop releases own GitHub's releases/latest, so Android needs its own
+  # fixed-URL release for README, docs and in-app download links to point at.
+  android-latest:
+    needs: android-build
+    if: needs.android-build.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+
+    # Why: serialized so each run reads the release list after the previous upload
+    # lands; versioned releases stay outside the group and run in parallel.
+    concurrency:
+      group: mobile-android-latest
+      cancel-in-progress: false
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Update rolling latest Android release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest_tag="mobile-android-latest"
+
+          # Why: publish the newest release's APK rather than this run's, so an older
+          # re-run or a queued run GitHub dropped can never leave the link stale.
+          # Paginated so no Android release is missed behind desktop ones.
+          releases="$(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq '.[] | select(.draft | not) | .tag_name'
+          )"
+          newest_tag="$(printf '%s\n' "$releases" | grep '^mobile-android-v' | sort -V | tail -1 || true)"
+          if [ -z "$newest_tag" ]; then
+            echo "::error::No published mobile-android-v* release found"
+            exit 1
+          fi
+          echo "Publishing $newest_tag as $latest_tag"
+
+          apk_dir="$RUNNER_TEMP/apk"
+          gh release download "$newest_tag" --repo "$GITHUB_REPOSITORY" --pattern '*.apk' --dir "$apk_dir"
+          shopt -s nullglob
+          apks=("$apk_dir"/*.apk)
+          if [ "${#apks[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one APK on $newest_tag, found ${#apks[@]}"
+            exit 1
+          fi
+          stable_apk="$RUNNER_TEMP/orca-android.apk"
+          cp "${apks[0]}" "$stable_apk"
+
+          # Why: only the APK is kept current; the tag and its source archives stay at first publish.
+          notes="Always the newest Orca Mobile Android APK. It is currently [$newest_tag](https://github.com/$GITHUB_REPOSITORY/releases/tag/$newest_tag); use that release for its source and changelog."
+          if gh release view "$latest_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # Why: --clobber deletes before uploading, which 404s the permanent link for the
+            # whole upload (and after a failed one). Stage under another name, then swap.
+            staged_apk="$RUNNER_TEMP/orca-android.next.apk"
+            cp "$stable_apk" "$staged_apk"
+            gh release upload "$latest_tag" --repo "$GITHUB_REPOSITORY" --clobber "$staged_apk"
+            asset_id() {
+              gh api "repos/$GITHUB_REPOSITORY/releases/tags/$latest_tag" \
+                --jq ".assets[] | select(.name == \"$1\") | .id"
+            }
+            staged_id="$(asset_id orca-android.next.apk)"
+            current_id="$(asset_id orca-android.apk)"
+            if [ -z "$staged_id" ]; then
+              echo "::error::Staged APK is missing from $latest_tag after upload"
+              exit 1
+            fi
+            if [ -n "$current_id" ]; then
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$current_id"
+            fi
+            # A failure here leaves only the staged asset; re-running the job completes the swap.
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/assets/$staged_id" \
+              -f name=orca-android.apk --silent
+            gh release edit "$latest_tag" --repo "$GITHUB_REPOSITORY" --notes "$notes"
+          else
+            gh release create "$latest_tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Orca Mobile Android (latest)" \
+              --prerelease \
+              --latest=false \
+              --notes "$notes" \
+              "$stable_apk"
           fi
