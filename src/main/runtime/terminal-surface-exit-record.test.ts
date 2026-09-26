@@ -90,8 +90,9 @@ function sessionStoreWithHostTab(ptyId?: string) {
 
 function makeRendererRuntime(
   snapshot: RuntimeMobileSessionTabsSnapshot,
-  runtimeStore: unknown = store
+  runtimeStore: typeof store = store
 ) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture stores implement every RuntimeStore member these runtime paths call; the shared fixtures are partial by design.
   const runtime = new OrcaRuntimeService(runtimeStore as never)
   const spawn = vi.fn().mockResolvedValue({ id: 'pty-runtime-spawn' })
   runtime.setPtyController({
