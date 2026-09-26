@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
+import { Suspense } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { editor } from 'monaco-editor'
 import type { OnMount } from '@monaco-editor/react'
@@ -118,11 +119,29 @@ it('keeps a retained cursor listener on the current file ID after same-path owne
   const editorInstance = mockEditor as unknown as editor.IStandaloneCodeEditor
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked mount integrations do not access Monaco, and the mouse listener is not invoked.
   const monaco = {} as Parameters<OnMount>[1]
-  const view = renderHook((next: MonacoEditorMountParams) => useMonacoEditorMount(next), {
-    initialProps: params
-  })
+  const suspendedRender = vi.fn()
+  const neverCommits = new Promise<void>(() => {})
+  const view = renderHook(
+    ({ next, suspend }: { next: MonacoEditorMountParams; suspend: boolean }) => {
+      const onMount = useMonacoEditorMount(next)
+      if (suspend) {
+        suspendedRender()
+        throw neverCommits
+      }
+      return onMount
+    },
+    {
+      initialProps: { next: params, suspend: false },
+      wrapper: ({ children }) => <Suspense fallback={null}>{children}</Suspense>
+    }
+  )
   view.result.current(editorInstance, monaco)
   expect(store.getState().editorCursorLine).toEqual({ [oldId]: 1 })
+
+  view.rerender({ next: { ...params, fileId: 'uncommitted-owner' }, suspend: true })
+  expect(suspendedRender).toHaveBeenCalled()
+  emitCursor?.({ position: { lineNumber: 7, column: 1 } })
+  expect(store.getState().editorCursorLine).toEqual({ [oldId]: 7 })
 
   const result = store.getState().reparentRestoredEditorFileOwner({
     fileId: oldId,
@@ -142,7 +161,10 @@ it('keeps a retained cursor listener on the current file ID after same-path owne
     throw new Error(`Owner migration failed: ${result.reason}`)
   }
   expect(store.getState().openFiles[0].filePath).toBe(filePath)
-  view.rerender({ ...params, fileId: result.fileId, worktreeId: 'wt-1' })
+  view.rerender({
+    next: { ...params, fileId: result.fileId, worktreeId: 'wt-1' },
+    suspend: false
+  })
   emitCursor?.({ position: { lineNumber: 42, column: 1 } })
 
   expect(store.getState().editorCursorLine).toEqual({ [result.fileId]: 42 })
