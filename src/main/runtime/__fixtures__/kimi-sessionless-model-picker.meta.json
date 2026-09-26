@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-24T21:29:54.181Z",
+  "platform": "darwin",
+  "command": ["/opt/homebrew/bin/kimi", "--model", "kimi-code/k3-256k"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Kimi Code 2.0.2; K3-256k; model picker open without changing selection",
+  "exitCode": 129
+}

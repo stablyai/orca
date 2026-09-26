@@ -102,20 +102,22 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     }
   }
 
-  // Why: the primary OSC-title signal can't fire for daemon-hosted terminals (no PTY data through the runtime), so this fallback polls the renderer-synced tab title + foreground-process quiescence; self-cancels when the OSC path fires.
+  /** Daemon-hosted leaves may have no OSC stream; rank retained text against tracked PTY identity. */
   protected isTuiIdleSatisfiedForLeaf(leaf: RuntimeLeafRecord): boolean {
+    const agent = this.getPaneAgentForTuiIdle(leaf.ptyId)
     return isTuiIdleSatisfied({
       record: leaf,
       rendererTitle: leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title ?? null,
       readPositiveBodyEvidence: () =>
         isKnownReadyPromptPreview(
-          buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+          buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview),
+          agent
         ),
       readMuseReadyBodyEvidence: () =>
         isMuseReadyPromptPreview(
           buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
         ),
-      agent: this.getPaneAgentForTuiIdle(leaf.ptyId),
+      agent,
       firstPartyStatus:
         (leaf.ptyId ? this.ptysById.get(leaf.ptyId)?.lastExplicitAgentStatus : null) ?? null,
       quiescenceMs: TUI_IDLE_QUIESCENCE_MS
@@ -192,19 +194,22 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     return live ? this.isTuiIdleSatisfiedForLeaf(live) : false
   }
 
+  /** Re-rank title notifications so retained startup text cannot override unfinished Kimi work. */
   protected isTuiIdleSatisfiedForPty(pty: RuntimePtyWorktreeRecord): boolean {
+    const agent = this.getPaneAgentForTuiIdle(pty.ptyId)
     return isTuiIdleSatisfied({
       record: pty,
       readPositiveBodyEvidence: () =>
         this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
         isKnownReadyPromptPreview(
-          buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+          buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
+          agent
         ),
       readMuseReadyBodyEvidence: () =>
         isMuseReadyPromptPreview(
           buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
         ),
-      agent: this.getPaneAgentForTuiIdle(pty.ptyId),
+      agent,
       firstPartyStatus: pty.lastExplicitAgentStatus ?? null,
       quiescenceMs: TUI_IDLE_QUIESCENCE_MS
     })

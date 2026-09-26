@@ -39,6 +39,7 @@ export type RuntimeTerminalAgentPresenceOptions = {
 export class RuntimeTerminalAgentPresence {
   constructor(private readonly deps: RuntimeTerminalAgentPresenceDependencies) {}
 
+  /** Presence is weaker than readiness; screen-based Kimi evidence still requires pane identity. */
   async isRunning(
     handle: string,
     options: RuntimeTerminalAgentPresenceOptions = {}
@@ -77,7 +78,10 @@ export class RuntimeTerminalAgentPresence {
       }
       const markerTitle = paneTitle ?? tabTitle
       const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-      if (!isOpenCodeNativeTitle(markerTitle) && isKnownReadyPromptPreview(waitText)) {
+      if (
+        !isOpenCodeNativeTitle(markerTitle) &&
+        isKnownReadyPromptPreview(waitText, trackedPty?.launchAgent ?? trackedPty?.foregroundAgent)
+      ) {
         return true
       }
       if (leaf.lastAgentStatus !== null && paneTitle === null && tabTitle === null) {
@@ -106,6 +110,7 @@ export class RuntimeTerminalAgentPresence {
     }
   }
 
+  /** For adopted PTYs, resolve process identity when retained title and body evidence is insufficient. */
   private async isPtyRunning(
     pty: RuntimePtyWorktreeRecord,
     leaf: RuntimeLeafRecord | null,
@@ -138,7 +143,10 @@ export class RuntimeTerminalAgentPresence {
       return true
     }
     const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    if (!isOpenCodeNativeTitle(markerTitle) && isKnownReadyPromptPreview(waitText)) {
+    if (
+      !isOpenCodeNativeTitle(markerTitle) &&
+      isKnownReadyPromptPreview(waitText, pty.launchAgent ?? pty.foregroundAgent)
+    ) {
       return true
     }
     if (

@@ -50,24 +50,28 @@ export class RuntimeTerminalWait {
   /** Why one helper per record kind: every satisfaction site must rank the same way,
    *  or the immediate check and the poll disagree about the same pane. */
   private ptySatisfied(pty: RuntimePtyWorktreeRecord, waitText: string): boolean {
+    const agent = this.deps.getPaneAgent(pty.ptyId)
     return isTuiIdleSatisfied({
       record: pty,
       readPositiveBodyEvidence: () =>
-        this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' || isKnownReadyPromptPreview(waitText),
+        this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
+        isKnownReadyPromptPreview(waitText, agent),
       readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText),
-      agent: this.deps.getPaneAgent(pty.ptyId),
+      agent,
       firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
       quiescenceMs: this.deps.quiescenceMs
     })
   }
 
+  /** Renderer leaves use the tracked PTY's identity and status, not a banner-derived agent name. */
   private leafSatisfied(leaf: RuntimeLeafRecord, waitText: string): boolean {
+    const agent = this.deps.getPaneAgent(leaf.ptyId)
     return isTuiIdleSatisfied({
       record: leaf,
       rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
-      readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText),
+      readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText, agent),
       readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText),
-      agent: this.deps.getPaneAgent(leaf.ptyId),
+      agent,
       firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
       quiescenceMs: this.deps.quiescenceMs
     })

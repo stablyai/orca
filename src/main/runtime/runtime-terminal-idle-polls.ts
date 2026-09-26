@@ -128,7 +128,7 @@ export class RuntimeTerminalIdlePolls {
         isTuiIdleSatisfied({
           record: leaf,
           rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
-          readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText),
+          readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText, agent),
           readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText),
           agent,
           firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
@@ -196,7 +196,7 @@ export class RuntimeTerminalIdlePolls {
           record: pty,
           readPositiveBodyEvidence: () =>
             this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
-            isKnownReadyPromptPreview(waitText),
+            isKnownReadyPromptPreview(waitText, agent),
           readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText),
           agent,
           firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
