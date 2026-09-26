@@ -1,4 +1,5 @@
 import { isClaudeLaunchCommand } from './host-env/fresh-spawn-routing'
+import { claudePinnedLaunchError } from '../../../shared/claude/claude-pinned-launch-error'
 import { markClaudePtySpawned } from '../../claude-accounts/live-pty-gate'
 import {
   markPinnedClaudePtySpawned,
@@ -51,7 +52,10 @@ export async function preparePinnableClaudeAuth(
     claudeAuth.provenance !== `managed:${pinnedAccountId}:pinned` &&
     claudeAuth.provenance !== `managed:${pinnedAccountId}`
   ) {
-    throw new Error(
+    // Why: the caller never sees this preparation, so its spawn finally cannot release the hold.
+    releasePinnedClaudeReservation(claudeAuth)
+    throw claudePinnedLaunchError(
+      'provenance',
       'Orca could not prepare the requested Claude account for this launch. Check `orca account list` and retry.'
     )
   }

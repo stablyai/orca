@@ -108,6 +108,19 @@ describe('preparePinnableClaudeAuth', () => {
     await expect(preparePinnableClaudeAuth(prepare, {}, 'acct-1')).rejects.toThrow(
       'Orca could not prepare the requested Claude account for this launch. Check `orca account list` and retry.'
     )
+    expect(mocks.releaseClaudePinnedAccountReservation).not.toHaveBeenCalled()
+  })
+
+  it('releases the reservation of a mismatched pinned preparation before refusing', async () => {
+    const prepare = vi
+      .fn()
+      .mockResolvedValue(
+        makeAuth({ provenance: 'managed:acct-2:pinned', pinnedAccountId: 'acct-2' })
+      )
+    await expect(preparePinnableClaudeAuth(prepare, {}, 'acct-1')).rejects.toThrow(
+      '[claude_pinned:provenance]'
+    )
+    expect(mocks.releaseClaudePinnedAccountReservation).toHaveBeenCalledWith('acct-2')
   })
 })
 

@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { claudePinnedLaunchError } from '../../../shared/claude/claude-pinned-launch-error'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import {
   countClaudePinnedAccountUsers,
@@ -54,7 +55,10 @@ export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationS
     ) {
       // Why: a switch to it finished during the wait; pinning it now would put one refresh
       // token in two stores, and the retry takes the normal path.
-      throw new Error('That Claude account just became the active account. Retry the launch.')
+      throw claudePinnedLaunchError(
+        'became-active',
+        'That Claude account just became the active account. Retry the launch.'
+      )
     }
     if (account.managedAuthRuntime === 'wsl') {
       throw new Error(
@@ -63,7 +67,8 @@ export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationS
     }
     const configDir = await this.getOwnedManagedAuthPath(account)
     if (!configDir) {
-      throw new Error(
+      throw claudePinnedLaunchError(
+        'credentials',
         `Orca cannot verify the saved sign-in for Claude account ${account.email}. Re-authenticate it in Settings > Accounts, then retry.`
       )
     }
@@ -72,7 +77,8 @@ export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationS
     }
     const credentialsJson = await this.readManagedCredentials(account)
     if (!credentialsJson || !this.isValidCredentialsJsonObject(credentialsJson)) {
-      throw new Error(
+      throw claudePinnedLaunchError(
+        'credentials',
         `Claude account ${account.email} has no valid saved sign-in. Re-authenticate it in Settings > Accounts, then retry.`
       )
     }
@@ -109,7 +115,10 @@ export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationS
   protected requireClaudeAccountForLaunch(accountId: string): ClaudeManagedAccount {
     const account = this.getActiveAccount(this.store.getSettings().claudeManagedAccounts, accountId)
     if (!account) {
-      throw new Error('That Claude account no longer exists. Run `orca account list` and retry.')
+      throw claudePinnedLaunchError(
+        'account-missing',
+        'That Claude account no longer exists. Run `orca account list` and retry.'
+      )
     }
     return account
   }
@@ -131,18 +140,23 @@ export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationS
       if (conflict === 'host-sessions') {
         const account = this.requireClaudeAccountForLaunch(accountId)
         const sessions = countHostClaudePtysForAccount(accountId)
-        throw new Error(
+        throw claudePinnedLaunchError(
+          'host-sessions',
           `Account ${account.email} still has ${sessions === 1 ? '1 Claude terminal' : `${sessions} Claude terminals`} started while it was the active account; close ${sessions === 1 ? 'it' : 'them'} before launching it with --account.`
         )
       }
       if (conflict === 'host-mutation') {
-        throw new Error(
+        throw claudePinnedLaunchError(
+          'host-mutation',
           'That Claude account is being switched to or removed. Retry once that finishes.'
         )
       }
       const remainingMs = deadline - Date.now()
       if (remainingMs <= 0 || !(await whenClaudeAccountUsageFetchSettles(accountId, remainingMs))) {
-        throw new Error('Orca is still checking usage for that Claude account. Retry in a moment.')
+        throw claudePinnedLaunchError(
+          'usage-fetch',
+          'Orca is still checking usage for that Claude account. Retry in a moment.'
+        )
       }
     }
   }
