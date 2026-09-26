@@ -58,7 +58,8 @@ describe('review acknowledgement summary', () => {
     const replaces = replace.mock.calls.length
     const splits = split.mock.calls.length
     expect(actual).toBe('comment — Heading')
-    expect(replaces).toBe(3)
+    // Why: three normalization passes plus the mention/reference neutralization pass.
+    expect(replaces).toBe(4)
     expect(splits).toBe(0)
   })
 })
