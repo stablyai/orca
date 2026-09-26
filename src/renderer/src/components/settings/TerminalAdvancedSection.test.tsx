@@ -3,11 +3,17 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, defaultValue: string) => defaultValue
+}))
+
+vi.mock('../../store', () => ({
+  useAppStore: (selector: (state: { settingsSearchQuery: string }) => unknown) =>
+    selector({ settingsSearchQuery: '' })
 }))
 
 describe('TerminalAdvancedSection scrollback rows', () => {
@@ -30,7 +36,11 @@ describe('TerminalAdvancedSection scrollback rows', () => {
     act(() => {
       root.render(
         <TerminalAdvancedSection
-          settings={{ terminalScrollbackRows: 5000 } as GlobalSettings}
+          settings={{
+            ...getDefaultSettings('/tmp'),
+            terminalScrollbackRows: 5000,
+            terminalScopeHistoryByWorktree: true
+          }}
           updateSettings={updateSettings}
           scrollbackMode="custom"
           setScrollbackMode={vi.fn()}
@@ -102,5 +112,19 @@ describe('TerminalAdvancedSection scrollback rows', () => {
 
     expect(updateSettings).toHaveBeenCalledWith({ terminalScrollbackRows: 12345 })
     expect(input.value).toBe('12345')
+  })
+
+  it('keeps shell history as a row inside Advanced', () => {
+    renderSection()
+
+    const headings = Array.from(container.querySelectorAll('h3')).map(
+      (heading) => heading.textContent
+    )
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Scope bash, zsh, and fish history by workspace"]'
+    )
+
+    expect(headings).toEqual(['Advanced'])
+    expect(toggle?.closest('section')?.querySelector('h3')?.textContent).toBe('Advanced')
   })
 })

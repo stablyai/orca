@@ -10615,6 +10615,26 @@
               "713c4a2f92": "为 Windows 上的新终端窗格选择默认 Shell。",
               "13715f9d23": "默认 Shell"
             }
+          },
+          "history": {
+            "scopeTitle": "按工作区隔离 bash、zsh 和 fish 历史记录",
+            "scopeDescription": "按工作区分别保存 bash、zsh 和 fish 的命令历史记录。PowerShell 和命令提示符不受影响。更改将应用于新的终端会话。",
+            "search": {
+              "shell": "Shell",
+              "history": "历史记录",
+              "workspace": "工作区",
+              "worktree": "工作树",
+              "reverseSearch": "反向搜索",
+              "autosuggestions": "自动建议",
+              "shared": "共享",
+              "isolated": "隔离",
+              "arrowUp": "上箭头键",
+              "ctrlR": "Ctrl+R",
+              "histfile": "HISTFILE",
+              "zsh": "zsh",
+              "bash": "bash",
+              "fish": "fish"
+            }
           }
         },
         "voice": {
