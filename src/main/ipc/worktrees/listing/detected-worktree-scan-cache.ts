@@ -299,7 +299,7 @@ export function rememberLocalWorktreeRoots(
     return
   }
   // Why: reuse the `git worktree list` result so later git/file IPC validation skips a second scan that can trigger macOS folder-permission prompts.
-  registerWorktreeRootsForRepo(store, repo.id, [
+  registerWorktreeRootsForRepo(store, repo, [
     repo.path,
     ...gitWorktrees.map((worktree) => worktree.path)
   ])
