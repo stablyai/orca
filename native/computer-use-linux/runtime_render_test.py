@@ -98,6 +98,7 @@ class FakeAccessible:
 
 class FailingChildrenAccessible(FakeAccessible):
     def get_child_count(self):
+        self.counter["child_reads"] += 1
         raise RuntimeError("defunct node")
 
 
@@ -168,6 +169,7 @@ class RuntimeRenderTest(unittest.TestCase):
         self.assertEqual([item["name"] for item in records], ["Save"])
         self.assertEqual(lines, ["0 button Save"])
         self.assertFalse(truncation["truncated"])
+        self.assertEqual(root.counter["child_reads"], 0)
 
     def test_named_generic_node_skips_unused_summary_walk(self):
         root = FakeAccessible("section", "Details", children=[FakeAccessible("text", "body")])
