@@ -33,11 +33,6 @@ const WRITES: AgentSessionWriteKind[] = [
   'goal'
 ]
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
-const FAILURES: AgentSessionWriteFailure[] = [
-  ...AGENT_SESSION_WIRE_REFUSAL_CODES.map((code) => ({ kind: 'refused' as const, code })),
-  { kind: 'failed' },
-  { kind: 'unconfirmed' }
-]
 
 // A cause is named only where every host emitter of the code means it; any other code says only
 // what did not happen, because one code covers owner states or reasons the client cannot tell apart.
@@ -62,7 +57,116 @@ function isCause(part: unknown): boolean {
   return typeof part === 'string' && !part.startsWith('notDone') && part !== 'tryAgainComposerSend'
 }
 
-describe('agentSessionRefusalNotice', () => {
+// A newer host can send a code this client has never heard of.
+const FUTURE_CODE: AgentSessionWriteFailure = JSON.parse(
+  '{"kind":"refused","code":"agent_session_from_the_future"}'
+)
+const FAILURES: AgentSessionWriteFailure[] = [
+  ...AGENT_SESSION_WIRE_REFUSAL_CODES.map((code) => ({ kind: 'refused' as const, code })),
+  { kind: 'failed' },
+  { kind: 'unconfirmed' },
+  FUTURE_CODE
+]
+const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> = {
+  send: 'notDoneSend',
+  'composer-send': 'notDoneSend',
+  stop: 'notDoneStop',
+  'stop-task': 'notDoneStopTask',
+  'stop-tasks': 'notDoneStopTasks',
+  answer: 'notDoneAnswer',
+  option: 'notDoneOption',
+  command: 'notDoneCommand',
+  goal: 'notDoneGoal'
+}
+
+function codeOf(failure: AgentSessionWriteFailure): string {
+  return failure.kind === 'refused' ? failure.code : failure.kind
+}
+
+// The host may have run it: a thrown request, or a replayed id with no recorded outcome.
+function mayHaveRun(failure: AgentSessionWriteFailure): boolean {
+  return codeOf(failure) === 'unconfirmed' || codeOf(failure) === 'agent_session_operation_unknown'
+}
+
+// Where the cause sentence alone already says the write cannot take effect.
+function causeSaysNotDone(
+  failure: AgentSessionWriteFailure,
+  write: AgentSessionWriteKind
+): boolean {
+  const code = codeOf(failure)
+  return (
+    code === 'structured_agent_session_unsupported' ||
+    (write === 'answer' &&
+      (code === 'agent_session_item_revision_stale' || code === 'agent_session_already_resolved'))
+  )
+}
+
+// The phone resends under the same id. These record nothing under it (the lease refusals drop the
+// row they admitted), so a resend can go through; every other code can be refused again.
+const RESEND_CAN_WORK = new Set([
+  'failed',
+  'agent_session_checkpoint_stale',
+  'agent_session_conflict',
+  'agent_session_ownership_unknown',
+  'execution_owner_reconciling'
+])
+
+// Every (failure x write) cell of the table, checked against the rules a notice must keep.
+describe('the notice for every failure and write', () => {
+  const cells = FAILURES.flatMap((failure) =>
+    WRITES.map((write) => {
+      const parts = agentSessionWriteNoticeParts(failure, write)
+      return {
+        failure,
+        write,
+        parts,
+        english: agentSessionWriteNoticeEnglish(parts),
+        cell: `${codeOf(failure)} x ${write}`
+      }
+    })
+  )
+
+  it('says the write did not happen, once and for that write, whenever that is certain', () => {
+    for (const { failure, write, parts, cell } of cells.filter((c) => !mayHaveRun(c.failure))) {
+      const notDone = parts.filter((part) => typeof part === 'string' && part.startsWith('notDone'))
+      expect(notDone, cell).toEqual(causeSaysNotDone(failure, write) ? [] : [NOT_DONE[write]])
+    }
+  })
+
+  it('never says a write did not happen when the host may have run it', () => {
+    for (const { parts, cell } of cells.filter((c) => mayHaveRun(c.failure))) {
+      expect(parts, cell).toEqual(['outcomeUnknown'])
+    }
+  })
+
+  // The control that sent the write is how to try again; only the phone's composer has none.
+  it('says how to try again only to update Orca, or on the phone where a resend can work', () => {
+    for (const { failure, write, parts, english, cell } of cells) {
+      const phoneResend = write === 'composer-send' && RESEND_CAN_WORK.has(codeOf(failure))
+      expect(parts.includes('tryAgainComposerSend'), cell).toBe(phoneResend)
+      expect(/again/i.test(english), cell).toBe(
+        phoneResend || codeOf(failure) === 'structured_agent_session_unsupported'
+      )
+    }
+    for (const reason of [null, DISPATCH_REJECTED_WRITE_FAILED, DISPATCH_REJECTED_QUEUE_FULL]) {
+      expect(
+        agentSessionWriteNoticeEnglish(structuredAgentSessionRejectionParts(reason, 'send'))
+      ).not.toMatch(/again/i)
+    }
+  })
+
+  it('names a cause only for a code on the allowlist', () => {
+    for (const { failure, parts, cell } of cells) {
+      const cause =
+        failure.kind === 'unconfirmed'
+          ? 'outcomeUnknown'
+          : failure.kind === 'refused'
+            ? CAUSES[failure.code]
+            : undefined
+      expect(parts.filter(isCause), cell).toEqual(cause ? [cause] : [])
+    }
+  })
+
   // Census of host emitters, one per code, that write for a log or carry a marker. One is enough
   // to rule out showing the host's message for that code:
   // - every code a planned write settles: "Operation <id> was already refused: <code>."
@@ -79,50 +183,24 @@ describe('agentSessionRefusalNotice', () => {
   // - owner_restart_failed: "<agent> couldn't restart: <cause>.", where the cause is the resume's
   //   own refusal message, including the ledger's (send-preparation, hold-resume)
   // - journal_unreadable: no emitter on this host; an older or newer one may send it.
-  it('never shows the host message, for any code or write', () => {
-    for (const code of AGENT_SESSION_WIRE_REFUSAL_CODES) {
-      for (const write of WRITES) {
-        const notice = agentSessionRefusalNotice({ code, message: HOST_TEXT }, write)
-        expect(notice).not.toContain('fence')
-        expect(notice.length).toBeGreaterThan(0)
-      }
-    }
-  })
-
-  it('names a cause only for a code on the allowlist', () => {
-    for (const code of AGENT_SESSION_WIRE_REFUSAL_CODES) {
-      for (const write of WRITES) {
-        const causes = agentSessionWriteNoticeParts({ kind: 'refused', code }, write).filter(
-          isCause
-        )
-        expect(causes).toEqual(CAUSES[code] ? [CAUSES[code]] : [])
-      }
-    }
-    for (const write of WRITES) {
-      expect(agentSessionWriteNoticeParts({ kind: 'failed' }, write).filter(isCause)).toEqual([])
-    }
-  })
-
-  // The control that sent the write is how to try again; only the phone's composer has none.
-  it('says how to try again only on the phone, or to update Orca', () => {
-    for (const failure of FAILURES) {
-      for (const write of WRITES) {
-        const notice = agentSessionWriteNoticeEnglish(agentSessionWriteNoticeParts(failure, write))
-        const allowed =
-          write === 'composer-send' ||
-          (failure.kind === 'refused' && failure.code === 'structured_agent_session_unsupported')
-        if (!allowed) {
-          expect(notice).not.toMatch(/again/i)
-        }
-      }
-    }
-    for (const reason of [null, DISPATCH_REJECTED_WRITE_FAILED, DISPATCH_REJECTED_QUEUE_FULL]) {
+  it('is never empty and never shows the host message', () => {
+    for (const { failure, write, parts, cell } of cells) {
+      expect(parts.length, cell).toBeGreaterThan(0)
       expect(
-        agentSessionWriteNoticeEnglish(structuredAgentSessionRejectionParts(reason, 'send'))
-      ).not.toMatch(/again/i)
+        parts.every((part) => typeof part === 'string'),
+        cell
+      ).toBe(true)
+      if (failure.kind === 'refused') {
+        expect(
+          agentSessionRefusalNotice({ code: failure.code, message: HOST_TEXT }, write),
+          cell
+        ).not.toContain('fence')
+      }
     }
   })
+})
 
+describe('agentSessionRefusalNotice', () => {
   // The phone resends under the same operation id. Owner refusals and failed requests record
   // nothing under it, so a resend can go through; a conflicting or expired id is refused again.
   it.each([
