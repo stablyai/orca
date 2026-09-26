@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/store-test-helpers'
+import type { VisibleBrowserLinkState } from './visible-browser-link-target'
 import {
   openHttpLink,
   registerHttpLinkStoreAccessor,
@@ -16,7 +18,15 @@ const openUrlMock = vi.fn()
 const registerLocalhostLabelMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
+const focusGroupMock = vi.fn()
 const openRuntimeBrowserTabMock = vi.fn(() => Promise.resolve())
+
+const emptyTabLayout: Required<VisibleBrowserLinkState> = {
+  layoutByWorktree: {},
+  groupsByWorktree: {},
+  unifiedTabsByWorktree: {},
+  activeGroupIdByWorktree: {}
+}
 
 const storeState = {
   settings: undefined as
@@ -30,6 +40,8 @@ const storeState = {
     | undefined,
   setActiveWorktree: setActiveWorktreeMock,
   createBrowserTab: createBrowserTabMock,
+  focusGroup: focusGroupMock,
+  ...emptyTabLayout,
   repos: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
   projects: [] as { id: string; displayName: string; repoIcon?: null; badgeColor?: string }[],
   worktreesByRepo: {} as Record<
@@ -47,6 +59,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   storeState.settings = undefined
   storeState.workspacePortScansByKey = {}
+  storeState.layoutByWorktree = {}
+  storeState.groupsByWorktree = {}
+  storeState.unifiedTabsByWorktree = {}
+  storeState.activeGroupIdByWorktree = {}
+  focusGroupMock.mockReset()
   registerHttpLinkStoreAccessor(() => storeState)
   registerWorkspaceHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
   vi.stubGlobal('window', {
@@ -680,6 +697,170 @@ describe('openHttpLink modifier routing', () => {
     openHttpLink('https://example.com/', { worktreeId: 'wt-1', forceSystemBrowser: true })
 
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+})
+
+function showBrowserBesideTerminal(wt = 'wt-1'): void {
+  storeState.layoutByWorktree = {
+    [wt]: {
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: 'term' },
+      second: { type: 'leaf', groupId: 'web' }
+    }
+  }
+  storeState.groupsByWorktree = {
+    [wt]: [
+      makeTabGroup({ id: 'term', worktreeId: wt, activeTabId: 't1', tabOrder: ['t1'] }),
+      makeTabGroup({ id: 'web', worktreeId: wt, activeTabId: 'b1', tabOrder: ['b1'] })
+    ]
+  }
+  storeState.unifiedTabsByWorktree = {
+    [wt]: [
+      makeUnifiedTab({ id: 't1', worktreeId: wt, groupId: 'term', contentType: 'terminal' }),
+      makeUnifiedTab({ id: 'b1', worktreeId: wt, groupId: 'web', contentType: 'browser' })
+    ]
+  }
+  storeState.activeGroupIdByWorktree = { [wt]: 'term' }
+}
+const PLACED = { activate: true, targetGroupId: 'web' }
+
+describe('openHttpLink with a browser on screen', () => {
+  it('opens a local link as a new tab in the visible browser group, then focuses it', () => {
+    storeState.settings = { openLinksInApp: true }
+    showBrowserBesideTerminal()
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+    expect(createBrowserTabMock).toHaveBeenCalledExactlyOnceWith(
+      'wt-1',
+      'https://example.com/',
+      PLACED
+    )
+    expect(focusGroupMock).toHaveBeenCalledExactlyOnceWith('wt-1', 'web')
+    expect(focusGroupMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      createBrowserTabMock.mock.invocationCallOrder[0]
+    )
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('still places the tab when the accessor has no focusGroup', () => {
+    storeState.settings = { openLinksInApp: true }
+    showBrowserBesideTerminal()
+    const { focusGroup: _omit, ...withoutFocus } = storeState
+    registerHttpLinkStoreAccessor(() => withoutFocus)
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', PLACED)
+    registerHttpLinkStoreAccessor(() => storeState)
+  })
+
+  it('keeps today placement with no focus call when the browser is hidden', () => {
+    storeState.settings = { openLinksInApp: true }
+    showBrowserBesideTerminal()
+    storeState.groupsByWorktree['wt-1']![1] = makeTabGroup({
+      id: 'web',
+      worktreeId: 'wt-1',
+      activeTabId: null,
+      tabOrder: ['b1']
+    })
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(focusGroupMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves groups alone when the link goes to the system browser', () => {
+    storeState.settings = { openLinksInApp: false }
+    showBrowserBesideTerminal()
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(focusGroupMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves groups alone when the modifier sends the link to the system browser', () => {
+    storeState.settings = { openLinksInApp: true }
+    showBrowserBesideTerminal()
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1', modifierHeld: true })
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(focusGroupMock).not.toHaveBeenCalled()
+  })
+
+  it('targets the floating workspace’s own browser without selecting it', () => {
+    storeState.settings = { openLinksInApp: true }
+    showBrowserBesideTerminal(FLOATING_TERMINAL_WORKTREE_ID)
+    openHttpLink('https://example.com/', { worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'https://example.com/',
+      PLACED
+    )
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('computes placement when a delayed localhost label resolves, not before', async () => {
+    storeState.settings = { openLinksInApp: true, localhostWorktreeLabelsEnabled: true }
+    storeState.repos = [{ id: 'repo-1', displayName: 'Repo' }]
+    storeState.worktreesByRepo = { 'repo-1': [{ id: 'wt-1', projectId: 'repo-1' }] }
+    storeState.workspacePortScansByKey = {
+      'local:all': {
+        platform: 'darwin',
+        scannedAt: 1,
+        ports: [
+          {
+            id: 'tcp:5180:wt-1',
+            kind: 'workspace',
+            port: 5180,
+            protocol: 'http',
+            bindHost: '127.0.0.1',
+            connectHost: 'localhost',
+            owner: {
+              repoId: 'repo-1',
+              worktreeId: 'wt-1',
+              displayName: 'wt-1',
+              path: '/wt-1',
+              confidence: 'cwd'
+            }
+          }
+        ]
+      }
+    }
+    showBrowserBesideTerminal()
+    let resolveLabel: (value: { url: string }) => void = () => {}
+    registerLocalhostLabelMock.mockReturnValue(new Promise((resolve) => (resolveLabel = resolve)))
+
+    openHttpLink('http://localhost:5180/', { worktreeId: 'wt-1', sourceOwner: { kind: 'local' } })
+    expect(registerLocalhostLabelMock).toHaveBeenCalled()
+    storeState.layoutByWorktree = { 'wt-1': { type: 'leaf', groupId: 'term' } }
+    resolveLabel({ url: 'http://wt-1.orca.localhost:60016/' })
+
+    await vi.waitFor(() => expect(createBrowserTabMock).toHaveBeenCalled())
+    expect(createBrowserTabMock.mock.calls[0]![2]).toEqual({ activate: true })
+    expect(focusGroupMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{ kind: 'ssh' as const, connectionId: 'ssh-1' }, { expectedSshConnectionId: 'ssh-1' }],
+    [
+      { kind: 'runtime' as const, runtimeEnvironmentId: 'env-1' },
+      { expectedRuntimeEnvironmentId: 'env-1' }
+    ]
+  ])('asks the remote opener for the visible browser group (%o)', (sourceOwner, owner) => {
+    storeState.settings = { openLinksInApp: true }
+    showBrowserBesideTerminal()
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true,
+      sourceOwner
+    })
+    expect(openRuntimeBrowserTabMock).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://example.com/',
+      intent: { kind: 'url' },
+      targetGroupId: 'web',
+      ...owner
+    })
+    expect(focusGroupMock).toHaveBeenCalledWith('wt-1', 'web')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 })

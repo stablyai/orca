@@ -131,4 +131,76 @@ describe('link-opened Orca tabs', () => {
       expect.objectContaining({ activate: false })
     )
   })
+
+  const focusGroupMock = vi.fn()
+  function splitWithVisibleBrowser(): Record<string, unknown> {
+    return {
+      browserPagesByWorkspace: {
+        'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
+      },
+      // Opener's profile deliberately differs from the destination browser's: placement is not profile inheritance.
+      browserTabsByWorktree: {
+        'worktree-1': [
+          { id: 'workspace-1', sessionProfileId: 'profile-a', sessionPartition: 'persist:a' }
+        ]
+      },
+      layoutByWorktree: {
+        'worktree-1': {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'term' },
+          second: { type: 'leaf', groupId: 'web' }
+        }
+      },
+      groupsByWorktree: {
+        'worktree-1': [
+          { id: 'term', worktreeId: 'worktree-1', activeTabId: 't1', tabOrder: ['t1'] },
+          { id: 'web', worktreeId: 'worktree-1', activeTabId: 'b1', tabOrder: ['b1'] }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        'worktree-1': [
+          { id: 't1', worktreeId: 'worktree-1', groupId: 'term', contentType: 'terminal' },
+          { id: 'b1', worktreeId: 'worktree-1', groupId: 'web', contentType: 'browser' }
+        ]
+      },
+      activeGroupIdByWorktree: { 'worktree-1': 'term' },
+      focusGroup: focusGroupMock,
+      createBrowserTab: createBrowserTabMock
+    }
+  }
+
+  it('opens the popup in the visible browser group, keeps the opener profile, and focuses it', () => {
+    focusGroupMock.mockReset()
+    storeState.value = splitWithVisibleBrowser()
+    captureOpenLinkHandler()({ browserPageId: 'page-1', url: 'https://docs.example.com/new' })
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      'worktree-1',
+      'https://docs.example.com/new',
+      {
+        title: 'https://docs.example.com/new',
+        activate: true,
+        targetGroupId: 'web',
+        sessionProfileId: 'profile-a',
+        sessionPartition: 'persist:a'
+      }
+    )
+    expect(focusGroupMock).toHaveBeenCalledWith('worktree-1', 'web')
+  })
+
+  it('places a background (activate:false) popup there without moving focus', () => {
+    focusGroupMock.mockReset()
+    storeState.value = splitWithVisibleBrowser()
+    captureOpenLinkHandler()({
+      browserPageId: 'page-1',
+      url: 'https://x.example/',
+      activate: false
+    })
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      'worktree-1',
+      'https://x.example/',
+      expect.objectContaining({ activate: false, targetGroupId: 'web' })
+    )
+    expect(focusGroupMock).not.toHaveBeenCalled()
+  })
 })

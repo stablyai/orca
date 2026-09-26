@@ -1,5 +1,6 @@
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { findVisibleBrowserLinkTarget } from '@/lib/visible-browser-link-target'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
 import {
@@ -121,9 +122,12 @@ export function registerBrowserStateIpcBridge(
       const sourceTab = (store.browserTabsByWorktree[sourcePage.worktreeId] ?? []).find(
         (tab) => tab.id === sourcePage.workspaceId
       )
+      const placement = findVisibleBrowserLinkTarget(store, sourcePage.worktreeId)
+      const shouldActivate = activate ?? true
       store.createBrowserTab(sourcePage.worktreeId, url, {
         title: url,
-        activate: activate ?? true,
+        activate: shouldActivate,
+        ...placement,
         ...(sourceTab
           ? {
               sessionProfileId: sourceTab.sessionProfileId,
@@ -131,6 +135,9 @@ export function registerBrowserStateIpcBridge(
             }
           : {})
       })
+      if (placement && shouldActivate) {
+        store.focusGroup(sourcePage.worktreeId, placement.targetGroupId)
+      }
     })
   )
 }
