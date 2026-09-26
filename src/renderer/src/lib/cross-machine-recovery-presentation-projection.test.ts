@@ -8,6 +8,7 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {
   projectCrossMachineRecoveryPresentation,
+  projectPresentationView,
   type PresentationProjectionInput
 } from './cross-machine-recovery-presentation-projection'
 
@@ -159,7 +160,7 @@ describe('projectCrossMachineRecoveryPresentation', () => {
       { kind: 'folder', folderWorkspaceId: 'fw-1' }
     ])
     expect(byHost.get('runtime:A')?.workspaces.map((entry) => entry.workspace)).toEqual([
-      { kind: 'worktree', worktreeId: 'wt-a' }
+      { kind: 'worktree', worktreeId: 'wt-a', instanceId: 'wt-a' }
     ])
   })
 
@@ -287,5 +288,28 @@ describe('projectCrossMachineRecoveryPresentation', () => {
     const local = projectCrossMachineRecoveryPresentation(input({ session: state })).get('local')
     expect(local?.truncated).toBe(true)
     expect(local?.workspaces[0].view.browsers[0].pages.map((page) => page.id)).toEqual(['page-0'])
+  })
+
+  it('resolves a workspace-scoped editor id to its backing file for tabs and the active editor', () => {
+    const state = session()
+    const ownedId = `editor:wt-local:local:${encodeURIComponent('/repo/wt-local/src/a.ts')}`
+    state.unifiedTabs = {
+      'wt-local': [
+        unifiedTab('term-1', 'term-1', 'terminal'),
+        unifiedTab(ownedId, ownedId, 'editor')
+      ]
+    }
+    state.tabGroups = {
+      'wt-local': [
+        { id: 'g1', worktreeId: 'wt-local', activeTabId: ownedId, tabOrder: ['term-1', ownedId] }
+      ]
+    }
+    state.activeFileIdByWorktree = { 'wt-local': ownedId }
+
+    const view = projectPresentationView(state, 'wt-local', '/repo/wt-local')
+
+    expect(view.activeEditorRelativePath).toBe('src/a.ts')
+    expect(view.tabs.find((tab) => tab.id === ownedId)?.entityId).toBe('/repo/wt-local/src/a.ts')
+    expect(view.groups[0]?.tabOrder).toEqual(['term-1', ownedId])
   })
 })
