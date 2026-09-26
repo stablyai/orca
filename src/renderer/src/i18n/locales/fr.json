@@ -8688,7 +8688,8 @@
           "e90afcc44f": "désactivé",
           "16c471ee03": "activé",
           "typographyAdvanced": "Typographie",
-          "dimUnfocusedPanes": "Assombrir les volets sans focus."
+          "dimUnfocusedPanes": "Assombrir les volets sans focus.",
+          "13b09da243": "Polices de repli"
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Graisse de la police en gras",
@@ -10735,7 +10736,10 @@
               "statusline": "ligne d'état",
               "dim": "faible",
               "colors": "couleurs"
-            }
+            },
+            "3f2a94a78d": "Polices de repli",
+            "a113f6ead3": "Polices utilisées dans l'ordre lorsque la police principale ne contient pas un glyphe. Les polices par défaut d'Orca restent à la fin de la pile.",
+            "ceecc7e492": "repli pile multilingue"
           },
           "windows": {
             "search": {
@@ -11400,6 +11404,17 @@
           "title": "Police de l'éditeur",
           "description": "Police utilisée par les éditeurs de fichiers et les vues de diff. Laissez vide pour suivre la police du terminal.",
           "placeholder": "Identique à la police du terminal"
+        },
+        "TerminalFontFallbackSetting": {
+          "212953bee6": "Polices de repli du terminal",
+          "36f45a7277": "Monter",
+          "5adea09881": "Descendre",
+          "7c2c7906a8": "Retirer la police de repli",
+          "a47b16e7af": "Ajouter une police",
+          "5674a5b618": "Nouvelle police de repli",
+          "14e6f886f2": "Ajouter",
+          "f78f446a8d": "Nombre maximal de 32 polices de repli atteint.",
+          "ff79a93a0d": "Police de repli"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} serveurs jumelés",

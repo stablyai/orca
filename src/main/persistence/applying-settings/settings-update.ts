@@ -7,6 +7,7 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { normalizeTerminalFontFallbacks } from '../../../shared/terminal-font-fallbacks'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal-scrollback-policy'
 import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-minimum-contrast-settings'
@@ -121,6 +122,11 @@ export function updateSettings(
         { terminalCursorStyle: updates.terminalCursorStyle },
         { preserveExplicitValue: true }
       )
+    )
+  }
+  if ('terminalFontFallbacks' in updates) {
+    sanitizedUpdates.terminalFontFallbacks = normalizeTerminalFontFallbacks(
+      updates.terminalFontFallbacks
     )
   }
   if ('terminalScrollbackRows' in updates) {

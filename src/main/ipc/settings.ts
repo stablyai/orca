@@ -21,6 +21,7 @@ import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
+import { normalizeTerminalFontFallbacks } from '../../shared/terminal-font-fallbacks'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
 import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
@@ -56,6 +57,9 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   // writes must pass the dedicated reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
+  if ('terminalFontFallbacks' in args) {
+    sanitizedArgs.terminalFontFallbacks = normalizeTerminalFontFallbacks(args.terminalFontFallbacks)
+  }
   return sanitizedArgs
 }
 

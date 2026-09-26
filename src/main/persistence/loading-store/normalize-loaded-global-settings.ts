@@ -5,6 +5,7 @@ import { normalizeOpenInApplications } from '../../../shared/open-in-application
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { normalizeTerminalFontFallbacks } from '../../../shared/terminal-font-fallbacks'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control-ai'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat-shell-environment'
@@ -76,6 +77,7 @@ export function normalizeLoadedGlobalSettings(
       primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
     ...migratedAutoRenameBranchFromWork,
     ...migratedTerminalCursorStyle,
+    terminalFontFallbacks: normalizeTerminalFontFallbacks(parsed.settings?.terminalFontFallbacks),
     terminalLineHeight: migratedTerminalLineHeight,
     // Why: the old true default was inherited, but false was always an explicit opt-out and must survive this one-shot reset.
     terminalRightClickToPaste: terminalRightClickToPasteDefaultedForPlatform

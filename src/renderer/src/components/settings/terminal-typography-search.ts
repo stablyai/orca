@@ -34,6 +34,25 @@ const getTerminalTypographySearchEntryCatalog = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('auto.components.settings.terminal.search.3f2a94a78d', 'Fallback Fonts'),
+    description: translate(
+      'auto.components.settings.terminal.search.a113f6ead3',
+      "Ordered fonts used when the primary font doesn't contain a glyph. Orca's defaults remain at the end of the stack."
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.103cdb862f',
+        'typography'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.b0bb76ae6b', 'font'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.ceecc7e492',
+        'fallback stack multilingual'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.terminal.search.28ea41bd2d', 'Font Weight'),
     description: translate(
       'auto.components.settings.terminal.search.98c18f2c77',
@@ -105,7 +124,7 @@ export const getTerminalTypographySearchEntries = createLocalizedCatalog(() => [
 ])
 
 export const getTerminalAdvancedTypographySearchEntries = createLocalizedCatalog(() =>
-  getTerminalTypographySearchEntryCatalog().slice(2)
+  getTerminalTypographySearchEntryCatalog().slice(3)
 )
 
 export const getTerminalRenderingSearchEntries = createLocalizedCatalog(() => [
