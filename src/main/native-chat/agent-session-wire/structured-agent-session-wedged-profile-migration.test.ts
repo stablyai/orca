@@ -19,11 +19,13 @@ import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-a
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type {
   AgentSessionClaimStatus,
-  AgentSessionHandoffStage,
-  AgentSessionOwnerRuntimeKind,
-  AgentSessionProcessIdentity,
-  AgentSessionRecord
+  AgentSessionProcessIdentity
 } from '../../../shared/agent-session-record'
+import type {
+  PersistedAgentSessionHandoffStage,
+  PersistedAgentSessionRecord,
+  PersistedAgentSessionRuntimeKind
+} from '../../../shared/agent-session-legacy-handoff-lease'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { AGENT_SESSION_STORE_FILE_NAME } from '../../runtime/agent-session-record-store-file'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -56,15 +58,15 @@ let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 
 type WedgeOverrides = {
   claimStatus: AgentSessionClaimStatus
-  handoffStage: AgentSessionHandoffStage | null
-  runtimeKind?: AgentSessionOwnerRuntimeKind
+  handoffStage: PersistedAgentSessionHandoffStage | null
+  runtimeKind?: PersistedAgentSessionRuntimeKind
   ownerProcess?: AgentSessionProcessIdentity | null
   reservedSpawnToken?: string | null
   handoffOperationId?: string | null
 }
 
-/** A record in the wedged shape, with real history behind it. */
-function wedgedRecord(overrides: WedgeOverrides): AgentSessionRecord {
+/** A record in the wedged shape, as a build may have left it on disk, with real history behind it. */
+function wedgedRecord(overrides: WedgeOverrides): PersistedAgentSessionRecord {
   const fence = 13
   return {
     schemaVersion: 2,
@@ -103,7 +105,7 @@ function wedgedRecord(overrides: WedgeOverrides): AgentSessionRecord {
   }
 }
 
-async function seedStore(record: AgentSessionRecord): Promise<void> {
+async function seedStore(record: PersistedAgentSessionRecord): Promise<void> {
   const directory = join(root, 'store')
   await mkdir(directory, { recursive: true })
   await writeFile(
@@ -230,7 +232,7 @@ describe('already-wedged profiles become usable on load', () => {
         handoffStage: null,
         ownerProcess: DEAD_OWNER
       })
-      const providerRecord: AgentSessionRecord =
+      const providerRecord: PersistedAgentSessionRecord =
         provider === 'codex'
           ? record
           : {
@@ -451,7 +453,7 @@ describe('already-wedged profiles become usable on load', () => {
     expect(isAcquirable(lease)).toBe(true)
   })
 
-  it('exits a TUI reservation that crashed before its identity was committed', async () => {
+  it('exits a TUI reservation an older build left before its identity was committed', async () => {
     // The reviewer's shape: a TUI child launched, the runtime died before `commitProcessIdentity`,
     // and restart adjudication could not answer, so the lease latched at `recovering` with a null
     // owner. Handoff restore cannot help (no owner to talk to) and manual recovery requires one,

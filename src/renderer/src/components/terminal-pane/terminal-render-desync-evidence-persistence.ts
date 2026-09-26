@@ -1,4 +1,5 @@
 import type { SentinelEvidence } from './terminal-render-desync-sentinel'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 /**
  * Durable persistence for render-desync captures, split from the sentinel so
@@ -59,8 +60,13 @@ export async function persistHealedReference(
   }
 }
 
+/** Why: a real paneKey is `${tabId}:${leafId}` — two UUIDs, 73 chars — which pushes the full
+ *  id past main's 120-char cap, so every capture was rejected. The trailing leaf id is the
+ *  identifying half, and the UUID nonce already guarantees uniqueness. */
+const MAX_CAPTURE_ID_PANE_PART_LENGTH = 40
+
 export function createCaptureId(paneKey: string): string {
-  const panePart = paneKey.replace(/[^a-zA-Z0-9_-]/g, '-')
-  const nonce = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
+  const panePart = paneKey.replace(/[^a-zA-Z0-9_-]/g, '-').slice(-MAX_CAPTURE_ID_PANE_PART_LENGTH)
+  const nonce = createBrowserUuid()
   return `${Date.now()}-${panePart}-${nonce}`
 }

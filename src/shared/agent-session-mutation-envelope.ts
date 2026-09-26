@@ -134,7 +134,7 @@ export function admitAgentSessionMutation(input: {
 /** Why the single admission oracle said no, mapped to what the client can do
  *  about it. The predicate itself is never re-implemented here. */
 function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireRefusal | null {
-  if (lease.runtimeKind === 'native' && agentSessionLeaseAdmitsWriter(lease)) {
+  if (agentSessionLeaseAdmitsWriter(lease)) {
     return null
   }
   if (lease.unreconciled) {
@@ -146,13 +146,10 @@ function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireR
   if (lease.handoffStage !== null) {
     return {
       code: 'agent_session_conflict',
-      message: `The session is mid-handoff (${lease.handoffStage}).`
-    }
-  }
-  if (lease.runtimeKind === 'tui' && agentSessionLeaseAdmitsWriter(lease)) {
-    return {
-      code: 'agent_session_conflict',
-      message: 'The agent terminal owns this session.'
+      message:
+        lease.handoffStage === 'new-owner-proving'
+          ? 'The chat is still starting.'
+          : "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
     }
   }
   return {

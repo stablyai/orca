@@ -15,11 +15,10 @@ import type { AgentSessionRecordStore } from './agent-session-record-store'
 
 export type AgentSessionRecordTransitionStore = Pick<AgentSessionRecordStore, 'transitionHandoff'>
 
-/** Whether this record is one THIS host may release on its own proof. A TUI owner, a session
- *  mid-handoff, and a lease nobody holds are all somebody else's transition. */
+/** Whether this record is one THIS host may release on its own proof. A session mid-handoff and a
+ *  lease nobody holds are somebody else's transition. */
 export function isSurfaceReleasableAgentSessionRecord(record: AgentSessionRecord): boolean {
   return (
-    record.lease.runtimeKind === 'native' &&
     record.lease.claimStatus === 'live' &&
     record.lease.handoffStage === null &&
     record.lease.ownerProcess !== null

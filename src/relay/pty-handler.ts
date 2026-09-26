@@ -64,6 +64,7 @@ import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-gr
 import type { PtyChildProcessVerdict } from '../shared/terminal-process-inspection'
 import { terminatePtyJob } from '../main/windows/windows-pty-job'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
+import { stripPiProcessOwnerEnv } from '../main/pty/pi-process-owner-env'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
 import { dropIncoherentCondaActivationEnv } from '../main/pty/conda-activation-env'
 import { dropInheritedOrcaFishHistory } from '../main/fish-history-session'
@@ -821,6 +822,7 @@ export class PtyHandler {
     result[ORCA_IMAGE_PROTOCOL_ENV] = ORCA_IMAGE_PROTOCOL_VALUE
     // Why: an older client may not ask a newly upgraded relay to delete inherited shim state.
     stripLegacyTerminalShimEnv(result, process.platform)
+    stripPiProcessOwnerEnv(result)
     // Why unconditionally here, not in injectRelayFishHistoryEnv: that runs only for a
     // fish pane with isolation on, yet an Orca-minted `fish_history` (fish EXPORTS it,
     // so the relay inherits one when launched from an Orca fish pane) must never scope

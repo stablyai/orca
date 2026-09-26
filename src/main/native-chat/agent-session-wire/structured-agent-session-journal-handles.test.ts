@@ -75,6 +75,7 @@ function hostSession(journal: AgentSessionJournal): StructuredAgentSessionHostSe
     params: {} as StructuredAgentSessionHostSession['params'],
     fence: 1,
     hasProviderChild: false,
+    providerChildPhase: 'ready',
     acquisitionGeneration: null
   }
 }

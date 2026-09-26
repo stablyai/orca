@@ -1,15 +1,17 @@
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionProviderChildPhase
+} from './structured-agent-session-adapter'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
-import type { StructuredAgentSessionHandoffTransport } from './structured-agent-session-handoff-types'
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
+import type { AgentModelCatalogService } from '../agent-model-catalog/agent-model-catalog-service'
 
 export type StructuredAgentSessionCaller = { callerKey: string }
 
@@ -29,9 +31,12 @@ export type StructuredAgentSessionHostSession = {
   params: AgentSessionAttachParams
   fence: number
   /** Whether THIS host generation is running the provider process behind the session. A journal
-   *  restored for reading has none, and neither has a session a TUI owns — so neither may be
-   *  evicted to free a child, and neither may have its lease released as an observed exit. */
+   *  restored for reading has none — so it may not be evicted to free a child, nor have its lease
+   *  released as an observed exit. */
   hasProviderChild: boolean
+  /** Whether the child behind `hasProviderChild` has proven its start. A publish-first acquire
+   *  is `starting` until the adapter's `started` event; only then are its reported options fact. */
+  providerChildPhase: StructuredAgentSessionProviderChildPhase
   /** The wind-down this host still owes for a child it started: settling that generation's work
    *  and handing the lease back. A separate fact from `hasProviderChild`, which goes false the
    *  moment the adapter proves the exit — an eviction that aborts after that point must still be
@@ -39,6 +44,10 @@ export type StructuredAgentSessionHostSession = {
   owesProviderChildWindDown?: boolean
   /** Exact adapter acquisition behind `hasProviderChild`; retained after exit to fence recovery. */
   acquisitionGeneration: string | null
+  /** The fence of the released owner this child replaced, when it was resumed into a lease handed
+   *  back cleanly. A writer current as of that owner is admitted at `fence`: the restart is the
+   *  only thing that moved it. Absent for a create or a journal restored for reading. */
+  resumedFromFence?: number
 }
 
 export type StructuredAgentSessionHostDeps = {
@@ -64,11 +73,6 @@ export type StructuredAgentSessionHostDeps = {
     provider: AgentSessionRecord['provider']
   ) => Promise<Record<string, string> | undefined> | Record<string, string> | undefined
   now?: () => number
-  persistTuiProviderHandle?: (input: {
-    sessionId: string
-    link: AgentSessionProviderHandleLink
-    now: number
-  }) => Promise<void>
   /** How long a session outlives its last surface. Tests drive this; production takes the default. */
   releaseGraceMs?: number
   onEventSinkError?: (input: { sessionId: string; error: unknown }) => void
@@ -82,5 +86,6 @@ export type StructuredAgentSessionHostDeps = {
    *  removed from. Both production hosts pass one — the desktop and headless `orcad`; absent,
    *  every reader of that store simply lists no structured session. */
   statusSink?: StructuredAgentSessionStatusSink
-  handoffTransport?: StructuredAgentSessionHandoffTransport
+  /** Host model catalog surface; absent means every catalog read answers `unknown`. */
+  modelCatalog?: AgentModelCatalogService
 }

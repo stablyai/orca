@@ -30,6 +30,32 @@ describe('proven-dead agent session eviction settlement', () => {
     })
   })
 
+  it('owes no settlement for a start that died before proving its handle', () => {
+    const record = agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        runtimeKind: 'native',
+        claimStatus: 'reserved',
+        handoffStage: 'new-owner-proving',
+        handoffOperationId: 'attach-op-1',
+        unreconciled: true
+      })
+    )
+
+    const evicted = applyAgentSessionRestartAdjudication({
+      record,
+      probe: { outcome: 'pid-absent' },
+      now: NOW
+    })
+
+    expect(evicted.lease).toMatchObject({
+      claimStatus: 'released',
+      runtimeFence: 8,
+      handoffStage: null,
+      handoffOperationId: null
+    })
+    expect(evicted.lease).not.toHaveProperty('settlementRetryRequired')
+  })
+
   it('latches recovery eviction from the same evicted disposition', () => {
     const record = agentSessionRecordFixture(
       agentSessionLeaseFixture({ runtimeKind: 'native', handoffStage: 'recovering' })

@@ -36,7 +36,6 @@ const TUI_AGENT_KIND_BY_AGENT = {
   aug: 'aug',
   cline: 'cline',
   codebuff: 'codebuff',
-  freebuff: 'freebuff',
   'command-code': 'command-code',
   continue: 'continue',
   cursor: 'cursor',
@@ -53,6 +52,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   ante: 'ante',
   trae: 'trae',
   muse: 'muse',
+  zcode: 'zcode',
   dsh: 'dsh'
 } satisfies Record<TuiAgent, ConcreteAgentKind>
 

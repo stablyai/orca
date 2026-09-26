@@ -1,4 +1,5 @@
 import {
+  AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError,
   type StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -10,9 +11,17 @@ import {
   supportsClaudeQueuedInterruptCancellation
 } from './claude-structured-control-actions'
 import type { ClaudeLateDispatchSettlement } from './claude-structured-dispatch'
+import { buildClaudePromptReply } from './claude-structured-prompt-replies'
 import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudePendingPrompt } from './claude-prompt-registry'
+import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
+import {
+  claudeStartupHoldsWrites,
+  rejectClaudeStartupWrites
+} from './claude-structured-session-startup-gate'
+import { DISPATCH_REJECTED_CANCELLED } from '../../shared/structured-agent-session-dispatch-rejection'
 
-/** Conservative user-facing window: below the 10s init and 30s control deadlines, trading
+/** Conservative user-facing window: below the 30s control deadline, trading
  * residual slow-pump risk for ensuring delivery bookkeeping cannot block Stop indefinitely. */
 export const CLAUDE_DISPATCH_ADMISSION_TIMEOUT_MS = 3_000
 const CLAUDE_DISPATCH_ADMISSION_POLL_MS = 50
@@ -98,6 +107,15 @@ export async function cancelClaudeStructuredTurn(input: {
   const session = requireSession(sessions, request.sessionId)
   const acquisitionGeneration = session.acquisitionGeneration
   const prompt = request.prompt
+  // A held prompt was never written, so Stop withdraws it; the drain only writes what it still
+  // holds. Before startup lands nothing was written, so there is nothing to interrupt either.
+  let withdrewHeld = false
+  if (!prompt && claudeStartupHoldsWrites(session) && session.fence === request.fence) {
+    withdrewHeld = rejectClaudeStartupWrites(session, DISPATCH_REJECTED_CANCELLED)
+    if (session.startup.state === 'pending') {
+      return { cancelled: withdrewHeld }
+    }
+  }
   if (prompt && session.fence !== request.fence) {
     return { cancelled: false }
   }
@@ -179,12 +197,25 @@ export async function cancelClaudeStructuredTurn(input: {
     } else if (claim) {
       session.prompts.releaseClaim(claim)
     }
-    return result
+    return withdrewHeld ? { ...result, cancelled: true } : result
   } catch (error) {
     if (claim && !interruptConfirmed) {
       session.prompts.releaseClaim(claim)
     }
     throw error
+  }
+}
+
+function prepareClaudePromptReply(
+  prompt: ClaudePendingPrompt,
+  response: AnswerInput['response']
+): PermissionResult {
+  try {
+    return buildClaudePromptReply(prompt, response)
+  } catch (error) {
+    throw new AgentSessionPromptAnswerRejectedError(
+      error instanceof Error ? error.message : String(error)
+    )
   }
 }
 
@@ -203,6 +234,7 @@ export async function answerClaudeStructuredPrompt(input: {
     throw new AgentSessionPromptUnavailableError(request.itemId)
   }
   try {
+    const reply = prepareClaudePromptReply(claim.found.prompt, request.response)
     await request.commit()
     if (
       sessions.get(request.sessionId) !== session ||
@@ -212,7 +244,7 @@ export async function answerClaudeStructuredPrompt(input: {
     ) {
       throw new AgentSessionPromptUnavailableError(request.itemId)
     }
-    await answerClaudePrompt(session, claim, request.optionId)
+    await answerClaudePrompt(session, claim, reply)
   } catch (error) {
     session.prompts.releaseClaim(claim)
     throw error

@@ -17,6 +17,7 @@ import {
 } from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
 import {
   WORKTREE_REMOVAL_AMBIGUOUS_ERROR,
   WORKTREE_REMOVAL_HOST_CHANGED_ERROR
@@ -213,6 +214,18 @@ export async function completeSameIdHostScopedRemoval(args: {
     worktreeBeforeRemoval,
     suppressPreservedBranchToast
   } = args
+  // Why first: a listing scanned before this removal must not restore the dropped host row.
+  const catalogVersion = removalResult?.catalogVersion
+  if (catalogVersion) {
+    set((s) =>
+      appliedWorktreeCatalogVersionPatch(
+        s,
+        getRepoIdFromWorktreeId(worktreeId),
+        requiredExecutionHostId,
+        catalogVersion
+      )
+    )
+  }
   const runtimeCleanup = await cleanupEphemeralVmRuntimesForDeleted({
     hostScopedWorkspaces: [{ workspaceId: worktreeId, executionHostId: requiredExecutionHostId }]
   })

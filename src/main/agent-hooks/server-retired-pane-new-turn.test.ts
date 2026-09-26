@@ -42,6 +42,7 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   'mimo-code': null,
   'command-code': null,
   muse: 'UserPromptSubmit',
+  zcode: 'SessionStart',
   dsh: 'SessionStart'
 }
 

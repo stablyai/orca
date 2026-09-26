@@ -21,7 +21,6 @@ export type IpynbCell = {
 
 export type ParsedIpynb = {
   language: string
-  kernelName: string | null
   cells: IpynbCell[]
 }
 
@@ -86,16 +85,6 @@ function getPreferredLanguage(content: Record<string, unknown>): string {
   return translateKernelLanguageToMonaco(language)
 }
 
-function getKernelName(content: Record<string, unknown>): string | null {
-  const metadata = isRecord(content.metadata) ? content.metadata : {}
-  const kernelSpec = isRecord(metadata.kernelspec) ? metadata.kernelspec : {}
-  return typeof kernelSpec.display_name === 'string'
-    ? kernelSpec.display_name
-    : typeof kernelSpec.name === 'string'
-      ? kernelSpec.name
-      : null
-}
-
 function getCellLanguage(cell: Record<string, unknown>, fallback: string): string {
   const metadata = isRecord(cell.metadata) ? cell.metadata : {}
   const vscode = isRecord(metadata.vscode) ? metadata.vscode : {}
@@ -115,7 +104,7 @@ function parseDisplayItems(data: unknown): IpynbOutputItem[] {
     })
 }
 
-function parseOutput(rawOutput: unknown): IpynbOutput | null {
+export function parseIpynbOutput(rawOutput: unknown): IpynbOutput | null {
   if (!isRecord(rawOutput) || typeof rawOutput.output_type !== 'string') {
     return null
   }
@@ -159,7 +148,9 @@ function parseCell(rawCell: unknown, fallbackLanguage: string): IpynbCell | null
   }
 
   const outputs = Array.isArray(rawCell.outputs)
-    ? rawCell.outputs.map(parseOutput).filter((output): output is IpynbOutput => output !== null)
+    ? rawCell.outputs
+        .map(parseIpynbOutput)
+        .filter((output): output is IpynbOutput => output !== null)
     : []
 
   return {
@@ -188,7 +179,6 @@ export function parseIpynb(content: string): ParsedIpynb {
 
   return {
     language,
-    kernelName: getKernelName(parsed),
     cells
   }
 }

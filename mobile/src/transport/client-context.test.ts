@@ -8,6 +8,23 @@ import type { MobileConnectionPath } from './stable-logical-rpc-client'
 const push = vi.hoisted(() => ({ attach: vi.fn(), detach: vi.fn() }))
 vi.mock('../notifications/push-registration', () => ({ attachPushRegistration: push.attach }))
 
+// Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.
+const descriptorProbe = vi.hoisted(() => {
+  const stop = vi.fn()
+  return {
+    stop,
+    start: vi.fn((_client: unknown, _onStatus: (status: unknown) => void) => stop),
+    record: vi.fn()
+  }
+})
+vi.mock('./runtime-status-probe', () => ({
+  startRuntimeStatusProbe: (client: unknown, onStatus: (status: unknown) => void) =>
+    descriptorProbe.start(client, onStatus)
+}))
+vi.mock('./host-descriptor-recorder', () => ({
+  recordHostDescriptorFromStatus: (...args: unknown[]) => descriptorProbe.record(...args)
+}))
+
 const connectMock = vi.fn()
 const loadHostsMock = vi.fn()
 
@@ -737,6 +754,33 @@ it('owns push registration for a paired host without mounting the home screen', 
   expect(push.attach).toHaveBeenCalledTimes(2)
   await act(async () => harness.unmount())
   expect(push.detach).toHaveBeenCalledTimes(2)
+})
+
+it('reads each connected host descriptor once per connection and records what lands', async () => {
+  descriptorProbe.start.mockClear()
+  descriptorProbe.stop.mockClear()
+  descriptorProbe.record.mockClear()
+  const client = makeFakeClient('handshaking')
+  connectMock.mockReturnValue(client)
+  loadHostsMock.mockResolvedValue([HOST])
+  const harness = await renderHarness(HOST.id)
+  expect(descriptorProbe.start).not.toHaveBeenCalled()
+  await act(async () => client.emitState('connected'))
+  await act(async () => client.emitState('connected'))
+  expect(descriptorProbe.start).toHaveBeenCalledOnce()
+  const onStatus = descriptorProbe.start.mock.calls[0]![1]
+  onStatus({ machineName: 'Studio', hostPlatform: 'darwin' })
+  onStatus(null)
+  expect(descriptorProbe.record).toHaveBeenCalledExactlyOnceWith(HOST.id, {
+    machineName: 'Studio',
+    hostPlatform: 'darwin'
+  })
+  await act(async () => client.emitState('disconnected'))
+  expect(descriptorProbe.stop).toHaveBeenCalledOnce()
+  await act(async () => client.emitState('connected'))
+  expect(descriptorProbe.start).toHaveBeenCalledTimes(2)
+  await act(async () => harness.unmount())
+  expect(descriptorProbe.stop).toHaveBeenCalledTimes(2)
 })
 
 it('registers an already authenticated host and detaches on explicit disconnect', async () => {

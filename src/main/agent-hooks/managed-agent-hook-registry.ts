@@ -16,6 +16,7 @@ import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { museHookService } from '../muse/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { zcodeHookService } from '../zcode/hook-service'
 
 // Why (#16441): Codex's installer awaits a codex app-server trust-grant session
 // instead of blocking the main thread on spawnSync. Widening the tuple keeps the
@@ -54,6 +55,7 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['devin', () => devinHookService.install()],
   ['kimi', () => kimiHookService.install()],
   ['muse', () => museHookService.install()],
+  ['zcode', () => zcodeHookService.install()],
   ['dsh', () => dshHookService.install()]
 ]
 
@@ -77,6 +79,7 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['devin', () => devinHookService.refreshManagedScripts()],
   ['kimi', () => kimiHookService.refreshManagedScripts()],
   ['muse', () => museHookService.refreshManagedScripts()],
+  ['zcode', () => zcodeHookService.refreshManagedScripts()],
   ['dsh', () => dshHookService.refreshManagedScripts()]
 ]
 
@@ -96,6 +99,7 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['devin', () => devinHookService.remove()],
   ['kimi', () => kimiHookService.remove()],
   ['muse', () => museHookService.remove()],
+  ['zcode', () => zcodeHookService.remove()],
   ['dsh', () => dshHookService.remove()]
 ]
 
@@ -119,5 +123,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['devin', () => devinHookService.getStatus()],
   ['kimi', () => kimiHookService.getStatus()],
   ['muse', () => museHookService.getStatus()],
+  ['zcode', () => zcodeHookService.getStatus()],
   ['dsh', () => dshHookService.getStatus()]
 ]

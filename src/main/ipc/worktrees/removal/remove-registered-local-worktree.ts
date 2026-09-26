@@ -32,6 +32,7 @@ import {
   removeWorktreeLinkedPaths
 } from '../../worktree-symlinks'
 import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
+import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
@@ -215,6 +216,8 @@ export async function removeRegisteredLocalWorktree(
         )
       }
     }
+    // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
+    runWorktreeChangeInvalidators(repoId)
     removalCompleted = true
   } finally {
     await removalGate.finish(removalCompleted)

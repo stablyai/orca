@@ -91,14 +91,12 @@ src/main/github/gh-utils.ts
 src/main/hooks.ts
 src/main/ipc/app.ts
 src/main/ipc/developer-permissions.ts
-src/main/ipc/filesystem-list-files-git-fallback.ts
 src/main/ipc/filesystem-list-files.ts
 src/main/ipc/filesystem-watcher-wsl.ts
 src/main/ipc/filesystem/filesystem-handler-context.ts
 src/main/ipc/filesystem/filesystem-search-handlers.ts
 src/main/ipc/local-network-connection-test.ts
 src/main/ipc/macos-keyboard-layout-snapshot.ts
-src/main/ipc/notebook.ts
 src/main/ipc/notification-authorization-status.ts
 src/main/ipc/parcel-watcher-cancellation-restart.ts
 src/main/ipc/parcel-watcher-cancellation-tracker.ts

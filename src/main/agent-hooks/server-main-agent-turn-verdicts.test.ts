@@ -106,6 +106,8 @@ describe('main agent turn verdicts and clocks', () => {
 
     vi.setSystemTime(1_002_000)
     await post('/hook/codex', { hook_event_name: 'Stop' })
+    // Readers that predate `mainAgent` must still read the restated turn as stopped, not finished.
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', interrupted: true })
     // Past the late-event suppression window, a child's activity republishes the main agent.
     vi.setSystemTime(1_060_000)
     await post('/hook/codex', { hook_event_name: 'SubagentStart', agent_id: 'child-1' })
@@ -138,6 +140,7 @@ describe('main agent turn verdicts and clocks', () => {
 
     vi.setSystemTime(1_002_000)
     relayed('Stop', { state: 'done' })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', interrupted: true })
     vi.setSystemTime(1_060_000)
     relayed(
       'SubagentStart',

@@ -13,6 +13,7 @@
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
+import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
 import {
   agentSessionBackgroundTasksEqual,
@@ -20,8 +21,11 @@ import {
   type AgentSessionStatusEvent,
   type AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionProviderChildPhase } from './structured-agent-session-adapter'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
 import {
   StructuredAgentSessionStatusOwnership,
@@ -39,6 +43,7 @@ type StatusFeedSession = {
   journal: AgentSessionJournal
   params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
   hasProviderChild?: boolean
+  providerChildPhase?: StructuredAgentSessionProviderChildPhase
   fence?: number
 }
 
@@ -63,9 +68,15 @@ function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSumma
     a.agent === b.agent &&
     a.status === b.status &&
     a.hostExecutionOwned === b.hostExecutionOwned &&
+    a.hostExecutionPhase === b.hostExecutionPhase &&
     a.rewindBlockedReason === b.rewindBlockedReason &&
-    // Settled activity changes ranking; streaming active turns must stay quiet.
-    (a.status !== 'idle' || a.updatedAt === b.updatedAt) &&
+    // A moved state clock changes ranking; row activity alone, including a subagent's, does not.
+    // An idle state the journal cannot date still republishes, since readers date it by `updatedAt`,
+    // and so does one live child work holds open: readers take each publish as its evidence.
+    a.statusStartedAt === b.statusStartedAt &&
+    (a.status !== 'idle' ||
+      a.updatedAt === b.updatedAt ||
+      (a.statusStartedAt !== undefined && !isIdleHeldOpenByChildWork(b))) &&
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
     a.toolName === b.toolName &&
@@ -74,6 +85,19 @@ function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSumma
     a.turnOutcome === b.turnOutcome &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)
+  )
+}
+
+function isIdleHeldOpenByChildWork(summary: AgentSessionStatusSummary): boolean {
+  return (
+    summary.status === 'idle' &&
+    isAgentStatusHeldOpenByChildWork(
+      structuredAgentSessionAgentStatus({
+        status: summary.status,
+        backgroundTasks: summary.backgroundTasks,
+        turnOutcome: summary.turnOutcome
+      })
+    )
   )
 }
 
@@ -241,8 +265,8 @@ export class StructuredAgentSessionStatusFeed {
     }
     const record = this.deps.getRecord(sessionId)
     const providerSession = structuredAgentSessionProviderSessionMetadata(record)
-    // The journal has no model: the record's acknowledged options are where an owner
-    // handoff or a mid-session switch lands, so the row follows whichever is in force.
+    // The journal has no model: the record's acknowledged options are where a mid-session
+    // switch lands, so the row follows whichever is in force.
     const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
     // Usage is dropped here on purpose: a `task_progress` tick would otherwise fail the
     // equality check and re-broadcast a full summary to every remote subscriber for a
@@ -254,7 +278,14 @@ export class StructuredAgentSessionStatusFeed {
       sessionId,
       workspaceId: session.params.location.workspaceId,
       agent: session.params.provider,
-      ...(session.hasProviderChild ? { hostExecutionOwned: true as const } : {}),
+      ...(session.hasProviderChild
+        ? {
+            hostExecutionOwned: true as const,
+            ...(session.providerChildPhase
+              ? { hostExecutionPhase: session.providerChildPhase }
+              : {})
+          }
+        : {}),
       ...projection.summary,
       ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
         ? { rewindBlockedReason: 'outcome-unknown' as const }
@@ -263,6 +294,19 @@ export class StructuredAgentSessionStatusFeed {
       ...(backgroundTasks && backgroundTasks.length > 0 ? { backgroundTasks } : {}),
       ...(providerSession ? { providerSession } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()
+    }
+  }
+
+  /** Child-work evidence for a session this feed publishes; a failing sink costs nothing else. */
+  publishChildWork(sessionId: string, evidence: AgentChildWorkEvidence[]): void {
+    const session = this.deps.sessions.get(sessionId)
+    if (!session) {
+      return
+    }
+    try {
+      this.ownership.publishChildWork(sessionId, evidence, session.params.provider)
+    } catch (error) {
+      console.warn('[structured-session-status] child work publish failed', error)
     }
   }
 

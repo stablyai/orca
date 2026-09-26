@@ -6,11 +6,19 @@
 // agent to verify its last action before repeating it, and the launch toast reports what happened.
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionMutationResult,
+  AgentSessionSendResult
+} from '../../../shared/agent-session-wire'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import {
-  AGENT_SESSION_RESTART_CONTINUATION_MESSAGE,
-  AGENT_SESSION_RESTART_CONTINUATION_NOTE
+  AGENT_SESSION_RESTART_CONTINUATION_NOTE,
+  AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
+  AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
+  AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE,
+  restartContinuationMessage
 } from '../../../shared/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from './structured-agent-session-operation-settlement'
 import { createHash } from 'node:crypto'
@@ -34,6 +42,95 @@ export type StructuredAgentSessionContinuationOutcome = {
   reason?: string
 }
 
+/** The slice of the host one continuation needs. Structural so this module never imports the host. */
+export type StructuredAgentSessionContinuationHost = {
+  sessions: ReadonlyMap<string, { journal: AgentSessionJournal; fence: number }>
+  send: (input: {
+    envelope: AgentSessionMutationEnvelope
+    body: AgentJournalMessageItem
+    beforeRun?: () => void
+  }) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
+  awaitSendSettlement: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<{ value: AgentSessionSendResult } | undefined>
+  onNoteFailed: (sessionId: string, error: unknown) => void
+  publish: (sessionId: string, journal: AgentSessionJournal) => void
+  now: () => number
+  /** Whether the marker is still an offer, with the continuation's own submission set aside.
+   *  Re-asked right before dispatch, so a newer user message refuses the send; a provider turn
+   *  running then does not, since both providers queue a message sent mid-turn. */
+  stillResumable: (
+    marker: AgentSessionResumeMarker,
+    options: { pendingContinuationId: string }
+  ) => boolean
+}
+
+/** Binds one continuation to the host: the superseded check before dispatch, the settlement
+ *  waiter for the verdict, and the journal note that attributes the send to Orca. */
+export function restartContinuationDeps(
+  host: StructuredAgentSessionContinuationHost,
+  marker: AgentSessionResumeMarker
+): StructuredAgentSessionContinuationDeps {
+  return {
+    currentFence: (sessionId) => host.sessions.get(sessionId)?.fence ?? null,
+    send: (input) =>
+      host.send({
+        ...input,
+        beforeRun: () => {
+          if (
+            !host.stillResumable(marker, {
+              pendingContinuationId: input.envelope.clientOperationId
+            })
+          ) {
+            throw new RestartContinuationSupersededError()
+          }
+        }
+      }),
+    awaitSettlement: async (sessionId, clientMessageId) =>
+      (await host.awaitSendSettlement(sessionId, clientMessageId))?.value.submission,
+    onNoteFailed: host.onNoteFailed,
+    note: restartNoteWriter(host)
+  }
+}
+
+/** The note for a reattach that failed before any continuation was attempted. */
+export function noteRestartReattachFailed(
+  host: StructuredAgentSessionContinuationHost,
+  sessionId: string
+): Promise<void> {
+  return noteNotContinued(
+    { note: restartNoteWriter(host), onNoteFailed: host.onNoteFailed },
+    sessionId,
+    'not-connected'
+  )
+}
+
+/** Writes a host-authored status note into the chat and publishes it to open panes. */
+function restartNoteWriter(
+  host: Pick<StructuredAgentSessionContinuationHost, 'sessions' | 'publish' | 'now'>
+): StructuredAgentSessionContinuationDeps['note'] {
+  return async (sessionId, text, tone) => {
+    const session = host.sessions.get(sessionId)
+    if (!session) {
+      return
+    }
+    await session.journal.appendItem(
+      { provider: 'orca', clientMessageId: `restart-continuation:${sessionId}:${host.now()}` },
+      { kind: 'status', text, ...(tone ? { tone } : {}) },
+      { fence: session.fence }
+    )
+    host.publish(sessionId, session.journal)
+  }
+}
+
+/** Refusals the user's own message would meet as well; the restart list says to retry these. */
+const OWNERSHIP_REFUSALS = new Set([
+  'agent_session_conflict',
+  'agent_session_ownership_unknown',
+  'execution_owner_reconciling'
+])
+
 /** Only this pre-dispatch failure proves a thrown send did not deliver. */
 export class RestartContinuationSupersededError extends AgentSessionPreDispatchError {
   constructor() {
@@ -43,11 +140,11 @@ export class RestartContinuationSupersededError extends AgentSessionPreDispatchE
 }
 
 /** The message body, built once so both the send and any test read the same text. */
-export function restartContinuationBody(): AgentJournalMessageItem {
+export function restartContinuationBody(marker: AgentSessionResumeMarker): AgentJournalMessageItem {
   return {
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text: AGENT_SESSION_RESTART_CONTINUATION_MESSAGE }]
+    blocks: [{ type: 'text', text: restartContinuationMessage(marker) }]
   }
 }
 
@@ -58,7 +155,7 @@ export function restartContinuationEnvelope(
   fence: number,
   marker: AgentSessionResumeMarker
 ): { envelope: AgentSessionMutationEnvelope; body: AgentJournalMessageItem } {
-  const body = restartContinuationBody()
+  const body = restartContinuationBody(marker)
   return {
     body,
     envelope: {
@@ -109,8 +206,9 @@ export type StructuredAgentSessionContinuationDeps = {
     sessionId: string,
     clientMessageId: string
   ) => Promise<{ dispatchState?: string; reason?: string | null } | undefined>
-  /** Records the host-authored journal note that marks this send as Orca's, not the user's. */
-  note: (sessionId: string, text: string) => Promise<void>
+  /** Records a host-authored journal note: that this send was Orca's, not the user's, or that the
+   *  chat did not carry on. `tone` is a display hint older clients render as plain text. */
+  note: (sessionId: string, text: string, tone?: 'error' | 'warning') => Promise<void>
   /** Reports a note that could not be written. The note is best effort, but its failure is not
    *  allowed to be silent — a swallowed append is how this regressed unnoticed once already. */
   onNoteFailed: (sessionId: string, error: unknown) => void
@@ -124,6 +222,54 @@ export type StructuredAgentSessionContinuationDeps = {
  * are not re-implemented here.
  */
 export async function continueStructuredAgentSessionAfterRestart(
+  deps: StructuredAgentSessionContinuationDeps,
+  sessionId: string,
+  marker: AgentSessionResumeMarker
+): Promise<StructuredAgentSessionContinuationOutcome> {
+  let result: StructuredAgentSessionContinuationOutcome
+  try {
+    result = await sendContinuation(deps, sessionId, marker)
+  } catch (error) {
+    await noteNotContinued(deps, sessionId, 'refused')
+    throw error
+  }
+  if (result.outcome !== 'continued') {
+    await noteNotContinued(
+      deps,
+      sessionId,
+      result.outcome !== 'refused'
+        ? 'unconfirmed'
+        : OWNERSHIP_REFUSALS.has(result.reason ?? '')
+          ? 'not-connected'
+          : 'refused'
+    )
+  }
+  return result
+}
+
+/** The chat itself carries the failure, so it survives the toast, a dismissed record and a restart,
+ *  and the user's next message is what moves past it. */
+async function noteNotContinued(
+  deps: Pick<StructuredAgentSessionContinuationDeps, 'note' | 'onNoteFailed'>,
+  sessionId: string,
+  outcome: 'refused' | 'not-connected' | 'unconfirmed'
+): Promise<void> {
+  try {
+    await (outcome === 'unconfirmed'
+      ? deps.note(sessionId, AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE, 'warning')
+      : deps.note(
+          sessionId,
+          outcome === 'refused'
+            ? AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE
+            : AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE,
+          'error'
+        ))
+  } catch (error) {
+    deps.onNoteFailed(sessionId, error)
+  }
+}
+
+async function sendContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
   marker: AgentSessionResumeMarker

@@ -20,8 +20,10 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 import type {
   AgentSessionDispatchOutcome,
-  StructuredAgentSessionAdapter
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionProviderChildPhase
 } from './structured-agent-session-adapter'
+import { providerStartupFailureRejection } from './structured-agent-session-dead-generation-settlement'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
@@ -43,9 +45,10 @@ export type AgentSessionTurnContext = {
   publish: () => void
   /** Drains provider lifecycle already accepted by the execution host. */
   flushStreamedEvents: () => Promise<void>
-  hasPendingStreamedEvents?: () => boolean
   /** Re-derives authorization after submission persistence, immediately before provider dispatch. */
   beforeDispatch?: () => void
+  /** What the host holds about the child this dispatch is for, read at the moment it is needed. */
+  providerChildPhase?: () => StructuredAgentSessionProviderChildPhase | undefined
   now: () => number
 }
 
@@ -57,8 +60,10 @@ function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal
   return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
 }
 
-/** A thrown adapter error is indistinguishable from a lost reply, so it settles
- *  as `unknown` rather than as a rejection. */
+/** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
+ *  rather than as a rejection — unless the child had not proven its start. Such a child has
+ *  accepted nothing (input is written only after it initializes), so a dispatch it could not
+ *  take is provably unwritten and is rejected with the cause the adapter gave. */
 async function dispatchSafely(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
@@ -71,29 +76,15 @@ async function dispatchSafely(
       clientMessageId,
       body,
       fence: ctx.fence,
-      ...(ctx.beforeDispatch
-        ? {
-            beforeDispatch: async () => {
-              const ready = await withTimeout(
-                ctx.flushStreamedEvents().then(() => true),
-                AGENT_SESSION_ADMISSION_BARRIER_TIMEOUT_MS,
-                false
-              )
-              // A drained barrier may be followed by newer accepted events.
-              if (!ready || ctx.hasPendingStreamedEvents?.()) {
-                throw new AgentSessionPreDispatchError(
-                  'agent_session_admission_evidence_unavailable'
-                )
-              }
-              ctx.beforeDispatch?.()
-            }
-          }
-        : {}),
+      ...(ctx.beforeDispatch ? { beforeDispatch: async () => ctx.beforeDispatch?.() } : {}),
       ...(requestedAt === undefined ? {} : { requestedAt })
     })
   } catch (error) {
     if (error instanceof AgentSessionPreDispatchError) {
       throw error
+    }
+    if (ctx.providerChildPhase?.() === 'starting') {
+      return { state: 'rejected', reason: providerStartupFailureRejection(error) }
     }
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
   }

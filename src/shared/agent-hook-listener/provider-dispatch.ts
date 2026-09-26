@@ -24,6 +24,7 @@ import { normalizeDevinEvent } from './providers/devin-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
 import { normalizeMuseEvent } from './providers/muse-events'
 import { normalizeDshEvent } from './providers/dsh-events'
+import { normalizeZCodeEvent } from './providers/zcode-events'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -156,6 +157,9 @@ export function normalizeProviderEvent(input: {
       break
     case 'dsh':
       payload = normalizeDshEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
+    case 'zcode':
+      payload = normalizeZCodeEvent(state, eventName, promptText, paneKey, hookPayload)
       break
   }
 

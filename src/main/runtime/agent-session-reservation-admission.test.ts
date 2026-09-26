@@ -50,7 +50,6 @@ function reserveRequest(
     location: LOCATION,
     provider: 'claude',
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-a',
     claimKeyId: 'key-1',
@@ -70,8 +69,7 @@ function storeState(records: readonly AgentSessionRecord[] = []): AgentSessionSt
     operations: new Map(),
     retiredClaimKeys: [],
     unreadableRecords: new Map(),
-    visibleSessionIds: new Set(),
-    visibleSessionIdsIndexPresent: true
+    sessionTabs: null
   }
 }
 
@@ -195,5 +193,50 @@ describe('adopted conversation ownership', () => {
         LEASE_TTL_MS
       )
     ).toThrow('agent_session_conflict')
+  })
+})
+
+describe('re-create over a failed create', () => {
+  const EXITED = agentSessionLeaseFixture({
+    sessionId: 'session-adopting',
+    runtimeKind: 'native',
+    runtimeFence: 2,
+    provenHandleLinkId: null,
+    ownerProcess: null,
+    reservedSpawnToken: null,
+    claimStatus: 'released'
+  })
+  function failedCreate(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
+    return {
+      ...agentSessionRecordFixture(EXITED),
+      location: LOCATION,
+      accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/home/dev/.claude' },
+      providerHandleChain: [],
+      ...overrides
+    }
+  }
+
+  it('reserves a record that never bound a conversation and whose attempt is proven gone', () => {
+    const { record, disposition } = applyAgentSessionReservation(
+      storeState([failedCreate()]),
+      reserveRequest(),
+      LEASE_TTL_MS
+    )
+
+    expect(disposition).toBe('reserved')
+    expect(record.lease).toMatchObject({ claimStatus: 'reserved', runtimeFence: 3 })
+  })
+
+  it('refuses when the record bound a conversation, or its attempt may still run', () => {
+    const bound = failedCreate({ providerHandleChain: [adoptedLink()] })
+    const unproven = failedCreate({
+      lease: { ...EXITED, claimStatus: 'reserved', handoffStage: 'manual-recovery' }
+    })
+
+    for (const record of [bound, unproven]) {
+      expect(() =>
+        applyAgentSessionReservation(storeState([record]), reserveRequest(), LEASE_TTL_MS)
+      ).toThrow('agent_session_conflict')
+    }
   })
 })

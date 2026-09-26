@@ -44,7 +44,13 @@ export function agentLaunchSurfaceFactory(
   operationCallerKey?: string
 ): AgentLaunchSurfaceFactory {
   return {
-    createStructuredSession: async ({ worktreeId, agent, options, sessionId: requested }) => {
+    createStructuredSession: async ({
+      worktreeId,
+      agent,
+      options,
+      sessionId: requested,
+      tabId
+    }) => {
       const sessionId = requested ?? createStructuredAgentSessionId(agent, randomUUID)
       const seeded = narrowStructuredLaunchSeedOptions(options)
       const created = await createStructuredAgentSessionForWorktree({
@@ -69,6 +75,7 @@ export function agentLaunchSurfaceFactory(
         worktree: `id:${worktreeId}`,
         agent,
         ...(seeded ? { options: seeded } : {}),
+        ...(tabId ? { tabId } : {}),
         // The user asked for this chat, so it takes the surface — unlike a dispatched worker.
         activate: true
       })
@@ -86,7 +93,8 @@ export function agentLaunchSurfaceFactory(
       return {
         sessionId: created.value.sessionId,
         handle: structuredAgentSessionTabId(created.value.sessionId),
-        fence: created.value.fence
+        fence: created.value.fence,
+        ...(created.value.tabId ? { tabId: created.value.tabId } : {})
       }
     },
     deliverStructuredPrompt: async ({ sessionId, fence, prompt }) =>

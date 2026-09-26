@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { withWorktreeSpan } from '../../../observability/instrumentation'
@@ -36,9 +37,19 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
       }
 
       // Why: concurrent stale-toast/double-click/sidebar races can hit the same worktree; share the op so only one path touches Git and disk.
-      const removal = withWorktreeSpan({ stage: 'remove', path: worktreePath }, () =>
-        executeWorktreeRemoval(context, args, repo, repoId, worktreePath, removalHostId)
-      )
+      const removal = withWorktreeSpan({ stage: 'remove', path: worktreePath }, async () => {
+        const result = await executeWorktreeRemoval(
+          context,
+          args,
+          repo,
+          repoId,
+          worktreePath,
+          removalHostId
+        )
+        // Why stamped inside the shared promise: a coalesced second caller gets the same reply,
+        // naming the catalog this removal produced.
+        return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repoId) }
+      })
       worktreeRemovalsInFlight.set(inFlightKey, { optionsKey, promise: removal })
       try {
         const result = await removal

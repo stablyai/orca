@@ -39,12 +39,21 @@ describe('structuredAgentSessionAgentStatus', () => {
     ).toEqual({ state: 'working', workingMode: 'monitoring', mainAgent: { state: 'done' } })
   })
 
-  it('keeps an idle lead working while a subagent is blocked or out of contact', () => {
-    for (const state of ['waiting', 'blocked', 'unverifiable'] as const) {
+  it('keeps an idle main agent working while a subagent failed in place or is out of contact', () => {
+    for (const state of ['blocked', 'unverifiable'] as const) {
       expect(
         structuredAgentSessionAgentStatus({ status: 'idle', backgroundTasks: [task({ state })] })
       ).toEqual({ state: 'working', mainAgent: { state: 'done' } })
     }
+  })
+
+  it('reads an idle main agent as waiting while a subagent waits on a human', () => {
+    expect(
+      structuredAgentSessionAgentStatus({
+        status: 'idle',
+        backgroundTasks: [task({ state: 'waiting' })]
+      })
+    ).toEqual({ state: 'waiting', mainAgent: { state: 'done' } })
   })
 
   // The spinner and the expandable child list are built from the same summary, so a workflow must
@@ -80,7 +89,7 @@ describe('structuredAgentSessionAgentStatus', () => {
   })
 
   // The verdict is a fact about a finished turn; the fold never reads it, so a cancelled turn with
-  // a watch loop still reads monitoring here (the hook lane's known divergence, until PR C).
+  // a watch loop reads monitoring, as it does in the hook lane.
   it('carries the turn verdict on the main agent only while the main agent is done', () => {
     expect(
       structuredAgentSessionAgentStatus({ status: 'idle', turnOutcome: 'cancellation' })

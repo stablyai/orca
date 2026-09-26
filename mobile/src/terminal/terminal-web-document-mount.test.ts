@@ -197,6 +197,21 @@ describe('a start that throws gives the host back', () => {
   })
 })
 
+describe("the document's overlays on the page", () => {
+  it('sit inside the host, which is their containing block, rather than over the whole page', () => {
+    // `position: fixed` is the WebView's frame; on the page it is the window, header and all.
+    const host = plantHost()
+    const mounted = mountTerminalWebDocument(host, () => {})
+    const position = (id: string) => getComputedStyle(host.querySelector(`#${id}`)!).position
+
+    expect(getComputedStyle(host).position).toBe('relative')
+    expect(position('selection-overlay')).toBe('absolute')
+    expect(position('scroll-indicator')).toBe('absolute')
+
+    mounted.dispose()
+  })
+})
+
 describe('the component names the cause of a start that threw', () => {
   it('reports it to onEngineError instead of waiting out the readiness watchdog', () => {
     const host = plantHost()

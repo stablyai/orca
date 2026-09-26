@@ -6,6 +6,8 @@ type Doubles = {
   store: Map<string, string>
   writes: { key: string; value: string | null }[]
   hostsReject: boolean
+  /** The stored name identity the app's host record carries, beside its resolved name. */
+  hostIdentity: Record<string, string>
   /** Holds every store read open, which is how the two reads are made to answer out of order. */
   holdReads: boolean
   releaseReads: (() => void)[]
@@ -15,6 +17,7 @@ const doubles = vi.hoisted((): Doubles => ({
   store: new Map(),
   writes: [],
   hostsReject: false,
+  hostIdentity: {},
   holdReads: false,
   releaseReads: []
 }))
@@ -48,7 +51,15 @@ vi.mock('../transport/host-store', () => ({
     if (doubles.hostsReject) {
       throw new Error('the keychain would not answer')
     }
-    return [{ id: 'host-1', name: 'Host One', endpoint: 'ws://host-1', lastConnected: 3 }]
+    return [
+      {
+        id: 'host-1',
+        name: 'Host One',
+        ...doubles.hostIdentity,
+        endpoint: 'ws://host-1',
+        lastConnected: 3
+      }
+    ]
   }
 }))
 
@@ -87,6 +98,7 @@ beforeEach(() => {
   doubles.store.clear()
   doubles.writes.length = 0
   doubles.hostsReject = false
+  doubles.hostIdentity = {}
   doubles.holdReads = false
   doubles.releaseReads.length = 0
 })
@@ -242,6 +254,24 @@ describe('the host the page is handed', () => {
     })
     expect(mounted.view().snapshot?.host.id).toBe('host-1')
     expect(mounted.view().readStorage().storage).toEqual({ [PINS]: '["one"]' })
+  })
+
+  it("carries the stored name identity, so the page can tell the phone's override from the desktop's name", async () => {
+    doubles.hostIdentity = {
+      personalName: 'Host One',
+      lastKnownMachineName: 'm4airs-Air',
+      lastKnownHostPlatform: 'darwin'
+    }
+    const mounted = await mount()
+    expect(mounted.view().snapshot?.host).toEqual({
+      id: 'host-1',
+      name: 'Host One',
+      personalName: 'Host One',
+      lastKnownMachineName: 'm4airs-Air',
+      lastKnownHostPlatform: 'darwin',
+      endpoint: 'ws://host-1',
+      lastConnected: 3
+    })
   })
 })
 

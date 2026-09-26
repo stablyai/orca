@@ -29,6 +29,8 @@ import {
 
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
+import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
+import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
 // Re-exported so the live-turn readers' existing consumers keep one import site.
 export {
@@ -207,14 +209,8 @@ export function hasUnansweredStructuredAgentSessionDispatch(
   submissions: readonly AgentJournalSubmission[],
   currentFence?: number | null
 ): boolean {
-  return submissions.some(
-    (submission) =>
-      (currentFence == null || submission.fence >= currentFence) &&
-      (submission.dispatchState === 'pending' ||
-        (submission.dispatchState === 'unknown' &&
-          submission.recovered !== true &&
-          // Older hosts publish the recovery reason but omit the optional marker.
-          submission.reason !== 'host_restarted_before_acknowledgement'))
+  return submissions.some((submission) =>
+    isUnansweredStructuredAgentSessionDispatch(submission, currentFence)
   )
 }
 
@@ -313,6 +309,7 @@ export type StructuredAgentSessionStatusProjection = {
   lastAssistantMessage?: string
   /** The newest settled turn's provider verdict; present only while `status` is idle. */
   turnOutcome?: AgentJournalTurnOutcome
+  statusStartedAt?: number
 }
 
 /** One projection shared by host and client: null status means "no turn yet", not idle.
@@ -353,13 +350,20 @@ export function projectStructuredAgentSessionStatusSummary(
   // `readAgentJournalTurnOutcome` already answers null for anything it cannot place.
   const turnOutcome =
     status === 'idle' ? readAgentJournalTurnOutcome(newestStructuredAgentSessionTurn(items)) : null
+  const statusStartedAt = structuredAgentSessionStatusStartedAt(
+    status,
+    items,
+    submissions,
+    currentFence
+  )
   return {
     status,
     latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items)),
     ...(toolName ? { toolName } : {}),
     ...(toolInput ? { toolInput } : {}),
     ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
-    ...(turnOutcome ? { turnOutcome } : {})
+    ...(turnOutcome ? { turnOutcome } : {}),
+    ...(statusStartedAt !== undefined ? { statusStartedAt } : {})
   }
 }
 

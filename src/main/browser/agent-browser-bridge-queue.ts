@@ -89,22 +89,12 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
   ): Promise<T> {
     this.assertCommandAdmission()
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
-    // Why: inactive panes are display:none; the automation lease makes only this target paintable without selecting it.
-    const restore = options.needsPaint
-      ? await this.browserManager.acquireAutomationVisibility(
-          this.resolveCommandTarget(worktreeId, browserPageId).webContentsId
-        )
-      : undefined
-    try {
-      // Why: the page's guest can change while queued; bind to the one current at execution.
-      const target = this.resolveCommandTarget(worktreeId, browserPageId)
-      if (options.ensureSession !== false) {
-        await this.ensureSession(sessionName, browserPageId, target.webContentsId)
-      }
-      return await execute(sessionName, target)
-    } finally {
-      restore?.()
+    // Why: the page's guest can change while queued; bind to the one current at execution.
+    const target = this.resolveCommandTarget(worktreeId, browserPageId)
+    if (options.ensureSession !== false) {
+      await this.ensureSession(sessionName, browserPageId, target.webContentsId)
     }
+    return execute(sessionName, target)
   }
 
   protected async processQueue(sessionName: string): Promise<void> {

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpToLine,
+  Clock,
   Ellipsis,
   Loader2,
   MoveDown,
@@ -76,32 +77,50 @@ export function IpynbToolbarButton({
   )
 }
 
+export type IpynbRunState = 'idle' | 'queued' | 'running'
+
 /** VS Code-style gutter: a fixed `[n]` count with a run button slot below it, shown on hover or focus. */
 export function IpynbRunPrompt({
   executionCount,
-  running,
+  state,
+  duration,
   onRun
 }: {
   executionCount: number | null
-  running: boolean
+  state: IpynbRunState
+  /** How long the last run took, once it has finished. */
+  duration: string | null
   onRun: () => void
 }): React.JSX.Element {
   return (
     <div className="flex flex-col items-center">
       {/* h-5 matches one code line, so the count sits on the first line's centre. */}
       <span className="flex h-5 items-center font-mono text-[11px] text-muted-foreground">
-        [{running ? '*' : (executionCount ?? ' ')}]
+        [{state === 'idle' ? (executionCount ?? ' ') : '*'}]
       </span>
       {/* Why: `invisible` keeps the slot's box, so revealing the button never moves anything. */}
-      <div className={cn(!running && 'invisible group-focus-within:visible group-hover:visible')}>
+      <div
+        className={cn(
+          state === 'idle' && 'invisible group-focus-within:visible group-hover:visible'
+        )}
+      >
         <IpynbToolbarButton
           label={translate('auto.components.editor.IpynbViewer.859bf9fc21', 'Run cell')}
-          disabled={running}
+          disabled={state !== 'idle'}
           onClick={onRun}
         >
-          {running ? <Loader2 className="animate-spin" /> : <Play />}
+          {state === 'running' ? (
+            <Loader2 className="animate-spin" />
+          ) : state === 'queued' ? (
+            <Clock />
+          ) : (
+            <Play />
+          )}
         </IpynbToolbarButton>
       </div>
+      {duration ? (
+        <span className="font-mono text-[10px] text-muted-foreground">{duration}</span>
+      ) : null}
     </div>
   )
 }

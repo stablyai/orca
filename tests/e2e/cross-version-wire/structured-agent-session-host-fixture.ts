@@ -19,6 +19,7 @@ export function structuredHostStub(
     // `installableHost` below is what reassembles the member. Keeping them flat also lets the
     // manifest name them to prove a call reached the host.
     restartResumableList: vi.fn(async () => []),
+    restartResumableFailures: vi.fn(async () => []),
     restartResumableDismiss: vi.fn(async () => 0),
     restartResumeAll: vi.fn(async () => []),
     restartContinueAll: vi.fn(async () => ({ resumed: [], continued: [] })),
@@ -69,11 +70,17 @@ export function structuredHostStub(
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
     changeThreadGoal: vi.fn(async () => ({ ok: true, replayed: false })),
-    requestHandoff: vi.fn(async () => ({ status: { owner: 'native' } })),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
+    modelCatalog: vi.fn(() => ({ origin: 'unknown' as const })),
     readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    journalSnapshot: vi.fn(() => ({
+      sessionId,
+      cursor: { epoch: 'epoch-a', sequence: 0 },
+      items: [],
+      submissions: []
+    })),
     subscribe: vi.fn(() => () => undefined),
     subscribeStatus: vi.fn((subscriber: { emit: (event: unknown) => void }) => {
       subscriber.emit({ type: 'snapshot', sessions: [] })
@@ -95,8 +102,10 @@ export function installableHost(
 ): StructuredAgentSessionHost {
   const host = {
     ...hostCalls,
+    deps: { modelCatalog: { read: hostCalls.modelCatalog } },
     restartResume: {
       list: hostCalls.restartResumableList,
+      listFailures: hostCalls.restartResumableFailures,
       dismiss: hostCalls.restartResumableDismiss,
       resume: hostCalls.restartResumeAll,
       continueAfterRestart: hostCalls.restartContinueAll

@@ -9,7 +9,6 @@ import {
 } from '../../../shared/agent-session-journal-item-key'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { AgentSessionRewindRefusal } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type {
   StructuredAgentSessionAdapter,
@@ -36,7 +35,6 @@ let adapter: StructuredAgentSessionAdapter
 let acquires: StructuredAgentSessionAcquireInput[]
 const rewind = vi.fn<NonNullable<StructuredAgentSessionAdapter['rewind']>>()
 const recoverRewind = vi.fn<NonNullable<StructuredAgentSessionAdapter['recoverRewind']>>()
-let failClaude = false
 
 beforeEach(async () => {
   resetHostTestOperationIds()
@@ -50,7 +48,6 @@ beforeEach(async () => {
       }
     ]
   })
-  failClaude = false
   acquires = []
   directory = await mkdtemp(join(tmpdir(), 'orca-rewind-'))
   store = await AgentSessionRecordStore.open({
@@ -58,19 +55,11 @@ beforeEach(async () => {
     hostId: 'local'
   })
   adapter = {
-    supportsCreate: (_location, agent) => agent === 'codex' || agent === 'claude',
+    supportsCreate: (_location, agent) => agent === 'codex',
     supportsLocation: () => true,
     acquire: async (input) => {
       acquires.push(input)
-      if (input.rewind && failClaude) {
-        throw new AgentSessionRewindRefusal('provider-refused')
-      }
-      if (input.rewind) {
-        await input.rewind.onProved?.(input.rewind.targetUuid)
-      }
-      await input.rewindRecovery?.onProved()
       sink = input.events!
-      const handle = input.identity.providerHandle
       return {
         process: {
           hostId: 'local',
@@ -84,14 +73,7 @@ beforeEach(async () => {
           mintedAtFence: input.fence,
           observedAt: HOST_TEST_NOW,
           origin: acquires.length === 1 ? 'created' : 'resumed',
-          handle:
-            handle.kind === 'claude'
-              ? {
-                  provider: 'claude',
-                  sessionId: handle.sessionId,
-                  leafUuid: input.rewind?.targetUuid ?? 'tip'
-                }
-              : { provider: 'codex', threadId: HOST_TEST_THREAD }
+          handle: { provider: 'codex', threadId: HOST_TEST_THREAD }
         }
       }
     },
@@ -122,22 +104,14 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
 
-async function seed(provider: 'codex' | 'claude' = 'codex', acceptedSubmissions = false) {
-  const params =
-    provider === 'codex'
-      ? hostTestAttachParams(null)
-      : hostTestAttachParams(null, {
-          provider,
-          agent: provider,
-          accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/claude' },
-          providerHandle: { kind: 'claude', sessionId: 'claude-session', leafUuid: 'tip' }
-        })
-  expect(await host.attach(caller, params)).toMatchObject({ ok: true })
-  const keys = ['kept', 'drop', 'tip'].map((uuid) =>
-    provider === 'codex'
-      ? { provider, threadId: HOST_TEST_THREAD, turnId: uuid, ordinal: 0 }
-      : { provider, sessionId: 'claude-session', uuid }
-  )
+async function seed(acceptedSubmissions = false) {
+  expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  const keys = ['kept', 'drop', 'tip'].map((turnId) => ({
+    provider: 'codex' as const,
+    threadId: HOST_TEST_THREAD,
+    turnId,
+    ordinal: 0
+  }))
   let selectedItemId = agentJournalItemKey(keys[1]!)
   for (const [i, identity] of keys.entries()) {
     const body = {
@@ -196,32 +170,14 @@ function params(
 }
 
 describe('host rewind', () => {
-  it.each(['codex', 'claude'] as const)(
-    'resolves accepted %s user submissions to provider targets',
-    async (provider) => {
-      const target = await seed(provider, true)
-      expect(target.startsWith('orca:')).toBe(true)
-      expect(await host.rewind(caller, params(target))).toMatchObject({ ok: true })
-      expect(host.journalSnapshot(HOST_TEST_SESSION).items).toHaveLength(1)
-      if (provider === 'codex') {
-        expect(rewind).toHaveBeenCalledWith(expect.objectContaining({ beforeTurnId: 'drop' }))
-      } else {
-        expect(acquires[1]?.rewind).toMatchObject({ targetUuid: 'kept', dropsTurn: 'drop' })
-      }
-    }
-  )
-
-  it('retains the preceding accepted Claude prompt when rewinding its assistant response', async () => {
-    await seed('claude', true)
-    const target = agentJournalItemKey({
-      provider: 'claude',
-      sessionId: 'claude-session',
-      uuid: 'tip'
-    })
+  it('resolves accepted codex user submissions to provider targets', async () => {
+    const target = await seed(true)
+    expect(target.startsWith('orca:')).toBe(true)
     expect(await host.rewind(caller, params(target))).toMatchObject({ ok: true })
-    expect(acquires[1]?.rewind).toMatchObject({ targetUuid: 'drop' })
-    expect(host.journalSnapshot(HOST_TEST_SESSION).items).toHaveLength(2)
+    expect(host.journalSnapshot(HOST_TEST_SESSION).items).toHaveLength(1)
+    expect(rewind).toHaveBeenCalledWith(expect.objectContaining({ beforeTurnId: 'drop' }))
   })
+
   it('finishes a durable provider success on reattach without repeating the provider mutation', async () => {
     const target = await seed()
     const request = params(target)
@@ -305,43 +261,6 @@ describe('host rewind', () => {
     expect(host.journalSnapshot(HOST_TEST_SESSION).cursor.epoch).not.toBe(request.expectedEpoch)
     expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
     expect(rewind).toHaveBeenCalledTimes(1)
-  })
-  it('reacquires Claude at the retained cursor with the same session and a new lease fence', async () => {
-    const target = await seed('claude')
-    const before = store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
-    expect(await host.rewind(caller, params(target))).toMatchObject({ ok: true })
-    const emit = vi.fn()
-    const unsubscribe = host.subscribe({ id: 'after-rewind', sessionId: HOST_TEST_SESSION, emit })
-    emit.mockClear()
-    sink.appendItem(
-      { provider: 'claude', sessionId: 'claude-session', uuid: 'next' },
-      hostTestMessage('next')
-    )
-    sink.publish()
-    await host.flushStreamedEvents(HOST_TEST_SESSION)
-    expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'batch' }))
-    unsubscribe()
-    expect(acquires[1]?.rewind).toMatchObject({
-      targetUuid: 'kept',
-      previousLeafUuid: 'tip',
-      dropsTurn: 'drop'
-    })
-    expect(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence).toBeGreaterThan(before)
-    expect(store.getRecord(HOST_TEST_SESSION)!.lease.ownerProcess?.pid).toBe(4002)
-    expect(host.journalSnapshot(HOST_TEST_SESSION).items).toHaveLength(2)
-  })
-  it('recovers a Claude refusal with one plain resume and preserves the journal', async () => {
-    const target = await seed('claude')
-    failClaude = true
-    const before = host.journalSnapshot(HOST_TEST_SESSION)
-    expect(await host.rewind(caller, params(target))).toMatchObject({
-      ok: false,
-      refusal: { rewindReason: 'provider-refused' }
-    })
-    expect(acquires).toHaveLength(3)
-    expect(acquires[2]?.rewind).toBeUndefined()
-    expect(host.journalSnapshot(HOST_TEST_SESSION)).toEqual(before)
-    expect(store.getRecord(HOST_TEST_SESSION)!.lease.claimStatus).toBe('live')
   })
   it('refuses a rewind racing an active turn before provider execution', async () => {
     const target = await seed()

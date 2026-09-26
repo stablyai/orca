@@ -173,4 +173,11 @@ describe('reading a recorded launch back', () => {
       isAgentLaunchResult({ ...BASE, outcome: { kind: 'terminal', handle: 't', paneKey: 7 } })
     ).toBe(false)
   })
+
+  it("checks a structured row's tab id when present and reads one written without it", () => {
+    const structured = { kind: 'structured', handle: 'h', sessionId: 'sess-1' }
+    expect(isAgentLaunchResult({ ...BASE, outcome: structured })).toBe(true)
+    expect(isAgentLaunchResult({ ...BASE, outcome: { ...structured, tabId: TAB_ID } })).toBe(true)
+    expect(isAgentLaunchResult({ ...BASE, outcome: { ...structured, tabId: 7 } })).toBe(false)
+  })
 })

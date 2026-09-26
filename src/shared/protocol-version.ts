@@ -193,6 +193,10 @@ export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.statu
 // would wait forever for completions the host never sends and report nothing wrong.
 export const AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY =
   'agent-session.turn-completion.v1' as const
+// Why: agentSession.conversationOutline is additive; a client probes this before calling so an
+// older host leaves the message rail on loaded messages instead of answering method_not_found.
+export const AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY =
+  'agent-session.conversation-outline.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
 // Readers must understand a monitoring roster with no available stop control.
@@ -207,6 +211,10 @@ export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
 // older host that would reject the whole cancellation instead of falling back to turn stop.
 export const AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY =
   'agent-session.prompt-cancel.v1' as const
+// Why: agentSession.respondToQuestion has a strict schema, so clients must not send structured
+// `answers` to an older host; they fall back to the answer packed into `optionId`.
+export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
+  'agent-session.question-answers.v1' as const
 // Why: the host now publishes rows for work that is live inside a turn, and such
 // a row carries `stoppable: false` because no targeted stop can reach it. A
 // reader that predates the field draws a per-row Stop on every row it is given,
@@ -222,6 +230,8 @@ export const AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY =
   'agent-session.opencode2-resume.v1' as const
 export const AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY = 'agent-session.muse-resume.v1' as const
 export const AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY = 'agent-session.dsh-resume.v1' as const
+export const AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY =
+  'agent-session.zcode-resume.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
@@ -302,7 +312,13 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
 
+// Why: `agentSession.create` is a strict object, so an older host refuses a payload carrying the
+// reserved `tabId` rather than ignoring it. A client sends the field only to a host advertising this.
+export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
+  'agentSession.create.tab-id.v1' as const
+
 export const RUNTIME_CAPABILITIES = [
+  AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'files.pathsExist',
   'runtime.status.compat.v1',
@@ -363,14 +379,17 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_DSH_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,

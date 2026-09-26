@@ -81,8 +81,10 @@ export async function pasteDraftWhenAgentReady(args: {
   forcePaste?: boolean
   timeoutMs?: number
   onTimeout?: () => void
+  onUnconfirmedDelivery?: () => void
 }): Promise<boolean> {
-  const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
+  const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
+    args
 
   const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
 
@@ -123,6 +125,10 @@ export async function pasteDraftWhenAgentReady(args: {
       onTimeout?.()
       return false
     }
+    // Why: the process merely exists -- its composer was never observed. On Windows this is
+    // the ONLY path: ConPTY does not forward DECSET 2004, so no 2004-anchored ready signal
+    // can ever fire. Callers must be able to tell this blind write apart from a real delivery.
+    onUnconfirmedDelivery?.()
   }
 
   return await sendBracketedPasteToAgent({
@@ -143,8 +149,19 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   forcePaste?: boolean
   timeoutMs?: number
   onTimeout?: () => void
+  onUnconfirmedDelivery?: () => void
 }): Promise<boolean> {
-  const { tabId, ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
+  const {
+    tabId,
+    ptyId,
+    content,
+    agent,
+    submit,
+    forcePaste,
+    timeoutMs,
+    onTimeout,
+    onUnconfirmedDelivery
+  } = args
   const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
 
   if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
@@ -163,6 +180,7 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
       onTimeout?.()
       return false
     }
+    onUnconfirmedDelivery?.()
   }
 
   return await sendBracketedPasteToAgent({

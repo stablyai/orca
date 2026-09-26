@@ -238,6 +238,7 @@
     "@types/ssh2": "^1.15.5",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.2.0",
+    "@vscode/ripgrep-universal": "1.18.0",
     "@xterm/addon-fit": "0.12.0-beta.300",
     "@xterm/addon-image": "0.10.0-beta.300",
     "@xterm/addon-ligatures": "0.11.0-beta.300",

@@ -12,7 +12,7 @@ import {
   ptyIncarnations,
   ptyInitialCwd,
   ptyProcesses,
-  ptyShellName,
+  getPtyShellName,
   ptyTerminalHandle,
   ptyWorktreeId,
   ptyWslDistroById,
@@ -120,7 +120,7 @@ export async function listLocalPtyProcesses(): Promise<PtyProcessInfo[]> {
     id,
     ...(ptyIncarnations.get(id) ? { incarnationId: ptyIncarnations.get(id) } : {}),
     cwd: ptyInitialCwd.get(id) ?? '',
-    title: proc.process || ptyShellName.get(id) || 'shell',
+    title: proc.process || getPtyShellName(id) || 'shell',
     ...(ptyWorktreeId.get(id) ? { worktreeId: ptyWorktreeId.get(id) } : {}),
     ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {}),
     ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {})

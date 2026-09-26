@@ -521,11 +521,14 @@ describeRender(
           observer.disconnect()
         })
         observer.observe(host, { attributes: true, attributeFilter: ['class'] })
+        // The page's refit follows the host's box, not the window, so the pulse resizes the host.
+        let narrow = false
         const pulse = () => {
           if (state.disposed !== null) {
             return
           }
-          globalThis.dispatchEvent(new Event('resize'))
+          narrow = !narrow
+          host.style.width = narrow ? '99%' : ''
           requestAnimationFrame(pulse)
         }
         requestAnimationFrame(pulse)
@@ -600,7 +603,8 @@ describeRender(
             // and reserves no width for one.
             viewportOverflowY: getComputedStyle(viewport).overflowY,
             viewportReservesScrollbar: viewport.offsetWidth !== viewport.clientWidth,
-            // The document's: the overlay sits in unscaled viewport coordinates above the grid.
+            // The mount's: the overlay sits in the host's unscaled coordinates above the grid,
+            // not over the page's header as `fixed` would put it.
             overlayPosition: getComputedStyle(overlay).position
           }
         })
@@ -608,7 +612,7 @@ describeRender(
         xtermPosition: 'relative',
         viewportOverflowY: 'hidden',
         viewportReservesScrollbar: false,
-        overlayPosition: 'fixed'
+        overlayPosition: 'absolute'
       })
 
       await page.evaluate(() => globalThis.__orcaTerminalProbe.setMounted(false))

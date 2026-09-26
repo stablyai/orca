@@ -74,17 +74,23 @@ describe('notebook code preview', () => {
 })
 
 describe('notebook run prompt', () => {
-  it('shows the count above the run button and [*] with the button disabled while running', () => {
+  it('shows the count, then [*] with a disabled button while queued or running, then the duration', () => {
     const { rerender } = render(
-      <IpynbRunPrompt executionCount={3} running={false} onRun={vi.fn()} />,
+      <IpynbRunPrompt executionCount={3} state="idle" duration={null} onRun={vi.fn()} />,
       { wrapper: TooltipProvider }
     )
     expect(screen.getByText('[3]')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Run cell' }).hasAttribute('disabled')).toBe(false)
 
-    rerender(<IpynbRunPrompt executionCount={3} running onRun={vi.fn()} />)
-    expect(screen.getByText('[*]')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Run cell' }).hasAttribute('disabled')).toBe(true)
+    for (const state of ['queued', 'running'] as const) {
+      rerender(<IpynbRunPrompt executionCount={3} state={state} duration={null} onRun={vi.fn()} />)
+      expect(screen.getByText('[*]')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Run cell' }).hasAttribute('disabled')).toBe(true)
+    }
+
+    rerender(<IpynbRunPrompt executionCount={4} state="idle" duration="1.2s" onRun={vi.fn()} />)
+    expect(screen.getByText('[4]')).toBeTruthy()
+    expect(screen.getByText('1.2s')).toBeTruthy()
   })
 })
 

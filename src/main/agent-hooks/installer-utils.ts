@@ -318,7 +318,9 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
 
 export function writeHooksJson(
   configPath: string,
-  config: HooksConfig,
+  // Why: only used for the fallback serialization, so any JSON-shaped config qualifies —
+  // ZCode nests its hook block under `hooks.events`, not Claude's `hooks.<Event>`.
+  config: Record<string, unknown>,
   // Why: `serialized` lets a JSONC config (Devin) supply text edited in place, so the
   // atomic write + rolling backup below stay shared instead of being reimplemented.
   options?: { preserveMode?: boolean; serialized?: string }

@@ -27,6 +27,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   trae: 'Trae',
   kimi: 'Kimi',
   muse: 'Muse',
+  zcode: 'ZCode',
   dsh: 'DeepSeek Harness'
 }
 

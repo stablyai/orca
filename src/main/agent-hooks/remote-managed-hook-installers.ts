@@ -15,6 +15,7 @@ import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { dshHookService } from '../dsh/hook-service'
 import { museHookService } from '../muse/hook-service'
+import { zcodeHookService } from '../zcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 export type RemoteManagedHookInstallOptions = {
@@ -76,6 +77,7 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
   ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)],
   ['muse', (sftp, remoteHome) => museHookService.installRemote(sftp, remoteHome)],
+  ['zcode', (sftp, remoteHome) => zcodeHookService.installRemote(sftp, remoteHome)],
   ['dsh', (sftp, remoteHome) => dshHookService.installRemote(sftp, remoteHome)]
 ]
 

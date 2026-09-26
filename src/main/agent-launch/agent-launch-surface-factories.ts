@@ -17,6 +17,9 @@ export type AgentLaunchSurfaceFactory = {
     options?: Readonly<Record<string, unknown>>
     /** The caller-minted session id; refused with `AgentLaunchSessionAlreadyExistsError` if taken. */
     sessionId?: string
+    /** The caller-reserved tab id (the tab half of `paneKey`), so the host records where this chat
+     *  is shown; absent records the id clients derive. */
+    tabId?: string
   }): Promise<AgentLaunchStructuredSurface>
   createTerminalAgent(args: {
     worktreeId: string
@@ -67,6 +70,8 @@ export type AgentLaunchStructuredSurface = {
   sessionId: string
   handle: string
   fence: number
+  /** The host-owned id of the tab that shows this chat; a host that predates it reports none. */
+  tabId?: string
 }
 
 /** A structured create refusal that proves no session was committed, so the launch may downgrade. */

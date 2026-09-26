@@ -38,6 +38,7 @@ function session(
     status: readPhase === 'loading' ? 'loading' : 'ready',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier: vi.fn(),
     readPhase
   }

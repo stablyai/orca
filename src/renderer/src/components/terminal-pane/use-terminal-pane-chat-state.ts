@@ -7,7 +7,7 @@ import { collectLeafIdsInOrder, EMPTY_LAYOUT } from './layout-serialization'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
-import { selectUnifiedTerminalTabChatFields } from './terminal-unified-tab-lookup'
+import { selectUnifiedTerminalTabFields } from './terminal-unified-tab-lookup'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import {
   nativeChatLaunchAgentForLeaf,
@@ -41,9 +41,9 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   const pendingCodexPaneRestartIds = useAppStore((store) => store.pendingCodexPaneRestartIds)
   // Why one selector: five separate subscriptions each re-read the same unified
   // tab, so one publication paid the lookup five times per mounted tab.
-  const { unifiedTabId, isChatViewMode, unifiedTabLabel } = useAppStore(
+  const { unifiedTabId, isChatViewMode, unifiedTabLabel, isTabPinned } = useAppStore(
     useShallow((store) =>
-      selectUnifiedTerminalTabChatFields(store.unifiedTabsByWorktree, worktreeId, tabId)
+      selectUnifiedTerminalTabFields(store.unifiedTabsByWorktree, worktreeId, tabId)
     )
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
@@ -243,6 +243,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     nativeChatEnabled,
     effectiveChatViewMode,
     unifiedTabLabel,
+    isTabPinned,
     runtimePaneTitlesByPaneId,
     tabAgentTypeByLeaf,
     setTabViewMode,

@@ -3,6 +3,8 @@ import type {
   WorktreeFetchOptions,
   WorktreeSlice
 } from '../../worktree-helpers'
+import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
+import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -28,10 +30,24 @@ export function createFetchWorktrees(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['fetchWorktrees'] {
-  return (async (
+  // Why declared overloads: the slice type is an overload pair, and a declaration carries it
+  // without asserting the implementation into shape.
+  function fetchWorktrees(
+    repoId: string,
+    options: DirectSshWorktreeFetchOptions
+  ): Promise<HostQualifiedDetectedWorktreeResult>
+  function fetchWorktrees(repoId: string, options?: WorktreeFetchOptions): Promise<boolean>
+  async function fetchWorktrees(
     repoId: string,
     options?: WorktreeFetchOptions | DirectSshWorktreeFetchOptions
-  ) => {
+  ): Promise<boolean | HostQualifiedDetectedWorktreeResult> {
+    return fetchWorktreesAttempt(repoId, options, true)
+  }
+  async function fetchWorktreesAttempt(
+    repoId: string,
+    options: WorktreeFetchOptions | DirectSshWorktreeFetchOptions | undefined,
+    relistIfStale: boolean
+  ): Promise<boolean | HostQualifiedDetectedWorktreeResult> {
     const directCallerAuthority =
       options && 'directSshAuthority' in options ? options.directSshAuthority : undefined
     try {
@@ -82,15 +98,17 @@ export function createFetchWorktrees(
         requireAuthoritative: options?.requireAuthoritative,
         directSshAuthority,
         connectionId: repoOwner?.connectionId,
-        knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId)
+        knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId),
+        isStaleCatalogPublication: (result) =>
+          isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion)
       })
       if (refresh.status !== 'admitted') {
         return directCallerAuthority ? refresh.providerResult : false
       }
       if (options?.requireAuthoritative && !refresh.result.authoritative) {
-        return directCallerAuthority ? refresh.providerResult : false
+        return directCallerAuthority ? (refresh.providerResult ?? false) : false
       }
-      const admitted = mergeFetchedWorktrees(set, {
+      const outcome = mergeFetchedWorktrees(set, {
         repoId,
         hostId,
         ownerWasMissingAtStart,
@@ -102,10 +120,22 @@ export function createFetchWorktrees(
         setup,
         refresh
       })
-      if (!admitted) {
-        return directCallerAuthority
-          ? (staleDetectedWorktreeProviderResult(refresh) ?? false)
-          : false
+      switch (outcome) {
+        case 'applied':
+          break
+        case 'superseded':
+          // Why current for direct callers: a newer catalog is already applied; 'stale' means a moved
+          // connection. Others relist once: a caller that joined a listing already in flight (a
+          // change event's refresh) may get only that older answer, and nothing else would follow
+          // it. One new listing scans at or past the applied version, so it is admitted.
+          if (directCallerAuthority) {
+            return refresh.providerResult ?? false
+          }
+          return relistIfStale ? fetchWorktreesAttempt(repoId, options, false) : false
+        case 'not-current':
+          return directCallerAuthority
+            ? (staleDetectedWorktreeProviderResult(refresh) ?? false)
+            : false
       }
       // Direct SSH lineage requires its own qualified authority result.
       // Bulk runtime callers apply one final host-wide snapshot after all repo merges.
@@ -120,5 +150,6 @@ export function createFetchWorktrees(
       console.error(`Failed to fetch worktrees for repo ${repoId}:`, err)
       return false
     }
-  }) as WorktreeSlice['fetchWorktrees']
+  }
+  return fetchWorktrees
 }

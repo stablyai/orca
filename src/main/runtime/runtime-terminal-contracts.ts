@@ -77,7 +77,6 @@ export type TerminalCreateOptions = {
   persistHostSessionBinding?: boolean
   agentSessionClaim?: AgentSessionExecutionClaim
   agentSessionCreateOperationId?: string
-  structuredAgentSessionId?: string
   signal?: AbortSignal
   onPtySpawnCommitted?: () => void
   deferMobileSessionPublish?: boolean
@@ -205,6 +204,8 @@ export type RuntimeProviderSnapshotReadOptions = {
 export type RuntimeAgentPromptWriteOptions = RuntimeTerminalWriteOptions & {
   /** Raw prompt text for submit scheduling; not written, only used for line-aware delays. */
   promptForSchedule?: string
+  /** See buildAgentPromptPasteBytes. */
+  leadLine?: string
   /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */
   acceptQueued?: boolean
   observationTimeoutMs?: number

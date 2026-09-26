@@ -14,6 +14,7 @@ import {
   removeWorktreeLinkedPaths
 } from '../ipc/worktree-symlinks'
 import { cleanupUnusedWorktreePushTargetRemote } from '../ipc/worktree-remote'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import {
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
@@ -174,6 +175,8 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
         throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
       }
     }
+    // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
+    runWorktreeChangeInvalidators(repo.id)
     completed = true
   } finally {
     await gate.finish(completed)

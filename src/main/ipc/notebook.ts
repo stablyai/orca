@@ -1,253 +1,128 @@
-import { spawn } from 'node:child_process'
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { dirname } from 'node:path'
-import { ipcMain } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
-import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
+import { startNotebookKernel, type NotebookKernel } from '../notebook/notebook-kernel'
+import {
+  createNotebookVenv,
+  describePython,
+  installIpykernel,
+  listPythonEnvironments
+} from '../notebook/python-environments'
+import { notebookVenvParent } from '../../shared/notebook-venv-location'
+import type {
+  CreateVenvResult,
+  KernelFrameEvent,
+  KernelStartResult,
+  PythonEnvironment,
+  PythonEnvironments
+} from '../../shared/notebook-kernel-types'
 
-export type NotebookRunResult = {
-  stdout: string
-  stderr: string
-  exitCode: number | null
-  error?: string
-}
+/** Each renderer document's kernels, by notebook file. */
+const kernelsByOwner = new Map<WebContents, Map<string, NotebookKernel>>()
 
-const PYTHON_RUN_TIMEOUT_MS = 60_000
-const MAX_CAPTURE_BYTES = 2 * 1024 * 1024
-
-type BoundedCapture = {
-  text: string
-  bytes: number
-  truncated: boolean
-}
-
-function pythonCandidates(): { command: string; argsPrefix: string[] }[] {
-  const configured = process.env.ORCA_NOTEBOOK_PYTHON?.trim()
-  const candidates: { command: string; argsPrefix: string[] }[] = []
-  if (configured) {
-    candidates.push({ command: configured, argsPrefix: [] })
-  }
-  if (process.platform === 'win32') {
-    candidates.push({ command: 'py', argsPrefix: ['-3'] })
-  }
-  candidates.push({ command: 'python3', argsPrefix: [] }, { command: 'python', argsPrefix: [] })
-  return candidates
-}
-
-function appendBounded(capture: BoundedCapture, chunk: Buffer): void {
-  if (capture.truncated) {
-    return
-  }
-  const remainingBytes = MAX_CAPTURE_BYTES - capture.bytes
-  if (remainingBytes <= 0) {
-    capture.truncated = true
-    return
-  }
-  if (chunk.byteLength <= remainingBytes) {
-    capture.text += chunk.toString('utf8')
-    capture.bytes += chunk.byteLength
-    return
-  }
-  capture.text += `${chunk.subarray(0, remainingBytes).toString('utf8')}\n[output truncated]\n`
-  capture.bytes = MAX_CAPTURE_BYTES
-  capture.truncated = true
-}
-
-/** Exported for the refusal-fallback test; the timeout path is otherwise unreachable. */
-export function terminateNotebookProcessTree(
-  child: ChildProcessWithoutNullStreams
-): ReturnType<typeof setTimeout> | null {
-  if (!child.pid) {
-    child.kill()
-    return null
-  }
-
-  if (process.platform === 'win32') {
-    if (
-      !admitSelfInitiatedTreeKill({
-        pid: child.pid,
-        site: 'notebook-cell-timeout',
-        scope: 'win-taskkill-tree'
-      })
-    ) {
-      // Refusal blocks the tree walk, not the termination: killing the root by
-      // handle cannot reach a recycled pid, and a timed-out cell must still stop.
-      child.kill()
-      return null
-    }
-    try {
-      // Why: a timed-out cell can spawn descendants. taskkill /T is the
-      // Windows equivalent of terminating the whole process group.
-      const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
-      killer.on('error', () => child.kill())
-      killer.unref()
-    } catch {
-      child.kill()
-    }
-    return null
-  }
-
-  try {
-    process.kill(-child.pid, 'SIGTERM')
-  } catch {
-    child.kill()
-  }
-
-  const forceKillTimer = setTimeout(() => {
-    try {
-      process.kill(-child.pid!, 'SIGKILL')
-    } catch {
-      /* process group already exited */
-    }
-  }, 2000)
-  forceKillTimer.unref?.()
-  return forceKillTimer
-}
-
-function buildPythonExecutionCode(code: string, preamble: string): string {
-  const payload = Buffer.from(JSON.stringify({ code, preamble }), 'utf8').toString('base64')
-  return [
-    'import base64, contextlib, io, json, sys, traceback',
-    `payload = json.loads(base64.b64decode(${JSON.stringify(payload)}).decode("utf-8"))`,
-    'namespace = {"__name__": "__main__"}',
-    'try:',
-    '    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):',
-    '        exec(payload["preamble"], namespace)',
-    '    exec(payload["code"], namespace)',
-    'except Exception:',
-    '    traceback.print_exc()',
-    '    sys.exit(1)'
-  ].join('\n')
-}
-
-async function runPythonCandidate(
-  candidate: { command: string; argsPrefix: string[] },
-  code: string,
-  preamble: string,
-  cwd: string
-): Promise<NotebookRunResult> {
-  return new Promise((resolve) => {
-    const stdout: BoundedCapture = { text: '', bytes: 0, truncated: false }
-    const stderr: BoundedCapture = { text: '', bytes: 0, truncated: false }
-    let settled = false
-    let forceKillTimer: ReturnType<typeof setTimeout> | null = null
-    let timeout: ReturnType<typeof setTimeout> | null = null
-    const child = spawn(
-      candidate.command,
-      [...candidate.argsPrefix, '-c', buildPythonExecutionCode(code, preamble)],
-      {
-        cwd,
-        detached: process.platform !== 'win32',
-        windowsHide: true,
-        env: process.env
+// Why: a reloaded, crashed or closed renderer has lost its sessions, so its kernels go with it.
+function kernelsOf(owner: WebContents): Map<string, NotebookKernel> {
+  let kernels = kernelsByOwner.get(owner)
+  if (!kernels) {
+    const owned = new Map<string, NotebookKernel>()
+    const stopAll = (): void => {
+      for (const kernel of owned.values()) {
+        kernel.shutdown()
       }
-    )
-    const cleanup = (options: { clearForceKillTimer: boolean }): void => {
-      if (timeout) {
-        clearTimeout(timeout)
-        timeout = null
-      }
-      if (forceKillTimer && options.clearForceKillTimer) {
-        clearTimeout(forceKillTimer)
-        forceKillTimer = null
-      }
-      child.stdout.off('data', onStdoutData)
-      child.stderr.off('data', onStderrData)
-      child.off('error', onError)
-      child.off('close', onClose)
+      owned.clear()
     }
-    const finish = (
-      result: NotebookRunResult,
-      options: { clearForceKillTimer: boolean } = { clearForceKillTimer: true }
-    ): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup(options)
-      resolve(result)
-    }
-
-    timeout = setTimeout(() => {
-      forceKillTimer = terminateNotebookProcessTree(child)
-      finish(
-        {
-          stdout: stdout.text,
-          stderr: stderr.text,
-          exitCode: null,
-          error: 'Python cell timed out.'
-        },
-        { clearForceKillTimer: false }
-      )
-    }, PYTHON_RUN_TIMEOUT_MS)
-
-    const onStdoutData = (chunk: Buffer): void => {
-      appendBounded(stdout, chunk)
-    }
-    const onStderrData = (chunk: Buffer): void => {
-      appendBounded(stderr, chunk)
-    }
-    const onError = (error: Error): void => {
-      finish({ stdout: stdout.text, stderr: stderr.text, exitCode: null, error: error.message })
-    }
-    const onClose = (exitCode: number | null): void => {
-      finish({
-        stdout: stdout.text,
-        stderr: stderr.text,
-        exitCode
-      })
-    }
-
-    child.stdout.on('data', onStdoutData)
-    child.stderr.on('data', onStderrData)
-    child.on('error', onError)
-    child.on('close', onClose)
-  })
-}
-
-async function runPythonCell(
-  code: string,
-  preamble: string,
-  cwd: string
-): Promise<NotebookRunResult> {
-  if (!code.trim() && !preamble.trim()) {
-    return { stdout: '', stderr: '', exitCode: 0 }
+    owner.on('did-navigate', stopAll)
+    owner.on('render-process-gone', stopAll)
+    owner.once('destroyed', () => {
+      stopAll()
+      kernelsByOwner.delete(owner)
+    })
+    kernelsByOwner.set(owner, owned)
+    kernels = owned
   }
-
-  let lastError = 'Python was not found.'
-  for (const candidate of pythonCandidates()) {
-    const result = await runPythonCandidate(candidate, code, preamble, cwd)
-    if (!result.error?.includes('ENOENT')) {
-      return result
-    }
-    lastError = result.error
-  }
-  return { stdout: '', stderr: '', exitCode: null, error: lastError }
+  return kernels
 }
 
 export function registerNotebookHandlers(store: Store): void {
   ipcMain.handle(
-    'notebook:runPythonCell',
+    'notebook:listPythonEnvironments',
     async (
       _event,
-      args: { filePath: string; code: string; preamble?: string; connectionId?: string | null }
-    ): Promise<NotebookRunResult> => {
-      if (args.connectionId) {
-        return {
-          stdout: '',
-          stderr: '',
-          exitCode: null,
-          error: 'Notebook execution is currently supported for local files only.'
-        }
-      }
-      const filePath = await resolveAuthorizedPath(args.filePath, store)
-      // Why: execute relative to the notebook file so local imports and data
-      // paths behave the same way users expect from a notebook opened on disk.
-      return runPythonCell(args.code, args.preamble ?? '', dirname(filePath))
+      args: { filePath: string; rootPath: string | null }
+    ): Promise<PythonEnvironments> => {
+      await resolveAuthorizedPath(args.filePath, store)
+      // Why the unresolved path: rootPath is in the same (possibly symlinked) form, e.g. /tmp.
+      return listPythonEnvironments(args.filePath, args.rootPath)
     }
   )
+
+  ipcMain.handle(
+    'notebook:describePython',
+    (_event, args: { path: string }): Promise<PythonEnvironment | null> => describePython(args.path)
+  )
+
+  ipcMain.handle(
+    'notebook:startKernel',
+    async (event, args: { filePath: string; python: string }): Promise<KernelStartResult> => {
+      // Why: run from the notebook's folder so relative imports and data paths resolve as on disk.
+      const cwd = dirname(await resolveAuthorizedPath(args.filePath, store))
+      const owner = event.sender
+      const kernels = kernelsOf(owner)
+      kernels.get(args.filePath)?.shutdown()
+      const { kernel, ready, exited } = startNotebookKernel({
+        python: args.python,
+        cwd,
+        onFrame: (frame) => {
+          if (!owner.isDestroyed()) {
+            owner.send('notebook:kernelFrame', {
+              filePath: args.filePath,
+              frame
+            } satisfies KernelFrameEvent)
+          }
+        }
+      })
+      kernels.set(args.filePath, kernel)
+      void exited.then(() => {
+        if (kernels.get(args.filePath) === kernel) {
+          kernels.delete(args.filePath)
+        }
+      })
+      return ready
+    }
+  )
+
+  ipcMain.handle(
+    'notebook:installIpykernel',
+    (_event, args: { python: string }): Promise<{ ok: boolean; detail: string }> =>
+      installIpykernel(args.python)
+  )
+
+  ipcMain.handle(
+    'notebook:createVenv',
+    async (
+      _event,
+      args: { filePath: string; rootPath: string | null; python: string }
+    ): Promise<CreateVenvResult> => {
+      await resolveAuthorizedPath(args.filePath, store)
+      if (args.rootPath) {
+        await resolveAuthorizedPath(args.rootPath, store)
+      }
+      return createNotebookVenv(args.python, notebookVenvParent(args.filePath, args.rootPath))
+    }
+  )
+
+  ipcMain.handle('notebook:execute', (event, args: { filePath: string; code: string }): void => {
+    kernelsOf(event.sender).get(args.filePath)?.execute(args.code)
+  })
+
+  ipcMain.handle('notebook:interrupt', (event, args: { filePath: string }): void => {
+    kernelsOf(event.sender).get(args.filePath)?.interrupt()
+  })
+
+  ipcMain.handle('notebook:shutdownKernel', (event, args: { filePath: string }): void => {
+    const kernels = kernelsOf(event.sender)
+    kernels.get(args.filePath)?.shutdown()
+    kernels.delete(args.filePath)
+  })
 }

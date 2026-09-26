@@ -55,6 +55,7 @@ const AGENT_HOOK_SOURCES = [
   'devin',
   'kimi',
   'muse',
+  'zcode',
   'dsh'
 ] as const
 

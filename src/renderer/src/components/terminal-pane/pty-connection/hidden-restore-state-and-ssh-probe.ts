@@ -17,8 +17,6 @@ import {
   HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX
 } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
-import { recordHiddenRendererSkip } from './e2e-terminal-pty-harness'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { bindHiddenOutputRestoreSnapshot } from './hidden-output-restore-snapshot'
@@ -97,38 +95,6 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
     // A partial CSI prefix belongs to the stream that produced it; carrying it into a
     // replacement PTY would splice two unrelated byte ranges into one sequence.
     session.mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
-  }
-
-  session.pulseVisibleLocalPtySizeForTuiRepaint = function (ptyId: string): void {
-    if (
-      !session.isRendererPtyResizeAuthoritative() ||
-      session.shouldSuppressDesktopPtyResize() ||
-      isRemoteRuntimePtyId(ptyId)
-    ) {
-      return
-    }
-    const cols = session.pane.terminal.cols
-    const rows = session.pane.terminal.rows
-    if (cols <= 2 || rows <= 0) {
-      return
-    }
-    // Why: a hidden alt-screen TUI can miss the same-size restore SIGWINCH; a one-column pulse makes the repaint observable to the child.
-    session.transport.resize(cols - 1, rows)
-    session.transport.resize(cols, rows)
-  }
-
-  session.skipBackgroundAlternateScreenOutput = function (data: string): void {
-    session.writeHiddenStartupRendererQueries(data)
-    session.hiddenRendererStateDirty = true
-    recordHiddenRendererSkip(data.length)
-    const ptyId = session.transport.getPtyId()
-    if (!ptyId || session.alternateScreenBackgroundRepaintTimer !== null) {
-      return
-    }
-    session.pulseVisibleLocalPtySizeForTuiRepaint(ptyId)
-    session.alternateScreenBackgroundRepaintTimer = setTimeout(() => {
-      session.alternateScreenBackgroundRepaintTimer = null
-    }, 100)
   }
 
   session.resetHiddenOutputRestoreIfPtyChanged = function (): void {

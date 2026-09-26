@@ -45,6 +45,23 @@ export type StructuredAgentSessionIdentityResolver = (
   journal: StructuredAgentSessionLifecycleJournal
 ) => AgentJournalItemIdentity | null
 
+/** What a revision reads: a keyed read for a row it can name, and the scan for one it cannot. */
+export type StructuredAgentSessionRevisionJournal = Pick<
+  AgentSessionJournal,
+  'epoch' | 'visitItems' | 'itemBody'
+>
+
+/** The row a revision rewrites and its whole new body, read from the journal at execution. */
+export type StructuredAgentSessionRevisionResolver = (
+  journal: StructuredAgentSessionRevisionJournal
+) => { identity: AgentJournalItemIdentity; body: AgentJournalItemBody } | null
+
+/** A revision's body is derived from the row it revises, so coalescing one away would lose it. */
+export type StructuredAgentSessionRevisionOptions = Omit<
+  StructuredAgentSessionAppendOptions,
+  'coalescingKey'
+>
+
 /** Compatibility alias for lifecycle callers that already use this resolver. */
 export type StructuredAgentSessionLifecycleIdentityResolver = StructuredAgentSessionIdentityResolver
 
@@ -83,11 +100,24 @@ export type StructuredAgentSessionEventSink = {
     resolveIdentity: StructuredAgentSessionIdentityResolver,
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
+  /** Queues a read-modify-write of one row; `reservedBytes` must bound the resolved write. */
+  tryReviseResolvedItem?(
+    reservedBytes: number,
+    resolve: StructuredAgentSessionRevisionResolver,
+    options?: StructuredAgentSessionRevisionOptions
+  ): StructuredAgentSessionSinkAdmission
+  /** Queues one revision and its publication as a single admitted operation. */
+  tryReviseResolvedItemAndPublish?(
+    reservedBytes: number,
+    resolve: StructuredAgentSessionRevisionResolver,
+    options?: StructuredAgentSessionRevisionOptions
+  ): StructuredAgentSessionSinkAdmission
   /** Queues one journal-derived lifecycle append; a null resolution is a no-op. */
   tryAppendLifecycleTransition?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    resolveIdentity: StructuredAgentSessionIdentityResolver
+    resolveIdentity: StructuredAgentSessionIdentityResolver,
+    options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   /** Current durable epoch, when this deferred sink is bound to its journal. */
   journalEpoch?(): string | null
@@ -179,7 +209,7 @@ export function createDeferredStructuredAgentSessionEventSink(
           bound.journal.appendLifecycleBatch({
             settlementId,
             mutations,
-            // Linkage is deliberately not forwarded: see the batch row builder.
+            // No row-level linkage: each mutation names its own (see the batch row builder).
             fence: bound.fence
           })
       },
@@ -230,27 +260,6 @@ export function createDeferredStructuredAgentSessionEventSink(
           options
         ),
       ...resolvedAppend,
-      tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity) => {
-        const bytes = estimateStructuredAgentSessionItemBytes(identitySizeBound, body)
-        return queue.submit(
-          {
-            bytes,
-            lifecycle: true,
-            run: async (bound) => {
-              const identity = resolveIdentity(bound.journal)
-              if (identity === null) {
-                return
-              }
-              if (estimateStructuredAgentSessionItemBytes(identity, body) > bytes) {
-                throw new Error('structured agent-session item identity exceeded its reserved size')
-              }
-              await bound.journal.appendItem(identity, body, { fence: bound.fence })
-              bound.publish()
-            }
-          },
-          { lifecycle: true }
-        )
-      },
       journalEpoch: queue.journalEpoch,
       appendLifecycleBatch: (settlementId, mutations, options = {}) => {
         const admission = appendLifecycleBatch(settlementId, mutations, options)

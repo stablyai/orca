@@ -120,7 +120,6 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   aug: true,
   cline: true,
   codebuff: true,
-  freebuff: true,
   'command-code': true,
   continue: true,
   cursor: true,
@@ -137,6 +136,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   ante: true,
   trae: true,
   muse: true,
+  zcode: true,
   dsh: true
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CodexAppServerFrameSizeError,
   CodexAppServerRequestError,
+  openCodexAppServerConnection,
   type CodexAppServerConnection
 } from './codex-app-server-connection'
 import { codexStructuredPermissionPolicyForSettings } from './codex-structured-permission-policy'
@@ -215,5 +216,124 @@ describe('openCodexThread', () => {
       )
     ).resolves.toMatchObject({ threadId: 'thread-1' })
     expect(request).toHaveBeenCalledTimes(2)
+  })
+
+  describe('a thread Codex never saved', () => {
+    const noRollout = (threadId: string, code = -32600) =>
+      new CodexAppServerRequestError(
+        'thread/resume',
+        code,
+        `codex app-server thread/resume failed: no rollout found for thread id ${threadId}`
+      )
+    function codexWithoutRollout(error: Error = noRollout('thread-unsaved')) {
+      return vi.fn(async (method: string, _params?: Record<string, unknown>) => {
+        if (method === 'thread/resume') {
+          throw error
+        }
+        return { thread: { id: 'thread-new' }, model: 'gpt-live' }
+      })
+    }
+
+    it('starts a new thread in its place when Codex proves it holds no rollout', async () => {
+      const request = codexWithoutRollout()
+
+      await expect(
+        openCodexThread(
+          connectionFor(request),
+          { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
+          2_000
+        )
+      ).resolves.toMatchObject({
+        threadId: 'thread-new',
+        supersededThreadId: 'thread-unsaved',
+        model: 'gpt-live'
+      })
+      expect(request.mock.calls.map(([method]) => method)).toEqual([
+        'thread/resume',
+        'thread/start'
+      ])
+      expect(request).toHaveBeenLastCalledWith(
+        'thread/start',
+        { cwd: '/workspace' },
+        {
+          timeoutMs: 2_000
+        }
+      )
+    })
+
+    it('keeps the resume failure for a thread a resume already proved', async () => {
+      const request = codexWithoutRollout()
+
+      await expect(
+        openCodexThread(
+          connectionFor(request),
+          { cwd: '/workspace', resumeThreadId: 'thread-unsaved' },
+          2_000
+        )
+      ).rejects.toThrow('no rollout found for thread id thread-unsaved')
+      expect(request).toHaveBeenCalledOnce()
+    })
+
+    it('treats no other resume failure as proof that nothing was saved', async () => {
+      const failures = [
+        noRollout('thread-other'),
+        noRollout('thread-unsaved', -32603),
+        new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'codex app-server thread/resume failed: thread not found'
+        ),
+        new Error('codex app-server exited')
+      ]
+      for (const failure of failures) {
+        const request = codexWithoutRollout(failure)
+        await expect(
+          openCodexThread(
+            connectionFor(request),
+            { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
+            2_000
+          )
+        ).rejects.toBe(failure)
+        expect(request).toHaveBeenCalledOnce()
+      }
+    })
+
+    // Every other test here builds the error itself; this one sends Codex's raw JSON-RPC frame
+    // through the real connection, so a change to Orca's own error wording cannot hide the proof.
+    it('recognizes the raw frame Codex sends, through the real connection', async () => {
+      const fakeAppServer = String.raw`
+        const readline = require('node:readline')
+        const send = (payload) => process.stdout.write(JSON.stringify(payload) + '\n')
+        readline.createInterface({ input: process.stdin }).on('line', (line) => {
+          const message = JSON.parse(line)
+          if (message.method === 'initialize') return send({ id: message.id, result: {} })
+          if (message.method === 'thread/resume') {
+            const threadId = message.params.threadId
+            return send({
+              id: message.id,
+              error: { code: -32600, message: 'no rollout found for thread id ' + threadId }
+            })
+          }
+          if (message.method === 'thread/start') {
+            return send({ id: message.id, result: { thread: { id: 'thread-new' } } })
+          }
+        })
+      `
+      const connection = await openCodexAppServerConnection({
+        command: process.execPath,
+        args: ['-e', fakeAppServer]
+      })
+      try {
+        await expect(
+          openCodexThread(
+            connection,
+            { cwd: '/workspace', resumeThreadId: 'thread-unsaved', supersedeIfUnsaved: true },
+            5_000
+          )
+        ).resolves.toMatchObject({ threadId: 'thread-new', supersededThreadId: 'thread-unsaved' })
+      } finally {
+        await connection.close()
+      }
+    })
   })
 })
