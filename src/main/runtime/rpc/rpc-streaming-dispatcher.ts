@@ -15,6 +15,11 @@ import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
 import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
+import {
+  needsOrchestrationCallerResolution,
+  resolveOrchestrationSessionCaller,
+  type ResolvedOrchestrationRequest
+} from './orchestration-session-caller'
 
 export type RpcStreamingDispatcherDependencies = {
   runtime: OrcaRuntimeService
@@ -29,10 +34,11 @@ export class RpcStreamingDispatcher {
 
   // Why: streaming dispatch sends multiple responses through the reply callback instead of a Promise.
   async dispatch(
-    request: RpcRequest,
+    rawRequest: RpcRequest,
     reply: (response: string) => void,
     options?: RpcDispatchStreamingOptions
   ): Promise<void> {
+    let request = rawRequest
     const { runtime, registry, orchestrationMutations, legacyOrchestration, meta } =
       this.dependencies
     const envelopeMeta = meta()
@@ -57,11 +63,24 @@ export class RpcStreamingDispatcher {
       return
     }
 
+    // Why: before params parse and the unary/streaming split, so both branches see one caller.
+    let resolved: ResolvedOrchestrationRequest = { request }
+    if (needsOrchestrationCallerResolution(request)) {
+      try {
+        resolved = await resolveOrchestrationSessionCaller(runtime, request, options)
+      } catch (error) {
+        reply(JSON.stringify(mapDispatcherError(request, envelopeMeta, error)))
+        return
+      }
+    }
+    request = resolved.request
+    const orchestrationCaller = resolved.caller
     const parsedParams = parseRpcRequestParams(request, method, envelopeMeta)
     if (parsedParams.error) {
       reply(JSON.stringify(parsedParams.error))
       return
     }
+    const params = parsedParams.value
 
     if (!isStreamingMethod(method)) {
       try {
@@ -73,7 +92,7 @@ export class RpcStreamingDispatcher {
         const clientHostedBrowser = await routeDispatcherClientHostedBrowserRpc(
           runtime,
           request.method,
-          parsedParams.value
+          params
         )
         if (clientHostedBrowser.handled) {
           recordRuntimeFeatureInteraction(
@@ -88,16 +107,12 @@ export class RpcStreamingDispatcher {
           )
           return
         }
-        const compatibility = await legacyOrchestration.tryHandle(
-          request,
-          parsedParams.value,
-          options?.signal
-        )
+        const compatibility = await legacyOrchestration.tryHandle(request, params, options?.signal)
         if (compatibility.handled) {
           reply(JSON.stringify(successResponse(request.id, envelopeMeta, compatibility.result)))
           return
         }
-        const effectiveParams = compatibility.params ?? parsedParams.value
+        const effectiveParams = compatibility.params ?? params
         const legacyCoordinator = legacyOrchestration.createCoordinatorInvocation(
           request,
           compatibility.legacyCoordinatorAuthority
@@ -136,14 +151,16 @@ export class RpcStreamingDispatcher {
             revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
             orchestrationCompatibilityCallerAuthority:
               compatibility.orchestrationCompatibilityCallerAuthority,
-            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence,
+            orchestrationCaller
           })
         }
         const result = await orchestrationMutations.run(
           request,
           effectiveParams,
           invoke,
-          legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint
+          legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint,
+          orchestrationCaller?.orcaSessionId
         )
         recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
         reply(JSON.stringify(successResponse(request.id, envelopeMeta, result)))
@@ -162,7 +179,7 @@ export class RpcStreamingDispatcher {
 
     try {
       const result = await method.handler(
-        parsedParams.value,
+        params,
         {
           runtime,
           signal: options?.signal,
@@ -177,7 +194,8 @@ export class RpcStreamingDispatcher {
           pairing: options?.pairing,
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
-          registerBinaryMessageHandler: options?.registerBinaryMessageHandler
+          registerBinaryMessageHandler: options?.registerBinaryMessageHandler,
+          orchestrationCaller
         },
         emit
       )

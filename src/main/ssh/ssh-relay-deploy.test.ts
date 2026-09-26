@@ -62,6 +62,9 @@ vi.mock('../ripgrep/bundled-ripgrep-path', () => ({
 // Why: the fire-and-forget ripgrep install would drain the queued exec mocks.
 // Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
 vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
 vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
   ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),
@@ -97,6 +100,7 @@ vi.mock('./ssh-connection-utils', () => ({
 }))
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import { ensureRemoteOpenCodeRuntime } from './ssh-relay-opencode-runtime'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import { isRelayAlreadyInstalled, gcOldRelayVersions } from './ssh-relay-versioned-install'
@@ -105,6 +109,7 @@ import {
   ensureRemoteBundledRipgrep,
   recordRemoteRipgrepReference
 } from './ssh-relay-ripgrep-install'
+import { gcRemoteRipgrepCache } from './ssh-relay-ripgrep-cache-gc'
 import * as DeployTiming from './ssh-relay-deploy-timing'
 import type { SshConnection } from './ssh-connection'
 import type * as SshRemoteNodeResolution from './ssh-remote-node-resolution'
@@ -544,10 +549,32 @@ describe('deployAndLaunchRelay', () => {
       await new Promise<void>((resolve) => setImmediate(resolve))
       expect(execCommand).toHaveBeenCalledTimes(execCount)
       expect(gcOldRelayVersions).not.toHaveBeenCalled()
+      expect(ensureRemoteOpenCodeRuntime).not.toHaveBeenCalled()
       finishUpload()
       await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
     }
   )
+
+  it('waits for SQLite runtime setup before cleanup on single-exec transports', async () => {
+    const conn = makeMockConnection()
+    vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(false)
+    queueFreshLinuxDeploy()
+    let finishSetup!: () => void
+    vi.mocked(ensureRemoteOpenCodeRuntime).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSetup = () => resolve('failed')
+        })
+    )
+    await deployAndLaunchRelay(conn)
+    await vi.waitFor(() => expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledOnce())
+    const execCount = vi.mocked(execCommand).mock.calls.length
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(execCommand).toHaveBeenCalledTimes(execCount)
+    expect(gcOldRelayVersions).not.toHaveBeenCalled()
+    finishSetup()
+    await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
+  })
 
   it('does not launch or upload an unprotected binary when recording its reference fails', async () => {
     const conn = makeMockConnection()
@@ -556,6 +583,20 @@ describe('deployAndLaunchRelay', () => {
     await deployAndLaunchRelay(conn)
     expect(detachedLaunchCommand(conn)).not.toContain('--ripgrep-path')
     expect(ensureRemoteBundledRipgrep).not.toHaveBeenCalled()
+  })
+
+  it('skips cleanup when SQLite setup cannot confirm command teardown on a single-exec transport', async () => {
+    const conn = makeMockConnection()
+    vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(false)
+    queueFreshLinuxDeploy()
+    vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValueOnce('teardown-unconfirmed')
+    await deployAndLaunchRelay(conn)
+    await vi.waitFor(() => expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledOnce())
+    const execCount = vi.mocked(execCommand).mock.calls.length
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(execCommand).toHaveBeenCalledTimes(execCount)
+    expect(gcOldRelayVersions).not.toHaveBeenCalled()
+    expect(gcRemoteRipgrepCache).not.toHaveBeenCalled()
   })
 
   it('allows an unlimited SSH disconnect grace window', async () => {

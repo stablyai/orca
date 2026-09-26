@@ -1,4 +1,5 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
 import { parseAntigravitySessionFile } from './session-scanner-antigravity-parser'
 import { parseDroidSessionFile } from './session-scanner-droid-parser'
@@ -35,17 +36,32 @@ import type { TranscriptMessageSink } from './session-transcript-consumers'
 async function readOpenCodeSqliteCandidate(
   sqliteCandidate: { dbPath: string; sessionId: string },
   platform: NodeJS.Platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal,
+  agent?: 'opencode2'
 ): Promise<AiVaultSession | null> {
-  const request = { ...sqliteCandidate, platform }
+  throwIfSignalAborted(signal)
+  const request = { ...sqliteCandidate, platform, signal }
   if (!messages?.active) {
-    return parseOpenCodeSqliteSessionViaWorker(request)
+    const parse =
+      agent === 'opencode2'
+        ? parseOpenCode2SqliteSessionViaWorker
+        : parseOpenCodeSqliteSessionViaWorker
+    const session = await parse(request)
+    throwIfSignalAborted(signal)
+    return session
   }
-  const capture = await captureOpenCodeSqliteSessionViaWorker(request)
-  for (const message of capture.messages) {
+  const capture =
+    agent === 'opencode2'
+      ? captureOpenCode2SqliteSessionViaWorker
+      : captureOpenCodeSqliteSessionViaWorker
+  const result = await capture(request)
+  for (const message of result.messages) {
+    throwIfSignalAborted(signal)
     messages.push(message)
   }
-  return capture.session
+  throwIfSignalAborted(signal)
+  return result.session
 }
 
 /**
@@ -61,7 +77,8 @@ async function readOpenCodeSqliteCandidate(
 export async function parseAgentSessionFile(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   switch (candidate.agent) {
     case 'claude':
@@ -88,7 +105,7 @@ export async function parseAgentSessionFile(
       // real filesystem paths and fall through to the JSON parser.
       const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
       if (sqliteCandidate) {
-        return readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages)
+        return readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal)
       }
       return parseOpenCodeSessionFile(candidate.file, platform, messages)
     }
@@ -98,22 +115,7 @@ export async function parseAgentSessionFile(
       // candidate path; there is no legacy file store.
       const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path)
       if (sqliteCandidate) {
-        if (messages?.active) {
-          const capture = await captureOpenCode2SqliteSessionViaWorker({
-            dbPath: sqliteCandidate.dbPath,
-            sessionId: sqliteCandidate.sessionId,
-            platform
-          })
-          for (const message of capture.messages) {
-            messages.push(message)
-          }
-          return capture.session
-        }
-        return parseOpenCode2SqliteSessionViaWorker({
-          dbPath: sqliteCandidate.dbPath,
-          sessionId: sqliteCandidate.sessionId,
-          platform
-        })
+        return readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal, 'opencode2')
       }
       return null
     }

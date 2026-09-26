@@ -3,11 +3,14 @@
  * segment, while the Store the GC consults holds one profile's ids. Without
  * these, switching profiles makes every other profile's history look orphaned.
  */
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
+import { importProfileStateJson } from '../persistence/profile-state/profile-state-documents'
+import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
+import { getOrcaProfileStateDatabaseFile } from '../orca-profiles/profile-storage-paths'
 import { getOtherProfileWorktreeIdsForHistoryGc } from './history-gc-profile-worktree-ids'
 
 const roots: string[] = []
@@ -101,6 +104,153 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
     const root = userDataWithProfiles('active', [{ id: 'active', state: {} }, { id: 'other' }])
 
     expect(getOtherProfileWorktreeIdsForHistoryGc(root).unreadableProfiles).toBe(1)
+  })
+
+  it('prefers the profile database over a stale JSON export', () => {
+    const root = userDataWithProfiles('active', [
+      { id: 'active', state: {} },
+      {
+        id: 'other',
+        state: { worktreeMeta: { 'repo::/json': {} }, folderWorkspaces: [] }
+      }
+    ])
+    const database = openProfileStateDatabase(
+      getOrcaProfileStateDatabaseFile('other', root),
+      'other'
+    )
+    try {
+      importProfileStateJson(
+        database.db,
+        JSON.stringify({
+          worktreeMeta: { 'repo::/database': {} },
+          folderWorkspaces: [{ id: 'folder-database' }]
+        })
+      )
+    } finally {
+      database.db.close()
+    }
+
+    expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
+      unreadableProfiles: 0,
+      ids: new Set(['repo::/database', folderWorkspaceKey('folder-database')])
+    })
+  })
+
+  it('falls back to JSON without creating a database', () => {
+    const root = userDataWithProfiles('active', [
+      { id: 'active', state: {} },
+      { id: 'other', state: { worktreeMeta: { 'repo::/json': {} } } }
+    ])
+    const databaseFile = getOrcaProfileStateDatabaseFile('other', root)
+
+    expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
+      unreadableProfiles: 0,
+      ids: new Set(['repo::/json'])
+    })
+    expect(existsSync(databaseFile)).toBe(false)
+  })
+
+  it.each([true, false])(
+    'refuses history pruning when SQLite is missing but a retained export exists (JSON: %s)',
+    (hasJson) => {
+      const state = { worktreeMeta: { 'repo::/stale-json': {} } }
+      const root = userDataWithProfiles('active', [
+        { id: 'active', state: {} },
+        { id: 'other', ...(hasJson ? { state } : {}) }
+      ])
+      const dataFile = join(root, 'profiles', 'other', 'orca-data.json')
+      const exportPath = `${dataFile}.sqlite-export.1.json`
+      const exportJson = JSON.stringify({ worktreeMeta: { 'repo::/export': {} } })
+      writeFileSync(exportPath, exportJson)
+
+      expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
+        unreadableProfiles: 1,
+        ids: new Set()
+      })
+      expect(existsSync(getOrcaProfileStateDatabaseFile('other', root))).toBe(false)
+      expect(existsSync(dataFile)).toBe(hasJson)
+      if (hasJson) {
+        expect(readFileSync(dataFile, 'utf8')).toBe(JSON.stringify(state))
+      }
+      expect(readFileSync(exportPath, 'utf8')).toBe(exportJson)
+    }
+  )
+
+  it('reads SQLite-only profiles with retained exports without blocking history pruning', () => {
+    const root = userDataWithProfiles('active', [{ id: 'active', state: {} }, { id: 'other' }])
+    const database = openProfileStateDatabase(
+      getOrcaProfileStateDatabaseFile('other', root),
+      'other'
+    )
+    try {
+      importProfileStateJson(
+        database.db,
+        JSON.stringify({ worktreeMeta: { 'repo::/database': {} } })
+      )
+    } finally {
+      database.db.close()
+    }
+    const dataFile = join(root, 'profiles', 'other', 'orca-data.json')
+    writeFileSync(
+      `${dataFile}.sqlite-export.1.json`,
+      JSON.stringify({ worktreeMeta: { 'repo::/stale-export': {} } })
+    )
+
+    expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
+      unreadableProfiles: 0,
+      ids: new Set(['repo::/database'])
+    })
+    expect(existsSync(dataFile)).toBe(false)
+  })
+
+  it('does not fall back to JSON when an existing database is corrupt', () => {
+    const root = userDataWithProfiles('active', [
+      { id: 'active', state: {} },
+      { id: 'other', state: { worktreeMeta: { 'repo::/json': {} } } }
+    ])
+    writeFileSync(getOrcaProfileStateDatabaseFile('other', root), 'not a sqlite database')
+
+    expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
+      unreadableProfiles: 1,
+      ids: new Set()
+    })
+  })
+
+  it.each(['-wal', '-shm', '-journal'])(
+    'does not fall back to JSON when only %s remains',
+    (suffix) => {
+      const root = userDataWithProfiles('active', [
+        { id: 'active', state: {} },
+        { id: 'other', state: { worktreeMeta: { 'repo::/json': {} } } }
+      ])
+      writeFileSync(
+        `${getOrcaProfileStateDatabaseFile('other', root)}${suffix}`,
+        'orphaned evidence'
+      )
+
+      expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
+        unreadableProfiles: 1,
+        ids: new Set()
+      })
+    }
+  )
+
+  it('refuses history pruning for a future profile database schema', () => {
+    const root = userDataWithProfiles('active', [
+      { id: 'active', state: {} },
+      { id: 'other', state: { worktreeMeta: { 'repo::/json': {} } } }
+    ])
+    const database = openProfileStateDatabase(
+      getOrcaProfileStateDatabaseFile('other', root),
+      'other'
+    )
+    database.db.pragma('user_version = 99')
+    database.db.close()
+
+    expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
+      unreadableProfiles: 1,
+      ids: new Set()
+    })
   })
 
   // A single-profile install must not pay for this, and no index at all is the

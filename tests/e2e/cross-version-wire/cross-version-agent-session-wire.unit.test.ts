@@ -763,15 +763,17 @@ describe('cross-version structured agent sessions', () => {
       expect(batch?.cursor.sequence).toBeGreaterThan(held.sequence)
     })
 
-    it('refuses a write still fenced to the host generation that died', async () => {
+    // Every released client still sends the fence it last saw; this host names a write by its
+    // target and ignores that fence. Only the attach keeps comparing one, which `reattach` pins.
+    it('delivers a write still fenced to the host generation that died', async () => {
       const created = await answer('agentSession.create', createIntentParams())
       await bootHost('b')
       const reattached = await reattach(created.fence)
       expect(reattached.fence).toBeGreaterThan(created.fence)
 
       expect(await answer('agentSession.send', sendParams('stale', created.fence))).toMatchObject({
-        ok: false,
-        refusal: { code: 'agent_session_checkpoint_stale' }
+        ok: true,
+        fence: reattached.fence
       })
     })
   })

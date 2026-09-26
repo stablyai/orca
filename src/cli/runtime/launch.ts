@@ -255,7 +255,7 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
   })
 }
 
-function getExecutableAppArgs(executable: string): string[] {
+export function getExecutableAppArgs(executable: string): string[] {
   const args = process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
   if (shouldDisableExtractedAppImageSandbox(executable)) {
     args.push('--no-sandbox')
@@ -289,14 +289,14 @@ function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shel
   return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable) ? { shell: true } : {}
 }
 
-function resolveAppRoot(): string {
+export function resolveAppRoot(): string {
   // Why: dev-mode resource resolution in the Electron child may consult
   // process.cwd(). Pin it to the app root so `orca serve` behaves the same
   // regardless of the shell directory it was launched from.
   return resolve(__dirname, '../../..')
 }
 
-function resolveForegroundOrcaExecutable(): string {
+export function resolveForegroundOrcaExecutable(): string {
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
     return overrideExecutable

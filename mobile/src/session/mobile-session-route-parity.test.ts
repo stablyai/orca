@@ -92,10 +92,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // never pass it. Found by pullfrog on #22300.
 // Moved, count unchanged, when the Markdown actions' Back `useEffect` became `useBackClaim`, the
 // seam that also claims the key on the page while a draft is dirty.
-const HEAD_MAIN_HOOK_SHA256 = '914bf72e0bf0abe2b22850467b5dfdc3ab3fd19111924f1de91d9c1d9d1ce74f'
-const HEAD_HOOK_BINDING_SHA256 = 'd0677b98b909f8a24089ac5d6afe9ad2c238fa6c24969da1e84e01cd6f653a16'
+const HEAD_MAIN_HOOK_SHA256 = 'f161e14a9c53d80c3dc75f51dd8ecb339b59b7239c9c3e067791b8612f51ede2'
+const HEAD_HOOK_BINDING_SHA256 = '7a9e256e2058635850253a74b9faa05bcafbbcaa1e5b0b3ef7f677dde85753a2'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  'e396ab759b2401acef45dea428e97c7f8f24fff41aae7fb7858da5a5b145c64c'
+  '373dca17a060e63d8cb4e32416ca2889b8404cee78f7b47e632940a9980baf23'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
 // and repo reads inside them now name their `RpcOperation` instead of the raw `sendRequest` port.
 // Refreshed in step 6 for the gesture flush, whose `terminal.send` became `terminalInputSend` and
@@ -115,7 +115,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // the other's body. The hook and string counts are C7.2's and stand.
 // Refreshed once more for the two dictation failure handlers, which now both call
 // `reportDictationFailure` instead of each choosing between the setup sheet and a toast.
-const HEAD_CALLBACK_BODY_SHA256 = '349ad6f766da14b3bce23a13f3a67f2b013efadd8896f63b7b68e724b9726d9b'
+const HEAD_CALLBACK_BODY_SHA256 = '2ccbfb5ee57e7dfeb07dafaee6fa592b95862b3bc898a5ac2995e7c69913bfc4'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built
@@ -172,7 +172,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // onLayout rather than reusing the loading View. Native measured 47 rows before and after: its
 // frame reported either way, and its window is its frame, so both measure paths agree there.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'd7eea5438ff7b4ee77c9bf652626adfdc3d2b49716ffb660df078f70bae0d88d'
+  '1be5398cdbdf96b6f7738b63a0e19f536496844140a947939a7f71824b08fe50'
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
 const HEAD_HOST_JSX_SHA256 = 'ca4c8b46af86a05cb671de91c22111c9e4aaeefd4a04c7b8b09976ca01a31c9b'
 const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
@@ -566,7 +566,7 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(281)
+    expect(main.hooks).toHaveLength(282)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(79)
@@ -611,7 +611,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(530)
+    expect(strings).toHaveLength(531)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)

@@ -181,8 +181,10 @@ hand-written. It covers the three skews that surface can fail on:
 - a new client against the old dispatcher always gets an answer rather than silence,
   and `method_not_found` for every method that release does not register, so the
   absence is visible during negotiation instead of by calling;
-- a cursor survives a host restart: the client's fence is refused as stale with the live
-  one attached, and resuming from the held cursor replays only what it missed.
+- a cursor survives a host restart: a reattach at the client's fence is refused as stale
+  with the live one attached, a write still carrying that fence is delivered (writes are
+  named by their target, and every released client still sends a fence), and resuming from
+  the held cursor replays only what it missed.
 
 Run it with:
 

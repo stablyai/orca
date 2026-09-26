@@ -14,6 +14,7 @@ export function limitRemoteScanFilesystemConcurrency(
 ): RemoteSessionFilesystemProvider {
   const gate = createConcurrencyGate(maxInFlight)
   return {
+    openCode: provider.openCode,
     readDir: (dirPath) => gate(() => provider.readDir(dirPath)),
     readFile: (filePath) => gate(() => provider.readFile(filePath)),
     stat: (filePath) => gate(() => provider.stat(filePath)),

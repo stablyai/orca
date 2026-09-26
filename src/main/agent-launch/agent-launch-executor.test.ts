@@ -265,7 +265,7 @@ describe('the prompt receipt', () => {
       'createStructuredSession',
       'deliverStructuredPrompt'
     ])
-    // The send must name the lease the create was admitted under, not one re-read later.
+    // The send carries the create's own fence; nothing re-reads the session for it.
     expect(h.deliverStructuredPrompt).toHaveBeenCalledWith({
       sessionId: 'sess-1',
       fence: 4,

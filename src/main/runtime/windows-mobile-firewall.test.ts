@@ -67,6 +67,18 @@ describe('windows mobile firewall', () => {
     expect(script).toContain('$localPrefixLength = [int]$ip.PrefixLength')
   })
 
+  it('doubles typographic single quotes in the executable literal', async () => {
+    const runPowerShell = vi.fn().mockResolvedValue('not json')
+    await inspectWindowsMobileFirewall(
+      6768,
+      '192.168.0.108',
+      environment(runPowerShell, { executablePath: 'C:\\Users\\O\u2019Brien\\Orca\\Orca.exe' })
+    )
+    expect(runPowerShell.mock.calls[0]![0]).toContain(
+      "-Program 'C:\\Users\\O\u2019\u2019Brien\\Orca\\Orca.exe'"
+    )
+  })
+
   it('treats an overlapping inbound Block rule as overriding a matching Allow rule', async () => {
     const runPowerShell = vi.fn().mockResolvedValue(
       JSON.stringify({
