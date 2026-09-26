@@ -68,6 +68,19 @@ export function buildStreamUnsubscribe(
   return null
 }
 
+// Unsubscribes whose host ends exactly the request named by `requestId`; hosts that predate it strip the field.
+const REQUEST_ADDRESSED_UNSUBSCRIBES = new Set(['terminal.unsubscribe', 'nativeChat.unsubscribe'])
+
+/** Unsubscribe params naming the subscribe frame id, for methods the host can address by request. */
+export function withUnsubscribeRequestId(
+  unsubscribe: { method: string; params: Record<string, unknown> },
+  requestId: string
+): Record<string, unknown> {
+  return REQUEST_ADDRESSED_UNSUBSCRIBES.has(unsubscribe.method)
+    ? { ...unsubscribe.params, requestId }
+    : unsubscribe.params
+}
+
 export function buildTerminalUnsubscribeParams(
   params: unknown
 ): { subscriptionId: string; client?: { id: string } } | null {

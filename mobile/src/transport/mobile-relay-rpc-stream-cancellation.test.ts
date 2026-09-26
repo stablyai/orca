@@ -113,7 +113,7 @@ describe('mobile relay subscription cancellation', () => {
       'nativeChat.subscribe',
       { subscriptionId: 'chat' },
       'nativeChat.unsubscribe',
-      { subscriptionId: 'chat' }
+      { subscriptionId: 'chat', requestId: 'request-1' }
     ]
   ])(
     'cancels %s using its request cleanup identity',
@@ -218,24 +218,39 @@ describe('mobile relay subscription cancellation', () => {
     }
   )
 
-  it('keeps skipping for a live newer terminal sibling though each unsubscribe names its request', async () => {
-    const { streams, sendFrame } = createStreams()
-    const params = { terminal: 'term', client: { id: 'phone' } }
-    const cancelOlder = streams.subscribe('terminal.subscribe', params, vi.fn())
-    const cancelNewer = streams.subscribe('terminal.subscribe', { ...params }, vi.fn())
-    await Promise.resolve()
+  it.each([
+    [
+      'terminal.subscribe',
+      { terminal: 'term', client: { id: 'phone' } },
+      'terminal.unsubscribe',
+      { subscriptionId: 'term:phone', client: { id: 'phone' } }
+    ],
+    [
+      'nativeChat.subscribe',
+      { agent: 'claude', sessionId: 's1', subscriptionId: 'claude:s1' },
+      'nativeChat.unsubscribe',
+      { subscriptionId: 'claude:s1' }
+    ]
+  ])(
+    'keeps skipping for a live newer %s sibling though each unsubscribe names its request',
+    async (method, params, unsubscribe, unsubscribeParams) => {
+      const { streams, sendFrame } = createStreams()
+      const cancelOlder = streams.subscribe(method, params, vi.fn())
+      const cancelNewer = streams.subscribe(method, { ...params }, vi.fn())
+      await Promise.resolve()
 
-    // A host without request addressing ends the slot, which the newer stream now owns.
-    cancelOlder()
-    expect(sendFrame).toHaveBeenCalledTimes(2)
+      // A host without request addressing ends the shared key, which the newer stream now owns.
+      cancelOlder()
+      expect(sendFrame).toHaveBeenCalledTimes(2)
 
-    cancelNewer()
-    expect(sendFrame).toHaveBeenLastCalledWith({
-      id: 'request-3',
-      method: 'terminal.unsubscribe',
-      params: { subscriptionId: 'term:phone', client: { id: 'phone' }, requestId: 'request-2' }
-    })
-  })
+      cancelNewer()
+      expect(sendFrame).toHaveBeenLastCalledWith({
+        id: 'request-3',
+        method: unsubscribe,
+        params: { ...unsubscribeParams, requestId: 'request-2' }
+      })
+    }
+  )
 
   it('still unsubscribes a shared-token nativeChat stream when the sibling is unsent', async () => {
     const wait = Promise.withResolvers<void>()
@@ -254,7 +269,7 @@ describe('mobile relay subscription cancellation', () => {
     expect(sendFrame).toHaveBeenLastCalledWith({
       id: 'request-3',
       method: 'nativeChat.unsubscribe',
-      params: { subscriptionId: 'claude:s1' }
+      params: { subscriptionId: 'claude:s1', requestId: 'request-1' }
     })
   })
 
