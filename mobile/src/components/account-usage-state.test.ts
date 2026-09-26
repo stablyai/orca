@@ -184,6 +184,33 @@ describe('getWindowResetLabel', () => {
   it('reads the requested window only', () => {
     const limits = makeLimits({ session: makeWindow(now + hour) })
     expect(getWindowResetLabel(limits, 'weekly', now)).toBe(null)
+    expect(getWindowResetLabel(limits, 'monthly', now)).toBe(null)
+  })
+
+  it('reads a monthly window without using the weekly timestamp', () => {
+    expect(
+      getWindowResetLabel(
+        makeLimits({
+          monthly: {
+            usedPercent: 25,
+            windowMinutes: 43200,
+            resetsAt: now + 6 * day,
+            resetDescription: null
+          }
+        }),
+        'monthly',
+        now
+      )
+    ).toBe('Resets in 6d')
+    expect(
+      getUsageBarState(
+        makeLimits({
+          status: 'ok',
+          monthly: { usedPercent: 25, windowMinutes: 43200, resetsAt: null, resetDescription: null }
+        }),
+        'monthly'
+      )
+    ).toEqual({ usedPercent: 25, unavailable: false, loading: false })
   })
 })
 

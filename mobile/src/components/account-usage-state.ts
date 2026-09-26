@@ -34,6 +34,8 @@ export type UsageBarState = {
   loading: boolean
 }
 
+export type UsageWindowKey = 'session' | 'weekly' | 'monthly'
+
 export function getActiveProviderRateLimits(
   snapshot: AccountsSnapshot,
   provider: ProviderKey
@@ -77,7 +79,7 @@ export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boole
 // is per window rather than per provider status.
 export function getUsageBarState(
   limits: ProviderRateLimits | null,
-  windowKey: 'session' | 'weekly',
+  windowKey: UsageWindowKey,
   isFetchingOverride?: boolean
 ): UsageBarState {
   const window = limits?.[windowKey] ?? null
@@ -101,7 +103,7 @@ export function getUsageBarState(
  */
 export function getWindowResetLabel(
   limits: ProviderRateLimits | null,
-  windowKey: 'session' | 'weekly',
+  windowKey: UsageWindowKey,
   now: number
 ): string | null {
   const resetsAt = limits?.[windowKey]?.resetsAt

@@ -8,6 +8,8 @@ import {
   type AccountsSnapshot,
   type ProviderKey
 } from '../components/AccountUsage'
+import { getGrokAccountUsage, getGrokUsageBarModel } from '../components/grok-account-usage'
+import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import type { HostProfile } from '../transport/types'
 
@@ -30,6 +32,9 @@ export function MobileHomeAccountUsageCards(props: {
           snapshot.codex.accounts.find(
             (account) => account.id === snapshot.codex.activeAccountId
           ) ?? null
+        const grok = getGrokAccountUsage(snapshot)
+        // Why: this row shows the meter only. The accounts screen owns the ticking reset label.
+        const grokMeter = grok ? getGrokUsageBarModel(grok, 0) : null
         return (
           <Pressable
             key={host.id}
@@ -82,6 +87,32 @@ export function MobileHomeAccountUsageCards(props: {
                 </View>
               )
             })}
+            {grok && grokMeter ? (
+              <View style={styles.row}>
+                <View style={styles.icon}>
+                  <MobileAgentIcon agentId="grok" size={18} />
+                </View>
+                <View style={styles.info}>
+                  <Text style={styles.email} numberOfLines={1}>
+                    {grok.label}
+                  </Text>
+                  <View style={styles.bars}>
+                    <UsageBar
+                      label={grokMeter.windowLabel}
+                      labelWidth={grokMeter.labelWidth}
+                      usedPercent={grokMeter.bar.usedPercent}
+                      unavailable={grokMeter.bar.unavailable}
+                      loading={grokMeter.bar.loading}
+                    />
+                  </View>
+                  {grok.limits?.error ? (
+                    <Text style={styles.error} numberOfLines={1}>
+                      {grok.limits.error}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
           </Pressable>
         )
       })}
@@ -129,5 +160,6 @@ const styles = StyleSheet.create({
   },
   info: { flex: 1, minWidth: 0, gap: 2 },
   email: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  bars: { flexDirection: 'row', gap: spacing.md, marginTop: 4 }
+  bars: { flexDirection: 'row', gap: spacing.md, marginTop: 4 },
+  error: { fontSize: 11, color: colors.statusRed }
 })
