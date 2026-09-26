@@ -29,7 +29,20 @@ createHelperApp()
 
 function buildUniversalBinary() {
   const builtBinaries = universalTriples.map((triple) => {
-    run('swift', ['build', '-c', 'release', '--package-path', packagePath, '--triple', triple])
+    // Why --build-system native: SwiftPM >= 6.4 (Xcode 27) defaults to the swiftbuild
+    // build system, which ignores the per-triple .build/<triple>/release layout this
+    // step reads back for lipo (#21145). Deprecated upstream; revisit before removal.
+    run('swift', [
+      'build',
+      '-c',
+      'release',
+      '--package-path',
+      packagePath,
+      '--triple',
+      triple,
+      '--build-system',
+      'native'
+    ])
     return path.join(packagePath, '.build', triple, 'release', 'orca-computer-use-macos')
   })
   mkdirSync(path.dirname(binaryPath), { recursive: true })
