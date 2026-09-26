@@ -1,3 +1,14 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  writeDataFile,
+  readDataFile,
+  makeRepo,
+  makeProject,
+  makeProjectHostSetup,
+  createSqliteTestStore
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -6,17 +17,10 @@ import type { PersistedState } from '../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../shared/constants'
 import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
-import {
-  testState,
-  createStore,
-  writeDataFile,
-  readDataFile,
-  makeRepo,
-  makeProject,
-  makeProjectHostSetup
-} from './persistence-test-harness'
+
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
-import * as durableFileWrite from './durable-file-write'
+import { ProfileStateSqliteAuthority } from './persistence/profile-state/profile-state-sqlite-authority'
+
 import {
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent
@@ -70,7 +74,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 1. Defaults when no file exists ──────────────────────────────────
@@ -109,9 +114,11 @@ describe('Store', () => {
   it('rolls the in-memory Codex reset ledger back when its durable write fails', async () => {
     const store = await createStore()
     const before = store.getCodexResetCreditAttemptLedger()
-    const write = vi.spyOn(durableFileWrite, 'writeFileDurableSync').mockImplementationOnce(() => {
-      throw new Error('disk full')
-    })
+    const write = vi
+      .spyOn(ProfileStateSqliteAuthority.prototype, 'writeCompleteSerializedDomains')
+      .mockImplementationOnce(() => {
+        throw new Error('disk full')
+      })
 
     try {
       await expect(
@@ -226,7 +233,7 @@ describe('Store', () => {
     vi.resetModules()
     const { Store, initDataPath } = await import('./persistence')
     initDataPath()
-    const store = new Store({ dataFile: profileDataFile })
+    const store = createSqliteTestStore(Store, { dataFile: profileDataFile })
 
     expect(store.getRepos().map((repo) => repo.id)).toEqual(['profile-repo'])
   }, 15_000)

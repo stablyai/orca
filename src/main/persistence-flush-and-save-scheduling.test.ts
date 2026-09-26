@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync, mkdirSync, existsSync, statSync } from 'node:fs'
+import { rmSync, mkdtempSync, mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../shared/persisted-state-types'
 import type { Repo } from '../shared/repo-types'
 import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson,
   testState,
   createStore,
   withPlatform,
@@ -68,9 +71,10 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.restoreAllMocks()
     _resetPtyBindingSpanSamplingForTests()
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 10. flush writes synchronously ─────────────────────────────────
@@ -146,7 +150,7 @@ describe('Store', () => {
   })
 
   // ── Content-hash write skipping ────────────────────────────────────
-  // Why inode comparison: every real write is a tmp+rename (new inode), so an unchanged inode proves no write happened.
+  // Retained ciphertext makes an unintended secret rewrite visible in the SQL projection.
 
   it('skips the disk write when a mutation burst nets out to already-persisted state', async () => {
     vi.useFakeTimers()
@@ -155,14 +159,14 @@ describe('Store', () => {
       store.updateUI({ sidebarWidth: 400 })
       vi.advanceTimersByTime(1000)
       await store.waitForPendingWrite()
-      const inoBefore = statSync(dataFile()).ino
+      const stateBefore = readPersistedStateJson(dataFile())
 
       store.updateUI({ sidebarWidth: 500 })
       store.updateUI({ sidebarWidth: 400 })
       vi.advanceTimersByTime(2000)
       await store.waitForPendingWrite()
 
-      expect(statSync(dataFile()).ino).toBe(inoBefore)
+      expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
     } finally {
       vi.useRealTimers()
     }
@@ -175,11 +179,11 @@ describe('Store', () => {
       store.updateUI({ sidebarWidth: 420 })
       vi.advanceTimersByTime(1000)
       await store.waitForPendingWrite()
-      const inoBefore = statSync(dataFile()).ino
+      const stateBefore = readPersistedStateJson(dataFile())
 
       store.flush()
 
-      expect(statSync(dataFile()).ino).toBe(inoBefore)
+      expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
     } finally {
       vi.useRealTimers()
     }
@@ -197,7 +201,7 @@ describe('Store', () => {
       }
       await store.waitForPendingWrite()
 
-      expect(existsSync(dataFile())).toBe(true)
+      expect(existsSync(join(testState.dir, 'profile-state.db'))).toBe(true)
       const persisted = readDataFile() as { ui: { sidebarWidth: number } }
       expect(persisted.ui.sidebarWidth).toBeGreaterThanOrEqual(400)
     } finally {
@@ -241,12 +245,12 @@ describe('Store', () => {
       ptyId: 'daemon-pty'
     }
     await store.persistPtyBinding(binding)
-    const inoBefore = statSync(dataFile()).ino
+    const stateBefore = readPersistedStateJson(dataFile())
 
     // Warm-restart re-bind storm: an identical binding re-asserted with a sync flush must not rewrite.
     await store.persistPtyBinding(binding)
 
-    expect(statSync(dataFile()).ino).toBe(inoBefore)
+    expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
   })
 
   // ── worktreeMeta startup GC ────────────────────────────────────────
@@ -346,14 +350,14 @@ describe('Store', () => {
       store.updateUI({ sidebarWidth: 411 })
       vi.advanceTimersByTime(1000)
       await store.waitForPendingWrite()
-      const inoBefore = statSync(dataFile()).ino
+      const stateBefore = readPersistedStateJson(dataFile())
       expect((readDataFile() as { githubCache?: unknown }).githubCache).toBeUndefined()
 
       store.setGitHubCache({ pr: { 'o/r#1': { fetchedAt: 123 } as never }, issue: {} })
       vi.advanceTimersByTime(6000)
       await store.waitForPendingWrite()
 
-      expect(statSync(dataFile()).ino).toBe(inoBefore)
+      expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
     } finally {
       vi.useRealTimers()
     }
@@ -380,17 +384,17 @@ describe('Store', () => {
     vi.resetModules()
     const { Store, initDataPath } = await import('./persistence')
     initDataPath()
-    const profileAStore = new Store({ dataFile: profileADataFile })
+    const profileAStore = createSqliteTestStore(Store, { dataFile: profileADataFile })
     profileAStore.setGitHubCache({ pr: { 'o/r#a': { fetchedAt: 10 } as never }, issue: {} })
     profileAStore.flush()
 
-    const profileBStore = new Store({ dataFile: profileBDataFile })
+    const profileBStore = createSqliteTestStore(Store, { dataFile: profileBDataFile })
     expect(profileBStore.getGitHubCache().pr['o/r#a']).toBeUndefined()
     profileBStore.setGitHubCache({ pr: { 'o/r#b': { fetchedAt: 20 } as never }, issue: {} })
     profileBStore.flush()
 
-    const restartedProfileA = new Store({ dataFile: profileADataFile })
-    const restartedProfileB = new Store({ dataFile: profileBDataFile })
+    const restartedProfileA = createSqliteTestStore(Store, { dataFile: profileADataFile })
+    const restartedProfileB = createSqliteTestStore(Store, { dataFile: profileBDataFile })
     expect(restartedProfileA.getGitHubCache().pr['o/r#a']).toEqual({ fetchedAt: 10 })
     expect(restartedProfileA.getGitHubCache().pr['o/r#b']).toBeUndefined()
     expect(restartedProfileB.getGitHubCache().pr['o/r#b']).toEqual({ fetchedAt: 20 })
@@ -443,7 +447,7 @@ describe('Store', () => {
       }
     }
 
-    afterEach(() => {
+    afterEach(async () => {
       _resetTracerForTests()
     })
 
@@ -453,7 +457,7 @@ describe('Store', () => {
         const store = await createStore()
         store.setWorkspaceSession(boundSession(), hostId)
         expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
-        const inoBefore = statSync(dataFile()).ino
+        const stateBefore = readPersistedStateJson(dataFile())
         const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
         const cloneSpy = vi.spyOn(globalThis, 'structuredClone')
 
@@ -461,7 +465,7 @@ describe('Store', () => {
 
         expect(runtimeCounters(store).lastDurableWriteGeneration).toBe(durableGenerationBefore)
         expect(cloneSpy).not.toHaveBeenCalled()
-        expect(statSync(dataFile()).ino).toBe(inoBefore)
+        expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
       }
     )
 
@@ -469,7 +473,7 @@ describe('Store', () => {
       const store = await createStore()
       store.setWorkspaceSession(boundSession())
       await store.persistPtyBinding(binding)
-      const inoBefore = statSync(dataFile()).ino
+      const stateBefore = readPersistedStateJson(dataFile())
       // Bumps the write generation without changing any binding.
       store.setWorkspaceSession({ ...store.getWorkspaceSession() })
       const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
@@ -478,7 +482,7 @@ describe('Store', () => {
       expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
         durableGenerationBefore
       )
-      expect(statSync(dataFile()).ino).toBe(inoBefore)
+      expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
 
       // Without the writeToDiskSync counter fix the hash-match flush leaves the durable
       // generation one behind and this third bind would flush again.
@@ -731,13 +735,13 @@ describe('Store', () => {
       const store = await createStore()
       store.addRepo(makeRepo())
       store.flushOrThrow()
-      const inoBefore = statSync(dataFile()).ino
+      const stateBefore = readPersistedStateJson(dataFile())
       const after = runtimeCounters(store)
       expect(after.lastDurableWriteGeneration).toBe(after.writeGeneration)
 
       store.flushOrThrow()
 
-      expect(statSync(dataFile()).ino).toBe(inoBefore)
+      expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
       const counters = runtimeCounters(store)
       expect(counters.writeGeneration).toBe(after.writeGeneration + 1)
       expect(counters.lastDurableWriteGeneration).toBe(counters.writeGeneration)

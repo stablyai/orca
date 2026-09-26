@@ -22,7 +22,7 @@ export function buildRecoveryCrashProcess(directory: string): string {
     stdin: {
       contents: `
         export { acquireProfileStateMaintenance } from './src/main/persistence/profile-state/profile-state-access'
-        export { restoreProfileStateJsonExport } from './src/main/persistence/profile-state/profile-state-recovery'
+        export { restoreProfileStateJsonExport } from './src/main/persistence/profile-state/legacy-json/profile-state-recovery'
         export { restoreProfileStateDatabaseBackup } from './src/main/persistence/profile-state/profile-state-database-recovery'
         export { openProfileStateDatabase } from './src/main/persistence/profile-state/profile-state-database'
         export { importProfileStateJson } from './src/main/persistence/profile-state/profile-state-documents'

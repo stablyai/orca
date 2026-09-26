@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
-import { hasStateBackup } from './profile-state-legacy-backup-path'
-import { profileStateJsonExportPaths } from './profile-state-export-path'
+import { hasStateBackup } from './legacy-json/profile-state-legacy-backup-path'
+import { profileStateJsonExportPaths } from './legacy-json/profile-state-export-path'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
 
 type ProfileStateRecoveryLocation = {
