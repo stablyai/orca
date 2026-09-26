@@ -127,12 +127,32 @@ describe('host conversation commands', () => {
   })
 
   it('reports provider compaction failure without a stuck lifecycle', async () => {
-    compact.mockResolvedValue({ error: 'Not enough messages to compact.' })
+    const detail = { text: 'Not enough messages to compact.', audience: 'person' as const }
+    compact.mockResolvedValue({ error: 'Not enough messages to compact.', detail })
+    const failure = { kind: 'compactionFailed', detail }
     expect(await host.conversationCommand(caller, commandParams('compact'))).toMatchObject({
       ok: true,
-      value: { state: 'completed', error: 'Not enough messages to compact.' }
+      value: {
+        state: 'completed',
+        error: 'Compaction failed: Not enough messages to compact.',
+        failure
+      }
     })
     expect(store.getRecord(HOST_TEST_SESSION)?.conversationCommand?.state).toBe('completed')
+    const rows = host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
+    expect(rows.ok && rows.page.items.map((item) => item.body)).toContainEqual({
+      kind: 'status',
+      text: 'Compaction failed: Not enough messages to compact.',
+      failure
+    })
+  })
+
+  it("keeps Orca's own compaction error out of the sentence", async () => {
+    compact.mockResolvedValue({ error: 'The provider exited during compaction.' })
+    expect(await host.conversationCommand(caller, commandParams('compact'))).toMatchObject({
+      ok: true,
+      value: { error: 'Compaction failed.', failure: { kind: 'compactionFailed' } }
+    })
   })
 
   it('keeps an unknown compaction from being executed again', async () => {

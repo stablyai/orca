@@ -6,6 +6,10 @@
 // row the next attach settles as `unknown`, whereas the reverse would lose a
 // turn the provider already accepted.
 
+import {
+  agentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../../shared/agent-session-failure'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
@@ -23,7 +27,11 @@ import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionProviderChildPhase
 } from './structured-agent-session-adapter'
-import { providerStartupFailureRejection } from './structured-agent-session-dead-generation-settlement'
+import {
+  agentSessionFailureRejection,
+  agentSessionFailureText,
+  providerStartupFailureFact
+} from './structured-agent-session-failure-text'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 export { performSetOption } from './structured-agent-session-turns-options'
@@ -76,7 +84,10 @@ async function dispatchSafely(
     })
   } catch (error) {
     if (ctx.providerChildPhase?.() === 'starting') {
-      return { state: 'rejected', reason: providerStartupFailureRejection(error) }
+      return {
+        state: 'rejected',
+        ...agentSessionFailureRejection(providerStartupFailureFact(error))
+      }
     }
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
   }
@@ -85,11 +96,12 @@ async function dispatchSafely(
 async function appendStatus(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
-  text: string
+  text: string,
+  failure?: AgentSessionFailureFact
 ): Promise<void> {
   await ctx.journal.appendItem(
     { provider: 'orca', clientMessageId },
-    { kind: 'status', text },
+    { kind: 'status', text, ...(failure ? { failure } : {}) },
     { fence: ctx.fence }
   )
 }
@@ -157,7 +169,7 @@ export async function handOverSubmission(
     await ctx.journal.resolveDispatch({
       clientMessageId,
       state: 'rejected',
-      reason: 'The message could not be read back and was not sent.',
+      ...agentSessionFailureRejection(agentSessionFailureFact('hostFault')),
       fence: ctx.fence
     })
     return
@@ -179,7 +191,15 @@ export async function handOverSubmission(
             providerIdentity: outcome.providerIdentity,
             fence: ctx.fence
           }
-        : { clientMessageId, state: outcome.state, reason: outcome.reason, fence: ctx.fence }
+        : outcome.state === 'rejected'
+          ? {
+              clientMessageId,
+              state: 'rejected',
+              reason: outcome.reason,
+              rejection: outcome.rejection,
+              fence: ctx.fence
+            }
+          : { clientMessageId, state: 'unknown', reason: outcome.reason, fence: ctx.fence }
     )
   } catch (error) {
     // A failed resolution must not strand a pending row; an unknown result is
@@ -229,6 +249,7 @@ export async function performCancel(
   }
   let cancelled = false
   let note = 'Cancellation requested.'
+  let failure: AgentSessionFailureFact | undefined
   try {
     const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
     cancelled = input.scope
@@ -257,9 +278,9 @@ export async function performCancel(
     if (input.prompt) {
       throw error
     }
-    note = `Cancellation was not confirmed: ${
-      error instanceof Error ? error.message : String(error)
-    }`
+    // The adapter's error is Orca's; the row says only that the stop is unconfirmed.
+    failure = agentSessionFailureFact('cancelUnconfirmed')
+    note = agentSessionFailureText(failure)
   }
   if (cancelled && input.prompt) {
     await ctx.flushStreamedEvents()
@@ -268,6 +289,6 @@ export async function performCancel(
     return { ok: true, value: { turnId: input.turnId, cancelled } }
   }
   // Keyed by the operation id so a replayed cancel upserts one item, not two.
-  await appendStatus(ctx, input.clientOperationId, note)
+  await appendStatus(ctx, input.clientOperationId, note, failure)
   return { ok: true, value: { turnId: input.turnId, cancelled } }
 }

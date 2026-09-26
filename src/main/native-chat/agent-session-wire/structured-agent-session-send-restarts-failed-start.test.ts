@@ -97,9 +97,15 @@ function exitBeforeProof(): Promise<void> {
     type: 'ended',
     ...currentChild(),
     reason: EXIT_REASON,
+    failure: { kind: 'providerExited', detail: { text: EXIT_REASON, audience: 'log' } },
     cause: 'unexpected-exit',
     startupUnproven: true
   })
+}
+
+const STARTUP_FAILURE = {
+  kind: 'providerStartFailed',
+  detail: { text: EXIT_REASON, audience: 'log' }
 }
 
 function journalStatuses(): string[] {
@@ -197,14 +203,15 @@ describe('a send into a published session whose child ended before startup', () 
     // host admitted, so nothing pins the session and Retry stays offered, and one row names the cause.
     expect(submission(held)).toMatchObject({
       dispatchState: 'rejected',
-      reason: expect.stringContaining(EXIT_REASON),
+      reason: 'The provider stopped before it finished starting.',
+      rejection: STARTUP_FAILURE,
       recovered: true
     })
     expect(
       host.journalSnapshot(SESSION).submissions.filter((e) => e.dispatchState === 'pending')
     ).toEqual([])
     expect(journalStatuses().slice(rowsBefore)).toEqual([
-      expect.stringMatching(/stopped before it finished starting: .*not signed in/)
+      'The provider stopped before it finished starting.'
     ])
     // The failed restart moved the fence twice: the acquisition, and the exit that released it.
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(releasedFence + 2)
@@ -241,13 +248,12 @@ describe('a send while the child of the first start is still proving itself', ()
 
     expect(submission(held)).toMatchObject({
       dispatchState: 'rejected',
-      reason: expect.stringContaining(EXIT_REASON),
+      reason: 'The provider stopped before it finished starting.',
+      rejection: STARTUP_FAILURE,
       recovered: true
     })
     expect(acquire).toHaveBeenCalledOnce()
-    expect(journalStatuses()).toEqual([
-      expect.stringMatching(/stopped before it finished starting: .*not signed in/)
-    ])
+    expect(journalStatuses()).toEqual(['The provider stopped before it finished starting.'])
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(fence + 1)
   })
 

@@ -33,7 +33,7 @@ export type ResolveDispatchInput = {
   | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
   | { state: 'pending' }
   /** `reason` is the sentence released clients print; `rejection` is what newer ones read. */
-  | { state: 'rejected'; reason?: string | null; rejection?: AgentSessionFailureFact }
+  | { state: 'rejected'; reason: string; rejection: AgentSessionFailureFact }
   | { state: 'unknown'; reason?: string | null }
 )
 

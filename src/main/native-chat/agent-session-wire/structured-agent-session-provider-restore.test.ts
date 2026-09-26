@@ -34,7 +34,11 @@ function claudeAdapter(): StructuredAgentSessionAdapter {
         observedAt: HOST_TEST_NOW
       }
     }),
-    dispatch: async () => ({ state: 'rejected', reason: 'unused' }),
+    dispatch: async () => ({
+      state: 'rejected',
+      reason: 'unused',
+      rejection: { kind: 'providerRejected' }
+    }),
     cancelTurn: async () => ({ cancelled: false }),
     answerPrompt: async () => undefined,
     setOption: async () => undefined

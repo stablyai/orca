@@ -1,7 +1,20 @@
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { boundJournalStatusText } from '../agent-session-journal/journal-prompt-body-bounds'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import {
+  agentSessionFailureRejection,
+  agentSessionFailureText,
+  type AgentSessionFailureTextContext
+} from './structured-agent-session-failure-text'
+
+/** A start that failed: keyed like its row, with what failed and whose words to use. */
+export type StructuredAgentSessionStartFailure = {
+  startKey: string | null
+  failure: AgentSessionFailureFact
+  context?: AgentSessionFailureTextContext
+}
 
 /**
  * The one row a start that failed leaves in the chat, whoever saw it fail: an error row, so the
@@ -11,12 +24,18 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
  */
 export function structuredAgentSessionStartFailureRow(
   startKey: string,
-  text: string
+  failure: AgentSessionFailureFact,
+  context: AgentSessionFailureTextContext = {}
 ): JournalLifecycleMutationInput {
   return {
     kind: 'item',
     identity: { provider: 'orca', clientMessageId: `start-failure:${startKey}` },
-    body: { kind: 'status', text: boundJournalStatusText(text), tone: 'error' }
+    body: {
+      kind: 'status',
+      text: boundJournalStatusText(agentSessionFailureText(failure, context)),
+      tone: 'error',
+      failure
+    }
   }
 }
 
@@ -27,7 +46,7 @@ export function structuredAgentSessionStartFailureRow(
  */
 export async function recordStructuredAgentSessionStartFailure(
   session: Pick<StructuredAgentSessionHostSession, 'journal'> & { fence: number },
-  failure: { startKey: string | null; text: string }
+  failure: StructuredAgentSessionStartFailure
 ): Promise<void> {
   const oldest = oldestQueuedSubmission(session)
   if (!oldest) {
@@ -38,9 +57,12 @@ export async function recordStructuredAgentSessionStartFailure(
     settlementId: `start-failure:${startKey}`,
     fence: session.fence,
     recovered: true,
-    mutations: [structuredAgentSessionStartFailureRow(startKey, failure.text)]
+    mutations: [structuredAgentSessionStartFailureRow(startKey, failure.failure, failure.context)]
   })
-  await session.journal.rejectQueuedSubmissions(session.fence, failure.text)
+  await session.journal.rejectQueuedSubmissions(
+    session.fence,
+    agentSessionFailureRejection(failure.failure, failure.context)
+  )
 }
 
 export function oldestQueuedSubmission(

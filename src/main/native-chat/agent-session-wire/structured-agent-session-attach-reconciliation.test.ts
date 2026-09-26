@@ -112,7 +112,7 @@ describe('attachJournal restart reconciliation', () => {
     expect(attached.unconfirmedClientMessageIds).toEqual([])
     const submission = attached.journal.submissions()[0]
     expect(submission?.dispatchState).toBe('rejected')
-    expect(submission?.reason).toBe('not_delivered')
+    expect(submission?.rejection).toEqual({ kind: 'notDelivered' })
     // Deciding is not sending: nothing here puts the message back on the wire.
     expect(dispatch).not.toHaveBeenCalled()
   })

@@ -45,7 +45,13 @@ async function settle(reason: string): Promise<string | null> {
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
     fence: 1
   })
-  await journal.resolveDispatch({ clientMessageId: 'msg-1', state: 'rejected', reason, fence: 1 })
+  await journal.resolveDispatch({
+    clientMessageId: 'msg-1',
+    state: 'rejected',
+    reason,
+    rejection: { kind: 'providerRejected' },
+    fence: 1
+  })
   return journal.snapshot().submissions[0]?.reason ?? null
 }
 

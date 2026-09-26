@@ -1,3 +1,4 @@
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
 import { recoverInterruptedCompaction } from './structured-compaction-recovery'
 // The host's attach, lifted out of the host class.
@@ -264,6 +265,8 @@ function endReleasedChild(
       fence: child.fence,
       cause: 'attach-failed',
       reason: cause instanceof Error ? cause.message : String(cause),
+      // Orca failed to attach; the provider said nothing.
+      failure: agentSessionFailureFact('hostFault'),
       duringStartup: child.phase === 'starting',
       ...verdict
     })

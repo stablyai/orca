@@ -16,7 +16,7 @@ import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_PROVIDER_CLOSED
 } from '../../../shared/structured-agent-session-dispatch-rejection'
-import { providerStartupFailureOutcome } from './structured-agent-session-dead-generation-settlement'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -164,14 +164,20 @@ function submission(id: string): AgentJournalSubmission | undefined {
   return host.journalSnapshot(SESSION).submissions.find((entry) => entry.clientMessageId === id)
 }
 
-function statusRows(): { itemId: string; text: string; tone?: string }[] {
+function statusRows(): {
+  itemId: string
+  text: string
+  tone?: string
+  failure?: AgentSessionFailureFact
+}[] {
   return host.journalSnapshot(SESSION).items.flatMap((item) =>
     item.body.kind === 'status'
       ? [
           {
             itemId: item.itemId,
             text: item.body.text,
-            ...(item.body.tone ? { tone: item.body.tone } : {})
+            ...(item.body.tone ? { tone: item.body.tone } : {}),
+            ...(item.body.failure ? { failure: item.body.failure } : {})
           }
         ]
       : []
@@ -192,6 +198,8 @@ function exit(child: ReturnType<typeof currentChild>, reason: string, startupUnp
     type: 'ended',
     ...child,
     reason,
+    // As an adapter reports it: the exit's stderr as a log detail.
+    failure: { kind: 'providerExited', detail: { text: reason, audience: 'log' } },
     cause: 'unexpected-exit',
     ...(startupUnproven ? { startupUnproven } : {})
   })
@@ -320,14 +328,21 @@ describe('a settlement retry for an earlier child inside the attach for the next
   })
 })
 
+const START_EXIT = 'claude stream-json exited (code 1)'
+const START_TEXT = 'The provider stopped before it finished starting.'
+const START_FAILURE: AgentSessionFailureFact = {
+  kind: 'providerStartFailed',
+  detail: { text: START_EXIT, audience: 'log' }
+}
+
 describe('a published child that dies while it proves its start', () => {
-  const EXIT = 'claude stream-json exited (code 1)'
-  const TEXT = providerStartupFailureOutcome(EXIT)
+  const EXIT = START_EXIT
+  const TEXT = START_TEXT
 
   it.each([['the loop sees the start fail first'], ['the exit is processed first']])(
     'leaves one error row keyed by the start, and every queued message rejected with it: %s (R2)',
     async (order) => {
-      const settled = deferred<string>()
+      const settled = deferred<AgentSessionFailureFact>()
       adapterExtras = { awaitStarted: vi.fn(() => settled.promise) }
       await restartHost()
       acquire.mockImplementation(spawnStartingChild)
@@ -339,9 +354,9 @@ describe('a published child that dies while it proves its start', () => {
 
       if (order === 'the exit is processed first') {
         await exit(child, EXIT, true)
-        settled.resolve(TEXT)
+        settled.resolve(START_FAILURE)
       } else {
-        settled.resolve(TEXT)
+        settled.resolve(START_FAILURE)
         await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
         await exit(child, EXIT, true)
       }
@@ -351,11 +366,17 @@ describe('a published child that dies while it proves its start', () => {
         {
           itemId: `orca:${encodeURIComponent(`start-failure:${child.acquisitionGeneration}`)}`,
           text: TEXT,
-          tone: 'error'
+          tone: 'error',
+          failure: START_FAILURE
         }
       ])
-      expect(submission(first)).toMatchObject({ dispatchState: 'rejected', reason: TEXT })
-      expect(submission(second)).toMatchObject({ dispatchState: 'rejected', reason: TEXT })
+      for (const id of [first, second]) {
+        expect(submission(id)).toMatchObject({
+          dispatchState: 'rejected',
+          reason: TEXT,
+          rejection: START_FAILURE
+        })
+      }
       expect(rejectedIn(events, second)).toBe(true)
       expect(dispatch).not.toHaveBeenCalled()
       expect(acquire).toHaveBeenCalledTimes(2)
@@ -364,11 +385,11 @@ describe('a published child that dies while it proves its start', () => {
 })
 
 describe("a view's start that dies while a sent message waits on it", () => {
-  const EXIT = 'claude stream-json exited (code 1)'
-  const TEXT = providerStartupFailureOutcome(EXIT)
+  const EXIT = START_EXIT
+  const TEXT = START_TEXT
 
   it("is the message's own failed start: one error row, the message rejected, no second start (R2)", async () => {
-    adapterExtras = { awaitStarted: vi.fn(async () => TEXT) }
+    adapterExtras = { awaitStarted: vi.fn(async () => START_FAILURE) }
     await restartHost()
     acquire.mockImplementation(spawnStartingChild)
     // Opening the tab: the view's hold starts a child that has not proven its start.
@@ -394,7 +415,8 @@ describe("a view's start that dies while a sent message waits on it", () => {
       {
         itemId: `orca:${encodeURIComponent(`start-failure:${viewChild.acquisitionGeneration}`)}`,
         text: TEXT,
-        tone: 'error'
+        tone: 'error',
+        failure: START_FAILURE
       }
     ])
     expect(rejectedIn(events, id)).toBe(true)
@@ -467,9 +489,17 @@ describe('a child that ends before its message is handed over', () => {
     const events = subscribe()
 
     await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
-    expect(submission(id)?.reason).toContain('codex app-server crashed')
+    // The exit's stderr rides beside the sentence, never in it.
+    const failure = {
+      kind: 'providerExited',
+      detail: { text: 'codex app-server crashed', audience: 'log' }
+    }
+    expect(submission(id)).toMatchObject({
+      reason: 'The provider stopped before this message was sent.',
+      rejection: failure
+    })
     expect(statusRows()).toEqual([
-      { itemId: expect.any(String), text: submission(id)?.reason, tone: 'error' }
+      { itemId: expect.any(String), text: submission(id)?.reason, tone: 'error', failure }
     ])
     expect(rejectedIn(events, id)).toBe(true)
     await eventually(() => expect(host['conversationDelivery'].loop.isRunning(SESSION)).toBe(false))
@@ -634,7 +664,7 @@ describe('how a stopped child ends the start its loop was waiting on', () => {
     expect(statusRows()).toEqual([])
   })
 
-  it('fails the start after a host stop, with the stop as the reason (R2)', async () => {
+  it("fails the start after a host stop, as Orca's fault rather than the provider's (R2)", async () => {
     const reason = 'Claude never finished starting, so Orca stopped it.'
     const second = await stoppedWhileStarting(() =>
       host['serialize'](SESSION, () =>
@@ -646,8 +676,11 @@ describe('how a stopped child ends the start its loop was waiting on', () => {
     )
 
     await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
-    expect(submission(second)?.reason).toBe(reason)
-    expect(statusRows()).toEqual([{ itemId: expect.any(String), text: reason, tone: 'error' }])
+    const text = "Orca ran into a problem, so this didn't go through. Try again."
+    expect(submission(second)).toMatchObject({ reason: text, rejection: { kind: 'hostFault' } })
+    expect(statusRows()).toEqual([
+      { itemId: expect.any(String), text, tone: 'error', failure: { kind: 'hostFault' } }
+    ])
     expect(dispatch).not.toHaveBeenCalled()
   })
 })

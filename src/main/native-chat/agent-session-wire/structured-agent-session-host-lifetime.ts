@@ -7,7 +7,7 @@
 
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { DISPATCH_REJECTED_PROVIDER_CLOSED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { DISPATCH_REJECTION_PROVIDER_CLOSED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import {
   evictStructuredAgentSession,
   STRUCTURED_AGENT_SESSION_EVICTION_STEPS,
@@ -62,7 +62,7 @@ export async function abandonQueuedStructuredAgentSessionMessages(
   await journal
     .rejectQueuedSubmissions(
       structuredAgentSessionConversationFence(deps.store, sessionId),
-      DISPATCH_REJECTED_PROVIDER_CLOSED
+      DISPATCH_REJECTION_PROVIDER_CLOSED
     )
     .catch((error: unknown) => deps.onEventSinkError?.({ sessionId, error }))
 }

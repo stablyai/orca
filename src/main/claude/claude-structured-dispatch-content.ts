@@ -5,6 +5,14 @@ import type { AgentJournalMessageItem } from '../../shared/agent-session-journal
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import { claudeRecord } from './claude-structured-item-translation'
 
+/** Orca refused the message's content, as opposed to failing to read an attachment. */
+export class ClaudeDispatchContentError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ClaudeDispatchContentError'
+  }
+}
+
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const MAX_IMAGE_COUNT = 20
 const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024
@@ -19,10 +27,12 @@ export async function readClaudeImage(path: string, openImpl: typeof open = open
   const file = await openImpl(path, 'r')
   try {
     const invalidImage = (): Error =>
-      new Error(`Claude image must be a non-empty file no larger than ${MAX_IMAGE_BYTES} bytes`)
+      new ClaudeDispatchContentError(
+        `Claude image must be a non-empty file no larger than ${MAX_IMAGE_BYTES} bytes`
+      )
     const info = await file.stat()
     if (!info.isFile()) {
-      throw new Error('Claude image must be a file')
+      throw new ClaudeDispatchContentError('Claude image must be a file')
     }
     if (info.size > MAX_IMAGE_BYTES) {
       throw invalidImage()
@@ -62,22 +72,28 @@ async function imageContent(
 ): Promise<unknown> {
   budget.count += 1
   if (budget.count > MAX_IMAGE_COUNT) {
-    throw new Error(`Claude messages support at most ${MAX_IMAGE_COUNT} images`)
+    throw new ClaudeDispatchContentError(
+      `Claude messages support at most ${MAX_IMAGE_COUNT} images`
+    )
   }
   if (block.url) {
     return { type: 'image', source: { type: 'url', url: block.url } }
   }
   if (!block.path) {
-    throw new Error('image reference has neither a path nor a URL')
+    throw new ClaudeDispatchContentError('image reference has neither a path nor a URL')
   }
   const data = await readClaudeImage(block.path)
   budget.localBytes += data.byteLength
   if (budget.localBytes > MAX_TOTAL_IMAGE_BYTES) {
-    throw new Error(`Claude images must total no more than ${MAX_TOTAL_IMAGE_BYTES} bytes`)
+    throw new ClaudeDispatchContentError(
+      `Claude images must total no more than ${MAX_TOTAL_IMAGE_BYTES} bytes`
+    )
   }
   const mediaType = IMAGE_MIME_BY_EXTENSION[extname(block.path).toLowerCase()]
   if (!mediaType) {
-    throw new Error(`Claude does not support the image type ${extname(block.path)}`)
+    throw new ClaudeDispatchContentError(
+      `Claude does not support the image type ${extname(block.path)}`
+    )
   }
   return {
     type: 'image',
@@ -99,7 +115,7 @@ export async function claudeDispatchMessageContent(
   body: AgentJournalMessageItem
 ): Promise<unknown[]> {
   if (body.role !== 'user') {
-    throw new Error('Claude dispatch accepts only user messages')
+    throw new ClaudeDispatchContentError('Claude dispatch accepts only user messages')
   }
   const images: unknown[] = []
   const texts: string[] = []
@@ -115,7 +131,7 @@ export async function claudeDispatchMessageContent(
   // text blocks would silently discard every one but the last.
   const content = texts.length > 0 ? [...images, { type: 'text', text: texts.join('\n') }] : images
   if (content.length === 0) {
-    throw new Error('Claude dispatch requires text or an image')
+    throw new ClaudeDispatchContentError('Claude dispatch requires text or an image')
   }
   return content
 }

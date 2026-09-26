@@ -276,7 +276,9 @@ export async function sendStructuredWorkerPreamble(args: {
     // pending receipt; only this one lets the caller retry knowing nothing landed.
     throw new OrchestrationError(
       'dispatch_preamble_undelivered',
-      `The dispatch preamble was not delivered: ${submission.reason ?? 'no reason given'}.`
+      `The dispatch preamble was not delivered${
+        submission.rejection ? ` (${submission.rejection.kind})` : ''
+      }: ${submission.reason ?? 'no reason given'}.`
     )
   }
   // Only `accepted` is an acknowledgement — the same rule the mail lane already applies. A thrown

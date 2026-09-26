@@ -1,3 +1,4 @@
+import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
 import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
 import {
@@ -29,6 +30,9 @@ export function handleCodexSessionExit(input: {
     type: 'ended',
     sessionId: input.sessionId,
     reason: input.error.message,
+    failure: agentSessionFailureFact('providerExited', {
+      detail: providerDiagnosticOf(input.error)
+    }),
     cause: session.requestedClose ? 'requested-close' : 'unexpected-exit',
     fence: session.fence,
     acquisitionGeneration: session.acquisitionGeneration,

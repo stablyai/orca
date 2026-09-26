@@ -24,7 +24,7 @@ import {
 } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { unexpectedProviderExitOutcome } from './structured-agent-session-dead-generation-settlement'
+import { UNEXPECTED_PROVIDER_EXIT_OUTCOME } from './structured-agent-session-dead-generation-settlement'
 import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
 import {
   HOST_TEST_NOW as NOW,
@@ -207,7 +207,11 @@ beforeEach(async () => {
     }
   })
   closeSession = vi.fn(async () => true)
-  dispatch = vi.fn(async () => ({ state: 'rejected' as const, reason: 'unused' }))
+  dispatch = vi.fn(async () => ({
+    state: 'rejected' as const,
+    reason: 'unused',
+    rejection: { kind: 'providerRejected' as const }
+  }))
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
   openHost()
 })
@@ -708,11 +712,11 @@ describe('an unexpected provider exit', () => {
     const history = host.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.ok && history.page.submissions[0]?.dispatchState).toBe('unknown')
     // A send whose delivery outcome is unknown IS work in progress, so the reassuring outcome is
-    // written — carrying the cause, and never the old bare `Provider exited: <reason>` row.
+    // written — its cause beside it, and never the old bare `Provider exited: <reason>` row.
     const statuses = history.ok
       ? history.page.items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
       : []
-    expect(statuses).toEqual([unexpectedProviderExitOutcome('provider exited')])
+    expect(statuses).toEqual([UNEXPECTED_PROVIDER_EXIT_OUTCOME])
     expect(statuses.some((text) => text.startsWith('Provider exited'))).toBe(false)
 
     dispatch.mockResolvedValueOnce({

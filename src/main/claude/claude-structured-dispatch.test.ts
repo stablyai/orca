@@ -379,7 +379,11 @@ describe('Claude structured dispatch image limits', () => {
         clientMessageId: 'client-2',
         body: userMessage([{ type: 'text', text: 'two' }])
       })
-    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'provider_write_failed: broken pipe',
+      rejection: { kind: 'writeFailed' }
+    })
     expect(session.dispatchWaiters).toEqual([firstWaiter])
 
     const firstUuid = (firstWaiter as { sentUuid?: string }).sentUuid
@@ -401,7 +405,11 @@ describe('Claude structured dispatch image limits', () => {
 
     await expect(
       dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'provider_write_failed: broken pipe',
+      rejection: { kind: 'writeFailed' }
+    })
     expect(session.dispatchWaiters).toHaveLength(0)
     expect(session.retiredDispatchWaiters).toHaveLength(0)
 
@@ -695,7 +703,11 @@ describe('Claude structured dispatch image limits', () => {
 
     await expect(
       dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-    ).resolves.toEqual({ state: 'rejected', reason: 'Claude messages support at most 20 images' })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: "An attachment on this message can't be sent to the agent.",
+      rejection: { kind: 'attachmentInvalid' }
+    })
     expect(session.connection.send).not.toHaveBeenCalled()
   })
 
@@ -716,7 +728,8 @@ describe('Claude structured dispatch image limits', () => {
         dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
       ).resolves.toEqual({
         state: 'rejected',
-        reason: `Claude images must total no more than ${20 * 1024 * 1024} bytes`
+        reason: "An attachment on this message can't be sent to the agent.",
+        rejection: { kind: 'attachmentInvalid' }
       })
       expect(session.connection.send).not.toHaveBeenCalled()
     } finally {
@@ -736,7 +749,8 @@ describe('Claude structured dispatch image limits', () => {
         dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
       ).resolves.toEqual({
         state: 'rejected',
-        reason: `Claude image must be a non-empty file no larger than ${5 * 1024 * 1024} bytes`
+        reason: "An attachment on this message can't be sent to the agent.",
+        rejection: { kind: 'attachmentInvalid' }
       })
       expect(session.connection.send).not.toHaveBeenCalled()
     } finally {

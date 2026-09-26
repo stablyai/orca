@@ -18,23 +18,27 @@ import type {
 } from './claude-structured-session-state'
 import { readClaudeFrameString } from './claude-structured-init-proof'
 import {
+  ClaudeDispatchContentError,
   claudeDispatchContentKey,
   claudeDispatchInvokesSlashCommand,
   claudeDispatchMessageContent
 } from './claude-structured-dispatch-content'
 import { dispatchWriteOutcomeUnknownReason } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
 import {
-  DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_QUEUE_FULL,
-  dispatchWriteFailureReason
+  DISPATCH_REJECTION_CANCELLED,
+  dispatchQueueFullRejection,
+  dispatchWriteFailureRejection
 } from '../../shared/structured-agent-session-dispatch-rejection'
+import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import { agentSessionFailureRejection } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
   claudeUnwrittenUserMessageError,
   claudeUserMessageWasProvablyUnwritten
 } from './claude-agent-sdk-user-message-queue'
 import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
 import {
-  claudeStartupFailureReason,
+  claudeStartupFailureFact,
   failClaudeStartup
 } from './claude-structured-session-startup-state'
 
@@ -214,7 +218,7 @@ export function settleCancelledClaudeDispatchWaiters(
       onSettledLate?.({
         clientMessageId: waiter.clientMessageId,
         state: 'rejected',
-        reason: DISPATCH_REJECTED_CANCELLED
+        ...DISPATCH_REJECTION_CANCELLED
       })
     }
   }
@@ -240,14 +244,22 @@ export async function dispatchClaudeTurn(
   try {
     content = await claudeDispatchMessageContent(input.body)
   } catch (error) {
-    return { state: 'rejected', reason: (error as Error).message }
+    // Orca's own refusal of the content, or an attachment it could not read; never the provider.
+    return {
+      state: 'rejected',
+      ...agentSessionFailureRejection(
+        agentSessionFailureFact(
+          error instanceof ClaudeDispatchContentError ? 'attachmentInvalid' : 'attachmentUnreadable'
+        )
+      )
+    }
   }
   if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
-    return { state: 'rejected', reason: DISPATCH_REJECTED_QUEUE_FULL }
+    return { state: 'rejected', ...dispatchQueueFullRejection(DISPATCH_REJECTED_QUEUE_FULL) }
   }
-  const startupFailure = claudeStartupFailureReason(session)
+  const startupFailure = claudeStartupFailureFact(session)
   if (startupFailure) {
-    return { state: 'rejected', reason: startupFailure }
+    return { state: 'rejected', ...agentSessionFailureRejection(startupFailure) }
   }
   // Read the sent content, not the journal blocks: only the mapped trailing prompt decides
   // whether Claude runs a command, so the two cannot disagree about which frame settles this.
@@ -293,7 +305,7 @@ export async function dispatchClaudeTurn(
       if (error instanceof AgentSessionPreDispatchError) {
         throw error
       }
-      return { state: 'rejected', reason: dispatchWriteFailureReason(error) }
+      return { state: 'rejected', ...dispatchWriteFailureRejection(error) }
     }
     const waiter = replay.waiter
     if (waiter.settledUuid) {
@@ -311,7 +323,7 @@ export async function dispatchClaudeTurn(
       waiter.resolve(null)
       // The frame was never handed to the SDK's input pump, so this is not doubt:
       // the message provably did not happen, which is what `rejected` means.
-      return { state: 'rejected', reason: dispatchWriteFailureReason(error) }
+      return { state: 'rejected', ...dispatchWriteFailureRejection(error) }
     }
     if (!waiter.retired) {
       retireWaiter(session, waiter)

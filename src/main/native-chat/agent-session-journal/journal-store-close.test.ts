@@ -117,7 +117,15 @@ describe('closed-state admission happens at enqueue', () => {
           fence: 1
         })
       ),
-      settle(journal.resolveDispatch({ clientMessageId: 'cm_1', state: 'rejected', fence: 1 })),
+      settle(
+        journal.resolveDispatch({
+          clientMessageId: 'cm_1',
+          state: 'rejected',
+          reason: 'Not sent.',
+          rejection: { kind: 'hostFault' },
+          fence: 1
+        })
+      ),
       settle(
         journal.appendLifecycleBatch({
           settlementId: 'settle',

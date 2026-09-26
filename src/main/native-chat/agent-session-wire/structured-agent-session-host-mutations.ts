@@ -21,7 +21,10 @@ import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
 } from '../../../shared/agent-session-wire'
-import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import {
+  DISPATCH_REJECTION_CANCELLED,
+  type AgentJournalDispatchRejection
+} from '../../../shared/structured-agent-session-dispatch-rejection'
 import { threadGoalPlan } from './structured-agent-session-thread-goal'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import {
@@ -153,7 +156,7 @@ export function cancelStructuredAgentSessionTurn(
         // Stop withdraws every queued message first, whatever the start or the child is doing.
         const withdrawn = await ctx.journal.rejectQueuedSubmissions(
           ctx.fence,
-          DISPATCH_REJECTED_CANCELLED
+          DISPATCH_REJECTION_CANCELLED
         )
         const child = context.sessions.get(ctx.sessionId)?.child
         if (child?.phase === 'starting') {
@@ -244,7 +247,10 @@ export async function settleStructuredAgentSessionLateDispatch(
   input: {
     sessionId: string
     clientMessageId: string
-  } & ({ providerIdentity: AgentJournalItemIdentity } | { state: 'rejected'; reason: string })
+  } & (
+    | { providerIdentity: AgentJournalItemIdentity }
+    | ({ state: 'rejected' } & AgentJournalDispatchRejection)
+  )
 ): Promise<void> {
   const session = context.sessions.get(input.sessionId)
   if (!session) {
@@ -264,6 +270,7 @@ export async function settleStructuredAgentSessionLateDispatch(
           clientMessageId: input.clientMessageId,
           state: 'rejected',
           reason: input.reason,
+          rejection: input.rejection,
           fence
         }
   )

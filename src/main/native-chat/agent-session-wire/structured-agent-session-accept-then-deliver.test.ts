@@ -2,6 +2,7 @@
 // session's delivery loop starts a provider child for it and hands it over. Against the real host,
 // store and journal; each assertion reads what an open chat or the journal's next reader sees.
 
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -172,6 +173,14 @@ function errorRows(): string[] {
     )
 }
 
+function errorFailures(): (AgentSessionFailureFact | undefined)[] {
+  return host
+    .journalSnapshot(SESSION)
+    .items.flatMap((item) =>
+      item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.failure] : []
+    )
+}
+
 let subscriptions = 0
 
 function subscribe(): AgentSessionSubscribeEvent[] {
@@ -309,9 +318,16 @@ describe('a start the chat needed and did not get', () => {
     await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
     const rows = errorRows()
     expect(rows).toHaveLength(1)
-    expect(rows[0]).toContain('spawn codex ENOENT')
-    expect(submission(first)).toMatchObject({ dispatchState: 'rejected', reason: rows[0] })
-    expect(submission(second)).toMatchObject({ dispatchState: 'rejected', reason: rows[0] })
+    // Orca's spawn error goes to the log; the row and every message say what failed, typed.
+    expect(rows[0]).toBe('The provider stopped before it finished starting.')
+    expect(errorFailures()).toEqual([{ kind: 'providerStartFailed' }])
+    for (const id of [first, second]) {
+      expect(submission(id)).toMatchObject({
+        dispatchState: 'rejected',
+        reason: rows[0],
+        rejection: { kind: 'providerStartFailed' }
+      })
+    }
 
     const next = await accept('after the fix')
     await eventually(() => expect(submission(next)?.dispatchState).toBe('accepted'))
@@ -324,12 +340,21 @@ describe('a start the chat needed and did not get', () => {
       () => {
         adapterExtras = { supportsLocation: () => false }
       },
-      'cannot resume'
+      {
+        text: "Codex couldn't restart. Start a new chat to continue.",
+        failure: {
+          kind: 'restartFailed',
+          refusal: { code: 'structured_agent_session_unsupported' }
+        }
+      }
     ],
     [
       'spawn',
       () => acquire.mockRejectedValueOnce(new Error('spawn codex ENOENT')),
-      'spawn codex ENOENT'
+      {
+        text: 'The provider stopped before it finished starting.',
+        failure: { kind: 'providerStartFailed' }
+      }
     ],
     [
       'auth',
@@ -337,9 +362,12 @@ describe('a start the chat needed and did not get', () => {
         acquire.mockRejectedValueOnce(
           new AgentSessionPreSpawnError(new Error('Not logged in. Please run /login.'))
         ),
-      'Not logged in'
+      {
+        text: 'The provider stopped before it finished starting.',
+        failure: { kind: 'providerStartFailed' }
+      }
     ]
-  ])('writes one row a live chat sees for a %s refusal (W14)', async (_source, arrange, cause) => {
+  ])('writes one row a live chat sees for a %s refusal (W14)', async (_source, arrange, row) => {
     await host.close(SESSION)
     arrange()
     await host.flushAllStreamedEvents()
@@ -348,8 +376,8 @@ describe('a start the chat needed and did not get', () => {
     const events = subscribe()
 
     await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
-    expect(errorRows()).toHaveLength(1)
-    expect(errorRows()[0]).toContain(cause)
+    expect(errorRows()).toEqual([row.text])
+    expect(errorFailures()).toEqual([row.failure])
     const framedRows = events.flatMap((event) =>
       event.type === 'batch' || event.type === 'snapshot'
         ? (event.type === 'batch' ? event.batch.items : event.page.items).filter(
@@ -380,11 +408,10 @@ describe('a start the chat needed and did not get', () => {
       settled = await reopened(id)
       expect(settled?.dispatchState).not.toBe('pending')
     })
-    // The message names the start that failed, not a close or a restart it never met.
-    expect(settled).toMatchObject({
-      dispatchState: 'rejected',
-      reason: expect.stringContaining('record store write failed')
-    })
+    // The message names the start that failed, not a close or a restart it never met — and never
+    // the store's own error, which is Orca's and goes to the log.
+    expect(settled).toMatchObject({ dispatchState: 'rejected', rejection: errorFailures()[0] })
+    expect(settled?.reason).not.toContain('record store write failed')
     expect(errorRows()).toEqual([settled?.reason])
   })
 })
@@ -481,7 +508,10 @@ describe('a child that exits before its message is handed over', () => {
     const id = await accept('hello')
 
     await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
-    expect(submission(id)?.reason).toContain('codex app-server crashed')
+    expect(submission(id)).toMatchObject({
+      reason: 'The provider stopped before this message was sent.',
+      rejection: { kind: 'providerExited' }
+    })
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(dispatch).not.toHaveBeenCalled()
   })

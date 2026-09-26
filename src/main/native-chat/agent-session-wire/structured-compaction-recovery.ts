@@ -1,3 +1,4 @@
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
@@ -27,12 +28,19 @@ export async function settleInterruptedCompaction(
     return
   }
   const error = 'Previous compaction completion could not be confirmed after session recovery.'
+  const failure = agentSessionFailureFact('compactionUnconfirmed')
   await journal.appendItem(
     { provider: 'orca', clientMessageId: `compact:${command.operationId}` },
-    { kind: 'status', text: error },
+    { kind: 'status', text: error, failure },
     { fence }
   )
-  const recovered = { ...command, phase: 'committed' as const, state: 'unknown' as const, error }
+  const recovered = {
+    ...command,
+    phase: 'committed' as const,
+    state: 'unknown' as const,
+    error,
+    failure
+  }
   await store.setConversationCommand(sessionId, fence, recovered)
   await store.recordOperationOutcome({
     callerKey: command.callerKey,

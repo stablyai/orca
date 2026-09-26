@@ -1,3 +1,5 @@
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureText } from './structured-agent-session-failure-text'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
   decodeAgentSessionQuestionAnswers,
@@ -82,14 +84,11 @@ export async function performPrompt(
     if (!committed.item) {
       throw error
     }
+    // The adapter's error is Orca's; the row says only what the user needs to know.
+    const failure = agentSessionFailureFact('answerUnconfirmed')
     await ctx.journal.appendItem(
       { provider: 'orca', clientMessageId: `${input.itemId}#delivery` },
-      {
-        kind: 'status',
-        text: `Your answer was recorded but the agent did not confirm it: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      },
+      { kind: 'status', text: agentSessionFailureText(failure), failure },
       { fence: ctx.fence }
     )
   }

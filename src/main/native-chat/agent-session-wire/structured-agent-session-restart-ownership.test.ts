@@ -125,7 +125,7 @@ it('still continues a chat whose last send acquisition proves was never delivere
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(host.journalSnapshot(SESSION).submissions[0]).toMatchObject({
     dispatchState: 'rejected',
-    reason: 'not_delivered'
+    rejection: { kind: 'notDelivered' }
   })
   expect(acquire).toHaveBeenCalledTimes(1)
   expect(dispatch).toHaveBeenCalledTimes(1)
@@ -455,7 +455,11 @@ it('retains acquisition through slow continuation settlement, then releases it',
   await vi.advanceTimersByTimeAsync(GRACE * 2)
   expect(host.isHeld(SESSION)).toBe(true)
   expect(closeSession).not.toHaveBeenCalled()
-  settlement.resolve({ state: 'rejected', reason: 'provider refused' })
+  settlement.resolve({
+    state: 'rejected',
+    reason: 'provider refused',
+    rejection: { kind: 'providerRejected' }
+  })
   expect((await continuing).continued).toMatchObject([{ outcome: 'refused' }])
   expect(host.isHeld(SESSION)).toBe(false)
   await vi.advanceTimersByTimeAsync(GRACE)

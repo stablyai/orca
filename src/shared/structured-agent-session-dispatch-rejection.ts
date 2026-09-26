@@ -64,6 +64,13 @@ export const DISPATCH_REJECTION_PROVIDER_CLOSED: AgentJournalDispatchRejection =
   rejection: { kind: 'chatClosed' }
 }
 
+/** Restart reconciliation proved the provider never took it. Released clients printed the old
+ *  `not_delivered` marker as it was, so new rows carry a sentence instead. */
+export const DISPATCH_REJECTION_NOT_DELIVERED: AgentJournalDispatchRejection = {
+  reason: 'This message was not delivered. Send it again to continue.',
+  rejection: { kind: 'notDelivered' }
+}
+
 /** The marker keeps its Orca text after the prefix, as released clients expect; they hide it. */
 export function dispatchWriteFailureRejection(error: unknown): AgentJournalDispatchRejection {
   return { reason: dispatchWriteFailureReason(error), rejection: { kind: 'writeFailed' } }

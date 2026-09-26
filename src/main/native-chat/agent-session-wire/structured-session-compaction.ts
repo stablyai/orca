@@ -1,10 +1,17 @@
+import { providerDiagnostic, type ProviderDiagnostic } from '../../../shared/agent-session-failure'
+
+/** `error` is Orca's account of a failed compaction; `detail` is the provider's own words, when it
+ *  gave any. */
+export type StructuredSessionCompactionResult = { error?: string; detail?: ProviderDiagnostic }
+
 type PendingCompaction = {
   identity: string
   commandTurnId?: string
   turnId?: string
   error?: string
+  detail?: ProviderDiagnostic
   compacted: boolean
-  finish: (result: { error?: string }) => void
+  finish: (result: StructuredSessionCompactionResult) => void
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -27,16 +34,16 @@ export class StructuredSessionCompaction {
     sessionId: string,
     identity: string,
     invoke: () => Promise<unknown>,
-    onLateResult?: (result: { error?: string }) => Promise<void>,
+    onLateResult?: (result: StructuredSessionCompactionResult) => Promise<void>,
     commandTurnId?: string
-  ): Promise<{ error?: string }> {
+  ): Promise<StructuredSessionCompactionResult> {
     if (this.pending.has(sessionId)) {
       throw new Error('Compaction is already running.')
     }
     let timer: ReturnType<typeof setTimeout>
     let expired = false
-    const completion = new Promise<{ error?: string }>((resolve, reject) => {
-      const finish = (result: { error?: string }) => {
+    const completion = new Promise<StructuredSessionCompactionResult>((resolve, reject) => {
+      const finish = (result: StructuredSessionCompactionResult) => {
         this.pending.delete(sessionId)
         if (expired && onLateResult) {
           void onLateResult(result).catch((error) =>
@@ -107,10 +114,14 @@ export class StructuredSessionCompaction {
     }
     if (method === 'turn/completed' && turn.id === pending.turnId) {
       const error = record(turn.error).message
+      const detail = typeof error === 'string' ? providerDiagnostic(error, 'person') : undefined
       pending.finish(
         turn.status === 'completed' && pending.compacted
           ? {}
-          : { error: typeof error === 'string' ? error : 'Compaction did not complete.' }
+          : {
+              error: typeof error === 'string' ? error : 'Compaction did not complete.',
+              ...(detail ? { detail } : {})
+            }
       )
     }
   }
@@ -123,6 +134,10 @@ export class StructuredSessionCompaction {
     if (message.compact_result === 'failed') {
       pending.error =
         typeof message.compact_error === 'string' ? message.compact_error : 'Compaction failed.'
+      pending.detail =
+        typeof message.compact_error === 'string'
+          ? providerDiagnostic(message.compact_error, 'person')
+          : undefined
     }
     if (message.compact_result === 'success' || message.subtype === 'compact_boundary') {
       pending.compacted = true
@@ -137,7 +152,7 @@ export class StructuredSessionCompaction {
       const error =
         pending.error ??
         (pending.compacted ? undefined : 'Compaction was not confirmed by the provider.')
-      pending.finish(error ? { error } : {})
+      pending.finish(error ? { error, ...(pending.detail ? { detail: pending.detail } : {}) } : {})
     }
   }
 }

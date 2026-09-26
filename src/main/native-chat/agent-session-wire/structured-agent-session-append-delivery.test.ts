@@ -85,6 +85,7 @@ function exitBeforeProof(): Promise<void> {
     fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
     acquisitionGeneration: `generation-${generation}`,
     reason: EXIT_REASON,
+    failure: { kind: 'providerExited', detail: { text: EXIT_REASON, audience: 'log' } },
     cause: 'unexpected-exit',
     startupUnproven: true
   })
@@ -158,7 +159,7 @@ describe('an open chat receives every row its journal commits', () => {
     )
     // One row, however many of its writers reported the start.
     expect(new Set(pane.received().statuses)).toEqual(
-      new Set([expect.stringMatching(/stopped before it finished starting: .*not signed in/)])
+      new Set(['The provider stopped before it finished starting.'])
     )
   })
 

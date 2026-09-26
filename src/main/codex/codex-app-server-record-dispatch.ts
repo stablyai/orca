@@ -88,7 +88,8 @@ export function createCodexAppServerRecordDispatcher(input: {
           : new CodexAppServerRequestError(
               waiter.method,
               typeof error.code === 'number' ? error.code : null,
-              `codex app-server ${waiter.method} failed: ${detail}`
+              `codex app-server ${waiter.method} failed: ${detail}`,
+              typeof error.message === 'string' ? error.message : undefined
             )
       )
       return

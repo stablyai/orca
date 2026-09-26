@@ -1,3 +1,4 @@
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
   stopAgentSessionProviderRoot,
   type StructuredAgentSessionLifecycleEvent
@@ -57,6 +58,8 @@ export class StructuredAgentSessionEventRecovery {
           type: 'ended',
           sessionId,
           reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
+          // Orca stopped the provider because its own journal failed.
+          failure: agentSessionFailureFact('hostFault'),
           cause: 'unexpected-exit',
           fence,
           acquisitionGeneration

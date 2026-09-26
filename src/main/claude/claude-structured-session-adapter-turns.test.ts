@@ -68,7 +68,11 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'provider_write_failed: broken pipe',
+      rejection: { kind: 'writeFailed' }
+    })
   })
 
   it('requires an acknowledged interrupt and supports controlled options', async () => {

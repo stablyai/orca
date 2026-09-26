@@ -41,7 +41,10 @@ describe('structured compaction lifecycle', () => {
           turn: { id: 'c', status: 'failed', error: { message: 'Unavailable' } }
         })
       })
-    ).resolves.toEqual({ error: 'Unavailable' })
+    ).resolves.toEqual({
+      error: 'Unavailable',
+      detail: { text: 'Unavailable', audience: 'person' }
+    })
   })
 
   it.each(['success', 'failed'])(
@@ -63,7 +66,12 @@ describe('structured compaction lifecycle', () => {
         result: ''
       })
       await expect(result).resolves.toEqual(
-        state === 'success' ? {} : { error: 'Not enough messages to compact.' }
+        state === 'success'
+          ? {}
+          : {
+              error: 'Not enough messages to compact.',
+              detail: { text: 'Not enough messages to compact.', audience: 'person' }
+            }
       )
     }
   )
