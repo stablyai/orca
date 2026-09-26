@@ -4,10 +4,12 @@ import { unified } from 'unified'
 import { describe, expect, it } from 'vitest'
 import { buildDispatchPreamble } from './preamble'
 
+/** Shared preamble inputs. Overrides replace one field, including the coordinator Run. */
 function baseParams(overrides: Partial<Parameters<typeof buildDispatchPreamble>[0]> = {}) {
   return {
     taskId: 'task_abc123',
     dispatchId: 'ctx_def456',
+    coordinatorRunId: 'run_example123',
     taskSpec: 'Implement the login form',
     coordinatorHandle: 'term_coord',
     workerHandle: 'term_worker',
@@ -72,13 +74,46 @@ describe('buildDispatchPreamble', () => {
     expect(result).not.toContain('orchestration send --to term_coord')
   })
 
+  it('gives same-host workers an explicit route to the coordinator Run', () => {
+    const result = buildDispatchPreamble(baseParams())
+    const statusLines = result.split('\n').filter((line) => line.includes('--type status'))
+
+    expect(result).toContain('durable Run address is: run:run_example123')
+    expect(statusLines).toEqual([expect.stringContaining('--to run:run_example123 --type status')])
+  })
+
+  it('omits --to when the Run id is not a shell token', () => {
+    const result = buildDispatchPreamble(baseParams({ coordinatorRunId: 'run_peer;touch owned' }))
+    const statusLines = result.split('\n').filter((line) => line.includes('--type status'))
+
+    expect(result).toContain('durable Run address is: run:run_peer;touch owned')
+    expect(statusLines).toHaveLength(1)
+    expect(statusLines[0]).not.toContain('--to')
+    expect(statusLines[0]).not.toContain(';')
+  })
+
+  it('omits the rejected explicit target from a paired-host preamble', () => {
+    const result = buildDispatchPreamble(baseParams({ explicitRunTarget: false }))
+    const statusLines = result.split('\n').filter((line) => line.includes('--type status'))
+
+    expect(result).toContain('durable Run address is: run:run_example123')
+    expect(statusLines).toHaveLength(1)
+    expect(statusLines[0]).not.toContain('--to')
+    expect(statusLines[0]).not.toContain('--run')
+    expect(result).not.toContain('--to run:run_example123')
+  })
+
   it(
     'CLI examples parse as valid shell (bash -n on the extracted block)',
     { timeout: 15_000 },
     () => {
-      const result = buildDispatchPreamble(baseParams())
-      const check = spawnSync('bash', ['-n'], { input: cliFence(result), encoding: 'utf8' })
-      expect(check.status).toBe(0)
+      for (const params of [baseParams(), baseParams({ explicitRunTarget: false })]) {
+        const check = spawnSync('bash', ['-n'], {
+          input: cliFence(buildDispatchPreamble(params)),
+          encoding: 'utf8'
+        })
+        expect(check.status).toBe(0)
+      }
     }
   )
 
@@ -88,12 +123,13 @@ describe('buildDispatchPreamble', () => {
       .split('\n')
       .filter((line) => line.trimStart().startsWith('orca orchestration'))
 
-    expect(commandLines).toHaveLength(5)
+    expect(commandLines).toHaveLength(6)
     expect(result).not.toContain('\\\n')
     expect(commandLines.filter((line) => line.includes('--type worker_done'))).toHaveLength(1)
     expect(commandLines.filter((line) => line.includes('--type heartbeat'))).toHaveLength(1)
     expect(commandLines.filter((line) => line.includes('orchestration ask'))).toHaveLength(1)
     expect(commandLines.filter((line) => line.includes('--type escalation'))).toHaveLength(1)
+    expect(commandLines.filter((line) => line.includes('--type status'))).toHaveLength(1)
   })
 
   it('fences shell comments so Markdown does not promote them to headings', () => {
@@ -188,7 +224,7 @@ describe('buildDispatchPreamble', () => {
       dispatchCapability: 'dcap_test_secret'
     })
 
-    expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(4)
+    expect(result.match(/--dispatch-capability dcap_test_secret/g)).toHaveLength(5)
     expect(result).not.toContain('"dispatchCapability"')
   })
 
@@ -284,6 +320,7 @@ describe('buildDispatchPreamble', () => {
     const result = buildDispatchPreamble({
       taskId: 'task_x',
       dispatchId: 'ctx_x',
+      coordinatorRunId: 'run_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
       workerHandle: 'term_w',
@@ -307,6 +344,7 @@ describe('buildDispatchPreamble', () => {
     const result = buildDispatchPreamble({
       taskId: 'task_x',
       dispatchId: 'ctx_x',
+      coordinatorRunId: 'run_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
       workerHandle: 'term_w',
@@ -325,6 +363,7 @@ describe('buildDispatchPreamble', () => {
     const result = buildDispatchPreamble({
       taskId: 'task_x',
       dispatchId: 'ctx_x',
+      coordinatorRunId: 'run_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
       workerHandle: 'term_w'
@@ -338,6 +377,7 @@ describe('buildDispatchPreamble', () => {
     const result = buildDispatchPreamble({
       taskId: 'task_x',
       dispatchId: 'ctx_x',
+      coordinatorRunId: 'run_x',
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
       workerHandle: 'term_w',
@@ -362,6 +402,7 @@ describe('buildDispatchPreamble', () => {
     const result = buildDispatchPreamble({
       taskId: 'task_SNAP',
       dispatchId: 'ctx_SNAP',
+      coordinatorRunId: 'run_SNAP',
       taskSpec: 'TASK_BODY',
       coordinatorHandle: 'term_COORD',
       workerHandle: 'term_WORKER'
@@ -374,6 +415,7 @@ describe('sub-dispatch section', () => {
   const base = {
     taskId: 'task_1',
     dispatchId: 'ctx_1',
+    coordinatorRunId: 'run_1',
     taskSpec: 'do the thing',
     coordinatorHandle: 'term_coord',
     workerHandle: 'term_worker'

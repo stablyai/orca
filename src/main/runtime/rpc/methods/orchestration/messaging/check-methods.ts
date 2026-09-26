@@ -97,7 +97,13 @@ export const ORCHESTRATION_CHECK_METHODS = [
       // caller whose Attempt moved on has to be told rather than handed an empty direct mailbox.
       // This outranks the pane guard: a paneless loser cannot run-use anyway, it has to stop.
       const settledDispatch = consumingCheck ? db.getLatestDispatchForTerminal(handle) : undefined
-      if (settledDispatch && isSupersededDispatch(settledDispatch)) {
+      // An empty check is the worker contract's "keep going" signal, so a lost Attempt
+      // with no mail stays fenced. Mail already addressed to this terminal is the new task.
+      if (
+        settledDispatch &&
+        isSupersededDispatch(settledDispatch) &&
+        db.getUnreadMessages(handle, typeFilter).length === 0
+      ) {
         throw dispatchFenced()
       }
       // Why: a consuming check on a handle with no live pane and no Dispatch can never see

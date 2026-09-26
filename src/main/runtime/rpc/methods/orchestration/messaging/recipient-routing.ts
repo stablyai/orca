@@ -90,6 +90,29 @@ export function resolveBareOrchestrationRecipient(params: {
     return mismatch ?? { ok: true, to: `dispatch:${dispatch.id}`, runId: dispatch.run_id }
   }
 
+  // Why: history includes every past bind. Prefer the Run this handle coordinates now,
+  // or a sender-Run match parks the assignment where this terminal's check never looks.
+  const currentRunIds = db
+    .getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner)
+    .filter((runId) => db.getRun(runId)?.coordinator_handle === handle)
+  if (currentRunIds.length > 1) {
+    const namedRunId = params.explicitRunId
+    if (namedRunId !== undefined && currentRunIds.includes(namedRunId)) {
+      return { ok: true, to: `run:${namedRunId}`, runId: namedRunId }
+    }
+    return ambiguous(
+      handle,
+      currentRunIds.map((runId) => `run:${runId}`)
+    )
+  }
+  if (currentRunIds.length === 1) {
+    const currentRunId = currentRunIds[0]
+    if (currentRunId !== undefined) {
+      const mismatch = runMismatch(handle, currentRunId, params.explicitRunId)
+      return mismatch ?? { ok: true, to: `run:${currentRunId}`, runId: currentRunId }
+    }
+  }
+
   const ownerRunIds = db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner)
   const selectedRunId = selectHistoricalRun(ownerRunIds, params)
   if (ownerRunIds.length > 0 && !selectedRunId) {

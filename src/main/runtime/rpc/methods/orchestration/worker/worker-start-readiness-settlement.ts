@@ -52,6 +52,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     structuredSession,
     terminalHandle,
     dispatchId: args.dispatchId,
+    coordinatorRunId: run.id,
     dispatchDepth: args.dispatchDepth,
     taskId: task.id,
     taskSpec: task.spec,

@@ -21,6 +21,7 @@ export async function deliverWorkerDispatchPreamble(args: {
   structuredSession: StructuredSession
   terminalHandle: string
   dispatchId: string
+  coordinatorRunId: string
   dispatchDepth: number
   taskId: string
   taskSpec: string
@@ -37,6 +38,7 @@ export async function deliverWorkerDispatchPreamble(args: {
     canDispatchSubWorkers: args.dispatchDepth < runtime.getNestedWorkerMaxDepth(),
     taskId: args.taskId,
     dispatchId: args.dispatchId,
+    coordinatorRunId: args.coordinatorRunId,
     taskSpec: args.taskSpec,
     coordinatorHandle: args.coordinatorHandle,
     workerHandle: terminalHandle,

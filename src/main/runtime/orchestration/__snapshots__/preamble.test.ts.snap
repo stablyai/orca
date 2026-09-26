@@ -3,6 +3,7 @@
 exports[`buildDispatchPreamble > renders a stable snapshot of the full preamble 1`] = `
 "You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: term_COORD
+Your coordinator's durable Run address is: run:run_SNAP
 Your task ID is: task_SNAP
 
 The coordinator cannot see this terminal, so reach it with the \`orca orchestration\`
@@ -27,6 +28,9 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
   orca orchestration send --from term_WORKER --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id task_SNAP --dispatch-id ctx_SNAP --outcome succeeded
+
+  # Send a non-lifecycle status report to the durable coordinator Run named above.
+  orca orchestration send --from term_WORKER --to run:run_SNAP --type status --subject "<short status>" --body "<what changed or what needs attention>"
 
   # Send a heartbeat every 5 minutes
   # while actively working on the task. The coordinator uses this to

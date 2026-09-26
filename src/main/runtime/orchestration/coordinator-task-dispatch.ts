@@ -60,6 +60,10 @@ export async function listAvailableWorkerTerminals(
   }
 }
 
+/**
+ * Injects one task's preamble, including its coordinator Run, into a worker terminal.
+ * A stale base is refused before a dispatch row exists, so the refusal does not burn a circuit-breaker attempt.
+ */
 export async function dispatchTaskToWorker(params: {
   db: OrchestrationDb
   runtime: CoordinatorRuntime
@@ -115,6 +119,7 @@ export async function dispatchTaskToWorker(params: {
   const preamble = buildDispatchPreamble({
     taskId: task.id,
     dispatchId: dispatch.id,
+    coordinatorRunId: task.run_id,
     canDispatchSubWorkers: dispatch.depth < params.nestedWorkerMaxDepth,
     // Why (§3.4): strippedSpec drops the allow-stale-base line so the worker doesn't read the infra flag as an instruction.
     taskSpec: strippedSpec,

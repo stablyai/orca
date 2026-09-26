@@ -10,6 +10,9 @@ export type PreambleParams = {
   // prevents stale messages from a previously-failed dispatch from completing
   // or refreshing the retry.
   dispatchId: string
+  // Why: workers address the Run, not the coordinator terminal. Federated
+  // attachments pass the persisted home Run, including a compatibility stub.
+  coordinatorRunId: string
   dispatchCapability?: string
   taskSpec: string
   coordinatorHandle: string
@@ -35,6 +38,8 @@ export type PreambleParams = {
   workerKind?: 'prompt-returning-agent' | 'bare-shell'
   // Why gated: advertising a verb the depth cap will reject just burns a turn.
   canDispatchSubWorkers?: boolean
+  // Why: a paired host rejects --to/--run. Only same-host preambles name the Run explicitly.
+  explicitRunTarget?: boolean
 }
 
 // Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
@@ -43,11 +48,10 @@ export type PreambleParams = {
 // cadence tuning is a single-line change (Q1 in DESIGN_DOC_PREAMBLE_FIX.md).
 const HEARTBEAT_INTERVAL_MIN = 5
 
-// Why: the dispatch preamble teaches agents about Orca's CLI commands for
-// structured communication. Behavioral rules (body summary, heartbeat cadence,
-// no-AskUserQuestion) live as inline comments above the relevant CLI example,
-// not as a separate prose block — LLM readers anchor on examples and skim
-// trailing prose, so rules must land at the point of use.
+/**
+ * Teaches a dispatched worker the CLI commands for structured communication.
+ * Rules sit on the example they govern; a trailing prose block gets skimmed.
+ */
 export function buildDispatchPreamble(params: PreambleParams): string {
   // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
   // socket. Without this, agents inside the dev Electron app would call the
@@ -60,6 +64,18 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const capabilityFlag = params.dispatchCapability
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
+  // Same-host workers address a shell-safe Run id explicitly. Paired hosts reject
+  // --to/--run, and an unsafe id would change how the shell parses the recipe.
+  const explicitRunTarget =
+    params.explicitRunTarget !== false && /^[A-Za-z0-9_]+$/.test(params.coordinatorRunId)
+      ? ` --to run:${params.coordinatorRunId}`
+      : ''
+  const statusRecipe = explicitRunTarget
+    ? `# Send a non-lifecycle status report to the durable coordinator Run named above.
+  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag}${explicitRunTarget} --type status --subject "<short status>" --body "<what changed or what needs attention>"`
+    : `# Send a non-lifecycle status report to the durable coordinator Run named above.
+  # Omit --to and --run; this host relays the report to that Run.
+  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} --type status --subject "<short status>" --body "<what changed or what needs attention>"`
 
   // Why: one-line recipes paste unchanged in POSIX shells, PowerShell, and cmd.exe.
   // Why fenced: keeps the shell comments executable without rendering them as Chat UI headings.
@@ -67,6 +83,7 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // the user did not write, and shouted rules read as prompt injection (STA-8200).
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
+Your coordinator's durable Run address is: run:${params.coordinatorRunId}
 Your task ID is: ${params.taskId}
 
 The coordinator cannot see this terminal, so reach it with the \`${cli} orchestration\`
@@ -91,6 +108,8 @@ Don't post to Slack, GitHub, or other channels during the run; report through th
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
   ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
+
+  ${statusRecipe}
 
   # Send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
   # while actively working on the task. The coordinator uses this to

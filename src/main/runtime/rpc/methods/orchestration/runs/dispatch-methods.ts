@@ -18,6 +18,9 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
     name: 'orchestration.dispatch',
     params: DispatchParams,
+    /**
+     * Dry-run and live dispatch both name this task's Run in the worker preamble.
+     */
     handler: async (
       params,
       {
@@ -60,6 +63,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
+          coordinatorRunId: task.run_id,
           canDispatchSubWorkers: previewDepth < maxDepth,
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
@@ -148,6 +152,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
+        coordinatorRunId: task.run_id,
         canDispatchSubWorkers: ctx.depth < runtime.getNestedWorkerMaxDepth(),
         taskSpec: task.spec,
         coordinatorHandle: params.from ?? 'coordinator',
@@ -189,6 +194,9 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
     name: 'orchestration.dispatchShow',
     params: DispatchShowParams,
+    /**
+     * Regenerates the worker preamble from the current task, including its Run.
+     */
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
@@ -207,6 +215,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           taskId: task.id,
           // Why: use the real ctx.id when present so the preview matches what was injected; placeholder when no dispatch has occurred yet.
           dispatchId: ctx?.id ?? 'ctx_preview',
+          coordinatorRunId: task.run_id,
           canDispatchSubWorkers: (ctx?.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
