@@ -35,6 +35,9 @@ it('recovers capped imports after disabling and enabling images', async () => {
       class {
         activate(): void {}
         dispose(): void {}
+        onImageAdded(): { dispose: () => void } {
+          return { dispose(): void {} }
+        }
       }
     )
     images.setInlineImagesEnabled(pane, false)

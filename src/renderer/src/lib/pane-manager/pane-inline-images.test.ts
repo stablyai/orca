@@ -1,9 +1,10 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 
-const { activation, disposeSpy } = vi.hoisted(() => ({
+const { activation, disposeSpy, imageAddedDisposeSpy } = vi.hoisted(() => ({
   activation: { fail: false },
-  disposeSpy: vi.fn()
+  disposeSpy: vi.fn(),
+  imageAddedDisposeSpy: vi.fn()
 }))
 
 vi.mock('@xterm/addon-image', () => ({
@@ -17,6 +18,9 @@ vi.mock('@xterm/addon-image', () => ({
       if (activation.fail) {
         throw new Error('partial activation')
       }
+    }
+    onImageAdded(): { dispose: () => void } {
+      return { dispose: imageAddedDisposeSpy }
     }
     dispose(): void {
       this.disposed = true
@@ -95,6 +99,16 @@ describe('pane inline images', () => {
     detachInlineImages(pane)
     expect(pane.imageAddon).toBeNull()
     expect(addon.disposed).toBe(true)
+  })
+
+  it('advances the cursor after image placement and unsubscribes on detach', () => {
+    const pane = makePane(10)
+    attachInlineImages(pane)
+    expect(pane.imageCursorAdvanceDisposable).toBeTruthy()
+    const before = imageAddedDisposeSpy.mock.calls.length
+    detachInlineImages(pane)
+    expect(pane.imageCursorAdvanceDisposable).toBeNull()
+    expect(imageAddedDisposeSpy).toHaveBeenCalledTimes(before + 1)
   })
 
   it('toggles attach and detach through setInlineImagesEnabled', () => {
