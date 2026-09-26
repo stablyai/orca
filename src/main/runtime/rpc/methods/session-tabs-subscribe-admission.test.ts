@@ -149,6 +149,28 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
     expect(frames(messages)).toEqual(['end'])
   })
 
+  it('a request abort during setup ends the stream and leaves nothing', async () => {
+    const host = makeHost()
+    const listing = deferred<RuntimeMobileSessionTabsResult>()
+    host.listMobileSessionTabs.mockReturnValueOnce(listing.promise)
+    const controller = new AbortController()
+    const messages: Frame[] = []
+    const pending = host.dispatch(
+      request('sub-1', 'session.tabs.subscribe', { worktree: 'id:wt-1' }),
+      messages,
+      { signal: controller.signal }
+    )
+
+    controller.abort()
+    listing.resolve(visibleSnapshot())
+    await pending
+    await settle()
+
+    expect(host.isRegistered(KEY('sub-1'))).toBe(false)
+    expect(host.runtime.onMobileSessionTabsChanged).not.toHaveBeenCalled()
+    expect(frames(messages)).toEqual(['end'])
+  })
+
   it('a request whose socket already closed attaches nothing', async () => {
     const host = makeHost()
     const controller = new AbortController()
