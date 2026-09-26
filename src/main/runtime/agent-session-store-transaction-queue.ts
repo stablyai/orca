@@ -1,14 +1,24 @@
-import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
-import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
+import type { AgentSessionLease } from '../../shared/agent-session-record'
 import { raiseAgentSessionFencesAfterBackupRecovery } from './agent-session-backup-recovery-fence'
 import {
   AGENT_SESSION_STORE_SCHEMA_VERSION,
+  agentSessionStoreExactPrimarySha256,
   agentSessionStoreRevision,
+  agentSessionStoreSerializedRevision,
   loadAgentSessionStore,
   saveAgentSessionStore,
   type AgentSessionStoreState,
   type LoadedAgentSessionStore
 } from './agent-session-record-store-file'
+import {
+  agentSessionStoreDraftChanges,
+  assertAgentSessionStoreDraftReadable,
+  draftAgentSessionStoreState
+} from './agent-session-store-draft'
+import {
+  agentSessionStoreBytesSha256,
+  readAgentSessionStorePrimary
+} from './agent-session-store-primary-bytes'
 import { withFileTransactionLock } from '../file-transaction-lock'
 
 /** Latch fields older builds wrote. Nothing reads them, and dropping them keeps a lease this build
@@ -35,41 +45,11 @@ function markLoadedLeasesUnreconciled(state: AgentSessionStoreState): void {
   }
 }
 
-function mapEntriesMatch<K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMap<K, V>): boolean {
-  if (left.size !== right.size) {
-    return false
-  }
-  for (const [key, value] of left) {
-    if (right.get(key) !== value) {
-      return false
-    }
-  }
-  return true
-}
-
-function agentSessionStoreStateChanged(
-  state: AgentSessionStoreState,
-  records: ReadonlyMap<string, AgentSessionRecord>,
-  operations: ReadonlyMap<string, AgentSessionOperationRow>,
-  retiredClaimKeys: AgentSessionStoreState['retiredClaimKeys'],
-  unreadableRecords: AgentSessionStoreState['unreadableRecords'],
-  sessionTabs: AgentSessionStoreState['sessionTabs']
-): boolean {
-  return (
-    !mapEntriesMatch(state.records, records) ||
-    !mapEntriesMatch(state.operations, operations) ||
-    !mapEntriesMatch(state.unreadableRecords, unreadableRecords) ||
-    (state.sessionTabs && sessionTabs
-      ? !state.sessionTabs.equals(sessionTabs)
-      : state.sessionTabs !== sessionTabs) ||
-    state.retiredClaimKeys.length !== retiredClaimKeys.length ||
-    state.retiredClaimKeys.some((entry, index) => entry !== retiredClaimKeys[index])
-  )
-}
-
 export class AgentSessionStoreTransactionQueue {
   private queue: Promise<unknown> = Promise.resolve()
   private diskRecoveredFromBackup: boolean
+  /** Hash of the primary bytes `diskRevision` is exactly derived from; null forces a full load. */
+  private primarySha256: string | null
 
   constructor(
     private readonly filePath: string,
@@ -77,11 +57,13 @@ export class AgentSessionStoreTransactionQueue {
     readonly readOnly: boolean,
     readonly recoveredFromBackup: boolean,
     private diskStoreFound: boolean,
-    public state: AgentSessionStoreState,
+    private published: AgentSessionStoreState,
     private diskRevision: string,
-    private needsRewrite: boolean
+    private needsRewrite: boolean,
+    primarySha256: string | null
   ) {
     this.diskRecoveredFromBackup = recoveredFromBackup
+    this.primarySha256 = primarySha256
   }
 
   static fromLoadedStore(
@@ -98,62 +80,50 @@ export class AgentSessionStoreTransactionQueue {
       loaded.storeFound,
       loaded.state,
       diskRevision,
-      loaded.needsRewrite
+      loaded.needsRewrite,
+      agentSessionStoreExactPrimarySha256(loaded)
     )
   }
 
-  transact<T>(apply: () => T): Promise<T> {
+  /** The durable state. A transaction in flight never shows here until its save has landed. */
+  get state(): AgentSessionStoreState {
+    return this.published
+  }
+
+  /** `apply` changes the draft it is given; the draft is published only after a durable save. */
+  transact<T>(apply: (draft: AgentSessionStoreState) => T): Promise<T> {
     const run = this.queue.then(() =>
       withFileTransactionLock(this.filePath, async () => {
         if (this.readOnly) {
           throw new Error('agent_session_legacy_required')
         }
         await this.refreshExternallyChangedState()
-        const records = new Map(this.state.records)
-        const operations = new Map(this.state.operations)
-        const retiredClaimKeys = [...this.state.retiredClaimKeys]
-        const unreadableRecords = new Map(this.state.unreadableRecords)
-        const sessionTabs = this.state.sessionTabs?.clone() ?? null
-        try {
-          // The lost commit may have granted a higher fence than the backup records show. Rather
-          // than refuse forever, raise every recovered fence clear of anything that commit could
-          // have minted, then continue in the same transaction.
-          const recovering = this.diskRecoveredFromBackup
-          if (recovering) {
-            raiseAgentSessionFencesAfterBackupRecovery(this.state)
-          }
-          const result = apply()
-          if (
-            !recovering &&
-            !this.needsRewrite &&
-            !agentSessionStoreStateChanged(
-              this.state,
-              records,
-              operations,
-              retiredClaimKeys,
-              unreadableRecords,
-              sessionTabs
-            )
-          ) {
-            return result
-          }
-          await saveAgentSessionStore(this.filePath, this.state, {
-            primaryStatus: this.diskStoreFound && !recovering ? 'validated' : 'unusable-or-absent'
-          })
-          this.state.schemaVersion = AGENT_SESSION_STORE_SCHEMA_VERSION
-          this.diskRevision = agentSessionStoreRevision(this.state)
-          this.diskRecoveredFromBackup = false
-          this.diskStoreFound = true
-          this.needsRewrite = false
-          return result
-        } catch (error) {
-          this.state.records = records
-          this.state.operations = operations
-          this.state.retiredClaimKeys = retiredClaimKeys
-          this.state.unreadableRecords = unreadableRecords
-          this.state.sessionTabs = sessionTabs
-          throw error
+        const draft = draftAgentSessionStoreState(this.published)
+        // The lost commit may have granted a higher fence than the backup records show. Rather
+        // than refuse forever, raise every recovered fence clear of anything that commit could
+        // have minted, then continue in the same transaction.
+        const recovering = this.diskRecoveredFromBackup
+        if (recovering) {
+          raiseAgentSessionFencesAfterBackupRecovery(draft)
         }
+        const result = apply(draft)
+        const changes = agentSessionStoreDraftChanges(this.published, draft)
+        if (!recovering && !this.needsRewrite && !changes.changed) {
+          return result
+        }
+        assertAgentSessionStoreDraftReadable(draft, changes)
+        const savedSchemaVersion = draft.schemaVersion
+        const written = await saveAgentSessionStore(this.filePath, draft, {
+          primaryStatus: this.diskStoreFound && !recovering ? 'validated' : 'unusable-or-absent'
+        })
+        draft.schemaVersion = AGENT_SESSION_STORE_SCHEMA_VERSION
+        this.published = draft
+        this.diskRevision = agentSessionStoreSerializedRevision(savedSchemaVersion, written)
+        this.primarySha256 = agentSessionStoreBytesSha256(written)
+        this.diskRecoveredFromBackup = false
+        this.diskStoreFound = true
+        this.needsRewrite = false
+        return result
       })
     )
     this.queue = run.catch(() => {})
@@ -165,7 +135,12 @@ export class AgentSessionStoreTransactionQueue {
   }
 
   private async refreshExternallyChangedState(): Promise<void> {
-    const loaded = await loadAgentSessionStore(this.filePath, this.hostId)
+    const primary = await readAgentSessionStorePrimary(this.filePath)
+    if (primary !== null && primary.sha256 === this.primarySha256) {
+      // Why: the exact bytes the durable state was last loaded from or written as.
+      return
+    }
+    const loaded = await loadAgentSessionStore(this.filePath, this.hostId, primary)
     if (this.diskStoreFound && !loaded.storeFound) {
       throw new Error('agent_session_store_corrupt')
     }
@@ -174,15 +149,17 @@ export class AgentSessionStoreTransactionQueue {
     this.diskRecoveredFromBackup = loaded.recoveredFromBackup
     if (diskRevision === this.diskRevision) {
       this.needsRewrite ||= loaded.needsRewrite
+      this.primarySha256 = agentSessionStoreExactPrimarySha256(loaded)
       return
     }
     if (loaded.readOnly) {
       throw new Error('agent_session_legacy_required')
     }
     markLoadedLeasesUnreconciled(loaded.state)
-    this.state = loaded.state
+    this.published = loaded.state
     this.diskRevision = diskRevision
     this.needsRewrite = loaded.needsRewrite
+    this.primarySha256 = agentSessionStoreExactPrimarySha256(loaded)
   }
 }
 
