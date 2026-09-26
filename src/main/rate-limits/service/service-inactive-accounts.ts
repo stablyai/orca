@@ -147,6 +147,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           const fresh = await fetchCodexRateLimits({
             codexHomePath: home.managedHomePath,
             allowPtyFallback: false,
+            networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
           if (

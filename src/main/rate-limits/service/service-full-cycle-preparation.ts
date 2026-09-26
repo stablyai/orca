@@ -176,6 +176,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
             fetchCodexRateLimits({
               codexHomePath,
               allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+              networkProxySettings: this.networkProxySettingsResolver?.(),
               signal
             })),
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
