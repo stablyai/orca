@@ -242,15 +242,18 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   }
   // Why: queue startup BEFORE TerminalPane mounts — it snapshots pendingStartupByTabId in useState on first render.
   // Why: followup path pastes an unsubmitted draft, so gate the initial chat view like a draft launch, not auto-submit.
+  const trimmedInitialCwd = initialCwd?.trim()
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
-    ...initialViewModeProps
+    ...initialViewModeProps,
+    // Why: saved tab.startupCwd survives StrictMode remount; the one-shot queue is cleared when the first pane is created (#22736).
+    ...(trimmedInitialCwd ? { startupCwd: trimmedInitialCwd } : {})
   })
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
-  if (initialCwd?.trim()) {
-    // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
-    store.queueTabInitialCwd(tab.id, initialCwd)
+  if (trimmedInitialCwd) {
+    // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory on the first pane spawn.
+    store.queueTabInitialCwd(tab.id, trimmedInitialCwd)
   }
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
