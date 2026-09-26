@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { makeRepo, makeTab, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 import type { AgentPaneThread } from './activity-thread-types'
 
@@ -6,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
   activateTabAndFocusPane: vi.fn(),
   activateStructuredAgentSessionTab: vi.fn(),
-  activateAndRevealWorkspace: vi.fn()
+  activateAndRevealWorkspace: vi.fn(),
+  isFloatingWorkspacePanelVisible: vi.fn(),
+  dispatchEvent: vi.fn()
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
@@ -18,6 +22,9 @@ vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
 }))
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
+}))
+vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
+  isFloatingWorkspacePanelVisible: mocks.isFloatingWorkspacePanelVisible
 }))
 
 import { createActivityThreadActions, hasActivityThreadWorkspace } from './activity-thread-actions'
@@ -62,6 +69,8 @@ describe('activity thread host routing', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal('window', { dispatchEvent: mocks.dispatchEvent })
+    mocks.isFloatingWorkspacePanelVisible.mockReturnValue(false)
     mocks.activateStructuredAgentSessionTab.mockReturnValue(false)
     mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
     getKnownWorktreeById.mockReturnValue(thread.worktree)
@@ -90,6 +99,52 @@ describe('activity thread host routing', () => {
       setActiveTabType: vi.fn()
     }
     mocks.getState.mockImplementation(() => state)
+  })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  function makeFloatingThread(): AgentPaneThread {
+    return {
+      ...thread,
+      worktree: { ...thread.worktree, id: FLOATING_TERMINAL_WORKTREE_ID },
+      repo: null,
+      tab: { ...thread.tab, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+    }
+  }
+
+  it.each([false, true])(
+    'reveals the floating agent pane when the panel is open=%s without switching workspace',
+    (open) => {
+      const floatingThread = makeFloatingThread()
+      state.tabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingThread.tab] }
+      mocks.activateAndRevealWorkspace.mockReturnValue(false)
+      mocks.isFloatingWorkspacePanelVisible.mockReturnValue(open)
+
+      makeActions().selectThread(floatingThread)
+
+      expect(setSelectedPaneKey).toHaveBeenCalledWith(floatingThread.paneKey)
+      expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
+      expect(setActiveWorktree).not.toHaveBeenCalled()
+      expect(mocks.dispatchEvent).toHaveBeenCalledTimes(open ? 0 : 1)
+      if (!open) {
+        expect(mocks.dispatchEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ type: TOGGLE_FLOATING_TERMINAL_EVENT })
+        )
+      }
+      expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith(
+        floatingThread.tab.id,
+        '11111111-1111-4111-8111-111111111111',
+        { flashFocusedPane: true, scrollToBottomIfOutputSinceLastView: true }
+      )
+    }
+  )
+
+  it('does not open the floating panel for a retained thread whose tab was closed', () => {
+    makeActions().selectThread(makeFloatingThread())
+
+    expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
+    expect(mocks.dispatchEvent).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
   })
 
   it('routes the row click through the full activation sequence for the matching host', () => {
