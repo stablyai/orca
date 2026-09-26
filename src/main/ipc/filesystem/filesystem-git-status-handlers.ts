@@ -17,6 +17,7 @@ import {
   getDiff
 } from '../../git/status'
 import { getHistory } from '../../git/history'
+import { getPerforceFolderDiff } from '../../perforce/perforce-diff-routing'
 import { checkIgnoredPaths } from '../../git/check-ignored-paths'
 import {
   appendFolderToGitignore,
@@ -298,6 +299,10 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const p4Diff = await getPerforceFolderDiff(store, args.worktreePath, worktreePath, filePath)
+      if (p4Diff) {
+        return p4Diff
+      }
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.worktreePath,

@@ -5,6 +5,7 @@ import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
+import { usePerforceWorkspace } from './perforce/use-perforce-workspace'
 import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
 import {
   collectInstalledPluginTabKeys,
@@ -45,6 +46,10 @@ export function useRightSidebarActivityItems({
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
+  const isPerforce = usePerforceWorkspace(
+    activeWorktree?.path ?? null,
+    isFolder && !isFolderWorkspace && !isSshRepo
+  )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
@@ -95,7 +100,8 @@ export function useRightSidebarActivityItems({
         icon: GitBranch,
         title: translate('auto.components.right.sidebar.index.0314901467', 'Source Control'),
         shortcut: sourceControlShortcut === 'Unassigned' ? '' : sourceControlShortcut,
-        gitOnly: true
+        gitOnly: true,
+        perforceCapable: true
       },
       {
         id: 'checks',
@@ -130,9 +136,10 @@ export function useRightSidebarActivityItems({
       getVisibleRightSidebarActivityItems(activityItems, {
         isFolder,
         isFolderWorkspace,
-        isSshRepo
+        isSshRepo,
+        isPerforce
       }),
-    [activityItems, isFolder, isFolderWorkspace, isSshRepo]
+    [activityItems, isFolder, isFolderWorkspace, isSshRepo, isPerforce]
   )
 
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null

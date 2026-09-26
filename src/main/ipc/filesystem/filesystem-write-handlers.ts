@@ -4,6 +4,7 @@ import type { SshMutationExpectation } from '../../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../../ssh/ssh-connection-generation'
 import { requireSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { tryDeleteWslUncPath } from '../../wsl-unc-delete'
+import { checkoutReadOnlyPerforceFileBeforeWrite } from '../../perforce/perforce-checkout-on-write'
 import { authorizeExternalPath, resolveAuthorizedPath } from '../filesystem-auth'
 import { isENOENT } from '../filesystem-path-containment'
 import { registerFilesystemMutationHandlers } from '../filesystem-mutations'
@@ -39,6 +40,7 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
           throw error
         }
       }
+      await checkoutReadOnlyPerforceFileBeforeWrite(store.getRepos(), filePath)
       await writeFile(filePath, args.content, 'utf-8')
     }
   )

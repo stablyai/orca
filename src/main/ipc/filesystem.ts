@@ -19,6 +19,7 @@ import { registerFilesystemGitRemoteHandlers } from './filesystem/filesystem-git
 import { registerFilesystemGitDiffHandlers } from './filesystem/filesystem-git-diff-handlers'
 import { registerFilesystemGitIndexHandlers } from './filesystem/filesystem-git-index-handlers'
 import { registerFilesystemGitUrlHandlers } from './filesystem/filesystem-git-url-handlers'
+import { registerPerforceHandlers } from './perforce'
 
 export function registerFilesystemHandlers(
   store: Store,
@@ -44,5 +45,6 @@ export function registerFilesystemHandlers(
   registerFilesystemGitDiffHandlers(context)
   registerFilesystemGitIndexHandlers(context)
   registerFilesystemGitUrlHandlers(context)
+  registerPerforceHandlers(store)
   registerLocalLogTailHandlers(store)
 }

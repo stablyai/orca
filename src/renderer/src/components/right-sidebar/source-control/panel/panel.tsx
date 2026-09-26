@@ -1,4 +1,6 @@
 import { translate } from '@/i18n/i18n'
+import { PerforcePanel } from '../../perforce/perforce-panel'
+import { usePerforceWorkspace } from '../../perforce/use-perforce-workspace'
 import { SourceControlPanelReady } from './panel-ready'
 import { useSourceControlPanelModel } from './use-panel-model'
 
@@ -6,6 +8,7 @@ import { useSourceControlPanelModel } from './use-panel-model'
 export function SourceControlPanel() {
   const model = useSourceControlPanelModel()
   const { activeRepo, activeWorktree, isFolder, worktreePath } = model
+  const isPerforce = usePerforceWorkspace(worktreePath, isFolder && !activeRepo?.connectionId)
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
     return (
@@ -16,6 +19,9 @@ export function SourceControlPanel() {
         )}
       </div>
     )
+  }
+  if (isPerforce) {
+    return <PerforcePanel worktreeId={activeWorktree.id} worktreePath={worktreePath} />
   }
   if (isFolder) {
     return (
