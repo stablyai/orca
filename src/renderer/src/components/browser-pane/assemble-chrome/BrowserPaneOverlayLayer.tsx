@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useEffect, useMemo } from 'react'
 import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store'
@@ -16,6 +16,8 @@ import {
 } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { ClientHostedBrowserHostRowPane } from '../client-hosted-browser-host-row-pane'
 import { useAnyBrowserPageMountAdmission } from '../host-guest/browser-page-mount-admission'
+import { isBrowserAutomationVisible } from '../host-guest/browser-automation-visibility'
+import { isBrowserPageMobileDriven } from '@/lib/pane-manager/browser-mobile-driver-state'
 
 // Why: Electron <webview> destroys its guest on DOM reparent, so BrowserPanes render at worktree level and moving a tab between groups only swaps the overlay's CSS position-anchor.
 
@@ -39,7 +41,7 @@ type BrowserOverlaySlotProps = {
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }
 
-// Why: memoize each slot so unrelated worktree mutations don't cascade a re-render into every BrowserPane subtree.
+/** Memoizes each slot so unrelated worktree mutations do not rerender every browser pane. */
 const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   browserTab,
   isWorktreeActive,
@@ -117,7 +119,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   )
 })
 
-// Why: memoize so parent re-renders on props this layer doesn't consume don't rerun its selector or assignments mapping (focused-split state comes from the store selector below, not props).
+/** Keeps guest overlays mounted across split moves; memoization skips unrelated parent renders. */
 const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId,
   isWorktreeActive
@@ -172,6 +174,35 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     }
     return entries
   }, [groupActiveTabById, unifiedTabs])
+
+  useEffect(() => {
+    if (!isWorktreeActive) {
+      return
+    }
+    return window.api.ui.onBrowserGuestInteraction((browserPageId) => {
+      // Why: consecutive guest events can arrive before React renders the new focused group.
+      const state = useAppStore.getState()
+      if (
+        state.activeWorktreeId !== worktreeId ||
+        isBrowserAutomationVisible(browserPageId) ||
+        isBrowserPageMobileDriven(browserPageId)
+      ) {
+        return
+      }
+      const browserTab = state.browserTabsByWorktree[worktreeId]?.find(
+        (tab) => (tab.activePageId ?? tab.id) === browserPageId
+      )
+      const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
+        (candidate) => candidate.contentType === 'browser' && candidate.entityId === browserTab?.id
+      )
+      const group = state.groupsByWorktree[worktreeId]?.find(
+        (candidate) => candidate.id === tab?.groupId && candidate.activeTabId === tab?.id
+      )
+      if (group && group.id !== state.activeGroupIdByWorktree[worktreeId]) {
+        state.focusGroup(worktreeId, group.id)
+      }
+    })
+  }, [worktreeId, isWorktreeActive])
 
   return (
     <>

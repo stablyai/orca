@@ -112,6 +112,8 @@ export type UiCommandEventApi = {
   }) => void
   onNewTerminalTab: (callback: () => void) => () => void
   onFocusBrowserAddressBar: (callback: (target: BrowserPageCommandTarget) => void) => () => void
+  /** Reports guest page IDs, not tab IDs; returns an unsubscribe callback. */
+  onBrowserGuestInteraction: (callback: (browserPageId: string) => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
   onReloadBrowserPage: (callback: (target: BrowserPageCommandTarget) => void) => () => void
   onBrowserHistoryNavigate: (

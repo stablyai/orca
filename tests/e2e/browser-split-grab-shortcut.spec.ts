@@ -145,6 +145,7 @@ test.describe('browser split grab shortcut', () => {
     savedClipboard = await readClipboard(electronApp)
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
+    await orcaPage.evaluate(() => window.__store!.getState().updateSettings({ uiLanguage: 'en' }))
     await ensureTerminalVisible(orcaPage)
   })
 

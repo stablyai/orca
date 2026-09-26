@@ -141,7 +141,10 @@ describe('deferred browser lifecycle through the overlay and SSH gate', () => {
     mocks.prepare.mockReset().mockResolvedValue({ partition: 'persist:orca-browser-v1-routed' })
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { browser: { prepareSshWorkspacePartition: mocks.prepare } }
+      value: {
+        browser: { prepareSshWorkspacePartition: mocks.prepare },
+        ui: { onBrowserGuestInteraction: () => () => {} }
+      }
     })
   })
   afterEach(() => {

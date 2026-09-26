@@ -83,7 +83,14 @@ describe('browserManager', () => {
         return guest
       }
       if (id === rendererWebContentsId) {
-        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+        return {
+          isDestroyed: vi.fn(() => false),
+          send: (channel: string, ...args: unknown[]) => {
+            if (channel !== 'ui:browserGuestInteraction') {
+              rendererSendMock(channel, ...args)
+            }
+          }
+        }
       }
       return null
     })
@@ -176,7 +183,14 @@ describe('browserManager', () => {
         return guest
       }
       if (id === rendererWebContentsId) {
-        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+        return {
+          isDestroyed: vi.fn(() => false),
+          send: (channel: string, ...args: unknown[]) => {
+            if (channel !== 'ui:browserGuestInteraction') {
+              rendererSendMock(channel, ...args)
+            }
+          }
+        }
       }
       return null
     })
@@ -335,7 +349,14 @@ describe('browserManager', () => {
         return guest
       }
       if (id === rendererWebContentsId) {
-        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+        return {
+          isDestroyed: vi.fn(() => false),
+          send: (channel: string, ...args: unknown[]) => {
+            if (channel !== 'ui:browserGuestInteraction') {
+              rendererSendMock(channel, ...args)
+            }
+          }
+        }
       }
       return null
     })
@@ -439,7 +460,14 @@ describe('browserManager', () => {
         return guest
       }
       if (id === rendererWebContentsId) {
-        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+        return {
+          isDestroyed: vi.fn(() => false),
+          send: (channel: string, ...args: unknown[]) => {
+            if (channel !== 'ui:browserGuestInteraction') {
+              rendererSendMock(channel, ...args)
+            }
+          }
+        }
       }
       return null
     })
@@ -509,7 +537,14 @@ describe('browserManager', () => {
         return guest
       }
       if (id === rendererWebContentsId) {
-        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+        return {
+          isDestroyed: vi.fn(() => false),
+          send: (channel: string, ...args: unknown[]) => {
+            if (channel !== 'ui:browserGuestInteraction') {
+              rendererSendMock(channel, ...args)
+            }
+          }
+        }
       }
       return null
     })
