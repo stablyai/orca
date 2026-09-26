@@ -18076,7 +18076,7 @@
           "unknown": "復元中…"
         },
         "notRestorable": {
-          "agentNotSupported": "エージェントはまだサポートされていません"
+          "agentNotSupported": "Agent はまだサポートされていません"
         }
       },
       "web": {
