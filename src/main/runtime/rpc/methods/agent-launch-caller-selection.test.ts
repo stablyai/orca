@@ -38,17 +38,11 @@ const CREATE_LAUNCH = {
   agent: 'claude',
   target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
 }
-const CALLER_SELECTION = { clientNavigationId: 'device-1', navigation: 'caller' }
+const CALLER = 'device-1'
 
 function selectionRuntime(options: Parameters<typeof runtimeStub>[0]) {
   return Object.assign(runtimeStub(options), {
-    activateMobileSessionTab: vi.fn(async () => ({ tabs: [] })),
-    listMobileSessionTabs: vi.fn(async () => ({
-      tabs: [
-        { type: 'agent-session', id: 'chat-tab-1', sessionId: 'sess-1', isActive: false },
-        { type: 'agent-session', id: 'chat-tab-other', sessionId: 'sess-9', isActive: true }
-      ]
-    }))
+    selectCreatedMobileSessionTabForClient: vi.fn(() => true)
   })
 }
 
@@ -76,32 +70,32 @@ describe('a paired client launching into an existing workspace', () => {
 
     await launch(EXISTING_LAUNCH, runtime)
 
-    expect(runtime.activateMobileSessionTab).toHaveBeenCalledExactlyOnceWith(
-      'id:wt-7',
-      TAB_ID,
-      LEAF_ID,
-      CALLER_SELECTION
+    expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledExactlyOnceWith(
+      'wt-7',
+      expect.objectContaining({ tabId: TAB_ID, leafId: LEAF_ID }),
+      CALLER
     )
   })
 
-  it('publishes the chat without activating it for everyone, then selects it for the caller', async () => {
+  it('publishes the chat without activating it for everyone, then selects it by session for the caller', async () => {
     const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
 
     const result = await launch(EXISTING_LAUNCH, runtime)
 
     expect(result.outcome.kind).toBe('structured')
     expect(chatActivation()).toBe(false)
-    expect(runtime.activateMobileSessionTab).toHaveBeenCalledExactlyOnceWith(
-      'id:wt-7',
-      'chat-tab-1',
-      undefined,
-      CALLER_SELECTION
+    expect(runtime.selectCreatedMobileSessionTabForClient).toHaveBeenCalledExactlyOnceWith(
+      'wt-7',
+      { sessionId: 'sess-1' },
+      CALLER
     )
   })
 
   it('still reports the launch when selecting its tab fails', async () => {
     const runtime = selectionRuntime({ settings: {}, terminalPaneKey: PANE_KEY })
-    runtime.activateMobileSessionTab.mockRejectedValueOnce(new Error('tab_not_found'))
+    runtime.selectCreatedMobileSessionTabForClient.mockImplementationOnce(() => {
+      throw new Error('selection store unavailable')
+    })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const result = await launch(EXISTING_LAUNCH, runtime)
@@ -115,7 +109,7 @@ describe('a paired client launching into an existing workspace', () => {
 
     await launch(EXISTING_LAUNCH, runtime)
 
-    expect(runtime.activateMobileSessionTab).not.toHaveBeenCalled()
+    expect(runtime.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
   })
 })
 
@@ -126,8 +120,7 @@ describe('launches that keep the host-wide behaviour', () => {
     await launch(EXISTING_LAUNCH, runtime, {})
 
     expect(chatActivation()).toBe(true)
-    expect(runtime.activateMobileSessionTab).not.toHaveBeenCalled()
-    expect(runtime.listMobileSessionTabs).not.toHaveBeenCalled()
+    expect(runtime.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
   })
 
   it('a workspace-creating launch from a paired client keeps the create navigation', async () => {
@@ -136,7 +129,7 @@ describe('launches that keep the host-wide behaviour', () => {
     await launch(CREATE_LAUNCH, runtime)
 
     expect(chatActivation()).toBe(true)
-    expect(runtime.activateMobileSessionTab).not.toHaveBeenCalled()
+    expect(runtime.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
   })
 })
 
@@ -164,12 +157,12 @@ describe('a replayed launch', () => {
     })
     const first = selectionRuntime({ settings: {}, terminalPaneKey: PANE_KEY })
     await AGENT_LAUNCH_REPLAY.handler(params, rpcContext(first, CAPABLE_CLIENT))
-    expect(first.activateMobileSessionTab).toHaveBeenCalledOnce()
+    expect(first.selectCreatedMobileSessionTabForClient).toHaveBeenCalledOnce()
 
     const replay = selectionRuntime({ settings: {}, terminalPaneKey: PANE_KEY })
     await AGENT_LAUNCH_REPLAY.handler(params, rpcContext(replay, CAPABLE_CLIENT))
 
     expect(replay.createTerminal).not.toHaveBeenCalled()
-    expect(replay.activateMobileSessionTab).not.toHaveBeenCalled()
+    expect(replay.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
   })
 })

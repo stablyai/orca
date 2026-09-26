@@ -161,7 +161,7 @@ async function runAgentLaunch(
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent)
   })
   if (callerNavigationId !== null) {
-    await selectAgentLaunchTabForCaller(context.runtime, result, callerNavigationId)
+    selectAgentLaunchTabForCaller(context.runtime, result, callerNavigationId)
   }
   return result
 }
