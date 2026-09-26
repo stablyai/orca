@@ -41,9 +41,16 @@ type HeapMetrics = BrowserPerformanceMemory & {
   exact: boolean
 }
 
+/** A footprint plus the heap measured when it resolved, so the two stay comparable. */
+type FootprintReading = {
+  footprint: RendererProcessMemory
+  readAtMs: number
+  heapAccountedBytes: number | undefined
+}
+
 const emittedHighwaterRatios = new Set<number>()
 const emittedPrivateHighwaterMarks = new Set<number>()
-let lastProcessFootprint: RendererProcessMemory | null = null
+let lastFootprintReading: FootprintReading | null = null
 let processFootprintReadGeneration = 0
 let processFootprintReadInFlight = false
 let rendererSurface: RendererSurface = 'main'
@@ -55,7 +62,7 @@ export function setRendererMemorySamplingSurface(surface: RendererSurface): void
 export function resetRendererMemorySampling(): void {
   emittedHighwaterRatios.clear()
   emittedPrivateHighwaterMarks.clear()
-  lastProcessFootprint = null
+  lastFootprintReading = null
   processFootprintReadGeneration += 1
   processFootprintReadInFlight = false
   rendererSurface = 'main'
@@ -69,10 +76,10 @@ export function recordRendererMemorySample(reason: string): void {
   const browserWebviews = getBrowserWebviewMemoryProfile()
   // Why the previous read: the footprint bridge is async, and awaiting it here
   // would make every sample (and its highwater arming) reentrant. Refresh in the
-  // background and annotate with the last answer instead — one sample interval
-  // of staleness is irrelevant to a footprint trend, and the first sample of a
-  // session simply carries no footprint.
-  const footprint = lastProcessFootprint
+  // background and annotate with the last answer instead, labeled with its age
+  // (footprintAgeMs) so readers can place it on a timeline. The first sample of
+  // a session simply carries no footprint.
+  const reading = lastFootprintReading
   refreshProcessFootprint()
 
   recordRendererCrashBreadcrumb(
@@ -85,12 +92,12 @@ export function recordRendererMemorySample(reason: string): void {
       heapSource: memory.exact ? 'v8' : 'quantized',
       mallocedMB: toMegabytes(memory.mallocedBytes),
       blinkAllocatedMB: toMegabytes(memory.blinkAllocatedBytes),
-      ...describeProcessFootprint(memory, footprint),
+      ...describeProcessFootprint(reading),
       browserWebviews: browserWebviews.browserWebviewCount,
       registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount
     })
   )
-  recordRendererMemoryHighwater(memory, browserWebviews, footprint)
+  recordRendererMemoryHighwater(memory, browserWebviews, reading)
 }
 
 /** Stays null on shells without the bridge, or when the runtime withholds it. */
@@ -105,8 +112,11 @@ function refreshProcessFootprint(): void {
     if (generation !== processFootprintReadGeneration) {
       return
     }
-    lastProcessFootprint = footprint
+    // Why first: a throw below must not wedge every later refresh.
     processFootprintReadInFlight = false
+    lastFootprintReading = footprint
+      ? { footprint, readAtMs: Date.now(), heapAccountedBytes: readHeapAccountedBytes() }
+      : null
   }
   try {
     void read().then(
@@ -118,21 +128,33 @@ function refreshProcessFootprint(): void {
   }
 }
 
+function readHeapAccountedBytes(): number | undefined {
+  let memory: HeapMetrics | undefined
+  try {
+    memory = readHeapMetrics()
+  } catch {
+    return undefined
+  }
+  return memory
+    ? (memory.usedJSHeapSize ?? 0) + (memory.mallocedBytes ?? 0) + (memory.blinkAllocatedBytes ?? 0)
+    : undefined
+}
+
 /**
  * Names the memory the heap counters cannot see. `outsideHeapMB` is the field
  * that distinguishes a JS leak from scrollback/atlas growth: it is what the OS
  * charges this renderer minus everything V8 and Blink admit to holding.
+ * All three sizes describe the moment the footprint was read, `footprintAgeMs`
+ * before this crumb — not the heap fields beside them.
  */
 function describeProcessFootprint(
-  memory: HeapMetrics,
-  footprint: RendererProcessMemory | null
+  reading: FootprintReading | null
 ): Record<string, CrashReportDetailValue | undefined> {
-  if (!footprint) {
+  if (!reading) {
     return {}
   }
+  const { footprint, heapAccountedBytes } = reading
   const privateMB = toMegabytes(footprint.privateKB * BYTES_PER_KILOBYTE)
-  const accountedBytes =
-    (memory.usedJSHeapSize ?? 0) + (memory.mallocedBytes ?? 0) + (memory.blinkAllocatedBytes ?? 0)
   return {
     privateMB,
     residentMB:
@@ -140,16 +162,17 @@ function describeProcessFootprint(
         ? undefined
         : toMegabytes(footprint.residentKB * BYTES_PER_KILOBYTE),
     outsideHeapMB:
-      privateMB === undefined
+      privateMB === undefined || heapAccountedBytes === undefined
         ? undefined
-        : Math.max(0, privateMB - (toMegabytes(accountedBytes) ?? 0))
+        : Math.max(0, privateMB - (toMegabytes(heapAccountedBytes) ?? 0)),
+    footprintAgeMs: Math.max(0, Date.now() - reading.readAtMs)
   }
 }
 
 function recordRendererMemoryHighwater(
   memory: HeapMetrics,
   browserWebviews: BrowserWebviewMemoryProfile,
-  footprint: RendererProcessMemory | null = null
+  reading: FootprintReading | null = null
 ): void {
   const used = memory.usedJSHeapSize
   const limit = memory.jsHeapSizeLimit
@@ -158,7 +181,9 @@ function recordRendererMemoryHighwater(
   const ratio =
     isFiniteHeapBytes(used) && isFiniteHeapBytes(limit) && limit > 0 ? used / limit : null
   const privateMB =
-    footprint === null ? null : (toMegabytes(footprint.privateKB * BYTES_PER_KILOBYTE) ?? null)
+    reading === null
+      ? null
+      : (toMegabytes(reading.footprint.privateKB * BYTES_PER_KILOBYTE) ?? null)
   let crossedThreshold = false
   if (ratio !== null) {
     for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
@@ -188,7 +213,7 @@ function recordRendererMemoryHighwater(
     heapSource: memory.exact ? 'v8' : 'quantized',
     mallocedMB: toMegabytes(memory.mallocedBytes),
     blinkAllocatedMB: toMegabytes(memory.blinkAllocatedBytes),
-    ...describeProcessFootprint(memory, footprint),
+    ...describeProcessFootprint(reading),
     domNodes: document.getElementsByTagName('*').length,
     terminalElements: document.querySelectorAll('.xterm').length,
     browserWebviews: browserWebviews.browserWebviewCount,

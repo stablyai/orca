@@ -409,6 +409,39 @@ describe('renderer crash diagnostics', () => {
       })
     })
 
+    it('labels a footprint read on an earlier tick and pairs it with that tick heap', async () => {
+      // Why: the footprint is refreshed after each emit, so a crumb carries the
+      // previous interval's private size. Bundle F0C4339L5R9 read a 254→633MB
+      // jump as 43s pre-crash when it was ~104s; outsideHeapMB also subtracted
+      // the current heap from that stale footprint.
+      const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+      stubFootprint(254)
+      diagnostics.installRendererCrashDiagnostics()
+      await flush()
+
+      readHeapStatistics.mockReturnValue({
+        usedHeapKB: 400 * KB,
+        totalHeapKB: 600 * KB,
+        heapLimitKB: 4192 * KB,
+        mallocedKB: 1 * KB,
+        blinkAllocatedKB: 29 * KB
+      })
+      stubFootprint(633)
+      now.mockReturnValue(1_060_000)
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      tick()
+      now.mockRestore()
+
+      const latest = memoryCalls().at(-1)!
+      expect(latest.data).toMatchObject({
+        usedHeapMB: 400,
+        privateMB: 254,
+        footprintAgeMs: 60_000,
+        // 254 − (150 heap + 1 malloced + 29 Blink) as measured when 254 was read.
+        outsideHeapMB: 74
+      })
+    })
+
     it('arms the leak census on footprint even when the heap ratio never trips', async () => {
       // Why: 150MB of a 4192MB limit is 3.6% — far below the 60% ratio mark, so
       // before this the census that names the leak never reached a report.
