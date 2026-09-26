@@ -21,10 +21,6 @@ export function wrapWindowsDirectCmdHookCommand(scriptPath: string): string | nu
   // Why: forward slashes are the one separator both hosts read, and no token here is a switch
   // MSYS can rewrite — a literal `cmd.exe /d /c <path>` does not survive Git Bash (measured).
   const invocation = scriptPath.replaceAll('\\', '/')
-  // Why: neutral JSON when the script is missing (#14818), with no interpreter to Test-Path with.
-  // Valid in bash and cmd.exe; PowerShell 5.1 rejects `||`, which is what gates this on Git Bash.
-  // It also fires when cmd.exe itself exits non-zero (a failing AutoRun), printing `{}` twice —
-  // on that same box the encoded launcher exited 1 instead, so neither shape is clean there.
-  // Stderr stays unredirected: `2>nul` writes a literal `nul` file into the cwd under MSYS.
-  return `${invocation} || echo {}`
+  // Why (#21514): bare script path avoids shell operators that force Claude Code into WSL bash and mask failures.
+  return invocation
 }

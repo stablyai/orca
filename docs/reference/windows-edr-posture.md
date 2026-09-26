@@ -274,7 +274,7 @@ _shorten the interpreter chain_ rather than to hide a window.
 #18875 is a worked example of that doctrine. The Claude Code lifecycle hook was
 registered as `powershell.exe -NoProfile -EncodedCommand <...>` whose entire
 decoded payload was a `Test-Path` and a call to `~/.orca/agent-hooks/claude-hook.cmd`.
-It now registers the script path itself (`<path> || echo {}`), so `bash ->
+It now registers the script path itself (`<path>`), so `bash ->
 powershell -> cmd -> curl` became `bash -> cmd -> curl` and one
 `powershell.exe -EncodedCommand` per hook event — a first-class Defender alert
 title — leaves the tree. The reporting box fired ~6 900 of them in five days,
@@ -287,11 +287,10 @@ concurrency, invoked as Claude Code invokes it. **No EDR verdict on either tree
 was measured**, so claim the removed `-EncodedCommand` spelling and the shorter
 chain, not a score. `cmd.exe` remains in the tree, spelled by MSYS's own `.cmd`
 spawn rather than by us — the doc's one "unavoidable for `.cmd`/`.bat`" case,
-carrying an absolute path and two literal tokens, with no caret escaping, no
-encoding and no free text. The encoded launcher is still the shape for profile
+carrying a bare absolute path, with no caret escaping, no encoding, no shell
+operators and no free text (#21514). The encoded launcher is still the shape for profile
 paths the shells cannot carry bare (a space, `%`, `^`, `&`, non-ASCII, a UNC
-profile) and for hosts where Git Bash is not resolvable, because PowerShell 5.1
-rejects `||` (measured: parse error, exit 1).
+profile) and for hosts where Git Bash is not resolvable.
 
 That last clause is the standing assumption of this change, and it is worth
 stating plainly because it is **not** measured. `||` parses in Git Bash, cmd.exe

@@ -58,8 +58,10 @@ describe('getWindowsManagedLifecycleHook', () => {
     const hook = getWindowsManagedLifecycleHook(SAFE_SCRIPT_PATH, { gitBashAvailable: true })
 
     expect(hook.args).toBeUndefined()
-    expect(hook.command).toBe('C:/Users/alice/.orca/agent-hooks/claude-hook.cmd || echo {}')
+    expect(hook.command).toBe('C:/Users/alice/.orca/agent-hooks/claude-hook.cmd')
     expect(hook.command).not.toMatch(/powershell|-EncodedCommand|conhost/i)
+    // Why: shell operators force Claude Code into WSL bash and mask failures (#21514).
+    expect(hook.command).not.toContain('||')
     // Why: Git Bash/MSYS mangles backslash paths and rewrites slash-prefixed switches.
     expect(hook.command).not.toMatch(/\\/)
     expect(hook.command).not.toMatch(/ \/[a-zA-Z]+( |$)/)
@@ -242,7 +244,7 @@ describe('ClaudeHookService.install', () => {
       // Why: POSIX resolves the profile at runtime (`${HOME-}`, STA-3348). Windows cannot —
       // no single token expands in both Git Bash and cmd.exe — so it registers the absolute
       // path, as Codex/Grok/Devin/Antigravity already do (#18875). A moved profile is caught
-      // by getStatus's exact match and rewritten, and `|| echo {}` keeps a stale entry neutral.
+      // by getStatus's exact match and rewritten (#18875, #21514).
       if (process.platform !== 'win32') {
         expect(JSON.stringify(managedHook)).not.toContain(tmpHome.replaceAll('\\', '/'))
       }
@@ -464,7 +466,7 @@ describe('ClaudeHookService.install', () => {
           readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
         ) as { hooks: Record<string, { hooks: TestHook[] }[]> }
 
-        const expected = `${scriptPath.replaceAll('\\', '/')} || echo {}`
+        const expected = scriptPath.replaceAll('\\', '/')
         for (const { eventName } of CLAUDE_EVENTS) {
           const hook = settings.hooks[eventName]?.[0]?.hooks?.[0]
           expect(hook?.args, eventName).toBeUndefined()
@@ -564,7 +566,7 @@ describe('ClaudeHookService.install', () => {
         }
         expect(JSON.stringify(settings.hooks)).not.toContain('someone-else')
         expect(settings.hooks.PreToolUse[0].hooks[0].command).toBe(
-          `${scriptPath.replaceAll('\\', '/')} || echo {}`
+          scriptPath.replaceAll('\\', '/')
         )
         expect(new ClaudeHookService().getStatus().state).toBe('installed')
       } finally {

@@ -181,8 +181,8 @@ export function getWindowsManagedLifecycleHook(
   scriptPath: string,
   options: WindowsManagedLifecycleHookOptions = {}
 ): HookCommandConfig {
-  // Why (#18875): the encoded launcher cost a PowerShell start-up per hook event. Take the direct
-  // path only where the host can parse `||` — Git Bash can, Windows PowerShell 5.1 cannot.
+  // Why (#18875, #21514): avoid a PowerShell start-up per hook event with the direct script path,
+  // falling back to the encoded launcher when Git Bash is unavailable or the path requires escaping.
   const directCommand =
     (options.gitBashAvailable ?? isGitBashAvailable())
       ? wrapWindowsDirectCmdHookCommand(scriptPath)
