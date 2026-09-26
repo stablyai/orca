@@ -4,9 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MacosTccPromptWatch,
   type LogStreamChild,
-  isOrcaAttributedPrompt,
+  isOwnAttributedPrompt,
   parseTccPromptEvent
 } from './macos-tcc-prompt-watch'
+
+const OWN_ID = 'com.stablyai.orca'
 
 // Captured verbatim from `log stream --predicate 'subsystem == "com.apple.TCC"'`
 // on macOS 26.5 while a real consent dialog was displayed and denied.
@@ -48,43 +50,59 @@ describe('parseTccPromptEvent', () => {
   })
 })
 
-describe('isOrcaAttributedPrompt', () => {
-  it('accepts the app and detached terminal helper across Orca build identities', () => {
-    for (const id of [
-      'com.stablyai.orca',
-      'com.stablyai.orca.helper',
-      'com.stablyai.orca.dev',
-      'com.stablyai.orca.dev.helper',
-      'com.stablyai.orca.local',
-      'com.stablyai.orca.local.helper'
-    ]) {
-      expect(
-        isOrcaAttributedPrompt({
-          service: 'kTCCServiceSystemPolicyAppData',
-          accessingIdentifier: 'find',
-          responsibleIdentifier: id
-        })
-      ).toBe(true)
+describe('isOwnAttributedPrompt', () => {
+  it('accepts the running bundle and its detached terminal helper, whatever it is named', () => {
+    for (const own of ['com.stablyai.orca', 'com.stablyai.orca.dev', 'com.example.fork']) {
+      for (const id of [own, `${own}.helper`]) {
+        expect(
+          isOwnAttributedPrompt(
+            {
+              service: 'kTCCServiceSystemPolicyAppData',
+              accessingIdentifier: 'find',
+              responsibleIdentifier: id
+            },
+            own
+          )
+        ).toBe(true)
+      }
     }
+  })
+
+  it('rejects another app that happens to share a prefix, and an unidentifiable bundle', () => {
+    const event = {
+      service: 'kTCCServiceSystemPolicyAppData',
+      accessingIdentifier: 'find',
+      responsibleIdentifier: 'com.stablyai.orcafake'
+    }
+    expect(isOwnAttributedPrompt(event, 'com.stablyai.orca')).toBe(false)
+    expect(
+      isOwnAttributedPrompt({ ...event, responsibleIdentifier: 'com.stablyai.orca' }, null)
+    ).toBe(false)
   })
 
   it('rejects dialogs another app is responsible for', () => {
     expect(
-      isOrcaAttributedPrompt({
-        service: 'kTCCServiceSystemPolicyAppData',
-        accessingIdentifier: 'find',
-        responsibleIdentifier: 'com.apple.Terminal'
-      })
+      isOwnAttributedPrompt(
+        {
+          service: 'kTCCServiceSystemPolicyAppData',
+          accessingIdentifier: 'find',
+          responsibleIdentifier: 'com.apple.Terminal'
+        },
+        'com.stablyai.orca'
+      )
     ).toBe(false)
   })
 
   it('rejects unrelated services even when Orca is responsible', () => {
     expect(
-      isOrcaAttributedPrompt({
-        service: 'kTCCServiceMicrophone',
-        accessingIdentifier: 'orca',
-        responsibleIdentifier: 'com.stablyai.orca'
-      })
+      isOwnAttributedPrompt(
+        {
+          service: 'kTCCServiceMicrophone',
+          accessingIdentifier: 'orca',
+          responsibleIdentifier: 'com.stablyai.orca'
+        },
+        'com.stablyai.orca'
+      )
     ).toBe(false)
   })
 })
@@ -130,7 +148,11 @@ describe('MacosTccPromptWatch', () => {
   it('never spawns a log reader off macOS', () => {
     setPlatform('linux')
     const spawnLogStream = vi.fn()
-    const watch = new MacosTccPromptWatch({ onPrompt: vi.fn(), spawnLogStream })
+    const watch = new MacosTccPromptWatch({
+      onPrompt: vi.fn(),
+      spawnLogStream,
+      ownIdentifier: OWN_ID
+    })
     watch.start()
     expect(spawnLogStream).not.toHaveBeenCalled()
   })
@@ -138,7 +160,11 @@ describe('MacosTccPromptWatch', () => {
   it('reports only Orca-attributed dialogs from a live stream', async () => {
     const { child, stdout } = createFakeLogStream()
     const onPrompt = vi.fn()
-    const watch = new MacosTccPromptWatch({ onPrompt, spawnLogStream: () => child })
+    const watch = new MacosTccPromptWatch({
+      onPrompt,
+      spawnLogStream: () => child,
+      ownIdentifier: OWN_ID
+    })
     watch.start()
 
     stdout.write('Filtering the log data using "subsystem == ..."\n')
@@ -159,7 +185,11 @@ describe('MacosTccPromptWatch', () => {
 
   it('kills the child on stop so it cannot outlive app quit', () => {
     const { child, killed } = createFakeLogStream()
-    const watch = new MacosTccPromptWatch({ onPrompt: vi.fn(), spawnLogStream: () => child })
+    const watch = new MacosTccPromptWatch({
+      onPrompt: vi.fn(),
+      spawnLogStream: () => child,
+      ownIdentifier: OWN_ID
+    })
     watch.start()
     watch.stop()
     expect(killed).toEqual(['SIGTERM'])
@@ -174,6 +204,7 @@ describe('MacosTccPromptWatch', () => {
       .mockReturnValueOnce(second.child)
     const watch = new MacosTccPromptWatch({
       onPrompt: vi.fn(),
+      ownIdentifier: OWN_ID,
       spawnLogStream,
       restartDelayMs: 0
     })
@@ -195,6 +226,7 @@ describe('MacosTccPromptWatch', () => {
     const spawnLogStream = vi.fn(() => first.child)
     const watch = new MacosTccPromptWatch({
       onPrompt: vi.fn(),
+      ownIdentifier: OWN_ID,
       spawnLogStream,
       restartDelayMs: 0
     })
@@ -210,12 +242,17 @@ describe('MacosTccPromptWatch', () => {
     const spawnLogStream = vi.fn(() => {
       throw new Error('log binary unavailable')
     })
-    const watch = new MacosTccPromptWatch({ onPrompt: vi.fn(), spawnLogStream })
+    const watch = new MacosTccPromptWatch({
+      onPrompt: vi.fn(),
+      spawnLogStream,
+      ownIdentifier: OWN_ID
+    })
     expect(() => watch.start()).not.toThrow()
 
     const { child } = createFakeLogStream()
     const afterStop = new MacosTccPromptWatch({
       onPrompt: vi.fn(),
+      ownIdentifier: OWN_ID,
       spawnLogStream: () => child
     })
     afterStop.stop()

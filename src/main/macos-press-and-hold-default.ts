@@ -1,7 +1,8 @@
 import { mkdirSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { runProcessSync, type ProcessResult } from '../shared/child-process/run-process'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
+import { readBundleIdentifierFromExecutablePath } from './macos-bundle-identifier'
 
 /**
  * Turns off the macOS accent picker for Orca's own preferences domain (#14746).
@@ -42,14 +43,14 @@ const DEFAULTS_TIMEOUT_MS = 5_000
 /** Why: `defaults` exits 1 for "does not exist"; anything else means the probe itself failed. */
 const DEFAULTS_MISSING_STATUS = 1
 
-const ORCA_BUNDLE_ID = 'com.stablyai.orca'
+const SHARED_ELECTRON_DOMAINS = new Set(['com.github.Electron'])
 
 export type PressAndHoldDecision =
   /** Not macOS — nothing is read or written. */
   | 'not-macos'
   /** A previous launch already decided; the domain is never touched again. */
   | 'already-decided'
-  /** The running bundle is not Orca's (e.g. a bare `Electron.app`), whose domain we do not own. */
+  /** The running bundle shares its domain (e.g. a bare `Electron.app`), so we do not own it. */
   | 'foreign-bundle'
   /** `defaults read` could not answer, so we cannot tell an unset key from a user's choice. */
   | 'probe-failed'
@@ -80,22 +81,11 @@ export type PressAndHoldHost = {
   now: () => string
 }
 
-/** Only Orca's own bundle: an unpackaged run is `com.github.Electron`, shared with every other
- *  unpackaged Electron app on the machine. */
-export function isOrcaPreferencesDomain(domain: string): boolean {
-  return domain === ORCA_BUNDLE_ID || domain.startsWith(`${ORCA_BUNDLE_ID}.`)
-}
-
-/** `<bundle>/Contents/MacOS/<exe>` → `<bundle>/Contents/Info.plist`. */
-export function readBundleIdentifierFromExecutablePath(execPath: string): string | null {
-  try {
-    const plist = readFileSync(join(dirname(dirname(execPath)), 'Info.plist'), 'utf8')
-    const match = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]*)<\/string>/.exec(plist)
-    const identifier = match?.[1]?.trim()
-    return identifier ? identifier : null
-  } catch {
-    return null
-  }
+/** Why a rejection list rather than our own identifier: an unpackaged run is `com.github.Electron`,
+ *  shared with every other unpackaged Electron app on the machine. Every other identifier came from
+ *  this bundle's own Info.plist, so a renamed build owns its domain exactly as the default one does. */
+export function isOwnPreferencesDomain(domain: string): boolean {
+  return domain.length > 0 && !SHARED_ELECTRON_DOMAINS.has(domain)
 }
 
 /**
@@ -198,7 +188,7 @@ export function ensureMacPressAndHoldDefault(host: PressAndHoldHost): PressAndHo
   }
 
   const domain = host.resolveBundleIdentifier()
-  if (!domain || !isOrcaPreferencesDomain(domain)) {
+  if (!domain || !isOwnPreferencesDomain(domain)) {
     return record('foreign-bundle', domain)
   }
 
