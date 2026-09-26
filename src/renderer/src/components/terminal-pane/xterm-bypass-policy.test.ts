@@ -19,10 +19,17 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
-  it('bubbles Cmd+C even with no selection (no-op copy is harmless on macOS)', () => {
-    expect(
-      shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), noSel)
-    ).toBe(true)
+  it('leaves Cmd+C to xterm with no selection so a Kitty TUI can copy its own selection', () => {
+    // Why: mouse-owning TUIs (Codex fullscreen transcript) select text xterm
+    // cannot see; native copy would be a silent no-op and the TUI never sees Super+C.
+    for (const type of ['keydown', 'keyup']) {
+      expect(
+        shouldBypassXtermKeyboardEvent(
+          event({ type, key: 'c', code: 'KeyC', metaKey: true }),
+          noSel
+        )
+      ).toBe(false)
+    }
   })
 
   it('bubbles Cmd+V so web clients receive the native paste event', () => {
