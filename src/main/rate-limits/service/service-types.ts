@@ -1,4 +1,7 @@
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  GlmUsagePlanConfig
+} from '../../../shared/rate-limit-types'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/runtime-selection'
 import type { KimiHomeResolution } from '../../kimi/kimi-runtime-home'
@@ -61,6 +64,8 @@ export type MiniMaxResolvedConfig = {
   error: string | null
 }
 
+export type GlmRateLimitConfig = GlmUsagePlanConfig | null | undefined
+
 export type GeminiCliOAuthEnabledResolver = () => boolean
 export type ActiveRateLimitProvider = ProviderRateLimits['provider']
 export type ActiveProviderState = {
@@ -110,6 +115,7 @@ export type InternalRateLimitState = {
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
+  glm: ProviderRateLimits | null
 }
 
 export function normalizePollingInterval(ms: number): number {

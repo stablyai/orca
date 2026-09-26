@@ -26,6 +26,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      glmConfigChanged,
+      glmConfigHash,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -33,7 +35,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        glmResult
       ],
       grokResultPromise,
       cursorResultPromise
@@ -127,6 +130,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const glm =
+      glmResult.status === 'fulfilled'
+        ? glmResult.value
+        : ({
+            provider: 'glm',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error: glmResult.reason instanceof Error ? glmResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const latestCodexHome = this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
@@ -166,6 +181,13 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
+    // Why: re-resolve at completion — a config saved mid-cycle must not apply a response fetched with the superseded platform/key.
+    const glmConfigAtApply = this.glmConfigResolver?.()
+    const glmConfigSuperseded =
+      `${glmConfigAtApply?.platform ?? ''}|${glmConfigAtApply?.apiKey ?? ''}` !== glmConfigHash
+    if (!glmConfigSuperseded) {
+      this.trackActiveFailureStreak('glm', glm)
+    }
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
     this.updateState({
@@ -190,7 +212,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
+      glm: glmConfigSuperseded
+        ? this.state.glm
+        : glmConfigChanged
+          ? glm
+          : this.applyStalePolicy(glm, previousState.glm)
     })
 
     const [grokSettled, cursorSettled] = await Promise.all([grokResultPromise, cursorResultPromise])

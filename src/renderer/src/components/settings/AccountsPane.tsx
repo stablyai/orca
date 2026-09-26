@@ -19,6 +19,7 @@ import {
   getAccountsCodexSearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsCursorSearchEntries,
+  getAccountsGlmSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
@@ -57,7 +58,8 @@ import { renderClaudeAccountsSection } from './accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './accounts-pane-codex-section'
 import {
   renderGeminiAccountsSection,
-  renderOpenCodeAccountsSection
+  renderOpenCodeAccountsSection,
+  renderGlmAccountsSection
 } from './accounts-pane-provider-setting-sections'
 import { renderMiniMaxAccountsSection } from './accounts-pane-minimax-section'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
@@ -77,6 +79,7 @@ export function AccountsPane({
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
+  const glmRateLimits = useAppStore((s) => s.rateLimits.glm)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -346,6 +349,7 @@ export function AccountsPane({
     runCodexAccountAction,
     recordOpenCodeSettingEdit,
     miniMaxRateLimits,
+    glmRateLimits,
     miniMaxApiKeyDraft,
     setMiniMaxApiKeyDraft,
     miniMaxApiKeyConfigured,
@@ -384,7 +388,10 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
-    ) : null
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsGlmSearchEntries())
+      ? renderGlmAccountsSection(model)
+      : null
   ].filter(Boolean)
 
   return (

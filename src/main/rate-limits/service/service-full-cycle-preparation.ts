@@ -6,6 +6,7 @@ import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
+import { fetchGlmRateLimits } from '../glm-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
@@ -33,8 +34,11 @@ export type FetchAllCyclePrepared = {
   opencodeGeneration: number
   miniMaxConfigChanged: boolean
   miniMaxGeneration: number
+  glmConfigChanged: boolean
+  glmConfigHash: string
   claudeFetchGated: boolean
   results: [
+    PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
@@ -112,6 +116,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    const glmConfig = this.glmConfigResolver?.()
+    const currentGlmConfigHash = `${glmConfig?.platform ?? ''}|${glmConfig?.apiKey ?? ''}`
+    const glmConfigChanged = currentGlmConfigHash !== this.lastGlmConfigHash
+    if (glmConfigChanged) {
+      this.lastGlmConfigHash = currentGlmConfigHash
+    }
+
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
     this.updateState({
       ...previousState,
@@ -130,7 +141,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
-      cursor: this.withFetchingStatus(previousState.cursor, 'cursor')
+      cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
+      glm: glmConfigChanged
+        ? this.withFetchingStatus(null, 'glm')
+        : this.withFetchingStatus(previousState.glm, 'glm')
     })
 
     // Why: the Cursor probe reads the macOS Keychain, so it is awaited inside the
@@ -159,7 +173,23 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
+    const glmUnavailableResult: ProviderRateLimits = {
+      provider: 'glm',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Not configured',
+      status: 'unavailable'
+    }
+    const glmFetchPromise = glmConfig?.apiKey
+      ? fetchGlmRateLimits({
+          platform: glmConfig.platform,
+          apiKey: glmConfig.apiKey,
+          signal
+        })
+      : Promise.resolve(glmUnavailableResult)
+
+    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult, glmResult] =
       await Promise.allSettled([
         claudeFetchGated
           ? Promise.resolve(previousState.claude as ProviderRateLimits)
@@ -200,7 +230,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
               models: miniMaxModels,
               endpointMode: miniMaxEndpoint,
               apiKey: miniMaxApiKey
-            })
+            }),
+        glmFetchPromise
       ])
 
     if (signal.aborted) {
@@ -221,6 +252,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      glmConfigChanged,
+      glmConfigHash: currentGlmConfigHash,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -228,7 +261,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        glmResult
       ],
       grokResultPromise,
       cursorResultPromise
