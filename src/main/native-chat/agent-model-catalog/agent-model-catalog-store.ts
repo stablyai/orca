@@ -53,6 +53,22 @@ function tierRecord(tiers: ReadonlyMap<string, string>): Record<string, string> 
   return Object.fromEntries(tiers.entries())
 }
 
+/** A listing that names no default effort for a model keeps the one a live child reported for it,
+ *  while that model still offers it: Claude's listing never names one, only a running child does. */
+function withKnownDefaultEfforts(
+  models: readonly AgentSessionModelOption[],
+  previous: AgentModelCatalogEntry | undefined
+): AgentSessionModelOption[] {
+  return models.map((model) => {
+    const known = previous?.models.find((entry) => entry.id === model.id)?.defaultEffort
+    return model.defaultEffort === undefined &&
+      known !== undefined &&
+      model.efforts.some((choice) => choice.value === known)
+      ? { ...model, defaultEffort: known }
+      : { ...model }
+  })
+}
+
 function listingKey(entry: AgentModelCatalogEntry): string {
   return JSON.stringify([
     entry.origin,
@@ -135,16 +151,16 @@ export class AgentModelCatalogStore {
       // An empty list identifies no model; it is doubt, not a catalog.
       return null
     }
+    const previous = this.entries.get(fingerprint)
     const entry: AgentModelCatalogEntry = {
       agent,
       fingerprint,
-      models: success.models.map((model) => ({ ...model })),
+      models: withKnownDefaultEfforts(success.models, previous),
       ...(success.fastModeSupport ? { fastModeSupport: success.fastModeSupport } : {}),
       fastModeTierByModel: tierRecord(success.fastModeTierByModel),
       origin: success.origin,
       fetchedAt: this.now()
     }
-    const previous = this.entries.get(fingerprint)
     this.entries.delete(fingerprint)
     this.entries.set(fingerprint, entry)
     this.failures.delete(fingerprint)
