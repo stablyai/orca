@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
   canShowWorkspaceFileBrowserAction,
@@ -9,6 +9,7 @@ import {
 } from './file-preview'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
+/** Keep owner resolution in visibility tests independent of the full app store. */
 function browserActionState(connectionId: string | null = null): never {
   return {
     repos: [{ id: 'repo-1', connectionId }],
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     | { state: 'enabled'; provider: 'local-client' | 'paired-runtime' }
     | { state: 'hidden'; reason: string },
   createBrowserTab: vi.fn(),
+  createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(true),
   createEmptySplitGroup: vi.fn(() => 'group-2'),
   setActiveBrowserTab: vi.fn(),
   setActiveBrowserPage: vi.fn(),
@@ -38,11 +40,16 @@ const mocks = vi.hoisted(() => ({
   convertBrowserPage: vi.fn(),
   environmentId: null as string | null,
   connectionId: null as string | null,
+  worktreeRootUnavailable: false,
   layoutByWorktree: {} as Record<string, unknown>,
   toastError: vi.fn()
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+
+vi.mock('@/runtime/web-runtime-session', () => ({
+  createWebRuntimeSessionBrowserTab: mocks.createWebRuntimeSessionBrowserTab
+}))
 
 vi.mock('@/lib/client-creation-action-policy', () => ({
   getClientCreationActionPolicy: () => ({ 'managed-browser': mocks.browserAvailability })
@@ -67,7 +74,8 @@ vi.mock('@/store', () => ({
       browserTabsByWorktree: mocks.browserTabsByWorktree,
       browserPagesByWorkspace: mocks.browserPagesByWorkspace,
       convertBrowserPage: mocks.convertBrowserPage,
-      getKnownWorktreeById: () => ({ id: 'wt-1', path: '/srv/repo' }),
+      getKnownWorktreeById: () =>
+        mocks.worktreeRootUnavailable ? undefined : { id: 'wt-1', path: '/srv/repo' },
       groupsByWorktree: {},
       layoutByWorktree: mocks.layoutByWorktree,
       repos: [{ id: 'repo-1', connectionId: mocks.connectionId }],
@@ -83,12 +91,15 @@ beforeEach(() => {
   mocks.browserAvailability = { state: 'enabled', provider: 'local-client' }
   mocks.environmentId = null
   mocks.connectionId = null
+  mocks.worktreeRootUnavailable = false
   mocks.layoutByWorktree = {}
   mocks.browserTabsByWorktree = {}
   mocks.browserPagesByWorkspace = {}
   mocks.unifiedTabsByWorktree = {}
   mocks.activeWorktreeId = 'wt-1'
 })
+
+afterEach(() => vi.unstubAllGlobals())
 
 /**
  * What a preview open looks like now: a browser tab located by the document, never a URL.
@@ -110,6 +121,100 @@ function docPreviewCall(filePath: string, extra: Record<string, unknown> = {}): 
 }
 
 describe('openFileInBrowserTab', () => {
+  it('opens a server worktree file in the server browser from paired web', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
+
+    const plan = openFileInBrowserTab({
+      filePath: '/srv/repo/docs/example.html',
+      worktreeId: 'wt-1'
+    })
+
+    expect(plan).toEqual({
+      status: 'runtime-browser-tab',
+      url: 'file:///srv/repo/docs/example.html',
+      title: 'example.html',
+      environmentId: 'runtime-1'
+    })
+    expect(mocks.createWebRuntimeSessionBrowserTab).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'runtime-1',
+      url: 'file:///srv/repo/docs/example.html',
+      stagedTitle: 'example.html',
+      targetGroupId: undefined,
+      clientTargetGroupId: undefined,
+      clientTargetGroupCreated: undefined,
+      focusOnCreate: true,
+      placementPreference: 'server'
+    })
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('waits for a known worktree root before opening a paired-web server file', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mocks.environmentId = 'runtime-1'
+    mocks.worktreeRootUnavailable = true
+    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
+
+    const plan = openFileInBrowserTab({ filePath: '/srv/repo/example.html', worktreeId: 'wt-1' })
+
+    expect(plan).toEqual({
+      status: 'unsupported',
+      message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
+      reason: 'no-channel'
+    })
+    expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('refuses an SSH file in paired web rather than opening an Electron-only preview', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mocks.connectionId = 'ssh-1'
+    mocks.environmentId = 'runtime-1'
+
+    const plan = openFileInBrowserTab({
+      filePath: '/home/alice/report.html',
+      worktreeId: 'wt-1'
+    })
+
+    expect(plan).toEqual({
+      status: 'unsupported',
+      message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
+      reason: 'no-channel'
+    })
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('requires browser streaming for a paired-web server file', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'hidden', reason: 'streaming unavailable' }
+
+    const plan = openFileInBrowserTab({
+      filePath: '/srv/repo/docs/example.html',
+      worktreeId: 'wt-1'
+    })
+
+    expect(plan).toEqual({
+      status: 'unsupported',
+      message: 'streaming unavailable',
+      reason: 'no-channel'
+    })
+    expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('reports a paired-web browser creation failure to the user', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
+    mocks.createWebRuntimeSessionBrowserTab.mockResolvedValueOnce(false)
+
+    openFileInBrowserTab({ filePath: '/srv/repo/example.html', worktreeId: 'wt-1' })
+
+    await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
+  })
+
   it('opens a local file URL in the Orca browser with the filename as title', () => {
     openFileInBrowserTab({
       filePath: '/tmp/example file.html',
@@ -125,6 +230,21 @@ describe('openFileInBrowserTab', () => {
   it('renders a paired-runtime file as a local doc preview instead of a runtime browser tab', () => {
     mocks.environmentId = 'runtime-1'
     mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
+
+    const plan = openFileInBrowserTab({
+      filePath: '/srv/repo/docs/example.html',
+      worktreeId: 'wt-1'
+    })
+
+    expect(plan).toEqual({ status: 'doc-preview' })
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      ...docPreviewCall('/srv/repo/docs/example.html', { activate: true })
+    )
+  })
+
+  it('keeps the Electron doc preview available while the paired root is unresolved', () => {
+    mocks.environmentId = 'runtime-1'
+    mocks.worktreeRootUnavailable = true
 
     const plan = openFileInBrowserTab({
       filePath: '/srv/repo/docs/example.html',
@@ -302,6 +422,30 @@ describe('openFileInBrowserTab', () => {
     expect(mocks.createBrowserTab).toHaveBeenCalledWith(
       ...docPreviewCall('/srv/repo/example.html', { targetGroupId: 'group-2' })
     )
+  })
+
+  it('opens paired-web side previews in an unfocused server browser tab', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
+
+    openFilePreviewToSide({
+      language: 'html',
+      filePath: '/srv/repo/example.html',
+      worktreeId: 'wt-1',
+      sourceGroupId: 'group-1'
+    })
+
+    expect(mocks.createWebRuntimeSessionBrowserTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetGroupId: 'group-2',
+        clientTargetGroupId: 'group-2',
+        clientTargetGroupCreated: true,
+        focusOnCreate: false,
+        placementPreference: 'server'
+      })
+    )
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
   })
 
   it('creates local side previews in an activated right-hand split', () => {

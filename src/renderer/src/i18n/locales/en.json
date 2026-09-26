@@ -1004,7 +1004,8 @@
       },
       "file": {
         "preview": {
-          "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet."
+          "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet.",
+          "runtimeOpenFailed": "The paired runtime could not open this file in the browser."
         }
       },
       "clipboardWriteFailure": {
