@@ -556,21 +556,18 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
       .catch((error: unknown) => error)
   }
 
-  it('releases on a first-hand root exit while still carrying the CLI diagnostic', async () => {
-    // The root's pid and start time are the lease's identity, and they are
-    // provably dead: latching the session would strand a signed-out user.
-    const error = await failedStart({ root: 'exited', tree: 'unverifiable' })
+  // The root's pid and start time are the lease's identity, and they are provably dead: latching
+  // the session would strand a signed-out user. The lease follows the root, so a descendant seen
+  // alive does not hold the session either.
+  it.each(['unverifiable', 'live'] as const)(
+    'releases on a first-hand root exit with its tree %s while still carrying the CLI diagnostic',
+    async (tree) => {
+      const error = await failedStart({ root: 'exited', tree })
 
-    expect(error).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
-    expect((error as Error).message).toBe('claude stream-json exited (code 1): not logged in')
-  })
-
-  it('never releases while a descendant was observed alive', async () => {
-    const error = await failedStart({ root: 'exited', tree: 'live' })
-
-    expect(error).toBeInstanceOf(AgentSessionAcquisitionExitUnprovenError)
-    expect(error).not.toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
-  })
+      expect(error).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
+      expect((error as Error).message).toBe('claude stream-json exited (code 1): not logged in')
+    }
+  )
 
   it('never releases for a root Orca never saw leave', async () => {
     const error = await failedStart({ root: 'live', tree: 'unverifiable' })
@@ -590,27 +587,19 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
     return { adapter, connection }
   }
 
-  it('classifies cleanup after a first-hand exit removed the session as a root exit, never as proven', async () => {
-    // The host may still be committing or proving the lease when the child dies;
-    // its cleanup must find the exit the ladder observed, not an absence.
-    const { adapter, connection } = await exitedAfterPublish({
-      root: 'exited',
-      tree: 'unverifiable'
-    })
-    const error = await adapter.releaseAcquisition({ sessionId: 'session-1' }).catch((e) => e)
+  // The host may still be committing or proving the lease when the child dies; its cleanup must
+  // find the exit the ladder observed, not an absence.
+  it.each(['unverifiable', 'live'] as const)(
+    'classifies cleanup after a first-hand exit with its tree %s as a root exit, never as proven',
+    async (tree) => {
+      const { adapter, connection } = await exitedAfterPublish({ root: 'exited', tree })
+      const error = await adapter.releaseAcquisition({ sessionId: 'session-1' }).catch((e) => e)
 
-    expect(error).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
-    expect((error as Error).message).toBe('claude stream-json exited (code 1): crashed')
-    expect(connection.closeCount).toBe(2)
-  })
-
-  it('never releases after an exit that left a descendant observed alive', async () => {
-    const { adapter } = await exitedAfterPublish({ root: 'exited', tree: 'live' })
-    const error = await adapter.releaseAcquisition({ sessionId: 'session-1' }).catch((e) => e)
-
-    expect(error).toBeInstanceOf(AgentSessionAcquisitionExitUnprovenError)
-    expect(error).not.toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
-  })
+      expect(error).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
+      expect((error as Error).message).toBe('claude stream-json exited (code 1): crashed')
+      expect(connection.closeCount).toBe(2)
+    }
+  )
 
   it('forgets a retained exit once the session is acquired again', async () => {
     const options: Parameters<typeof fakeClaude>[0] = {}

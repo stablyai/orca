@@ -109,8 +109,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   /** Resolves once every first-hand exit observed so far has published its
-   *  lifecycle event — or has failed its tree proof and stayed indexed for a
-   *  retry. Publication trails observation by the close ladder and the
+   *  lifecycle event — or, with neither its tree proven gone nor its root's exit
+   *  observed, stayed indexed for a retry. Publication trails observation by the close ladder and the
    *  transcript cursor write, so nothing outside can otherwise tell the two
    *  apart without guessing at wall-clock. */
   drainObservedExits = (): Promise<void> => drainClaudeObservedExits(this.exits)

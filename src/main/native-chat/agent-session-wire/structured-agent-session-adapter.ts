@@ -63,9 +63,9 @@ export class AgentSessionPromptAnswerRejectedError extends Error {
 
 /**
  * The provider's own root process was observed to exit, but its descendant tree
- * could not be verified. The lease keys on the root's pid and start time, so its
- * observed death releases the reservation; nothing is claimed about descendants.
- * Never thrown when a descendant was observed still alive — that stays unproven.
+ * was not proven gone. The lease keys on the root's pid and start time, so its
+ * observed death releases the reservation; nothing is claimed about descendants,
+ * including one seen still alive.
  */
 export class AgentSessionAcquisitionRootExitObservedError extends Error {
   constructor(cause: unknown) {
@@ -195,7 +195,7 @@ export type StructuredAgentSessionAdapter = {
   /** Reaps an acquired provider when the host cannot commit or prove its lease.
    *  Returns true only after provider child exit is proven. Throws
    *  `AgentSessionAcquisitionRootExitObservedError` when the provider root's own
-   *  exit was observed first-hand but its descendants could not be verified. */
+   *  exit was observed first-hand but its descendants were not proven gone. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
   dispatch(input: {
     sessionId: string
@@ -353,8 +353,8 @@ function provenExitAcquisitionFailure(cause: unknown): unknown {
 }
 
 /** Whether a stop left the provider root gone. The lease follows the root, so a first-hand root
- *  exit or a processless child ends the session even with descendants unverified; any other
- *  failure, including known-live descendants, still throws. */
+ *  exit or a processless child ends the session whatever its descendants did; any other
+ *  failure still throws. */
 export async function stopAgentSessionProviderRoot(stop: () => Promise<boolean>): Promise<boolean> {
   try {
     return (await stop()) === true
