@@ -12,6 +12,7 @@ import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrchestrationDb } from './orchestration/db'
+import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
 import {
   isStructuredWorkerHandle,
   structuredWorkerIdentities,
@@ -77,7 +78,8 @@ function structuredWorkerTabListed(
   }
 }
 
-/** Identity plus a record that still proves this runtime owns the session. */
+/** Identity plus a record that still proves this runtime owns the session, for a worker its
+ *  orchestration has not released. */
 export function resolveStructuredWorkerAuthority(
   handle: string,
   db: OrchestrationDb | null | undefined
@@ -87,7 +89,19 @@ export function resolveStructuredWorkerAuthority(
     return null
   }
   const record = readStructuredAgentSessionRecord(identity.sessionId)
-  return record && structuredWorkerOwned(identity.sessionId) ? { identity, record } : null
+  return record &&
+    structuredWorkerOwned(identity.sessionId) &&
+    !structuredWorkerResourceReleased(db?.getWorkerTerminalResourceByHandle?.(identity.handle))
+    ? { identity, record }
+    : null
+}
+
+/** The orchestration released this worker: its coordinator is done with it, as with a terminal
+ *  worker whose terminal closed, so nothing routes to it. Its chat stays the user's. */
+export function structuredWorkerResourceReleased(
+  row: Pick<WorkerTerminalResourceRow, 'release_state' | 'ownership_state'> | undefined
+): boolean {
+  return row?.release_state === 'released' || row?.ownership_state === 'released'
 }
 
 /**

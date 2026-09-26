@@ -10,6 +10,7 @@ import {
   resolveStructuredWorkerForDispatch,
   structuredWorkerOwned
 } from '../../orchestration-structured-worker-lifecycle'
+import { structuredWorkerResourceReleased } from '../../../../structured-worker-authority'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -53,7 +54,12 @@ export async function inspectWorkerTerminal(
       processIncarnation: structured.processIncarnation
     })
     const observation = observeStructuredWorker(structured)
-    const addressable = structuredWorkerOwned(structured.sessionId)
+    const owned = structuredWorkerOwned(structured.sessionId)
+    const addressable =
+      owned === null
+        ? null
+        : owned &&
+          !structuredWorkerResourceReleased(db.getWorkerTerminalResourceByHandle(structured.handle))
     return {
       terminal: null,
       exact,

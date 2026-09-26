@@ -155,6 +155,44 @@ describe('an open dispatch keeps its worker running (P2-19 i)', () => {
     expect(resolveStructuredWorkerAuthority(handle, db)).toBeNull()
   })
 
+  it('stops routing to a worker its coordinator abandoned and then released, and keeps its tab', () => {
+    const dispatch = dispatchWorker()
+    db.markWorkerDispatchReady(dispatch.id)
+    structuredWorkerIdentities.clear()
+    const tabs = [SESSION]
+    installHost(
+      record({
+        claimStatus: 'released',
+        deathEvidence: { kind: 'exit-observed', detail: 'stopped by the sweep', observedAt: 1 }
+      }),
+      tabs
+    )
+    const resource = db.getWorkerTerminalResourceByOwner(dispatch.id)!
+    const handle = resource.terminal_handle
+    const recipients = () => listAddressableStructuredWorkers(db)
+    // At rest, its dispatch abandoned: still a recipient, as a terminal worker left running is.
+    db.abandonWorkerDispatch(dispatch.id)
+    const worktreeGroup = () =>
+      resolveGroupAddress('@worktree:wt_1', 'term_sender', recipients(), () => 'idle')
+    expect(worktreeGroup()).toEqual([handle])
+    expect(resolveStructuredWorkerAuthority(handle, db)).not.toBeNull()
+
+    // The release finds the agent at rest, so it settles as released.
+    expect(db.requestWorkerTerminalRelease(dispatch.id)).toMatchObject({ disposition: 'retained' })
+    expect(
+      db.settleDeadWorkerTerminalRelease({
+        requestingDispatchId: dispatch.id,
+        resourceId: resource.id,
+        processIncarnation: resource.process_incarnation!
+      })
+    ).toMatchObject({ disposition: 'released' })
+
+    expect(tabs).toEqual([SESSION])
+    expect(worktreeGroup()).toEqual([])
+    // Direct mail routes through the same answer.
+    expect(resolveStructuredWorkerAuthority(handle, db)).toBeNull()
+  })
+
   it('reads only this host scope, and no database answers no', () => {
     dispatchWorker(JSON.stringify({ kind: 'ssh', targetId: 'elsewhere' }))
     expect(structuredWorkerHasOpenDispatch(db, record({}))).toBe(false)
