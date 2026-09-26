@@ -60,6 +60,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.worktreeIdByTabId.set(browserTabId, worktreeId)
     }
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserTabId)
+    this.reapplyStandingViewportOverride(browserTabId)
 
     this.setupContextMenu(browserTabId, guest)
     this.setupGrabShortcut(browserTabId, guest)
@@ -136,6 +137,8 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     // Why: drop the viewport-op chain so the Map doesn't retain a promise keyed to a destroyed guest.
     this.viewportOpsByTabId.delete(browserTabId)
     this.viewportUaOverrideMobileByTabId.delete(browserTabId)
+    this.viewportOverrideByTabId.delete(browserTabId)
+    this.viewportOverrideRequestGenerationByTabId.delete(browserTabId)
     this.viewportPresetActiveByTabId.delete(browserTabId)
     this.viewportScrollStateByTabId.delete(browserTabId)
     if (wcId !== undefined) {
@@ -181,6 +184,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.worktreeIdByTabId.set(browserPageId, worktreeId)
     }
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserPageId)
+    this.reapplyStandingViewportOverride(browserPageId)
     return true
   }
 
@@ -207,6 +211,8 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.worktreeIdByTabId.clear()
     this.sessionProfileIdByPageId.clear()
     this.viewportUaOverrideMobileByTabId.clear()
+    this.viewportOverrideByTabId.clear()
+    this.viewportOverrideRequestGenerationByTabId.clear()
     this.viewportPresetActiveByTabId.clear()
     this.viewportScrollStateByTabId.clear()
     this.authUserAgentOverrideStateByGuestId.clear()

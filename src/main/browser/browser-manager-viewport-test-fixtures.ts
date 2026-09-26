@@ -14,13 +14,38 @@ export async function flushViewportOps(): Promise<void> {
   }
 }
 
+export type MockGuestWebContents = Record<string, unknown> & {
+  id: number
+  getType: ReturnType<typeof vi.fn>
+}
+
 export type ViewportGuestHandle = {
-  guest: Record<string, unknown>
+  guest: MockGuestWebContents
   debuggerSendCommand: ReturnType<typeof vi.fn>
   debuggerIsAttached: ReturnType<typeof vi.fn>
   debuggerAttach: ReturnType<typeof vi.fn>
+  debuggerOn: ReturnType<typeof vi.fn>
+  isDevToolsOpened: ReturnType<typeof vi.fn>
   setGuestUserAgent: (ua: string) => void
   commitNavigationTo: (nextUrl: string) => void
+}
+
+export function attachMockGuest(
+  manager: { attachGuestPolicies: (guest: never) => void },
+  guest: unknown
+): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unit test mock WebContents passed to policy attachment
+  manager.attachGuestPolicies(guest as never)
+}
+
+export function extractEventListener(
+  calls: unknown[][],
+  targetEvent: string
+): (() => void) | undefined {
+  const match = calls.find(([event]) => event === targetEvent)
+  const handler = match?.[1]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: verified as function type before returning
+  return typeof handler === 'function' ? (handler as () => void) : undefined
 }
 
 // Why: the guest wires the file's own hoisted mocks, which cannot be imported here.
@@ -31,12 +56,15 @@ export function createViewportGuestFactory(
     const debuggerSendCommand = vi.fn().mockResolvedValue(undefined)
     const debuggerIsAttached = vi.fn(() => true)
     const debuggerAttach = vi.fn()
+    const debuggerOn = vi.fn()
+    const isDevToolsOpened = vi.fn(() => false)
     let currentUa = GUEST_ELECTRON_UA
     // Why: getURL() reports the last COMMITTED url — it does not move at did-start-navigation.
     let committedUrl = url
     const guest = {
       id,
       isDestroyed: vi.fn(() => false),
+      isDevToolsOpened,
       getType: vi.fn(() => 'webview'),
       getURL: vi.fn(() => committedUrl),
       getUserAgent: vi.fn(() => currentUa),
@@ -54,7 +82,7 @@ export function createViewportGuestFactory(
         isAttached: debuggerIsAttached,
         attach: debuggerAttach,
         sendCommand: debuggerSendCommand,
-        on: vi.fn(),
+        on: debuggerOn,
         off: vi.fn()
       }
     }
@@ -63,6 +91,8 @@ export function createViewportGuestFactory(
       debuggerSendCommand,
       debuggerIsAttached,
       debuggerAttach,
+      debuggerOn,
+      isDevToolsOpened,
       setGuestUserAgent: (ua: string) => {
         currentUa = ua
       },
