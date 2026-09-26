@@ -15,12 +15,26 @@ const MOBILE_DIR = fileURLToPath(new URL('../../', import.meta.url))
 const GEOMETRY =
   /keyboardHeight|keyboardLift|keyboardInset|bottomInset|insets\.bottom|KeyboardAvoidingView|keyboard(Will|Did)(Show|Hide)/
 
-/** Lines reading `Platform.OS` within two lines of keyboard or inset arithmetic. */
-export function platformReadsInGeometry(source: string): number[] {
+const KEYBOARD_READ =
+  /keyboardHeight|keyboardLift|keyboardInset|useKeyboardOcclusion|useSoftKeyboard/
+const KEYBOARD_IMPORT = /from '[^']*(keyboard|inset)[^']*'/i
+const KEYBOARD_FILE = /(keyboard|inset|drawer|lift)[^/]*$/i
+const COMMENT = /^\s*(\/\/|\*|\/\*)/
+
+/**
+ * `Platform.OS` reads near keyboard or inset arithmetic, or anywhere in a file that reads the keyboard,
+ * imports a keyboard/inset module or is named for one: a live-input reopen flag four lines from its
+ * keyboard height escaped the proximity rule alone. Comments are not reads.
+ */
+export function platformReadsInGeometry(source: string, file = ''): number[] {
   const lines = source.split('\n')
+  const wholeFile =
+    KEYBOARD_READ.test(source) || KEYBOARD_IMPORT.test(source) || KEYBOARD_FILE.test(file)
   return lines.flatMap((line, index) =>
     line.includes('Platform.OS') &&
-    lines.slice(Math.max(0, index - 2), index + 3).some((near) => GEOMETRY.test(near))
+    !COMMENT.test(line) &&
+    (wholeFile ||
+      lines.slice(Math.max(0, index - 2), index + 3).some((near) => GEOMETRY.test(near)))
       ? [index + 1]
       : []
   )
@@ -46,7 +60,7 @@ describe('keyboard and inset arithmetic', () => {
 
   it('reads the host OS, never Platform.OS', () => {
     const offenders = files().flatMap((file) =>
-      platformReadsInGeometry(readFileSync(file, 'utf8')).map(
+      platformReadsInGeometry(readFileSync(file, 'utf8'), file).map(
         (line) => `${relative(MOBILE_DIR, file)}:${line}`
       )
     )

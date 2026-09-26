@@ -173,11 +173,12 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // frame reported either way, and its window is its frame, so both measure paths agree there.
 // 531 -> 533, and the host-JSX hash: the tab bar and the accessory bar take a ref that gives the
 // page `keyboardShouldPersistTaps` ('handled', 'always'), which react-native-web ignores. Natively
-// the ref is undefined.
+// the ref is undefined. 533 -> 532: the live input's reopen flag reads the host OS, not an 'android' literal.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '110e263e0c43e5200c35a30f67769d4545e39019c7936d03e22a920e90e5d62d'
-// Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
-const HEAD_HOST_JSX_SHA256 = '3a1c72c513a000b677ae7ba09e58db1b5ccc99345e41addcf075f111f455b841'
+  'e70e112260bdbbc620a6b9b39da2824d33b7c4921b51bc601a3ad3ca2fe194ba'
+// Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now;
+// their keyboard type and remount key read the host OS.
+const HEAD_HOST_JSX_SHA256 = '06163ee4cb4aa7ef84250e9c1873a4f0beab91a0d21212d28e586e133789961b'
 const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
@@ -614,7 +615,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(533)
+    expect(strings).toHaveLength(532)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)

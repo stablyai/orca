@@ -22,6 +22,13 @@ describe("the page's host OS", () => {
     expect(hostOs()).toBe('android')
   })
 
+  it('reads an iPad that still names itself in the user agent', () => {
+    agent(
+      'Mozilla/5.0 (iPad; CPU OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
+    )
+    expect(hostOs()).toBe('ios')
+  })
+
   it('takes an iPad, which reports a Mac, by its touch points', () => {
     agent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 'MacIntel', 5)
     expect(hostOs()).toBe('ios')
