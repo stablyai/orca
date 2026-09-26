@@ -30,29 +30,61 @@ export async function inspectRemoteAttachment(
   reason?: string
   /** Set only on a proven-exact attachment parked on a prompt that needs a human. */
   agentWait?: RuntimeTerminalInteractiveWait | null
+  /** The handle that actually resolved: the durable one, or a live handle re-minted from the
+   *  recorded process incarnation after the durable handle went stale. Null when none resolved. */
+  terminalHandle: string | null
 }> {
   const db = runtime.getOrchestrationDb()
   const attachment = db.getRemoteDispatchAttachment(dispatchId)
   if (!attachment?.terminal_handle) {
-    return { terminal: null, exact: false, status: 'unattached' }
+    return { terminal: null, exact: false, status: 'unattached', terminalHandle: null }
   }
-  const terminal = await runtime.showTerminal(attachment.terminal_handle).catch(() => null)
+  let effectiveHandle = attachment.terminal_handle
+  let terminal = await runtime.showTerminal(effectiveHandle).catch(() => null)
   if (!terminal) {
-    return { terminal: null, exact: false, status: 'missing' }
+    // Why: the durable handle resolves nowhere after a renderer graph epoch bump or handle
+    // invalidation, yet the recorded process incarnation may still name a live PTY. Re-mint a
+    // live handle (incarnation-fenced) so federation-show, read, readOutput, stop, and release
+    // act on the still-running process instead of reporting it missing — which would leak the
+    // agent process tree (the federation twin of #18737 / PR #18790).
+    const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
+    const processIncarnation = resource?.process_incarnation ?? attachment.process_incarnation
+    const hostScope = resource?.host_scope ?? attachment.host_scope ?? null
+    const reminted =
+      processIncarnation && hostScope
+        ? runtime.resolveTerminalHandleByProcessIncarnation?.(processIncarnation, hostScope)
+        : null
+    if (reminted) {
+      const remintedTerminal = await runtime.showTerminal(reminted).catch(() => null)
+      if (remintedTerminal) {
+        effectiveHandle = reminted
+        terminal = remintedTerminal
+      }
+    }
+  }
+  if (!terminal) {
+    return { terminal: null, exact: false, status: 'missing', terminalHandle: null }
   }
   const exact = db.isRemoteAttachmentProcessCurrent({
     dispatchId,
-    paneKey: runtime.getTerminalPaneKey(attachment.terminal_handle),
-    processIncarnation: runtime.getTerminalProcessIncarnation(attachment.terminal_handle)
+    paneKey: runtime.getTerminalPaneKey(effectiveHandle),
+    processIncarnation: runtime.getTerminalProcessIncarnation(effectiveHandle)
   })
   if (!exact) {
-    return { terminal, exact, status: 'identity_changed' }
+    return { terminal, exact, status: 'identity_changed', terminalHandle: effectiveHandle }
   }
   // Why: transport loss clears `connected` for every remote PTY; only the execution host can certify exit.
   const agentWait = terminal.agentWait
-  const verdict = runtime.getTerminalLivenessVerdict?.(attachment.terminal_handle) ?? null
+  const verdict = runtime.getTerminalLivenessVerdict?.(effectiveHandle) ?? null
   if (verdict?.status === 'unverifiable') {
-    return { terminal, exact, status: 'unverifiable', reason: verdict.reason, agentWait }
+    return {
+      terminal,
+      exact,
+      status: 'unverifiable',
+      reason: verdict.reason,
+      agentWait,
+      terminalHandle: effectiveHandle
+    }
   }
   if (!verdict) {
     // Why: the verdict register only fills on the first inventory sweep or exit frame, so a PTY
@@ -61,28 +93,29 @@ export async function inspectRemoteAttachment(
     // exactly as worker-show reads it. Nothing weaker earns a claim: a disconnected pane or an
     // SSH-scoped one (contact, not the process) stays unverifiable, never `exited`.
     const currentHostScope = runtime.getOrchestrationDispatchAuthority?.(
-      attachment.terminal_handle
+      effectiveHandle
     )?.hostScope
     const persistedHostScope = parseWorkerTerminalHostScope(
-      db.getWorkerTerminalResourceByOwner(dispatchId)?.host_scope ?? null
+      db.getWorkerTerminalResourceByOwner(dispatchId)?.host_scope ?? attachment.host_scope ?? null
     )
     const provenLocal =
       currentHostScope !== undefined &&
       currentHostScope.kind !== 'ssh' &&
       persistedHostScope?.kind !== 'ssh'
     if (provenLocal && terminal.connected !== false) {
-      return { terminal, exact, status: 'live', agentWait }
+      return { terminal, exact, status: 'live', agentWait, terminalHandle: effectiveHandle }
     }
     return {
       terminal,
       exact,
       status: 'unverifiable',
       reason: 'missing_liveness_verdict',
-      agentWait
+      agentWait,
+      terminalHandle: effectiveHandle
     }
   }
   if (verdict.status === 'exited') {
-    return { terminal, exact, status: 'exited', agentWait }
+    return { terminal, exact, status: 'exited', agentWait, terminalHandle: effectiveHandle }
   }
-  return { terminal, exact, status: 'live', agentWait }
+  return { terminal, exact, status: 'live', agentWait, terminalHandle: effectiveHandle }
 }

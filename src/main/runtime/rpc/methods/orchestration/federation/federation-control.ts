@@ -91,10 +91,11 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           `Remote Dispatch ${params.dispatchId} no longer resolves to its exact process.`
         )
       }
+      const liveHandle = observation.terminalHandle ?? observation.terminal.handle
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
-        terminal: await runtime.readTerminal(observation.terminal.handle, {
+        terminal: await runtime.readTerminal(liveHandle, {
           cursor: params.cursor,
           limit: params.limit
         })
@@ -148,11 +149,11 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           `Remote Dispatch ${params.dispatchId} no longer resolves to its exact process.`
         )
       }
+      const liveHandle = observation.terminalHandle ?? observation.terminal.handle
       const output = await readExactWorkerOutput({
         runtime,
         dispatchId: params.dispatchId,
-        terminalHandle: observation.terminal.handle,
-        workerState: attachment.state,
+        terminalHandle: liveHandle,
         terminalStatus:
           observation.status === 'exited'
             ? 'exited'
@@ -214,9 +215,9 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
         }
       }
       try {
-        const close = await runtime.closeTerminal(observation.terminal.handle)
+        const liveHandle = observation.terminalHandle ?? observation.terminal.handle
+        const close = await runtime.closeTerminal(liveHandle)
         if (!close.ptyKilled) {
-          // The tab is retired but the process was never confirmed stopped, so
           // the coordinator must not be told this dispatch reached 'stopped'.
           const attachment = db.markRemoteAttachmentStopUnknown(
             params.dispatchId,
