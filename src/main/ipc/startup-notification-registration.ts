@@ -1,5 +1,6 @@
 import { Notification } from 'electron'
 import type { Store } from '../persistence'
+import { isDesktopNotificationSupported } from '../notifications/notification-support'
 import { activeNotifications, logNativeNotificationFailure } from './native-notification-lifecycle'
 import { recordNotificationDeliveryOutcome } from './notification-permission-probe'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
@@ -10,7 +11,7 @@ import { openNotificationSystemSettings } from './notification-system-settings-l
  * Why: macOS requires at least one notification attempt before it will prompt to allow/deny.
  */
 export function triggerStartupNotificationRegistration(store: Store): void {
-  if (process.platform !== 'darwin' || !Notification.isSupported()) {
+  if (process.platform !== 'darwin' || !isDesktopNotificationSupported()) {
     return
   }
   // Why: fire once per install, not on every launch where status stays not-determined (e.g. user dismisses the dialog).
