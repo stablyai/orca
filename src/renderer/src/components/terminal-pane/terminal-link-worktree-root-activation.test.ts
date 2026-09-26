@@ -7,7 +7,8 @@ import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fix
 import {
   createProviderSetup,
   makeBuffer,
-  makeBufferLine
+  makeBufferLine,
+  makeExistsCache
 } from './terminal-link-provider-buffer-fixtures'
 import {
   flushAsyncWork,
@@ -180,7 +181,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     }
     const { provider, linkTooltip } = createProviderSetup(
       [makeBufferLine('/repo')],
-      new Map([['active\0/repo', false]])
+      makeExistsCache([['active\0/repo', false]])
     )
 
     const links = await new Promise<ILink[]>((resolve) => {
@@ -247,7 +248,9 @@ describe('createFilePathLinkProvider range bounds', () => {
         worktreeId: 'wt-1',
         worktreePath: '/tmp',
         runtimeEnvironmentId: null,
-        pathExistsCache: new Map([['active\0/tmp/other-worktree', false]])
+        pathExistsCache: new Map([
+          ['active\0/tmp/other-worktree', { exists: false, checkedAt: Date.now(), sequence: 0 }]
+        ])
       }
     )
     await flushAsyncWork()

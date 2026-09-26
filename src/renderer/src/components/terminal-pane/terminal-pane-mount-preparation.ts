@@ -14,6 +14,7 @@ import {
   terminalUrlOpenHintOptionsFor
 } from './terminal-link-open-hints'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
+import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
 import type { TerminalHttpLinkActionDestinations } from './terminal-url-link-hit-testing'
 import type { PtyConnectionDeps } from './pty-connection-types'
@@ -153,7 +154,10 @@ export function prepareTerminalPaneMount(
       middleClickBehavior
     }
   }
-  const pathExistsCache = new Map<string, boolean>()
+  // Why: existence probes can cross SSH/runtime boundaries. This cache is
+  // lifecycle-scoped, so external mutations and the initial 'active' runtime
+  // fallback can temporarily leave stale entries.
+  const pathExistsCache: TerminalPathExistsCache = new Map()
   const linkDeps: LinkHandlerDeps = {
     worktreeId: deps.worktreeId,
     worktreePath,
