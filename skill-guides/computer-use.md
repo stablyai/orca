@@ -84,6 +84,9 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 
 ## Action Rules
 
+- On macOS, `paste-text` first tries an accessibility value write. If clipboard paste is needed, it replaces the clipboard with plain text and leaves that text there so a delayed receiver cannot paste restored images or files. A successful accessibility write with an unverified readback does not trigger a second input attempt. Always inspect both the resulting text and any existing draft attachments.
+- If a macOS clipboard paste fails after writing the text, the previous clipboard contents are still replaced. To intentionally paste an image already on the clipboard, use `hotkey --key CmdOrCtrl+V`; do not run `paste-text` first. This text command does not disable ordinary image paste or file attachment controls.
+
 - An action's verification is separate from whether its provider call succeeded:
   - `verified` means the changed value was read back.
   - `unverified (accessibility action unasserted)` means the accessibility call succeeded but no post-state assertion was made.
