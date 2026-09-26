@@ -9,7 +9,6 @@ import {
 } from '../../../shared/cross-machine-recovery-binding-key'
 import type {
   RecoveryImportBindingResult,
-  RecoveryLaunchPreferences,
   RecoveryResumeResult
 } from '../../../shared/cross-machine-recovery-descriptor'
 import { listRecoveryRecords } from '../../../shared/cross-machine-recovery-session-ops'
@@ -24,16 +23,16 @@ export type RecoveryResumeParams = {
   presentation?: 'focused' | 'background'
 }
 
-export async function claimRecoveryRecord(
+/** Exclusive: a second Resume or release of the same binding fails instead of racing the first. */
+export function holdRecoveryBinding(
   host: CrossMachineRecoveryHost,
-  worktreeId: string,
   binding: RecoveryBindingKey
-): Promise<SleepingAgentSessionRecord> {
-  const outcome = await host.applyOp({ kind: 'claim-record', worktreeId, binding })
-  if (!outcome.ok || !outcome.claimed) {
-    throw new Error('recovery_binding_not_found')
+): () => void {
+  const release = host.resumeHolds.hold(binding)
+  if (!release) {
+    throw new Error('recovery_session_live_locally')
   }
-  return outcome.claimed
+  return release
 }
 
 export const CLAUDE_APPEND_SYSTEM_PROMPT_FLAG = '--append-system-prompt'
@@ -55,59 +54,54 @@ export async function recordConsumedRecoveryBinding(
   worktreeId: string,
   binding: RecoveryBindingKey
 ): Promise<void> {
-  const provenance = host.getWorktreeMeta(worktreeId)?.recoveryProvenance
   const key = recoveryBindingKeyString(binding)
-  if (!provenance || provenance.consumedBindings?.includes(key)) {
-    return
-  }
-  await host.setRecoveryProvenance(worktreeId, {
-    ...provenance,
-    consumedBindings: [...(provenance.consumedBindings ?? []), key]
-  })
+  // Why an update: read inside the serialized write, so concurrent consumptions never drop one.
+  await host.updateRecoveryProvenance(worktreeId, (provenance) =>
+    !provenance || provenance.consumedBindings?.includes(key)
+      ? provenance
+      : { ...provenance, consumedBindings: [...(provenance.consumedBindings ?? []), key] }
+  )
 }
 
-/** Claims the dormant record, launches it with host-default args, and restores it on any failure. */
-export async function resumeClaimedRecoveryBinding(
+/** Launches a dormant record with host-default args, then consumes it; the record stays until then. */
+export async function resumeRecoveryRecord(
   host: CrossMachineRecoveryHost,
   worktreeId: string,
-  binding: RecoveryBindingKey,
-  options: {
-    presentation?: 'focused' | 'background'
-    launchPreferences?: RecoveryLaunchPreferences
-  } = {}
+  record: SleepingAgentSessionRecord,
+  presentation: 'focused' | 'background' = 'background'
 ): Promise<RecoveryResumeResult> {
-  // Why: held before the claim so a concurrent replay never re-adds the record this resume consumes.
-  const release = host.resumeHolds.hold(binding)
+  const binding = recoveryBindingKeyOf(record)
+  const release = holdRecoveryBinding(host, binding)
   try {
-    const record = await claimRecoveryRecord(host, worktreeId, binding)
-    const restore = (): Promise<unknown> => host.applyOp({ kind: 'restore-record', record })
-    if (host.isProviderSessionLive(recoveryBindingKeyOf(record))) {
-      await restore()
+    if (host.isProviderSessionLive(binding)) {
       throw new Error('recovery_session_live_locally')
     }
     const pane = parsePaneKey(record.paneKey)
     const extraResumeArgv = await recoveryResumeExtraArgv(host, record)
+    const launchPreferences = record.recovery?.launchPreferences
     let result: Awaited<ReturnType<CrossMachineRecoveryHost['ensureAgentSession']>>
     try {
       // Why: terminal.ensureAgentSession semantics; omitting agentArgs keeps launch args host-owned.
+      // The dormant record stays in place meanwhile, so a pane mounting now waits instead of
+      // starting a shell.
       result = await host.ensureAgentSession({
         kind: 'explicit',
         worktree: `id:${worktreeId}`,
         agent: record.agent,
         providerSession: record.providerSession,
-        ...(options.launchPreferences ? { launchPreferences: options.launchPreferences } : {}),
-        presentation: options.presentation ?? 'background',
+        ...(launchPreferences ? { launchPreferences } : {}),
+        presentation,
         ...(extraResumeArgv.length > 0 ? { extraResumeArgv } : {}),
         placement: { tabId: pane?.tabId ?? record.tabId, ...(pane ? { leafId: pane.leafId } : {}) },
         // Why: a dormant pane has no PTY; adopting one that appeared would resume into a shell.
         requireFreshPane: true
       })
     } catch (error) {
-      await restore()
       throw error instanceof AgentLaunchPaneAlreadyLiveError
         ? new Error('recovery_placement_occupied')
         : error
     }
+    await host.applyOp({ kind: 'claim-record', worktreeId, binding })
     await recordConsumedRecoveryBinding(host, worktreeId, binding)
     return {
       terminalHandle: result.terminal.handle,
@@ -132,14 +126,7 @@ export async function resumeSelectedRecoveryBindings(
       continue
     }
     try {
-      const resumed = await resumeClaimedRecoveryBinding(
-        host,
-        worktreeId,
-        recoveryBindingKeyOf(record),
-        {
-          launchPreferences: binding.launch.launchPreferences
-        }
-      )
+      const resumed = await resumeRecoveryRecord(host, worktreeId, record)
       results.push({
         ...result,
         localPaneKey: resumed.localPaneKey,
@@ -148,7 +135,7 @@ export async function resumeSelectedRecoveryBindings(
       })
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
-      // Why: a failed launch restores the record, so the binding stays dormant rather than lost.
+      // Why: a failed launch never removed the record, so the binding stays dormant rather than lost.
       const status = reason === 'recovery_session_live_locally' ? 'refused' : 'dormant'
       results.push({ ...result, status, reason })
     }
@@ -169,12 +156,7 @@ export async function resumeRecoveryBindingWithHost(
   if (!selection.ok) {
     throw new Error(selection.code)
   }
-  return await resumeClaimedRecoveryBinding(
-    host,
-    worktree.id,
-    recoveryBindingKeyOf(selection.binding),
-    { presentation: params.presentation }
-  )
+  return await resumeRecoveryRecord(host, worktree.id, selection.binding, params.presentation)
 }
 
 export async function resumeRecoveryBinding(

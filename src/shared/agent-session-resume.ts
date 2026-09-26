@@ -1,3 +1,4 @@
+import type { RecoveryLaunchPreferences } from './cross-machine-recovery-descriptor'
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
@@ -81,6 +82,8 @@ export type SleepingAgentRecoveryBinding = {
   sourcePaneKey: string
   /** Claude-only; appended at resume when the host's claude advertises --append-system-prompt. */
   appendSystemPrompt?: string
+  /** The source binding's validated preferences, so a deferred Resume launches as an immediate one. */
+  launchPreferences?: RecoveryLaunchPreferences
 }
 
 // Why: imported bindings resume only when the user selects them, so every automatic sweep skips them.

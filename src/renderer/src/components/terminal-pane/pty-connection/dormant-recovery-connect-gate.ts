@@ -43,8 +43,8 @@ export function waitForDormantRecoveryRelease(
     shellReleasedSessions.add(session)
     connect()
   })
-  // Why: Resume claims the record before the host spawns, so only a PTY bound to this leaf ends
-  // the wait; a generation bump remounts the pane, which then reattaches on its own.
+  // Why: Resume removes the record only after its launch binds a PTY here, so that PTY ends the
+  // wait; a generation bump remounts the pane, which then reattaches on its own.
   const unsubscribeStore = useAppStore.subscribe((state) => {
     const tab = findTerminalTabForPane(state, session.deps.worktreeId, session.deps.tabId)
     const ptyId = tab ? state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId?.[leafId] : undefined

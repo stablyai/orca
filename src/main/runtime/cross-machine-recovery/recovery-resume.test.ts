@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../shared/agent-launch-pane-already-live'
+import { isDormantRecoveryRecord } from '../../../shared/agent-session-resume'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { importRecoveryWorkspaceWithHost } from './recovery-import'
@@ -56,6 +57,63 @@ describe('resumeRecoveryBindingWithHost', () => {
         placement: { tabId: pane!.tabId, leafId: pane!.leafId },
         requireFreshPane: true
       })
+    )
+  })
+
+  it('keeps the dormant record as the pane fence until the launch settles', async () => {
+    const recordsDuringLaunch: boolean[] = []
+    const f = fixture({
+      ensure: async () => {
+        recordsDuringLaunch.push(
+          ...Object.values(f.getSession().sleepingAgentSessionsByPaneKey ?? {}).map(
+            isDormantRecoveryRecord
+          )
+        )
+        await expect(
+          resumeRecoveryBindingWithHost(f.host, {
+            worktree: `id:${f.worktreeId}`,
+            binding: SESSION_ID
+          })
+        ).rejects.toThrow('recovery_session_live_locally')
+        return {
+          terminal: { handle: 'term-1', worktreeId: f.worktreeId, title: null },
+          disposition: 'created' as const
+        }
+      }
+    })
+    await importRecoveryWorkspaceWithHost(
+      f.host,
+      { descriptor: descriptor(), checkoutPath: f.checkout, checkpointId: 'cp' },
+      f.readCommonDir
+    )
+
+    await resumeRecoveryBindingWithHost(f.host, {
+      worktree: `id:${f.worktreeId}`,
+      binding: SESSION_ID
+    })
+
+    expect(recordsDuringLaunch).toEqual([true])
+    expect(f.getSession().sleepingAgentSessionsByPaneKey).toEqual({})
+  })
+
+  it('forwards the imported launch preferences on a deferred Resume', async () => {
+    const f = fixture()
+    const d = descriptor()
+    const launchPreferences = { model: 'opus', effort: 'high', mode: 'plan' }
+    d.bindings[0] = { ...d.bindings[0], launch: { ...d.bindings[0].launch, launchPreferences } }
+    await importRecoveryWorkspaceWithHost(
+      f.host,
+      { descriptor: d, checkoutPath: f.checkout, checkpointId: 'cp' },
+      f.readCommonDir
+    )
+
+    await resumeRecoveryBindingWithHost(f.host, {
+      worktree: `id:${f.worktreeId}`,
+      binding: SESSION_ID
+    })
+
+    expect(f.ensureAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({ launchPreferences })
     )
   })
 

@@ -5,6 +5,8 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { RecoveryProvenance } from '../../../shared/cross-machine-recovery-descriptor'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { RuntimeStore } from '../runtime-store-contract'
+import { recoveryBindingKeyString } from '../../../shared/cross-machine-recovery-binding-key'
+import { recordConsumedRecoveryBinding } from './recovery-resume'
 import { createRecoveryResumeHolds } from './recovery-resume-holds'
 import { createCrossMachineRecoveryHost } from './recovery-runtime-host'
 
@@ -87,6 +89,17 @@ class ReceiverCheckedStore {
   }
 }
 
+// Why: the real Store queues durable mutations, so a write can sit behind a pending one.
+class QueuedDurableStore extends ReceiverCheckedStore {
+  private queue: Promise<unknown> = Promise.resolve()
+
+  override runDurableMutation<T>(mutate: DurableMutation<T>): Promise<T> {
+    const run = this.queue.then(() => super.runDurableMutation(mutate))
+    this.queue = run.catch(() => undefined)
+    return run
+  }
+}
+
 function statusRow(connectionId: string | null): AgentStatusIpcPayload {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: isProviderSessionLive reads only these three fields.
   return {
@@ -96,8 +109,10 @@ function statusRow(connectionId: string | null): AgentStatusIpcPayload {
   } as unknown as AgentStatusIpcPayload
 }
 
-function setup(snapshot: readonly AgentStatusIpcPayload[] = []) {
-  const store = new ReceiverCheckedStore()
+function setup(
+  snapshot: readonly AgentStatusIpcPayload[] = [],
+  store: ReceiverCheckedStore = new ReceiverCheckedStore()
+) {
   const host = createCrossMachineRecoveryHost({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host reads only the session, meta and durable-writer members this double implements.
     store: store as unknown as RuntimeStore,
@@ -139,17 +154,36 @@ describe('cross-machine recovery runtime host', () => {
   it('makes recovery provenance durable before resolving', async () => {
     const { store, host } = setup()
 
-    await host.setRecoveryProvenance(WT, provenance)
+    await host.updateRecoveryProvenance(WT, () => provenance)
 
     expect(store.durableProvenance).toEqual([provenance])
     expect(host.getWorktreeMeta(WT)?.recoveryProvenance).toEqual(provenance)
+  })
+
+  it('keeps every binding consumed concurrently behind a pending write', async () => {
+    const { host } = setup([], new QueuedDurableStore())
+    await host.updateRecoveryProvenance(WT, () => provenance)
+    const a = { agent: 'claude' as const, key: 'session_id' as const, id: 'session-a' }
+    const b = { ...a, id: 'session-b' }
+
+    await Promise.all([
+      recordConsumedRecoveryBinding(host, WT, a),
+      recordConsumedRecoveryBinding(host, WT, b)
+    ])
+
+    expect(host.getWorktreeMeta(WT)?.recoveryProvenance?.consumedBindings).toEqual([
+      recoveryBindingKeyString(a),
+      recoveryBindingKeyString(b)
+    ])
   })
 
   it('rejects and restores the previous provenance when the durable write fails', async () => {
     const { store, host } = setup()
     store.failNextDurableWrite()
 
-    await expect(host.setRecoveryProvenance(WT, provenance)).rejects.toThrow('write failed')
+    await expect(host.updateRecoveryProvenance(WT, () => provenance)).rejects.toThrow(
+      'write failed'
+    )
 
     expect(host.getWorktreeMeta(WT)?.recoveryProvenance).toBeUndefined()
   })

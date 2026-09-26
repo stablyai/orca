@@ -124,7 +124,7 @@ describe('importRecoveryWorkspaceWithHost', () => {
     expect(Object.values(live.getSession().sleepingAgentSessionsByPaneKey ?? {})).toHaveLength(1)
   })
 
-  it('never re-adds a dormant twin while a resume of that binding is between claim and launch', async () => {
+  it('never re-adds a dormant twin or launches twice while a resume of that binding is launching', async () => {
     let finishLaunch = (): void => {}
     const f = fixture({
       ensure: () =>
@@ -143,12 +143,17 @@ describe('importRecoveryWorkspaceWithHost', () => {
       binding: SESSION_ID
     })
     await vi.waitFor(() => expect(f.ensureAgentSession).toHaveBeenCalledTimes(1))
-    const replay = await importRecoveryWorkspaceWithHost(f.host, request, f.readCommonDir)
+    const replay = await importRecoveryWorkspaceWithHost(
+      f.host,
+      { ...request, resume: [SESSION_ID] },
+      f.readCommonDir
+    )
     expect(replay.bindings[0]).toMatchObject({
       status: 'refused',
       reason: 'recovery_session_live_locally'
     })
-    expect(f.getSession().sleepingAgentSessionsByPaneKey).toEqual({})
+    expect(Object.values(f.getSession().sleepingAgentSessionsByPaneKey ?? {})).toHaveLength(1)
+    expect(f.ensureAgentSession).toHaveBeenCalledTimes(1)
     finishLaunch()
     await expect(resuming).resolves.toMatchObject({ terminalHandle: 'term-1' })
     expect(f.getSession().sleepingAgentSessionsByPaneKey).toEqual({})

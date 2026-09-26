@@ -3,27 +3,26 @@ import {
   type RecoveryBindingKey
 } from '../../../shared/cross-machine-recovery-binding-key'
 
-/** Bindings between their resume claim and launch settling: no record exists, yet the session is not live. */
+/** Bindings mid-Resume or mid-release: one owner at a time, and replay never re-adds them. */
 export type RecoveryResumeHolds = {
-  hold(binding: RecoveryBindingKey): () => void
+  /** Null when another Resume or release already owns the binding. */
+  hold(binding: RecoveryBindingKey): (() => void) | null
   isHeld(binding: RecoveryBindingKey): boolean
 }
 
 export function createRecoveryResumeHolds(): RecoveryResumeHolds {
-  const counts = new Map<string, number>()
+  const held = new Set<string>()
   return {
     hold: (binding) => {
       const key = recoveryBindingKeyString(binding)
-      counts.set(key, (counts.get(key) ?? 0) + 1)
+      if (held.has(key)) {
+        return null
+      }
+      held.add(key)
       return () => {
-        const remaining = (counts.get(key) ?? 0) - 1
-        if (remaining > 0) {
-          counts.set(key, remaining)
-        } else {
-          counts.delete(key)
-        }
+        held.delete(key)
       }
     },
-    isHeld: (binding) => counts.has(recoveryBindingKeyString(binding))
+    isHeld: (binding) => held.has(recoveryBindingKeyString(binding))
   }
 }

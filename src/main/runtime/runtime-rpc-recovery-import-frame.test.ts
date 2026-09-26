@@ -92,6 +92,14 @@ describe('crossMachineRecovery.import frame budget over the unix socket', () => 
     expect(importRecoveryWorkspace).not.toHaveBeenCalled()
   })
 
+  it('sizes the frame before trimming so whitespace cannot hide past the import prefix', async () => {
+    const frame = `{"id":"req_pad","authToken":"${authToken}","method":"crossMachineRecovery.import","params":{},"method":"status"}${' '.repeat(Math.floor(1.1 * MIB))}`
+
+    const response = await writeRawFrame(endpoint, frame)
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'request_too_large' } })
+  })
+
   it('rejects an import frame beyond the descriptor cap plus envelope headroom', async () => {
     const response = await sendRequest(endpoint, {
       id: 'req_import_huge',

@@ -91,22 +91,55 @@ export async function replayRecoveryImport(
     }
     return plan
   })
-  if (!dryRun) {
-    await host.applyOp({
-      kind: 'merge-records',
-      records: [...freshPlans.values()].flatMap((p) =>
-        p.record && !blockedReason(recoveryBindingKeyOf(p.record)) ? [p.record] : []
-      )
-    })
+  if (dryRun) {
+    return replayedResult(
+      base,
+      provenance,
+      emptyIdMap,
+      planned.map((p) => p.result)
+    )
   }
+  const outcome = await host.applyOp({
+    kind: 'merge-records',
+    records: [...freshPlans.values()].flatMap((p) =>
+      p.record && !blockedReason(recoveryBindingKeyOf(p.record)) ? [p.record] : []
+    )
+  })
+  // Why: a concurrent replay may have stored this binding under its own pane key first.
+  const stored = new Map(
+    (outcome.ok ? (outcome.merged ?? []) : []).map((record) => [
+      recoveryBindingKeyString(recoveryBindingKeyOf(record)),
+      record
+    ])
+  )
+  const settled = planned.map((plan): PlannedRecoveryBinding => {
+    const record = plan.record
+      ? stored.get(recoveryBindingKeyString(recoveryBindingKeyOf(plan.record)))
+      : undefined
+    return record
+      ? { ...plan, record, result: { ...plan.result, localPaneKey: record.paneKey } }
+      : plan
+  })
+  return replayedResult(
+    base,
+    provenance,
+    emptyIdMap,
+    await resumeSelectedRecoveryBindings(host, ctx.worktreeId, settled, resumeKeys)
+  )
+}
+
+function replayedResult(
+  base: RecoveryReplayInput['base'],
+  provenance: RecoveryProvenance,
+  idMap: RecoveryImportResult['idMap'],
+  bindings: RecoveryImportResult['bindings']
+): RecoveryImportResult {
   return {
     ...base,
     disposition: 'replayed',
     presentationSource: provenance.presentationSource,
-    idMap: emptyIdMap,
-    bindings: dryRun
-      ? planned.map((p) => p.result)
-      : await resumeSelectedRecoveryBindings(host, ctx.worktreeId, planned, resumeKeys),
+    idMap,
+    bindings,
     provenance
   }
 }

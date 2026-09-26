@@ -1,5 +1,6 @@
 import { MAX_RECOVERY_APPEND_SYSTEM_PROMPT_BYTES } from './cross-machine-recovery-launch'
 import { z } from 'zod'
+import { LaunchPreferences } from './rpc-contract/agent-session-params'
 import {
   getAgentResumeArgv,
   normalizeAgentProviderSession,
@@ -109,7 +110,8 @@ const sleepingAgentSessionRecordSchema = z
           .string()
           .min(1)
           .max(MAX_RECOVERY_APPEND_SYSTEM_PROMPT_BYTES)
-          .optional()
+          .optional(),
+        launchPreferences: LaunchPreferences.optional()
       })
       .optional()
   })

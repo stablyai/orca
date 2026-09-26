@@ -192,6 +192,30 @@ describe('OrcaRuntimeService', () => {
     expect(revealTerminalSession).not.toHaveBeenCalled()
   })
 
+  it('refuses adopting the canonical provider-session owner when a fresh pane is required', async () => {
+    const { runtime, revealTerminalSession } = runtimeWithDesktopWindow({
+      id: 'pty-owner',
+      agentSessionEnsure: {
+        disposition: 'adopted',
+        owner: {
+          surface: { tabId: 'owner-tab', leafId: 'owner-leaf', terminalHandle: 'term_owner' }
+        }
+      }
+    })
+
+    await expect(
+      runtime.ensureAgentSession({
+        kind: 'explicit',
+        worktree: `id:${TEST_WORKTREE_ID}`,
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'provider-session-1' },
+        placement: { tabId: RESERVED_TAB_ID, leafId: RESERVED_LEAF_ID },
+        requireFreshPane: true
+      })
+    ).rejects.toThrow('agent_launch_pane_already_live')
+    expect(revealTerminalSession).not.toHaveBeenCalled()
+  })
+
   it('still attaches to a live pane when the caller did not require a fresh one', async () => {
     // `terminal.create` keeps its reattach; only agent.launch opts into the refusal.
     const { runtime, revealTerminalSession } = runtimeWithDesktopWindow(LIVE_PANE_SPAWN)

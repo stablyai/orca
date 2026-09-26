@@ -49,7 +49,12 @@ export type CrossMachineRecoveryApplyOp =
   | { kind: 'restore-record'; record: SleepingAgentSessionRecord }
 
 export type CrossMachineRecoveryApplyOutcome =
-  | { ok: true; claimed: SleepingAgentSessionRecord | null }
+  | {
+      ok: true
+      claimed: SleepingAgentSessionRecord | null
+      /** merge-records only: the record each requested binding holds after the merge. */
+      merged?: SleepingAgentSessionRecord[]
+    }
   | { ok: false; code: 'recovery_destination_not_empty' }
 
 export type CrossMachineRecoveryApplyRequest = {
@@ -175,7 +180,16 @@ export function applyCrossMachineRecoveryOp(
           existing[record.paneKey] === undefined &&
           !findRecoveryRecord(existing, record.worktreeId, recoveryBindingKeyOf(record))
       )
-      return { session: withRecords(session, fresh), outcome: { ok: true, claimed: null } }
+      const next = withRecords(session, fresh)
+      const merged = op.records.flatMap(
+        (record) =>
+          findRecoveryRecord(
+            next.sleepingAgentSessionsByPaneKey,
+            record.worktreeId,
+            recoveryBindingKeyOf(record)
+          ) ?? []
+      )
+      return { session: next, outcome: { ok: true, claimed: null, merged } }
     }
     case 'claim-record': {
       const claimed = findRecoveryRecord(

@@ -40,7 +40,11 @@ export type CrossMachineRecoveryHost = {
   resolveWorktree(selector: string): Promise<{ id: string; repoId: string; instanceId?: string }>
   getLocalSession(): WorkspaceSessionState
   getWorktreeMeta(worktreeId: string): WorktreeMeta | undefined
-  setRecoveryProvenance(worktreeId: string, provenance: RecoveryProvenance): Promise<void>
+  /** Reads and writes inside one serialized durable mutation, so concurrent updates compose. */
+  updateRecoveryProvenance(
+    worktreeId: string,
+    update: (current: RecoveryProvenance | undefined) => RecoveryProvenance | undefined
+  ): Promise<void>
   /** Applies through the renderer when one is attached, else through the runtime's durable writer. */
   applyOp(op: CrossMachineRecoveryApplyOp): Promise<CrossMachineRecoveryApplyOutcome>
   ensureAgentSession(
@@ -61,7 +65,7 @@ export type CrossMachineRecoveryHostDeps = Omit<
   | 'mintId'
   | 'getLocalSession'
   | 'getWorktreeMeta'
-  | 'setRecoveryProvenance'
+  | 'updateRecoveryProvenance'
   | 'applyOp'
   | 'isProviderSessionLive'
 > & {
@@ -158,7 +162,7 @@ export function createCrossMachineRecoveryHost(
       return session
     },
     getWorktreeMeta: (worktreeId) => requireStore().getWorktreeMeta(worktreeId),
-    setRecoveryProvenance: async (worktreeId, recoveryProvenance) => {
+    updateRecoveryProvenance: async (worktreeId, update) => {
       const store = requireStore()
       const runDurableMutation = store.runDurableMutation?.bind(store)
       if (!runDurableMutation) {
@@ -167,6 +171,10 @@ export function createCrossMachineRecoveryHost(
       // Why durable before replying: a retried import finds its importKey only through this row.
       await runDurableMutation(() => {
         const previous = store.getWorktreeMeta(worktreeId)?.recoveryProvenance
+        const recoveryProvenance = update(previous)
+        if (recoveryProvenance === previous) {
+          return { value: undefined, persist: false }
+        }
         store.setWorktreeMeta(worktreeId, { recoveryProvenance })
         return {
           value: undefined,

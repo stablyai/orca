@@ -159,9 +159,11 @@ export class UnixSocketTransport implements RpcTransport {
       }
       let newlineIndex = buffer.indexOf('\n')
       while (newlineIndex !== -1) {
-        const rawMessage = buffer.slice(0, newlineIndex).trim()
+        const frame = buffer.slice(0, newlineIndex)
+        const rawMessage = frame.trim()
         buffer = buffer.slice(newlineIndex + 1)
-        if (!isWithinRuntimeRpcFrameBudget(rawMessage, Buffer.byteLength(rawMessage, 'utf8'))) {
+        // Why: sized before trimming, or padding past the import prefix would reach another method.
+        if (!isWithinRuntimeRpcFrameBudget(rawMessage, Buffer.byteLength(frame, 'utf8'))) {
           rejectOversized()
           return
         }

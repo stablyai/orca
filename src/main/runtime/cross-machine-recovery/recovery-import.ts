@@ -73,6 +73,25 @@ function resolveResumeKeys(
   )
 }
 
+const importsInFlightByWorktree = new Map<string, Promise<unknown>>()
+
+// Why: two identical first imports would both see an empty destination; the later one must
+// find the earlier one's provenance and replay instead of failing as not empty.
+async function serializedByWorktree<T>(worktreeId: string, run: () => Promise<T>): Promise<T> {
+  const current = (importsInFlightByWorktree.get(worktreeId) ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(run)
+  const settled = current.catch(() => undefined)
+  importsInFlightByWorktree.set(worktreeId, settled)
+  try {
+    return await current
+  } finally {
+    if (importsInFlightByWorktree.get(worktreeId) === settled) {
+      importsInFlightByWorktree.delete(worktreeId)
+    }
+  }
+}
+
 export async function importRecoveryWorkspaceWithHost(
   host: CrossMachineRecoveryHost,
   params: RecoveryImportRequest,
@@ -92,6 +111,37 @@ export async function importRecoveryWorkspaceWithHost(
   )
   host.invalidateWorktreeCatalog(repoId)
   const worktree = await host.resolveWorktree(`path:${checkoutPath}`)
+  return await serializedByWorktree(worktree.id, () =>
+    importIntoWorktree(host, params, {
+      descriptor,
+      sourceIds: rekeyed.sourceIds,
+      resumeKeys,
+      checkoutPath,
+      repoId,
+      worktree
+    })
+  )
+}
+
+async function importIntoWorktree(
+  host: CrossMachineRecoveryHost,
+  params: RecoveryImportRequest,
+  {
+    descriptor,
+    sourceIds,
+    resumeKeys,
+    checkoutPath,
+    repoId,
+    worktree
+  }: {
+    descriptor: RecoveryImportRequest['descriptor']
+    sourceIds: RecoveryPlanContext['sourceProviderSessionIds']
+    resumeKeys: ReadonlySet<string>
+    checkoutPath: string
+    repoId: string
+    worktree: { id: string; instanceId?: string }
+  }
+): Promise<RecoveryImportResult> {
   const meta = host.getWorktreeMeta(worktree.id)
   const instanceId = worktree.instanceId ?? meta?.instanceId
   if (!instanceId) {
@@ -107,7 +157,7 @@ export async function importRecoveryWorkspaceWithHost(
     mintId: host.mintId,
     importKey,
     pathMap: params.pathMap ?? [],
-    sourceProviderSessionIds: rekeyed.sourceIds,
+    sourceProviderSessionIds: sourceIds,
     recoveryLaunch: params.recoveryLaunch ?? {}
   }
   const session = host.getLocalSession()
@@ -141,7 +191,7 @@ export async function importRecoveryWorkspaceWithHost(
       throw new Error('recovery_destination_not_empty')
     }
     if (!params.dryRun) {
-      await host.setRecoveryProvenance(worktree.id, provenance)
+      await host.updateRecoveryProvenance(worktree.id, () => provenance)
     }
     return await replayRecoveryImport(host, { ...replay, provenance })
   }
@@ -163,7 +213,7 @@ export async function importRecoveryWorkspaceWithHost(
   if (!outcome.ok) {
     throw new Error(outcome.code)
   }
-  await host.setRecoveryProvenance(worktree.id, provenance)
+  await host.updateRecoveryProvenance(worktree.id, () => provenance)
   const bindings = await resumeSelectedRecoveryBindings(
     host,
     worktree.id,

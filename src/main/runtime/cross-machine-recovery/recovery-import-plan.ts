@@ -180,27 +180,55 @@ export function sourceProviderSessionId(
   return ctx.sourceProviderSessionIds.get(binding.providerSession.id) ?? binding.providerSession.id
 }
 
+type RemappedRecoveryPanes = {
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
+  idMap: RecoveryImportIdMap
+}
+
+function mappedPlacement(
+  binding: RecoveryAgentBinding,
+  remapped: RemappedRecoveryPanes
+): { tabId: string; leafId: string } | null {
+  const tabId = remapped.idMap.tabs[binding.sourceTabId]
+  const leafId = binding.sourceLeafId ? remapped.idMap.leaves[binding.sourceLeafId] : undefined
+  return tabId && leafId && leafBelongsToTab(remapped.terminalLayoutsByTabId, tabId, leafId)
+    ? { tabId, leafId }
+    : null
+}
+
+/** Each mapped pane goes to one binding: the live one, else the most recently updated. */
+function reservePlacements(
+  bindings: readonly RecoveryAgentBinding[],
+  remapped: RemappedRecoveryPanes
+): Map<RecoveryAgentBinding, { tabId: string; leafId: string }> {
+  const ranked = [...bindings].sort(
+    (a, b) =>
+      Number(b.liveness === 'live') - Number(a.liveness === 'live') || b.updatedAt - a.updatedAt
+  )
+  const taken = new Set<string>()
+  const reserved = new Map<RecoveryAgentBinding, { tabId: string; leafId: string }>()
+  for (const binding of ranked) {
+    const placement = mappedPlacement(binding, remapped)
+    const paneKey = placement ? makePaneKey(placement.tabId, placement.leafId) : null
+    if (placement && paneKey && !taken.has(paneKey)) {
+      taken.add(paneKey)
+      reserved.set(binding, placement)
+    }
+  }
+  return reserved
+}
+
 /** One dormant origin-'recovery' record per resumable binding, placed on its remapped pane. */
 export function planRecoveryBindings(
   bindings: readonly RecoveryAgentBinding[],
-  remapped: {
-    terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
-    idMap: RecoveryImportIdMap
-  },
+  remapped: RemappedRecoveryPanes,
   ctx: RecoveryPlanContext
 ): PlannedRecoveryBinding[] {
+  const reserved = reservePlacements(bindings, remapped)
   return bindings.map((binding) => {
-    const mappedTabId = remapped.idMap.tabs[binding.sourceTabId]
-    const mappedLeafId = binding.sourceLeafId
-      ? remapped.idMap.leaves[binding.sourceLeafId]
-      : undefined
-    const placed =
-      mappedTabId &&
-      mappedLeafId &&
-      leafBelongsToTab(remapped.terminalLayoutsByTabId, mappedTabId, mappedLeafId)
-    // Why: an unplaced binding gets fresh pane ids; resume creates that tab through placement.
-    const tabId = placed ? mappedTabId : ctx.mintId()
-    const leafId = placed ? mappedLeafId : ctx.mintId()
+    // Why: an unplaced binding, or one whose source pane another binding holds, gets fresh pane
+    // ids; resume creates that tab through placement.
+    const { tabId, leafId } = reserved.get(binding) ?? { tabId: ctx.mintId(), leafId: ctx.mintId() }
     const localPaneKey = makePaneKey(tabId, leafId)
     const providerSession = localRecoveryProviderSession(binding, ctx.pathMap)
     const base = {
@@ -238,7 +266,10 @@ export function planRecoveryBindings(
       recovery: {
         importKey: ctx.importKey,
         sourcePaneKey: binding.sourcePaneKey,
-        ...(launch ? { appendSystemPrompt: launch.appendSystemPrompt } : {})
+        ...(launch ? { appendSystemPrompt: launch.appendSystemPrompt } : {}),
+        ...(binding.launch.launchPreferences
+          ? { launchPreferences: binding.launch.launchPreferences }
+          : {})
       }
     }
     return { binding, record, result: { ...base, status: 'dormant' } }

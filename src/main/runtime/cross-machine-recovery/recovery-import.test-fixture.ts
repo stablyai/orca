@@ -169,8 +169,8 @@ export function fixture(
     resolveWorktree: async () => ({ id: worktreeId, repoId: 'repo-1', instanceId: 'inst-local' }),
     getLocalSession: () => session,
     getWorktreeMeta: (id) => meta[id],
-    setRecoveryProvenance: async (id, recoveryProvenance) => {
-      meta[id] = { ...meta[id], recoveryProvenance }
+    updateRecoveryProvenance: async (id, update) => {
+      meta[id] = { ...meta[id], recoveryProvenance: update(meta[id]?.recoveryProvenance) }
     },
     applyOp: async (op) => {
       const next = applyCrossMachineRecoveryOp(session, op)
