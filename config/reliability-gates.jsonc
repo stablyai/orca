@@ -11,6 +11,94 @@
   },
   "gates": [
     {
+      "id": "workspace-hooks.execution-host-ownership",
+      "title": "Hook reads and writes use the stored repository execution owner",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "workspace-runtime",
+      "layer": "cross-layer-unit",
+      "surfaces": [
+        "desktop worktree hook IPC",
+        "runtime repository hooks",
+        "issue-command read and write",
+        "hosted-review own-store host resolution"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Actual hydration and authoritative desktop owner selection with mocked filesystem, Git, inspection and provider boundaries; synthetic local/SSH/runtime rows. No physical provider or native platform certification.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/ipc/hooks/register-worktree-hook-file-handlers.ts"
+      ],
+      "invariant": "Hook file operations follow the authoritative repository row in this process Store: canonical SSH selects its target, explicit local and self-addressed runtime rows use registered local files, and missing SSH providers never substitute local I/O.",
+      "oracle": "Nine desktop/runtime operations never use local I/O for canonical SSH or dial a stale legacy target; legacy SSH/local/runtime controls retain behavior, folder skips remain, missing providers do not gain local fallback.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/hooks/worktree-hook-execution-host.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ipc/hooks/worktree-hook-execution-host.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/hooks/worktree-hook-execution-host.test.ts",
+          "assertions": [
+            "routes %s to the stored owner",
+            "refuses an unreachable canonical SSH write without touching local files"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/hooks/worktree-hook-execution-host.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.739,
+          "summary": "Independent68pass/original37fail31controls. Eleven additional authority/unavailable-provider/encoded-ID/folder controls pass; author102unique permanent tests across four suites."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused renderer-unit suites, p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Author and independent local evidence only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Frozen permanent suite68pass; original sources37fail31controls; independently reproduced with eleven extra controls."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Incorrect local/stale-target routes9to0 for each of four changed identity shapes. This is correctness evidence only, no latency/CPU/heap gain. Existing host resolver reused, no polling, cache or inventory/subprocess fanout added."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "Physical SSH/WSL/remote-runtime, native Linux/Windows, mobile and mixed-version integration untested. Local/daemon PTY data, identity and liveness unchanged.",
+        "Runtime absent-provider issue-command write still returns ok:true without a write; this preexisting convention is not a completion claim.",
+        "Only own-store rows use the generalized helper; generic runtime dispatch still rejects hosts this process does not execute.",
+        "No actual filesystem writes, provider operations, native UI or packaged app validation in routing fixtures."
+      ],
+      "promotionCriteria": [
+        "Retain exact route, no-local-fallback and authority oracles; obtain CI soak and physical host evidence before promotion."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate authority/routing failures without replacing exact-target or no-local-I/O assertions."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",
