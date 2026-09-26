@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyDarkAppearanceVariant,
   applyDocumentTheme,
+  PURE_BLACK_CLASS,
   resolveDocumentTheme,
   THEME_TRANSITION_DISABLED_CLASS
 } from './document-theme'
@@ -84,6 +86,33 @@ describe('document theme', () => {
   it('resolves system from matchMedia', () => {
     expect(resolveDocumentTheme('system', () => ({ matches: true }))).toBe(true)
     expect(resolveDocumentTheme('system', () => ({ matches: false }))).toBe(false)
+  })
+
+  it('toggles the pure-black class from the persisted variant', () => {
+    const root = createThemeRoot()
+
+    applyDarkAppearanceVariant('pure-black', { root })
+    expect(root.classList.contains(PURE_BLACK_CLASS)).toBe(true)
+
+    applyDarkAppearanceVariant('default', { root })
+    expect(root.classList.contains(PURE_BLACK_CLASS)).toBe(false)
+  })
+
+  it('treats a profile saved before the variant existed as default', () => {
+    const root = createThemeRoot()
+
+    applyDarkAppearanceVariant(undefined, { root })
+    expect(root.classList.contains(PURE_BLACK_CLASS)).toBe(false)
+  })
+
+  it('keeps the pure-black class when a theme preview reapplies the theme', () => {
+    const root = createThemeRoot()
+
+    applyDarkAppearanceVariant('pure-black', { root })
+    applyDocumentTheme('light', { root, disableTransitions: false })
+    applyDocumentTheme('dark', { root, disableTransitions: false })
+
+    expect(root.classList.contains(PURE_BLACK_CLASS)).toBe(true)
   })
 
   it('applies dark and light root classes', () => {

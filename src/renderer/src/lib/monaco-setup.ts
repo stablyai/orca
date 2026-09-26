@@ -14,6 +14,7 @@ import { registerNimLanguage } from './monaco-languages/register-nim'
 import { registerShellMarkdownAliases } from './monaco-languages/register-shell-markdown-aliases'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
+import { registerPureBlackMonacoTheme } from './monaco-editor-theme'
 import { installMonacoDelayerCancellationGuard } from './monaco-delayer-cancellation-guard'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
 import { installMonacoPeekReferencesPreviewOptions } from './monaco-peek-preview-options'
@@ -84,6 +85,7 @@ runMonacoSetupSteps([
   ['Nim language registration', () => registerNimLanguage(monaco)],
   ['JSONL language registration', () => registerJsonlLanguage(monaco)],
   ['shell Markdown alias registration', () => registerShellMarkdownAliases(monaco)],
+  ['pure black theme registration', () => registerPureBlackMonacoTheme(monaco)],
   ['delayer cancellation guard', installMonacoDelayerCancellationGuard],
   ['diff editor disposal guard', () => installMonacoDiffEditorDisposalGuard(monaco)],
   ['peek references preview options', installMonacoPeekReferencesPreviewOptions],

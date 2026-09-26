@@ -14,6 +14,9 @@ export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untrac
 
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
+/** Dark-mode surface family. `pure-black` collapses the gray canvas/panel tiers to #000 for OLED panels. */
+export type DarkAppearanceVariant = 'default' | 'pure-black'
+
 /** Strategy for the prefix prepended to worktree branch names. */
 export type BranchPrefixStrategy = 'git-username' | 'custom' | 'none'
 
