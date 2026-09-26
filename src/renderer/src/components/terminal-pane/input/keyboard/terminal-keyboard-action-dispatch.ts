@@ -131,6 +131,7 @@ export function dispatchTerminalShortcutAction(
     return
   }
   if (action.type === 'scrollViewport') {
+    armNativeOnlyShortcut(event)
     event.preventDefault()
     event.stopImmediatePropagation()
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
