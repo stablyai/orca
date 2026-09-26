@@ -90,4 +90,20 @@ describe('recovery commands stay local', () => {
       worktree: 'path:/work/repo'
     })
   })
+
+  it('accepts and ignores --host on recovery commands', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    callMock.mockResolvedValue({
+      id: 'req-4',
+      ok: true,
+      result: { bindings: [] },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    await main(['recovery', 'list', '--host', 'runtime:remote', '--json'], '/work/repo')
+
+    expect(process.exitCode).not.toBe(1)
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, null)
+    expect(callMock).toHaveBeenCalledWith('crossMachineRecovery.list', {})
+  })
 })
