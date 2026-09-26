@@ -33,6 +33,13 @@ export const inflightProjectViewRequests = new Map<
   { promise: Promise<GetProjectViewTableResult>; force: boolean }
 >()
 export const prRequestGenerations = new Map<string, number>()
+let prRequestGenerationSequence = 0
+
+export function nextPRRequestGeneration(): number {
+  // A retired key can still have older requests pending, so its generation must not restart.
+  return ++prRequestGenerationSequence
+}
+
 export const prRefreshStartedHostedReviewEntries = new Map<
   string,
   AppState['hostedReviewCache'][string] | undefined
