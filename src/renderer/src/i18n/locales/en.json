@@ -18085,6 +18085,10 @@
     },
     "status": {
       "bar": {
+        "inlineUsage": {
+          "temporarilyUnavailable": "Usage temporarily unavailable",
+          "unavailable": "Usage unavailable"
+        },
         "workspaceSpace": {
           "otherTopLevelItems": "Other top-level items ({{value0}})"
         }
