@@ -1,23 +1,11 @@
-// What the Claude journal translator is given and what it offers, apart from how it translates.
+// What the rest of a Claude session asks of its journal translator.
 
-import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { AgentSessionContextReport } from '../../shared/agent-session-context-usage'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { StructuredAgentSessionSinkAdmission } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { ClaudeChildToolQueries } from './claude-child-tool-queries'
 import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claude-context-facts'
 import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
-
-export type ClaudeJournalTranslatorDeps = {
-  sink: StructuredAgentSessionEventSink
-  bindPromptItemId?: (journalItemId: string, promptKey: string, questionId?: string) => void
-  coalesceMs?: number
-  schedule?: AgentSessionDeltaCoalescerDeps['schedule']
-  fallbackIdPrefix?: string
-  onBackgroundTaskJournalFailure?: (error: Error) => void
-}
+import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 
 export type ClaudeJournalTranslator = {
   handle: (event: ClaudeStructuredSessionEvent) => void
@@ -26,6 +14,8 @@ export type ClaudeJournalTranslator = {
    *  a client's Stop names. Sole owner: no reader keeps a copy to disagree with. */
   readonly currentTurnId: string | null
   flush: () => void
+  childToolOwner?: ClaudeChildToolQueries['childToolOwner']
+  childActivity?: ClaudeChildToolQueries['childActivity']
   retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission
   /** Streamed blocks still awaiting a final frame. A settled turn leaves none. */
   readonly pendingStreamedBlocks: number

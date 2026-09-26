@@ -124,6 +124,20 @@ describe('the idle sweep', () => {
     await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
   })
 
+  it('stops an agent whose roster holds only children that went idle or finished', async () => {
+    await foundRestTestChat(rig)
+    rig.adapter.backgroundTaskState.mockReturnValue({
+      state: 'monitoring',
+      tasks: [
+        { id: 'subagent-1', kind: 'agent', state: 'idle' },
+        { id: 'command-1', kind: 'command', state: 'done' }
+      ]
+    })
+    rig.clock.now += IDLE_MS + 1
+
+    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+  })
+
   it('never stops an agent while its lead turn runs, however quiet (P2-10)', async () => {
     await foundRestTestChat(rig)
     providerEvents().appendItem(

@@ -121,7 +121,7 @@ describe('Claude live prompt ownership', () => {
       sessionId: 'session-1',
       itemId: 'journal-prompt',
       kind: 'approval',
-      optionId: 'allow',
+      response: { kind: 'option', optionId: 'allow' },
       fence: 7,
       commit: async () => {
         expect(answered.settled()).toBe(false)
@@ -186,7 +186,7 @@ describe('Claude live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'allow',
+        response: { kind: 'option', optionId: 'allow' },
         fence: 7,
         commit
       })
@@ -205,7 +205,7 @@ describe('Claude live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'allow',
+        response: { kind: 'option', optionId: 'allow' },
         fence: 7,
         commit
       })
@@ -360,7 +360,6 @@ describe('Claude live prompt ownership', () => {
           input: { command: 'git status' },
           suggestions: [],
           questionIds: [],
-          answers: new Map(),
           settle: vi.fn()
         }
       })
@@ -402,7 +401,7 @@ describe('Claude live prompt ownership', () => {
       sessionId: 'session-1',
       itemId: 'journal-prompt',
       kind: 'approval',
-      optionId: 'allow',
+      response: { kind: 'option', optionId: 'allow' },
       fence: 7,
       commit: async () => undefined
     })
@@ -561,7 +560,7 @@ describe('Claude live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: promptItemId,
         kind: 'approval',
-        optionId: 'allow',
+        response: { kind: 'option', optionId: 'allow' },
         fence: 7,
         commit
       })
@@ -614,7 +613,7 @@ describe('Claude live prompt ownership', () => {
         sessionId: 'session-1',
         itemId: 'journal-prompt',
         kind: 'approval',
-        optionId: 'allow',
+        response: { kind: 'option', optionId: 'allow' },
         fence: 8,
         commit
       })
@@ -694,7 +693,6 @@ describe('Claude live prompt ownership', () => {
       },
       suggestions: [],
       questionIds: ['First?', 'Second?'],
-      answers: new Map(),
       settle: vi.fn()
     }
     prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })
@@ -734,7 +732,6 @@ describe('Claude live prompt ownership', () => {
         input: { command: 'git status' },
         suggestions: [],
         questionIds: [],
-        answers: new Map(),
         settle: vi.fn()
       }
       prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })

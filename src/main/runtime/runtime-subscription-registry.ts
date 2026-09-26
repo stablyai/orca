@@ -1,17 +1,24 @@
 type SubscriptionCleanup = () => void | Promise<void>
 
+type SubscriptionEntry = { cleanup: SubscriptionCleanup; version: number }
+
 export type SubscriptionRegistration = {
   releaseIfCurrent(): void
 }
 
 export class RuntimeSubscriptionRegistry {
-  private readonly cleanups = new Map<string, SubscriptionCleanup>()
+  private readonly cleanups = new Map<string, SubscriptionEntry>()
   private readonly cleanupPromises = new Map<
     string,
-    { cleanup: SubscriptionCleanup; promise: Promise<void> }
+    { entry: SubscriptionEntry; promise: Promise<void> }
   >()
   private readonly subscriptionsByConnection = new Map<string, Set<string>>()
   private readonly connectionBySubscription = new Map<string, string>()
+  private registrationVersion = 0
+
+  getRegistrationVersion(): number {
+    return this.registrationVersion
+  }
 
   register(subscriptionId: string, cleanup: SubscriptionCleanup, connectionId?: string): void {
     const existing = this.cleanups.get(subscriptionId)
@@ -19,7 +26,7 @@ export class RuntimeSubscriptionRegistry {
       this.removeConnectionIndex(subscriptionId)
       this.cleanup(subscriptionId)
     }
-    this.cleanups.set(subscriptionId, cleanup)
+    this.cleanups.set(subscriptionId, { cleanup, version: ++this.registrationVersion })
     if (!connectionId) {
       return
     }
@@ -38,18 +45,23 @@ export class RuntimeSubscriptionRegistry {
     connectionId?: string
   ): SubscriptionRegistration {
     this.register(subscriptionId, cleanup, connectionId)
-    return { releaseIfCurrent: () => this.cleanupOwned(subscriptionId, cleanup) }
+    const version = this.registrationVersion
+    return { releaseIfCurrent: () => this.cleanupOwned(subscriptionId, version) }
   }
 
-  cleanupIfOwnedByConnection(subscriptionId: string, connectionId?: string): boolean {
-    if (!connectionId) {
-      this.cleanup(subscriptionId)
+  cleanupIfOwnedByConnection(
+    subscriptionId: string,
+    connectionId?: string,
+    throughVersion?: number
+  ): boolean {
+    const entry = this.cleanups.get(subscriptionId)
+    if (!entry) {
       return true
     }
-    if (!this.cleanups.has(subscriptionId)) {
-      return true
+    if (throughVersion !== undefined && entry.version > throughVersion) {
+      return false
     }
-    if (this.connectionBySubscription.get(subscriptionId) !== connectionId) {
+    if (connectionId && this.connectionBySubscription.get(subscriptionId) !== connectionId) {
       return false
     }
     this.cleanup(subscriptionId)
@@ -63,15 +75,19 @@ export class RuntimeSubscriptionRegistry {
   }
 
   retryAfter(subscriptionId: string, cleanupOwner: SubscriptionCleanup, gate: Promise<void>): void {
+    const entry = this.cleanups.get(subscriptionId)
     const failedGeneration = this.cleanupPromises.get(subscriptionId)
     void gate.then(
       async () => {
-        await (failedGeneration?.cleanup === cleanupOwner
+        if (entry?.cleanup !== cleanupOwner) {
+          return
+        }
+        await (failedGeneration?.entry === entry
           ? failedGeneration.promise.catch(() => undefined)
           : undefined)
-        while (this.cleanups.get(subscriptionId) === cleanupOwner) {
+        while (this.cleanups.get(subscriptionId) === entry) {
           const newerGeneration = this.cleanupPromises.get(subscriptionId)
-          if (newerGeneration?.cleanup === cleanupOwner) {
+          if (newerGeneration?.entry === entry) {
             await newerGeneration.promise.catch(() => undefined)
             continue
           }
@@ -84,23 +100,23 @@ export class RuntimeSubscriptionRegistry {
   }
 
   async cleanupAndWait(subscriptionId: string): Promise<void> {
-    const cleanup = this.cleanups.get(subscriptionId)
-    if (!cleanup) {
+    const entry = this.cleanups.get(subscriptionId)
+    if (!entry) {
       return
     }
     const inFlight = this.cleanupPromises.get(subscriptionId)
-    if (inFlight?.cleanup === cleanup) {
+    if (inFlight?.entry === entry) {
       return inFlight.promise
     }
     let cleanupResult: void | Promise<void>
     try {
-      cleanupResult = cleanup()
+      cleanupResult = entry.cleanup()
     } catch (error) {
       cleanupResult = Promise.reject(error)
     }
     const promise = Promise.resolve(cleanupResult)
       .then(() => {
-        if (this.cleanups.get(subscriptionId) !== cleanup) {
+        if (this.cleanups.get(subscriptionId) !== entry) {
           return
         }
         this.cleanups.delete(subscriptionId)
@@ -111,7 +127,7 @@ export class RuntimeSubscriptionRegistry {
           this.cleanupPromises.delete(subscriptionId)
         }
       })
-    this.cleanupPromises.set(subscriptionId, { cleanup, promise })
+    this.cleanupPromises.set(subscriptionId, { entry, promise })
     return promise
   }
 
@@ -139,8 +155,8 @@ export class RuntimeSubscriptionRegistry {
     }
   }
 
-  private cleanupOwned(subscriptionId: string, expectedCleanup: SubscriptionCleanup): void {
-    if (this.cleanups.get(subscriptionId) !== expectedCleanup) {
+  private cleanupOwned(subscriptionId: string, expectedVersion: number): void {
+    if (this.cleanups.get(subscriptionId)?.version !== expectedVersion) {
       return
     }
     this.cleanup(subscriptionId)

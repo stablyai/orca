@@ -58,7 +58,7 @@ export class ClaudeJournalPrompts {
       sink: StructuredAgentSessionEventSink
       /** The turn that raised the prompt: the open one, else the conversation. */
       turnScope: () => AgentJournalTurnScope
-      bindPromptItemId?: (journalItemId: string, promptKey: string, questionId?: string) => void
+      bindPromptItemId?: (journalItemId: string, promptKey: string) => void
       questionItems?: (input: {
         sessionId: string
         prompt: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>['prompt']

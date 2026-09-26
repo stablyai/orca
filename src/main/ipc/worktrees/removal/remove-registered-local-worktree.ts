@@ -11,17 +11,10 @@ import {
 } from '../../../git/worktree'
 import { gitExecFileAsync } from '../../../git/runner'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktree-shared-directories'
-import {
-  getLocalWorktreePathAccess,
-  removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
-} from '../../../local-worktree-filesystem'
+import { cleanupLocalOrphanedWorktreeDirectory } from '../../../local-orphaned-worktree-cleanup'
 import { recoverLocalWindowsWorktreeRemoval } from '../../../local-worktree-removal-recovery'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
-import {
-  canSafelyRemoveOrphanedWorktreeDirectory,
-  findRegisteredDeletableWorktree
-} from '../../../worktree-removal-safety'
+import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from '../../../worktree-removal-home-guard'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -162,25 +155,12 @@ export async function removeRegisteredLocalWorktree(
         console.warn(
           `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
         )
-        const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-        if (
-          await canSafelyRemoveOrphanedWorktreeDirectory(
-            toLocalWorktreeRuntimePath(canonicalWorktreePath, localWorktreeGitOptions),
-            toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-            CLIENT_REMOVAL_HOME,
-            access.statPath,
-            access.readPath
-          )
-        ) {
-          await runtime.closeFileWatchersForRemoval(canonicalWorktreePath)
-          await removeLocalWorktreePath(canonicalWorktreePath, localWorktreeGitOptions).catch(
-            () => {}
-          )
-        } else {
-          console.warn(
-            `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
-          )
-        }
+        await cleanupLocalOrphanedWorktreeDirectory(
+          repo.path,
+          canonicalWorktreePath,
+          localWorktreeGitOptions,
+          (path) => runtime.closeFileWatchersForRemoval(path)
+        )
         // Why: remove failed so git still tracks it (.git/worktrees/<name>); prune or the stale entry keeps its branch locked.
         await gitExecFileAsync(['worktree', 'prune'], {
           cwd: repo.path,

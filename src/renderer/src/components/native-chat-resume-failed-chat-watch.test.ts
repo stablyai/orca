@@ -25,8 +25,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 vi.mock('sonner', () => ({ toast: vi.fn() }))
 
-// After a restart action leaves a chat failed, the user's reply in that chat must retire the status
-// bar entry without the user reopening anything, and nothing may run while nothing failed.
+// When the user sends in an offered or failed chat, its status bar entry must retire without the
+// user reopening anything, and nothing may run while nothing is offered or failed.
 
 const failure = {
   sessionId: 'a',
@@ -91,7 +91,26 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('opens no status stream while nothing failed', async () => {
+// The host withdraws a pending offer once the chat moves on; the status bar must not keep counting it.
+it('re-reads once when the user sends in an offered chat, and the count drops', async () => {
+  const { failedAt: _failedAt, outcome: _outcome, reason: _reason, ...candidate } = failure
+  mocks.rpc
+    .mockResolvedValueOnce({ sessions: [candidate], failed: [] })
+    .mockResolvedValue({ sessions: [], failed: [] })
+  await refreshNativeChatRestartOffer()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(getNativeChatRestartOffer().candidates).toHaveLength(1)
+  expect(mocks.subscribeStatus).toHaveBeenCalledOnce()
+
+  hostEmit()({ type: 'status', session: summary('working', 'Something else', Date.now() + 10_000) })
+  await vi.advanceTimersByTimeAsync(500)
+
+  expect(offerReads()).toBe(2)
+  expect(getNativeChatRestartOffer().candidates).toEqual([])
+  expect(mocks.unsubscribe).toHaveBeenCalledOnce()
+})
+
+it('opens no status stream while nothing is offered or failed', async () => {
   mocks.rpc.mockResolvedValue({ sessions: [], failed: [] })
   await refreshNativeChatRestartOffer()
   await vi.advanceTimersByTimeAsync(0)

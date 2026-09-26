@@ -3839,7 +3839,7 @@
             },
             "usage": {
               "noSubscription": {
-                "label": "購読なし"
+                "label": "サブスクリプションなし"
               }
             }
           },
@@ -3941,15 +3941,15 @@
             "ariaLabel": "{{value0}} チャットを再開できます",
             "tooltip": "中断されたチャットを開いて再開可能",
             "failedLabelOne": "1 件のチャットを再開できませんでした",
-            "failedLabel": "{{value0}} チャットを再開できませんでした",
-            "failedAriaOne": "1 件のチャットを再開できませんでした。詳細については、クリックしてください。",
-            "failedAria": "{{value0}} チャットを再開できませんでした。詳細については、クリックしてください。",
-            "failedTooltip": "再起動後、チャット Orca を再開できませんでした。詳細については、クリックしてください。",
-            "checkLabelOne": "1 チャットを確認する",
-            "checkLabel": "{{value0}} チャットを確認してください",
-            "checkAriaOne": "再開後に確認するチャットは1つ。詳細については、クリックしてください。",
-            "checkAria": "{{value0}} チャットは再開後に確認します。詳細については、クリックしてください。",
-            "checkTooltip": "再起動後、チャット Orca が再開できなかったか、再開を確認できませんでした。詳細については、クリックしてください。"
+            "failedLabel": "{{value0}} 件のチャットを再開できませんでした",
+            "failedAriaOne": "1 件のチャットを再開できませんでした。詳細はクリックしてください。",
+            "failedAria": "{{value0}} 件のチャットを再開できませんでした。詳細はクリックしてください。",
+            "failedTooltip": "再起動後に Orca が再開できなかったチャット。詳細はクリックしてください。",
+            "checkLabelOne": "確認が必要なチャット 1 件",
+            "checkLabel": "確認が必要なチャット {{value0}} 件",
+            "checkAriaOne": "再開後に確認が必要なチャット 1 件。詳細はクリックしてください。",
+            "checkAria": "再開後に確認が必要なチャット {{value0}} 件。詳細はクリックしてください。",
+            "checkTooltip": "再起動後に Orca が再開できなかった、または再開を確認できなかったチャット。詳細はクリックしてください。"
           }
         }
       },
@@ -6259,16 +6259,16 @@
           "copyDiagnostics": "コピー診断"
         },
         "LocalGitToolchainScanBanner": {
-          "xcodeLicenseTitle": "Git を使用するには Xcode ライセンスに同意します",
-          "xcodeLicenseBody": "macOS は、ユーザーが受け入れるまで Git をブロックします。これをターミナルで実行し、Orca に戻します。自動的に再度チェックされます。",
-          "developerToolsTitle": "Apple のコマンドラインツールをインストールする",
-          "developerToolsBody": "Git には Apple の開発者ツールが必要です。これをターミナルで実行し、Orca に戻します。自動的に再度チェックされます。",
-          "affectedOne": "ワークツリーのスキャンは{{value0}}のために一時停止されました",
-          "affectedMany": "{{value0}} プロジェクトのワークツリースキャンが一時停止されました",
+          "xcodeLicenseTitle": "Git を使うには Xcode ライセンスに同意してください",
+          "xcodeLicenseBody": "承諾するまで macOS が Git をブロックします。ターミナルでこれを実行し、Orca に戻ってください。自動的に再確認します。",
+          "developerToolsTitle": "Apple のコマンドラインツールをインストール",
+          "developerToolsBody": "Git には Apple の開発者ツールが必要です。ターミナルでこれを実行し、Orca に戻ってください。自動的に再確認します。",
+          "affectedOne": "{{value0}} のワークツリースキャンを一時停止中",
+          "affectedMany": "{{value0}} 件のプロジェクトのワークツリースキャンを一時停止中",
           "copyCommand": "コマンドをコピー",
-          "copied": "コマンドがコピーされました",
-          "retry": "今すぐ再試行してください",
-          "restored": "Git が再び動作します。ワークツリーが更新されました。"
+          "copied": "コマンドをコピーしました",
+          "retry": "今すぐ再試行",
+          "restored": "Git が再び動作しています。ワークツリーを更新しました。"
         }
       },
       "shared": {
@@ -6504,10 +6504,10 @@
           "opencodeGo": {
             "apiKey": {
               "title": "OpenCode Go API キー",
-              "description": "オプションの上書き。それ以外の場合、Orca は /connect を実行したときに保存されたキー OpenCode を使用し、次に OPENCODE_API_KEY を使用します。",
-              "label": "OpenCode Go APIキー",
-              "placeholder": "/connect または OPENCODE_API_KEY によって保存されたキーを使用する場合は、空白のままにします。",
-              "help": "ステータスバーで OpenCode Go を使用するために使用されます。以下のセッション Cookie は、従来のコンソール (OpenCode Black) アカウントにのみ必要です。"
+              "description": "任意のオーバーライド。指定しない場合、Orca は /connect 実行時に OpenCode が保存したキー（次に OPENCODE_API_KEY）を使用します。",
+              "label": "OpenCode Go API キー",
+              "placeholder": "/connect または OPENCODE_API_KEY で保存されたキーを使う場合は空欄のままにします",
+              "help": "ステータスバーの OpenCode Go 使用状況表示に使います。下のセッション Cookie はレガシーコンソール (OpenCode Black) アカウントでのみ必要です。"
             }
           }
         },
@@ -14908,31 +14908,31 @@
           "3e4cbf15ea": "生",
           "1833dbbc43": "Markdown",
           "7005960d73": "コード",
-          "8dbe39a152": "さらなるセル操作",
-          "fa8fd99cf1": "細胞の種類",
-          "kernelStarting": "起動…",
-          "kernelInstalling": "ipykernel をインストールしています…",
-          "kernelDead": "カーネルが死んだ",
-          "selectKernel": "カーネルの選択",
+          "8dbe39a152": "その他のセル操作",
+          "fa8fd99cf1": "セルの種類",
+          "kernelStarting": "開始中…",
+          "kernelInstalling": "ipykernel をインストール中…",
+          "kernelDead": "カーネルが停止しました",
+          "selectKernel": "カーネルを選択",
           "notPython": "そのファイルは Python インタープリターではありません。",
-          "interrupt": "割り込み",
-          "restart": "カーネルを再起動します",
+          "interrupt": "中断",
+          "restart": "カーネルを再起動",
           "runAll": "すべて実行",
-          "clearAll": "すべての出力をクリアする",
-          "notResponding": "応答がありません。カーネルを再起動します",
-          "findingPython": "Python 環境を探しています…",
+          "clearAll": "すべての出力をクリア",
+          "notResponding": "応答がありません。カーネルを再起動してください",
+          "findingPython": "Python 環境を検索中…",
           "recommended": "推奨",
           "pythonOnPath": "PATH 上の Python",
-          "browsePython": "Python を参照してください…",
-          "missingIpykernelTitle": "ipykernelをインストールしますか?",
-          "missingIpykernel": "「{{env}}」を使用してセルを実行するには、ipykernel パッケージが必要です。",
+          "browsePython": "Python を参照…",
+          "missingIpykernelTitle": "ipykernel をインストールしますか?",
+          "missingIpykernel": "'{{env}}' でセルを実行するには ipykernel パッケージが必要です。",
           "copyCommand": "コマンドをコピー",
           "install": "インストール",
           "kernelStartFailed": "カーネルの起動に失敗しました。",
-          "noPython": "このコンピュータでは Python が見つかりませんでした。 [python.org](https://www.python.org/downloads/) からインストールし、セルを再度実行します。",
-          "kernelDied": "カーネルが死亡しました。",
-          "localOnly": "ノートブックセルは、このコンピュータ上のファイルに対してのみ実行できます。",
-          "pythonOnly": "Orca で実行できるのは Python ノートブックのみです。"
+          "noPython": "このコンピュータに Python が見つかりません。[python.org](https://www.python.org/downloads/) からインストールして、セルを再実行してください。",
+          "kernelDied": "カーネルが停止しました。",
+          "localOnly": "ノートブックセルはこのコンピュータ上のファイルでのみ実行できます。",
+          "pythonOnly": "Orca では Python ノートブックのみ実行できます。"
         },
         "MarkdownPreview": {
           "e4683f70c4": "キャンセル",
@@ -17044,12 +17044,12 @@
         "dismissAll": "すべて閉じる",
         "dismissUnconfirmed": "履歴書のオファーの拒否は確認されていません。ステータスバーにまだ表示されている可能性があります。",
         "notContinuedOne": "1 件のチャットを再開できませんでした",
-        "notContinuedMany": "{{value0}} チャットを再開できませんでした",
+        "notContinuedMany": "{{value0}} 件のチャットを再開できませんでした",
         "notConfirmedOne": "1 件のチャットが再開されたことを確認できませんでした",
-        "notConfirmedMany": "{{value0}} チャットが再開されたことを確認できませんでした",
-        "notConfirmedOtherOne": "他の 1 件のチャットが再開されたことを確認できませんでした",
-        "notConfirmedOtherMany": "{{value0}} 他のチャットが再開されたことを確認できませんでした",
-        "show": "見せる",
+        "notConfirmedMany": "{{value0}} 件のチャットが再開されたことを確認できませんでした",
+        "notConfirmedOtherOne": "他のチャット 1 件が再開されたことを確認できませんでした",
+        "notConfirmedOtherMany": "他のチャット {{value0}} 件が再開されたことを確認できませんでした",
+        "show": "表示",
         "dismiss": "閉じる",
         "activityUnnamed": "名前なし",
         "activityApproval": "承認待ち: {{value0}}",
@@ -17137,24 +17137,24 @@
         "c5b3e8a17d": "Orca にサインインする"
       },
       "NativeChatResumeOutcomeRow": {
-        "openChat": "オープンチャット",
+        "openChat": "チャットを開く",
         "retry": "再試行",
         "dismiss": "閉じる",
         "unconfirmed": "チャットが再開されたことを確認できませんでした",
         "failed": "再開できませんでした",
         "statusFor": "{{value0}}: {{value1}}",
-        "dismissChat": "{{value1}} の「{{value0}}」を無視します",
-        "toResume": "再開するには:"
+        "dismissChat": "\"{{value0}}\" ({{value1}}) を閉じる",
+        "toResume": "再開するチャット:"
       },
       "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca は「続行」メッセージが配信されたことを確認できませんでした。別のチャットを送信する前に、チャットを開いて確認してください。",
-        "superseded": "チャットを開いて返信します。再起動直後に新規作業が到着したため、Orca は「続行」メッセージを送信しませんでした。",
-        "conflict": "別の Orca ウィンドウまたはターミナルがまだこのセッションを所有しています。閉じてから再試行してください。",
-        "ownershipUnknown": "Orca は、どのプロセスがこのセッションを所有しているかをまだ調査中です。しばらく待ってから、再試行してください。",
-        "notAttached": "チャットは再接続されませんでした。再試行するか、開いて新しいターンを開始してください。",
-        "dispatchRejected": "Agent は「続行」メッセージを拒否しました。チャットを開いて自分でチャットを送信してください。",
-        "unsupported": "Orca ではこのチャットを再開できません。開いてどこで止まったかを確認します。",
-        "fallback": "Orca はこのチャットを再開できませんでした。手動で続行するには、それを開いてください。"
+        "unconfirmed": "Orca は “continue” メッセージが配信されたことを確認できませんでした。別のメッセージを送る前にチャットを開いて確認してください。",
+        "superseded": "チャットを開いて返信してください。再起動の直後に新規作業が届いたため、Orca は “continue” メッセージを送信しませんでした。",
+        "conflict": "別の Orca ウィンドウまたはターミナルがこのセッションをまだ保持しています。閉じてから再試行してください。",
+        "ownershipUnknown": "Orca はこのセッションを所有するプロセスを確認中です。少し待ってから再試行してください。",
+        "notAttached": "チャットが再接続されませんでした。再試行するか、開いて新しいターンを開始してください。",
+        "dispatchRejected": "Agent が “continue” メッセージを拒否しました。チャットを開いて自分で送信してください。",
+        "unsupported": "このチャットは Orca で再開できません。開いて停止位置を確認してください。",
+        "fallback": "Orca はこのチャットを再開できませんでした。開いて手動で続けてください。"
       }
     },
     "i18n": {
@@ -17593,8 +17593,13 @@
       },
       "fileLinks": {
         "notFound": "ファイルが見つかりません: {{value0}}",
-        "unverifiable": "{{value0}} をチェックできませんでした: {{value1}}",
+        "unverifiable": "{{value0}} を確認できませんでした: {{value1}}",
         "unresolved": "このワークスペースで {{value0}} を解決できませんでした"
+      },
+      "contextUsage": {
+        "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
+        "title": "コンテキスト",
+        "estimated": "最後の応答から推定。"
       }
     },
     "tab": {
@@ -17876,7 +17881,7 @@
       "sent": "セッションコンテキストを新規 {{agent}} セッションに送信しました。",
       "deliveryFailed": "新規 {{agent}} セッションは開始しましたが、コンテキストを送信できませんでした。",
       "launchFailed": "新規 {{agent}} セッションを開始できませんでした。",
-      "deliveryUnconfirmed": "Orca は {{agent}} がセッションコンテキストを受信したことを確認できませんでした。新規セッションを確認し、入力が空の場合は自分で貼り付けます。",
+      "deliveryUnconfirmed": "Orca は {{agent}} がセッションコンテキストを受け取ったことを確認できませんでした。新規セッションを確認し、入力が空の場合は自分で貼り付けてください。",
       "copyPrompt": "プロンプトをコピー"
     },
     "terminalPane": {

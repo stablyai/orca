@@ -1,4 +1,6 @@
+import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
@@ -29,12 +31,19 @@ import { ClaudeOpenTurn } from './claude-open-turn'
 import { ClaudeContextFacts } from './claude-context-facts'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
+import { claudeChildToolQueries } from './claude-child-tool-queries'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
 
-import type {
-  ClaudeJournalTranslator,
-  ClaudeJournalTranslatorDeps
-} from './claude-structured-journal-contracts'
+export type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
+
+export type ClaudeJournalTranslatorDeps = {
+  sink: StructuredAgentSessionEventSink
+  bindPromptItemId?: (journalItemId: string, promptKey: string) => void
+  coalesceMs?: number
+  schedule?: AgentSessionDeltaCoalescerDeps['schedule']
+  fallbackIdPrefix?: string
+  onBackgroundTaskJournalFailure?: (error: Error) => void
+}
 
 export function createClaudeSessionJournalTranslator(
   sink: StructuredAgentSessionEventSink | undefined,
@@ -47,8 +56,7 @@ export function createClaudeSessionJournalTranslator(
         sink,
         fallbackIdPrefix,
         ...(onBackgroundTaskJournalFailure ? { onBackgroundTaskJournalFailure } : {}),
-        bindPromptItemId: (itemId, promptKey, questionId) =>
-          prompts.bindJournalItemId(itemId, promptKey, questionId)
+        bindPromptItemId: (itemId, promptKey) => prompts.bindJournalItemId(itemId, promptKey)
       })
     : null
 }
@@ -80,6 +88,7 @@ export function createClaudeJournalTranslator(
     // still owed is never coming; the rows keep the stamp they already have.
     onIdentitiesFinal: () => corrections.abandon()
   })
+  const childQueries = claudeChildToolQueries({ tools, toolOrigins, linkage: subagents.linkage })
   const corrections = new ClaudeProvisionalRowCorrections({
     ...subagents.linkage,
     turnScope,
@@ -281,6 +290,8 @@ export function createClaudeJournalTranslator(
       return turn.id
     },
     flush: streamedText.flush,
+    childToolOwner: childQueries.childToolOwner,
+    childActivity: childQueries.childActivity,
     retryPendingTaskRows: () => backgroundTasks.retryPendingWrites(),
     get pendingStreamedBlocks() {
       return streamedText.pending

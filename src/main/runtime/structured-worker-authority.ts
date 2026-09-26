@@ -9,6 +9,7 @@
  */
 
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { OrcaSessionId } from '../../shared/orca-session-address'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrchestrationDb } from './orchestration/db'
@@ -16,6 +17,7 @@ import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-
 import {
   isStructuredWorkerHandle,
   structuredWorkerIdentities,
+  structuredWorkerProcessIncarnation,
   structuredWorkerRecordIsCurrent,
   type StructuredWorkerIdentity
 } from './structured-worker-identity'
@@ -76,6 +78,39 @@ function structuredWorkerTabListed(
   } catch {
     return false
   }
+}
+
+/** The worker identity minted for a session, if that session is a structured worker. */
+export function resolveStructuredWorkerIdentityForSession(
+  sessionId: string,
+  db: OrchestrationDb | null | undefined
+): StructuredWorkerIdentity | null {
+  const known = structuredWorkerIdentities.getBySessionId(sessionId)
+  if (known) {
+    return known
+  }
+  const row = db?.getWorkerTerminalResourceByProcessIncarnation?.(
+    structuredWorkerProcessIncarnation(sessionId)
+  )
+  return row ? structuredWorkerIdentities.rehydrate(row) : null
+}
+
+/**
+ * Whether this session was assigned a Dispatch as a structured worker. Such a session acts with its
+ * worker handle, so one whose handle is gone must not act handle-less, as a chat would.
+ */
+export function isRecordedStructuredWorkerSession(
+  sessionId: OrcaSessionId,
+  db: OrchestrationDb
+): boolean {
+  return Boolean(
+    db.db
+      .prepare(
+        `SELECT 1 FROM dispatch_contexts
+         WHERE assignee_orca_session_id = ? AND process_incarnation = ? LIMIT 1`
+      )
+      .get(sessionId, structuredWorkerProcessIncarnation(sessionId))
+  )
 }
 
 /** Identity plus a record that still proves this runtime owns the session, for a worker its

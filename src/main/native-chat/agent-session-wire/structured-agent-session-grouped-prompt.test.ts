@@ -146,23 +146,78 @@ afterEach(async () => {
 })
 
 describe('grouped question admission', () => {
-  it('admits renderer question-group payloads with child ids and multi-select answers', async () => {
+  it('reads the packed answer an older client sends into structured answers', async () => {
     const attached = await host.attach(CALLER, attachParams())
     expect(attached.ok).toBe(true)
     const prompt = await seedGroupedQuestion()
-    const optionId = encodeAgentSessionQuestionAnswers([
+    const answers = [
       { questionId: 'q1', optionIds: ['target-web', 'target-mobile'] },
       { questionId: 'q2', optionIds: [], other: 'SSH host' }
-    ])
+    ]
+    const optionId = encodeAgentSessionQuestionAnswers(answers)
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId }
     const result = await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:question', fields),
       kind: 'question',
       ...fields
     })
-    expect(result).toMatchObject({ ok: true, value: { resolution: { state: 'resolved' } } })
+    expect(result).toMatchObject({
+      ok: true,
+      value: { resolution: { state: 'resolved', selectedOptionId: optionId, answers } }
+    })
     expect(answerPrompt).toHaveBeenCalledWith(
-      expect.objectContaining({ itemId: prompt.itemId, optionId })
+      expect.objectContaining({ itemId: prompt.itemId, response: { kind: 'answers', answers } })
     )
+  })
+
+  it('takes structured answers past the old option-id bound and keeps the packed form for older readers', async () => {
+    const attached = await host.attach(CALLER, attachParams())
+    expect(attached.ok).toBe(true)
+    const prompt = await seedGroupedQuestion()
+    const typed = 'Proceed with the replacement, but wait for the capture. '.repeat(40)
+    const answers = [
+      { questionId: 'q1', optionIds: ['target-web'] },
+      { questionId: 'q2', optionIds: [], other: typed }
+    ]
+    const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, answers }
+    const result = await host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:question', fields),
+      kind: 'question',
+      ...fields
+    })
+
+    expect(typed.length).toBeGreaterThan(1024)
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        resolution: {
+          state: 'resolved',
+          selectedOptionId: encodeAgentSessionQuestionAnswers(answers),
+          answers
+        }
+      }
+    })
+    expect(answerPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ response: { kind: 'answers', answers } })
+    )
+  })
+
+  it('refuses answers that do not match the questions without reaching the provider', async () => {
+    const attached = await host.attach(CALLER, attachParams())
+    expect(attached.ok).toBe(true)
+    const prompt = await seedGroupedQuestion()
+    const answers = [{ questionId: 'q1', optionIds: ['target-web'] }]
+    const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, answers }
+    const result = await host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:question', fields),
+      kind: 'question',
+      ...fields
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_invalid' }
+    })
+    expect(answerPrompt).not.toHaveBeenCalled()
   })
 })

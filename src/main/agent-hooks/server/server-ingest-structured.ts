@@ -62,7 +62,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     if (this.state.lastStatusByPaneKey.has(paneKey)) {
       throw new Error('Structured status address conflicts with legacy evidence')
     }
-    const snapshot = this.canonicalStatusStore.getSnapshot()
+    const snapshot = this.canonicalStatusStore.getRevision()
     const observedAt = Math.max(Date.now(), priorStatus?.receivedAt ?? 0)
     const status: AgentStatusIpcPayload = {
       paneKey,

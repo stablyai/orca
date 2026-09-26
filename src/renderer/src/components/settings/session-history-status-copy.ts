@@ -13,6 +13,14 @@ export function isSweepingSessionSearch(status: AiVaultSearchStatus | null): boo
   return status.phase === 'indexing' || (status.phase === 'degraded' && status.filesDue > 0)
 }
 
+/** A whole sweep has finished with nothing left due; failures alone do not hold readiness back. */
+export function isSessionSearchIndexReady(status: AiVaultSearchStatus | null): boolean {
+  if (!status?.enabled || status.lastSweepCompletedAt === null || status.filesDue > 0) {
+    return false
+  }
+  return status.phase === 'current' || status.phase === 'degraded'
+}
+
 export function sessionSearchPollIntervalMs(status: AiVaultSearchStatus | null): number {
   return isSweepingSessionSearch(status)
     ? SESSION_SEARCH_SWEEPING_POLL_MS
