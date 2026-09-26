@@ -183,7 +183,7 @@ off the context `client-context.tsx` keeps module-private, and each used to carr
 `exports.recorderHostClientContext = Ctx;`. That string names a local no type checker follows, so
 five spellings were five independent ways to reach a `ReferenceError` seconds into a recording.
 `hostClientContextExposure` is the one copy; the trade is that it sits inside `recorderSha256`, so
-editing it re-records all 787 goldens rather than the five families. A rename of the local is still
+editing it re-records all 786 goldens rather than the five families. A rename of the local is still
 invisible to `tsc` — nothing short of editing the product module makes a private local checkable —
 so `adapter-seam.test.ts` asserts the declaration it names exists exactly once, and refuses a sixth
 inline copy.
@@ -378,7 +378,7 @@ families because no reference states are defined for them.
 
 ## What this oracle does and does not see
 
-It replays 397 manifest scenarios against frozen goldens and fails on any divergence: 787 goldens
+It replays 397 manifest scenarios against frozen goldens and fails on any divergence: 786 goldens
 over 790 tests, all inside `pnpm --dir mobile test`. Counted with
 `python3 -c "import json;print(len(json.load(open('mobile/rpc-foundation/pilot-scenarios.json'))['scenarios']))"`,
 `find mobile/rpc-foundation/goldens -type f | wc -l`, and the reported total of
@@ -613,7 +613,7 @@ the drop happened under, and records a non-empty report as a `reply-salvage` eff
 operation, the method, the decoded variant, the dropped paths and the count. Nothing in the product
 tree changes: the report was already being built and thrown away.
 
-44 of the 787 goldens carry one, and every other checked read in the corpus decodes its reply
+44 of the 786 goldens carry one, and every other checked read in the corpus decodes its reply
 whole (`grep -l reply-salvage mobile/rpc-foundation/goldens/*.json | wc -l`). The matrix varies the
 envelope a host sends rather than the shape of a row inside a result, so on most families this
 observation pins an absence rather than a recorded drop. What it buys is the next tightening: an element or member schema narrowed so a recorded row stops parsing moves the
@@ -654,14 +654,15 @@ timer has not run when `dispose()` returns, so reading the set first made a defe
 byte-identical to a stream nobody ever closed.
 
 Why it is not enough to watch the wire: closing a stream only writes a frame when its method has an
-unsubscribe builder, and `notifications.subscribe` has none. Deleting that cleanup's
-`unsubscribeStream()` used to fail one golden, the cutover scenario written for it; it now fails
-seven, and the next builder-less method needs no scenario of its own.
+unsubscribe builder, and `agentSession.subscribe` has none. `notifications.subscribe` had none
+until the transport took over its release; deleting its cleanup's `unsubscribeStream()` used to
+fail one golden, the cutover scenario written for it, and the next builder-less method needs no
+scenario of its own.
 
 An empty set is not recorded, so the corpus stays quiet and a family that starts leaking gains a
-checkpoint. Four goldens report a non-empty set today, and all four are the same non-leak: the two
-`runtime.clientEvents.subscribe` matrices, on every partition whose subscribe reply is not a
-well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
+checkpoint. Five goldens report a non-empty set today, and all five are the same non-leak: the two
+`runtime.clientEvents.subscribe` matrices and the `notifications.subscribe` matrix, on every
+partition whose subscribe reply is not a well-formed `ready`. With no `subscriptionId` to unsubscribe with, `disposeServerSubscription` marks
 the record cancelled and keeps it until the id arrives — the retention the per-session registry
 paragraph above describes. `cancelled` is in the observation so those are legible as what they are:
 a product cleanup that never ran records `cancelled: false`, and because the drain precedes the

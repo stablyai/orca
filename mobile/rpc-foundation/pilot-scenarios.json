@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "80e0bee23b8153f5db195a0d8c1db114f28bd336",
+  "baseline": "a547d8903b91908502892cc3ca68cb0986397901",
   "scenarios": [
     {
       "id": "b1",
@@ -21066,18 +21066,6 @@
           "checkpoint": "unsubscribing"
         },
         {
-          "complete": "notifications.unsubscribe#1",
-          "params": {
-            "subscriptionId": "sub-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "unsubscribed": true
-            }
-          }
-        },
-        {
           "checkpoint": "stopped"
         }
       ]
@@ -21227,18 +21215,6 @@
         {
           "action": "stop",
           "id": "stop"
-        },
-        {
-          "complete": "notifications.unsubscribe#1",
-          "params": {
-            "subscriptionId": "sub-2"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "unsubscribed": true
-            }
-          }
         },
         {
           "checkpoint": "stopped"
@@ -22601,18 +22577,6 @@
         {
           "action": "stop",
           "id": "stop"
-        },
-        {
-          "complete": "notifications.unsubscribe#1",
-          "params": {
-            "subscriptionId": "sub-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "unsubscribed": true
-            }
-          }
         },
         {
           "checkpoint": "stopped"
