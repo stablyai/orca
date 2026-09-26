@@ -201,7 +201,8 @@ it('keeps the offer withdrawn after the idle sweep closes the chat and it is rea
   await host.revealSession(SESSION)
 
   expect(await host.restartResume.list()).toEqual([])
-  expect(await offersIn(root)).toEqual([])
+  // The listing retires what it finds moved on; the write trails the answer.
+  await vi.waitFor(async () => expect(await offersIn(root)).toEqual([]))
 })
 
 // Resume that runs by itself at launch goes through the same call a click does, and the same rule
