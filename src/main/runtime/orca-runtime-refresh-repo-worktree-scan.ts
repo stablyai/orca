@@ -52,14 +52,23 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
       // caller must never wait on it, or every cold read pays filesystem latency it cannot use.
       const probed = await withTimeoutResult(probe, WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
       if (!probed.ok) {
-        // Why log: expiry and "fingerprint unavailable" both surface as `null`, so a wedged mount is
-        // otherwise indistinguishable from a repo that simply cannot be fingerprinted.
-        console.warn('[worktree-scan] admin fingerprint probe expired; running a full scan', {
+        // Timeout proves nothing, so it is no evidence the repo changed: serve the cache without
+        // adding scan load, and preserve the last confirmed baseline.
+        // Ignore the late probe: it could describe a mutation these cached rows predate.
+        console.warn('[worktree-scan] admin fingerprint probe expired; serving the cached scan', {
           repoId: repo.id,
           timeoutMs: WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS
         })
+        return {
+          result: reusable.result,
+          adminFingerprint: reusable.adminFingerprint,
+          adminFingerprintProbe: null,
+          scannedAt: reusable.scannedAt
+        }
       }
-      const current = probed.ok ? probed.value : null
+      // A `null` value is the other story: the probe answered that it cannot describe this repo,
+      // so nothing is proven and a real scan is the only way to know.
+      const current = probed.value
       if (current !== null && current === reusable.adminFingerprint) {
         return {
           result: reusable.result,
