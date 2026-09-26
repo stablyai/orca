@@ -1,6 +1,7 @@
 import bridgePath from '../../../resources/notebook/kernel-bridge.py?asset&asarUnpack'
 import { spawnProcess } from '../../shared/child-process/run-process'
 import { forceTerminateProcessTree } from '../../shared/child-process/process-tree-termination'
+import { createNdjsonParser } from '../../shared/main-process-ndjson-framer'
 import {
   KERNEL_OUTPUT_TYPES,
   type KernelFrame,
@@ -16,13 +17,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function parseFrame(line: string): BridgeFrame | null {
-  let value: unknown
-  try {
-    value = JSON.parse(line)
-  } catch {
-    return null
-  }
+function parseFrame(value: unknown): BridgeFrame | null {
   if (!isRecord(value)) {
     return null
   }
@@ -46,12 +41,22 @@ function parseFrame(line: string): BridgeFrame | null {
 
 /** Splits bridge stdout into frames, skipping any line that is not one. */
 export function createFrameReader(onFrame: (frame: BridgeFrame) => void): (text: string) => void {
-  let partial = ''
+  let pending: unknown[] = []
+  const parser = createNdjsonParser(
+    (value) => {
+      pending.push(value)
+    },
+    undefined,
+    // Notebook display frames can contain large images; preserve the existing unrestricted size.
+    { maxLineBytes: Number.POSITIVE_INFINITY }
+  )
   return (text) => {
-    const lines = (partial + text).split('\n')
-    partial = lines.pop() ?? ''
-    for (const line of lines) {
-      const frame = parseFrame(line)
+    // Preserve the final partial record before a consumer can throw or feed more input.
+    parser.feed(text)
+    const complete = pending
+    pending = []
+    for (const value of complete) {
+      const frame = parseFrame(value)
       if (frame) {
         onFrame(frame)
       }
