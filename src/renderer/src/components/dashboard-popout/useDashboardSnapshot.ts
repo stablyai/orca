@@ -31,6 +31,16 @@ function terminalDialogIsOpen(): boolean {
   return document.querySelector('[role="dialog"][data-state="open"]') !== null
 }
 
+function isBenignViewTransitionError(err: unknown): boolean {
+  if (err instanceof Error) {
+    return err.name === 'InvalidStateError' || err.name === 'AbortError'
+  }
+  if (err && typeof err === 'object' && 'name' in err) {
+    return err.name === 'InvalidStateError' || err.name === 'AbortError'
+  }
+  return false
+}
+
 /**
  * Pop-out side of the dashboard bridge: subscribe to snapshots relayed from the
  * main window and request an initial one on mount. When a card changes column
@@ -123,9 +133,31 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       }
       // flushSync so the DOM reflects `next` synchronously inside the transition
       // callback — the browser captures the "after" state from it.
-      startViewTransition(() => {
-        flushSync(() => setSnapshot(next))
-      })
+      // Absorb benign InvalidStateError/AbortError if Chromium aborts in-flight animations
+      // or if rapid updates collide, avoiding React #185 and unhandled promise rejection storms.
+      try {
+        const transition = startViewTransition(() => {
+          try {
+            flushSync(() => setSnapshot(next))
+          } catch {
+            setSnapshot(next)
+          }
+        })
+        if (transition && typeof transition === 'object' && 'finished' in transition) {
+          const vt = transition as { finished?: Promise<void> }
+          vt.finished?.catch((err: unknown) => {
+            if (!isBenignViewTransitionError(err)) {
+              console.warn('Unexpected view transition rejection:', err)
+            }
+          })
+        }
+      } catch (err: unknown) {
+        if (isBenignViewTransitionError(err)) {
+          setSnapshot(next)
+        } else {
+          throw err
+        }
+      }
     }
 
     const unsubscribe = window.api.dashboard.onSnapshot(apply)
