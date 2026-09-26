@@ -1,11 +1,8 @@
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { reconcileCatalogRows } from '../slices/repo-identity-reconcile'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
-} from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { catalogOwnsHost } from '../slices/project-group-owner-routing'
 import type { RepoSlice } from '../repos/repo-state'
 import {
   getProjectHostSetupOwnerKey,
@@ -135,14 +132,11 @@ export function mergeFetchedProjectCompatibilityForHost({
   repos: readonly Repo[]
   hostId: string
 }): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean => {
-    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
-      return setup.hostId === hostId
-    }
-    const owner = parseExecutionHostId(setup.hostId)
-    // Why: desktop persistence owns local and direct-SSH setups; runtime setups stay authoritative on their remote Orca server.
-    return setup.hostId === LOCAL_EXECUTION_HOST_ID || owner?.kind === 'ssh'
-  }
+  // Why: desktop persistence owns local and direct-SSH setups; runtime setups stay authoritative on their remote Orca server.
+  const catalogOwnsAnyHost = (hostIds: ReadonlySet<string>): boolean =>
+    [...hostIds].some((ownerHostId) => catalogOwnsHost(hostId, ownerHostId))
+  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean =>
+    catalogOwnsHost(hostId, setup.hostId)
   const fetchedSetupsForHost = fetched.projectHostSetups.filter(setupBelongsToFetchedCatalog)
   const preservedSetups = previous.projectHostSetups.filter(
     (setup) => !setupBelongsToFetchedCatalog(setup)
@@ -179,8 +173,8 @@ export function mergeFetchedProjectCompatibilityForHost({
       const previousProject = previousProjectById.get(project.id)
       // Why: repo-derived compatibility projects include every host; a one-host refresh should only reconcile or prune that host's ownership.
       return (
-        fetchedProjectHostIds(project).has(hostId) ||
-        (previousProject ? previousProjectHostIds(previousProject).has(hostId) : false)
+        catalogOwnsAnyHost(fetchedProjectHostIds(project)) ||
+        (previousProject ? catalogOwnsAnyHost(previousProjectHostIds(previousProject)) : false)
       )
     })
     .map((project) => {
@@ -198,6 +192,8 @@ export function mergeFetchedProjectCompatibilityForHost({
   const preservedProjects = previous.projects.filter(
     (project) =>
       !fetchedProjectIds.has(project.id) &&
+      // Why: a project whose setups and repos are all gone has no owner left to answer for it.
+      currentProjectOwnerHostIds(project).size > 0 &&
       (!previousProjectHostIds(project).has(hostId) || projectHasCurrentOwnerOutsideHost(project))
   )
   // Why: both merges always allocate (sourceRepoIds is rebuilt per project, and fetched setups
