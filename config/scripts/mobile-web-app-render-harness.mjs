@@ -642,11 +642,10 @@ export function installSchedulerRecorder() {
       // own header and line 1 is this wrapper.
       const caller = ((new Error('scheduled').stack ?? '').split('\n')[2] ?? '').trim()
       const container = document.getElementById('terminal-container')
-      // `fired` is what makes "owed" readable: a callback that has not run is still owed, whether
-      // it was cancelled or is merely waiting, and cancelling never sets it.
-      const entry = { kind, caller, owned: container !== null, fired: false }
+      // `fired` and `cancelled` make "owed" readable: a frame neither ran nor was taken back.
+      const entry = { kind, caller, owned: container !== null, fired: false, cancelled: false }
       state.scheduled.push(entry)
-      return schedule(
+      const id = schedule(
         (...args) => {
           entry.fired = true
           if (container !== null && !container.isConnected) {
@@ -656,7 +655,20 @@ export function installSchedulerRecorder() {
         },
         ...rest
       )
+      if (kind === 'frame') {
+        frames.set(id, entry)
+      }
+      return id
     }
+  const frames = new Map()
+  const cancelFrame = globalThis.cancelAnimationFrame.bind(globalThis)
+  globalThis.cancelAnimationFrame = (id) => {
+    const entry = frames.get(id)
+    if (entry !== undefined) {
+      entry.cancelled = true
+    }
+    return cancelFrame(id)
+  }
   globalThis.requestAnimationFrame = wrap(
     globalThis.requestAnimationFrame.bind(globalThis),
     'frame'

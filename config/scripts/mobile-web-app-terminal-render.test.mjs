@@ -462,24 +462,12 @@ describeRender(
       // Two things have to be pinned down for that to be readable, and the first version of this
       // case had neither.
       //
-      // The witness has to be owed whenever the dispose lands. A single refit is not: the retry
-      // loop commits on its first attempt whenever the grid still measures, so one resize buys
-      // one frame and a dispose after it owes nothing — which agrees with an empty leak list for
-      // exactly the reason under test, once in five runs. So the refit is re-armed every frame,
-      // and the order inside the frame matters: a resize that runs before the document's attempt
-      // is committed by it, the refit then finds the box already fitted, and the document owes
-      // nothing at the end of every other frame. Re-arming from a resize observer made after the
-      // document's puts the resize after the attempt in the next frame, so every frame ends owed.
-      //
-      // And the leak has to be counted from the moment dispose returned, not from the moment the
-      // host element left the DOM. React unmounts in two steps: the mutation phase detaches the
-      // host, and the passive cleanup that calls `dispose` runs after it — 1 ms apart here, 20 to
-      // 35 ms apart with the CPU throttled 20x, which is the CI runner this failed on. A frame
-      // served in that gap runs with a detached container while the document is still live and
-      // has not been asked to stop, and no registry could take it back. It went through
-      // `scheduleDocumentFrame` like every other; the old oracle called it a leak because it
-      // judged by the container rather than by dispose. Only what runs after the last statement
-      // of `dispose` is the document keeping something it gave up.
+      // The witness has to be owed at the instant dispose is called, whoever drives the refit: a
+      // resize observer here, the host's layout notify elsewhere, and neither owes a frame at the
+      // end of every frame — a refit that finds its box already fitted asks for none. So the test
+      // reads the owed count from a frame of its own and, once it is positive, unmounts with a
+      // sync render in that same callback. Detach and dispose then run before it returns, with no
+      // gap a frame could be served in, so the leak is counted from the moment dispose returned.
       let documentChunk = null
       const { page } = await openPage(PROBE_ROUTE, {
         scheduler: true,
@@ -505,36 +493,33 @@ describeRender(
         const state = globalThis.__orcaScheduler
         state.disposed = null
         state.watching = true
-        // `dispose` empties the host and drops its class last, after `cancelDocumentFrames`, so
-        // the class going is the moment it returned. Observed on the element rather than on the
-        // tree because React may have detached it already.
         const host = document.querySelector('.orca-terminal-document-host')
-        const observer = new MutationObserver(() => {
-          if (state.disposed !== null || host.classList.contains('orca-terminal-document-host')) {
-            return
-          }
-          state.disposed = {
-            // A cancelled frame never runs, so it is still owed here. That is the point.
-            owed: state.scheduled.filter(
-              (entry) => entry.kind === 'frame' && !entry.fired && entry.caller.includes(chunk)
-            ).length,
-            leakedBefore: state.leaked.length
-          }
-          observer.disconnect()
-        })
-        observer.observe(host, { attributes: true, attributeFilter: ['class'] })
+        const owedFrames = () =>
+          state.scheduled.filter(
+            (entry) =>
+              entry.kind === 'frame' &&
+              !entry.fired &&
+              !entry.cancelled &&
+              entry.caller.includes(chunk)
+          ).length
         // The page's refit follows the host's box, not the window, so the pulse resizes the host.
-        // The observer's first delivery starts the one chain; each resize it causes re-arms it.
         let narrow = false
-        const pulse = () => {
-          if (state.disposed !== null) {
+        let frames = 0
+        const disposeWhenOwed = () => {
+          const owed = owedFrames()
+          if (owed === 0 && ++frames < 600) {
+            narrow = !narrow
+            host.style.width = narrow ? '99%' : ''
+            requestAnimationFrame(disposeWhenOwed)
             return
           }
-          narrow = !narrow
-          host.style.width = narrow ? '99%' : ''
+          const leakedBefore = state.leaked.length
+          globalThis.__orcaTerminalProbe.unmountNow()
+          // `dispose` drops the host's class last, so its absence says dispose ran inside the call.
+          const returned = !host.classList.contains('orca-terminal-document-host')
+          state.disposed = { owed, leakedBefore, returned }
         }
-        new ResizeObserver(() => requestAnimationFrame(pulse)).observe(host)
-        globalThis.setTimeout(() => globalThis.__orcaTerminalProbe.setMounted(false), 200)
+        requestAnimationFrame(disposeWhenOwed)
       }, documentChunk)
       await page.locator('#terminal-container').waitFor({ state: 'detached', timeout: 30_000 })
       await page.evaluate(() => {
@@ -549,9 +534,10 @@ describeRender(
       await page.evaluate(() => new Promise((resolve) => globalThis.setTimeout(resolve, 3000)))
 
       const scheduler = await page.evaluate(() => globalThis.__orcaScheduler)
+      expect(scheduler.disposed?.returned, 'dispose ran inside the unmount call').toBe(true)
       expect(
-        scheduler.disposed?.owed,
-        'the document owed a frame at the moment dispose returned'
+        scheduler.disposed.owed,
+        'the document owed a frame at the moment dispose was called'
       ).toBeGreaterThan(0)
       expect(
         scheduler.leaked
