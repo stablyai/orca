@@ -156,6 +156,19 @@ function mouseEventForRow(
   } as unknown as MouseEvent
 }
 
+function makeMouseEvent(init: Partial<MouseEvent>): MouseEvent {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test mock for DOM MouseEvent in node test environment.
+  return {
+    button: 0,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    preventDefault: vi.fn(),
+    ...init
+  } as never
+}
+
 describe('hard-wrapped terminal HTTP clicks', () => {
   beforeEach(() => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
@@ -532,5 +545,86 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(terminal.options.mouseEventsRequireAlt).toBe(false)
     expect(openUrlMock).not.toHaveBeenCalled()
     disposable.dispose()
+  })
+
+  it('does not hand off a custom app URL on a plain click', () => {
+    const { terminal } = makeTerminal({ urlRows: ['obsidian://open?vault=notes'] })
+    const event = mouseEventForRow(0, { plain: true })
+    handleTerminalWebLinkClick('obsidian://open?vault=notes', event, {
+      terminal,
+      worktreeId: 'wt-1',
+      worktreePath: '/tmp',
+      startupCwd: '/tmp'
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('does not hand off a custom app URL on the wrong platform modifier', () => {
+    const { terminal } = makeTerminal({ urlRows: ['obsidian://open?vault=notes'] })
+    const event = makeMouseEvent({ ctrlKey: true })
+    expect(
+      handleTerminalWebLinkClick('obsidian://open?vault=notes', event, {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(false)
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('opens custom app schemes with Ctrl+click on non-Mac', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows NT 10.0' })
+    const { terminal, clearSelection } = makeTerminal({
+      urlRows: ['obsidian://open?vault=notes']
+    })
+    const event = makeMouseEvent({ ctrlKey: true })
+    expect(
+      handleTerminalWebLinkClick('obsidian://open?vault=notes', event, {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith('obsidian://open?vault=notes')
+    expect(clearSelection).toHaveBeenCalled()
+  })
+
+  it('opens custom app schemes through shell and skips HTTP routing', () => {
+    const { terminal, clearSelection } = makeTerminal({
+      urlRows: ['obsidian://open?vault=notes']
+    })
+    const event = mouseEventForRow(0)
+
+    expect(
+      handleTerminalWebLinkClick('obsidian://open?vault=notes', event, {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(true)
+    expect(event.preventDefault).toHaveBeenCalled()
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith('obsidian://open?vault=notes')
+    expect(clearSelection).toHaveBeenCalled()
+  })
+
+  it('does not open custom app schemes without an owned gesture', () => {
+    const { terminal } = makeTerminal({
+      urlRows: ['obsidian://open?vault=notes']
+    })
+
+    expect(
+      handleTerminalWebLinkClick('obsidian://open?vault=notes', undefined, {
+        terminal,
+        worktreeId: 'wt-1',
+        worktreePath: '/tmp',
+        startupCwd: '/tmp'
+      })
+    ).toBe(false)
+    expect(openUrlMock).not.toHaveBeenCalled()
   })
 })
