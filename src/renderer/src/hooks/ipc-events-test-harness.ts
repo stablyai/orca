@@ -12,6 +12,11 @@ export {
   type HarnessStoreState,
   type HarnessTab
 } from './ipc-events-harness-store-state'
+export {
+  createStoreWithOwnerFiledElsewhere,
+  OWNER_ELSEWHERE_EVENT_WORKTREE_ID,
+  OWNER_ELSEWHERE_OWNER_WORKTREE_ID
+} from './terminal-reveal-test-fixtures'
 
 export type CreateTerminalRequest = {
   requestId?: string
@@ -69,6 +74,10 @@ export type IpcEventsHarness = {
   settleClientHostedBrowserRowsSnapshot: () => Promise<void>
   /** Standard (non-palette) target of a workspace digit chord. */
   activateAndRevealWorkspace: ReturnType<typeof vi.fn>
+  /** Runtime-surface focus attempt; its third argument is the worktree key a reveal surfaces under. */
+  focusRuntimeTerminalSurface: ReturnType<typeof vi.fn>
+  /** Window CustomEvents the bridge emits, e.g. split-pane and background-mount requests. */
+  dispatchEvent: ReturnType<typeof vi.fn>
 }
 
 export type IpcEventsHarnessOptions = {
@@ -90,6 +99,8 @@ export async function loadIpcEventsHarness(
 ): Promise<IpcEventsHarness> {
   const replyTerminalCreate = vi.fn()
   const activateAndRevealWorkspace = vi.fn()
+  const focusRuntimeTerminalSurface = vi.fn(() => false)
+  const dispatchEvent = vi.fn()
   let createTerminalListener: ((request: CreateTerminalRequest) => void) | null = null
   let requestTerminalCreateListener: ((request: RequestTerminalCreateRequest) => void) | null = null
   let focusEditorTabListener: ((request: FocusEditorTabRequest) => void) | null = null
@@ -140,13 +151,11 @@ export async function loadIpcEventsHarness(
     isWebRuntimeSessionActive: vi.fn(() => false)
   }))
   vi.doMock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
-  vi.doMock('@/runtime/sync-runtime-graph', () => ({
-    focusRuntimeTerminalSurface: vi.fn(() => false)
-  }))
+  vi.doMock('@/runtime/sync-runtime-graph', () => ({ focusRuntimeTerminalSurface }))
   vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
 
   vi.stubGlobal('window', {
-    dispatchEvent: vi.fn(),
+    dispatchEvent,
     api: new Proxy(
       {
         runtimeEnvironments: createApiNamespaceStub({
@@ -297,7 +306,9 @@ export async function loadIpcEventsHarness(
       await Promise.resolve()
       await Promise.resolve()
     },
-    activateAndRevealWorkspace
+    activateAndRevealWorkspace,
+    focusRuntimeTerminalSurface,
+    dispatchEvent
   }
 }
 

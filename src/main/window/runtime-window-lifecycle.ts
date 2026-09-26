@@ -9,7 +9,10 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
-import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
+import {
+  revealedPaneMatches,
+  type TerminalTabCreateReply
+} from '../../shared/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
@@ -69,12 +72,14 @@ export function registerRuntimeWindowLifecycle(
         title: opts.title,
         ...(opts.presentation ? { presentation: opts.presentation } : {})
       }),
-    revealTerminalSession: (worktreeId, opts) =>
+    // Why worktreeHint: ownership is tab-keyed, so the renderer decides which workspace key the
+    // surface is filed under. This argument only says where to look first.
+    revealTerminalSession: (worktreeHint, opts) =>
       new Promise((resolve, reject) => {
         const requestId = randomUUID()
         const expectedIdentity = opts.expectedProcessIdentity
           ? opts.tabId && opts.leafId
-            ? { worktreeId, tabId: opts.tabId, leafId: opts.leafId, ptyId: opts.ptyId }
+            ? { tabId: opts.tabId, leafId: opts.leafId, ptyId: opts.ptyId }
             : null
           : undefined
         if (expectedIdentity === null) {
@@ -96,14 +101,7 @@ export function registerRuntimeWindowLifecycle(
             reject(new Error(reply.error))
             return
           }
-          if (
-            expectedIdentity &&
-            (!reply.identity ||
-              reply.identity.worktreeId !== expectedIdentity.worktreeId ||
-              reply.identity.tabId !== expectedIdentity.tabId ||
-              reply.identity.leafId !== expectedIdentity.leafId ||
-              reply.identity.ptyId !== expectedIdentity.ptyId)
-          ) {
+          if (expectedIdentity && !revealedPaneMatches(reply.identity, expectedIdentity)) {
             reject(new Error('terminal_reveal_identity_mismatch'))
             return
           }
@@ -116,7 +114,7 @@ export function registerRuntimeWindowLifecycle(
         ipcMain.on('terminal:tabCreateReply', handler)
         const sent = send('ui:createTerminal', {
           requestId,
-          worktreeId,
+          worktreeId: worktreeHint,
           ptyId: opts.ptyId,
           title: opts.title ?? undefined,
           ...(opts.cwd ? { cwd: opts.cwd } : {}),

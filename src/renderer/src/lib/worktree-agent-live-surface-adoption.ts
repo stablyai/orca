@@ -1,7 +1,8 @@
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import type { useAppStore } from '@/store'
-import { resolveTerminalTabPtyOwnership } from './terminal-tab-for-pty-id'
+import { listTerminalPtyPaneOwners } from './terminal-pty-pane-owner'
+import { findTerminalTabRow } from './terminal-tab-row-lookup'
 import type {
   LiveTerminalSurfaceOwner,
   LiveTerminalSurfaceOwnerIndex
@@ -116,6 +117,17 @@ function adoptHostOwnedSurface(
 }
 
 /**
+ * Whether some pane in this renderer already shows the PTY. Ownership is tab-keyed, so a row
+ * filed under any other worktree key still counts — a PTY already surfaced must not be adopted
+ * twice. A layout whose row is gone surfaces nothing, so it counts for neither.
+ */
+function isPtyAlreadySurfaced(store: LiveSurfaceAdoptionStore, ptyId: string): boolean {
+  return listTerminalPtyPaneOwners(store, ptyId).some(
+    (owner) => findTerminalTabRow(store, owner.tabId) !== null
+  )
+}
+
+/**
  * Give every live workspace PTY the surface that already owns it, minting one
  * only for a PTY proven to have none.
  *
@@ -130,11 +142,7 @@ export async function adoptLiveWorkspacePtySurfaces(
   livePtyIds: readonly string[],
   listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>
 ): Promise<{ surfaced: boolean; declinedPtyIds: string[] }> {
-  // Why: ptyIdsByTabId holds only panes this renderer mounted, so a tab bound
-  // solely in tab.ptyId or the persisted layout used to read as unbound.
-  const unbound = livePtyIds.filter(
-    (ptyId) => resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind === 'none'
-  )
+  const unbound = livePtyIds.filter((ptyId) => !isPtyAlreadySurfaced(getState(), ptyId))
   let surfaced = unbound.length < livePtyIds.length
   const declinedPtyIds: string[] = []
   if (unbound.length === 0) {
@@ -150,7 +158,7 @@ export async function adoptLiveWorkspacePtySurfaces(
   for (const ptyId of unbound) {
     // Why: a pane can mount while the census is in flight, so the pre-RPC
     // verdict is stale by the time it would authorize a mint.
-    if (resolveTerminalTabPtyOwnership(getState(), worktreeId, ptyId).kind !== 'none') {
+    if (isPtyAlreadySurfaced(getState(), ptyId)) {
       surfaced = true
       continue
     }

@@ -467,12 +467,40 @@ describe('worktree agent activation gate', () => {
     expect(deps.listSurfaceOwners).not.toHaveBeenCalled()
   })
 
-  it('does not mint a second surface for a PTY recorded only on the tab row', async () => {
+  it('lets the execution host decide for a PTY recorded only on the tab row', async () => {
+    // The row is no longer an ownership tier, so it is not evidence of a surface. Only the host
+    // can prove a live PTY has none, and an authoritative empty census says exactly that.
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({ sessions: [listed(livePtyId)] })
     const store = deps.getState()
     seedExistingSurface(store, { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
     store.tabsByWorktree[WORKTREE_ID]![0]!.ptyId = livePtyId
+
+    await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+
+    expect(deps.listSurfaceOwners).toHaveBeenCalled()
+    expect(createTab).toHaveBeenCalledWith(
+      WORKTREE_ID,
+      undefined,
+      undefined,
+      expect.objectContaining({ initialPtyId: livePtyId })
+    )
+  })
+
+  it('never mints for a pty bound in a layout, whatever the host census says', async () => {
+    // The negative twin of the row-only case above. The mint path exists only for a PTY with no
+    // pane at all; a layout binding outranks an empty census, or an authoritative "no surfaces"
+    // answer would fork every restored agent onto a second empty pane (#13060's failure class).
+    const livePtyId = `${WORKTREE_ID}@@live-agent`
+    const { deps, createTab } = testDeps({
+      sessions: [listed(livePtyId)],
+      surfaceOwners: new Map()
+    })
+    seedExistingSurface(deps.getState(), {
+      tabId: 'tab-live',
+      leafId: LIVE_LEAF_ID,
+      boundPtyId: livePtyId
+    })
 
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
 

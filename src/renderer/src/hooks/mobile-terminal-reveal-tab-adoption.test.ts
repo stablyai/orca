@@ -211,9 +211,94 @@ describe('mobile terminal reveal tab adoption', () => {
     })
   })
 
-  it('replies without an error when two recorded bindings both claim the pty', async () => {
-    // Ambiguity is unresolvable, so the reveal still creates a tab — but it must
-    // not reject, because the mobile focus path awaits it with no catch.
+  it('mints for an ambiguous pty whose leaf id no layout carries, leaving both splits intact', async () => {
+    // Adopting a claimant here would be worse than a second tab: the bridge finds the leaf absent
+    // from that tab's tree, replaces its whole layout with a single pane, and orphans the PTYs of
+    // every other pane it had. Ambiguity plus an unknown leaf must mint.
+    const splitLayout = (boundLeafId: string, siblingLeafId: string) => ({
+      root: {
+        type: 'split' as const,
+        direction: 'horizontal' as const,
+        first: { type: 'leaf' as const, leafId: boundLeafId },
+        second: { type: 'leaf' as const, leafId: siblingLeafId }
+      },
+      ptyIdsByLeafId: { [boundLeafId]: 'pty-b', [siblingLeafId]: `pty-${siblingLeafId}` }
+    })
+    const storeState: HarnessStoreState = createHarnessStoreState({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [
+          { id: 'tab-x', ptyId: null, title: 'Terminal 1' },
+          { id: 'tab-y', ptyId: null, title: 'Terminal 2' }
+        ]
+      },
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {
+        'tab-x': splitLayout('leaf-1', 'leaf-2'),
+        'tab-y': splitLayout('leaf-3', 'leaf-4')
+      }
+    })
+    const before = structuredClone(storeState.terminalLayoutsByTabId)
+    const harness = await loadIpcEventsHarness(storeState)
+    harness.useIpcEvents()
+
+    harness.createTerminal({
+      requestId: 'mobile-reveal',
+      worktreeId: WORKTREE_ID,
+      ptyId: 'pty-b',
+      leafId: 'leaf-new',
+      presentation: 'focused',
+      title: 'codex'
+    })
+
+    expect(storeState.createTab).toHaveBeenCalled()
+    expect(storeState.terminalLayoutsByTabId['tab-x']).toEqual(before['tab-x'])
+    expect(storeState.terminalLayoutsByTabId['tab-y']).toEqual(before['tab-y'])
+    expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'mobile-reveal',
+      tabId: 'tab-minted',
+      title: 'codex'
+    })
+  })
+
+  it('adopts through the leaf id when an ambiguous pty’s leaf is one a layout carries', async () => {
+    // Ambiguity is not a reason to mint on its own: the leaf id still names exactly one pane.
+    const storeState: HarnessStoreState = createHarnessStoreState({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [
+          { id: 'tab-x', ptyId: null, title: 'Terminal 1' },
+          { id: 'tab-y', ptyId: null, title: 'Terminal 2' }
+        ]
+      },
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {
+        'tab-x': { ptyIdsByLeafId: { 'leaf-1': 'pty-b' } },
+        'tab-y': { ptyIdsByLeafId: { 'leaf-3': 'pty-b' } }
+      }
+    })
+    const harness = await loadIpcEventsHarness(storeState)
+    harness.useIpcEvents()
+
+    harness.createTerminal({
+      requestId: 'mobile-reveal',
+      worktreeId: WORKTREE_ID,
+      ptyId: 'pty-b',
+      leafId: 'leaf-3',
+      presentation: 'focused',
+      title: 'codex'
+    })
+
+    expect(storeState.createTab).not.toHaveBeenCalled()
+    expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'mobile-reveal',
+      tabId: 'tab-y',
+      title: 'codex'
+    })
+  })
+
+  it('adopts the sole layout claimant now that the tab row is not an ownership tier', async () => {
+    // tab-stale-a holds the pty only through its row, which no longer binds anything, so
+    // tab-stale-b is the one claimant. The reply must still not reject: the mobile focus
+    // path awaits it with no catch.
     const storeState: HarnessStoreState = createHarnessStoreState({
       tabsByWorktree: {
         [WORKTREE_ID]: [
@@ -238,7 +323,7 @@ describe('mobile terminal reveal tab adoption', () => {
 
     expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'mobile-reveal',
-      tabId: 'tab-minted',
+      tabId: 'tab-stale-b',
       title: 'codex'
     })
   })

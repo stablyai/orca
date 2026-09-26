@@ -5,6 +5,7 @@ import {
   runtimeWorktreeIdsEqual
 } from './runtime-worktree-path-identity'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { revealedPaneMatches } from '../../shared/terminal-reveal-identity'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-retirement'
 import type {
@@ -169,14 +170,7 @@ export class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends Orc
         incarnationId: candidate.incarnationId
       }
     })
-    const identity = reveal?.identity
-    return Boolean(
-      identity &&
-      runtimeWorktreeIdsEqual(identity.worktreeId, candidate.worktreeId) &&
-      identity.tabId === candidate.tabId &&
-      identity.leafId === candidate.leafId &&
-      identity.ptyId === candidate.ptyId
-    )
+    return revealedPaneMatches(reveal?.identity, candidate)
   }
 
   setAutomationService(service: AutomationService): void {
