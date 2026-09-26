@@ -7,6 +7,20 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/project-exe
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { isPinnableClaudeAccountId } from '../../shared/claude/project-claude-account-preference'
+
+/** The `--account` a background terminal create must carry: explicit, or the launch config's one-time pin. */
+export function terminalCreateClaudeAccountIdField(launchOpts: {
+  claudeAccountId?: string
+  launchConfig?: Pick<SleepingAgentLaunchConfig, 'claudeAccountId'>
+}): { claudeAccountId?: string } {
+  if (launchOpts.claudeAccountId) {
+    return { claudeAccountId: launchOpts.claudeAccountId }
+  }
+  return isPinnableClaudeAccountId(launchOpts.launchConfig?.claudeAccountId)
+    ? { claudeAccountId: launchOpts.launchConfig.claudeAccountId }
+    : {}
+}
 
 export function mergeTerminalEnvDeletionKeys(
   first: readonly string[] | undefined,

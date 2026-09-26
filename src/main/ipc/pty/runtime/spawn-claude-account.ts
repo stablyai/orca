@@ -4,21 +4,40 @@ import {
   preparePinnableClaudeAuth,
   markClaudePtySpawnedForAuth
 } from '../claude-pinned-spawn'
+import { resolveProjectClaudeAccount } from '../../../claude-accounts/project-claude-account-resolution'
 import type { RuntimePtySpawnState } from './spawn-state'
 
-/** The `--account` a fresh runtime spawn must run on, refused where a pinned launch cannot run. */
+/**
+ * The `--account` a fresh runtime spawn must run on, refused where a pinned launch cannot run.
+ * With no explicit `--account`, falls back to the project's saved Claude account default; that
+ * fallback never throws, since it never applies to SSH or non-Claude launches.
+ */
 export function resolveRuntimeSpawnClaudeAccount(ctx: RuntimePtySpawnState): string | undefined {
-  const accountId = ctx.preAdoptedStablePane ? undefined : ctx.args.claudeAccountId
-  if (!accountId) {
+  if (ctx.preAdoptedStablePane) {
     return undefined
   }
-  if (ctx.args.connectionId) {
-    throw new Error('Claude --account launches are not supported for SSH workspaces.')
+  const explicit = ctx.args.claudeAccountId
+  if (explicit) {
+    if (ctx.args.connectionId) {
+      throw new Error('Claude --account launches are not supported for SSH workspaces.')
+    }
+    if (!isClaudeLaunchCommand(ctx.args.command) && ctx.args.launchAgent !== 'claude') {
+      throw new Error('--account applies only to Claude launches.')
+    }
+    return explicit
   }
-  if (!isClaudeLaunchCommand(ctx.args.command) && ctx.args.launchAgent !== 'claude') {
-    throw new Error('--account applies only to Claude launches.')
+  if (
+    ctx.args.connectionId ||
+    !isFreshClaudeLaunch({ ...ctx.args, preAdoptedStablePane: false }, undefined, {
+      trustLaunchAgent: true
+    })
+  ) {
+    return undefined
   }
-  return accountId
+  return resolveProjectClaudeAccount({
+    getRepo: (repoId) => ctx.deps.store?.getRepo?.(repoId),
+    worktreeId: ctx.args.worktreeId
+  })
 }
 
 export function isRuntimeClaudeLaunch(

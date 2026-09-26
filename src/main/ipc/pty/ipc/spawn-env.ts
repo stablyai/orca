@@ -23,7 +23,8 @@ import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
-  if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
+  // Why exempt pinned: mirrors preflight and the runtime lane; a switch never touches a pinned account.
+  if (ctx.isClaudeLaunch && !ctx.claudeAuth?.pinnedAccountId && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
   if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {

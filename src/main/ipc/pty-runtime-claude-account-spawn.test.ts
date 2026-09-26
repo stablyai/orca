@@ -9,6 +9,11 @@ import {
   hasLivePinnedClaudePtys
 } from '../claude-accounts/claude-pinned-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import type { Store } from '../persistence'
+import type { ProjectClaudeAccountPreference } from '../../shared/claude/project-claude-account-preference'
+import { resolveRuntimeSpawnClaudeAccount } from './pty/runtime/spawn-claude-account'
+import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './pty/runtime/spawn-state'
+import type { PtyRuntimeControllerDeps } from './pty/runtime/controller-deps'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -88,11 +93,27 @@ const PINNED_PREPARATION: ClaudeRuntimeAuthPreparation = {
   provenance: 'managed:acct-b:pinned'
 }
 
+function storeWithRepo(claude: ProjectClaudeAccountPreference): Store {
+  const repo = { id: 'wt-1', agentAccounts: { claude } }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveRuntimeSpawnClaudeAccount only reads getRepo; the rest of Store belongs to unrelated persistence callers this test never exercises.
+  return { getRepo: (repoId: string) => (repoId === 'wt-1' ? repo : undefined) } as unknown as Store
+}
+
+function runtimeCtx(input: {
+  args: Partial<RuntimePtySpawnArgs>
+  deps?: { store?: Store }
+}): ReturnType<typeof createRuntimePtySpawnState> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolveRuntimeSpawnClaudeAccount only reads deps.store; the rest of PtyRuntimeControllerDeps belongs to later spawn stages this test never runs.
+  const deps = { store: input.deps?.store } as unknown as PtyRuntimeControllerDeps
+  return createRuntimePtySpawnState(deps, { cols: 80, rows: 24, ...input.args })
+}
+
 describe('runtime PTY spawn pinned to a Claude account', () => {
   const { mainWindow } = setupPtyIpcSuite()
 
   function registerRuntimeController(
-    prepareClaudeAuth: (...args: unknown[]) => Promise<ClaudeRuntimeAuthPreparation>
+    prepareClaudeAuth: (...args: unknown[]) => Promise<ClaudeRuntimeAuthPreparation>,
+    store?: Store
   ): RuntimeSpawnController {
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -113,7 +134,8 @@ describe('runtime PTY spawn pinned to a Claude account', () => {
       runtime as never,
       undefined,
       undefined,
-      prepareClaudeAuth
+      prepareClaudeAuth,
+      store
     )
     if (!controller) {
       throw new Error('runtime PTY controller was not registered')
@@ -279,5 +301,34 @@ describe('runtime PTY spawn pinned to a Claude account', () => {
     } finally {
       cleanup([])
     }
+  })
+})
+
+describe('resolveRuntimeSpawnClaudeAccount: project account fallback', () => {
+  const worktreeId = 'wt-1'
+
+  it('falls back to the project account when no --account is given', () => {
+    const ctx = runtimeCtx({
+      args: { command: 'claude', launchAgent: 'claude', worktreeId },
+      deps: { store: storeWithRepo({ mode: 'account', accountId: 'acct-1' }) }
+    })
+    expect(resolveRuntimeSpawnClaudeAccount(ctx)).toBe('acct-1')
+  })
+
+  it('keeps SSH and non-Claude runtime spawns unpinned by project preference', () => {
+    const store = storeWithRepo({ mode: 'account', accountId: 'acct-1' })
+    const sshCtx = runtimeCtx({
+      args: { command: 'claude', launchAgent: 'claude', worktreeId, connectionId: 'ssh-1' },
+      deps: { store }
+    })
+    const nonClaudeCtx = runtimeCtx({
+      args: { command: 'zsh', worktreeId },
+      deps: { store }
+    })
+
+    expect(() => resolveRuntimeSpawnClaudeAccount(sshCtx)).not.toThrow()
+    expect(resolveRuntimeSpawnClaudeAccount(sshCtx)).toBeUndefined()
+    expect(() => resolveRuntimeSpawnClaudeAccount(nonClaudeCtx)).not.toThrow()
+    expect(resolveRuntimeSpawnClaudeAccount(nonClaudeCtx)).toBeUndefined()
   })
 })

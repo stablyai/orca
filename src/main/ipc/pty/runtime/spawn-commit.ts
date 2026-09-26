@@ -108,6 +108,11 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       agentSessionEnsure: ctx.result.agentSessionEnsure
     }
   }
+  // Why here: first step past the adopted branch, so a later throw cannot leave this live PTY
+  // unregistered after the run releases its pinned reservation.
+  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+    markRuntimeClaudePtySpawned(ctx.result.id, ctx.claudeAuth)
+  }
   ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
   if (ctx.result.incarnationId) {
     ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
@@ -226,9 +231,6 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
   if (!ctx.stablePaneOwner) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(ctx.result.id, ctx.launchCommand ?? null)
-  }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markRuntimeClaudePtySpawned(ctx.result.id, ctx.claudeAuth)
   }
   if (args.telemetry && !ctx.stablePaneOwner) {
     const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)

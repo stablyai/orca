@@ -138,7 +138,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
               launchOpts.envToDelete,
               agentTeamsPlan?.envToDelete
             ),
-            ...(launchOpts.claudeAccountId ? { claudeAccountId: launchOpts.claudeAccountId } : {}),
+            ...dependencies.terminalCreateClaudeAccountIdField(launchOpts),
             resumeProviderSession: launchOpts.resumeProviderSession,
             telemetry: launchOpts.telemetry,
             connectionId: workspace.connectionId,

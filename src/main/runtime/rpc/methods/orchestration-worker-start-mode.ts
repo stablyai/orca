@@ -65,7 +65,8 @@ export function decideWorkerStartMode(args: {
 }
 
 export async function resolveWorkerStartModeOnHost(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
+  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'> &
+    Partial<Pick<OrcaRuntimeService, 'listRepos'>>,
   mode: WorkerStartModeReceipt,
   worktreeId: string | undefined,
   agent: TuiAgent | undefined
