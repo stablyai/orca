@@ -277,6 +277,7 @@ describe('repo RPC methods', () => {
   })
 
   it('routes repository hook operations to the runtime server', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the repo-hook methods this dispatch test calls.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getRepoHooks: vi.fn().mockResolvedValue({
@@ -309,7 +310,15 @@ describe('repo RPC methods', () => {
         localFilePath: '/srv/repo/.orca/issue-command',
         source: 'shared'
       }),
-      writeRepoIssueCommand: vi.fn().mockResolvedValue({ ok: true })
+      writeRepoIssueCommand: vi.fn().mockResolvedValue({ ok: true }),
+      readRepoReviewCommand: vi.fn().mockResolvedValue({
+        localContent: null,
+        sharedContent: 'Review it',
+        effectiveContent: 'Review it',
+        localFilePath: '',
+        source: 'shared'
+      }),
+      writeRepoReviewCommand: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
 
@@ -333,6 +342,13 @@ describe('repo RPC methods', () => {
     expect(runtime.inspectRepoSetupScriptImports).toHaveBeenCalledWith('repo-1')
     expect(runtime.readRepoIssueCommand).toHaveBeenCalledWith('repo-1')
     expect(runtime.writeRepoIssueCommand).toHaveBeenCalledWith('repo-1', 'Fix it')
+
+    await dispatcher.dispatch(makeRequest('repo.reviewCommandRead', { repo: 'repo-1' }))
+    await dispatcher.dispatch(
+      makeRequest('repo.reviewCommandWrite', { repo: 'repo-1', content: 'Review it' })
+    )
+    expect(runtime.readRepoReviewCommand).toHaveBeenCalledWith('repo-1')
+    expect(runtime.writeRepoReviewCommand).toHaveBeenCalledWith('repo-1', 'Review it')
   })
 
   it('persists GitHub issue source preference updates', async () => {

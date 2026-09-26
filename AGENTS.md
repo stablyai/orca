@@ -129,6 +129,10 @@ When adding or changing a Git command:
 
 Source-control and review changes must consider GitLab and other supported git providers, not only GitHub. Keep provider-specific behavior behind explicit checks, and avoid GitHub-only naming for generic review concepts.
 
+## Repo Prompt Templates
+
+A repo sets the agent's draft prompt for a linked work item through two `orca.yaml` keys, `issueCommand` (issues) and `reviewCommand` (pull/merge requests), each with a local `.orca/` override and a built-in default. Before changing either, or the trust gate on shared `orca.yaml` content, read [`docs/reference/repo-prompt-templates.md`](./docs/reference/repo-prompt-templates.md). Naming stays provider-neutral: `review`, never `pullRequest`/`mergeRequest`.
+
 ## GitHub CLI Usage
 
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.

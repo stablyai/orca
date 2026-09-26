@@ -5304,7 +5304,10 @@
           "95bf974a1a": "{{value0}} script",
           "9e52effffd": "New {{value0}} script",
           "e4a51dc4b3": "Run {{value0}} from {{value1}}?",
-          "02b0ede5ad": "{{value0}}'s {{value1}} changed — run the new version?"
+          "02b0ede5ad": "{{value0}}'s {{value1}} changed — run the new version?",
+          "6e0466e18e": "{{value2}} {{value0}} from {{value1}}?",
+          "bd9b312c45": "New {{value0}} {{value1}}",
+          "c6101b508a": "{{value0}} {{value1}}"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancel worktree creation",
@@ -8042,7 +8045,9 @@
           "da37d6f10e": "Copy",
           "3149964b66": "Copied",
           "waitForSetupBeforeAgent": "Wait for setup to complete before starting agent",
-          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup."
+          "waitForSetupBeforeAgentHelp": "Turn this on when setup installs dependencies, MCP servers, or config files the agent needs during startup.",
+          "c6fd537b13": "Custom Review Command",
+          "8f844ef8e6": "Optional per-user override for the pull/merge request prompt."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
@@ -10460,7 +10465,13 @@
             "wsl": "wsl",
             "distro": "distro",
             "agentRuntime": "agent runtime",
-            "skillRuntime": "skill runtime"
+            "skillRuntime": "skill runtime",
+            "8f907858c1": "review command",
+            "477e8c36fb": "pull request command",
+            "b23c9163a8": "merge request command",
+            "4b1f01c96f": ".orca/review-command",
+            "4b87da14ac": "Custom Review Command",
+            "22948e9325": "File-based pull/merge request prompt configured via orca.yaml reviewCommand and an optional local override."
           }
         },
         "runtime": {
@@ -12175,6 +12186,11 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+"RepositoryIssueCommandSetting": {
+          "e21e26b8ea": "Custom Review Command",
+          "66af9e725a": "Review {{artifact_url}}",
+          "1d56d3faed": "for the linked pull or merge request URL."
         },
         "TerminalRenderingSection": {
           "6d4c55bacc": "Inline Images",

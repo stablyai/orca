@@ -7,10 +7,16 @@ import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatc
 import { isENOENT } from '../filesystem-path-containment'
 import { parseOrcaYaml } from '../../hooks'
 import {
+  getRepoCommandRelativePath,
   isIssueCommandIgnoredByGit,
   readIssueCommand,
   writeIssueCommand
 } from '../../issue-command-file'
+import {
+  isRepoCommandKind,
+  REPO_COMMAND_YAML_KEY,
+  type RepoCommandKind
+} from '../../../shared/repo-command-kind'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
@@ -20,7 +26,8 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
 
   ipcMain.handle(
     'hooks:readIssueCommand',
-    async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
+    async (_event, args: { repoId: string; hostId?: ExecutionHostId; kind?: RepoCommandKind }) => {
+      const kind = isRepoCommandKind(args.kind) ? args.kind : 'issue'
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         return {
@@ -33,7 +40,10 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
         }
       }
       if (repo.connectionId) {
-        const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+        const issueCommandPath = joinWorktreeRelativePath(
+          repo.path,
+          getRepoCommandRelativePath(kind)
+        )
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
         if (!fsProvider) {
           return {
@@ -61,7 +71,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
           sharedContent = result.isBinary
             ? null
-            : parseOrcaYaml(result.content)?.issueCommand?.trim() || null
+            : parseOrcaYaml(result.content)?.[REPO_COMMAND_YAML_KEY[kind]]?.trim() || null
         } catch (error) {
           if (!isENOENT(error)) {
             status = 'error'
@@ -81,19 +91,31 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
               : ('none' as const)
         }
       }
-      return readIssueCommand(repo.path)
+      return readIssueCommand(repo.path, kind)
     }
   )
 
   ipcMain.handle(
     'hooks:writeIssueCommand',
-    async (_event, args: { repoId: string; content: string; hostId?: ExecutionHostId }) => {
+    async (
+      _event,
+      args: {
+        repoId: string
+        content: string
+        hostId?: ExecutionHostId
+        kind?: RepoCommandKind
+      }
+    ) => {
+      const kind = isRepoCommandKind(args.kind) ? args.kind : 'issue'
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         return
       }
       if (repo.connectionId) {
-        const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+        const issueCommandPath = joinWorktreeRelativePath(
+          repo.path,
+          getRepoCommandRelativePath(kind)
+        )
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
         if (!fsProvider) {
           throw new Error(
@@ -110,7 +132,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
           return
         }
         await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
-        if (await isIssueCommandIgnoredByGit(repo.path, repo.connectionId)) {
+        if (await isIssueCommandIgnoredByGit(repo.path, repo.connectionId, {}, kind)) {
           await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
           return
         }
@@ -130,8 +152,11 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
         await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
         return
       }
-      await writeIssueCommand(repo.path, args.content, () =>
-        getLocalProjectWorktreeGitOptions(store, repo)
+      await writeIssueCommand(
+        repo.path,
+        args.content,
+        () => getLocalProjectWorktreeGitOptions(store, repo),
+        kind
       )
     }
   )

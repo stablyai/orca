@@ -87,6 +87,13 @@ export function RepositoryHooksSection({
     repoHostIdentity,
     selectedHostId
   })
+  const reviewCommand = useRepositoryIssueCommand({
+    hookRuntimeSettings,
+    repoId: repo.id,
+    repoHostIdentity,
+    selectedHostId,
+    kind: 'review'
+  })
   const localHookFields = getLocalHookFields()
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
@@ -233,7 +240,29 @@ export function RepositoryHooksSection({
         forceVisible={forceVisible}
         keywords={['github issue command', 'issue command', 'workflow', 'agent', 'github']}
       >
-        <RepositoryIssueCommandSetting {...issueCommand} />
+        <RepositoryIssueCommandSetting {...issueCommand} kind="issue" />
+      </SearchableSetting>
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.RepositoryHooksSection.c6fd537b13',
+          'Custom Review Command'
+        )}
+        description={translate(
+          'auto.components.settings.RepositoryHooksSection.8f844ef8e6',
+          'Optional per-user override for the pull/merge request prompt.'
+        )}
+        forceVisible={forceVisible}
+        keywords={[
+          'review command',
+          'pull request command',
+          'merge request command',
+          'pr command',
+          'mr command',
+          'gitlab',
+          'github'
+        ]}
+      >
+        <RepositoryIssueCommandSetting {...reviewCommand} kind="review" />
       </SearchableSetting>
       <SearchableSetting
         title={translate('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced')}

@@ -23,9 +23,10 @@ type ComposerAsyncStateInput = Pick<
   | 'setName'
 >
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { IssueCommandReadResult } from '@/runtime/runtime-hooks-client'
+import type { RepoCommandKind } from '../../../../shared/repo-command-kind'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
@@ -61,18 +62,39 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
 
   const [checkedHooksContextKey, setCheckedHooksContextKey] = useState<string | null>(null)
 
-  const [loadedIssueCommand, setLoadedIssueCommand] = useState<{
+  const [loadedRepoCommands, setLoadedRepoCommands] = useState<{
     contextKey: string
-    result: IssueCommandReadResult
+    results: Partial<Record<RepoCommandKind, IssueCommandReadResult>>
   } | null>(null)
 
-  const currentIssueCommand =
-    loadedIssueCommand?.contextKey === selectedRepoHookContextKey ? loadedIssueCommand.result : null
+  // Why: merge rather than replace — the quick path fills one kind, the full path fills both.
+  const setLoadedRepoCommand = useCallback(
+    (contextKey: string, kind: RepoCommandKind, result: IssueCommandReadResult) => {
+      setLoadedRepoCommands((prev) => ({
+        contextKey,
+        results: { ...(prev?.contextKey === contextKey ? prev.results : {}), [kind]: result }
+      }))
+    },
+    []
+  )
+
+  const currentRepoCommands =
+    loadedRepoCommands?.contextKey === selectedRepoHookContextKey
+      ? loadedRepoCommands.results
+      : null
+
+  const currentIssueCommand = currentRepoCommands?.issue ?? null
+  const currentReviewCommand = currentRepoCommands?.review ?? null
 
   const issueCommandTemplate = currentIssueCommand?.effectiveContent ?? ''
+  const reviewCommandTemplate = currentReviewCommand?.effectiveContent ?? ''
 
+  // Why: both kinds are read together, so "loaded" means both settled — a PR must never be
+  // submitted against a half-loaded pair.
   const hasLoadedIssueCommand =
-    !selectedRepoIsGit || !enableIssueAutomation || currentIssueCommand !== null
+    !selectedRepoIsGit ||
+    !enableIssueAutomation ||
+    (currentIssueCommand !== null && currentReviewCommand !== null)
 
   const [setupDecision, setSetupDecision] = useState<'run' | 'skip' | null>(null)
 
@@ -221,10 +243,11 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     setYamlHooks,
     checkedHooksContextKey,
     setCheckedHooksContextKey,
-    loadedIssueCommand,
-    setLoadedIssueCommand,
+    setLoadedRepoCommand,
     currentIssueCommand,
+    currentReviewCommand,
     issueCommandTemplate,
+    reviewCommandTemplate,
     hasLoadedIssueCommand,
     setupDecision,
     setSetupDecision,

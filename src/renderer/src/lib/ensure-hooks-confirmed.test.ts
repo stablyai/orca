@@ -580,3 +580,101 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 })
+
+describe('review command trust', () => {
+  beforeEach(() => {
+    readIssueCommandMock.mockReset()
+    __resetTrustPromptChainForTests()
+    clearRuntimeCompatibilityCacheForTests()
+    installHooksApiMock()
+  })
+
+  it('prompts for a shared review command under the reviewCommand trust key', async () => {
+    readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
+      localContent: null,
+      sharedContent: 'Review {{artifact_url}}',
+      effectiveContent: 'Review {{artifact_url}}',
+      localFilePath: '',
+      source: 'shared'
+    })
+    const { state, pending } = createTestState()
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'local', undefined, 'review')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(readIssueCommandMock).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      hostId: 'local',
+      kind: 'review'
+    })
+    expect(pending[0].data.scriptKind).toBe('reviewCommand')
+    expect(pending[0].data.scriptContent).toBe('Review {{artifact_url}}')
+    pending[0].resolve('run')
+    await expect(promise).resolves.toMatchObject({
+      template: 'Review {{artifact_url}}',
+      trustDecision: 'run'
+    })
+  })
+
+  it('does not reuse an issueCommand approval for the review command', async () => {
+    const hash = await hashOrcaHookScript('Review {{artifact_url}}')
+    readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
+      localContent: null,
+      sharedContent: 'Review {{artifact_url}}',
+      effectiveContent: 'Review {{artifact_url}}',
+      localFilePath: '',
+      source: 'shared'
+    })
+    const { state, pending } = createTestState({
+      trustedOrcaHooks: { 'repo-1': { issueCommand: { contentHash: hash, approvedAt: 1 } } }
+    })
+    const promise = readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'local', undefined, 'review')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toMatchObject({ trustDecision: 'skip' })
+  })
+
+  it('runs a previously approved review command without prompting', async () => {
+    const hash = await hashOrcaHookScript('Review {{artifact_url}}')
+    readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
+      localContent: null,
+      sharedContent: 'Review {{artifact_url}}',
+      effectiveContent: 'Review {{artifact_url}}',
+      localFilePath: '',
+      source: 'shared'
+    })
+    const { state, pending } = createTestState({
+      trustedOrcaHooks: { 'repo-1': { reviewCommand: { contentHash: hash, approvedAt: 1 } } }
+    })
+    await expect(
+      readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'local', undefined, 'review')
+    ).resolves.toMatchObject({ trustDecision: 'run' })
+    expect(pending).toHaveLength(0)
+  })
+
+  it('auto-trusts a local .orca/review-command override', async () => {
+    readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
+      localContent: 'Review it',
+      sharedContent: null,
+      effectiveContent: 'Review it',
+      localFilePath: '/r/.orca/review-command',
+      source: 'local'
+    })
+    const { state, pending } = createTestState()
+    await expect(
+      readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'local', undefined, 'review')
+    ).resolves.toMatchObject({ trustDecision: 'run' })
+    expect(pending).toHaveLength(0)
+  })
+
+  it('degrades to skip when the host has no review command method', async () => {
+    readIssueCommandMock.mockRejectedValue(new Error('method_not_found'))
+    const { state, pending } = createTestState()
+    await expect(
+      readAndConfirmRuntimeIssueCommand(state, 'repo-1', 'local', undefined, 'review')
+    ).resolves.toMatchObject({ trustDecision: 'skip', template: '' })
+    expect(pending).toHaveLength(0)
+  })
+})

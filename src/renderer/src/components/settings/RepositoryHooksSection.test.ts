@@ -171,7 +171,8 @@ describe('RepositoryHooksSection execution ownership', () => {
     expect(readRuntimeIssueCommand).toHaveBeenCalledWith(
       { activeRuntimeEnvironmentId: 'hub' },
       repo.id,
-      'runtime:hub'
+      'runtime:hub',
+      'issue'
     )
   })
 })

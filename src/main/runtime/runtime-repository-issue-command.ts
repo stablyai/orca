@@ -2,10 +2,12 @@ import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import type { Repo } from '../../shared/repo-types'
 import { parseOrcaYaml } from '../hooks'
 import {
+  getRepoCommandRelativePath,
   isIssueCommandIgnoredByGit,
   readIssueCommand,
   writeIssueCommand
 } from '../issue-command-file'
+import { REPO_COMMAND_YAML_KEY, type RepoCommandKind } from '../../shared/repo-command-kind'
 import { isENOENT } from '../ipc/filesystem-auth'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from '../providers/types'
@@ -20,7 +22,7 @@ type RuntimeRepositoryIssueCommandDeps = {
 export class RuntimeRepositoryIssueCommand {
   constructor(private readonly deps: RuntimeRepositoryIssueCommandDeps) {}
 
-  async read(repoSelector: string) {
+  async read(repoSelector: string, kind: RepoCommandKind = 'issue') {
     const repo = await this.deps.resolveRepo(repoSelector)
     if (isFolderRepo(repo)) {
       return {
@@ -32,9 +34,9 @@ export class RuntimeRepositoryIssueCommand {
       }
     }
     if (!repo.connectionId) {
-      return readIssueCommand(repo.path)
+      return readIssueCommand(repo.path, kind)
     }
-    const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+    const issueCommandPath = joinWorktreeRelativePath(repo.path, getRepoCommandRelativePath(kind))
     const fsProvider = getSshFilesystemProvider(repo.connectionId)
     if (!fsProvider) {
       return {
@@ -46,7 +48,7 @@ export class RuntimeRepositoryIssueCommand {
       }
     }
     const localContent = await readRemoteOverride(fsProvider, issueCommandPath)
-    const sharedContent = await readRemoteShared(fsProvider, repo.path)
+    const sharedContent = await readRemoteShared(fsProvider, repo.path, kind)
     return {
       localContent,
       sharedContent,
@@ -61,16 +63,25 @@ export class RuntimeRepositoryIssueCommand {
   }
 
   /** Save a private override on its execution host; blank content restores the shared command. */
-  async write(repoSelector: string, content: string): Promise<{ ok: true }> {
+  async write(
+    repoSelector: string,
+    content: string,
+    kind: RepoCommandKind = 'issue'
+  ): Promise<{ ok: true }> {
     const repo = await this.deps.resolveRepo(repoSelector)
     if (isFolderRepo(repo)) {
       return { ok: true }
     }
     if (!repo.connectionId) {
-      await writeIssueCommand(repo.path, content, () => this.deps.getLocalGitArgs(repo)[0] ?? {})
+      await writeIssueCommand(
+        repo.path,
+        content,
+        () => this.deps.getLocalGitArgs(repo)[0] ?? {},
+        kind
+      )
       return { ok: true }
     }
-    const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+    const issueCommandPath = joinWorktreeRelativePath(repo.path, getRepoCommandRelativePath(kind))
     const fsProvider = getSshFilesystemProvider(repo.connectionId)
     if (!fsProvider) {
       return { ok: true }
@@ -85,7 +96,7 @@ export class RuntimeRepositoryIssueCommand {
       return { ok: true }
     }
     await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
-    if (!(await isIssueCommandIgnoredByGit(repo.path, repo.connectionId))) {
+    if (!(await isIssueCommandIgnoredByGit(repo.path, repo.connectionId, {}, kind))) {
       await ensureRemoteOrcaDirIgnored(fsProvider, repo.path)
     }
     await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
@@ -107,11 +118,14 @@ async function readRemoteOverride(
 
 async function readRemoteShared(
   fsProvider: IFilesystemProvider,
-  repoPath: string
+  repoPath: string,
+  kind: RepoCommandKind
 ): Promise<string | null> {
   try {
     const result = await fsProvider.readFile(joinWorktreeRelativePath(repoPath, 'orca.yaml'))
-    return result.isBinary ? null : parseOrcaYaml(result.content)?.issueCommand?.trim() || null
+    return result.isBinary
+      ? null
+      : parseOrcaYaml(result.content)?.[REPO_COMMAND_YAML_KEY[kind]]?.trim() || null
   } catch {
     return null
   }

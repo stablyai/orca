@@ -12,11 +12,11 @@ import {
   getSetupConfig,
   getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider,
-  getWorkspaceSeedName,
-  DEFAULT_ISSUE_COMMAND_TEMPLATE,
-  renderIssueCommandTemplate
+  getWorkspaceSeedName
 } from '@/lib/new-workspace'
+import { resolveLinkedOnlyTemplatePrompt } from '@/lib/composer-issue-command'
 import type { SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
+import { getRepoCommandKindForLinkedItemType } from '../../../../shared/repo-command-kind'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
@@ -29,6 +29,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     enableIssueAutomation,
     hasLoadedIssueCommand,
     issueCommandTemplate,
+    reviewCommandTemplate,
     linkDebouncedQuery,
     linkDirectItem,
     linkItems,
@@ -199,12 +200,17 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     if (!shouldApplyLinkedOnlyTemplate || !linkedWorkItem) {
       return ''
     }
-    const template = issueCommandTemplate.trim() || DEFAULT_ISSUE_COMMAND_TEMPLATE
-    return renderIssueCommandTemplate(template, {
-      issueNumber: linkedWorkItem.type === 'issue' ? linkedWorkItem.number : null,
-      artifactUrl: linkedWorkItem.url
+    const kind = getRepoCommandKindForLinkedItemType(linkedWorkItem.type)
+    // Why: the preview shows what a repo template would say; submit re-derives it behind the gate.
+    return resolveLinkedOnlyTemplatePrompt({
+      trustDecision: 'run',
+      note: '',
+      kind,
+      number: linkedWorkItem.number,
+      artifactUrl: linkedWorkItem.url,
+      template: kind === 'review' ? reviewCommandTemplate : issueCommandTemplate
     })
-  }, [issueCommandTemplate, linkedWorkItem, shouldApplyLinkedOnlyTemplate])
+  }, [issueCommandTemplate, reviewCommandTemplate, linkedWorkItem, shouldApplyLinkedOnlyTemplate])
 
   const normalizedLinkQuery = useMemo(
     () => normalizeGitHubLinkQuery(linkDebouncedQuery),

@@ -111,6 +111,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         submitPushTarget,
         effectiveSetupDecision,
         issueCommand,
+        linkedOnlyTemplatePrompt,
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
@@ -123,8 +124,17 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
 
-      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+      const resolvedQuickPrompt = resolveQuickCreateLinkedWorkItemPrompt(
+        promptLinkedWorkItem,
+        trimmedNote
+      )
+
+      const quickPrompt = resolvedQuickPrompt.prompt
+      // Why: the repo's issue-command template replaces the bare linked URL draft when the user typed no note.
+      const quickDraftPrompt =
+        promptLinkedWorkItem && linkedOnlyTemplatePrompt
+          ? linkedOnlyTemplatePrompt
+          : resolvedQuickPrompt.draftPrompt
 
       const {
         startupPlan,

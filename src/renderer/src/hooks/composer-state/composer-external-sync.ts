@@ -29,7 +29,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     selectedRepoSettingsRef: target.asyncComposerState.selectedRepoSettingsRef,
     selectedRepoSshStatus: target.runtimeTargetSelection.selectedRepoSshStatus,
-    setLoadedIssueCommand: target.asyncComposerState.setLoadedIssueCommand,
+    setLoadedRepoCommand: target.asyncComposerState.setLoadedRepoCommand,
     setTuiAgent: target.workspaceIdentityState.setTuiAgent,
     settings: target.composerTargetStore.settings,
     tuiAgent: target.workspaceIdentityState.tuiAgent

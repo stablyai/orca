@@ -5,6 +5,7 @@ type FullSubmitPreparationInput = Pick<
   | 'branchAutoNameRef'
   | 'branchNameOverridePreservesNameEdits'
   | 'currentIssueCommand'
+  | 'currentReviewCommand'
   | 'isSubmissionCancelled'
   | 'issueCommandTemplate'
   | 'name'
@@ -26,6 +27,7 @@ type FullSubmitPreparationInput = Pick<
 import { useCallback } from 'react'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import { ensureHooksConfirmed, confirmRuntimeIssueCommandRead } from '@/lib/ensure-hooks-confirmed'
+import { resolveTrustedStartupPrompt } from './full-submit-source-preparation'
 import { useAppStore } from '@/store'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
@@ -45,6 +47,7 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
     branchAutoNameRef,
     branchNameOverridePreservesNameEdits,
     currentIssueCommand,
+    currentReviewCommand,
     isSubmissionCancelled,
     issueCommandTemplate,
     name,
@@ -77,7 +80,11 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
         workspaceName,
         submitBranchNameOverride,
         submitLinkedWorkItemProvider,
-        submitStartupPrompt,
+        submitCommandKind,
+        submitShouldApplyLinkedOnlyTemplate,
+        submitLinkedOnlyTemplateIsRepoText,
+        submitStartupPromptWithoutTemplate,
+        submitStartupPromptWithTemplate,
         submitShouldRunIssueAutomation
       } = source
 
@@ -106,14 +113,20 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
           ? 'skip'
           : ((resolvedSetupDecision ?? 'inherit') as SetupDecision)
 
-      let issueCommandTrustDecision: 'run' | 'skip' = 'run'
+      // Why: repository text on the linked-only path becomes the agent's draft prompt, so it
+      // starts untrusted and is only promoted by an explicit confirmation — matching quick-submit.
+      let issueCommandTrustDecision: 'run' | 'skip' =
+        submitShouldApplyLinkedOnlyTemplate && submitLinkedOnlyTemplateIsRepoText ? 'skip' : 'run'
 
       let confirmedIssueCommandTemplate = issueCommandTemplate
 
+      const submitCurrentCommand =
+        submitCommandKind === 'review' ? currentReviewCommand : currentIssueCommand
+
       if (
         selectedRepoIsGit &&
-        submitShouldRunIssueAutomation &&
-        currentIssueCommand &&
+        (submitShouldRunIssueAutomation || submitShouldApplyLinkedOnlyTemplate) &&
+        submitCurrentCommand &&
         selectedRepoExecutionHostId
       ) {
         if (setupTrustDecision === 'skip') {
@@ -124,8 +137,9 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
               useAppStore.getState(),
               repoId,
               selectedRepoExecutionHostId,
-              currentIssueCommand,
-              isSubmissionCancelled
+              submitCurrentCommand,
+              isSubmissionCancelled,
+              submitCommandKind
             ),
             isSubmissionCancelled
           )
@@ -137,6 +151,14 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
           confirmedIssueCommandTemplate = confirmed.template
         }
       }
+
+      const submitStartupPrompt = resolveTrustedStartupPrompt({
+        applyTemplate: submitShouldApplyLinkedOnlyTemplate,
+        templateIsRepoText: submitLinkedOnlyTemplateIsRepoText,
+        trustDecision: issueCommandTrustDecision,
+        templatePrompt: submitStartupPromptWithTemplate,
+        plainPrompt: submitStartupPromptWithoutTemplate
+      })
 
       const linkedLinearIssue =
         submitLinkedWorkItem && submitLinkedWorkItemProvider === 'linear'
@@ -227,6 +249,7 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
           : undefined
 
       return Object.assign(source, {
+        submitStartupPrompt,
         effectiveSetupDecision,
         issueCommandTrustDecision,
         confirmedIssueCommandTemplate,
@@ -245,6 +268,7 @@ export function useFullSubmitPreparation(input: FullSubmitPreparationInput) {
     [
       branchNameOverridePreservesNameEdits,
       currentIssueCommand,
+      currentReviewCommand,
       isSubmissionCancelled,
       issueCommandTemplate,
       name,

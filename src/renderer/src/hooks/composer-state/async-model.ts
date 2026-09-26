@@ -6,6 +6,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { IssueCommandReadResult } from '@/runtime/runtime-hooks-client'
+import type { RepoCommandKind } from '../../../../shared/repo-command-kind'
 import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
 
 export type ComposerAsyncModel = {
@@ -13,12 +14,15 @@ export type ComposerAsyncModel = {
   setYamlHooks: React.Dispatch<React.SetStateAction<OrcaHooks | null>>
   checkedHooksContextKey: string | null
   setCheckedHooksContextKey: React.Dispatch<React.SetStateAction<string | null>>
-  loadedIssueCommand: { contextKey: string; result: IssueCommandReadResult } | null
-  setLoadedIssueCommand: React.Dispatch<
-    React.SetStateAction<{ contextKey: string; result: IssueCommandReadResult } | null>
-  >
+  setLoadedRepoCommand: (
+    contextKey: string,
+    kind: RepoCommandKind,
+    result: IssueCommandReadResult
+  ) => void
   currentIssueCommand: IssueCommandReadResult | null
+  currentReviewCommand: IssueCommandReadResult | null
   issueCommandTemplate: string
+  reviewCommandTemplate: string
   hasLoadedIssueCommand: boolean
   setupDecision: 'skip' | 'run' | null
   setSetupDecision: React.Dispatch<React.SetStateAction<'skip' | 'run' | null>>

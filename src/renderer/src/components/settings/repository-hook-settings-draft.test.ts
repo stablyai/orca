@@ -47,4 +47,19 @@ describe('repository hook settings draft', () => {
       'scripts:\n  setup: |\n    pnpm install\n    pnpm build\n  archive: |\n    pnpm clean\nissueCommand: |\n  Complete {{artifact_url}}'
     )
   })
+  it('previews reviewCommand alongside issueCommand', () => {
+    expect(
+      renderYamlScriptPreview({
+        scripts: { setup: 'echo hi' },
+        issueCommand: 'Complete {{artifact_url}}',
+        reviewCommand: 'Review {{artifact_url}}'
+      })
+    ).toContain('reviewCommand: |\n  Review {{artifact_url}}')
+  })
+
+  it('omits reviewCommand when the repo has none', () => {
+    expect(renderYamlScriptPreview({ scripts: {}, issueCommand: 'Complete it' })).not.toContain(
+      'reviewCommand'
+    )
+  })
 })

@@ -7,7 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createIssueCommandRunnerScriptMock,
   getSshFilesystemProviderMock,
-  getSshGitProviderMock
+  getSshGitProviderMock,
+  parseOrcaYamlMock
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 
@@ -149,7 +150,8 @@ describe('registerWorktreeHandlers', () => {
       expect(write).toHaveBeenCalledExactlyOnceWith(
         '/workspace/repo',
         'command',
-        expect.any(Function)
+        expect.any(Function),
+        'issue'
       )
     } finally {
       resolveOptions.mockRestore()
@@ -367,5 +369,101 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo/.orca/issue-command',
       'local command\n'
     )
+  })
+  it('reads the SSH review command from .orca/review-command and orca.yaml reviewCommand', async () => {
+    store.getRepo.mockReturnValue({
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    })
+    const fsProvider = {
+      readFile: vi.fn(async (filePath: string) => {
+        if (filePath.endsWith('/.orca/review-command')) {
+          throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+        }
+        if (filePath.endsWith('/orca.yaml')) {
+          return {
+            content: 'issueCommand: Complete it\nreviewCommand: Review it\n',
+            isBinary: false
+          }
+        }
+        throw new Error(`unexpected read ${filePath}`)
+      })
+    }
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    parseOrcaYamlMock.mockReturnValue({
+      scripts: {},
+      issueCommand: 'Complete it',
+      reviewCommand: 'Review it'
+    })
+
+    await expect(
+      handlers['hooks:readIssueCommand'](null, { repoId: 'repo-ssh', kind: 'review' })
+    ).resolves.toMatchObject({
+      status: 'ok',
+      localContent: null,
+      sharedContent: 'Review it',
+      source: 'shared',
+      localFilePath: '/remote/repo/.orca/review-command'
+    })
+    expect(fsProvider.readFile).not.toHaveBeenCalledWith(expect.stringMatching(/issue-command$/))
+  })
+
+  it('writes the SSH review override to .orca/review-command', async () => {
+    store.getRepo.mockReturnValue({
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    })
+    const checkIgnoredPaths = vi.fn().mockResolvedValue(['.orca/review-command'])
+    getSshGitProviderMock.mockReturnValue({ checkIgnoredPaths })
+    const fsProvider = {
+      createDir: vi.fn().mockResolvedValue(undefined),
+      readFile: vi.fn(),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      deletePath: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+
+    await handlers['hooks:writeIssueCommand'](null, {
+      repoId: 'repo-ssh',
+      content: 'Review it',
+      kind: 'review'
+    })
+
+    expect(checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', ['.orca/review-command'])
+    expect(fsProvider.writeFile).toHaveBeenCalledExactlyOnceWith(
+      '/remote/repo/.orca/review-command',
+      'Review it\n'
+    )
+  })
+
+  it('reads the issue command when no kind is sent', async () => {
+    store.getRepo.mockReturnValue({
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    })
+    getSshFilesystemProviderMock.mockReturnValue({
+      readFile: vi.fn(async (filePath: string) => {
+        if (filePath.endsWith('/.orca/issue-command')) {
+          return { content: 'local issue\n', isBinary: false }
+        }
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      })
+    })
+
+    await expect(
+      handlers['hooks:readIssueCommand'](null, { repoId: 'repo-ssh' })
+    ).resolves.toMatchObject({ localContent: 'local issue' })
   })
 })

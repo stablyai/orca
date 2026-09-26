@@ -27,6 +27,7 @@ export type DerivedComposerStateInput = Pick<
   | 'enableIssueAutomation'
   | 'hasLoadedIssueCommand'
   | 'issueCommandTemplate'
+  | 'reviewCommandTemplate'
   | 'linkDebouncedQuery'
   | 'linkDirectItem'
   | 'linkItems'

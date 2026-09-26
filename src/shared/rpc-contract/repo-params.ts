@@ -93,6 +93,11 @@ export const RepoIssueCommandWrite = RepoSelector.extend({
   content: z.string()
 })
 
+// Why: same shape as the issue write; a distinct export keeps the generated catalog readable.
+export const RepoReviewCommandWrite = RepoSelector.extend({
+  content: z.string()
+})
+
 export const RepoSparsePresetSave = RepoSelector.extend({
   id: OptionalString,
   name: requiredString('Missing preset name'),

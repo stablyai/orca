@@ -7,7 +7,8 @@ import {
   TEST_GITIGNORE_PATH,
   TEST_ISSUE_COMMAND_PATH,
   TEST_REPO_ORCA_YAML_PATH,
-  TEST_REPO_PATH
+  TEST_REPO_PATH,
+  TEST_REVIEW_COMMAND_PATH
 } from './hooks-test-fixtures'
 
 // Mock fs used by loadHooks
@@ -85,6 +86,78 @@ describe('readIssueCommand', () => {
       localFilePath: TEST_ISSUE_COMMAND_PATH,
       source: 'shared'
     })
+  })
+})
+
+describe('review kind', () => {
+  it('reads .orca/review-command over orca.yaml reviewCommand and never the issue file', async () => {
+    const fs = await import('node:fs')
+    vi.mocked(fs.existsSync).mockImplementation(
+      (path) =>
+        path === TEST_ISSUE_COMMAND_PATH ||
+        path === TEST_REVIEW_COMMAND_PATH ||
+        path === TEST_REPO_ORCA_YAML_PATH
+    )
+    vi.mocked(fs.readFileSync).mockImplementation((path) => {
+      if (path === TEST_ISSUE_COMMAND_PATH) {
+        return 'local issue\n'
+      }
+      if (path === TEST_REVIEW_COMMAND_PATH) {
+        return 'local review\n'
+      }
+      if (path === TEST_REPO_ORCA_YAML_PATH) {
+        return 'issueCommand: shared issue\nreviewCommand: shared review\n'
+      }
+      return ''
+    })
+    const { readIssueCommand } = await import('./issue-command-file')
+    expect(readIssueCommand(TEST_REPO_PATH, 'review')).toEqual({
+      localContent: 'local review',
+      sharedContent: 'shared review',
+      effectiveContent: 'local review',
+      localFilePath: TEST_REVIEW_COMMAND_PATH,
+      source: 'local'
+    })
+    expect(readIssueCommand(TEST_REPO_PATH)).toMatchObject({ localContent: 'local issue' })
+  })
+
+  it('falls back to orca.yaml reviewCommand when no local review file exists', async () => {
+    const fs = await import('node:fs')
+    vi.mocked(fs.existsSync).mockImplementation((path) => path === TEST_REPO_ORCA_YAML_PATH)
+    vi.mocked(fs.readFileSync).mockImplementation((path) =>
+      path === TEST_REPO_ORCA_YAML_PATH ? 'reviewCommand: shared review\n' : ''
+    )
+    const { readIssueCommand } = await import('./issue-command-file')
+    expect(readIssueCommand(TEST_REPO_PATH, 'review')).toMatchObject({
+      sharedContent: 'shared review',
+      source: 'shared'
+    })
+  })
+
+  it('writes .orca/review-command and leaves .orca/issue-command alone', async () => {
+    const fs = await import('node:fs')
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.writeFileSync).mockClear()
+    const { writeIssueCommand } = await import('./issue-command-file')
+    await writeIssueCommand(TEST_REPO_PATH, 'Review {{artifact_url}}', {}, 'review')
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      TEST_REVIEW_COMMAND_PATH,
+      'Review {{artifact_url}}\n',
+      'utf-8'
+    )
+    expect(fs.writeFileSync).not.toHaveBeenCalledWith(
+      TEST_ISSUE_COMMAND_PATH,
+      expect.anything(),
+      expect.anything()
+    )
+  })
+
+  it('deletes only the review file on blank content', async () => {
+    const fs = await import('node:fs')
+    vi.mocked(fs.rmSync).mockClear()
+    const { writeIssueCommand } = await import('./issue-command-file')
+    await writeIssueCommand(TEST_REPO_PATH, '  ', {}, 'review')
+    expect(fs.rmSync).toHaveBeenCalledExactlyOnceWith(TEST_REVIEW_COMMAND_PATH, { force: true })
   })
 })
 

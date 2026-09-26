@@ -46,6 +46,7 @@ export type UseComposerStateOptions = {
   repoIdOverride?: string
   onRepoIdOverrideChange?: (value: string) => void
   telemetrySource?: WorkspaceCreateTelemetrySource
+  // Covers both repo prompt templates: issues and PR/MR reviews.
   enableIssueAutomation?: boolean
   createGateMode?: 'full' | 'quick'
 }

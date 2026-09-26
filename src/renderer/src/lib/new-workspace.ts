@@ -16,6 +16,7 @@ import {
 import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
+import { DEFAULT_REPO_COMMAND_TEMPLATE } from '../../../shared/repo-command-kind'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
@@ -50,7 +51,7 @@ export function canUseIssueCommandForLinkedItemProvider(
 // we still want the composer to send a useful default prompt whenever the user
 // attaches a linked work item without typing anything else. "Complete <url>"
 // is the minimum viable instruction that always produces a coherent agent task.
-export const DEFAULT_ISSUE_COMMAND_TEMPLATE = 'Complete {{artifact_url}}'
+export const DEFAULT_ISSUE_COMMAND_TEMPLATE = DEFAULT_REPO_COMMAND_TEMPLATE.issue
 
 export type SetupConfig = {
   source: 'yaml' | 'local' | 'both'
@@ -86,9 +87,10 @@ function getSetupConfigKind(
 }
 
 /**
- * Substitute the issue-command template variables. Prefers `{{artifact_url}}`
- * and keeps `{{issue}}` working silently for repos that have not migrated
- * their `orca.yaml` / `.orca/issue-command` yet.
+ * Substitute the repo-command template variables. `{{artifact_url}}` is the linked
+ * item's URL; `{{issue}}` is its number — an issue, pull request or merge request
+ * number. Both spellings keep working for repos that have not migrated their
+ * `orca.yaml` / `.orca/issue-command` yet.
  */
 export function renderIssueCommandTemplate(
   template: string,

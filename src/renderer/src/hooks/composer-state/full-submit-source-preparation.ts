@@ -13,6 +13,7 @@ type FullSubmitSourcePreparationInput = Pick<
   | 'fallbackCreatureName'
   | 'hasLoadedIssueCommand'
   | 'issueCommandTemplate'
+  | 'reviewCommandTemplate'
   | 'lastAutoNameRef'
   | 'linkedGitLabMR'
   | 'linkedWorkItem'
@@ -27,12 +28,26 @@ import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider,
-  renderIssueCommandTemplate,
-  DEFAULT_ISSUE_COMMAND_TEMPLATE,
   buildAgentPromptWithContext
 } from '@/lib/new-workspace'
+import { resolveLinkedOnlyTemplatePrompt } from '@/lib/composer-issue-command'
+import { getRepoCommandKindForLinkedItemType } from '../../../../shared/repo-command-kind'
+
 import { getLinkedWorkItemPromptContext } from '@/lib/linked-work-item-context'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
+
+// Why: unconfirmed *repository* text is dropped here, not downstream; the built-in default stands.
+export function resolveTrustedStartupPrompt(input: {
+  applyTemplate: boolean
+  templateIsRepoText: boolean
+  trustDecision: 'run' | 'skip'
+  templatePrompt: string
+  plainPrompt: string
+}): string {
+  return input.applyTemplate && (!input.templateIsRepoText || input.trustDecision === 'run')
+    ? input.templatePrompt
+    : input.plainPrompt
+}
 
 export function useFullSubmitSourcePreparation(input: FullSubmitSourcePreparationInput) {
   const {
@@ -47,6 +62,7 @@ export function useFullSubmitSourcePreparation(input: FullSubmitSourcePreparatio
     fallbackCreatureName,
     hasLoadedIssueCommand,
     issueCommandTemplate,
+    reviewCommandTemplate,
     lastAutoNameRef,
     linkedGitLabMR,
     linkedWorkItem,
@@ -150,33 +166,43 @@ export function useFullSubmitSourcePreparation(input: FullSubmitSourcePreparatio
         hasLoadedIssueCommand &&
         canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider)
 
+      const submitCommandKind = getRepoCommandKindForLinkedItemType(submitLinkedWorkItem?.type)
+
+      // Why: the submit-time linked item can differ from component state (Smart paste / PR start
+      // point), so the kind of the item being submitted picks from the pair held in state.
+      const submitLinkedOnlyTemplateText = (
+        submitCommandKind === 'review' ? reviewCommandTemplate : issueCommandTemplate
+      ).trim()
+
       const submitLinkedOnlyTemplatePrompt =
         submitShouldApplyLinkedOnlyTemplate && submitLinkedWorkItem
-          ? renderIssueCommandTemplate(
-              issueCommandTemplate.trim() || DEFAULT_ISSUE_COMMAND_TEMPLATE,
-              {
-                issueNumber:
-                  submitLinkedWorkItem.type === 'issue' ? submitLinkedWorkItem.number : null,
-                artifactUrl: submitLinkedWorkItem.url
-              }
-            )
+          ? resolveLinkedOnlyTemplatePrompt({
+              trustDecision: 'run',
+              note: '',
+              kind: submitCommandKind,
+              number: submitLinkedWorkItem.number,
+              artifactUrl: submitLinkedWorkItem.url,
+              template: submitLinkedOnlyTemplateText
+            })
           : ''
 
       const linkedPromptContext = getLinkedWorkItemPromptContext(submitLinkedWorkItem)
 
-      const submitStartupPrompt = submitShouldApplyLinkedOnlyTemplate
+      const submitStartupPromptWithoutTemplate = buildAgentPromptWithContext(
+        agentPrompt,
+        attachmentPaths,
+        linkedPromptContext.linkedUrls,
+        linkedPromptContext.linkedContextBlocks
+      )
+
+      const submitStartupPromptWithTemplate = submitLinkedOnlyTemplatePrompt
         ? buildAgentPromptWithContext(
             submitLinkedOnlyTemplatePrompt,
             attachmentPaths,
             [],
             linkedPromptContext.linkedContextBlocks
           )
-        : buildAgentPromptWithContext(
-            agentPrompt,
-            attachmentPaths,
-            linkedPromptContext.linkedUrls,
-            linkedPromptContext.linkedContextBlocks
-          )
+        : submitStartupPromptWithoutTemplate
 
       const submitShouldRunIssueAutomation =
         enableIssueAutomation &&
@@ -199,7 +225,12 @@ export function useFullSubmitSourcePreparation(input: FullSubmitSourcePreparatio
         submitPushTarget,
         submitBranchNameOverride,
         submitLinkedWorkItemProvider,
-        submitStartupPrompt,
+        submitCommandKind,
+        submitShouldApplyLinkedOnlyTemplate,
+        submitLinkedOnlyTemplateIsRepoText: submitLinkedOnlyTemplateText.length > 0,
+        submitStartupPromptWithoutTemplate,
+        submitStartupPromptWithTemplate,
+        submitStartupPrompt: submitStartupPromptWithTemplate,
         submitShouldRunIssueAutomation
       }
     },
@@ -213,6 +244,7 @@ export function useFullSubmitSourcePreparation(input: FullSubmitSourcePreparatio
       fallbackCreatureName,
       hasLoadedIssueCommand,
       issueCommandTemplate,
+      reviewCommandTemplate,
       linkedGitLabMR,
       linkedWorkItem,
       isExplicitWorkspaceNameInput,

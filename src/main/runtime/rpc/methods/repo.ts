@@ -16,6 +16,7 @@ import {
   RepoClone,
   RepoCreate,
   RepoIssueCommandWrite,
+  RepoReviewCommandWrite,
   RepoPath,
   RepoReorder,
   RepoSearchRefs,
@@ -211,5 +212,18 @@ export const REPO_METHODS = [
     params: RepoIssueCommandWrite,
     handler: async (params, { runtime }) =>
       runtime.writeRepoIssueCommand(params.repo, params.content)
+  }),
+  // Why: a `kind` param on repo.issueCommandRead/Write would make a pre-review-template host
+  // answer with — or overwrite — the ISSUE command. Distinct names fail loudly instead.
+  defineMethod({
+    name: 'repo.reviewCommandRead',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => runtime.readRepoReviewCommand(params.repo)
+  }),
+  defineMethod({
+    name: 'repo.reviewCommandWrite',
+    params: RepoReviewCommandWrite,
+    handler: async (params, { runtime }) =>
+      runtime.writeRepoReviewCommand(params.repo, params.content)
   })
 ]

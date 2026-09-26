@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { RepoCommandKind } from '../../shared/repo-command-kind'
 import type { PreloadApi } from '../api-types'
 
 export const hooksApi = {
@@ -19,6 +20,7 @@ export const hooksApi = {
   readIssueCommand: (args: {
     repoId: string
     hostId?: ExecutionHostId
+    kind?: RepoCommandKind
   }): Promise<{
     status?: 'ok' | 'error'
     localContent: string | null
@@ -32,5 +34,6 @@ export const hooksApi = {
     repoId: string
     content: string
     hostId?: ExecutionHostId
+    kind?: RepoCommandKind
   }): Promise<void> => ipcRenderer.invoke('hooks:writeIssueCommand', args)
 } satisfies PreloadApi['hooks']

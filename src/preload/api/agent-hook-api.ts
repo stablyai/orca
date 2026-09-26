@@ -2,6 +2,7 @@ import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../shared/setup-script-imports'
+import type { RepoCommandKind } from '../../shared/repo-command-kind'
 
 export type HooksApi = {
   check: (args: { repoId: string; hostId?: ExecutionHostId }) => Promise<{
@@ -19,7 +20,11 @@ export type HooksApi = {
     worktreePath: string
     command: string
   }) => Promise<WorktreeSetupLaunch>
-  readIssueCommand: (args: { repoId: string; hostId?: ExecutionHostId }) => Promise<{
+  readIssueCommand: (args: {
+    repoId: string
+    hostId?: ExecutionHostId
+    kind?: RepoCommandKind
+  }) => Promise<{
     status?: 'ok' | 'error'
     localContent: string | null
     sharedContent: string | null
@@ -31,5 +36,6 @@ export type HooksApi = {
     repoId: string
     content: string
     hostId?: ExecutionHostId
+    kind?: RepoCommandKind
   }) => Promise<void>
 }

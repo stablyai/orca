@@ -2,6 +2,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
+import type { RepoCommandKind } from '../../../shared/repo-command-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 
 function getHookInspectionTarget(
@@ -68,15 +69,23 @@ export async function inspectRuntimeSetupScriptImports(
 export async function readRuntimeIssueCommand(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   repoId: string,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  kind: RepoCommandKind = 'issue'
 ): Promise<IssueCommandReadResult> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    return window.api.hooks.readIssueCommand({ repoId, ...(hostId ? { hostId } : {}) })
+    // Why: omit `kind` for issues so existing callers and older preload builds see the old args.
+    return window.api.hooks.readIssueCommand({
+      repoId,
+      ...(hostId ? { hostId } : {}),
+      ...(kind === 'issue' ? {} : { kind })
+    })
   }
+  // Why: a pre-review-template host has no such method and rejects; callers already handle a
+  // failed read. See docs/reference/remote-wire-compatibility.md.
   return callRuntimeRpc<IssueCommandReadResult>(
     target,
-    'repo.issueCommandRead',
+    kind === 'review' ? 'repo.reviewCommandRead' : 'repo.issueCommandRead',
     { repo: repoId },
     { timeoutMs: 15_000 }
   )
@@ -86,16 +95,22 @@ export async function writeRuntimeIssueCommand(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   repoId: string,
   content: string,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  kind: RepoCommandKind = 'issue'
 ): Promise<void> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    await window.api.hooks.writeIssueCommand({ repoId, content, ...(hostId ? { hostId } : {}) })
+    await window.api.hooks.writeIssueCommand({
+      repoId,
+      content,
+      ...(hostId ? { hostId } : {}),
+      ...(kind === 'issue' ? {} : { kind })
+    })
     return
   }
   await callRuntimeRpc(
     target,
-    'repo.issueCommandWrite',
+    kind === 'review' ? 'repo.reviewCommandWrite' : 'repo.issueCommandWrite',
     { repo: repoId, content },
     { timeoutMs: 15_000 }
   )
