@@ -1196,6 +1196,15 @@
       }
     },
     "components": {
+      "ClaudeAccountPromptDialog": {
+        "title": "Choose a Claude account",
+        "description": "Pick the Claude account to start in {{value0}}.",
+        "accountLabel": "Account",
+        "remember": "Remember for this project",
+        "rememberHint": "You can change this in Settings → Repository",
+        "cancel": "Cancel",
+        "start": "Start"
+      },
       "BrowserCookieImportDisclosure": {
         "title": "Google logins aren't imported",
         "description": "Sign in to Google directly in Orca."

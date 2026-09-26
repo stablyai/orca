@@ -9,6 +9,7 @@ import {
 } from '@/lib/launch-agent-in-new-tab'
 import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { useAppStore } from '../../store'
+import { launchWithClaudeAccountChoice } from '../claude-account-prompt/choose-claude-launch-account'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
@@ -221,30 +222,32 @@ export function useTabBarCreateMenuController({
     }
   }
   const launchAgentFromNewTabEntry = (agent: TuiAgent): void => {
-    const option = agentLaunchOptions.find((candidate) => candidate.agent === agent)
-    const result = launchAgentInNewTab({
-      agent,
-      worktreeId,
-      groupId: resolvedGroupId,
-      launchSource: 'tab_bar_quick_launch'
-    })
-    if (!result) {
-      toast.error(
-        translate(
-          'auto.components.tab.bar.TabBar.ab589350e5',
-          'Could not build launch command for {{value0}}.',
-          { value0: option?.label ?? agent }
+    // Why: after the account prompt the menu has already closed, so the queued focus must run now.
+    const afterDeferredLaunch = runPendingNewTabMenuFocusAfterClose
+    launchWithClaudeAccountChoice(agent, { worktreeId, afterDeferredLaunch }, (claudeAccountId) => {
+      const result = launchAgentInNewTab({
+        agent,
+        worktreeId,
+        groupId: resolvedGroupId,
+        launchSource: 'tab_bar_quick_launch',
+        claudeAccountId
+      })
+      if (!result) {
+        toast.error(
+          translate(
+            'auto.components.tab.bar.TabBar.ab589350e5',
+            'Could not build launch command for {{value0}}.',
+            { value0: agentLaunchOptions.find((entry) => entry.agent === agent)?.label ?? agent }
+          )
         )
-      )
-      return
-    }
-    if (result.surface.kind === 'local-terminal') {
-      queueTerminalTabFocusAfterNewTabMenuClose(result.surface.tabId)
-      return
-    }
-    if (shouldQueueTerminalFocusAfterMenuClose(result)) {
-      queueNewActiveTerminalFocusAfterNewTabMenuClose()
-    }
+        return
+      }
+      if (result.surface.kind === 'local-terminal') {
+        queueTerminalTabFocusAfterNewTabMenuClose(result.surface.tabId)
+      } else if (shouldQueueTerminalFocusAfterMenuClose(result)) {
+        queueNewActiveTerminalFocusAfterNewTabMenuClose()
+      }
+    })
   }
   const runPendingNewTabMenuFocusAfterClose = (): void => {
     const pendingFocus = pendingNewTabMenuFocusRef.current

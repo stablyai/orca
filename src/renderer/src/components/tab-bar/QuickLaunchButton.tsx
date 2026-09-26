@@ -8,6 +8,8 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { launchWithClaudeAccountChoice } from '../claude-account-prompt/choose-claude-launch-account'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
@@ -130,8 +132,8 @@ function QuickLaunchAgentMenuItemsInner({
     openSettingsPage()
   }, [openSettingsPage, openSettingsTarget])
 
-  const runLaunch = useCallback(
-    (agent: TuiAgent) => {
+  const launchAndWatch = useCallback(
+    (agent: TuiAgent, claudeAccountId: string | undefined, deferred: boolean) => {
       const entry = getCatalogEntry(agent)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
@@ -141,7 +143,8 @@ function QuickLaunchAgentMenuItemsInner({
         ...(prompt !== undefined ? { prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {}),
-        ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {})
+        ...(onPromptDelivered !== undefined ? { onPromptDelivered } : {}),
+        ...(claudeAccountId ? { claudeAccountId } : {})
       })
       if (!result) {
         toast.error(
@@ -156,7 +159,12 @@ function QuickLaunchAgentMenuItemsInner({
       if (result.surface.kind !== 'local-terminal') {
         return
       }
-      onFocusTerminal(result.surface.tabId)
+      // Why: after the account prompt the menu has already closed, so a queued menu-close focus would never run.
+      if (deferred) {
+        focusTerminalTabSurface(result.surface.tabId)
+      } else {
+        onFocusTerminal(result.surface.tabId)
+      }
 
       // Why: launch success means the terminal session exists. Agent readiness
       // can lag behind on slow machines, and prompt paste flows already own
@@ -180,6 +188,15 @@ function QuickLaunchAgentMenuItemsInner({
       })
     },
     [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
+  )
+
+  const runLaunch = useCallback(
+    (agent: TuiAgent) => {
+      launchWithClaudeAccountChoice(agent, { worktreeId }, (claudeAccountId, deferred) =>
+        launchAndWatch(agent, claudeAccountId, deferred)
+      )
+    },
+    [worktreeId, launchAndWatch]
   )
 
   const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []

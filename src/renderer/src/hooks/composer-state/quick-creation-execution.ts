@@ -48,6 +48,7 @@ import { buildQuickCreationRequest } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { resolveLaunchClaudeAccountId } from '@/lib/claude-launch-account'
+import { chooseClaudeLaunchAccountIdForRepo } from '@/components/claude-account-prompt/choose-claude-launch-account'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -127,8 +128,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
         resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
 
-      // The composer's account prompt sets this in a later change.
-      const composerClaudeAccountId: string | undefined = undefined
+      const composerClaudeAccountId =
+        agent === 'claude' ? await chooseClaudeLaunchAccountIdForRepo(repoId) : undefined
+      if (composerClaudeAccountId === null) {
+        return
+      }
 
       const {
         startupPlan,

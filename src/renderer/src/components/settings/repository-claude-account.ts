@@ -12,7 +12,7 @@ export type ClaudeAccountOption = {
   disabled?: boolean
 }
 
-function claudeAccountLabel(account: ClaudeManagedAccountSummary): string {
+export function claudeAccountLabel(account: ClaudeManagedAccountSummary): string {
   return account.organizationName ? `${account.email} · ${account.organizationName}` : account.email
 }
 
