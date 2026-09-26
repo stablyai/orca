@@ -4,7 +4,6 @@
  * Why a fake provider on disk: the picker's contract is the provider CLI's argv, env and JSON, so
  * only a real spawned process proves env scrubbing, --json, progress streaming and group cancel.
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -14,6 +13,7 @@ import {
   isProcessAlive,
   type FakeProviderFixture
 } from './helpers/cross-machine-recovery-fake-provider'
+import { captureHiddenRendererScreenshot } from './helpers/hidden-renderer-screenshot'
 
 const SCREENSHOT_DIR = path.join(process.cwd(), 'validation-screenshots', 'cross-machine-recovery')
 const LOCAL_MACHINE = 'E2E Desk'
@@ -214,20 +214,11 @@ function buildFixture(target: { worktreeId: string; path: string }): FakeProvide
 }
 
 async function captureHiddenRenderer(page: Page, testInfo: TestInfo, name: string): Promise<void> {
-  // Why CDP: the window is never shown, so the capture comes straight from the hidden renderer.
-  const cdp = await page.context().newCDPSession(page)
-  try {
-    await page.evaluate(() =>
-      Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => {})))
-    )
-    const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' })
-    const body = Buffer.from(data, 'base64')
-    mkdirSync(SCREENSHOT_DIR, { recursive: true })
-    writeFileSync(path.join(SCREENSHOT_DIR, `picker-${name}.png`), body)
-    await testInfo.attach(`picker-${name}.png`, { body, contentType: 'image/png' })
-  } finally {
-    await cdp.detach()
-  }
+  const body = await captureHiddenRendererScreenshot(
+    page,
+    path.join(SCREENSHOT_DIR, `picker-${name}.png`)
+  )
+  await testInfo.attach(`picker-${name}.png`, { body, contentType: 'image/png' })
 }
 
 async function openRecoverSessionsFromJumpPalette(
