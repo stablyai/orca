@@ -1,4 +1,5 @@
 name: PR Checks
+run-name: 'PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }}'
 
 on:
   pull_request:
@@ -27,23 +28,28 @@ jobs:
     # Reuse one lightweight checkout for detection and the always-required guards.
     runs-on: ubuntu-slim
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
-      native_cache_changed: ${{ steps.filter.outputs.native_cache_changed }}
+      reused_run_id: ${{ steps.readiness.outputs.run_id }}
+      # A proven success masks required work only; advisory routing still uses the full diff.
+      native_cache_changed: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.native_cache_changed }}
       mobile_dependencies: ${{ steps.filter.outputs.mobile_dependencies }}
-      mobile_web_app: ${{ steps.filter.outputs.mobile_web_app }}
-      static_analysis: ${{ steps.filter.outputs.static_analysis }}
-      typecheck: ${{ steps.filter.outputs.typecheck }}
-      git_compatibility: ${{ steps.filter.outputs.git_compatibility }}
-      codex_index_heal_contract: ${{ steps.filter.outputs.codex_index_heal_contract }}
-      xterm_patch_sync: ${{ steps.filter.outputs.xterm_patch_sync }}
-      shell_contracts: ${{ steps.filter.outputs.shell_contracts }}
-      test: ${{ steps.filter.outputs.test }}
-      orcad_browser: ${{ steps.filter.outputs.orcad_browser }}
-      cross-version-wire: ${{ steps.filter.outputs.cross-version-wire }}
-      managed_hook_node18: ${{ steps.filter.outputs.managed_hook_node18 }}
-      package: ${{ steps.filter.outputs.package }}
-      package_windows: ${{ steps.filter.outputs.package_windows }}
+      mobile_web_app: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.mobile_web_app }}
+      static_analysis: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.static_analysis }}
+      typecheck: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.typecheck }}
+      git_compatibility: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.git_compatibility }}
+      codex_index_heal_contract: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.codex_index_heal_contract }}
+      xterm_patch_sync: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.xterm_patch_sync }}
+      shell_contracts: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.shell_contracts }}
+      test: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.test }}
+      orcad_browser: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.orcad_browser }}
+      cross-version-wire: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.cross-version-wire }}
+      managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
+      package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
+      package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
       ssh_source_changed: ${{ steps.e2e_filter.outputs.ssh_source_changed }}
@@ -66,6 +72,7 @@ jobs:
             /config/scripts/check-readme-local-links.mjs
             /config/scripts/pr-code-change-scope.mjs
             /config/scripts/pr-e2e-source-routing.mjs
+            /config/scripts/pr-ready-check-reuse.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -78,6 +85,15 @@ jobs:
       # The full Git index retains link targets outside the sparse working tree.
       - name: Check README local links
         run: node config/scripts/check-readme-local-links.mjs
+
+      # Readiness changes eligibility for advisory tests, not the already-tested source.
+      - name: Find identical successful required checks
+        id: readiness
+        if: github.event.action == 'ready_for_review'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_CHECK_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: node config/scripts/pr-ready-check-reuse.mjs
 
       - name: Classify changed paths
         id: filter

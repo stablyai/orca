@@ -3,17 +3,17 @@ name: Bun profile persistence
 on:
   pull_request:
     paths:
-      - 'src/main/persistence/**'
-      - 'src/main/sqlite/**'
-      - 'src/main/worker-thread-entry-path.ts'
-      - 'src/main/orcad/**'
-      - 'src/main/daemon/pty-subprocess/**'
-      - 'src/main/providers/**'
-      - 'src/shared/**'
+      - 'src/**'
       - 'config/**'
+      - 'native/**'
+      - 'tests/**'
+      - 'resources/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
+      - 'tsconfig.json'
+      - '.npmrc'
+      - '.pnpmfile.cjs'
       - '.github/actions/install-node-dependencies/**'
       - '.github/workflows/bun-profile-tests.yml'
   workflow_dispatch:
@@ -26,7 +26,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      should_run: ${{ steps.scope.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Detect Bun build and test inputs
+        id: scope
+        shell: bash
+        run: |
+          # Compare the tested merge with its base, retaining both sides of renames.
+          if git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/bun-changes"; then
+            node config/scripts/bun-profile-change-scope.mjs "$RUNNER_TEMP/bun-changes"
+          else
+            echo 'should_run=true' >> "$GITHUB_OUTPUT"
+          fi
+
   persistence:
+    needs: changes
+    # Missing/failed detection runs the full matrix; manual runs remain unconditional.
+    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -56,6 +82,9 @@ jobs:
           node out/orcad/orcad.js --orcad-profile-state-preflight 00000000-0000-4000-8000-000000000018
 
   linux_glibc_floor:
+    needs: changes
+    # Missing/failed detection runs the full matrix; manual runs remain unconditional.
+    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -78,6 +107,9 @@ jobs:
       - run: pnpm test:bun:profile --artifact
 
   linux_musl:
+    needs: changes
+    # Missing/failed detection runs the full matrix; manual runs remain unconditional.
+    if: ${{ !cancelled() && needs.changes.outputs.should_run != 'false' }}
     strategy:
       fail-fast: false
       matrix:

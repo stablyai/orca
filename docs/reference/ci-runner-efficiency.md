@@ -1,5 +1,42 @@
 # CI efficiency and runner capacity
 
+## Four follow-up changes
+
+- Keep the readiness event, but reuse required checks only after an Actions API
+  lookup proves that the same PR head, tested merge commit, and workflow commit
+  already completed successfully. A changed base, missing proof, failed lookup,
+  or still-running check falls back to the full checks. Advisory tests retain
+  their normal readiness routing. The line-count workflow has no draft-dependent
+  work, so it no longer runs again when a draft becomes ready.
+- Route the Bun matrix using the actual headless build and selected tests'
+  transitive imports, with conservative inclusion for dynamic workers, native
+  inputs, fixtures, and toolchain changes. A graph failure runs the full matrix;
+  manual dispatch still runs all ten platform jobs. The shared test selectors
+  retain the same 85 files. Unrelated shard timings and mobile-test tooling can
+  skip the matrix; shared shortcut definitions remain real runtime dependencies
+  and still run it. Building the graph does not execute the imported modules.
+- Restore pnpm stores on PRs using setup-node's existing key and store path,
+  without publishing more PR-private copies. Non-PR setup-node caching and
+  native/TypeScript caches keep their existing behavior. A missing main store
+  still installs with the frozen lockfile. The mixed root/mobile store may miss
+  repeatedly because the existing main warmer only seeds the root lockfile.
+- Batch only the PowerShell quota-fixture reservations within each test, using
+  the original generated scripts in fresh local scopes. Commands under test
+  retain separate processes, real file identities, and existing race assertions.
+  A traced local run confirms 44 PowerShell starts become 24, with all 21 cases
+  passing. Alternating after/before/after elapsed times were 50.00/59.28/37.00
+  seconds on a shared macOS arm64 host; that variance does not justify a precise
+  percentage or hosted runner-time claim. Test budgets and worker counts are
+  unchanged.
+
+The reproducible pnpm-store comparison is
+`ORCA_BACKGROUND_LAUNCH=1 node config/scripts/ci-pnpm-store-benchmark.mjs --samples=3`.
+On macOS arm64 with BSD tar, three alternating fresh-store pairs eliminated a
+median 332,746,995-byte archive per miss. Median install time was 17.33 seconds
+before and 16.94 after; the removed archive step alone took 53.51 seconds.
+Those local disk/CPU measurements exclude uploads and are not a prediction of
+Linux or Windows hosted savings. Restore cost is common to both policies.
+
 ## September 26 verification
 
 [PR #23053](https://github.com/stablyai/orca/pull/23053) was merged before its

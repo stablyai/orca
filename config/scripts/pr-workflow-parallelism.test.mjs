@@ -269,11 +269,20 @@ describe('PR workflow parallelism', () => {
     expect(steps[pnpmIndex].uses).toBe('pnpm/setup@v2')
     expect(steps[pnpmIndex].with.version).toBeUndefined()
     expect(steps[pnpmIndex].with.install).toBe(false)
-    expect(steps[nodeIndex].with.cache).toBe('pnpm')
+    const saveOutsidePrs = "${{ github.event_name != 'pull_request' && 'pnpm' || '' }}"
+    expect(steps[nodeIndex].with.cache).toBe(saveOutsidePrs)
     expect(steps[nodeIndex].if).toBe("inputs.node-version == ''")
     expect(steps[requestedNodeIndex].if).toBe("inputs.node-version != ''")
     expect(steps[requestedNodeIndex].with['node-version']).toBe('${{ inputs.node-version }}')
-    expect(steps[requestedNodeIndex].with.cache).toBe('pnpm')
+    expect(steps[requestedNodeIndex].with.cache).toBe(saveOutsidePrs)
+    const restoreIndex = steps.findIndex(
+      (step) => step.name === 'Restore pnpm download store without saving'
+    )
+    expect(restoreIndex).toBeGreaterThan(requestedNodeIndex)
+    expect(restoreIndex).toBeLessThan(
+      steps.findIndex((step) => step.name === 'Install dependencies')
+    )
+    expect(steps[restoreIndex].uses).toBe('actions/cache/restore@v5')
   })
 
   it('uses the repository package-manager version for every direct pnpm setup', () => {

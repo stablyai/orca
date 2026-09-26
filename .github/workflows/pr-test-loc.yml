@@ -6,7 +6,6 @@ on:
       - opened
       - synchronize
       - reopened
-      - ready_for_review
 
 concurrency:
   group: pr-test-loc-${{ github.event.pull_request.number }}

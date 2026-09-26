@@ -517,9 +517,12 @@ describe('PR Checks skip wiring', () => {
     expect(classify.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
     expect(classify.run).toContain('node config/scripts/pr-code-change-scope.mjs')
     expect(classify.run).toContain('tee -a "$GITHUB_OUTPUT"')
-    for (const jobName of ['should_run', 'native_cache_changed', ...expensiveJobs]) {
+    expect(prWorkflow.jobs.code_paths.outputs.should_run).toBe(
+      '${{ steps.filter.outputs.should_run }}'
+    )
+    for (const jobName of ['native_cache_changed', ...expensiveJobs]) {
       expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(
-        `\${{ steps.filter.outputs.${jobName} }}`
+        `\${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.${jobName} }}`
       )
     }
   })

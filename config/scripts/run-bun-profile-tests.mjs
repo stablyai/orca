@@ -12,6 +12,7 @@ import {
 } from '../../src/shared/orcad-profile-preflight.ts'
 import { currentTarget } from './build-orcad-bun.mjs'
 import { runProcessSync } from './script-child-process.mjs'
+import { bunProfileTestPaths } from './bun-profile-test-paths.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const target = currentTarget()
@@ -69,28 +70,5 @@ run(runtimePath, [
   'run',
   '--config',
   'config/vitest.config.ts',
-  ...(testArgs.length > 0
-    ? testArgs
-    : [
-        'src/main/persistence/profile-state',
-        'src/main/persistence/loading-store/profile-state',
-        'src/main/sqlite',
-        'src/main/orcad/orcad-entry.test.ts',
-        'src/main/orcad/orcad-push-startup.test.ts',
-        ...(artifact
-          ? [
-              'src/main/daemon/pty-subprocess/bun-pty-process.integration.test.ts',
-              'src/main/daemon/pty-subprocess/bun-pty-job-control.integration.test.ts',
-              'src/main/daemon/pty-subprocess/bun-pty-process-suspension.test.ts',
-              'src/main/daemon/pty-subprocess-spawn-file-foreground.test.ts',
-              'src/main/daemon/pty-subprocess/spawn-file-foreground-rejected-agents.test.ts',
-              'tests/e2e/daemon-running-work-probe.unit.test.ts',
-              'src/main/daemon/pty-subprocess/windows-bun-pty-gate.integration.test.ts',
-              'src/main/providers/local-pty-bun-artifact.integration.test.ts',
-              'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
-              'src/main/orcad/orcad-bun-launcher.integration.test.ts',
-              'config/scripts/zip-extractor-command.test.mjs'
-            ]
-          : [])
-      ])
+  ...(testArgs.length > 0 ? testArgs : bunProfileTestPaths({ artifact }))
 ])

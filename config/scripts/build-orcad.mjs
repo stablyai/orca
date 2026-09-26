@@ -5,7 +5,8 @@ import { build } from 'esbuild'
 import {
   buildOrcadEntry,
   externalNativeAddons,
-  ORCAD_EXTERNAL_MODULES
+  ORCAD_EXTERNAL_MODULES,
+  ORCAD_CHILD_ENTRY_POINTS
 } from './orcad-entry-build.mjs'
 import { createRequire } from 'node:module'
 import {
@@ -44,14 +45,14 @@ const OUT_DIR = process.env.ORCAD_OUT_DIR
 // Why beside orcad.js: the watcher runs in a forked child so a native @parcel/watcher
 // fault crashes that child instead of the server, and `resolveWatcherProcessEntryPath`
 // looks for it in the app root. A deployment has no desktop out/main to fall back to.
-const WATCHER_ENTRY = join(ROOT, 'src/main/ipc/parcel-watcher-process-entry.ts')
+const WATCHER_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.watcher)
 const WATCHER_OUT_FILE = join(OUT_DIR, 'parcel-watcher-process-entry.js')
 // Why beside orcad.js: orcad forks the terminal daemon so PTYs outlive the runtime process,
 // and `getDaemonEntryPath()` probes the app root for this exact filename. Without it every
 // orcad restart would SIGKILL every running terminal.
-const DAEMON_ENTRY = join(ROOT, 'src/main/daemon/daemon-entry.ts')
+const DAEMON_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.daemon)
 const DAEMON_OUT_FILE = join(OUT_DIR, 'daemon-entry.js')
-const PTY_GATE_ENTRY = join(ROOT, 'src/main/daemon/pty-subprocess/windows-bun-pty-gate-entry.ts')
+const PTY_GATE_ENTRY = join(ROOT, ORCAD_CHILD_ENTRY_POINTS.ptyGate)
 const PTY_GATE_OUT_FILE = join(OUT_DIR, 'windows-bun-pty-gate-entry.js')
 const OUT_FILE = join(OUT_DIR, 'orcad.js')
 const BUILD_TARGET = process.env.ORCAD_BUILD_TARGET
@@ -179,7 +180,7 @@ const childResults = await Promise.all([
   buildForkedChild(PTY_GATE_ENTRY, PTY_GATE_OUT_FILE),
   ...['writer', 'backup'].map((role) =>
     buildForkedChild(
-      join(ROOT, `src/main/persistence/profile-state/profile-state-${role}-worker-entry.ts`),
+      join(ROOT, ORCAD_CHILD_ENTRY_POINTS[role]),
       join(OUT_DIR, `profile-state-${role}-worker-entry.js`)
     )
   )
