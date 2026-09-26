@@ -13,6 +13,7 @@ import {
   buildPtyTerminalWaitResult,
   buildTerminalWaitBlockedResult,
   buildTerminalWaitResult,
+  getPtyTerminalState,
   getTerminalState
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
@@ -84,7 +85,9 @@ export class RuntimeTerminalWait {
     const condition = options?.condition ?? 'exit'
     const pty = this.deps.getLivePty(handle)
     if (pty) {
-      if (condition === 'exit' && !pty.pty.connected) {
+      // Why getPtyTerminalState and not `!connected`: a disconnected PTY with no proven exit
+      // code is contact lost, not a death certificate — settle only once the code is proven.
+      if (condition === 'exit' && getPtyTerminalState(pty.pty) === 'exited') {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       const ptyWaitText = buildTerminalWaitText(
@@ -130,7 +133,7 @@ export class RuntimeTerminalWait {
         if (!live) {
           this.waiters.remove(waiter)
           reject(new Error('terminal_handle_stale'))
-        } else if (condition === 'exit' && !live.pty.connected) {
+        } else if (condition === 'exit' && getPtyTerminalState(live.pty) === 'exited') {
           this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
         } else if (condition === 'tui-idle') {
           const livePtyWaitText = buildTerminalWaitText(
