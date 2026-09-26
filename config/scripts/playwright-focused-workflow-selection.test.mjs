@@ -9,10 +9,35 @@ import { runProcess } from '../../src/shared/child-process/run-process'
 const require = createRequire(import.meta.url)
 const projectDir = resolve(import.meta.dirname, '../..')
 
+function assertGoldenPlatformCommands(workflow) {
+  const fresh = [
+    'tests/e2e/golden-fresh-profile-terminal.spec.ts',
+    'tests/e2e/golden-shell-command.spec.ts'
+  ]
+  const core = ['tests/e2e/golden-core-flows.spec.ts']
+  for (const [platform, expected] of Object.entries({
+    Linux: [core, fresh],
+    macOS: [core, fresh],
+    Windows: [fresh]
+  })) {
+    const step = workflow.jobs['golden-e2e'].steps.find(
+      (candidate) => candidate.name === `Run golden E2E tests on ${platform}`
+    )
+    expect(step, platform).toMatchObject({ if: `runner.os == '${platform}'` })
+    const args = [...step.run.matchAll(/\bpnpm run test:e2e\s+([^\n]+)/g)].map((match) =>
+      match[1].trim().split(/\s+/)
+    )
+    expect(args, platform).toEqual(expected)
+  }
+}
+
 function focusedArguments() {
   const commands = []
   for (const filename of ['terminal-ime-e2e.yml', 'golden-e2e-experiment.yml']) {
     const workflow = parse(readFileSync(join(projectDir, '.github/workflows', filename), 'utf8'))
+    if (filename === 'golden-e2e-experiment.yml') {
+      assertGoldenPlatformCommands(workflow)
+    }
     for (const job of Object.values(workflow.jobs)) {
       for (const step of job.steps) {
         for (const match of (step.run ?? '').matchAll(/\bpnpm run test:e2e\s+([^\n]+)/g)) {
