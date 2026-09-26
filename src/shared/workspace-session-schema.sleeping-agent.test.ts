@@ -394,6 +394,77 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves recovery-origin records with their import binding', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session' },
+          prompt: '',
+          state: 'waiting',
+          capturedAt: 10,
+          updatedAt: 10,
+          origin: 'recovery',
+          restoreOnTabOpenOnly: false,
+          launchConfig: { agentArgs: '', agentEnv: {} },
+          recovery: { importKey: 'a'.repeat(64), sourcePaneKey: 'src-tab:leaf-1' }
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
+      expect(record?.origin).toBe('recovery')
+      expect(record?.recovery).toEqual({
+        importKey: 'a'.repeat(64),
+        sourcePaneKey: 'src-tab:leaf-1'
+      })
+    }
+  })
+
+  it('drops recovery records that lose their binding and bindings without the origin', () => {
+    const base = {
+      tabId: 'tab1',
+      worktreeId: 'wt',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'claude-session' },
+      prompt: '',
+      state: 'waiting',
+      capturedAt: 10,
+      updatedAt: 10
+    }
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': { ...base, paneKey: 'tab1:pane-1', origin: 'recovery' },
+        'tab1:pane-2': {
+          ...base,
+          paneKey: 'tab1:pane-2',
+          origin: 'live',
+          recovery: { importKey: 'k', sourcePaneKey: 's' }
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey).toBeUndefined()
+    }
+  })
+
   it('preserves the tab-open-only restore flag across hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

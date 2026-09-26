@@ -12,6 +12,7 @@ import type {
 import type { TuiAgent } from '../tui-agent'
 import type { OrcaWorkspaceLayout } from '../global-settings-types'
 import type { DiffComment, MobileDiffReviewState } from '../diff-comment-types'
+import type { RecoveryProvenance } from '../cross-machine-recovery-descriptor'
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
 export type WorktreeMeta = {
@@ -92,4 +93,6 @@ export type WorktreeMeta = {
   automationProvenance?: AutomationWorkspaceProvenance
   /** System-owned provenance for workspaces created via `orca worktree create`. */
   cliProvenance?: CliWorkspaceProvenance
+  /** System-owned provenance for workspaces materialized by a cross-machine recovery import. */
+  recoveryProvenance?: RecoveryProvenance
 }

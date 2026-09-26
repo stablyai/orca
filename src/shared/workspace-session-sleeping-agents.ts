@@ -98,8 +98,15 @@ const sleepingAgentSessionRecordSchema = z
     interrupted: z.boolean().optional(),
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
-    origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
-    restoreOnTabOpenOnly: z.boolean().optional()
+    origin: z.enum(['worktree-sleep', 'quit', 'live', 'recovery']).optional(),
+    restoreOnTabOpenOnly: z.boolean().optional(),
+    recovery: z
+      .object({ importKey: z.string().min(1).max(128), sourcePaneKey: z.string().min(1).max(512) })
+      .optional()
+  })
+  .refine((record) => (record.origin === 'recovery') === (record.recovery !== undefined), {
+    message: 'recovery binding must accompany origin recovery',
+    path: ['recovery']
   })
   .refine(
     (record) => getAgentResumeArgv(record.agent, record.providerSession) !== null,

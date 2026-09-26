@@ -65,12 +65,20 @@ export type SleepingAgentSessionRecord = {
    *  Quit/live records describe panes that still exist in the restored session,
    *  so only the pane's own cold-restore path may consume them — activation
    *  launching a tab too would duplicate a warm-reattached session (#5232). */
-  origin?: 'worktree-sleep' | 'quit' | 'live'
+  origin?: 'worktree-sleep' | 'quit' | 'live' | 'recovery'
   /** Set on a finished pane captured by an explicit workspace sleep. Its
    *  `--resume` is issued by the pane's own cold restore when its tab is
    *  opened, so a mobile wake must not background-mount every such tab and
    *  respawn the whole workspace the user just slept (#11598). */
   restoreOnTabOpenOnly?: boolean
+  /** Set only with origin 'recovery': a cross-machine import's dormant binding. No wake path
+   *  auto-launches it; the pane's explicit Resume affordance claims it. */
+  recovery?: SleepingAgentRecoveryBinding
+}
+
+export type SleepingAgentRecoveryBinding = {
+  importKey: string
+  sourcePaneKey: string
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)

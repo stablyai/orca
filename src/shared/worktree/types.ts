@@ -8,6 +8,7 @@ import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
 import type { BuiltInWorktreeVisibilitySourceId } from '../repo-types'
 import type { WorktreeIdentity } from './identity'
 import type { WorktreeScanFailureKind } from '../worktree-scan-failure'
+import type { RecoveryProvenance } from '../cross-machine-recovery-descriptor'
 
 export type WorkspaceLinkedItem = {
   provider: 'github' | 'gitlab' | 'linear' | 'jira'
@@ -143,6 +144,7 @@ export type Worktree = {
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
+  recoveryProvenance?: RecoveryProvenance
 } & GitWorktreeInfo
 
 /** Provenance for workspaces created through `orca worktree create`. Absent on
