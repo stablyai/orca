@@ -106,7 +106,8 @@ describe('every target param resolves both spellings of a party to one canonical
         'orchestration.ask',
         'orchestration.dispatch',
         'orchestration.inbox',
-        'orchestration.sessionAddress'
+        'orchestration.sessionAddress',
+        'orchestration.workerStart'
       ].sort()
     )
   })
@@ -174,9 +175,28 @@ describe('every target param resolves both spellings of a party to one canonical
     }
   )
 
-  it('dispatch: refuses a chat assignee with no row written', async () => {
+  it('dispatch: a chat is an assignee by its session address', async () => {
     const runId = await chatRun()
     const task = h.db.createTask({ runId, spec: 'work' })
+
+    const { dispatch } = await as(SESSION_X, 'orchestration.dispatch', {
+      task: task.id,
+      to: ADDRESS_Z
+    })
+
+    expect(dispatch).toMatchObject({
+      assignee_handle: ADDRESS_Z,
+      assignee_orca_session_id: SESSION_Z,
+      assignee_pane_key: null,
+      process_incarnation: null
+    })
+    expect(h.db.getTask(task.id)?.status).toBe('dispatched')
+  })
+
+  it('dispatch: refuses a chat that mail could not reach, with no row written', async () => {
+    const runId = await chatRun()
+    const task = h.db.createTask({ runId, spec: 'work' })
+    h.records.set(SESSION_Z, sessionRecord(SESSION_Z, { location: { executionHostId: 'ssh:box' } }))
 
     const response = await call(SESSION_X, 'orchestration.dispatch', {
       task: task.id,
@@ -185,11 +205,7 @@ describe('every target param resolves both spellings of a party to one canonical
 
     expect(response).toMatchObject({
       ok: false,
-      error: {
-        code: CODES.chatNotDispatchable,
-        message: `Agent session ${SESSION_Z} is a chat, and a chat can't receive a dispatch yet. Start a worker with worker-start instead. No effects were applied.`,
-        data: { effectsApplied: false }
-      }
+      error: { code: CODES.hostBoundary, data: { effectsApplied: false } }
     })
     expect(h.db.db.prepare('SELECT COUNT(*) AS n FROM dispatch_contexts').get()).toEqual({ n: 0 })
     expect(h.db.getTask(task.id)?.status).toBe('ready')

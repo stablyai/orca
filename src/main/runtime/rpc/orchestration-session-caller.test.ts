@@ -44,7 +44,6 @@ const NAMES_NO_RESOLVED_PARTY: Readonly<Record<string, string>> = {
   'orchestration.run from': 'retired; refused before any handler',
   'orchestration.runShow from': 'reads a Run by id; `from` is unused',
   'orchestration.dispatchShow from': '`from` only fills the preview preamble text',
-  'orchestration.workerStart terminal': 'adopts an existing PTY pane, which a session never has',
   'orchestration.federationAttachStart terminal': 'names the remote worker terminal',
   'orchestration.workerTerminalUserInput terminal': 'names the worker terminal',
   'orchestration.workerTerminalUserInput sessionId':

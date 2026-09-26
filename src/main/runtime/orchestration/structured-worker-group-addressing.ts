@@ -15,8 +15,10 @@
  * the smaller shape instead, and nothing here has to invent a `worktreePath` or a `branch`.
  */
 
+import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { observeStructuredWorker, structuredWorkerAgent } from '../structured-worker-authority'
+import { executingSessionId, readAgentSessionRecordStore } from './structured-session-lineage'
 import { structuredWorkerIdentities } from '../structured-worker-identity'
 import { readStructuredSessionGateFacts } from './structured-mailbox-pointer-host'
 
@@ -61,4 +63,16 @@ export function structuredWorkerAgentStatus(sessionId: string): string | null {
     return 'attention'
   }
   return facts.turnRunning ? 'working' : 'idle'
+}
+
+/** A chat assignee's agent, off its session record, so `@claude`/`@codex` match it as a pane. */
+export function chatAssigneeAgentIdentity(address: string): TuiAgent | undefined {
+  const chat = parseOrcaSessionAddress(address)
+  return chat ? readAgentSessionRecordStore()?.getRecord(chat)?.provider : undefined
+}
+
+/** A chat assignee's status for `@idle`, read off the session running it now. */
+export function chatAssigneeAgentStatus(address: string): string | null {
+  const chat = parseOrcaSessionAddress(address)
+  return chat ? structuredWorkerAgentStatus(executingSessionId(chat)) : null
 }

@@ -19,7 +19,6 @@ import {
   type OrcaSessionId
 } from '../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
-import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { OrchestrationDb } from './db'
 import { OrchestrationError } from './orchestration-error'
 import {
@@ -27,7 +26,10 @@ import {
   resolveOrchestrationParty,
   type OrchestrationSessionParty
 } from './orchestration-party'
-import { lineageLiveSession, type AgentSessionRecordReader } from './structured-session-lineage'
+import {
+  resolveExecutingSession,
+  type AgentSessionRecordReader
+} from './structured-session-lineage'
 import type { MessageRow } from './types'
 
 export type OrcaAgentSessionLookup =
@@ -66,13 +68,14 @@ export function structuredSessionMailReach(
   record: AgentSessionRecord,
   db: OrchestrationDb | null | undefined
 ): StructuredSessionMailReach {
-  const live = lineageLiveSession(store, record.sessionId)
-  if (!live) {
+  const executing = resolveExecutingSession(store, record.sessionId)
+  if (executing.kind === 'unrecorded') {
     return { kind: 'ended', reason: 'continuation-missing' }
   }
-  if (!structuredWorkerHostScope(live.location)) {
+  if (executing.kind === 'other-host') {
     return { kind: 'other-host' }
   }
+  const live = executing.record
   if (isOrcaSessionId(live.sessionId) && !addressableSessionParty(live.sessionId, db)) {
     // Why: it can no longer act (the caller resolver refuses it), so mail to it could never be read.
     return { kind: 'ended', reason: 'worker-identity-lost' }

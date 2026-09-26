@@ -15,7 +15,7 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { retireSettledStructuredWorkerTab } from './structured-agent-session-tab-retirement'
-import { observeStructuredWorker } from './structured-worker-authority'
+import { observeStructuredSession } from './structured-worker-authority'
 
 export type StructuredAgentSessionCloseOutcome = {
   stopped: boolean
@@ -86,7 +86,7 @@ export async function closeStructuredAgentSessionChild(
     }
   }
   options.afterClose?.()
-  const observation = observeStructuredWorker({ sessionId })
+  const observation = observeStructuredSession(sessionId)
   if (observation.status !== 'exited') {
     await restorePersistedTabVisibility(host, sessionId, restoreTabIfCloseFails)
     return {
@@ -137,7 +137,7 @@ async function restorePersistedTabVisibility(
   sessionId: string,
   tabId: string | null
 ): Promise<void> {
-  if (tabId === null || observeStructuredWorker({ sessionId }).status === 'exited') {
+  if (tabId === null || observeStructuredSession(sessionId).status === 'exited') {
     return
   }
   try {

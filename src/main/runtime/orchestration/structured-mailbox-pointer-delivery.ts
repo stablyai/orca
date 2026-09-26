@@ -10,11 +10,17 @@
  * Coordinators are in scope here, unlike the PTY lane's reasoning: a PTY coordinator blocks in
  * `check --wait`, where a waiter preempts pointer delivery, but a structured coordinator is a chat
  * session whose turn ends — so nothing else would ever wake it for its own `run:` mail.
+ *
+ * A chat assignee's owed dispatch preamble is the one exception to pointing: it is the turn a PTY
+ * assignee would have typed into its pane. It goes alone, as its own body, and the turn it becomes
+ * is its reading, so an accepted one is marked read. Every other message, whatever its type, gets
+ * the pointer (see `isOwedDispatchPreamble`).
  */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { OrchestrationDb } from './db'
+import type { MessageRow, OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
+import { isOwedDispatchPreamble } from './dispatch-preamble-identity'
 import type { OrchestrationCliCommand } from './cli-command'
 import {
   selectOrchestrationPointerBatch,
@@ -188,7 +194,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     db: OrchestrationDb,
     mailboxHandle: string,
     target: StructuredPointerTarget,
-    unread: readonly { id: string; type: string; sequence: number }[],
+    unread: readonly MessageRow[],
     reservedTypes: ReadonlySet<string> | undefined
   ): Promise<void> {
     const release = await this.deps.host.wake?.(target.sessionId)
@@ -203,7 +209,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     db: OrchestrationDb,
     mailboxHandle: string,
     target: StructuredPointerTarget,
-    unread: readonly { id: string; type: string; sequence: number }[],
+    unread: readonly MessageRow[],
     reservedTypes: ReadonlySet<string> | undefined
   ): Promise<void> {
     const sessionId = target.sessionId
@@ -218,17 +224,17 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       this.retain(mailboxHandle, sessionId, 'session-not-attached', reservedTypes)
       return
     }
+    const preamble = unread.find((message) => isOwedDispatchPreamble(mailboxHandle, message))
+    const batch = preamble ? [preamble] : unread
+    const text = preamble
+      ? preamble.body
+      : formatMessagePointer(unread.length, mailboxHandle, this.deps.getCliCommand()).trim()
     const body: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
-      blocks: [
-        {
-          type: 'text',
-          text: formatMessagePointer(unread.length, mailboxHandle, this.deps.getCliCommand()).trim()
-        }
-      ]
+      blocks: [{ type: 'text', text }]
     }
-    const staged = unread.map((message) => message.id)
+    const staged = batch.map((message) => message.id)
     const operation = resolveStructuredPointerOperation({
       db,
       mailboxHandle,
@@ -255,13 +261,25 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       this.retain(mailboxHandle, sessionId, retainReasonForDispatch(outcome.state), reservedTypes)
       return
     }
-    db.markAsDelivered(staged)
+    const consumed = preamble !== undefined
+    if (consumed && outcome.state === 'accepted') {
+      db.markAsReadAndDelivered(staged)
+    } else {
+      db.markAsDelivered(staged)
+    }
     if (outcome.state === 'pending') {
       // Admitted is a claim, not a turn: it is consumed with the echo or given back, never kept.
       const operationId = operation.operationId
       void outcome.settlement
         .then((settled) =>
-          this.settlePendingPointer(mailboxHandle, sessionId, staged, operationId, settled)
+          this.settlePendingPointer({
+            mailboxHandle,
+            sessionId,
+            staged,
+            operationId,
+            settled,
+            consumed
+          })
         )
         .catch((error: unknown) => {
           console.warn('[orchestration] could not settle a pending pointer', {
@@ -276,13 +294,16 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     db.deleteStructuredPointerOperation(mailboxHandle)
   }
 
-  private settlePendingPointer(
-    mailboxHandle: string,
-    sessionId: string,
-    staged: readonly string[],
-    operationId: string,
+  private settlePendingPointer(input: {
+    mailboxHandle: string
+    sessionId: string
+    staged: readonly string[]
+    operationId: string
     settled: StructuredPointerSettlement
-  ): void {
+    /** A preamble turn is its own reading; a pointer only points at mail `check` reads. */
+    consumed: boolean
+  }): void {
+    const { mailboxHandle, sessionId, staged, operationId, settled } = input
     const db = this.deps.getDb()
     if (!db) {
       return
@@ -292,6 +313,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       db.deleteStructuredPointerOperation(mailboxHandle)
     }
     if (settled === 'accepted') {
+      if (input.consumed) {
+        db.markAsRead([...staged])
+      }
       return
     }
     // The row is dropped above because a recorded send replays its verdict and never reaches the

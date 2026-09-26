@@ -63,7 +63,8 @@ export const ORCHESTRATION_ASK_METHODS = [
           dispatchId: activeDispatch.id,
           capability: orchestrationCapability,
           paneKey,
-          processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined
+          processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined,
+          orcaSessionId: orchestrationCaller?.orcaSessionId
         })
         if (!authority.valid) {
           throw new OrchestrationError('dispatch_capability_invalid', authority.reason)

@@ -21,6 +21,7 @@ import {
   readWorkerListSnapshot
 } from './worker-list-snapshot-store'
 import { projectWorkerFleet, type WorkerListPageParams } from './worker-list-projection'
+import { ensureSessionHostForStructuredRows } from './fleet-execution-host-verdict'
 import { exposeWorkerTerminalResource } from './worker-release-completion'
 import { WORKER_TERMINAL_LIST_STATES, WorkerListParams } from './worker-release-schemas'
 
@@ -197,7 +198,10 @@ async function projectWorkerListPageWithFilteredSnapshot(
     authorityNow
   )
   const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
+  await ensureSessionHostForStructuredRows(runtime, pageRows)
   const fleet = projectWorkerFleet({
+    db,
+    agentStatus: (handle) => runtime.getAgentStatusForHandle(handle),
     rows: pageRows,
     attentionFacts,
     statuses,

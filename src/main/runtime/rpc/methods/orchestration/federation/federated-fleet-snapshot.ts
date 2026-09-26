@@ -1,12 +1,14 @@
 import { groupFederatedDispatches } from './federated-fleet-host-groups'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import { ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
-import {
-  refreshOrchestrationFleetLivenessAttention,
-  type FleetDurableWorker,
-  type OrchestrationFleetPage
+import type {
+  FleetDurableWorker,
+  OrchestrationFleetPage
 } from '../../../../../../shared/orchestration-fleet-projection'
-import { projectFleetNextAction } from '../../../../../../shared/orchestration-fleet-worker-projection'
+import {
+  applyExecutionHostVerdict,
+  refreshFleetWorkerVerdict
+} from '../worker/fleet-execution-host-verdict'
 import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/orchestration-peer-capability-cache'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -211,30 +213,7 @@ export function applyFederatedFleetObservations(
       }
       continue
     }
-    if (worker.liveness.verdict === 'exited' && observation.status !== 'exited') {
-      continue
-    }
-    worker.liveness =
-      observation.status === 'live'
-        ? { verdict: 'live', observedAt, source: 'execution_host' }
-        : observation.status === 'exited'
-          ? { verdict: 'exited', source: 'execution_host' }
-          : { verdict: 'unverifiable', reason: hostReportedReason(observation.reason) }
-    worker.evidence.liveStatus = observation.status === 'live' ? 'fresh' : 'unavailable'
-    worker.evidence.lastObservedAt = observation.status === 'unverifiable' ? null : observedAt
-    refreshFleetWorkerVerdict(worker, durable)
-  }
-}
-
-// Recompute every projection derived from the host's verdict.
-function refreshFleetWorkerVerdict(
-  worker: OrchestrationFleetPage['workers'][number],
-  durable: ReadonlyMap<string, FleetDurableWorker>
-): void {
-  refreshOrchestrationFleetLivenessAttention(worker)
-  const row = durable.get(worker.dispatchId)
-  if (row) {
-    worker.nextAction = projectFleetNextAction(row, worker.liveness)
+    applyExecutionHostVerdict(worker, observation, observedAt, durable)
   }
 }
 
@@ -243,25 +222,4 @@ function unavailableLivenessReason(
   code: FederatedFleetHostError['code']
 ): 'home_budget_exhausted' | 'peer_changed' | 'capability_unsupported' | 'host_unavailable' {
   return code === 'host_unavailable' ? 'host_unavailable' : code
-}
-
-const HOST_REPORTED_REASONS = new Set([
-  'missing_status',
-  'stale_status',
-  'future_status',
-  'restored_unconfirmed'
-])
-
-/** The host answered; contact was never lost, so never relabel its verdict as host_unavailable. */
-function hostReportedReason(
-  reason: string | undefined
-):
-  | 'host_indeterminate'
-  | 'missing_status'
-  | 'stale_status'
-  | 'future_status'
-  | 'restored_unconfirmed' {
-  return reason && HOST_REPORTED_REASONS.has(reason)
-    ? (reason as 'missing_status' | 'stale_status' | 'future_status' | 'restored_unconfirmed')
-    : 'host_indeterminate'
 }

@@ -1,4 +1,6 @@
+import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationWorkerLaunchReceipt } from '../worker/worker-launch-preferences'
+import { startingWorkerNextCommands } from '../worker/worker-start-receipt'
 
 export type RemoteStartReceipt = {
   dispatchId: string
@@ -46,5 +48,27 @@ export function federatedUnknownReceipt(
       `orca orchestration worker-show --dispatch ${worker.dispatch_id} --json`,
       `orca orchestration worker-abandon --dispatch ${worker.dispatch_id} --json`
     ]
+  }
+}
+
+/** A remote start still attaching when a capped caller stops waiting: its durable `starting`. */
+export function federatedInProgressReceipt(
+  db: OrchestrationDb,
+  dispatchId: string,
+  taskId: string,
+  server: { name: string },
+  launch: OrchestrationWorkerLaunchReceipt
+): unknown {
+  const worker = db.getWorkerDispatch(dispatchId)
+  return {
+    taskId,
+    dispatchId,
+    state: 'starting',
+    stage: worker?.stage ?? 'remote_attach_requested',
+    server: { name: server.name },
+    launch,
+    effects: [],
+    residualResources: [],
+    nextCommands: startingWorkerNextCommands(dispatchId)
   }
 }

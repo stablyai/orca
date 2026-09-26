@@ -3,13 +3,15 @@ import { OrchestrationError } from '../../orchestration-error'
 import { hashDispatchCapability } from '../dispatch-capability-hash'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
+import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
 
 export function mintDispatchCapability(
   this: OrchestrationDb,
   params: {
     dispatchId: string
-    paneKey: string
-    processIncarnation: string
+    /** Both null for a chat assignee, which is proven by its session instead. */
+    paneKey: string | null
+    processIncarnation: string | null
   }
 ): string {
   const dispatch = this.getDispatchContextById(params.dispatchId)
@@ -54,6 +56,8 @@ export function verifyDispatchCapability(
     capability: string | undefined
     paneKey: string | undefined
     processIncarnation: string | undefined
+    /** The caller's host-verified Orca session id; never one a caller merely declared. */
+    orcaSessionId?: OrcaSessionId | null
   }
 ): { valid: true } | { valid: false; reason: string } {
   const dispatch = this.getDispatchContextById(params.dispatchId)
@@ -78,6 +82,11 @@ export function verifyDispatchCapability(
   const observed = Buffer.from(hashDispatchCapability(params.capability), 'hex')
   if (expected.length !== observed.length || !timingSafeEqual(expected, observed)) {
     return { valid: false, reason: 'The Dispatch capability is invalid.' }
+  }
+  // The assignee is proven by its pane and process, or by the session the host verified it is: a
+  // chat has no pane, and its session outlives `/clear` the way a terminal's handle does.
+  if (params.orcaSessionId && params.orcaSessionId === dispatch.assignee_orca_session_id) {
+    return { valid: true }
   }
   if (
     !dispatch.assignee_pane_key ||

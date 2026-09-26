@@ -1,3 +1,5 @@
+import { NOT_OWED_DISPATCH_PREAMBLE_SQL } from '../../dispatch-preamble-identity'
+import { selectMessageRows } from './message-inbox'
 import type { DeliveryRow, MessageRow, MessageType } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
@@ -62,7 +64,7 @@ export function getOrCreateMailboxDelivery(
         .prepare(
           `SELECT 1 FROM messages
            WHERE run_id = ? AND to_handle = ? AND read = 0
-             AND delivery_contract = 'current_delivery'
+             AND delivery_contract = 'current_delivery' AND ${NOT_OWED_DISPATCH_PREAMBLE_SQL}
              AND type IN (${placeholders}) LIMIT 1`
         )
         .get(params.runId, params.mailboxHandle, ...params.wakeTypes)
@@ -71,15 +73,15 @@ export function getOrCreateMailboxDelivery(
         return undefined
       }
     }
-    const messages = exposeMessageListTimestamps(
-      this.db
-        .prepare(
-          `SELECT * FROM messages
+    const messages = selectMessageRows(
+      this,
+      `SELECT * FROM messages
            WHERE run_id = ? AND to_handle = ? AND read = 0
-             AND delivery_contract = 'current_delivery'
-           ORDER BY sequence ASC LIMIT ?`
-        )
-        .all(params.runId, params.mailboxHandle, limit) as MessageRow[]
+             AND delivery_contract = 'current_delivery' AND ${NOT_OWED_DISPATCH_PREAMBLE_SQL}
+           ORDER BY sequence ASC LIMIT ?`,
+      params.runId,
+      params.mailboxHandle,
+      limit
     )
     if (messages.length === 0) {
       this.db.exec('COMMIT')

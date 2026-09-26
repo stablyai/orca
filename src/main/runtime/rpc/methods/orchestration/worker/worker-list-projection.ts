@@ -6,6 +6,10 @@ import {
 import { resolveFleetWorkerOutcome } from '../../../../../../shared/orchestration-fleet-outcome-resolution'
 import type { WorkerTerminalListState } from '../../../../orchestration/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import { observeStructuredAssignee } from '../../../../structured-worker-authority'
+import { applyExecutionHostVerdict } from './fleet-execution-host-verdict'
+import { structuredAgentSessionLeadState } from '../../../../../../shared/structured-agent-session-agent-status'
+import type { StructuredAgentSessionProjectedStatus } from '../../../../../../shared/structured-agent-session-projection'
 
 export type WorkerListPageParams = {
   run?: string
@@ -15,6 +19,10 @@ export type WorkerListPageParams = {
 }
 
 export function projectWorkerFleet(args: {
+  /** Reads a structured session's liveness off this runtime's own session host. */
+  db: OrchestrationDb
+  /** A structured session's status, as `@idle` reads it (`getAgentStatusForHandle`). */
+  agentStatus: (handle: string) => string | null
   rows: ReturnType<OrchestrationDb['listWorkerTerminalResources']>
   attentionFacts: ReturnType<OrchestrationDb['getWorkerAttentionFactsForDispatches']>
   statuses: Parameters<typeof projectOrchestrationFleet>[0]['statuses']
@@ -49,15 +57,14 @@ export function projectWorkerFleet(args: {
   })
   const durable = new Map(workers.map((worker) => [worker.dispatchId, worker]))
   if (!args.completeProjection) {
-    return {
-      ...projectOrchestrationFleet({
-        workers,
-        statuses: args.statuses,
-        limit: args.limit,
-        now: args.now
-      }),
-      durable
-    }
+    const page = projectOrchestrationFleet({
+      workers,
+      statuses: args.statuses,
+      limit: args.limit,
+      now: args.now
+    })
+    applyStructuredSessionVerdicts(page.workers, durable, args)
+    return { ...page, durable }
   }
 
   const projections: ReturnType<typeof projectOrchestrationFleet>['workers'] = []
@@ -71,9 +78,48 @@ export function projectWorkerFleet(args: {
       }).workers
     )
   }
+  applyStructuredSessionVerdicts(projections, durable, args)
   return {
     workers: projections,
     page: { limit: workers.length, total: workers.length, hasMore: false, nextCursor: null },
     durable
   }
 }
+
+/**
+ * A worker that is a structured session — a minted worker or a chat — has no pane, so no
+ * agent-status row can ever bind to it. Its liveness is the session host's own verdict, the same
+ * observation worker-show reports.
+ */
+function applyStructuredSessionVerdicts(
+  projected: ReturnType<typeof projectOrchestrationFleet>['workers'],
+  durable: ReadonlyMap<string, FleetDurableWorker>,
+  host: {
+    db: OrchestrationDb
+    now: number
+    agentStatus: (handle: string) => string | null
+  }
+): void {
+  for (const worker of projected) {
+    const handle = durable.get(worker.dispatchId)?.agentTerminalHandle
+    const observation = handle ? observeStructuredAssignee(handle, host.db) : null
+    if (handle && observation) {
+      const status = PROJECTED_STATUSES.find((known) => known === host.agentStatus(handle))
+      applyExecutionHostVerdict(
+        worker,
+        {
+          ...observation,
+          ...(status ? { activity: structuredAgentSessionLeadState(status) } : {})
+        },
+        host.now,
+        durable
+      )
+    }
+  }
+}
+
+const PROJECTED_STATUSES: readonly StructuredAgentSessionProjectedStatus[] = [
+  'working',
+  'attention',
+  'idle'
+]

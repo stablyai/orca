@@ -13,7 +13,7 @@ export type StructuredAgentSessionAgentStatus = {
 }
 
 /** The lead state one projected session status stands for, before child work is folded in. */
-function structuredAgentSessionLeadState(
+export function structuredAgentSessionLeadState(
   status: StructuredAgentSessionProjectedStatus
 ): 'working' | 'blocked' | 'done' {
   return status === 'working' ? 'working' : status === 'attention' ? 'blocked' : 'done'

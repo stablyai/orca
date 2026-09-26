@@ -69,7 +69,8 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
     })
-    if (result.result.state !== 'ready') {
+    // `starting` is a healthy start the host is still settling, not a failure to recover from.
+    if (result.result.state !== 'ready' && result.result.state !== 'starting') {
       process.exitCode = 1
     }
     const renderedResult = result.result.nextCommands

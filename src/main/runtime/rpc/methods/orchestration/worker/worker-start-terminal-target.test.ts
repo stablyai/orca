@@ -17,7 +17,7 @@ describe('worker-start --terminal target', () => {
       })
     ).rejects.toMatchObject({
       code: 'terminal_is_coordinator',
-      message: expect.stringContaining("coordinator's own terminal")
+      message: expect.stringContaining("coordinator's own address")
     })
     expect(harness.db.getDispatchContext(task.id)).toBeUndefined()
   })

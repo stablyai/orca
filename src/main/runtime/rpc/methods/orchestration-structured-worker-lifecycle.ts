@@ -33,10 +33,14 @@ import {
   projectStructuredItemToNativeChat,
   projectStructuredItemsToNativeChat
 } from '../../../../shared/structured-agent-session-projection'
+import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import { executingSessionId } from '../../orchestration/structured-session-lineage'
 import {
   observeStructuredWorker,
+  readStructuredAgentSessionRecord,
   resolveStructuredWorkerIdentity,
   structuredWorkerAgent,
+  structuredWorkerSessionId,
   structuredWorkerTerminalState,
   type StructuredWorkerObservation
 } from '../../structured-worker-authority'
@@ -80,12 +84,35 @@ export async function stopStructuredWorker(
     'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
   >
 ): Promise<StructuredWorkerStopOutcome> {
-  return closeStructuredAgentSessionChild(identity.sessionId, {
+  // The session doing the work: after `/clear` that is the successor, not the minted one.
+  return closeStructuredAgentSessionChild(structuredWorkerSessionId(identity), {
     ...(runtime ? { runtime } : {}),
     // Between the close and the proof, never after: an unsettled close returns early, and a
     // surviving hold keeps the provider child un-evictable for the life of the app.
     afterClose: () => releaseStructuredWorkerSession(dispatchId, runtime)
   })
+}
+
+/** A session journal a read serves: the session running the worker now, and what keys its cursor. */
+type StructuredJournalSource = { sessionId: string; identityKey: readonly string[] }
+
+function workerJournalSource(identity: StructuredWorkerIdentity): StructuredJournalSource {
+  return {
+    sessionId: structuredWorkerSessionId(identity),
+    identityKey: [identity.processIncarnation, identity.paneKey]
+  }
+}
+
+/** A chat assignee's journal, by the address the Dispatch names it at. */
+function chatJournalSource(
+  db: OrchestrationDb,
+  dispatchId: string
+): StructuredJournalSource | null {
+  const address =
+    db.getWorkerDispatch(dispatchId)?.agent_terminal_handle ??
+    db.getDispatchContextById(dispatchId)?.assignee_handle
+  const chat = parseOrcaSessionAddress(address)
+  return chat && address ? { sessionId: executingSessionId(chat), identityKey: [address] } : null
 }
 
 /** The structured half of `worker-read`, or null when a PTY worker owns the dispatch. */
@@ -100,7 +127,10 @@ export function readStructuredWorkerOutput(args: {
   limit?: number
 }): OrchestrationWorkerReadTranscriptResult | null {
   const identity = resolveStructuredWorkerForDispatch(args.db, args.dispatchId)
-  if (!identity) {
+  const source = identity
+    ? workerJournalSource(identity)
+    : chatJournalSource(args.db, args.dispatchId)
+  if (!source) {
     return null
   }
   if (args.source === 'terminal') {
@@ -111,20 +141,31 @@ export function readStructuredWorkerOutput(args: {
       `Worker Dispatch ${args.dispatchId} has no terminal output; read it with --source auto or --source transcript.`
     )
   }
-  return readStructuredWorkerJournal({
-    identity,
+  return readStructuredJournal({
+    source,
     dispatchId: args.dispatchId,
     workerState: args.workerState,
     liveness: args.liveness,
-    agent: structuredWorkerAgent(identity),
+    agent: identity
+      ? structuredWorkerAgent(identity)
+      : (readStructuredAgentSessionRecord(source.sessionId)?.provider ?? 'claude'),
     ...(args.cursor === undefined ? {} : { cursor: args.cursor }),
     ...(args.limit === undefined ? {} : { limit: args.limit })
   })
 }
 
 /** Journal page in the shape `worker-read --source transcript` already serves. */
-export function readStructuredWorkerJournal(args: {
-  identity: StructuredWorkerIdentity
+export function readStructuredWorkerJournal(
+  args: Omit<Parameters<typeof readStructuredJournal>[0], 'source'> & {
+    identity: StructuredWorkerIdentity
+  }
+): OrchestrationWorkerReadTranscriptResult {
+  const { identity, ...rest } = args
+  return readStructuredJournal({ ...rest, source: workerJournalSource(identity) })
+}
+
+function readStructuredJournal(args: {
+  source: StructuredJournalSource
   dispatchId: string
   workerState: string
   liveness: StructuredWorkerObservation['status']
@@ -132,7 +173,7 @@ export function readStructuredWorkerJournal(args: {
   cursor?: string | number
   limit?: number
 }): OrchestrationWorkerReadTranscriptResult {
-  const page = readStructuredJournalPage(args.identity.sessionId)
+  const page = readStructuredJournalPage(args.source.sessionId)
   if (!page) {
     throw new OrchestrationError(
       'transcript_required',
@@ -142,7 +183,7 @@ export function readStructuredWorkerJournal(args: {
   const bounded = boundWorkerTranscriptMessages(projectStructuredItemsToNativeChat(page.items))
   // Identity of the PREFIX the caller already holds — see `structuredJournalPrefixIdentity`.
   const identityAt = (position: number): string =>
-    structuredJournalPrefixIdentity({ identity: args.identity, page, position })
+    structuredJournalPrefixIdentity({ identityKey: args.source.identityKey, page, position })
   const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
   if (
     cursor &&
@@ -193,7 +234,7 @@ export function readStructuredWorkerJournal(args: {
  * The oldest item stays in the anchor as the window-slide detector: a slide shifts every index.
  */
 function structuredJournalPrefixIdentity(args: {
-  identity: StructuredWorkerIdentity
+  identityKey: readonly string[]
   page: StructuredJournalPage
   position: number
 }): string {
@@ -205,8 +246,7 @@ function structuredJournalPrefixIdentity(args: {
   )
   return createWorkerOutputSourceIdentity([
     'structured-journal',
-    args.identity.processIncarnation,
-    args.identity.paneKey,
+    ...args.identityKey,
     args.page.items[0]?.itemId ?? '',
     ...projected.slice(0, args.position).flatMap((item) => [item.itemId, String(item.revision)])
   ])
@@ -217,7 +257,7 @@ export function captureStructuredWorkerArchive(
   identity: StructuredWorkerIdentity,
   agent: AgentType
 ): WorkerStructuredJournalArchive {
-  const page = readStructuredJournalPage(identity.sessionId)
+  const page = readStructuredJournalPage(structuredWorkerSessionId(identity))
   if (page) {
     return buildStructuredJournalArchive({
       agent,
