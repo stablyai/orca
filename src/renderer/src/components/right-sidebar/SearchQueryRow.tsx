@@ -34,9 +34,12 @@ export function SearchQueryRow({
   onToggleRegex
 }: SearchQueryRowProps): React.JSX.Element {
   return (
+    // Why the surface declaration: a one-line query field owns no vertical caret
+    // movement, so global shortcuts stay reachable without tabbing out of it.
     <div
       className="flex h-7 items-center gap-1 rounded-sm border border-border bg-input/50 px-1.5 focus-within:border-ring"
       data-ignore-file-explorer-keys="true"
+      data-keyboard-surface="text-field"
     >
       <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
       <input

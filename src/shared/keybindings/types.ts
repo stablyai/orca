@@ -10,15 +10,27 @@ export type KeybindingScope =
   | 'composer'
   | 'settings'
 
-export type KeybindingContext = 'app' | 'terminal' | 'browser'
+export type KeybindingContext = 'app' | 'terminal' | 'browser' | 'text-entry'
 
 export type KeybindingPlatform = 'darwin' | 'linux' | 'win32'
 
 export type TerminalShortcutPolicy = 'orca-first' | 'terminal-first'
 
+/**
+ * Which key gestures a focused text surface owns. A single-line field claims no
+ * vertical caret movement, so a chord like Mod+Shift+ArrowUp is free for an app
+ * action there while a textarea or rich-text editor still keeps it.
+ */
+export type TextEntryClaim = {
+  verticalCaret: boolean
+  richTextFormatting: boolean
+}
+
 export type KeybindingMatchOptions = {
   context?: KeybindingContext
   terminalShortcutPolicy?: TerminalShortcutPolicy
+  /** Only read when `context` is 'text-entry'; the most restrictive claim is assumed when absent. */
+  textEntryClaim?: TextEntryClaim
 }
 
 export type AgentTabActionId = `tab.newAgent.${TuiAgent}`

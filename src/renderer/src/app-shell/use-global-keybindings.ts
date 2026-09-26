@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { isEditableTarget } from '../lib/editable-target'
 import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
 import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
@@ -32,8 +31,12 @@ import {
 } from '../../../shared/modifier-double-tap-detector'
 import { shortcutPlatform } from './app-window-chrome'
 import {
+  keybindingContextForSurface,
+  resolveKeyboardShortcutSurface,
+  textEntryClaimForSurface
+} from '@/lib/keyboard-shortcut-surface'
+import {
   createAppCommandHandlers,
-  getKeybindingContext,
   useAppShortcutActions,
   type AppShortcutState,
   type ShortcutDispatchInput
@@ -115,14 +118,17 @@ export function useGlobalKeybindings(args: {
       ) {
         return
       }
-      const context = getKeybindingContext(input.target)
+      const surface = resolveKeyboardShortcutSurface(input.target)
+      const context = keybindingContextForSurface(surface)
+      const textEntryClaim = textEntryClaimForSurface(surface)
 
       // Note: some shortcuts are also intercepted in createMainWindow.ts before-input-event (for browser-guest focus); the renderer keeps handlers for local focus.
 
       const matchShortcut = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, input, shortcutPlatform, keybindings, {
           context,
-          terminalShortcutPolicy
+          terminalShortcutPolicy,
+          textEntryClaim
         })
       const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
         if (context !== 'terminal' || (terminalShortcutPolicy ?? 'orca-first') !== 'orca-first') {
@@ -188,7 +194,8 @@ export function useGlobalKeybindings(args: {
       }
 
       // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).
-      if (isEditableTarget(input.target)) {
+      // A surface that declares what it owns is judged per chord in the keybinding gate instead.
+      if (surface.kind === 'blocked') {
         return
       }
 
@@ -199,7 +206,11 @@ export function useGlobalKeybindings(args: {
 
       // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
       if (isFloatingWorkspacePanelFocused()) {
-        const floatingMatchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
+        const floatingMatchOptions: KeybindingMatchOptions = {
+          context,
+          terminalShortcutPolicy,
+          textEntryClaim
+        }
         if (
           matchFloatingWorkspacePanelChord(
             input,
