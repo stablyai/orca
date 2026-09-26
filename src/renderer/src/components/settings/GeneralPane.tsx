@@ -279,12 +279,12 @@ export function GeneralPane({
     // its own loading placeholder and its own collapsing Separator. Without
     // that separation, a dangling divider would remain above the collapsed
     // section.
-  ].filter(Boolean)
+  ].filter((section) => section !== null)
 
   return (
     <div className="space-y-6">
       {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-6">
+        <div key={section.key} className="space-y-6">
           {index > 0 ? <Separator /> : null}
           {section}
         </div>
