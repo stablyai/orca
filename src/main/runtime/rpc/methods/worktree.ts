@@ -11,6 +11,7 @@ import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-
 import { defineMethod } from '../core'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
+import { resolveRpcWorkspaceStatus } from './workspace-status-resolution'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import { WorktreeCreate, WorktreePrefetchCreateBase } from './worktree-create-schemas'
@@ -84,6 +85,7 @@ export const WORKTREE_METHODS = [
       // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
       context.runtime.dedupeWorktreeCreate(params.repo, params.clientMutationId, async () => {
         const { runtime } = context
+        const workspaceStatus = resolveRpcWorkspaceStatus(runtime, params.workspaceStatus)
         const repo = await runtime.showRepo(params.repo)
         const automationProvenance = resolveAutomationWorkspaceProvenance({
           authority: runtime,
@@ -96,7 +98,7 @@ export const WORKTREE_METHODS = [
         try {
           const result = await runtime.createManagedWorktree(
             buildManagedWorktreeCreateArgs(
-              params,
+              { ...params, workspaceStatus },
               {
                 automationProvenance,
                 cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
@@ -168,7 +170,7 @@ export const WORKTREE_METHODS = [
         sparseBaseRef: params.sparseBaseRef,
         sparsePresetId: params.sparsePresetId,
         baseRef: params.baseRef,
-        workspaceStatus: params.workspaceStatus,
+        workspaceStatus: resolveRpcWorkspaceStatus(runtime, params.workspaceStatus),
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
         mobileDiffReview: params.mobileDiffReview,
