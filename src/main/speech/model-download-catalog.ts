@@ -179,6 +179,18 @@ const MODEL_DOWNLOAD_FILES = {
       ['tokens.txt', 28_557, '732f64c53909f2620c713f4106b487d92e6f54a6915b3cd3d1dbd32f9f4f392a']
     ]
   ),
+  'gigaam-v3-ctc-punct-ru-int8': huggingFaceFiles(
+    'csukuangfj/sherpa-onnx-nemo-ctc-punct-giga-am-v3-russian-2025-12-16',
+    '4fb5407ff028a69fec516cdf4c10fac9ddea7c16',
+    [
+      [
+        'model.int8.onnx',
+        224_893_661,
+        'd5fea8df94263c285e54b21e5774b707c707192d3bdbeffd7b1eb07fb6743b35'
+      ],
+      ['tokens.txt', 2_007, '142de7570b3de5b3035ce111a89c228e80e6085273731d944093ddf24fa539cd']
+    ]
+  ),
   'whisper-tiny': huggingFaceFiles(
     'csukuangfj/sherpa-onnx-whisper-tiny',
     '65176e2deb88badc814a94058666cadccc29b61c',

@@ -19,6 +19,23 @@ describe('SPEECH_MODEL_CATALOG', () => {
     ])
   })
 
+  it('includes the Russian GigaAM v3 CTC model with a valid manifest', () => {
+    const manifest = getCatalogModel('gigaam-v3-ctc-punct-ru-int8')
+
+    expect(manifest).toBeDefined()
+    expect(manifest?.type).toBe('nemo-ctc')
+    expect(manifest?.provider).toBe('local')
+    expect(manifest?.language).toBe('ru')
+    expect(manifest?.streaming).toBe(false)
+    expect(manifest?.sampleRate).toBe(16000)
+    expect(manifest?.files).toEqual(['model.int8.onnx', 'tokens.txt'])
+    expect(manifest?.sizeBytes).toBe(224_895_668)
+    expect(manifest?.downloadFiles?.map(({ url }) => url)).toEqual([
+      'https://huggingface.co/csukuangfj/sherpa-onnx-nemo-ctc-punct-giga-am-v3-russian-2025-12-16/resolve/4fb5407ff028a69fec516cdf4c10fac9ddea7c16/model.int8.onnx?download=true',
+      'https://huggingface.co/csukuangfj/sherpa-onnx-nemo-ctc-punct-giga-am-v3-russian-2025-12-16/resolve/4fb5407ff028a69fec516cdf4c10fac9ddea7c16/tokens.txt?download=true'
+    ])
+  })
+
   it('has unique ids across the catalog', () => {
     const ids = SPEECH_MODEL_CATALOG.map((m) => m.id)
 
