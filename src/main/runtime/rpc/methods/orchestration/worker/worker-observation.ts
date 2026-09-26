@@ -59,7 +59,9 @@ export async function inspectWorkerTerminal(
       owned === null
         ? null
         : owned &&
-          !structuredWorkerResourceReleased(db.getWorkerTerminalResourceByHandle(structured.handle))
+          !structuredWorkerResourceReleased(
+            db.getWorkerTerminalResourceByHandle?.(structured.handle)
+          )
     return {
       terminal: null,
       exact,
