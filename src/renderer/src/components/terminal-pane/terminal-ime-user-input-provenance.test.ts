@@ -80,9 +80,11 @@ describe('IME and Hangul commits reach the PTY as user input', () => {
     originalUserAgent = Object.getOwnPropertyDescriptor(navigator, 'userAgent')
     originalMaxTouchPoints = Object.getOwnPropertyDescriptor(navigator, 'maxTouchPoints')
     // happy-dom has no 2d context, which the DOM renderer's WidthCache requires.
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
-      measureText: () => ({ width: 10 })
-    } as unknown as CanvasRenderingContext2D)
+    const measuringContext = { measureText: () => ({ width: 10 }) }
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the DOM renderer's WidthCache calls only measureText.
+      measuringContext as unknown as CanvasRenderingContext2D
+    )
   })
 
   afterEach(() => {
