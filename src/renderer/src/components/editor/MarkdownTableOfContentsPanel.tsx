@@ -242,7 +242,7 @@ export function MarkdownTableOfContentsPanel({
           </Button>
         </div>
       </div>
-      <div className="markdown-toc-list">
+      <div className="markdown-toc-list scrollbar-sleek">
         {items.length > 0 ? (
           items.map((item) => (
             <MarkdownTocRow

@@ -59,5 +59,6 @@ describe('MarkdownTableOfContentsPanel', () => {
     expect(html).toContain('Setup')
     expect(html).toContain('data-markdown-toc-resize-handle')
     expect(html).toContain('Resize table of contents')
+    expect(html).toContain('class="markdown-toc-list scrollbar-sleek"')
   })
 })
