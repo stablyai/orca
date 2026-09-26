@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 
 // Stop is there from the moment a message is sent until the work settles — against a host that takes
-// a Stop naming no turn. Against an older host it stays exactly what it was: a running turn only.
+// a Stop naming no turn. Against any other host, one that accepts sends first included, it stays
+// exactly what it was: a running turn only, named.
 
 import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -13,8 +14,7 @@ import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/struc
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
-  withdrawUnsent: vi.fn(),
-  acceptsSend: false
+  withdrawUnsent: vi.fn()
 }))
 let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
@@ -23,10 +23,6 @@ let outbox: StructuredAgentSessionOutboxEntry[] = []
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
-}))
-
-vi.mock('@/runtime/structured-agent-session-accepted-send-capability', () => ({
-  useStructuredAgentSessionHostAcceptsSend: () => mocks.acceptsSend
 }))
 
 vi.mock('./use-structured-agent-session-read', () => ({
@@ -49,6 +45,11 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
   })
 }))
 
+import {
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
 function entry(
@@ -121,6 +122,10 @@ function cancels(): unknown[] {
     .map(([, , params]) => params)
 }
 
+afterEach(() => {
+  setLocalRuntimeCapabilitiesForTests(null)
+})
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.call.mockImplementation(async (_target, method) =>
@@ -133,7 +138,10 @@ beforeEach(() => {
 
 describe('Stop against a host that stops the conversation', () => {
   beforeEach(() => {
-    mocks.acceptsSend = true
+    setLocalRuntimeCapabilitiesForTests([
+      AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+      AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY
+    ])
   })
 
   it.each(Object.entries(IN_FLIGHT))(
@@ -167,13 +175,19 @@ describe('Stop against a host that stops the conversation', () => {
   })
 })
 
-describe('Stop against an older host', () => {
+// A host that accepts sends first but predates the no-turn cancel refuses that cancel as invalid,
+// so it is treated exactly as an older host; so is one whose capabilities are not known yet.
+describe.each([
+  ['one that only accepts sends first', [AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY]],
+  ['an older one', []],
+  ['one not heard from yet', null]
+])('Stop against a host that is %s', (_host, capabilities) => {
   beforeEach(() => {
-    mocks.acceptsSend = false
+    setLocalRuntimeCapabilitiesForTests(capabilities)
   })
 
   it.each(Object.entries(IN_FLIGHT).filter(([state]) => state !== 'a turn is running'))(
-    'stays hidden while %s',
+    'stays hidden while %s, and sends no cancel naming no turn',
     async (_state, arrange) => {
       arrange()
       const { result } = render()

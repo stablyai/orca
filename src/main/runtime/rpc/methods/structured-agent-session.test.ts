@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
@@ -153,6 +154,8 @@ describe('capability gating', () => {
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
     // A client tells a host that accepts first, and admits a writer-free Stop before a turn, by it.
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY)
+    // And a cancel naming no turn, which a host that only accepts first still refuses as invalid.
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)
     // Separate from the structured capability on purpose: a host can serve the rest of the

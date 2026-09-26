@@ -9,7 +9,7 @@ import type {
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { supportsStructuredAgentSessionPromptCancel } from '@/runtime/structured-agent-session-client'
-import { useStructuredAgentSessionHostAcceptsSend } from '@/runtime/structured-agent-session-accepted-send-capability'
+import { useStructuredAgentSessionHostStopsConversation } from '@/runtime/structured-agent-session-host-capability'
 import { hasUnsettledStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import {
   pendingStructuredSessionPrompts,
@@ -113,10 +113,10 @@ export function useStructuredAgentSession(args: {
 
   const prompts = pendingStructuredSessionPrompts(transportState.journalItems)
   const { outbox } = outboxController
-  // A host that accepts a send before any agent has it also takes a Stop naming no turn, so Stop is
-  // there from the send until the work settles. An older host can stop only a turn it has opened.
+  // A host that takes a Stop naming no turn gets Stop from the send until the work settles; every
+  // Stop before a turn opens needs that form. An older host can stop only a turn it has opened.
   const stopsConversation =
-    useStructuredAgentSessionHostAcceptsSend(target) && transportState.fence !== null
+    useStructuredAgentSessionHostStopsConversation(target) && transportState.fence !== null
   const canStop =
     transportState.turnId !== null ||
     (stopsConversation &&
