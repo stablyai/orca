@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
+import { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import { encodeJsonRpcFrame } from '../ssh/relay-protocol'
 import {
   REMOTE_WORKSPACE_STALE_NOTIFICATION,
+  REMOTE_WORKSPACE_CHANGED_NOTIFICATION,
   type RemoteWorkspaceChangedEvent,
   type RemoteWorkspaceSession,
   type RemoteWorkspaceSnapshot
@@ -280,5 +283,121 @@ describe('workspace.stale resync', () => {
 
     expect(getCachedRemoteWorkspaceSnapshot('target-1')?.revision).toBe(3)
     expect(sent.map((event) => event.snapshot.revision)).toEqual([2])
+  })
+
+  it.each(['response-first', 'notification-first'] as const)(
+    'never publishes an older read after a newer notification in one decode turn (%s)',
+    async (order) => {
+      let receive: ((data: Buffer) => void) | undefined
+      const mux = new SshChannelMultiplexer({
+        write: () => {},
+        onData: (callback) => {
+          receive = callback
+        },
+        onClose: () => {}
+      })
+      const read = vi.spyOn(mux, 'request')
+      getActiveMultiplexerMock.mockReturnValue(mux)
+      mux.onNotification((method, params) =>
+        handleRemoteWorkspaceNotification('target-1', method, params)
+      )
+      rememberRemoteWorkspaceSnapshot('target-1', snapshot(1, 'initial-tab'))
+      try {
+        handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_STALE_NOTIFICATION, {
+          namespace: 'target-1'
+        })
+        const reply = { jsonrpc: '2.0', id: 1, result: snapshot(2, 'older-read') } as const
+        const changed = {
+          jsonrpc: '2.0',
+          method: REMOTE_WORKSPACE_CHANGED_NOTIFICATION,
+          params: { snapshot: snapshot(3, 'newer-peer'), sourceClientId: 'peer-client' }
+        } as const
+        const messages = order === 'response-first' ? [reply, changed] : [changed, reply]
+        receive?.(
+          Buffer.concat(messages.map((message, index) => encodeJsonRpcFrame(message, index + 1, 0)))
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+        expect(getCachedRemoteWorkspaceSnapshot('target-1')?.revision).toBe(3)
+        expect(sent.map((event) => event.snapshot.revision)).toEqual([3])
+        await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2))
+        receive?.(
+          encodeJsonRpcFrame({ jsonrpc: '2.0', id: 2, result: snapshot(3, 'newer-peer') }, 3, 0)
+        )
+        await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
+        expect(sent.map((event) => event.snapshot.revision)).toEqual([3])
+      } finally {
+        mux.dispose()
+      }
+    }
+  )
+
+  it.each([2, 3])(
+    'does not deliver a captured read after peer revision %i replaces it',
+    async (peerRevision) => {
+      rememberRemoteWorkspaceSnapshot('target-1', snapshot(1, 'initial-tab'))
+      const peer = snapshot(peerRevision, 'newer-peer')
+      request.mockResolvedValue(peer)
+      let releaseRead: ((value: RemoteWorkspaceSnapshot) => void) | undefined
+      request.mockImplementationOnce(
+        () =>
+          new Promise<RemoteWorkspaceSnapshot>((resolve) => {
+            releaseRead = resolve
+          })
+      )
+      handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_STALE_NOTIFICATION, {
+        namespace: 'target-1'
+      })
+
+      releaseRead?.(snapshot(2, 'older-read'))
+      queueMicrotask(() => {
+        handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_CHANGED_NOTIFICATION, {
+          snapshot: peer,
+          sourceClientId: 'peer-client'
+        })
+      })
+      await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
+
+      expect(getCachedRemoteWorkspaceSnapshot('target-1')?.session.activeTabId).toBe('newer-peer')
+      expect(sent.map((event) => event.snapshot.session.activeTabId)).toEqual(['newer-peer'])
+      expect(request).toHaveBeenCalledTimes(2)
+    }
+  )
+
+  it('accepts a relay reset after rereading a response that raced a host change', async () => {
+    rememberRemoteWorkspaceSnapshot('target-1', snapshot(40, 'before-reset'))
+    request.mockResolvedValue(snapshot(1, 'after-reset'))
+    let releaseRead: ((value: RemoteWorkspaceSnapshot) => void) | undefined
+    request.mockImplementationOnce(
+      () =>
+        new Promise<RemoteWorkspaceSnapshot>((resolve) => {
+          releaseRead = resolve
+        })
+    )
+    handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_STALE_NOTIFICATION, {
+      namespace: 'target-1'
+    })
+    handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_CHANGED_NOTIFICATION, {
+      snapshot: snapshot(41, 'last-before-reset'),
+      sourceClientId: 'peer-client'
+    })
+    releaseRead?.(snapshot(1, 'after-reset'))
+    await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
+
+    expect(getCachedRemoteWorkspaceSnapshot('target-1')?.revision).toBe(1)
+    expect(sent.map((event) => event.snapshot.revision)).toEqual([41, 1])
+    expect(request).toHaveBeenCalledTimes(2)
+  })
+
+  it('still accepts a lower revision after a relay reset', async () => {
+    rememberRemoteWorkspaceSnapshot('target-1', snapshot(40, 'before-reset'))
+    request.mockResolvedValue(snapshot(1, 'after-reset'))
+    handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_STALE_NOTIFICATION, {
+      namespace: 'target-1'
+    })
+    await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
+    expect(getCachedRemoteWorkspaceSnapshot('target-1')?.revision).toBe(1)
+    expect(sent.map((event) => event.snapshot.session.activeTabId)).toEqual(['after-reset'])
+    expect(request).toHaveBeenCalledTimes(1)
   })
 })

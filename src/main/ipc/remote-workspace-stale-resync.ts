@@ -3,6 +3,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { readRemoteSnapshot } from './remote-workspace-relay-sync'
 import {
   getCachedRemoteWorkspaceSnapshot,
+  remoteWorkspaceSnapshotsAreIdentical,
   rememberRemoteWorkspaceSnapshot
 } from './remote-workspace-snapshot-cache'
 import { remoteWorkspaceSessionMatchesSnapshot } from './remote-workspace-snapshot-normalization'
@@ -42,20 +43,34 @@ export function resyncStaleRemoteWorkspace(
     try {
       do {
         pending.requeued = false
+        const cachedBeforeRead = getCachedRemoteWorkspaceSnapshot(target.id)
         const observation = await readRemoteSnapshot(target, (snapshot) => {
           // An own patch reply can update the cache while this read is pending.
           const previous = getCachedRemoteWorkspaceSnapshot(target.id)
+          if (previous?.hostObservationToken !== cachedBeforeRead?.hostObservationToken) {
+            // Reread a conflicting observation; revision comparisons would reject valid relay resets.
+            pending.requeued ||= !remoteWorkspaceSnapshotsAreIdentical(previous, snapshot)
+            return null
+          }
           return {
             unchanged: remoteWorkspaceSessionMatchesSnapshot(previous, snapshot.session),
             snapshot: rememberRemoteWorkspaceSnapshot(target.id, snapshot)
           }
         })
         if (!observation) {
-          return
+          continue
         }
         // Suppress the echo: our own patch response already cached this session, and re-publishing it
         // makes the renderer rehydrate a state it authored.
         if (observation.unchanged) {
+          continue
+        }
+        const latest = getCachedRemoteWorkspaceSnapshot(target.id)
+        if (
+          latest?.hostObservationToken !== observation.snapshot.hostObservationToken &&
+          !remoteWorkspaceSnapshotsAreIdentical(latest, observation.snapshot)
+        ) {
+          pending.requeued = true
           continue
         }
         deliver(observation.snapshot)
