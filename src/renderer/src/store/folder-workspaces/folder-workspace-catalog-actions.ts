@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { getActiveRuntimeTarget, settingsForRuntimeOwner } from '../../runtime/runtime-rpc-client'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { FetchedFolderWorkspaceCatalog } from './folder-workspace-catalog'
 import type { HostCatalogFence } from '../host-catalog-fencing'
 import type { RepoSlice } from '../repos/repo-state'
@@ -65,14 +66,16 @@ export function createFolderWorkspaceCatalogActions(
       const applyCatalog = (
         catalog: FetchedFolderWorkspaceCatalog,
         fence: HostCatalogFence
-      ): void => {
+      ): boolean => {
         if (!isHostCatalogFenceCurrent(get, fence)) {
-          return
+          return false
         }
+        let applied = false
         set((current) => {
           if (!isHostCatalogFenceCurrent(get, fence)) {
             return current
           }
+          applied = true
           folderWorkspaceUpdates.recordCatalogReplacement(
             getFolderWorkspaceCatalogReplacementIdentities(
               catalog,
@@ -92,17 +95,35 @@ export function createFolderWorkspaceCatalogActions(
               : { folderWorkspacePathStatuses: {} })
           }
         })
+        return applied
       }
 
-      let failed = false
+      const hydratedFolderWorkspaceFences = new Map<ExecutionHostId, HostCatalogFence>()
+      const clearRestoredOwnersForHydratedHosts = (): void => {
+        const hydratedFolderWorkspaceHostIds = new Set(
+          [...hydratedFolderWorkspaceFences]
+            .filter(([, fence]) => isHostCatalogFenceCurrent(get, fence))
+            .map(([hostId]) => hostId)
+        )
+        set((s) => ({
+          restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(
+            s.restoredRuntimeHostIdByWorkspaceSessionKey,
+            s,
+            { hydratedFolderWorkspaceHostIds }
+          )
+        }))
+      }
       try {
         const target = { kind: 'local' as const }
         const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
-        applyCatalog(await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups), fence)
+        const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
+        if (applyCatalog(catalog, fence)) {
+          hydratedFolderWorkspaceFences.set(catalog.hostId, fence)
+        }
       } catch (err) {
-        failed = true
         console.error('Failed to fetch local folder workspaces for all-host load:', err)
       }
+      clearRestoredOwnersForHydratedHosts()
       if (options?.remoteHosts === 'skip') {
         return
       }
@@ -116,12 +137,11 @@ export function createFolderWorkspaceCatalogActions(
           }
           const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
           try {
-            applyCatalog(
-              await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups),
-              fence
-            )
+            const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
+            if (applyCatalog(catalog, fence)) {
+              hydratedFolderWorkspaceFences.set(catalog.hostId, fence)
+            }
           } catch (err) {
-            failed = true
             console.warn(
               `Skipped folder workspaces for runtime environment ${environment.id}:`,
               err
@@ -129,14 +149,7 @@ export function createFolderWorkspaceCatalogActions(
           }
         })
       )
-      if (!failed) {
-        set((s) => ({
-          restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(
-            s.restoredRuntimeHostIdByWorkspaceSessionKey,
-            s
-          )
-        }))
-      }
+      clearRestoredOwnersForHydratedHosts()
     }
   }
 }
