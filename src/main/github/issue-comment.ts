@@ -1,5 +1,6 @@
 import type { GitHubCommentResult, PRComment } from '../../shared/github/comment-types'
 import type { LocalGitExecOptions, OwnerRepo } from './gh-utils'
+import { withGhApiJsonInput } from './gh-api-json-input'
 import { getIssueGitHubApiRepository, resolveGitHubRepoExecution } from './github-api-repository'
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
 
@@ -35,16 +36,17 @@ export async function addIssueComment(
   }
   await acquire()
   try {
-    const { stdout } = await ghExecFileAsync(
-      [
-        'api',
-        '-X',
-        'POST',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}/comments`,
-        '--raw-field',
-        `body=${body}`
-      ],
-      ghOptions
+    const { stdout } = await withGhApiJsonInput({ body }, (inputArgs) =>
+      ghExecFileAsync(
+        [
+          'api',
+          '-X',
+          'POST',
+          `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}/comments`,
+          ...inputArgs
+        ],
+        ghOptions
+      )
     )
     const data = JSON.parse(stdout) as {
       id?: number
