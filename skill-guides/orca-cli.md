@@ -4,10 +4,11 @@ description: >-
   Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, artifacts,
   skill sharing, worktree comments, and Orca's embedded browser through the `orca` CLI. Use
   when the user says "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a
-  worktree", "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another
-  agent", "Orca browser", "orca artifacts", or "share skills". Prefer it over raw git
-  worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
-  when a visible window needs GUI control that a CLI, filesystem, or API cannot do.
+  worktree", "read/wait/send Orca terminal", "terminal bridge", "cross-terminal", "@1", "@2",
+  "#1", "#2", "inter-terminal", "handoff" / "handover" / "give this to another agent",
+  "Orca browser", "orca artifacts", or "share skills". Prefer it over raw git worktree, ad hoc
+  PTYs, or Computer Use when Orca state is involved. Use Computer Use only when a visible window
+  needs GUI control that a CLI, filesystem, or API cannot do.
 ---
 
 # Orca CLI
@@ -182,6 +183,26 @@ Terminal rules:
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction horizontal` splits left/right. `--direction vertical` splits top/bottom.
+
+### Terminal Bridge (@target Addressing & Inter-Agent Coordination)
+
+Orca automatically indexes workspace terminals as `#1`, `#2`, `#3`... shown on tab badges. Any terminal can be targeted using `@<index>` (e.g. `@1`, `@2`) or `@<title>` (e.g. `@twin3-sdk`):
+
+```text
+ORCA bridge list --json
+ORCA bridge read @2 30 --json
+ORCA bridge type @2 "git status" --json
+ORCA bridge send @2 "npm test" --json
+ORCA bridge message @2 "review ready" --json
+ORCA bridge keys @2 Enter --json
+```
+
+Rules:
+- Targets: `@<index>` (e.g. `@1`, `@2`), `#<index>`, or `@<label>`. Ambiguous duplicate labels error until disambiguated by index.
+- Read Guard: `bridge read <target> [lines]` reads output and arms the read guard. `bridge send`, `bridge type`, and `bridge keys` require reading before writing to prevent race conditions (use `--no-read-guard` to bypass).
+- Send vs Type: `ORCA bridge send <target> "<command>"` types and presses Enter. `ORCA bridge type <target> "<text>"` types without submitting.
+- Special Keys: `ORCA bridge keys <target> <key>...` sends keys like `Enter`, `Escape`, `C-c`.
+- Inter-agent coordination pattern: `bridge list` -> `bridge read @<target>` -> `bridge send @<target> "<cmd>"` -> `bridge read @<target>`.
 
 ## Artifacts
 

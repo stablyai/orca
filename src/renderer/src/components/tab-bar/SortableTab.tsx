@@ -113,6 +113,16 @@ export default function SortableTab({
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
 
+  // Why: determine 1-based terminal index within the worktree for cross-terminal addressing and mentions.
+  const terminalIndex = useAppStore((s) => {
+    const tabs = s.tabsByWorktree[tab.worktreeId]
+    if (!tabs) {
+      return undefined
+    }
+    const idx = tabs.findIndex((t) => t.id === tab.id)
+    return idx !== -1 ? idx + 1 : undefined
+  })
+
   // Why: use hook status + title evidence so the icon reflects the harness running now, not just the launch command.
   const tabAgent = useTabAgent(tab)
 
@@ -236,6 +246,14 @@ export default function SortableTab({
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
       />
+      {terminalIndex !== undefined && !isEditing && (
+        <span
+          data-testid="tab-terminal-index"
+          className="mr-1 inline-flex items-center rounded px-1 py-0.5 text-[10px] font-mono font-medium text-muted-foreground bg-muted/60"
+        >
+          #{terminalIndex}
+        </span>
+      )}
       {isPinned && !isEditing && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}
