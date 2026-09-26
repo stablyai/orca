@@ -141,6 +141,23 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
       ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
+  },
+  {
+    title: translate('settings.appearance.fileIconTheme.title', 'File Icon Theme'),
+    description: translate(
+      'settings.appearance.fileIconTheme.description',
+      'Choose the icons used for files and folders in the file explorer.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.fileIconTheme.keyword.icons', 'icons'),
+      ...translateSearchKeyword('settings.appearance.fileIconTheme.keyword.folders', 'folders'),
+      ...translateSearchKeyword('settings.appearance.fileIconTheme.keyword.colors', 'colors'),
+      ...translateSearchKeyword(
+        'settings.appearance.fileIconTheme.keyword.explorer',
+        'file explorer'
+      ),
+      ...translateSearchKeyword('settings.appearance.fileIconTheme.keyword.plugins', 'plugins')
+    ]
   }
 ])
 

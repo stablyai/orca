@@ -14,6 +14,8 @@ import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { useFileExplorerSelection } from './useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
+import { useAppStore } from '@/store'
+import { usePluginIconThemes } from '@/store/plugin-icon-themes'
 
 type FileExplorerFilesTreePaneProps = {
   activeRepo: Repo | null
@@ -59,6 +61,9 @@ export function FileExplorerFilesTreePane({
   handleExplorerBackgroundContextMenuCapture,
   handleExplorerBackgroundDoubleClick
 }: FileExplorerFilesTreePaneProps): React.JSX.Element {
+  const selectedIconThemeId = useAppStore((state) => state.settings?.fileIconTheme ?? 'builtin')
+  const iconThemes = usePluginIconThemes()
+  const iconTheme = iconThemes.find((theme) => theme.id === selectedIconThemeId) ?? null
   const { loadingDirPaths, rootCache, rootError } = tree
   const { selectedPaths, preserveSelectionForContextMenu, copyPathsForNode } = selection
   const {
@@ -169,6 +174,7 @@ export function FileExplorerFilesTreePane({
           virtualizer={virtualizer}
           inlineInputIndex={inlineInputIndex}
           rowProjection={rowProjection}
+          iconTheme={iconTheme}
           inlineInput={inlineInput}
           handleInlineSubmit={handleInlineSubmit}
           dismissInlineInput={dismissInlineInput}

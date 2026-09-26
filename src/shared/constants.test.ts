@@ -19,6 +19,11 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').showGitIgnoredFiles).toBe(true)
   })
 
+  it('uses Orca built-in file icons by default', () => {
+    expect(getDefaultSettings('/tmp').fileIconTheme).toBe('builtin')
+    expect(getDefaultSettings('/tmp').folderColorOverrides).toEqual({})
+  })
+
   it('uses list view for Source Control changes by default', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
   })
