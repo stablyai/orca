@@ -40,7 +40,7 @@ import { useNotebookKernelState } from './ipynb-kernel-store'
 type KernelState = ReturnType<typeof useNotebookKernelState>
 
 function environmentLabel({ name, version }: PythonEnvironment): string {
-  return `${name} (Python ${version})`
+  return version ? `${name} (Python ${version})` : name
 }
 
 function kernelLabel({ environment, status, setup }: KernelState): string {
@@ -115,15 +115,17 @@ export function IpynbKernelToolbar({
       return
     }
     let current = true
-    void window.api.notebook.listPythonEnvironments({ filePath, rootPath }).then((found) => {
-      if (current) {
-        setEnvironments(found)
-      }
-    })
+    void window.api.notebook
+      .listPythonEnvironments({ filePath, rootPath, runWorkspaceInterpreters: kernel.trusted })
+      .then((found) => {
+        if (current) {
+          setEnvironments(found)
+        }
+      })
     return () => {
       current = false
     }
-  }, [filePath, pickerOpen, rootPath])
+  }, [filePath, kernel.trusted, pickerOpen, rootPath])
 
   const choose = (path: string): void => {
     const environment = [...(environments?.workspace ?? []), ...(environments?.path ?? [])].find(
@@ -220,8 +222,9 @@ export function IpynbKernelToolbar({
             <FolderOpen />
             {translate('auto.components.editor.IpynbViewer.browsePython', 'Browse for Python…')}
           </DropdownMenuItem>
+          {/* Why trusted: it reuses an existing .venv, running a Python the repo may have shipped. */}
           <DropdownMenuItem
-            disabled={!venvBase}
+            disabled={!venvBase || !kernel.trusted}
             onSelect={() => {
               if (venvBase) {
                 offerVirtualEnvironment(filePath, venvBase)

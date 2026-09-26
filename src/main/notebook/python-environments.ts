@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative } from 'node:path'
 import { runProcess } from '../../shared/child-process/run-process'
 import type { ProcessResult } from '../../shared/child-process/process-spec'
@@ -15,6 +15,7 @@ const WORKSPACE_ENV_DIRS = ['.venv', '.conda']
 const INSTALL_TIMEOUT_MS = 10 * 60_000
 const INSTALL_DETAIL_CHARS = 4000
 const VENV_TIMEOUT_MS = 2 * 60_000
+const PYVENV_CFG_MAX_BYTES = 64 * 1024
 
 /** `.venv`/`.conda` interpreters from the notebook's folder up to the workspace root, nearest first. */
 export function findWorkspaceInterpreters(
@@ -62,27 +63,76 @@ async function probe(
   }
 }
 
-/** Names an interpreter after its environment folder when it lives in one. */
-function environmentName(executable: string): string {
+/** The environment folder an interpreter lives in, when it lives in one. */
+function environmentDir(executable: string): string | undefined {
   // venvs keep python in bin/ or Scripts\; Windows conda envs keep it at the env root.
-  const envDir = [dirname(dirname(executable)), dirname(executable)].find(
+  return [dirname(dirname(executable)), dirname(executable)].find(
     (dir) => existsSync(join(dir, 'pyvenv.cfg')) || existsSync(join(dir, 'conda-meta'))
   )
-  return basename(envDir ?? executable)
+}
+
+/** Names an interpreter after its environment folder when it lives in one. */
+function environmentName(executable: string): string {
+  return basename(environmentDir(executable) ?? executable)
+}
+
+/** The Python version an environment records on disk: venv `pyvenv.cfg`, else conda's `conda-meta`. */
+function recordedVersion(envDir: string): string | undefined {
+  try {
+    const cfg = join(envDir, 'pyvenv.cfg')
+    const stat = existsSync(cfg) ? statSync(cfg) : null
+    // Why the size cap: a hostile repo can point pyvenv.cfg at something endless.
+    if (stat?.isFile() && stat.size <= PYVENV_CFG_MAX_BYTES) {
+      const match = /^\s*version(?:_info)?\s*=\s*(\d+\.\d+(?:\.\d+)?)/m.exec(
+        readFileSync(cfg, 'utf8')
+      )
+      if (match) {
+        return match[1]
+      }
+    }
+    const condaMeta = join(envDir, 'conda-meta')
+    if (existsSync(condaMeta)) {
+      for (const entry of readdirSync(condaMeta)) {
+        const match = /^python-(\d+\.\d+(?:\.\d+)?)-.*\.json$/.exec(entry)
+        if (match) {
+          return match[1]
+        }
+      }
+    }
+  } catch {
+    // Unreadable metadata just leaves the version unknown.
+  }
+  return undefined
+}
+
+/** Describes a workspace interpreter from its files alone, without running it. */
+function describeWithoutRunning(interpreter: string): PythonEnvironment {
+  const envDir = environmentDir(interpreter)
+  const version = envDir === undefined ? undefined : recordedVersion(envDir)
+  const name = basename(envDir ?? interpreter)
+  return version ? { path: interpreter, name, version } : { path: interpreter, name }
 }
 
 export function describePython(path: string): Promise<PythonEnvironment | null> {
   return probe(path, [], environmentName)
 }
 
+/**
+ * Pythons a notebook can use. `runWorkspaceInterpreters` is false until the notebook is trusted:
+ * a repo can ship its own `.venv/bin/python`, so those are then read from disk, never run.
+ */
 export async function listPythonEnvironments(
   notebookPath: string,
-  rootPath: string | null
+  rootPath: string | null,
+  { runWorkspaceInterpreters }: { runWorkspaceInterpreters: boolean }
 ): Promise<PythonEnvironments> {
   const pathCommands =
     process.platform === 'win32' ? [['py', '-3'], ['python']] : [['python3'], ['python']]
+  const workspaceInterpreters = findWorkspaceInterpreters(notebookPath, rootPath)
   const [workspace, onPath] = await Promise.all([
-    Promise.all(findWorkspaceInterpreters(notebookPath, rootPath).map(describePython)),
+    runWorkspaceInterpreters
+      ? Promise.all(workspaceInterpreters.map(describePython))
+      : workspaceInterpreters.map(describeWithoutRunning),
     Promise.all(
       pathCommands.map(([program, ...args]) =>
         probe(program, args, () => [program, ...args].join(' '))
