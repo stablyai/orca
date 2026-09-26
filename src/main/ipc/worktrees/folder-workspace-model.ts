@@ -69,6 +69,7 @@ export function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     ...(meta.cliProvenance !== undefined ? { cliProvenance: meta.cliProvenance } : {}),
     ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+    ...(meta.tags !== undefined ? { tags: meta.tags } : {}),
     diffComments: meta.diffComments,
     mobileDiffReview: meta.mobileDiffReview
   }

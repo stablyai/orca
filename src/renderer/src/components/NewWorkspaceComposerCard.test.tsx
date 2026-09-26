@@ -33,7 +33,9 @@ vi.mock('@/store', () => ({
         settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
         updateSettings: vi.fn(),
         projects: [],
-        repos: []
+        repos: [],
+        worktreesByRepo: {},
+        folderWorkspaces: []
       }),
     {
       getState: () => ({
@@ -255,6 +257,10 @@ function renderCard(
         onCreate={() => {}}
         note=""
         onNoteChange={() => {}}
+        tags={[]}
+        onTagsChange={() => {}}
+        tagDraft=""
+        onTagDraftChange={() => {}}
         setupConfig={null}
         requiresExplicitSetupChoice={false}
         setupDecision={null}

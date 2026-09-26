@@ -55,6 +55,7 @@ export const FolderWorkspaceUpdate = z.object({
       sortOrder: OptionalFiniteNumber,
       manualOrder: OptionalFiniteNumber,
       workspaceStatus: OptionalString,
+      tags: z.array(z.string()).optional(),
       createdWithAgent: z.string().refine(isTuiAgent).optional(),
       pendingFirstAgentMessageRename: z.boolean().optional(),
       firstAgentMessageRenameError: z.string().nullable().optional(),

@@ -31,6 +31,9 @@ import {
   ProjectGroupCreateWorkspaceButton,
   ProjectGroupHeaderMenu
 } from './project-group-header-actions'
+import { TagHeaderMenu } from './tag-header-actions'
+import { UNTAGGED_GROUP_KEY } from '../grouping/tag-groups'
+import { getTagDropTargetProps } from '../drag/tag-target'
 import {
   RepoHeaderCreateWorkspaceButton,
   RepoHeaderProjectActionsMenu,
@@ -51,6 +54,7 @@ export type SectionHeaderRowContext = {
   sshConnectionStates: AppState['sshConnectionStates']
   highlightedRevealRowKey: string | null
   dragOverStatus: WorkspaceStatus | null
+  dragOverTagSection: string | null
   pinDragOver: boolean
   headerDrag: WorktreeSidebarHeaderDrag
   getCachedFolderWorkspacePathStatus: (request: {
@@ -228,6 +232,7 @@ export function renderWorktreeSectionHeaderRow(args: {
         data-project-group-header-drag-handle={isDraggableProjectGroupHeader ? '' : undefined}
         data-workspace-status-drop-target={headerWorkspaceStatus ? '' : undefined}
         data-workspace-status={headerWorkspaceStatus ?? undefined}
+        {...getTagDropTargetProps(ctx.groupBy === 'tag' ? row.key : undefined)}
         data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
         className={cn(
           // Why: no row-level grab — only the title surface below shows the hand;
@@ -243,6 +248,8 @@ export function renderWorktreeSectionHeaderRow(args: {
             'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
           isPinnedHeader &&
             ctx.pinDragOver &&
+            'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
+          ctx.dragOverTagSection === row.key &&
             'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
           row.repo && 'overflow-hidden'
         )}
@@ -367,6 +374,10 @@ export function renderWorktreeSectionHeaderRow(args: {
               onRename={ctx.onRenameProjectGroup}
               onDelete={ctx.onDeleteProjectGroup}
             />
+          ) : null}
+
+          {ctx.groupBy === 'tag' && row.key !== UNTAGGED_GROUP_KEY ? (
+            <TagHeaderMenu tag={row.label} />
           ) : null}
 
           {folderBackedProjectGroup ? (

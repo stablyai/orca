@@ -87,6 +87,21 @@ describe('Store', () => {
     expect(updated.comment).toBe('updated')
   })
 
+  it('persists normalized worktree tags across a reload and clears them with an empty list', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta('wt1', { tags: ['Billing', ' billing ', 'web'] })
+    store.flush()
+
+    const restored = await createStore()
+    expect(restored.getWorktreeMeta('wt1')?.tags).toEqual(['Billing', 'web'])
+
+    restored.setWorktreeMeta('wt1', { tags: [] })
+    restored.flush()
+    expect(readDataFile()).toMatchObject({
+      worktreeMeta: { wt1: expect.not.objectContaining({ tags: expect.anything() }) }
+    })
+  })
+
   it('persists paired Jira linked-item metadata and drops mismatched source context', async () => {
     const store = await createStore()
     const linkedWorkItem = {
@@ -285,6 +300,26 @@ describe('Store', () => {
     expect(restored.getFolderWorkspace(workspace.id)?.diffComments).toEqual([
       expect.objectContaining({ id: 'note-1', body: 'Review this paragraph' })
     ])
+  })
+
+  it('tags folder workspaces, normalizes on write, and clears with an empty list', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const workspace = store.createFolderWorkspace({ projectGroupId: group.id, name: 'Ticket' })
+
+    expect(
+      store.updateFolderWorkspace(workspace.id, { tags: ['Billing', 'BILLING', ' web '] })?.tags
+    ).toEqual(['Billing', 'web'])
+    store.flush()
+    const restored = await createStore()
+    expect(restored.getFolderWorkspace(workspace.id)?.tags).toEqual(['Billing', 'web'])
+
+    const cleared = restored.updateFolderWorkspace(workspace.id, { tags: [] })
+    expect(cleared).not.toHaveProperty('tags')
   })
 
   it('persists the exact folder workspace path provided on create and update', async () => {

@@ -6,8 +6,7 @@ import {
   getWorkspaceStatusFromGroupKey,
   getWorkspaceStatusVisualMeta
 } from '../../workspace-status'
-import { PROJECT_GROUP_META, PR_GROUP_META } from './group-keys'
-import type { PRGroupKey } from './group-keys'
+import { PROJECT_GROUP_META, PR_GROUP_META, PR_GROUP_ORDER, getPRLaneKey } from './group-keys'
 import type { NoticeHostContext } from './host-labels'
 import {
   getLaneHostWorktreeCounts,
@@ -30,6 +29,7 @@ import type {
   WorktreeGroupBy
 } from './row-types'
 import { orderMainWorktreeFirst } from './section-order'
+import { TAG_GROUP_META, UNTAGGED_GROUP_KEY, UNTAGGED_GROUP_META } from './tag-groups'
 
 /** Everything section emission reads that stays fixed for one buildRows call. */
 export type SectionAppendContext = {
@@ -122,8 +122,15 @@ export function appendOrderedGroups(
               }
             })()
           : (() => {
-              const prGroup = key.replace(/^pr:/, '') as PRGroupKey
-              const meta = PR_GROUP_META[prGroup]
+              const meta =
+                groupBy === 'tag'
+                  ? key === UNTAGGED_GROUP_KEY
+                    ? UNTAGGED_GROUP_META
+                    : { ...TAG_GROUP_META, label: group.label }
+                  : PR_GROUP_META[
+                      PR_GROUP_ORDER.find((prGroup) => getPRLaneKey(prGroup) === key) ??
+                        'in-progress'
+                    ]
               return {
                 type: 'header' as const,
                 key,
@@ -211,7 +218,9 @@ export function appendOrderedGroups(
         cyclicLineageIds
       })
       for (const pair of folderPairs) {
-        result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
+        result.push(
+          buildFolderWorkspaceRow(pair, projectGroupDepth, groupBy === 'tag' ? key : undefined)
+        )
       }
     }
   }

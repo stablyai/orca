@@ -14,6 +14,7 @@ import { getWorktreeLineageGroupKey } from '../grouping/group-keys'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
+import { narrowTagRevealKeys } from '../grouping/tag-groups'
 import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
@@ -68,7 +69,7 @@ export function expandGroupsForWorktreeReveal(
     }
   )
   if (folderGroupKeys.length > 0) {
-    for (const groupKey of folderGroupKeys) {
+    for (const groupKey of narrowTagRevealKeys(folderGroupKeys, args.collapsedGroups)) {
       if (args.collapsedGroups.has(groupKey)) {
         args.toggleGroup(groupKey)
       }
@@ -137,7 +138,7 @@ export function expandGroupsForWorktreeReveal(
           args.projectGroups,
           args.projectGrouping
         )
-  for (const groupKey of groupKeys) {
+  for (const groupKey of narrowTagRevealKeys(groupKeys, args.collapsedGroups)) {
     if (args.collapsedGroups.has(groupKey)) {
       args.toggleGroup(groupKey)
     }

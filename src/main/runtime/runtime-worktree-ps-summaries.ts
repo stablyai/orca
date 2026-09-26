@@ -30,6 +30,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       linkedPR = { number: meta.linkedPR, state: 'unknown' }
     }
     const lineage = worktree.lineage
+    const tags = getHostTags(args.store, worktree)
     summaries.set(worktree.id, {
       workspaceKind: 'git',
       worktreeId: worktree.id,
@@ -53,6 +54,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       childWorktreeIds: worktree.childWorktreeIds,
       displayName: worktree.displayName,
       workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+      ...(tags?.length ? { tags } : {}),
       sortOrder: meta?.sortOrder ?? 0,
       ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
       lastActivityAt: worktree.lastActivityAt,
@@ -99,6 +101,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       childWorktreeIds: [],
       displayName: worktree.displayName,
       workspaceStatus: worktree.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+      ...(worktree.tags?.length ? { tags: worktree.tags } : {}),
       sortOrder: worktree.sortOrder ?? 0,
       ...(worktree.manualOrder !== undefined ? { manualOrder: worktree.manualOrder } : {}),
       lastActivityAt: worktree.lastActivityAt,
@@ -122,4 +125,13 @@ export function buildRuntimeWorktreePsSummaries(args: {
     })
   }
   return summaries
+}
+
+/** Tags from the resolved row's own host; the legacy id-keyed record can belong to another host. */
+function getHostTags(store: RuntimeStore | null, worktree: ResolvedWorktree): string[] | undefined {
+  if (worktree.tags !== undefined) {
+    return worktree.tags
+  }
+  const hostId = worktree.identity?.executionHostId ?? worktree.hostId
+  return hostId ? store?.getWorktreeMetaForHost?.(worktree.id, hostId)?.tags : undefined
 }

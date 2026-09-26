@@ -4,6 +4,7 @@ import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { WORKTREE_SET_COMMAND_SPEC } from './worktree-set'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -137,31 +138,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
     ]
   },
-  {
-    path: ['worktree', 'set'],
-    summary: 'Update Orca metadata for a worktree',
-    usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'worktree',
-      'display-name',
-      'issue',
-      'linear-issue',
-      'comment',
-      'workspace-status',
-      'parent-worktree',
-      'no-parent'
-    ],
-    notes: [
-      'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
-      'Pass --linear-issue null to clear the Linear issue link.'
-    ],
-    examples: [
-      'orca worktree set --worktree active --linear-issue STA-335 --json',
-      'orca worktree set --worktree active --linear-issue null --json'
-    ]
-  },
+  WORKTREE_SET_COMMAND_SPEC,
   {
     path: ['worktree', 'rm'],
     // Why: agents reach for git's `remove`/`delete` verbs; accept them as

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
+import { getRenderRowSidebarKey } from '../navigation/render-row-lookup'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -9,7 +10,6 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { buildRows } from '../grouping/build-rows'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
@@ -46,21 +46,13 @@ type SectionRowsArgs = {
   workspaceHostScope: AppState['workspaceHostScope']
 }
 
+// Why the shared lookup: reveal matches rows by the same key, so the two cannot drift.
 function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSectionRows>) {
   const keys = new Set<string>()
   for (const row of sectionRows) {
-    if (row.type === 'header') {
-      keys.add(row.key)
-    } else if (row.type === 'item') {
-      keys.add(row.rowKey)
-    } else if (row.type === 'folder-workspace') {
-      keys.add(folderWorkspaceKey(row.folderWorkspace.id))
-    } else if (row.type === 'pending-creation') {
-      keys.add(`pending:${row.creationId}`)
-    } else if (row.type === 'imported-worktrees-card') {
-      keys.add(row.key)
-    } else if (row.type === 'new-external-worktrees-inbox') {
-      keys.add(row.key)
+    const key = getRenderRowSidebarKey(row)
+    if (key !== null) {
+      keys.add(key)
     }
   }
   return keys

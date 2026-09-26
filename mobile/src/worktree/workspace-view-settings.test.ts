@@ -33,6 +33,10 @@ describe('group mode mapping', () => {
     expect(groupModeFromDesktop('pr-status')).toBe('prStatus')
     expect(groupModeFromDesktop(undefined)).toBeNull()
   })
+
+  it('shows the desktop tag grouping as a flat list until mobile has a tag view', () => {
+    expect(groupModeFromDesktop('tag')).toBe('none')
+  })
 })
 
 describe('sort mode mapping', () => {

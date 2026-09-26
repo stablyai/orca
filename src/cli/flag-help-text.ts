@@ -71,6 +71,9 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   workspace: '--workspace <selector> Existing worktree selector for automation runs',
   'workspace-status':
     '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',
+  tag: '--tag <name>           Add a workspace tag (repeatable)',
+  untag: '--untag <name>         Remove a workspace tag (repeatable)',
+  tags: '--tags <a,b|null>      Replace all workspace tags; null clears them',
   staged: '--staged               Open staged source-control changes',
   provider: '--provider <agent>     Agent id such as codex, claude, or gemini',
   'source-context':

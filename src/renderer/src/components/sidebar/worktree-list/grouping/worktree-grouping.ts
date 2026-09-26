@@ -9,7 +9,7 @@ import {
 } from '../../workspace-status'
 import {
   compareFolderWorkspacesForDisplay,
-  getFolderWorkspaceLaneKey,
+  getFolderWorkspaceLaneKeys,
   type RenderableFolderWorkspace
 } from './folder-workspace-lanes'
 import { PR_GROUP_META, PR_GROUP_ORDER, getPRGroupKey, getPRLaneKey } from './group-keys'
@@ -27,13 +27,19 @@ import type {
   WorktreeGroupBy
 } from './row-types'
 import { getManualOrderAnchorRepo, sortProjectEntries } from './section-order'
+import { compareTagSections, getTagSections } from './tag-groups'
+import { preferTagSpelling } from '../../../../../../shared/worktree/worktree-tags'
 
 /** Lane label for a lane a folder workspace opened before any worktree did. */
 function getLaneLabelForKey(
   key: string,
   groupBy: Exclude<WorktreeGroupBy, 'repo'>,
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  workspaceStatuses: readonly WorkspaceStatusDefinition[],
+  pair: RenderableFolderWorkspace
 ): string {
+  if (groupBy === 'tag') {
+    return getTagSections(pair.folderWorkspace).find((section) => section.key === key)?.label ?? key
+  }
   if (groupBy === 'workspace-status') {
     const status = getWorkspaceStatusFromGroupKey(key, workspaceStatuses)
     return workspaceStatuses.find((entry) => entry.id === status)?.label ?? status ?? key
@@ -78,50 +84,64 @@ export function buildOrderedGroups(args: {
     folderWorkspaces = []
   } = args
 
-  const grouped = new Map<string, WorktreeGroupEntry>()
-  for (const w of naturalWorktrees) {
-    let key: string
-    let label: string
-    let repo: Repo | undefined
+  const getSections = (w: Worktree): { key: string; label: string; repo?: Repo }[] => {
     if (groupBy === 'repo') {
       const grouping = getProjectGroupingForRepo(w.repoId, repoMap, projectIndex)
-      key = grouping.key
-      label = grouping.label
-      repo = grouping.repo
-    } else if (groupBy === 'workspace-status') {
+      return [{ key: grouping.key, label: grouping.label, repo: grouping.repo }]
+    }
+    if (groupBy === 'workspace-status') {
       const workspaceStatus = getWorkspaceStatus(w, workspaceStatuses)
-      key = getWorkspaceStatusGroupKey(workspaceStatus)
-      label =
+      const label =
         workspaceStatuses.find((status) => status.id === workspaceStatus)?.label ?? workspaceStatus
-    } else {
-      const prGroup = getPRGroupKey(w, repoMap, prCache, settings)
-      key = getPRLaneKey(prGroup)
-      label = PR_GROUP_META[prGroup].label
+      return [{ key: getWorkspaceStatusGroupKey(workspaceStatus), label }]
     }
-    if (!grouped.has(key)) {
-      grouped.set(key, { label, items: [], repo, repoIds: new Set() })
+    // Why: the one mode where a workspace renders in several sections, once per tag.
+    if (groupBy === 'tag') {
+      return getTagSections(w)
     }
-    const group = grouped.get(key)!
-    group.items.push(w)
-    addRepoIdToGroup(group, w.repoId)
+    const prGroup = getPRGroupKey(w, repoMap, prCache, settings)
+    return [{ key: getPRLaneKey(prGroup), label: PR_GROUP_META[prGroup].label }]
+  }
+
+  const grouped = new Map<string, WorktreeGroupEntry>()
+  for (const w of naturalWorktrees) {
+    for (const { key, label, repo } of getSections(w)) {
+      if (!grouped.has(key)) {
+        grouped.set(key, { label, items: [], repo, repoIds: new Set() })
+      }
+      const group = grouped.get(key)!
+      if (groupBy === 'tag') {
+        // Why: spellings of one tag differ per workspace; the header must not follow sort order.
+        group.label = preferTagSpelling(group.label, label)
+      }
+      group.items.push(w)
+      addRepoIdToGroup(group, w.repoId)
+    }
   }
   // Why: folder workspaces are not worktrees, so they never appear in the loop
   // above. Bucketing them here — and creating the lane when no worktree opened
   // one — is what lets a folder workspace be the sole occupant of a lane (#15362).
   if (groupBy !== 'repo') {
     for (const pair of folderWorkspaces) {
-      const key = getFolderWorkspaceLaneKey(pair, groupBy, workspaceStatuses)
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          label: getLaneLabelForKey(key, groupBy, workspaceStatuses),
-          items: [],
-          repo: undefined,
-          repoIds: new Set()
-        })
+      for (const key of getFolderWorkspaceLaneKeys(pair, groupBy, workspaceStatuses)) {
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            label: getLaneLabelForKey(key, groupBy, workspaceStatuses, pair),
+            items: [],
+            repo: undefined,
+            repoIds: new Set()
+          })
+        }
+        const group = grouped.get(key)!
+        if (groupBy === 'tag') {
+          group.label = preferTagSpelling(
+            group.label,
+            getLaneLabelForKey(key, groupBy, workspaceStatuses, pair)
+          )
+        }
+        group.folderWorkspaces ??= []
+        group.folderWorkspaces.push(pair)
       }
-      const group = grouped.get(key)!
-      group.folderWorkspaces ??= []
-      group.folderWorkspaces.push(pair)
     }
     for (const group of grouped.values()) {
       group.folderWorkspaces?.sort((left, right) =>
@@ -212,6 +232,13 @@ export function buildOrderedGroups(args: {
       if (group) {
         orderedGroups.push([key, group])
       }
+    }
+  } else if (groupBy === 'tag') {
+    const entries = Array.from(grouped.entries()).sort(([leftKey, left], [rightKey, right]) =>
+      compareTagSections({ key: leftKey, label: left.label }, { key: rightKey, label: right.label })
+    )
+    for (const entry of entries) {
+      orderedGroups.push(entry)
     }
   } else if (groupBy === 'workspace-status') {
     // Why: status grouping is opt-in while the board drawer remains the wider

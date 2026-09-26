@@ -4,8 +4,9 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { WorkspaceGroupBy } from '../../../../../../shared/workspace-group-by'
 
-export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+export type WorktreeGroupBy = WorkspaceGroupBy
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
 
 export function getPinnedWorktreeDisplayPolicy(
@@ -87,6 +88,8 @@ export type PendingCreationRow = {
 export type FolderWorkspaceRow = {
   type: 'folder-workspace'
   key: string
+  /** Set only where one folder workspace renders in several sections (tag grouping). */
+  sectionKey?: string
   folderWorkspace: FolderWorkspace
   projectGroup: ProjectGroup
   depth: number

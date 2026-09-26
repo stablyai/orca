@@ -8,6 +8,7 @@ import { PINNED_GROUP_KEY, getLineageGroupKey } from '../grouping/group-keys'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
+import { narrowTagRevealKeys } from '../grouping/tag-groups'
 import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -67,7 +68,7 @@ export function useEffectiveCollapsedGroups(args: {
         return collapsedGroups
       }
       const nextForFolder = new Set(collapsedGroups)
-      for (const groupKey of folderKeys) {
+      for (const groupKey of narrowTagRevealKeys(folderKeys, collapsedGroups)) {
         nextForFolder.delete(groupKey)
       }
       return nextForFolder
@@ -79,7 +80,7 @@ export function useEffectiveCollapsedGroups(args: {
     ) {
       next.delete(PINNED_GROUP_KEY)
     } else {
-      for (const groupKey of getGroupKeysForWorktree(
+      const groupKeys = getGroupKeysForWorktree(
         groupBy,
         targetWorktree,
         repoMap,
@@ -88,7 +89,8 @@ export function useEffectiveCollapsedGroups(args: {
         settings,
         projectGroups,
         projectGrouping
-      )) {
+      )
+      for (const groupKey of narrowTagRevealKeys(groupKeys, collapsedGroups)) {
         next.delete(groupKey)
       }
     }

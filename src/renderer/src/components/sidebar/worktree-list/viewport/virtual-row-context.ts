@@ -81,6 +81,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       sshConnectionStates: args.sshConnectionStates,
       highlightedRevealRowKey: reveal.highlightedRevealRowKey,
       dragOverStatus: runtime.dragOverStatus,
+      dragOverTagSection: runtime.dragOverTagSection,
       pinDragOver: runtime.pinDragOver,
       headerDrag,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
@@ -152,6 +153,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       onSelectionGesture: props.onSelectionGesture,
       onContextMenuSelect: props.onContextMenuSelect,
       onImmediateActivate: primaryActive.handleImmediateWorktreeRowActivate,
+      getActiveSurfaceVariant: primaryActive.getActiveSurfaceVariant,
       onRowClickCapture: args.onRowClickCapture,
       onRowPointerDown: args.onRowPointerDown
     }

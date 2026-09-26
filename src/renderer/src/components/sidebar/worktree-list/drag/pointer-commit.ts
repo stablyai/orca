@@ -8,6 +8,8 @@ import { resolveWorkspaceKanbanCardDropCommitTarget } from '../../workspace-kanb
 import { getFullDropIndexForWorktreeDragUnit } from '../../worktree-drag-units'
 import { resolveWorktreeSidebarStatusDropCommitTarget } from '../../worktree-sidebar-drop-preview'
 import { getPointerDropStatusTarget, shouldPreferSidebarStatusDropTarget } from './status-target'
+import { getPointerDropTagSection } from './tag-target'
+import { TAG_GROUP_PREFIX } from '../grouping/tag-groups'
 import type {
   WorktreeDropCommitContext,
   WorktreeStatusDropAtIndexArgs
@@ -80,6 +82,19 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
       groups: getWorkspaceKanbanSidebarDropGroups()
     })
   } else {
+    const tagSection = ctx.scrollRef.current
+      ? getPointerDropTagSection({
+          container: ctx.scrollRef.current,
+          x: event.clientX,
+          y: event.clientY
+        })
+      : null
+    // Why only across sections: inside its own section a drag keeps reorder and lineage nesting.
+    if (tagSection && tagSection !== drag.sourceGroupKey) {
+      ctx.onTagWorktrees(drag.draggedIdentities, tagSection.slice(TAG_GROUP_PREFIX.length))
+      ctx.clearWorktreeDrag()
+      return
+    }
     const preferredStatusTarget = ctx.getEligibleLineageDropTarget(
       ctx.scrollRef.current
         ? getPointerDropStatusTarget({

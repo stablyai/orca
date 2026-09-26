@@ -37,6 +37,8 @@ export type WorktreePointerDrag = {
   currentY: number
   worktreeId: string
   draggedIds: readonly string[]
+  /** Host-qualified identities of the dragged rows; bare ids repeat across hosts. */
+  draggedIdentities: readonly string[]
   reorderDraggedIds: readonly string[]
   reorderUnitDraggedIds: readonly string[]
   sourceGroupKey: string

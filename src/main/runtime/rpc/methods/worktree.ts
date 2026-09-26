@@ -138,6 +138,7 @@ export const WORKTREE_METHODS = [
     name: 'worktree.set',
     params: WorktreeSet,
     handler: async (params, { runtime }) => ({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the wire-opaque diffComments and mobileDiffReview differ from the update type; every other field already matches it.
       worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
         displayName: params.displayName,
         ...(params.displayName !== undefined
@@ -169,6 +170,11 @@ export const WORKTREE_METHODS = [
         sparsePresetId: params.sparsePresetId,
         baseRef: params.baseRef,
         workspaceStatus: params.workspaceStatus,
+        tags: params.tags,
+        tagChanges:
+          params.addTags || params.removeTags
+            ? { add: params.addTags, remove: params.removeTags }
+            : undefined,
         pushTarget: params.pushTarget,
         diffComments: params.diffComments,
         mobileDiffReview: params.mobileDiffReview,

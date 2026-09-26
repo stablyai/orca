@@ -700,6 +700,19 @@ describe('Store', () => {
     expect(store.getUI().groupBy).toBe('none')
   })
 
+  it('preserves tag grouping and saves it through updateUI', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { groupBy: 'tag' }
+    })
+    const store = await createStore()
+    expect(store.getUI().groupBy).toBe('tag')
+
+    store.updateUI({ groupBy: 'repo' })
+    store.updateUI({ groupBy: 'tag' })
+    expect(store.getUI().groupBy).toBe('tag')
+  })
+
   it('normalizes interim flat grouping back to none', async () => {
     writeDataFile({
       schemaVersion: 1,

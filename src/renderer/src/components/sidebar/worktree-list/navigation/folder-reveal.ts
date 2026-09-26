@@ -5,7 +5,7 @@ import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-works
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getProjectGroupHeaderKey } from '../grouping/group-keys'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getFolderWorkspaceLaneKey } from '../grouping/folder-workspace-lanes'
+import { getFolderWorkspaceLaneKeys } from '../grouping/folder-workspace-lanes'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import { getFolderWorkspaceHostId } from '../../folder-workspace-host-id'
 
@@ -92,7 +92,7 @@ export function getFolderWorkspaceRevealGroupKeys(
   const owningGroup = groupsById.get(folderWorkspace.projectGroupId)
   if (options?.groupBy && options.groupBy !== 'repo' && owningGroup) {
     keys.push(
-      getFolderWorkspaceLaneKey(
+      ...getFolderWorkspaceLaneKeys(
         { folderWorkspace, projectGroup: owningGroup },
         options.groupBy,
         options.workspaceStatuses ?? []

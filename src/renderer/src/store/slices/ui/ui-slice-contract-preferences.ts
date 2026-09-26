@@ -1,3 +1,4 @@
+import type { WorkspaceGroupBy } from '../../../../../shared/workspace-group-by'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import type {
   ActivityGroupBy,
@@ -27,7 +28,7 @@ export type UISlicePreferences = {
   /** Which list the sidebar body shows. Navigator-only; does not change the active view. */
   sidebarBody: 'workspaces' | 'agents'
   setSidebarBody: (body: UISlicePreferences['sidebarBody']) => void
-  groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
+  groupBy: WorkspaceGroupBy
   setGroupBy: (g: UISlicePreferences['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlicePreferences['sortBy']) => void

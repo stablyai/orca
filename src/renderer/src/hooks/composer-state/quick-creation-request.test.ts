@@ -38,6 +38,7 @@ function createInput(
     issueCommand: undefined,
     pendingFirstAgentMessageRename: false,
     note: '',
+    tags: [],
     startupPlan: null,
     quickPrompt: '',
     launchDraftPrompt: '',
@@ -137,5 +138,12 @@ describe('quick composer creation request', () => {
     expect(request).not.toHaveProperty('sparseCheckout')
     expect(request).not.toHaveProperty('linkedGitLabMR')
     expect(request).not.toHaveProperty('linkedGitLabIssue')
+  })
+
+  it('carries chosen tags for post-create persistence and omits an empty list', () => {
+    expect(buildQuickCreationRequest(createInput({ tags: ['billing team'] })).tags).toEqual([
+      'billing team'
+    ])
+    expect(buildQuickCreationRequest(createInput())).not.toHaveProperty('tags')
   })
 })

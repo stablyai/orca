@@ -101,6 +101,8 @@ export type WorktreeCreationRequest = {
   pendingFirstAgentMessageRename: boolean
   /** Post-create note persisted as the worktree comment. */
   note: string
+  /** Post-create workspace tags; absent when none were chosen. */
+  tags?: string[]
   /** Renderer-side launch plan used to seed the first terminal when the backend
    *  did not already spawn it. Null for blank-shell creates. */
   startupPlan: AgentStartupPlan | null

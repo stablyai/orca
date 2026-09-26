@@ -29,6 +29,12 @@ export const GROUP_BY_OPTIONS = [
     get label() {
       return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2170d553cf', 'Project')
     }
+  },
+  {
+    id: 'tag',
+    get label() {
+      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tag', 'Tag')
+    }
   }
 ] as const
 
@@ -87,6 +93,13 @@ const BASE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
     properties: ['comment'],
     get label() {
       return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.8d62c68b35', 'Notes')
+    }
+  },
+  {
+    id: 'tags',
+    properties: ['tags'],
+    get label() {
+      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.tags', 'Tags')
     }
   },
   {

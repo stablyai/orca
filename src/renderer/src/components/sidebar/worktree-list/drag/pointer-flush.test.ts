@@ -42,6 +42,7 @@ function setup() {
       currentY: 300,
       worktreeId: 'child',
       draggedIds: ['child'],
+      draggedIdentities: ['child'],
       reorderDraggedIds: ['child'],
       reorderUnitDraggedIds: ['child'],
       sourceGroupKey: 'repo',
@@ -76,7 +77,8 @@ function setup() {
       onMoveWorktreesToStatus: vi.fn(),
       onMoveWorktreesToStatusAtIndex: vi.fn(),
       onReorderWorktrees: vi.fn(),
-      onPinWorktrees: vi.fn()
+      onPinWorktrees: vi.fn(),
+      onTagWorktrees: vi.fn()
     },
     workspaceBoardOpen: false,
     onWorkspaceBoardDragPreviewStart: vi.fn(),
@@ -84,6 +86,7 @@ function setup() {
     shouldShowWorkspaceBoardDropIndicator: () => false,
     setDragOverStatus: vi.fn(),
     setPinDragOver: vi.fn(),
+    setDragOverTagSection: vi.fn(),
     setWorktreeDragState: (update) => {
       state = typeof update === 'function' ? update(state) : update
     }
@@ -255,5 +258,24 @@ describe('Escape during pointer dragging', () => {
     expect(escape.defaultPrevented).toBe(false)
     expect(t.cancelBoard).not.toHaveBeenCalled()
     t.args.drag.preview?.remove()
+  })
+})
+
+describe('tag section hover', () => {
+  it('highlights another tag section and drops the insertion line', () => {
+    const t = setup()
+    const container = document.createElement('div')
+    const section = document.createElement('div')
+    section.setAttribute('data-workspace-tag-drop-target', 'tag:billing team')
+    container.append(section)
+    document.body.append(container)
+    vi.spyOn(document, 'elementFromPoint').mockReturnValue(section)
+    t.args.ctx = { ...t.args.ctx, scrollRef: { current: container } }
+
+    flushWorktreePointerDragFrame(t.args)
+
+    expect(t.args.setDragOverTagSection).toHaveBeenLastCalledWith('tag:billing team')
+    expect(t.state().dropIndicatorY).toBeNull()
+    container.remove()
   })
 })

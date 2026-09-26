@@ -10,7 +10,8 @@ export const WORKSPACE_GROUP_BY_ARMS = hostUnionArms<PersistedUIState['groupBy']
   none: true,
   'workspace-status': true,
   repo: true,
-  'pr-status': true
+  'pr-status': true,
+  tag: true
 })
 export const WORKSPACE_SORT_BY_ARMS = hostUnionArms<PersistedUIState['sortBy']>({
   name: true,

@@ -20,6 +20,7 @@ import type { WorktreeDragSession } from './use-session'
 import { useWorktreePointerDragAutoscroll } from './use-pointer-autoscroll'
 import { useWorktreePointerDragWindowEvents } from './use-pointer-window-events'
 import { flushWorktreePointerDragFrame } from './pointer-flush'
+import { hasOtherTagDropTarget } from './tag-target'
 import { EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS, type WorktreePointerDrag } from './row-state'
 
 export function useWorktreePointerDrag(args: {
@@ -58,7 +59,8 @@ export function useWorktreePointerDrag(args: {
     suppressWorktreeClickUntilRef,
     setWorktreeDragState,
     setDragOverStatus,
-    setPinDragOver
+    setPinDragOver,
+    setDragOverTagSection
   } = runtime
 
   const flushWorktreePointerDrag = useCallback(() => {
@@ -75,13 +77,15 @@ export function useWorktreePointerDrag(args: {
       shouldShowWorkspaceBoardDropIndicator,
       setWorktreeDragState,
       setDragOverStatus,
-      setPinDragOver
+      setPinDragOver,
+      setDragOverTagSection
     })
   }, [
     ctx,
     onWorkspaceBoardDragPreviewCommit,
     onWorkspaceBoardDragPreviewStart,
     setDragOverStatus,
+    setDragOverTagSection,
     setPinDragOver,
     setWorktreeDragState,
     shouldShowWorkspaceBoardDropIndicator,
@@ -176,14 +180,16 @@ export function useWorktreePointerDrag(args: {
       if (
         rects.length <= 1 &&
         !hasWorkspaceKanbanSidebarDropBoard() &&
-        !canPreviewWorkspaceBoardOnDrag
+        !canPreviewWorkspaceBoardOnDrag &&
+        !hasOtherTagDropTarget(container, sourceGroupKey)
       ) {
         return
       }
-      const draggedIds =
+      const draggedRows =
         selectedWorktreeIds.has(getWorktreeHostIdentity(worktree)) && selectedWorktrees.length > 1
-          ? selectedWorktrees.map((worktree) => worktree.id)
-          : [worktreeId]
+          ? selectedWorktrees
+          : [worktree]
+      const draggedIds = draggedRows.map((row) => row.id)
       const reorderDraggedIds = session.getReorderDraggedIds(draggedIds)
       const reorderUnitDraggedIds = session.getReorderUnitDraggedIds(
         sourceGroupKey,
@@ -198,6 +204,7 @@ export function useWorktreePointerDrag(args: {
         currentY: event.clientY,
         worktreeId,
         draggedIds,
+        draggedIdentities: draggedRows.map(getWorktreeHostIdentity),
         reorderDraggedIds,
         reorderUnitDraggedIds,
         sourceGroupKey,

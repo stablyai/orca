@@ -4,6 +4,7 @@ import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
 import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
+import { applyWorktreeTagChanges } from '../../shared/worktree/worktree-tags'
 import type { RuntimeStore } from './runtime-store-contract'
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -11,6 +12,8 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
   pushTarget?: GitPushTarget | null
   lineage?: { parentWorktree?: string; noParent?: boolean }
+  /** Incremental tag edits, applied against the stored tags at write time. */
+  tagChanges?: { add?: string[]; remove?: string[] }
 }
 
 type Ports = {
@@ -29,7 +32,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   ports: Ports
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
-  const { lineage, ...metaUpdates } = args.updates
+  const { lineage, tagChanges, ...metaUpdates } = args.updates
   if (lineage?.parentWorktree) {
     args.ports.invalidateResolved()
     args.ports.invalidateScan(worktree.repoId)
@@ -89,8 +92,15 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
       createdAt
     })
   }
-  const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
   const executionHostId = worktree.identity?.executionHostId ?? worktree.hostId
+  if (tagChanges && (tagChanges.add?.length || tagChanges.remove?.length)) {
+    // Why here: read and write stay in one synchronous step, so concurrent CLI edits cannot drop each other.
+    const stored = executionHostId
+      ? args.store.getWorktreeMetaForHost?.(worktree.id, executionHostId)
+      : args.store.getWorktreeMeta(worktree.id)
+    persisted.tags = applyWorktreeTagChanges(persisted.tags ?? stored?.tags, tagChanges)
+  }
+  const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
   if (executionHostId && args.store.setWorktreeMetaForHost) {
     args.store.setWorktreeMetaForHost(worktree.id, executionHostId, metadataUpdates)
   } else {

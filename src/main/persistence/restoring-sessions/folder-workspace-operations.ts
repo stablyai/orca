@@ -8,6 +8,7 @@ import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-co
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { applyNormalizedWorktreeTags } from '../../../shared/worktree/worktree-tags'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
 
 export type FolderWorkspaceMutationOperations = {
@@ -121,6 +122,7 @@ export class FolderWorkspacePersistenceOperations {
         | 'sortOrder'
         | 'manualOrder'
         | 'workspaceStatus'
+        | 'tags'
         | 'createdWithAgent'
         | 'pendingFirstAgentMessageRename'
         | 'firstAgentMessageRenameError'
@@ -186,6 +188,10 @@ export class FolderWorkspacePersistenceOperations {
     }
     if (updates.workspaceStatus !== undefined) {
       workspace.workspaceStatus = updates.workspaceStatus
+    }
+    if (updates.tags !== undefined) {
+      workspace.tags = updates.tags
+      applyNormalizedWorktreeTags(workspace)
     }
     if (updates.createdWithAgent !== undefined) {
       workspace.createdWithAgent = updates.createdWithAgent

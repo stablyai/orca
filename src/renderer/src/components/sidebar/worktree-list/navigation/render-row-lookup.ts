@@ -6,6 +6,7 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import type { RenderRow } from '../listing/render-row'
 import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
 import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
+import { getFolderWorkspaceRowNavigationKey } from '../grouping/row-builders'
 
 export function getRenderRowSidebarKey(row: RenderRow): string | null {
   if (row.type === 'header') {
@@ -15,7 +16,7 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
     return row.rowKey
   }
   if (row.type === 'folder-workspace') {
-    return folderWorkspaceKey(row.folderWorkspace.id)
+    return getFolderWorkspaceRowNavigationKey(row)
   }
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`

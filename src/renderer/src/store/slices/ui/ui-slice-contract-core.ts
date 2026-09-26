@@ -76,6 +76,8 @@ export type NewWorkspaceDraft = {
   name: string
   prompt: string
   note: string
+  /** Workspace tags to apply on create; absent in drafts saved before tags existed. */
+  tags?: string[]
   attachments: string[]
   linkedWorkItem: {
     provider?: 'github' | 'gitlab' | 'linear' | 'jira'

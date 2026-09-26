@@ -103,4 +103,22 @@ describe('mergeWorktree identity projection', () => {
 
     expect(worktree.suppressedGitHubPR).toBe(42)
   })
+
+  it('projects tags only when the metadata carries them', () => {
+    const meta = {
+      displayName: '',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    }
+
+    expect(mergeWorktree('repo-1', git, { ...meta, tags: ['billing'] }).tags).toEqual(['billing'])
+    expect(mergeWorktree('repo-1', git, meta)).not.toHaveProperty('tags')
+  })
 })

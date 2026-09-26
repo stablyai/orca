@@ -41,6 +41,8 @@ export type WorktreeCardProperty =
   // Badge marking workspaces created through `orca worktree create`.
   | 'cli'
   | 'comment'
+  // User-authored workspace tags, shown as chips under the title.
+  | 'tags'
   | 'ports'
   // Inline agent-activity list rendered in each workspace card; on by default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts).
   | 'inline-agents'

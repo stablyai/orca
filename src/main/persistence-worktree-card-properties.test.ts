@@ -79,6 +79,7 @@ describe('Store', () => {
       'jira-issue',
       'pr',
       'comment',
+      'tags',
       'ports',
       'inline-agents'
     ])
@@ -146,6 +147,7 @@ describe('Store', () => {
       'automation',
       'cli',
       'comment',
+      'tags',
       'ports',
       'inline-agents'
     ])
@@ -176,6 +178,7 @@ describe('Store', () => {
       'linear-issue',
       'jira-issue',
       'pr',
+      'tags',
       'ports',
       'inline-agents'
     ])
@@ -192,7 +195,8 @@ describe('Store', () => {
         worktreeCardProperties: ['status', 'pr'],
         _inlineAgentsDefaultedForAllUsers: true,
         _expandedWorktreeCardPropertiesDefaulted: true,
-        _jiraIssueWorktreeCardPropertyDefaulted: true
+        _jiraIssueWorktreeCardPropertyDefaulted: true,
+        _tagsWorktreeCardPropertyDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -252,7 +256,8 @@ describe('Store', () => {
         ],
         _inlineAgentsDefaultedForAllUsers: true,
         _expandedWorktreeCardPropertiesDefaulted: true,
-        _jiraIssueWorktreeCardPropertyDefaulted: true
+        _jiraIssueWorktreeCardPropertyDefaulted: true,
+        _tagsWorktreeCardPropertyDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -304,6 +309,7 @@ describe('Store', () => {
       'linear-issue',
       'jira-issue',
       'pr',
+      'tags',
       'ports',
       'inline-agents'
     ])
@@ -323,7 +329,8 @@ describe('Store', () => {
         worktreeCardProperties: ['status', 'unread', 'issue', 'linear-issue', 'pr'],
         _inlineAgentsDefaultedForAllUsers: true,
         _expandedWorktreeCardPropertiesDefaulted: true,
-        _jiraIssueWorktreeCardPropertyDefaulted: true
+        _jiraIssueWorktreeCardPropertyDefaulted: true,
+        _tagsWorktreeCardPropertyDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -338,6 +345,76 @@ describe('Store', () => {
       'pr'
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('jira-issue')
+  })
+
+  it('backfills tags once for profiles saved before it joined the defaults', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'pr', 'comment', 'ports'],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'pr',
+      'comment',
+      'tags',
+      'ports'
+    ])
+    expect(store.getUI()._tagsWorktreeCardPropertyDefaulted).toBe(true)
+  })
+
+  it('does not backfill tags into Compact-mode profiles', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: true },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'pr'],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).not.toContain('tags')
+    expect(store.getUI()._tagsWorktreeCardPropertyDefaulted).toBe(true)
+  })
+
+  it('preserves a deliberate tags removal after the backfill has run', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'pr'],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true,
+        _tagsWorktreeCardPropertyDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'pr'])
   })
 
   it('leaves fresh default profiles with a single jira-issue entry', async () => {
