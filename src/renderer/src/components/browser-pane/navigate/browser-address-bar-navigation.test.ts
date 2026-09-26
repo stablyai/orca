@@ -16,6 +16,17 @@ vi.mock('@/i18n/i18n', () => ({
 import { resolveBrowserAddressBarSubmission } from './browser-address-bar-navigation'
 
 describe('resolveBrowserAddressBarSubmission', () => {
+  it.each([
+    ['example.com:8443/docs', 'https://example.com:8443/docs'],
+    ['app.localhost:3000', 'http://app.localhost:3000/']
+  ])('submits %s as a navigation for local and client-hosted panes', (input, url) => {
+    expect(resolveBrowserAddressBarSubmission(input)).toEqual({ status: 'navigate', url })
+    expect(resolveBrowserAddressBarSubmission(input, { allowFileUrls: false })).toEqual({
+      status: 'navigate',
+      url
+    })
+  })
+
   it('falls back to the configured search engine instead of parsing a query as a host', () => {
     storeState.browserDefaultSearchEngine = 'google'
     expect(resolveBrowserAddressBarSubmission('google maps')).toEqual({

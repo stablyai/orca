@@ -34,6 +34,7 @@ const SEARCH_ENGINE_URLS: Record<SearchEngine, string> = {
 
 export const DEFAULT_SEARCH_ENGINE: SearchEngine = 'google'
 
+/** Defaults scheme-less development addresses to HTTP; this does not imply certificate trust. */
 export function classifySchemeLessLocalDevAddress(rawInput: string): URL | null {
   const trimmed = rawInput.trim()
   if (!LOCAL_ADDRESS_PATTERN.test(trimmed)) {
@@ -46,12 +47,14 @@ export function classifySchemeLessLocalDevAddress(rawInput: string): URL | null 
   }
 }
 
+/** Normalizes host spelling so case, IPv6 brackets, and a trailing dot do not affect comparisons. */
 function normalizeCertificateHostname(hostname: string): string {
   const lower = hostname.trim().toLowerCase()
   const unbracketed = lower.startsWith('[') && lower.endsWith(']') ? lower.slice(1, -1) : lower
   return unbracketed.endsWith('.') ? unbracketed.slice(0, -1) : unbracketed
 }
 
+/** Rejects malformed DNS labels before local-host eligibility and navigation checks. */
 function isValidDnsName(name: string): boolean {
   if (name.length === 0 || name.length > 253) {
     return false
@@ -64,6 +67,25 @@ function isValidDnsName(name: string): boolean {
     )
 }
 
+/** Avoids parsing a dotted host and port as a scheme; .localhost defaults to HTTP. */
+function classifySchemeLessDomainPortAddress(input: string): URL | null {
+  const match = /^([^\s/\\:@?#]+):\d+(?:[/?#].*)?$/.exec(input)
+  if (!match || !match[1].includes('.')) {
+    return null
+  }
+  try {
+    const url = new URL(`https://${input}`)
+    const hostname = normalizeCertificateHostname(url.hostname)
+    if (!isValidDnsName(hostname)) {
+      return null
+    }
+    return hostname.endsWith('.localhost') ? new URL(`http://${input}`) : url
+  } catch {
+    return null
+  }
+}
+
+/** Accepts canonical dotted 127/8 addresses only, excluding legacy URL-parser shorthand. */
 function isIpv4Loopback(hostname: string): boolean {
   const octets = hostname.split('.')
   if (octets.length !== 4 || octets.some((octet) => !/^\d{1,3}$/.test(octet))) {
@@ -248,6 +270,7 @@ export function isAbsoluteFilesystemPathInput(input: string): boolean {
   )
 }
 
+/** Encodes filenames as path segments while preserving a Windows drive colon. */
 function absolutePathToFileUrl(filePath: string): string {
   const normalizedPath = filePath.replaceAll('\\', '/')
   const segments = normalizedPath.split('/').map((segment, index) => {
@@ -261,12 +284,14 @@ function absolutePathToFileUrl(filePath: string): string {
     : `file:///${segments.join('/')}`
 }
 
+/** Keeps the UNC server as the file URL authority so network shares stay addressable. */
 function windowsUncPathToFileUrl(filePath: string): string {
   const normalizedPath = filePath.replaceAll('\\', '/').replace(/^\/+/, '')
   const [host, ...pathSegments] = normalizedPath.split('/')
   return `file://${host}/${pathSegments.map(encodeURIComponent).join('/')}`
 }
 
+/** Resolves address-bar input to a browser URL or search; unsupported schemes return null. */
 export function normalizeBrowserNavigationUrl(
   rawUrl: string,
   searchEngine?: SearchEngine | null,
@@ -288,6 +313,11 @@ export function normalizeBrowserNavigationUrl(
 
   if (UNIX_ABSOLUTE_PATH_PATTERN.test(trimmed) || WINDOWS_ABSOLUTE_PATH_PATTERN.test(trimmed)) {
     return absolutePathToFileUrl(trimmed)
+  }
+
+  const domainPortAddress = classifySchemeLessDomainPortAddress(trimmed)
+  if (domainPortAddress) {
+    return domainPortAddress.toString()
   }
 
   try {
