@@ -400,7 +400,7 @@ describe('SshFilesystemProvider', () => {
     expect(mux.request).toHaveBeenCalledWith(
       'fs.workspaceSpaceScan',
       { rootPath: '/home/user/project' },
-      { signal: controller.signal, timeoutMs: 130000 }
+      { signal: controller.signal, timeoutMs: 130_000 }
     )
   })
 
