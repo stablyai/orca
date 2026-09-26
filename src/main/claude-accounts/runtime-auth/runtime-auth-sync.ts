@@ -9,9 +9,11 @@ import {
 import { hasLiveClaudePtys } from '../live-pty-gate'
 import { isOauthTokenExpiring } from '../oauth-refresh'
 import { writeActiveClaudeKeychainCredentialsForRuntime } from '../keychain'
+import { mergeSharedClaudeCredentialFields } from '../shared-credential-fields'
 import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
 
 export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
+  /** Materializes the currently selected Claude account's credentials into the runtime. */
   protected async doSyncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
     const settings = this.store.getSettings()
     const effectiveTarget = this.resolveWslDefaultTarget(target)
@@ -261,7 +263,23 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
     if (process.platform === 'darwin') {
       // Why: Claude Code 2.1+ reads the scoped service, older builds the legacy unsuffixed one; runtime switching must satisfy both.
       try {
-        await writeActiveClaudeKeychainCredentialsForRuntime(credentialsJson, paths.configDir)
+        // Why (orca#16098): the managed account's own stored credential never carries
+        // machine-shared MCP OAuth connections (they aren't per-account) — merge the live
+        // credential's copy of those fields back in before overwriting, mirroring the
+        // external claude-swap tool's own live-wins rule for this exact Keychain item, so
+        // an Orca-driven switch stops silently dropping every MCP connection every time.
+        // Best-effort: a transient read failure should skip the merge, not abort the switch.
+        const liveCredentialsJson = await this.readAggregateClaudeKeychainCredentialsBestEffort(
+          paths.configDir
+        )
+        const credentialsJsonForKeychain = mergeSharedClaudeCredentialFields(
+          credentialsJson,
+          liveCredentialsJson
+        )
+        await writeActiveClaudeKeychainCredentialsForRuntime(
+          credentialsJsonForKeychain,
+          paths.configDir
+        )
       } catch (error) {
         await this.restoreSystemDefaultSnapshot(
           credentialsJson,
