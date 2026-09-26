@@ -36,6 +36,7 @@ import {
   hostedReviewRequestKey,
   hostedReviewRequestGenerations as requestGenerations,
   inflightHostedReviewRequests,
+  nextHostedReviewRequestGeneration,
   queueHostedReviewRevalidation,
   registerInflightHostedReviewRequest
 } from './hosted-review-request-state'
@@ -186,7 +187,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
 
     const inflightRequest = inflightHostedReviewRequests.get(requestKey)
     const startRequest = (): Promise<HostedReviewInfo | null> => {
-      const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
+      const generation = nextHostedReviewRequestGeneration()
       const requestStartedAt = Date.now()
       const requestStartedEntry = get().hostedReviewCache[cacheKey]
       requestGenerations.set(cacheKey, generation)
