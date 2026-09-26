@@ -37,8 +37,12 @@ describeOnWindows('MSYS terminal job ownership', () => {
     })
     let output = ''
     let childPid: number | undefined
+    let exit: { exitCode: number; signal?: number } | undefined
+    proc.onExit((event) => {
+      exit = event
+    })
     proc.onData((chunk) => {
-      output += chunk
+      output = (output + chunk).slice(-32_768)
       const match = /MSYS_OWNED_CHILD=(\d+)/.exec(output)
       if (match) {
         childPid = Number(match[1])
@@ -48,7 +52,14 @@ describeOnWindows('MSYS terminal job ownership', () => {
       proc.write(
         `${quotePosixShell(process.execPath.replace(/\\/g, '/'))} ${quotePosixShell(script.replace(/\\/g, '/'))}\r`
       )
-      await vi.waitFor(() => expect(childPid).toBeDefined(), { timeout: 15_000 })
+      try {
+        await vi.waitFor(() => expect(childPid).toBeDefined(), { timeout: 15_000 })
+      } catch (cause) {
+        throw new Error(
+          JSON.stringify({ shellPid: proc.pid, exit, jobPids: listPtyJobProcessIds(proc), output }),
+          { cause }
+        )
+      }
       expect(isAlive(childPid!)).toBe(true)
       expect(listPtyJobProcessIds(proc)).toContain(childPid)
       expect(terminatePtyJob(proc)).toBe('terminated')
