@@ -6,7 +6,7 @@ import type { TerminalPaneCloseController } from './use-terminal-pane-close-acti
 import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
 
 const { connectPanePty } = vi.hoisted(() => ({
-  connectPanePty: vi.fn(() => ({ dispose: vi.fn() }))
+  connectPanePty: vi.fn((..._args: unknown[]) => ({ dispose: vi.fn() }))
 }))
 vi.mock('./pty-connection', () => ({ connectPanePty }))
 
@@ -57,11 +57,10 @@ describe('restarting an exited pane', () => {
     connectPanePty.mockClear()
     const { result, manager } = renderExitActions()
 
-    result.current.handleAttachExitedPane({
-      ...processExit,
-      reason: 'git-bash-console-capacity',
-      startup: { command: 'claude' }
-    })
+    result.current.handleRestartExitedPane(
+      { ...processExit, reason: 'git-bash-console-capacity', startup: { command: 'claude' } },
+      { attach: true }
+    )
 
     expect(connectPanePty).toHaveBeenCalledTimes(1)
     expect(connectPanePty.mock.calls[0]![2]).toMatchObject({ tabId: 'tab-1', startup: null })

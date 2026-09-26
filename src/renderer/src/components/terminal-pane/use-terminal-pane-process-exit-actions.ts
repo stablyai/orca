@@ -186,22 +186,15 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   )
 
   const handleRestartExitedPane = useCallback(
-    (processExit: PaneProcessExit) => {
+    (processExit: PaneProcessExit, opts: { attach?: boolean } = {}) => {
       clearPaneProcessExit(processExit.paneId)
+      // Why no startup and no focus for an attach: main already started this leaf's process for
+      // another device, so the pane's spawn resolves main's stable owner and leaves focus alone.
       handleRestartCodexPane(
         processExit.paneId,
-        resolveTerminalProcessExitRestartStartup(processExit)
+        opts.attach ? null : resolveTerminalProcessExitRestartStartup(processExit),
+        !opts.attach
       )
-    },
-    [clearPaneProcessExit, handleRestartCodexPane]
-  )
-
-  // Why no startup and no focus: main already started this leaf's process for another device,
-  // so the pane's spawn resolves main's stable owner and attaches without moving desktop focus.
-  const handleAttachExitedPane = useCallback(
-    (processExit: PaneProcessExit) => {
-      clearPaneProcessExit(processExit.paneId)
-      handleRestartCodexPane(processExit.paneId, null, false)
     },
     [clearPaneProcessExit, handleRestartCodexPane]
   )
@@ -263,7 +256,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     pendingCodexPaneRestartIds
   ])
 
-  return { handleRestartExitedPane, handleAttachExitedPane, handleCloseExitedPane }
+  return { handleRestartExitedPane, handleCloseExitedPane }
 }
 
 export type TerminalPaneProcessExitController = ReturnType<typeof useTerminalPaneProcessExitActions>

@@ -36,7 +36,6 @@ function makeController(state: PortalState, actions: ReturnType<typeof makeActio
 
 function makeActions() {
   return {
-    handleAttachExitedPane: vi.fn(),
     handleCloseExitedPane: vi.fn(),
     handleRestartExitedPane: vi.fn()
   }
@@ -60,14 +59,14 @@ describe('an exited pane whose leaf main restarted', () => {
 
   it('attaches once when its leaf binds a new process, even in a background tab', () => {
     const { actions, update } = renderExitedPane({ isActive: false })
-    expect(actions.handleAttachExitedPane).not.toHaveBeenCalled()
-
-    update({ isActive: false, ptyIdsByLeafId: { [LEAF_ID]: 'pty-restarted' } })
-    update({ isActive: false, ptyIdsByLeafId: { [LEAF_ID]: 'pty-restarted' } })
-
-    expect(actions.handleAttachExitedPane).toHaveBeenCalledTimes(1)
-    expect(actions.handleAttachExitedPane).toHaveBeenCalledWith(processExit)
     expect(actions.handleRestartExitedPane).not.toHaveBeenCalled()
+
+    update({ isActive: false, ptyIdsByLeafId: { [LEAF_ID]: 'pty-restarted' } })
+    update({ isActive: false, ptyIdsByLeafId: { [LEAF_ID]: 'pty-restarted' } })
+
+    expect(actions.handleRestartExitedPane).toHaveBeenCalledExactlyOnceWith(processExit, {
+      attach: true
+    })
   })
 
   it('does not attach to the dead process a remounted pane still names', () => {
@@ -79,11 +78,11 @@ describe('an exited pane whose leaf main restarted', () => {
     update({ isActive: true, ptyIdsByLeafId: { [LEAF_ID]: 'pty-dead' } })
     update({ isActive: true })
 
-    expect(actions.handleAttachExitedPane).not.toHaveBeenCalled()
+    expect(actions.handleRestartExitedPane).not.toHaveBeenCalled()
 
     update({ isActive: true, ptyIdsByLeafId: { [LEAF_ID]: 'pty-restarted' } })
 
-    expect(actions.handleAttachExitedPane).toHaveBeenCalledTimes(1)
+    expect(actions.handleRestartExitedPane).toHaveBeenCalledTimes(1)
   })
 
   it('never attaches when its record ends by a close or a worktree removal', () => {
@@ -105,7 +104,7 @@ describe('an exited pane whose leaf main restarted', () => {
     update({ isActive: true })
     update({ isActive: true, exited: false })
 
-    expect(actions.handleAttachExitedPane).not.toHaveBeenCalled()
+    expect(actions.handleRestartExitedPane).not.toHaveBeenCalled()
   })
 
   it("does not attach twice after the pane's own Restart cleared its exit", () => {
@@ -114,6 +113,6 @@ describe('an exited pane whose leaf main restarted', () => {
     update({ isActive: true, exited: false })
     update({ isActive: true, exited: false, ptyIdsByLeafId: { [LEAF_ID]: 'pty-own-restart' } })
 
-    expect(actions.handleAttachExitedPane).not.toHaveBeenCalled()
+    expect(actions.handleRestartExitedPane).not.toHaveBeenCalled()
   })
 })

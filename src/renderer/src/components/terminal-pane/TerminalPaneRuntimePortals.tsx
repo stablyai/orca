@@ -49,7 +49,6 @@ export function TerminalPaneProcessExitPortals({
   controller: TerminalPaneController
 }): React.JSX.Element {
   const {
-    handleAttachExitedPane,
     handleCloseExitedPane,
     handleRestartExitedPane,
     isActive,
@@ -69,7 +68,7 @@ export function TerminalPaneProcessExitPortals({
             {/* Why outside the isActive gate: a restart from another device lands in background tabs too. */}
             <ExitedPaneProcessAttach
               boundPtyId={savedLayout.ptyIdsByLeafId?.[pane.leafId] ?? null}
-              onAttach={() => handleAttachExitedPane(processExit)}
+              onAttach={() => handleRestartExitedPane(processExit, { attach: true })}
             />
             {isActive
               ? createPortal(
