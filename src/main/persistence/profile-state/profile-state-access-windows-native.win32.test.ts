@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
@@ -10,6 +10,7 @@ import {
 } from './profile-state-access'
 import { profileStateAccessMachineIdentity } from './profile-state-access-identity'
 import { profileStateAccessPaths } from './profile-state-access-owner'
+import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
 
 it.runIf(process.platform === 'win32')(
   'reclaims a previous Windows PID incarnation and retains the live owner using native identities',
@@ -49,7 +50,7 @@ it.runIf(process.platform === 'win32')(
       }
       acquireProfileStateMaintenance(root).release()
     } finally {
-      rmSync(root, { recursive: true, force: true })
+      removeTreeSync(root)
     }
   }
 )
