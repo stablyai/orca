@@ -144,14 +144,16 @@ async function measure(run: () => Promise<unknown>): Promise<Cost> {
   counts.serialized = 0
   counts.hashedBytes = 0
   const parse = vi.spyOn(JSON, 'parse')
+  let storeParses: number
   try {
     await run()
   } finally {
+    // Read before restoring: a restored spy forgets its calls.
+    storeParses = parse.mock.calls.filter(
+      ([text]) => typeof text === 'string' && text.includes('"records"')
+    ).length
     parse.mockRestore()
   }
-  const storeParses = parse.mock.calls.filter(
-    ([text]) => typeof text === 'string' && text.includes('"records"')
-  ).length
   return {
     storeParses,
     validated: counts.validated,
