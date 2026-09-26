@@ -81,7 +81,9 @@ describe('removeWorktree', () => {
   it('keeps removal successful when branch cleanup fails', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git rev-parse --verify --quiet HEAD^{commit}': { stdout: 'abc123\n' },
+      'git merge-base abc123 def456': { stdout: 'def456\n' },
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -91,15 +93,8 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-`
-      },
-      'git branch -d -- feature/test': {
-        error: new Error('branch delete failed'),
-        stderr: 'branch delete failed'
+      'git worktree list --porcelain': {
+        error: new Error('branch cleanup failed')
       }
     })
 
@@ -108,9 +103,11 @@ branch refs/heads/main
     })
 
     expect(warnSpy).toHaveBeenCalledWith(
-      '[git] Preserved local branch "feature/test" after removing worktree (not fully merged)',
-      expect.any(Error)
+      '[git] Preserved local branch "feature/test" after removing worktree',
+      expect.objectContaining({ message: 'branch cleanup failed' })
     )
+    expect(getGitCalls()).toContain('git merge-base abc123 def456')
+    expect(getGitCalls()).not.toContain('git update-ref -d refs/heads/feature/test def456')
 
     warnSpy.mockRestore()
   })
@@ -127,27 +124,11 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain -z#2': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-`
-      },
       'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
 `
-      },
-      'git worktree list --porcelain#2': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-`
-      },
-      'git branch -d -- feature/test': {
-        error: new Error('branch delete failed'),
-        stderr: 'error: the branch feature/test is not fully merged'
       },
       'git config --get branch.feature/test.base': {
         stdout: 'refs/remotes/origin/main\n'
@@ -158,7 +139,7 @@ branch refs/heads/main
       'git rev-parse --verify --quiet HEAD^{commit}': {
         stdout: 'base123\n'
       },
-      'git merge-tree --write-tree base123 refs/heads/feature/test': {
+      'git merge-tree --write-tree base123 def456': {
         stdout: 'tree123\n'
       },
       'git rev-parse --verify --quiet base123^{tree}': {
@@ -169,11 +150,11 @@ branch refs/heads/main
     await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({})
 
     const calls = getGitCalls()
-    expect(calls).toContain('git branch -d -- feature/test')
-    expect(calls).toContain('git merge-tree --write-tree base123 refs/heads/feature/test')
+    expect(calls).not.toContain('git branch -d -- feature/test')
+    expect(calls).toContain('git merge-tree --write-tree base123 def456')
     expect(calls).toContain('git update-ref -d refs/heads/feature/test def456')
     expect(calls).toContain('git config --remove-section branch.feature/test')
-    expect(calls).not.toContain('git remote')
+    expect(calls).toContain('git remote')
   })
 
   it('deletes a squash-merged branch with branch-only merge commits via expected head', async () => {
@@ -188,21 +169,11 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain -z#2': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-`
-      },
       'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
 `
-      },
-      'git branch -d -- feature/test': {
-        error: new Error('branch delete failed'),
-        stderr: 'error: the branch feature/test is not fully merged'
       },
       'git config --get branch.feature/test.base': {
         stdout: 'refs/remotes/origin/main\n'
@@ -210,19 +181,19 @@ branch refs/heads/main
       'git rev-parse --verify --quiet refs/remotes/origin/main^{commit}': {
         stdout: 'target123\n'
       },
-      'git merge-tree --write-tree target123 refs/heads/feature/test': {
+      'git merge-tree --write-tree target123 def456': {
         stdout: 'merged-tree\n'
       },
       'git rev-parse --verify --quiet target123^{tree}': {
         stdout: 'target-tree\n'
       },
-      'git rev-list --right-only --merges --count target123...refs/heads/feature/test': {
+      'git rev-list --right-only --merges --count target123...def456': {
         stdout: '1\n'
       },
-      'git merge-base target123 refs/heads/feature/test': {
+      'git merge-base target123 def456': {
         stdout: 'base123\n'
       },
-      'git diff base123 refs/heads/feature/test': {
+      'git diff base123 def456': {
         stdout: 'branch net diff\n'
       },
       'git patch-id --stable#1': {
@@ -237,7 +208,7 @@ branch refs/heads/main
       'git patch-id --stable#2': {
         stdout: 'patch123 squash123\n'
       },
-      'git merge-tree --write-tree squash123 refs/heads/feature/test': {
+      'git merge-tree --write-tree squash123 def456': {
         stdout: 'squash-tree\n'
       },
       'git rev-parse --verify --quiet squash123^{tree}': {
@@ -260,7 +231,7 @@ branch refs/heads/main
     ])
   })
 
-  it('refreshes the saved remote base before deleting a safe-delete-rejected branch', async () => {
+  it('refreshes the saved remote base before proving the captured branch head merged', async () => {
     mockGitCommands({
       'git worktree list --porcelain -z': {
         stdout: `worktree /repo
@@ -272,27 +243,11 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain -z#2': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-`
-      },
       'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
 `
-      },
-      'git worktree list --porcelain#2': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-`
-      },
-      'git branch -d -- feature/test': {
-        error: new Error('branch delete failed'),
-        stderr: 'error: the branch feature/test is not fully merged'
       },
       'git config --get branch.feature/test.base': {
         stdout: 'refs/remotes/origin/main\n'
@@ -306,7 +261,7 @@ branch refs/heads/main
       'git rev-parse --verify --quiet refs/remotes/origin/main^{commit}': {
         stdout: 'base123\n'
       },
-      'git merge-tree --write-tree base123 refs/heads/feature/test': {
+      'git merge-tree --write-tree base123 def456': {
         stdout: 'tree123\n'
       },
       'git rev-parse --verify --quiet base123^{tree}': {
@@ -317,7 +272,7 @@ branch refs/heads/main
     await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({})
 
     const calls = getGitCalls()
-    const mergeTreeCall = 'git merge-tree --write-tree base123 refs/heads/feature/test'
+    const mergeTreeCall = 'git merge-tree --write-tree base123 def456'
     const mergeTreeIndexes = calls.flatMap((call, index) => (call === mergeTreeCall ? [index] : []))
     const fetchIndex = calls.indexOf('git fetch --prune origin')
     const updateRefIndex = calls.indexOf('git update-ref -d refs/heads/feature/test def456')
@@ -346,21 +301,11 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain -z#2': {
-        stdout: `worktree /repo
-HEAD abc123
-branch refs/heads/main
-`
-      },
       'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
 `
-      },
-      'git branch -d -- feature/test': {
-        error: new Error('branch delete failed'),
-        stderr: 'error: the branch feature/test is not fully merged'
       },
       'git config --get branch.feature/test.base': {
         stdout: 'refs/remotes/origin/main\n'
@@ -368,10 +313,10 @@ branch refs/heads/main
       'git rev-parse --verify --quiet refs/remotes/origin/main^{commit}': {
         stdout: 'base123\n'
       },
-      'git rev-list --right-only --merges --count base123...refs/heads/feature/test': {
+      'git rev-list --right-only --merges --count base123...def456': {
         stdout: '0\n'
       },
-      'git cherry -v base123 refs/heads/feature/test': {
+      'git cherry -v base123 def456': {
         stdout: '- def456 fix: already squash-merged\n'
       },
       'git update-ref -d refs/heads/feature/test def456': {
@@ -384,13 +329,14 @@ branch refs/heads/main
     })
 
     expect(warnSpy).toHaveBeenCalledWith(
-      '[git] Failed to delete already-merged local branch "feature/test" after removing worktree',
-      expect.any(Error)
+      '[git] Preserved local branch "feature/test" after removing worktree',
+      expect.objectContaining({
+        message:
+          'Local branch "feature/test" changed after the workspace was deleted. Review it before deleting it.'
+      })
     )
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[git] Preserved local branch "feature/test" after removing worktree (not fully merged)',
-      expect.any(Error)
-    )
+    expect(getGitCalls()).toContain('git update-ref -d refs/heads/feature/test def456')
+    expect(getGitCalls()).not.toContain('git config --remove-section branch.feature/test')
     warnSpy.mockRestore()
   })
 

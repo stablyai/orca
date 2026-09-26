@@ -224,7 +224,7 @@ describe('addWorktreeOp', () => {
 describe('removeWorktreeOp', () => {
   it('rejects a locked SSH worktree before invoking remove', async () => {
     const git = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list') {
@@ -248,13 +248,19 @@ describe('removeWorktreeOp', () => {
     )
   })
 
-  it('deletes the now-unused branch after removing an SSH worktree', async () => {
+  it('deletes the merged branch at its captured head after removing an SSH worktree', async () => {
     const calls: string[] = []
     let listCount = 0
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push(`${cwd}$ ${args.join(' ')}`)
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args.join(' ') === 'rev-parse --verify --quiet HEAD^{commit}') {
+        return { stdout: 'base123\n', stderr: '' }
+      }
+      if (args.join(' ') === 'merge-base base123 1') {
+        return { stdout: '1\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
@@ -278,7 +284,14 @@ describe('removeWorktreeOp', () => {
       '/repo-feature$ rev-parse --git-common-dir',
       `${resolvedRepoPath()}$ worktree list --porcelain -z`,
       `${resolvedRepoPath()}$ worktree remove /repo-feature`,
-      `${resolvedRepoPath()}$ branch -d -- feature/test`
+      `${resolvedRepoPath()}$ config --get branch.feature/test.base`,
+      `${resolvedRepoPath()}$ symbolic-ref --quiet refs/remotes/origin/HEAD`,
+      `${resolvedRepoPath()}$ rev-parse --verify --quiet HEAD^{commit}`,
+      `${resolvedRepoPath()}$ merge-base base123 1`,
+      `${resolvedRepoPath()}$ worktree list --porcelain`,
+      `${resolvedRepoPath()}$ update-ref -d refs/heads/feature/test 1`,
+      `${resolvedRepoPath()}$ worktree list --porcelain`,
+      `${resolvedRepoPath()}$ config --remove-section branch.feature/test`
     ])
   })
 
@@ -287,8 +300,14 @@ describe('removeWorktreeOp', () => {
     let listCount = 0
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push(`${cwd}$ ${args.join(' ')}`)
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args.join(' ') === 'rev-parse --verify --quiet HEAD^{commit}') {
+        return { stdout: 'base123\n', stderr: '' }
+      }
+      if (args.join(' ') === 'merge-base base123 1') {
+        return { stdout: '1\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
@@ -319,13 +338,20 @@ describe('removeWorktreeOp', () => {
       `${resolvedRepoPath()}$ worktree remove /repo-feature`,
       '/repo-feature$ status --porcelain --untracked-files=all',
       `${resolvedRepoPath()}$ worktree remove --force /repo-feature`,
-      `${resolvedRepoPath()}$ branch -d -- feature/test`
+      `${resolvedRepoPath()}$ config --get branch.feature/test.base`,
+      `${resolvedRepoPath()}$ symbolic-ref --quiet refs/remotes/origin/HEAD`,
+      `${resolvedRepoPath()}$ rev-parse --verify --quiet HEAD^{commit}`,
+      `${resolvedRepoPath()}$ merge-base base123 1`,
+      `${resolvedRepoPath()}$ worktree list --porcelain`,
+      `${resolvedRepoPath()}$ update-ref -d refs/heads/feature/test 1`,
+      `${resolvedRepoPath()}$ worktree list --porcelain`,
+      `${resolvedRepoPath()}$ config --remove-section branch.feature/test`
     ])
   })
 
   it('surfaces uncommitted changes instead of force-removing a dirty submodule worktree', async () => {
     const git = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list') {
@@ -359,7 +385,7 @@ describe('removeWorktreeOp', () => {
 
   it('does not force-retry when the caller already forced SSH removal', async () => {
     const git = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list') {
@@ -393,46 +419,74 @@ describe('removeWorktreeOp', () => {
     )
   })
 
-  it('preserves the branch (does not throw) when `branch -d` refuses an unmerged branch', async () => {
-    let listCount = 0
-    const git = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'rev-parse') {
-        return { stdout: '/repo/.git\n', stderr: '' }
-      }
-      if (args[0] === 'worktree' && args[1] === 'list') {
-        listCount += 1
-        return {
-          stdout:
-            listCount === 1
-              ? worktreeList(
-                  { path: '/repo', branch: 'main' },
-                  { path: '/repo-feature', branch: 'feature/test' }
-                )
-              : worktreeList({ path: '/repo', branch: 'main' }),
-          stderr: ''
+  it.each([true, false])(
+    'preserves an unmerged branch when tracking-branch deletion would succeed: %s',
+    async (trackingBranchContainsHead) => {
+      let listCount = 0
+      const git = vi.fn<GitExec>(async (args) => {
+        if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
+          return { stdout: '/repo/.git\n', stderr: '' }
         }
-      }
-      if (args[0] === 'branch' && args[1] === '-d') {
-        throw new Error('error: the branch feature/test is not fully merged')
-      }
-      return { stdout: '', stderr: '' }
-    })
+        if (args.join(' ') === 'rev-parse --verify --quiet HEAD^{commit}') {
+          return { stdout: 'base123\n', stderr: '' }
+        }
+        if (args.join(' ') === 'merge-base base123 1') {
+          return { stdout: 'ancestor123\n', stderr: '' }
+        }
+        if (args.join(' ') === 'merge-tree --write-tree base123 1') {
+          throw new Error('merge conflict')
+        }
+        if (args.join(' ') === 'rev-list --right-only --merges --count base123...1') {
+          return { stdout: '0\n', stderr: '' }
+        }
+        if (args.join(' ') === 'cherry -v base123 1') {
+          return { stdout: '+ 1 Unmerged change\n', stderr: '' }
+        }
+        if (args[0] === 'worktree' && args[1] === 'list') {
+          listCount += 1
+          return {
+            stdout:
+              listCount === 1
+                ? worktreeList(
+                    { path: '/repo', branch: 'main' },
+                    { path: '/repo-feature', branch: 'feature/test' }
+                  )
+                : worktreeList({ path: '/repo', branch: 'main' }),
+            stderr: ''
+          }
+        }
+        if (args[0] === 'branch' && args[1] === '-d') {
+          if (trackingBranchContainsHead) {
+            return { stdout: 'Deleted branch feature/test\n', stderr: '' }
+          }
+          throw new Error('error: the branch feature/test is not fully merged')
+        }
+        return { stdout: '', stderr: '' }
+      })
 
-    // The unmerged-branch refusal must be surfaced without failing workspace removal.
-    await expect(
-      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
-    ).resolves.toEqual({
-      preservedBranch: { branchName: 'feature/test', head: '1' }
-    })
+      await expect(
+        removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+      ).resolves.toEqual({
+        preservedBranch: { branchName: 'feature/test', head: '1' }
+      })
 
-    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
-    expect(git).not.toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
-  })
+      expect(git).toHaveBeenCalledWith(['merge-base', 'base123', '1'], resolvedRepoPath())
+      expect(git).not.toHaveBeenCalledWith(
+        ['branch', '-d', '--', 'feature/test'],
+        expect.any(String)
+      )
+      expect(git).not.toHaveBeenCalledWith(
+        ['branch', '-D', '--', 'feature/test'],
+        expect.any(String)
+      )
+      expect(git.mock.calls.some(([args]) => args[0] === 'update-ref')).toBe(false)
+    }
+  )
 
   it('force-deletes the just-created branch during failed sparse setup rollback', async () => {
     let listCount = 0
     const git = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list') {
@@ -467,7 +521,7 @@ describe('removeWorktreeOp', () => {
 
   it('does not let force override a locked SSH worktree', async () => {
     const git = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list') {
@@ -496,7 +550,7 @@ describe('removeWorktreeOp', () => {
     const calls: string[] = []
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push(`${cwd}$ ${args.join(' ')}`)
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list') {
@@ -526,8 +580,14 @@ describe('removeWorktreeOp', () => {
   it('keeps the branch when Git reports another SSH worktree still uses it', async () => {
     let listCount = 0
     const git = vi.fn<GitExec>(async (args, _cwd) => {
-      if (args[0] === 'rev-parse') {
+      if (args[0] === 'rev-parse' && args[1] === '--git-common-dir') {
         return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args.join(' ') === 'rev-parse --verify --quiet HEAD^{commit}') {
+        return { stdout: 'base123\n', stderr: '' }
+      }
+      if (args.join(' ') === 'merge-base base123 1') {
+        return { stdout: '1\n', stderr: '' }
       }
       if (args[0] === 'worktree' && args[1] === 'list') {
         listCount += 1
@@ -545,18 +605,18 @@ describe('removeWorktreeOp', () => {
           stderr: ''
         }
       }
-      if (args[0] === 'branch' && args[1] === '-d') {
-        throw new Error(
-          "error: cannot delete branch 'feature/test' used by worktree at '/repo-other'"
-        )
-      }
       return { stdout: '', stderr: '' }
     })
 
-    await removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({ preservedBranch: { branchName: 'feature/test', head: '1' } })
 
-    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
+    expect(listCount).toBe(3)
+    expect(git).toHaveBeenCalledWith(['merge-base', 'base123', '1'], resolvedRepoPath())
+    expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
     expect(git).toHaveBeenCalledWith(['worktree', 'prune'], expect.any(String))
     expect(git).not.toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
+    expect(git.mock.calls.some(([args]) => args[0] === 'update-ref')).toBe(false)
   })
 })

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { BranchDeletionUnverifiedError } from '../shared/git-branch-delete-verification'
 
 const { gitExecFileAsyncMock, listWorktreesStrictMock, removeLocalWorktreePathMock } = vi.hoisted(
   () => ({
@@ -47,6 +48,24 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('does not report a branch as preserved after deletion and restoration could not be verified', async () => {
+    await withPlatform('win32', async () => {
+      const result = await recoverLocalWindowsWorktreeRemoval({
+        error: new BranchDeletionUnverifiedError('feature/test', new Error('restore failed')),
+        force: false,
+        canonicalWorktreePath: 'C:/repo/feature',
+        repoPath: 'C:/repo',
+        localWorktreeGitOptions: {},
+        registeredWorktree: { branch: 'refs/heads/feature/test', head: 'abc123' },
+        deleteBranch: true,
+        closeWatcher: vi.fn()
+      })
+      expect(result).toBeUndefined()
+      expect(listWorktreesStrictMock).not.toHaveBeenCalled()
+      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
+    })
   })
 
   it('recovers Git for Windows partial filesystem deletion failures', async () => {
