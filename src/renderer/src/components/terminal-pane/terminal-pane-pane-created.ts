@@ -143,6 +143,7 @@ export function createTerminalPaneCreatedHandler(
 
     installTerminalPaneInputHandling({
       pane,
+      tabId: deps.tabId,
       managerRef,
       paneKittyKeyboardModesRef,
       settingsRef,

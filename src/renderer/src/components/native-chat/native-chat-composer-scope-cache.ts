@@ -10,7 +10,9 @@ export const NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX = 128
 export function setBoundedScopeCacheEntry<T>(
   cache: Map<string, T>,
   scopeKey: string,
-  value: T
+  value: T,
+  /** Called for each scope shed here, so a caller mirroring this cache can keep up. */
+  onEvict?: (evictedScopeKey: string) => void
 ): void {
   cache.delete(scopeKey)
   cache.set(scopeKey, value)
@@ -20,5 +22,6 @@ export function setBoundedScopeCacheEntry<T>(
       break
     }
     cache.delete(oldest)
+    onEvict?.(oldest)
   }
 }
