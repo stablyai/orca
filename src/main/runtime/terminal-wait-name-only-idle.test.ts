@@ -295,6 +295,29 @@ function oscTitle(title: string): string {
 }
 
 describe('tui-idle over the live OSC title pipeline', () => {
+  it('reads the visible Codex screen again when daemon tail omits its ready header', async () => {
+    const { runtime, handle } = await makeRuntime('codex')
+    runtime.onPtyData(E2E_PTY_ID, `${oscTitle(NAME_ONLY_TITLE)}starting\n`, Date.now())
+    const read = runtime.readTerminal.bind(runtime)
+    const snapshot = vi.spyOn(runtime, 'readTerminal').mockImplementation(async (...args) => {
+      const result = await read(...args)
+      return {
+        ...result,
+        source: 'screen',
+        tail:
+          snapshot.mock.calls.length === 1
+            ? ['Starting Codex']
+            : [' >_ OpenAI Codex (v0.157.0)', ' model: GPT-6-Sol low', ' directory: /work']
+      }
+    })
+
+    await expect(
+      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 5_000 })
+    ).resolves.toMatchObject({ satisfied: true })
+    expect(snapshot).toHaveBeenCalledTimes(2)
+    expect(snapshot).toHaveBeenCalledWith(handle, { screen: true }, expect.anything())
+  }, 6_000)
+
   it('does not settle on a name-only title arriving mid-stream', async () => {
     const { runtime, handle } = await makeRuntime('codex')
     runtime.onPtyData(E2E_PTY_ID, `${oscTitle(WORKING_TITLE)}building\n`, Date.now())
