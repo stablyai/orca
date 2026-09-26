@@ -18,6 +18,7 @@ export type GitHandlerCommandOptions = {
 
 export type GitHandlerCommandResult = { stdout: string; stderr: string }
 export type GitHandlerWatcherRegistry = Pick<RelayFilesystemWatchRegistry, 'runWithRemovalFence'>
+export type GitCloneProxyOptions = { proxyUrl?: string; proxyBypassRules?: string }
 
 export type GitHandlerOperationHost = {
   readonly gitDiffReadDedupe: InFlightPromiseDedupe<unknown>
@@ -34,6 +35,7 @@ export type GitHandlerOperationHost = {
     args: string[],
     cwd: string,
     progressId: string,
+    proxy?: GitCloneProxyOptions,
     context?: RequestContext
   ): Promise<GitHandlerCommandResult>
   clearGitMutationReadCaches(): void
@@ -80,9 +82,10 @@ export abstract class GitHandlerOperationContext {
     args: string[],
     cwd: string,
     progressId: string,
+    proxy?: GitCloneProxyOptions,
     context?: RequestContext
   ): Promise<GitHandlerCommandResult> {
-    return this.host.spawnClone(args, cwd, progressId, context)
+    return this.host.spawnClone(args, cwd, progressId, proxy, context)
   }
 
   protected clearGitMutationReadCaches(): void {
