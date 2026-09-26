@@ -413,6 +413,13 @@ describe("the page pushes its terminal frame's box into the document", () => {
     expect(scales.at(-1)).toBe(FIT_390)
     layOut(390, 600)
     await framesUntil(() => scales.at(-1) === 390 / (7.5 * 80))
+    // The held fit is spent: a second hide and show must not run it again over the user's pan.
+    const landed = scales.length
+    layOut(0, 0)
+    layOut(390, 600)
+    await nextFrame()
+    await nextFrame()
+    expect(scales).toHaveLength(landed)
     mounted.dispose()
   })
 
