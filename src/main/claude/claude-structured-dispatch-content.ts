@@ -12,11 +12,18 @@ import { claudeRecord } from './claude-structured-item-translation'
 export class ClaudeDispatchContentError extends Error {
   /** What the person reads on the rejected message; `message` stays for logs. */
   readonly sentence: string
+  /** `hostFault`: a body no Orca client sends, so the fault is Orca's, not an attachment's. */
+  readonly kind: 'attachmentInvalid' | 'hostFault'
 
-  constructor(message: string, sentence: string) {
+  constructor(
+    message: string,
+    sentence: string,
+    kind: 'attachmentInvalid' | 'hostFault' = 'attachmentInvalid'
+  ) {
     super(message)
     this.name = 'ClaudeDispatchContentError'
     this.sentence = sentence
+    this.kind = kind
   }
 }
 
@@ -24,7 +31,7 @@ export class ClaudeDispatchContentError extends Error {
  *  words that refusal carries, or an attachment it could not read. Never the provider. */
 export function claudeDispatchContentRejection(error: unknown): AgentJournalDispatchRejection {
   if (error instanceof ClaudeDispatchContentError) {
-    return { reason: error.sentence, rejection: agentSessionFailureFact('attachmentInvalid') }
+    return { reason: error.sentence, rejection: agentSessionFailureFact(error.kind) }
   }
   // The row says only that it could not be read; why belongs in the log.
   console.warn('[claude-dispatch] attachment could not be read:', error)
@@ -146,7 +153,8 @@ export async function claudeDispatchMessageContent(
   if (body.role !== 'user') {
     throw new ClaudeDispatchContentError(
       'Claude dispatch accepts only user messages',
-      "This message can't be sent to the agent."
+      "This message can't be sent to the agent.",
+      'hostFault'
     )
   }
   const images: unknown[] = []
@@ -165,7 +173,8 @@ export async function claudeDispatchMessageContent(
   if (content.length === 0) {
     throw new ClaudeDispatchContentError(
       'Claude dispatch requires text or an image',
-      'This message is empty, so it was not sent.'
+      'This message is empty, so it was not sent.',
+      'hostFault'
     )
   }
   return content

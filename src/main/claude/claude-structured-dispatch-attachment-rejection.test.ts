@@ -1,4 +1,4 @@
-// What a person reads when Orca refuses a message's attachments before sending it.
+// What a person reads when Orca refuses a message's content before sending it.
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -97,6 +97,31 @@ describe('Claude structured dispatch attachment rejections', () => {
     } finally {
       await rm(directory, { recursive: true, force: true })
     }
+  })
+
+  it('does not blame an attachment for a message no Orca client sends', async () => {
+    const session = sessionFor()
+    await expect(
+      dispatchClaudeTurn(session, {
+        clientMessageId: 'client-1',
+        body: userMessage([{ type: 'text', text: '' }])
+      })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'This message is empty, so it was not sent.',
+      rejection: { kind: 'hostFault' }
+    })
+    await expect(
+      dispatchClaudeTurn(session, {
+        clientMessageId: 'client-2',
+        body: { ...userMessage([{ type: 'text', text: 'hi' }]), role: 'assistant' }
+      })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: "This message can't be sent to the agent.",
+      rejection: { kind: 'hostFault' }
+    })
+    expect(session.connection.send).not.toHaveBeenCalled()
   })
 
   it('rejects an attachment it cannot read with the generic sentence and no path', async () => {
