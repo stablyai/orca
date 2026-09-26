@@ -8,6 +8,7 @@ import type { ActionSheetAction } from './ActionSheetModal'
 import { ActionSheetModal } from './ActionSheetModal'
 import { BottomDrawer } from './BottomDrawer'
 import { ConfirmModal } from './ConfirmModal'
+import { AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE } from '../session/mobile-existing-agent-launch'
 import { mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
@@ -86,7 +87,7 @@ function useSendActions(controller: ReturnType<typeof useMobileDiffReviewControl
         ...(controller.agentLaunchAvailability === 'update-required'
           ? { hint: 'Update Orca on your computer' }
           : controller.agentLaunchAvailability === 'unverified'
-            ? { hint: "Could not read this host's status" }
+            ? { hint: AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE }
             : {}),
         skipAutoClose: true,
         onPress: () => void controller.createTerminalAndSend(comments)
