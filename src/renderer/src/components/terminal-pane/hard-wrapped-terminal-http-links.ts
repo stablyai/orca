@@ -16,6 +16,31 @@ const MIN_HARD_WRAP_FILL_RATIO = 0.8
 
 type TranslatedLine = ReturnType<typeof translateLineWithColumns>
 
+function findFrameIndexBefore(text: string, beforeIndex: number): number {
+  for (let index = beforeIndex - 1; index >= 0; index--) {
+    if (VERTICAL_LAYOUT_FRAME_PATTERN.test(text[index]!)) {
+      return index
+    }
+  }
+  return -1
+}
+
+// Why: a TUI overlay paints its frame over whatever it covers, so rows share
+// only the run from the frame to the URL; further left is the screen underneath
+// and differs per row. Anchor on the frame's cell column, not the row prefix.
+function findFramedFragmentStart(
+  translated: TranslatedLine,
+  frameColumn: number,
+  framedPrefix: string
+): number {
+  const frameIndex = translated.columns.indexOf(frameColumn)
+  if (frameIndex === -1) {
+    return -1
+  }
+  const prefixEnd = frameIndex + framedPrefix.length
+  return translated.text.slice(frameIndex, prefixEnd) === framedPrefix ? prefixEnd : -1
+}
+
 function buildCandidateFromStart(
   buffer: { getLine(y: number): IBufferLine | undefined },
   startY: number,
@@ -34,12 +59,15 @@ function buildCandidateFromStart(
   }
   const translatedStart = cachedStart ?? translateLineWithColumns(startLine)
   translatedLines.set(startY, translatedStart)
-  const schemeColumn = translatedStart.columns[schemeIndex]
-  if (schemeColumn === undefined) {
+  const frameIndex = findFrameIndexBefore(translatedStart.text, schemeIndex)
+  if (frameIndex === -1) {
     return null
   }
-
-  const continuationPrefix = translatedStart.text.slice(0, schemeIndex)
+  const frameColumn = translatedStart.columns[frameIndex]
+  if (frameColumn === undefined) {
+    return null
+  }
+  const framedPrefix = translatedStart.text.slice(frameIndex, schemeIndex)
   let text = ''
   let rightFrameColumn: number | null = null
   let previousRowCanContinue = true
@@ -59,15 +87,21 @@ function buildCandidateFromStart(
         ? translatedStart
         : (translatedLines.get(rowY) ?? translateLineWithColumns(line))
     translatedLines.set(rowY, translated)
-    if (rowY > startY && translated.text.slice(0, schemeIndex) !== continuationPrefix) {
+    const fragmentStart =
+      rowY === startY ? schemeIndex : findFramedFragmentStart(translated, frameColumn, framedPrefix)
+    if (fragmentStart === -1) {
+      break
+    }
+    const fragmentStartColumn = translated.columns[fragmentStart]
+    if (fragmentStartColumn === undefined) {
       break
     }
 
-    const fragment = translated.text.slice(schemeIndex).match(HTTP_FRAGMENT_PATTERN)?.[0] ?? ''
+    const fragment = translated.text.slice(fragmentStart).match(HTTP_FRAGMENT_PATTERN)?.[0] ?? ''
     if (!fragment || (rowY > startY && HTTP_SCHEME_START_PATTERN.test(fragment))) {
       break
     }
-    const fragmentEnd = schemeIndex + fragment.length
+    const fragmentEnd = fragmentStart + fragment.length
     const layoutSuffix = translated.text.slice(fragmentEnd)
     const rightFrameOffset = layoutSuffix.search(VERTICAL_LAYOUT_FRAME_PATTERN)
     const currentRightFrameIndex = rightFrameOffset === -1 ? -1 : fragmentEnd + rightFrameOffset
@@ -90,15 +124,15 @@ function buildCandidateFromStart(
       y: rowY,
       text: fragment,
       sourceText: translated.text,
-      columns: translated.columns.slice(schemeIndex, fragmentEnd + 1),
+      columns: translated.columns.slice(fragmentStart, fragmentEnd + 1),
       startIndex: text.length,
       isWrapped: line.isWrapped,
       lineLength: line.length
     })
     text += fragment
 
-    const contentWidth = currentRightFrameColumn - schemeColumn
-    const fragmentWidth = translated.columns[fragmentEnd]! - schemeColumn
+    const contentWidth = currentRightFrameColumn - fragmentStartColumn
+    const fragmentWidth = translated.columns[fragmentEnd]! - fragmentStartColumn
     const fillsRow = contentWidth > 0 && fragmentWidth / contentWidth >= MIN_HARD_WRAP_FILL_RATIO
     if (rowY === startY) {
       startRowFilled = fillsRow
