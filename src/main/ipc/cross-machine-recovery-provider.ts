@@ -1,5 +1,4 @@
 import { ipcMain, type WebContents } from 'electron'
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { Store } from '../persistence'
 import {
   runProcess,
@@ -111,6 +110,8 @@ function listArgv(args: CrossMachineRecoveryListArgs): string[] {
 
 const MAX_PROGRESS_LINE_CHARS = 4096
 
+type PickupChild = ReturnType<typeof spawnProcess>
+
 function pickupArgv(args: CrossMachineRecoveryPickupArgs): string[] {
   return [
     'pickup',
@@ -124,7 +125,7 @@ function pickupArgv(args: CrossMachineRecoveryPickupArgs): string[] {
 }
 
 export function createCrossMachineRecoveryProvider(getProviderPath: () => string) {
-  const pickups = new Map<string, { child: ChildProcessWithoutNullStreams; cancelled: boolean }>()
+  const pickups = new Map<string, { child: PickupChild; cancelled: boolean }>()
 
   async function query<T>(
     argv: string[],
@@ -149,7 +150,7 @@ export function createCrossMachineRecoveryProvider(getProviderPath: () => string
     sender: Pick<WebContents, 'send' | 'isDestroyed'>,
     args: WithClientInstanceId<CrossMachineRecoveryPickupArgs>
   ): Promise<CrossMachineRecoveryProviderResult<CcSyncPickup>> {
-    let child: ChildProcessWithoutNullStreams
+    let child: PickupChild
     try {
       child = spawnProcess({
         program: getProviderPath(),
