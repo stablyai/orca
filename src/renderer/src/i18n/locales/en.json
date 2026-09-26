@@ -517,6 +517,8 @@
           "2dcd706774": "Project also exists in another profile",
           "presenceProfileOverflow": "{{names}} +{{count}} more",
           "removeProjectFailed": "Failed to remove project",
+          "24424c2102": "Converted to a Git repository",
+          "e6c1e9dba0": "Failed to convert folder to a Git repository",
           "wslFilesystemBoundaryTitle": "This project is stored on a Windows drive",
           "wslFilesystemBoundaryDescription": "Git for this project runs in {{distro}}, which reaches Windows drives over the WSL filesystem bridge. Expect git to be roughly 20x slower than it would be on a copy stored inside {{distro}}."
         },
@@ -5284,12 +5286,14 @@
         },
         "NonGitFolderDialog": {
           "e52454b7f6": "Open as Folder",
-          "05b33a17a9": "Cancel",
-          "8fba4b8cbb": "This folder isn't a Git repository. You'll have the editor, terminal, and search, but Git-based features won't be available.",
           "c49fb13492": "Failed to add folder on this host",
           "9a766f33ac": "This path was checked on the SSH host.",
           "79fd02cf5f": "This path was checked on {{hostName}}.",
-          "8851b77327": "This path was checked locally."
+          "8851b77327": "This path was checked locally.",
+          "eb079b3809": "Convert to Git Repository",
+          "15b3ae7310": "This folder isn't a Git repository",
+          "1d9e5c8007": "Convert it to a Git repository to use worktrees, source control, and code reviews. Or open it as a plain folder with just the editor, terminal, and search.",
+          "2bef0e9e6d": "Converting runs git init, adds a .gitignore if one is missing, and makes an initial commit. Your existing files aren't changed."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "Run hooks",

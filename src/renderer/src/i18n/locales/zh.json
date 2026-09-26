@@ -400,6 +400,8 @@
           "15cf5319ec": "已在 {{hostName}} 上检查 {{path}}，但该主机未报告可用文件夹。",
           "2dcd706774": "该项目也存在于另一个配置文件中",
           "presenceProfileOverflow": "{{names}} 及另外 {{count}} 个",
+          "24424c2102": "Converted to a Git repository",
+          "e6c1e9dba0": "Failed to convert folder to a Git repository",
           "removeProjectFailed": "删除项目失败",
           "wslFilesystemBoundaryTitle": "该项目存储在 Windows 驱动器上",
           "wslFilesystemBoundaryDescription": "该项目的 Git 在 {{distro}} 中运行，它通过 WSL 文件系统桥到达 Windows 驱动器。预计 git 的速度比存储在 {{distro}} 内的副本慢大约 20 倍。"
@@ -5094,12 +5096,14 @@
         },
         "NonGitFolderDialog": {
           "e52454b7f6": "作为文件夹打开",
-          "05b33a17a9": "取消",
-          "8fba4b8cbb": "此文件夹不是 Git 存储库。您将拥有编辑器、终端和搜索，但基于 Git 的功能将不可用。",
           "c49fb13492": "添加远程文件夹失败",
           "9a766f33ac": "已在 SSH 主机上检查此路径。",
           "79fd02cf5f": "已在 {{hostName}} 上检查此路径。",
-          "8851b77327": "已在本机检查此路径。"
+          "8851b77327": "已在本机检查此路径。",
+          "15b3ae7310": "This folder isn't a Git repository",
+          "eb079b3809": "Convert to Git Repository",
+          "1d9e5c8007": "Convert it to a Git repository to use worktrees, source control, and code reviews. Or open it as a plain folder with just the editor, terminal, and search.",
+          "2bef0e9e6d": "Converting runs git init, adds a .gitignore if one is missing, and makes an initial commit. Your existing files aren't changed."
         },
         "OrcaYamlTrustDialog": {
           "f3e2b868fb": "运行钩子",

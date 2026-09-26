@@ -3,11 +3,14 @@ import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import {
+  getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { isFolderRepo } from '../../shared/repo-kind'
 import type { Repo } from '../../shared/repo-types'
+import { convertLocalFolderToGit } from '../git/convert-local-folder-to-git'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, isGitRepo } from '../git/repo'
 import { invalidateAuthorizedRootsCache, isENOENT } from '../ipc/filesystem-auth'
@@ -49,6 +52,9 @@ export class RuntimeRepositoryRegistrationController {
       )
     })
     if (existing) {
+      if (kind === 'git' && isFolderRepo(existing)) {
+        return this.upgradeFolderRepoToGit(store, existing, path)
+      }
       if (
         existing.executionHostId == null &&
         parseExecutionHostId(executionHostId)?.kind === 'runtime'
@@ -78,12 +84,56 @@ export class RuntimeRepositoryRegistrationController {
       ...detected,
       addedAt: Date.now(),
       kind,
-      ...(kind === 'git' ? { externalWorktreeVisibilityLegacy: false } : {})
+      ...(kind === 'git'
+        ? {
+            externalWorktreeVisibility: 'hide' as const,
+            externalWorktreeVisibilityLegacy: false,
+            projectHostSetupMethod: 'imported-existing-folder' as const
+          }
+        : {})
     }
     store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(store, repo)
     this.invalidate(repo.id)
     return store.getRepo(repo.id) ?? repo
+  }
+
+  async convertToGit(path: string): Promise<{ repo: Repo } | { error: string }> {
+    this.requireStore()
+    const conversion = await convertLocalFolderToGit(path)
+    if (!conversion.ok) {
+      return { error: conversion.error }
+    }
+    return { repo: await this.add(path, 'git') }
+  }
+
+  private async upgradeFolderRepoToGit(
+    store: RuntimeStore,
+    existing: Repo,
+    path: string
+  ): Promise<Repo> {
+    const detected = await detectRepoIconAndUpstream({
+      repoPath: path,
+      kind: 'git',
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
+    const updated = store.updateRepo(
+      existing.id,
+      {
+        kind: 'git',
+        ...detected,
+        externalWorktreeVisibility: 'hide',
+        projectHostSetupMethod: existing.projectHostSetupMethod ?? 'imported-existing-folder'
+      },
+      getRepoExecutionHostId(existing)
+    )
+    if (!updated) {
+      throw new Error(`Project disappeared before it could be converted to Git: ${existing.id}`)
+    }
+    await prepareLocalWorktreeRootForRepo(store, updated)
+    invalidateAuthorizedRootsCache()
+    this.invalidate(updated.id)
+    return updated
   }
 
   async create(

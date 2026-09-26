@@ -5231,8 +5231,6 @@
         },
         "NonGitFolderDialog": {
           "e52454b7f6": "Ouvrir comme dossier",
-          "05b33a17a9": "Annuler",
-          "8fba4b8cbb": "Ce dossier n'est pas un dépôt Git. Vous aurez l'éditeur, le terminal et la recherche, mais les fonctionnalités basées sur Git ne seront pas disponibles.",
           "c49fb13492": "Échec de l'ajout du dossier sur cet hôte",
           "9a766f33ac": "Ce chemin a été vérifié sur l'hôte SSH.",
           "79fd02cf5f": "Ce chemin a été vérifié sur {{hostName}}.",
