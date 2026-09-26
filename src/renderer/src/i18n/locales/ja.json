@@ -18424,5 +18424,10 @@
   },
   "common": {
     "retry": "再試行"
+  },
+  "crossMachineRecovery": {
+    "recoveredSession": "復元されたセッション",
+    "resume": "再開",
+    "resumeFailed": "復元されたセッションを再開できませんでした"
   }
 }

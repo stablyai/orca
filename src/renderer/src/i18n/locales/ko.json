@@ -18424,5 +18424,10 @@
   },
   "common": {
     "retry": "다시 시도"
+  },
+  "crossMachineRecovery": {
+    "recoveredSession": "복구된 세션",
+    "resume": "재개",
+    "resumeFailed": "복구된 세션을 재개할 수 없습니다"
   }
 }
