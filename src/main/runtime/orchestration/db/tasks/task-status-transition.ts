@@ -1,3 +1,4 @@
+import { emitOrchestrationTaskTerminal } from '../../orchestration-task-terminal-event'
 import { OrchestrationError } from '../../orchestration-error'
 import type { TaskRow, TaskStatus } from '../../types'
 import { settleActiveDispatchesForTask } from '../dispatch-context/dispatch-completion'
@@ -110,11 +111,31 @@ export function updateTaskStatus(
     }
     const updatedTask = this.getTask(id)
     commitLifecycleWriteTransaction(this.db, transaction)
+    if (terminalStatus && task.status !== status) {
+      const dispatchId = latestDispatchId(this, id)
+      if (dispatchId) {
+        emitOrchestrationTaskTerminal(this, {
+          taskId: id,
+          dispatchId,
+          kind: status === 'completed' ? 'completed' : 'failed'
+        })
+      }
+    }
     return updatedTask
   } catch (error) {
     rollbackLifecycleWriteTransaction(this.db, transaction)
     throw error
   }
+}
+
+function latestDispatchId(db: OrchestrationDb, taskId: string): string | undefined {
+  const row: unknown = db.db
+    .prepare(`SELECT id FROM dispatch_contexts WHERE task_id = ? ORDER BY rowid DESC LIMIT 1`)
+    .get(taskId)
+  if (!row || typeof row !== 'object' || !('id' in row) || typeof row.id !== 'string') {
+    return undefined
+  }
+  return row.id
 }
 
 export type TaskStatusTransitionMethods = {

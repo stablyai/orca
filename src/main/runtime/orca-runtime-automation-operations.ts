@@ -16,6 +16,7 @@ import {
   type AutomationListResult
 } from '../../shared/automation-list-scope'
 import { OrchestrationDb } from './orchestration/db'
+import { bindOrchestrationTaskTerminalTeardown } from './orchestration/orchestration-task-terminal-event'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
@@ -154,6 +155,7 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     if (!this._orchestrationDb) {
       const dbPath = join(getAppEnvironment().getPath('userData'), 'orchestration.db')
       this._orchestrationDb = new OrchestrationDb(dbPath)
+      bindOrchestrationTaskTerminalTeardown(this, this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
     }

@@ -1,3 +1,4 @@
+import { emitOrchestrationTaskTerminal } from '../../orchestration-task-terminal-event'
 import type { WorkerDispatchRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -87,6 +88,9 @@ export function failWorkerStart(
         .get(dispatch.task_id)
     )
     const task = this.getTask(dispatch.task_id)
+    const taskBecameFailed = Boolean(
+      !hasActiveDispatch && task && task.status !== 'completed' && task.status !== 'failed'
+    )
     if (!hasActiveDispatch && task && task.status !== 'completed') {
       transitionLifecycleWithDb(this.db, {
         entity: 'task',
@@ -99,6 +103,13 @@ export function failWorkerStart(
     this.closeQuestionsForDispatch(dispatchId)
     recordFailedStartDispatchIdentity(this, this.getWorkerDispatch(dispatchId) as WorkerDispatchRow)
     this.db.exec('COMMIT')
+    if (taskBecameFailed) {
+      emitOrchestrationTaskTerminal(this, {
+        taskId: dispatch.task_id,
+        dispatchId,
+        kind: 'failed'
+      })
+    }
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
     this.db.exec('ROLLBACK')
