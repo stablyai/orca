@@ -4,20 +4,20 @@ import { parseWorktreeDeepLink, worktreeDeepLinkFromArguments } from './worktree
 describe('parseWorktreeDeepLink', () => {
   it('parses orca://worktree/create with parameters', () => {
     const result = parseWorktreeDeepLink(
-      'orca://worktree/create?repo=wom7web&name=feat-voice&branch=main'
+      'orca://worktree/create?repo=my-project&name=feat-voice&branch=main'
     )
     expect(result).toEqual({
       type: 'worktree-create',
-      repo: 'wom7web',
+      repo: 'my-project',
       name: 'feat-voice',
       branch: 'main'
     })
   })
 
   it('parses orca://worktree/new alias', () => {
-    expect(parseWorktreeDeepLink('orca://worktree/new?repo=wom7mlx&name=feat-omlx')).toEqual({
+    expect(parseWorktreeDeepLink('orca://worktree/new?repo=demo-engine&name=feat-omlx')).toEqual({
       type: 'worktree-create',
-      repo: 'wom7mlx',
+      repo: 'demo-engine',
       name: 'feat-omlx'
     })
   })
@@ -38,9 +38,9 @@ describe('parseWorktreeDeepLink', () => {
       name: 'fix'
     })
 
-    expect(parseWorktreeDeepLink('https://share.onorca.dev/worktree/new?repo=wom7web')).toEqual({
+    expect(parseWorktreeDeepLink('https://share.onorca.dev/worktree/new?repo=my-project')).toEqual({
       type: 'worktree-create',
-      repo: 'wom7web'
+      repo: 'my-project'
     })
 
     expect(parseWorktreeDeepLink('http://localhost:5173/worktree/create?name=dev')).toEqual({
@@ -86,10 +86,10 @@ describe('parseWorktreeDeepLink', () => {
 
 describe('worktreeDeepLinkFromArguments', () => {
   it('extracts matching worktree deep link from process argv array', () => {
-    const argv = ['/path/to/orca', 'orca://worktree/create?repo=wom7web&name=feat-1']
+    const argv = ['/path/to/orca', 'orca://worktree/create?repo=my-project&name=feat-1']
     expect(worktreeDeepLinkFromArguments(argv)).toEqual({
       type: 'worktree-create',
-      repo: 'wom7web',
+      repo: 'my-project',
       name: 'feat-1'
     })
   })

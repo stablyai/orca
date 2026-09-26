@@ -742,7 +742,7 @@ describe('createUISlice space navigation', () => {
 
     store.getState().openWorktreeDeepLink({
       type: 'worktree-create',
-      repo: 'wom7web',
+      repo: 'my-project',
       name: 'feat/siri-shortcuts',
       branch: 'main'
     })
@@ -750,13 +750,13 @@ describe('createUISlice space navigation', () => {
     expect(store.getState().activeModal).toBe('new-workspace-composer')
     expect(store.getState().modalData).toEqual({
       prefilledName: 'feat/siri-shortcuts',
-      initialRepoId: 'wom7web',
+      initialRepoId: 'my-project',
       initialBaseBranch: 'main',
       telemetrySource: 'unknown'
     })
     expect(store.getState().pendingWorktreeDeepLink).toEqual({
       type: 'worktree-create',
-      repo: 'wom7web',
+      repo: 'my-project',
       name: 'feat/siri-shortcuts',
       branch: 'main'
     })
