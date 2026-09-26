@@ -5819,7 +5819,8 @@
           "assertions": [
             "multiple client routes on one browser host share source-write application admission",
             "destination copies remain charged through browser-facing socket settlement",
-            "credited transport handoff transfers application ownership before callback settlement"
+            "credited transport handoff transfers application ownership before callback settlement",
+            "remote close after consumed EOF retires blocked writes exactly once and releases memory without a second end event, while earlier close orders preserve buffered data"
           ]
         },
         {

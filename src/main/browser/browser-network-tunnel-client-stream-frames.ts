@@ -113,6 +113,10 @@ function closeStream(
   }
   stream.remoteClosed = true
   stream.localEnded = true
+  if (stream.socket.readableEnded) {
+    actions.retire(stream)
+    return
+  }
   stream.socket.once('end', () => actions.retire(stream))
   if (!stream.remoteEnded) {
     finishBrowserNetworkSourceData(stream)

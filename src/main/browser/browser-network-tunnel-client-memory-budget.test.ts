@@ -28,6 +28,69 @@ function frame(
 }
 
 describe('BrowserNetworkTunnelClient aggregate memory', () => {
+  it.each(['consumed EOF', 'buffered EOF', 'queued data', 'full close'] as const)(
+    'retires a blocked write exactly once after remote close with %s',
+    async (order) => {
+      const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
+        hostMaxBytes: 10,
+        processMaxBytes: 100
+      })
+      const route = createClient(registry.acquire('host-a')!)
+      const socket = await open(route.client)
+      const settled = vi.fn()
+      const ended = vi.fn()
+      socket.on('end', ended)
+      socket.write(Buffer.from([1]), settled)
+      try {
+        const received: Buffer[] = []
+        if (order === 'consumed EOF') {
+          const eof = once(socket, 'end')
+          socket.resume()
+          route.client.handleBinary(frame(BrowserNetworkTunnelOpcode.HalfClose))
+          await eof
+          expect(socket.readableEnded).toBe(true)
+          expect(socket.destroyed).toBe(false)
+          expect(settled).not.toHaveBeenCalled()
+          expect(registry.evidence().retainedBytes).toBe(1)
+        } else {
+          route.client.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([2, 3])))
+          if (order === 'buffered EOF') {
+            socket.read(0)
+          }
+          if (order !== 'full close') {
+            route.client.handleBinary(frame(BrowserNetworkTunnelOpcode.HalfClose))
+          }
+          expect(socket.readableEnded).toBe(false)
+          expect(socket.readableLength).toBe(order === 'buffered EOF' ? 2 : 0)
+        }
+
+        route.client.handleBinary(frame(BrowserNetworkTunnelOpcode.Close))
+        if (order !== 'consumed EOF') {
+          expect(socket.destroyed).toBe(false)
+          expect(settled).not.toHaveBeenCalled()
+          expect(registry.evidence().retainedBytes).toBe(3)
+          const eof = once(socket, 'end')
+          socket.on('data', (bytes: Buffer) => received.push(bytes))
+          await eof
+          expect(Buffer.concat(received)).toEqual(Buffer.from([2, 3]))
+        }
+
+        expect(socket.destroyed).toBe(true)
+        expect(ended).toHaveBeenCalledOnce()
+        expect(settled).toHaveBeenCalledExactlyOnceWith(new Error('Browser tunnel stream closed'))
+        expect(registry.evidence().retainedBytes).toBe(0)
+        // A duplicate Close must be ignored for a retired ID, not close the route.
+        route.client.handleBinary(frame(BrowserNetworkTunnelOpcode.Close))
+        const replacement = await open(route.client, 2)
+        expect(replacement.destroyed).toBe(false)
+      } finally {
+        route.client.close()
+      }
+      expect(settled).toHaveBeenCalledOnce()
+      expect(registry.evidence().retainedBytes).toBe(0)
+    }
+  )
+
   it('shares application-write admission across routes on one browser host', async () => {
     const registry = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry({
       hostMaxBytes: 10,
