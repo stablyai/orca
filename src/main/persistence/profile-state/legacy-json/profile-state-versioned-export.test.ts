@@ -2,7 +2,7 @@ import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../../../durable-file-write'
 import { profileStateJsonExportPath } from './profile-state-export-path'
 import { writeVersionedProfileStateExport } from './profile-state-versioned-export'
 

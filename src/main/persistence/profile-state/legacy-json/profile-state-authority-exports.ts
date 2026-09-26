@@ -5,15 +5,15 @@ import {
   durableWriteTempPath,
   writeFileDurable,
   writeFileDurableSync
-} from '../../durable-file-write'
+} from '../../../durable-file-write'
 import {
   readProfileStateSnapshot,
   stageProfileStateJsonCompatibility,
   acceptProfileStateJsonCompatibility
-} from './profile-state-documents'
-import type Database from '../../sqlite/sync-database'
+} from '../profile-state-documents'
+import type Database from '../../../sqlite/sync-database'
 import { writeVersionedProfileStateExport } from './profile-state-versioned-export'
-import { ProfileStateRevisionConflictError } from './profile-state-document-validation'
+import { ProfileStateRevisionConflictError } from '../profile-state-document-validation'
 
 function readExportSnapshot(db: Database.Database, expectedRevision?: number) {
   const snapshot = readProfileStateSnapshot(db)
