@@ -62,7 +62,8 @@ export function useTerminalWebViewController(
     onTerminalTap,
     onFileTap,
     onOpenUrl,
-    onTextScaleChange
+    onTextScaleChange,
+    onCellBoxChange
   } = props
   const { pingsOnForegroundRecovery, post } = transport
   const isWebReadyRef = useRef(false)
@@ -162,15 +163,16 @@ export function useTerminalWebViewController(
         // Why: the document's init() rAF chain has run — term is open, renderService is
         // populated, first paint has happened. Resolve any pending awaitReady() so a queued
         // measure can now safely read cell dims.
-        const corrected = cellMetrics.acceptReady(msg)
-        if (
-          corrected?.reported &&
-          (corrected.reported.cellWidth !== corrected.actual.cellWidth ||
-            corrected.reported.cellHeight !== corrected.actual.cellHeight)
-        ) {
-          console.log('[fit][cell-metrics] probe differs from xterm', corrected)
-        }
         promises.resolveReady()
+      } else if (msg.type === 'cell-metrics') {
+        const corrected = cellMetrics.acceptLaidOut(msg)
+        if (
+          corrected?.fontScale === textScale &&
+          typeof msg.cols === 'number' &&
+          typeof msg.rows === 'number'
+        ) {
+          onCellBoxChange?.({ cols: msg.cols, rows: msg.rows })
+        }
       } else if (msg.type === 'measure-result') {
         promises.resolveMeasure(msg)
       } else {
@@ -206,7 +208,9 @@ export function useTerminalWebViewController(
       onTerminalTap,
       onFileTap,
       onOpenUrl,
-      onTextScaleChange
+      onTextScaleChange,
+      onCellBoxChange,
+      textScale
     ]
   )
 

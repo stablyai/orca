@@ -55,10 +55,13 @@ describe('createTerminalCellMetricsStore', () => {
     expect(store.fit(1, 751)).toBeUndefined()
   })
 
-  it('follows the view layout after the document report', () => {
+  it('follows the view layout, and keeps it across a reloaded document', () => {
     const store = createTerminalCellMetricsStore()
     store.acceptWebReady(webReady())
     store.layout(854, 400)
+    expect(store.fit(1)).toEqual({ cols: 111, rows: 23 })
+    store.clear()
+    store.acceptWebReady(webReady())
     expect(store.fit(1)).toEqual({ cols: 111, rows: 23 })
   })
 
@@ -68,16 +71,22 @@ describe('createTerminalCellMetricsStore', () => {
     expect(store.fit(1, 751)).toBeNull()
   })
 
-  it('takes the box xterm laid out at ready over the probe', () => {
+  it('takes the box xterm laid out over the probe, and says when it corrected a guess', () => {
     const store = createTerminalCellMetricsStore()
     store.acceptWebReady(webReady())
     const actual = { fontScale: 1, cellWidth: 7.8, cellHeight: 17 }
-    expect(store.acceptReady({ type: 'ready', cellMetrics: [actual] })).toEqual({
-      reported: CELL_1X,
-      actual
-    })
+    expect(store.acceptLaidOut({ type: 'cell-metrics', cellMetrics: [actual] })).toEqual(actual)
     expect(store.fit(1, 751)).toEqual({ cols: 54, rows: 44 })
-    expect(store.acceptReady({ type: 'ready' })).toBeNull()
+    // The same box again, or one that matches the guess, corrected nothing.
+    expect(store.acceptLaidOut({ type: 'cell-metrics', cellMetrics: [actual] })).toBeNull()
+    expect(store.acceptLaidOut({ type: 'cell-metrics', cellMetrics: [CELL_125X] })).toBeNull()
+    expect(store.acceptLaidOut({ type: 'cell-metrics' })).toBeNull()
+  })
+
+  it('does not call a first box a correction when there was no guess', () => {
+    const store = createTerminalCellMetricsStore()
+    store.acceptWebReady({ type: 'web-ready' })
+    expect(store.acceptLaidOut({ type: 'cell-metrics', cellMetrics: [CELL_1X] })).toBeNull()
   })
 
   it('forgets a replaced document', () => {

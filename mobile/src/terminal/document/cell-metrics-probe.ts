@@ -1,6 +1,7 @@
 import { TERMINAL_TEXT_SCALES } from '../terminal-text-scales'
 import type { TerminalCellMetrics } from '../terminal-cell-metrics'
 import type { TerminalDocumentScope } from './document-scope'
+import { notify } from './host-notify'
 import { fontPxForScale } from './text-scaling'
 
 /** xterm's DomMeasureStrategy repeat count. */
@@ -44,7 +45,11 @@ function createCharMeasure(scope: TerminalDocumentScope): (fontPx: number) => Ch
   }
 }
 
-/** Whether init will attach the WebGL renderer, which snaps the cell width to device pixels. */
+/**
+ * A guess at whether init gets the WebGL renderer, which snaps the cell width to device pixels.
+ * Building the addon creates no context, so a context that fails on load still lands on the DOM
+ * renderer; the laid-out report corrects that.
+ */
 function webglRendererExpected(scope: TerminalDocumentScope) {
   if (typeof WebGL2RenderingContext === 'undefined') {
     return false
@@ -77,6 +82,8 @@ export function measureCellMetrics(scope: TerminalDocumentScope): TerminalCellMe
       if (!(char.width > 0 && char.height > 0)) {
         return []
       }
+      // Why: copies xterm 6.1.0-beta.303's renderer rounding; the tests recompute this same formula, so
+      // only the laid-out report after init catches an xterm that rounds differently.
       const deviceWidth = snapsWidth ? Math.floor(char.width * dpr) : char.width * dpr
       entries.push({
         fontScale,
@@ -106,4 +113,26 @@ export function laidOutCellMetrics(scope: TerminalDocumentScope): TerminalCellMe
     return []
   }
   return [{ fontScale: scope.currentTextScale, cellWidth: width, cellHeight: height }]
+}
+
+/**
+ * Tells the host the box xterm laid out whenever it changes: after init, a renderer swap on
+ * context loss, a text-size or DPR change, or a resize (the DOM renderer's width depends on cols).
+ */
+export function reportLaidOutCellBox(scope: TerminalDocumentScope) {
+  const [laidOut] = laidOutCellMetrics(scope)
+  if (!laidOut || !scope.term) {
+    return
+  }
+  const key = laidOut.fontScale + ':' + laidOut.cellWidth + 'x' + laidOut.cellHeight
+  if (key === scope.reportedCellBox) {
+    return
+  }
+  scope.reportedCellBox = key
+  notify(scope, {
+    type: 'cell-metrics',
+    cellMetrics: [laidOut],
+    cols: scope.term.cols,
+    rows: scope.term.rows
+  })
 }

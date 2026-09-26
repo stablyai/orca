@@ -44,8 +44,9 @@ afterEach(() => {
 
 function mount(textScale = 1) {
   const ref = createRef<TerminalWebViewHandle>()
+  const onCellBoxChange = vi.fn()
   act(() => {
-    renderer = create(createElement(TerminalWebView, { ref, textScale }))
+    renderer = create(createElement(TerminalWebView, { ref, textScale, onCellBoxChange }))
   })
   const handle = () => {
     if (!ref.current) {
@@ -62,10 +63,12 @@ function mount(textScale = 1) {
   }
   const rerender = (nextScale: number) => {
     act(() => {
-      renderer!.update(createElement(TerminalWebView, { ref, textScale: nextScale }))
+      renderer!.update(
+        createElement(TerminalWebView, { ref, textScale: nextScale, onCellBoxChange })
+      )
     })
   }
-  return { handle, notify, rerender }
+  return { handle, notify, rerender, onCellBoxChange }
 }
 
 function postedTypes(): unknown[] {
@@ -107,16 +110,24 @@ describe('terminal fit from the reported cell box', () => {
     expect(postedTypes()).not.toContain('measure')
   })
 
-  it('takes the box xterm laid out at ready over the probe', () => {
-    const { handle, notify } = mount()
+  it('corrects a wrong guess from the laid-out box and tells the view the grid it has', () => {
+    const { handle, notify, onCellBoxChange } = mount()
     notify(WEB_READY)
-    notify({
-      type: 'ready',
-      cols: 55,
-      rows: 44,
-      cellMetrics: [{ fontScale: 1, cellWidth: 7.8, cellHeight: 17 }]
-    })
+    const laidOut = { fontScale: 1, cellWidth: 7.8, cellHeight: 17 }
+    notify({ type: 'cell-metrics', cellMetrics: [laidOut], cols: 55, rows: 44 })
     expect(handle().fitDimensions(751)).toEqual({ cols: 54, rows: 44 })
+    expect(onCellBoxChange).toHaveBeenCalledExactlyOnceWith({ cols: 55, rows: 44 })
+    notify({ type: 'cell-metrics', cellMetrics: [laidOut], cols: 54, rows: 44 })
+    expect(onCellBoxChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('says nothing when the laid-out box matches the guess or is for another text size', () => {
+    const { notify, onCellBoxChange } = mount()
+    notify(WEB_READY)
+    notify({ type: 'cell-metrics', cellMetrics: [CELL_1X], cols: 55, rows: 44 })
+    const other = { fontScale: 1.25, cellWidth: 10, cellHeight: 21 }
+    notify({ type: 'cell-metrics', cellMetrics: [other], cols: 55, rows: 44 })
+    expect(onCellBoxChange).not.toHaveBeenCalled()
   })
 
   it('fits the view layout once it arrives', () => {

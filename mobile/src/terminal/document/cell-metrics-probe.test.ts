@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TERMINAL_TEXT_SCALES } from '../terminal-text-scales'
-import { laidOutCellMetrics, measureCellMetrics } from './cell-metrics-probe'
+import { laidOutCellMetrics, measureCellMetrics, reportLaidOutCellBox } from './cell-metrics-probe'
 import { createTerminalDocumentScope } from './document-scope'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import type { TerminalDocumentHost } from './document-host-seams'
@@ -75,11 +75,17 @@ describe('measureCellMetrics', () => {
 })
 
 describe('laidOutCellMetrics', () => {
-  function scopeWithCell(cell: { width: number; height: number }, fontSize: number) {
-    const scope = probeScope()
+  function scopeWithCell(
+    cell: { width: number; height: number },
+    fontSize: number,
+    posted: Record<string, unknown>[] = []
+  ) {
+    const scope = probeScope({ postToHost: (message) => posted.push(message) })
     scope.currentTextScale = 1.25
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader touches only options.fontSize and _core's render dimensions.
     scope.term = {
+      cols: 55,
+      rows: 47,
       options: { fontSize },
       _core: { _renderService: { dimensions: { css: { cell } } } }
     } as unknown as typeof scope.term
@@ -90,6 +96,31 @@ describe('laidOutCellMetrics', () => {
     const scope = scopeWithCell({ width: 29 / 3, height: 21 }, fontPxForScale(1.25))
     expect(laidOutCellMetrics(scope)).toEqual([
       { fontScale: 1.25, cellWidth: 29 / 3, cellHeight: 21 }
+    ])
+  })
+
+  it('tells the host each new laid-out box once, with the grid it belongs to', () => {
+    const posted: Record<string, unknown>[] = []
+    const cell = { width: 29 / 3, height: 21 }
+    const scope = scopeWithCell(cell, fontPxForScale(1.25), posted)
+    reportLaidOutCellBox(scope)
+    reportLaidOutCellBox(scope)
+    // A renderer swap after context loss: the DOM renderer does not snap the width.
+    cell.width = 9.75
+    reportLaidOutCellBox(scope)
+    expect(posted).toEqual([
+      {
+        type: 'cell-metrics',
+        cellMetrics: [{ fontScale: 1.25, cellWidth: 29 / 3, cellHeight: 21 }],
+        cols: 55,
+        rows: 47
+      },
+      {
+        type: 'cell-metrics',
+        cellMetrics: [{ fontScale: 1.25, cellWidth: 9.75, cellHeight: 21 }],
+        cols: 55,
+        rows: 47
+      }
     ])
   })
 

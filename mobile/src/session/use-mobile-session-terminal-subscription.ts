@@ -3,6 +3,7 @@ import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-r
 import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
 import { seedTerminalViewportFromCellMetrics } from './mobile-terminal-first-subscribe-viewport'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
+import { useTerminalCellBoxRefit } from './use-mobile-session-terminal-cell-box-refit'
 import { mobileTerminalSnapshotByteBudget } from './terminal-snapshot-byte-budget'
 import {
   readTerminalViewportDims,
@@ -295,8 +296,10 @@ export function useMobileSessionTerminalSubscription(
       signalTerminalInventoryRecovery
     ]
   )
+  const handleTerminalCellBoxChange = useTerminalCellBoxRefit(scope, subscribeToTerminal)
   return {
-    subscribeToTerminal
+    subscribeToTerminal,
+    handleTerminalCellBoxChange
   }
 }
 

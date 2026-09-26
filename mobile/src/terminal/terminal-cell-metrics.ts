@@ -1,8 +1,8 @@
 /**
  * The document's cell box per text size, so a fit needs no terminal and no message round trip.
  *
- * The document reports a table at `web-ready` (one entry per preset, because the text scale only
- * reaches it after that notify) and the box xterm actually laid out at each init's `ready`.
+ * The document reports a guessed table at `web-ready` (one entry per preset, because the text
+ * scale only reaches it after that notify), then the box xterm actually lays out whenever it changes.
  */
 
 export type TerminalCellMetrics = { fontScale: number; cellWidth: number; cellHeight: number }
@@ -55,55 +55,68 @@ export function fitDimensionsFromCell(
   return { cols, rows: Math.max(MIN_FIT_ROWS, Math.floor(height / cell.cellHeight)) }
 }
 
+type Box = { width: number; height: number }
+
+function readBox(width: unknown, height: unknown): Box | null {
+  const w = positive(width)
+  const h = positive(height)
+  return w !== null && h !== null ? { width: w, height: h } : null
+}
+
+function sameCell(a: TerminalCellMetrics | undefined, b: TerminalCellMetrics) {
+  return a !== undefined && a.cellWidth === b.cellWidth && a.cellHeight === b.cellHeight
+}
+
 export function createTerminalCellMetricsStore() {
   const cells = new Map<number, TerminalCellMetrics>()
-  let box: { width: number; height: number } | null = null
-
-  function setBox(width: unknown, height: unknown) {
-    const w = positive(width)
-    const h = positive(height)
-    if (w !== null && h !== null) {
-      box = { width: w, height: h }
-    }
-  }
+  // Why: RN reports the view's layout once per mount; a reloaded document must not replace it.
+  let layoutBox: Box | null = null
+  // The document's own viewport, which on the page arrives at web-ready before any RN layout.
+  let documentBox: Box | null = null
 
   return {
-    /** A new document: its table and its viewport replace everything the last one said. */
+    /** A new document: its probe table and viewport replace the last document's. */
     acceptWebReady(msg: Record<string, unknown>) {
       cells.clear()
-      box = null
       for (const entry of readTerminalCellMetrics(msg)) {
         cells.set(entry.fontScale, entry)
       }
-      setBox(msg.viewportWidth, msg.viewportHeight)
+      documentBox = readBox(msg.viewportWidth, msg.viewportHeight)
     },
-    /** xterm's own box after an init; returns what it replaced so a mismatch can be logged. */
-    acceptReady(msg: Record<string, unknown>) {
+    /**
+     * The box xterm laid out, which replaces the probe's guess. Returns it when it corrected a
+     * different guess, else null.
+     */
+    acceptLaidOut(msg: Record<string, unknown>): TerminalCellMetrics | null {
       const [actual] = readTerminalCellMetrics(msg)
       if (!actual) {
         return null
       }
-      const reported = cells.get(actual.fontScale) ?? null
+      const guessed = cells.get(actual.fontScale)
       cells.set(actual.fontScale, actual)
-      return { reported, actual }
+      // Why: with no guess the first subscribe went without dims, and the fit pass owns that case.
+      return guessed === undefined || sameCell(guessed, actual) ? null : actual
     },
-    /** The terminal view's RN layout, which is current after the document's own report. */
-    layout: setBox,
+    layout(width: unknown, height: unknown) {
+      layoutBox = readBox(width, height) ?? layoutBox
+    },
     /**
      * Undefined when the table has no entry for this scale or no box is known yet, so the caller
      * can fall back to asking the document; null when the box is too small to fit.
      */
     fit(fontScale: number, containerHeight?: number): TerminalFitDimensions | null | undefined {
       const cell = cells.get(fontScale)
+      const box = layoutBox ?? documentBox
       if (!cell || !box) {
         return undefined
       }
       const height = positive(containerHeight) ?? box.height
       return fitDimensionsFromCell(cell, box.width, height)
     },
+    /** The document is gone; the view, and so its layout, is not. */
     clear() {
       cells.clear()
-      box = null
+      documentBox = null
     }
   }
 }

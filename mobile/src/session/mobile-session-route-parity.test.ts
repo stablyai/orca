@@ -94,8 +94,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // seam that also claims the key on the page while a draft is dirty.
 // Refreshed when the first subscribe began sizing itself from the document's reported cell box:
 // the first-subscribe mark ref and `measureViewportOnce` are gone (hooks 282 → 280, callbacks 79 → 78).
-const HEAD_MAIN_HOOK_SHA256 = 'dd2ec391f4a47ee68a14a2e47fa7727c0b71d55d93c4694265edf90e1755ecd4'
-const HEAD_HOOK_BINDING_SHA256 = '460d2ad068a47eab8be63a52d0719185e5ca8cd6a5ebd78880878b6f221a4dc1'
+// Again for `useTerminalCellBoxRefit`, which re-fits when xterm lays out a different box (hooks 281),
+// and the leaf JSX for the pane's `onCellBoxChange` prop.
+const HEAD_MAIN_HOOK_SHA256 = '4303478f80b40d23c66ff8f5f7192605c39b2e187d342f21a2434491ea329105'
+const HEAD_HOOK_BINDING_SHA256 = '4b3dc7d5e2f4ce0922d741a3c1b4c0a416eb609af0894b9cef52ed1c7055b8d1'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '05a65afca31a853010f35b656853ad33c2a899133b930e2c86cec888e6293dd5'
 // Pins that no callback body in the route changed unnoticed. Body text, not behaviour: the sends
@@ -177,7 +179,7 @@ const HEAD_RUNTIME_STRING_SHA256 =
   'd7eea5438ff7b4ee77c9bf652626adfdc3d2b49716ffb660df078f70bae0d88d'
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
 const HEAD_HOST_JSX_SHA256 = 'ca4c8b46af86a05cb671de91c22111c9e4aaeefd4a04c7b8b09976ca01a31c9b'
-const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
+const HEAD_LEAF_JSX_SHA256 = '087b1f408beb933a8f802eeed4003524beacf7c221bdec4e11b62281e7e42171'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
 const HEAD_IDENTITY_FIELD_SHA256 =
@@ -568,7 +570,7 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(280)
+    expect(main.hooks).toHaveLength(281)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(78)
