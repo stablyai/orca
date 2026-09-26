@@ -309,7 +309,8 @@ describe('the wind-down retry with a message queued (P2-31)', () => {
     const sweep = new StructuredAgentSessionIdleSweep({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a session fixture carrying only the journal and child facts the sweep reads.
       sessions: Object.assign(new Map([[SESSION, session as never]]), {
-        lastActivityAt: () => 0
+        lastActivityAt: () => 0,
+        touch: () => undefined
       }),
       serialize: (_id, task) => task(),
       now: () => IDLE_MS + 1,

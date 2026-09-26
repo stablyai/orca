@@ -317,6 +317,7 @@ describe('a task dispatched into a worker whose own dispatch settled', () => {
       expect(observeStructuredWorker({ sessionId: REST_TEST_SESSION }).status).toBe('live')
 
       db.completeDispatch(handedOn.id)
+      rig.clock.now += IDLE_MS + 1
       await vi.waitFor(() =>
         expect(observeStructuredWorker({ sessionId: REST_TEST_SESSION }).status).toBe('exited')
       )

@@ -21,6 +21,7 @@ export const STRUCTURED_AGENT_SESSION_IDLE_MS = 30 * 60_000
 export type StructuredAgentSessionIdleSweepDeps = {
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession> & {
     lastActivityAt: (sessionId: string) => number | undefined
+    touch: (sessionId: string) => void
   }
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
@@ -118,6 +119,9 @@ export class StructuredAgentSessionIdleSweep {
         return
       }
       if (this.owesWork(sessionId, session)) {
+        // Owed work is activity, so the agent gets a full window once it ends: a child can read
+        // done before the lead's wake-up turn writes anything.
+        this.deps.sessions.touch(sessionId)
         return
       }
       await this.deps.stopAgent(sessionId)

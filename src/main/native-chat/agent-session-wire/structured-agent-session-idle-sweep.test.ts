@@ -120,6 +120,28 @@ describe('the idle sweep', () => {
     await sweepTicks()
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
     rig.adapter.backgroundTaskState.mockReturnValue(undefined)
+    rig.clock.now += IDLE_MS + 1
+    await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
+  })
+
+  // A finished child reads done before the lead's wake-up turn writes its first row; stopping the
+  // agent in that gap would lose the wake-up. Owed work is activity, as main's release clock had it.
+  it('gives an agent a full idle window after its background work ends', async () => {
+    await foundRestTestChat(rig)
+    rig.adapter.backgroundTaskState.mockReturnValue({
+      state: 'monitoring',
+      tasks: [{ id: 'subagent-1', kind: 'agent', state: 'working' }]
+    })
+    rig.clock.now += IDLE_MS + 1
+    await sweepTicks()
+    rig.adapter.backgroundTaskState.mockReturnValue({
+      state: 'monitoring',
+      tasks: [{ id: 'subagent-1', kind: 'agent', state: 'done' }]
+    })
+
+    await sweepTicks()
+    expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+    rig.clock.now += IDLE_MS + 1
     await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
   })
 
@@ -189,6 +211,7 @@ describe('the idle sweep', () => {
     expect(rig.adapter.closeSession).not.toHaveBeenCalled()
     expect(hasOpenDispatch).toHaveBeenCalledWith(expect.objectContaining({ sessionId: SESSION }))
     open = false
+    rig.clock.now += IDLE_MS + 1
     await vi.waitFor(() => expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION))
   })
 
@@ -243,7 +266,7 @@ describe('the idle sweep with no child running (P2-22 ii)', () => {
     const sessions = Object.assign(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a session fixture carrying only the journal and child facts the sweep reads.
       new Map([[SESSION, { journal, child: null } as never]]),
-      { lastActivityAt: () => 0 }
+      { lastActivityAt: () => 0, touch: () => undefined }
     )
     const stopAgent = vi.fn(async () => undefined)
     const closeConversation = vi.fn(async () => true)
