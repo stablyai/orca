@@ -139,9 +139,23 @@ export async function fetchActiveClaudeRateLimits(
 
   const credentialClassification = classifyClaudeCredentialAbsence({
     hasRefreshableCredentials: oauthCredentials.hasRefreshableCredentials,
+    hasEmptyStoredEntry: oauthCredentials.hasEmptyStoredEntry,
     keychainUnavailable: oauthCredentials.keychainUnavailable,
     managedRefreshDeferredByLivePty: options?.authPreparation?.managedRefreshDeferredByLivePty
   })
+
+  // Why: terminal signed-out means there is no token to try and no CLI
+  // fallback is sanctioned — return before any refresh or PTY attempts.
+  if (credentialClassification.failureKind === 'signed-out') {
+    return makeClaudeUsageResult('error', 'Claude sign-in expired', {
+      ...metadataForClaudeUsageAttempt({
+        attemptedSources: attempts.attemptedSources,
+        oauthCredentials,
+        authPreparation: options?.authPreparation,
+        failureKind: 'signed-out'
+      })
+    })
+  }
 
   if (shouldDeferClaudeUsageForLiveSession(options?.authPreparation, credentialClassification)) {
     return makeLiveClaudeUsageDeferredResult({

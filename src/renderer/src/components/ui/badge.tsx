@@ -22,10 +22,16 @@ const badgeVariants = cva(
          *  so it reads as context beside a workspace name rather than as a status of its own. */
         hostContext:
           'h-4 rounded border-border bg-accent px-1.5 text-[10px] leading-none text-muted-foreground dark:border-border/50 dark:bg-accent/80'
+      },
+      size: {
+        default: '',
+        /** Square 16px status chip that sits inline beside a row title (e.g. "Needs sign-in"). */
+        compact: 'h-4 rounded px-1.5 text-[10px] leading-none'
       }
     },
     defaultVariants: {
-      variant: 'default'
+      variant: 'default',
+      size: 'default'
     }
   }
 )
@@ -33,6 +39,7 @@ const badgeVariants = cva(
 function Badge({
   className,
   variant = 'default',
+  size = 'default',
   asChild = false,
   ...props
 }: React.ComponentProps<'span'> & VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
@@ -42,7 +49,7 @@ function Badge({
     <Comp
       data-slot="badge"
       data-variant={variant}
-      className={cn(badgeVariants({ variant }), className)}
+      className={cn(badgeVariants({ variant, size }), className)}
       {...props}
     />
   )

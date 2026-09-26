@@ -26,6 +26,9 @@ export type ClaudeOAuthCredentialReadResult = {
   hasRefreshableCredentials: boolean
   source: ClaudeOAuthCredentialSource
   keychainUnavailable?: boolean
+  // Why: a stored entry with blank tokens means signed-out, not
+  // never-configured — the status bar shows a sign-in state instead of hiding.
+  hasEmptyStoredEntry?: boolean
 }
 
 type ClaudeOAuthCredentialReadOptions = {
@@ -41,11 +44,24 @@ export function parseClaudeOAuthCredentialsJson(
     const oauth = (JSON.parse(raw) as ClaudeCredentials)?.claudeAiOauth
     const hasRefreshableCredentials =
       typeof oauth?.refreshToken === 'string' && oauth.refreshToken.trim() !== ''
-    if (!oauth?.accessToken || typeof oauth.accessToken !== 'string') {
-      return { token: null, hasRefreshableCredentials, source }
+    // Why: a whitespace-only token is unusable — treat it as absent so the
+    // entry counts as emptied (signed-out) instead of reaching the OAuth path.
+    const accessToken =
+      typeof oauth?.accessToken === 'string' && oauth.accessToken.trim() !== ''
+        ? oauth.accessToken.trim()
+        : null
+    if (accessToken == null) {
+      return {
+        token: null,
+        hasRefreshableCredentials,
+        source,
+        ...(oauth != null && !hasRefreshableCredentials
+          ? { hasEmptyStoredEntry: true as const }
+          : {})
+      }
     }
     // Why: expiresAt is not authoritative for the usage endpoint; let the server decide.
-    return { token: oauth.accessToken, hasRefreshableCredentials, source }
+    return { token: accessToken, hasRefreshableCredentials, source }
   } catch {
     return emptyClaudeOAuthCredentialReadResult()
   }
@@ -86,9 +102,10 @@ async function readFromKeychain(configDir?: string): Promise<ClaudeOAuthCredenti
     if (legacy.hasRefreshableCredentials) {
       return legacy
     }
-    return scoped.keychainUnavailable || legacy.keychainUnavailable
-      ? unavailableKeychainResult()
-      : legacy
+    if (scoped.keychainUnavailable || legacy.keychainUnavailable) {
+      return unavailableKeychainResult()
+    }
+    return scoped.hasEmptyStoredEntry ? scoped : legacy
   }
 
   try {
@@ -144,7 +161,16 @@ export async function readClaudeOAuthCredentials(
   if (file.token || file.hasRefreshableCredentials) {
     return file
   }
-  return keychain.keychainUnavailable ? keychain : emptyClaudeOAuthCredentialReadResult()
+  if (keychain.keychainUnavailable) {
+    return keychain
+  }
+  if (keychain.hasEmptyStoredEntry) {
+    return keychain
+  }
+  if (file.hasEmptyStoredEntry) {
+    return file
+  }
+  return emptyClaudeOAuthCredentialReadResult()
 }
 
 export function resolveClaudeOAuthCredentialReadOptions(

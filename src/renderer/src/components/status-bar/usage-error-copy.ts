@@ -88,6 +88,8 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
+      case 'signed-out':
+        return translate('auto.components.status.bar.UsageRosterPanel.notSignedIn', 'not signed in')
       case 'deferred-by-live-session':
         return translate(
           'auto.components.status.bar.tooltip.0d8d7cfe15',
@@ -200,6 +202,10 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.a7517cccb6',
           'Claude usage is unavailable right now.'
         )
+      // Why: the main-process 'Claude sign-in expired' string is intentionally
+      // pattern-safe (matches no auth-error rewrite), so it surfaces verbatim.
+      case 'signed-out':
+        return p.error ?? fallback
       case 'missing-credentials':
       case 'no-subscription':
       case 'rate-limited':
