@@ -18109,6 +18109,8 @@
       "closed": "No live terminal — this agent's pane has closed.",
       "remotePreviewUnavailable": "No preview for this remote session — open the workspace to view the terminal.",
       "focusWorktree": "Open worktree",
+      "openChat": "Open chat",
+      "structuredUnavailable": "No terminal preview — this is a structured chat session.",
       "close": "Close"
     },
     "filters": {

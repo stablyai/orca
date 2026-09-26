@@ -133,7 +133,11 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       return
     }
     return window.api.dashboard.onRevealAgent((args) => {
-      revealDashboardAgent(args)
+      const opened = revealDashboardAgent(args)
+      // Why: a Promise is truthy, so a failed republish must not read as success.
+      if (typeof opened !== 'boolean') {
+        void opened.catch(() => undefined)
+      }
     })
   }, [enabled])
 

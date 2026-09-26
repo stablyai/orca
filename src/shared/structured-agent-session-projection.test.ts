@@ -11,7 +11,9 @@ import {
   latestStructuredAgentSessionAssistantMessage,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusSummary,
-  structuredAgentSessionPaneKey
+  structuredAgentSessionIdFromTabId,
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
 } from './structured-agent-session-projection'
 import { statusStructuredAgentSessionToolCall } from './structured-agent-session-live-turn'
 
@@ -385,6 +387,15 @@ describe('structured agent session status projection', () => {
     expect(projectStructuredAgentSessionStatusSummary([pasted]).latestPrompt).toHaveLength(
       AGENT_STATUS_MAX_FIELD_LENGTH
     )
+  })
+
+  it('round-trips a structured session id through its tab id', () => {
+    expect(structuredAgentSessionTabId('session-1')).toBe('structured-agent-session-session-1')
+    expect(structuredAgentSessionIdFromTabId('structured-agent-session-session-1')).toBe(
+      'session-1'
+    )
+    expect(structuredAgentSessionIdFromTabId('session-tab')).toBeUndefined()
+    expect(structuredAgentSessionIdFromTabId('structured-agent-session-')).toBeUndefined()
   })
 
   it('creates a deterministic pane identity for status stores', () => {
