@@ -1,6 +1,6 @@
 /**
- * A terminal launch that fails before its spawn is requested — agent disabled, no launch command,
- * runtime unavailable — created nothing, so a named operation settles as failed with its real cause.
+ * A terminal launch that fails before its spawn is requested — no launch command, runtime
+ * unavailable — created nothing, so a named operation settles as failed with its real cause.
  * Once the request has left, a failure proves nothing and the outcome stays unknown.
  */
 
@@ -30,7 +30,7 @@ const CREATE_LAUNCH = {
   agent: 'claude',
   target: { kind: 'create-worktree', create: { repo: 'id:repo-1', name: 'task' } }
 }
-const AGENT_DISABLED = 'Selected agent is disabled. Choose an enabled agent before creating.'
+const NO_LAUNCH_COMMAND = 'Could not build launch command for claude.'
 
 /** The create throws; `afterDispatch` says whether the spawn request had already left. */
 function failingCreate(runtime: AgentLaunchRuntimeStub, error: Error, afterDispatch: boolean) {
@@ -83,12 +83,12 @@ describe('a launch whose terminal fails', () => {
 
   it('reports a failure before the spawn request with its real cause and records it', async () => {
     const runtime = runtimeStub({ settings: {} })
-    failingCreate(runtime, new Error(AGENT_DISABLED), false)
+    failingCreate(runtime, new Error(NO_LAUNCH_COMMAND), false)
 
     const response = await replay(runtime, EXISTING_LAUNCH)
 
-    expect(response).toMatchObject({ ok: false, error: { message: AGENT_DISABLED } })
-    expect(outcomeOf(OPERATION_ID)).toMatchObject({ status: 'failed', code: AGENT_DISABLED })
+    expect(response).toMatchObject({ ok: false, error: { message: NO_LAUNCH_COMMAND } })
+    expect(outcomeOf(OPERATION_ID)).toMatchObject({ status: 'failed', code: NO_LAUNCH_COMMAND })
   })
 
   it('keeps a stable runtime code such as runtime_unavailable', async () => {
@@ -102,14 +102,14 @@ describe('a launch whose terminal fails', () => {
 
   it('answers a retry of the same operation from the record instead of launching again', async () => {
     const first = runtimeStub({ settings: {} })
-    failingCreate(first, new Error(AGENT_DISABLED), false)
+    failingCreate(first, new Error(NO_LAUNCH_COMMAND), false)
     await replay(first, EXISTING_LAUNCH)
 
     const retry = runtimeStub({ settings: {} })
     const response = await replay(retry, EXISTING_LAUNCH)
 
     expect(retry.createTerminal).not.toHaveBeenCalled()
-    expect(response).toMatchObject({ ok: false, error: { message: AGENT_DISABLED } })
+    expect(response).toMatchObject({ ok: false, error: { message: NO_LAUNCH_COMMAND } })
   })
 
   it('stays unknown when the failure came after the spawn request left', async () => {
@@ -133,7 +133,7 @@ describe('a launch whose terminal fails', () => {
       worktree: { id: 'wt-new' },
       startupTerminal: undefined
     })
-    failingCreate(runtime, new Error(AGENT_DISABLED), false)
+    failingCreate(runtime, new Error(NO_LAUNCH_COMMAND), false)
 
     const response = await replay(runtime, CREATE_LAUNCH)
 
