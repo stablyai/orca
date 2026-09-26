@@ -13,6 +13,8 @@ const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+const LOGIN_SHELL_GUARD_ENV_KEY =
+  /^(?:GIT_TERMINAL_PROMPT|GCM_INTERACTIVE|GIT_ASKPASS|SSH_ASKPASS|GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+))$/
 
 function getCmdExePath(): string {
   return process.env.ComSpec || `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\cmd.exe`
@@ -174,7 +176,11 @@ export class AgentExecHandler {
       let child
       const loginShellEnv = Object.fromEntries(
         Object.entries(spawnEnv).filter(
-          ([key, value]) => Object.hasOwn(extraEnv ?? {}, key) || value !== process.env[key]
+          ([key, value]) =>
+            Object.hasOwn(extraEnv ?? {}, key) ||
+            value !== process.env[key] ||
+            // Startup must not overwrite inherited guards or part of their indexed config.
+            LOGIN_SHELL_GUARD_ENV_KEY.test(key)
         )
       )
       const loginShell = agentExecLoginShell(binary, args, cwd, params.loginShell, loginShellEnv)

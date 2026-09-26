@@ -36,6 +36,8 @@ function fixture(shell: string): { cwd: string; pidPath: string; bin: string } {
     `export PATH=${quotePosixShell(bin)}:"$PATH"`,
     'printf "LOGIN BANNER\\n"',
     'export ORCA_AGENT_FIXTURE=from-login',
+    'export GIT_TERMINAL_PROMPT=1 GCM_INTERACTIVE=always GIT_ASKPASS=profile-askpass SSH_ASKPASS=profile-askpass',
+    'export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.username GIT_CONFIG_VALUE_0=profile-user',
     'cd /'
   ].join('\n')
   writeFileSync(join(root, '.zshrc'), startup)
@@ -161,6 +163,48 @@ describe('SSH agent login execution', () => {
         )
         expect(result).toMatchObject({ stdout: JSON.stringify({ value, path: bin }), exitCode: 0 })
         expect(existsSync(join(cwd, 'injected'))).toBe(false)
+      }
+    )
+  }
+
+  for (const shell of ['/bin/bash', '/bin/zsh']) {
+    it.skipIf(process.platform === 'win32' || !existsSync(shell))(
+      `preserves inherited credential guards after login startup in ${shell}`,
+      async () => {
+        const { cwd } = fixture(shell)
+        const inherited = {
+          GIT_TERMINAL_PROMPT: '0',
+          GCM_INTERACTIVE: 'never',
+          GIT_ASKPASS: '',
+          SSH_ASKPASS: '',
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'credential.username',
+          GIT_CONFIG_VALUE_0: 'inherited-user'
+        }
+        for (const [key, value] of Object.entries(inherited)) {
+          vi.stubEnv(key, value)
+        }
+        const expected = {
+          ...inherited,
+          GIT_CONFIG_COUNT: '3',
+          GIT_CONFIG_KEY_1: 'credential.interactive',
+          GIT_CONFIG_VALUE_1: 'false',
+          GIT_CONFIG_KEY_2: 'credential.guiPrompt',
+          GIT_CONFIG_VALUE_2: 'false'
+        }
+        const result = await createHandlers().get('agent.execNonInteractive')!(
+          {
+            binary: process.execPath,
+            args: [
+              '-e',
+              `process.stdout.write(JSON.stringify(Object.fromEntries(${JSON.stringify(Object.keys(expected))}.map(key => [key, process.env[key]]))))`
+            ],
+            cwd,
+            loginShell: true
+          },
+          requestContext()
+        )
+        expect(result).toMatchObject({ stdout: JSON.stringify(expected), exitCode: 0 })
       }
     )
   }
