@@ -114,6 +114,7 @@ export function createStructuredAgentSessionRestartResume(
     getRecord: deps.store.getRecord,
     adapter: deps.adapter,
     retryable: (marker) => derive([marker], 'may-be-held').candidates.length === 1,
+    reveal: (markers) => revealMarkers(markers),
     now: surfaces.now,
     enqueue: enqueueRecoveryOperation
   })
