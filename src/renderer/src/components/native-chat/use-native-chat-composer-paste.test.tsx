@@ -7,7 +7,8 @@ import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 const mocks = vi.hoisted(() => ({
   saveClipboardImageAsTempFile: vi.fn(),
   readClipboardText: vi.fn(),
-  readClipboardImageThumbnail: vi.fn()
+  readClipboardImageThumbnail: vi.fn(),
+  clipboardHasImage: vi.fn()
 }))
 
 vi.mock('@/i18n/i18n', () => ({
@@ -29,7 +30,8 @@ vi.stubGlobal('window', {
     ui: {
       saveClipboardImageAsTempFile: mocks.saveClipboardImageAsTempFile,
       readClipboardText: mocks.readClipboardText,
-      readClipboardImageThumbnail: mocks.readClipboardImageThumbnail
+      readClipboardImageThumbnail: mocks.readClipboardImageThumbnail,
+      clipboardHasImage: mocks.clipboardHasImage
     }
   }
 })
@@ -177,13 +179,21 @@ afterEach(() => {
 })
 
 describe('useNativeChatComposerPaste', () => {
-  it('does not save a clipboard image locally for a remote runtime', async () => {
+  it('refuses a remote clipboard image without saving it locally', async () => {
+    mocks.clipboardHasImage.mockResolvedValue(true)
+    mocks.readClipboardImageThumbnail.mockResolvedValue({
+      dataUrl: 'data:image/png;base64,AAA',
+      width: 4,
+      height: 4
+    })
     const setNotice = vi.fn()
+    const insertTypedText = vi.fn()
     const store = createChipStore()
     const probe = await renderProbe({
       resolveAttachmentOwner: () => ({ kind: 'runtime' }),
       store,
-      setNotice
+      setNotice,
+      insertTypedText
     })
 
     await act(async () => probe.latest().pasteFromClipboard())
@@ -192,7 +202,119 @@ describe('useNativeChatComposerPaste', () => {
       'Local attachments are not available for remote sessions.'
     )
     expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(mocks.readClipboardText).not.toHaveBeenCalled()
+    expect(insertTypedText).not.toHaveBeenCalled()
+    expect(store.chips).toHaveLength(0)
+  })
+
+  it('stops a remote paste when image presence is unknown', async () => {
+    mocks.clipboardHasImage.mockResolvedValue(null)
+    mocks.readClipboardText.mockResolvedValue('caption beside the image')
+    const setNotice = vi.fn()
+    const insertTypedText = vi.fn()
+    const store = createChipStore()
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'runtime' }),
+      store,
+      setNotice,
+      insertTypedText
+    })
+
+    await act(async () => probe.latest().pasteFromClipboard())
+
+    expect(mocks.readClipboardText).not.toHaveBeenCalled()
+    expect(insertTypedText).not.toHaveBeenCalled()
+    expect(setNotice).not.toHaveBeenCalled()
+  })
+
+  it('stops a remote paste when the image probe fails', async () => {
+    mocks.clipboardHasImage.mockRejectedValue(new Error('clipboard changed'))
+    mocks.readClipboardText.mockResolvedValue('caption beside the image')
+    const setNotice = vi.fn()
+    const insertTypedText = vi.fn()
+    const store = createChipStore()
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'runtime' }),
+      store,
+      setNotice,
+      insertTypedText
+    })
+
+    await act(async () => probe.latest().pasteFromClipboard())
+
+    expect(mocks.readClipboardText).not.toHaveBeenCalled()
+    expect(insertTypedText).not.toHaveBeenCalled()
+    expect(setNotice).not.toHaveBeenCalled()
+    expect(store.chips).toHaveLength(0)
+  })
+
+  it('inserts plain text into a remote runtime composer', async () => {
+    mocks.clipboardHasImage.mockResolvedValue(false)
+    mocks.readClipboardImageThumbnail.mockResolvedValue(null)
+    mocks.readClipboardText.mockResolvedValue('hello from the server')
+    const setNotice = vi.fn()
+    const insertTypedText = vi.fn()
+    const store = createChipStore()
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'runtime' }),
+      store,
+      setNotice,
+      insertTypedText
+    })
+
+    await act(async () => probe.latest().pasteFromClipboard())
+
+    expect(insertTypedText).toHaveBeenCalledWith('hello from the server')
+    expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(setNotice).not.toHaveBeenCalled()
+    expect(store.chips).toHaveLength(0)
+  })
+
+  it('refuses an oversized remote image instead of inserting its caption text', async () => {
+    mocks.clipboardHasImage.mockResolvedValue(true)
+    mocks.readClipboardImageThumbnail.mockResolvedValue(null)
+    mocks.readClipboardText.mockResolvedValue('caption beside the image')
+    const setNotice = vi.fn()
+    const insertTypedText = vi.fn()
+    const store = createChipStore()
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'runtime' }),
+      store,
+      setNotice,
+      insertTypedText
+    })
+
+    await act(async () => probe.latest().pasteFromClipboard())
+
+    expect(setNotice).toHaveBeenCalledWith(
+      'Local attachments are not available for remote sessions.'
+    )
+    expect(mocks.readClipboardText).not.toHaveBeenCalled()
     expect(mocks.readClipboardImageThumbnail).not.toHaveBeenCalled()
+    expect(insertTypedText).not.toHaveBeenCalled()
+    expect(store.chips).toHaveLength(0)
+  })
+
+  it('still refuses an image paste event on a remote runtime', async () => {
+    const setNotice = vi.fn()
+    const insertTypedText = vi.fn()
+    const store = createChipStore()
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'runtime' }),
+      store,
+      setNotice,
+      insertTypedText
+    })
+
+    await act(async () => {
+      probe.latest().handlePaste(imagePasteEvent())
+    })
+
+    expect(setNotice).toHaveBeenCalledWith(
+      'Local attachments are not available for remote sessions.'
+    )
+    expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(insertTypedText).not.toHaveBeenCalled()
     expect(store.chips).toHaveLength(0)
   })
 

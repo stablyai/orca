@@ -552,6 +552,24 @@ describe('registerClipboardHandlers', () => {
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeFile')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:saveImageAsTempFile')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readImageThumbnail')
+    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:hasImage')
+  })
+
+  it('reports an oversized image as present without building a thumbnail', async () => {
+    clipboardReadImageMock.mockReturnValue({ isEmpty: () => false })
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    expect(handlers.get('clipboard:hasImage')?.(makeClipboardEvent())).toBe(true)
+    expect(clipboardReadImageMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports an empty image clipboard as no image', () => {
+    clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
+    registerClipboardHandlers({} as never)
+
+    const handlers = getRegisteredHandlers()
+    expect(handlers.get('clipboard:hasImage')?.(makeClipboardEvent())).toBe(false)
   })
 
   it('does not inspect FileNameW when an empty image clipboard is read outside Windows', async () => {

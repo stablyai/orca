@@ -96,6 +96,7 @@ export const uiClipboardAndWindowControlsApi = {
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
   readClipboardImageThumbnail: (): Promise<ClipboardImageThumbnail | null> =>
     ipcRenderer.invoke('clipboard:readImageThumbnail'),
+  clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
   writeClipboardText: (text: string): Promise<void> =>
     ipcRenderer.invoke('clipboard:writeText', text),
   writeTerminalClipboardText: (text: string): Promise<void> =>

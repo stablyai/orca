@@ -91,6 +91,21 @@ async function readClipboardImageBlob(): Promise<Blob | null> {
   return null
 }
 
+/**
+ * Image presence from clipboard types. `null` means the read API is missing, so
+ * absence is unknown. An oversized image still counts, and a failed read rejects.
+ */
+export async function clipboardHasImage(): Promise<boolean | null> {
+  const clipboard = navigator.clipboard as
+    | (Clipboard & { read?: () => Promise<ClipboardItem[]> })
+    | undefined
+  if (!clipboard?.read) {
+    return null
+  }
+  const items = await clipboard.read()
+  return items.some((item) => item.types.some((type) => type.startsWith('image/')))
+}
+
 /** Web counterpart of the main-process clipboard probe: decodes the clipboard
  *  image once and returns a small preview so the composer can show a chip while
  *  the full image is still being uploaded to the runtime. */

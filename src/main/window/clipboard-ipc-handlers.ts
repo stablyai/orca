@@ -96,6 +96,7 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
+  ipcMain.removeHandler('clipboard:hasImage')
 
   void cleanupExpiredRemoteClipboardFiles()
   scheduleLegacyRemoteClipboardFileCleanup()
@@ -116,6 +117,12 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {
     assertTrustedClipboardSender(event)
     return buildClipboardImageThumbnail(clipboard.readImage())
+  })
+  // Why: an oversized image has no thumbnail, but it is still an image. The
+  // remote composer must not treat that clipboard as plain text.
+  ipcMain.handle('clipboard:hasImage', (event): boolean => {
+    assertTrustedClipboardSender(event)
+    return !clipboard.readImage().isEmpty()
   })
   // Why: terminals need to detect clipboard images to support tools like Claude
   // Code that accept image input via paste. Writes the clipboard image to a
