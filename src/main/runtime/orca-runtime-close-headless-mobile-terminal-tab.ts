@@ -172,6 +172,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       tabId: string
       root: TerminalPaneLayoutNode | null
       expandedLeafId: string | null
+      chatLeafId?: string | null
       titlesByLeafId?: Record<string, string>
     }
   ): Promise<{ updated: true }> {
@@ -197,6 +198,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         tabId: hostTabId,
         root: acceptedLayout.root,
         expandedLeafId: acceptedLayout.expandedLeafId,
+        chatLeafId: acceptedLayout.chatLeafId ?? null,
         ...(acceptedLayout.titlesByLeafId ? { titlesByLeafId: acceptedLayout.titlesByLeafId } : {})
       })
     }
