@@ -1,16 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import {
-  copyFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 
+import { writeRollingFileBackup } from '../rolling-file-backup'
 import type { ConfigParseResult, HermesConfig } from './hermes-config-yaml'
 import { parseHermesConfig, serializeHermesConfig } from './hermes-config-yaml'
 import {
@@ -51,22 +53,22 @@ export function readConfigFile(configPath: string): ConfigParseResult {
 export function writeConfigFile(configPath: string, config: HermesConfig): void {
   const dir = dirname(configPath)
   mkdirSync(dir, { recursive: true })
-  const serialized = serializeHermesConfig(config)
-  if (existsSync(configPath)) {
-    try {
-      if (readFileSync(configPath, 'utf-8') === serialized) {
-        return
-      }
-    } catch {
-      // Fall through to the atomic write path.
-    }
+  const existing = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : undefined
+  const serialized = serializeHermesConfig(config, existing)
+  if (existing === serialized) {
+    return
   }
+  const mode = existing === undefined ? 0o600 : statSync(configPath).mode & 0o777
 
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   try {
-    writeFileSync(tmpPath, serialized, 'utf-8')
+    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode, flag: 'wx' })
+    if (process.platform !== 'win32') {
+      // Preserve the existing mode even when this process has a stricter umask.
+      chmodSync(tmpPath, mode)
+    }
     if (existsSync(configPath)) {
-      copyFileSync(configPath, `${configPath}.bak`)
+      writeRollingFileBackup(configPath, `${configPath}.bak`)
     }
     renameSync(tmpPath, configPath)
   } finally {

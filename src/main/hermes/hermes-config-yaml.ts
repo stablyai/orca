@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { parse, stringify } from 'yaml'
 
 import { HERMES_PLUGIN_NAME } from './hermes-managed-plugin-source'
@@ -41,7 +42,13 @@ export function parseHermesConfig(content: string | null): ConfigParseResult {
   }
 }
 
-export function serializeHermesConfig(config: HermesConfig): string {
+export function serializeHermesConfig(config: HermesConfig, existing?: string): string {
+  if (existing !== undefined) {
+    const parsed = parseHermesConfig(existing)
+    if (parsed.ok && isDeepStrictEqual(parsed.config, config)) {
+      return existing
+    }
+  }
   return `${stringify(config, { lineWidth: 0 }).trimEnd()}\n`
 }
 
@@ -85,7 +92,7 @@ export function updateConfigContent(
   if (!parsed.ok) {
     return { content: null, detail: parsed.detail }
   }
-  return { content: serializeHermesConfig(updater(parsed.config)) }
+  return { content: serializeHermesConfig(updater(parsed.config), content ?? undefined) }
 }
 
 export function getConfigEnablement(config: HermesConfig): {
