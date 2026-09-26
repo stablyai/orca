@@ -14,6 +14,7 @@
  * Requires: ORCA_E2E_SSH_DOCKER=1 and Docker available.
  */
 import { expect, test } from './helpers/orca-app'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import {
   cleanupDockerSshRelayTarget,
   execDockerSshRelayTargetCommand,
@@ -105,6 +106,36 @@ function sampleRemoteResources(target: DockerSshRelayTarget): RemoteResourceSamp
   }
 }
 
+async function recordReconnectOwnership(
+  page: Page,
+  target: DockerSshRelayTarget,
+  remote: { targetId: string; worktreeId: string },
+  phase: string,
+  testInfo: TestInfo
+): Promise<void> {
+  const renderer = await page.evaluate(({ targetId, worktreeId }) => {
+    const state = window.__store?.getState()
+    if (!state) {
+      throw new Error('Store unavailable')
+    }
+    return {
+      connection: state.sshConnectionStates.get(targetId),
+      workspaceSessionReady: state.workspaceSessionReady,
+      tabs: (state.tabsByWorktree[worktreeId] ?? []).map((tab) => ({
+        tab,
+        layout: state.terminalLayoutsByTabId[tab.id],
+        ptyIds: state.ptyIdsByTabId[tab.id],
+        deferredSessionId: state.deferredSshSessionIdsByTabId[tab.id]
+      }))
+    }
+  }, remote)
+  // Read the host directly; pty:listSessions would rebuild ownership and alter the race.
+  const processes = execDockerSshRelayTargetCommand(target, 'ps -eo pid,ppid,stat,tty,lstart,args')
+  const body = JSON.stringify({ phase, renderer, processes }, null, 2)
+  console.log(`[resource-accumulation] ownership ${body}`)
+  await testInfo.attach(`reconnect-ownership-${phase}`, { body, contentType: 'application/json' })
+}
+
 test.describe('Docker SSH relay resource accumulation', () => {
   test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
   test.skip(process.platform === 'win32', 'Uses POSIX /proc and /dev/pts probes.')
@@ -185,9 +216,11 @@ test.describe('Docker SSH relay resource accumulation', () => {
 
       // Repeated reconnects must not accumulate anything on the host.
       const reconnectSamples: RemoteResourceSample[] = []
+      await recordReconnectOwnership(orcaPage, target, remote, 'before', testInfo)
       for (let cycle = 0; cycle < RECONNECT_CYCLES; cycle += 1) {
         await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
         reconnectSamples.push(sampleRemoteResources(target))
+        await recordReconnectOwnership(orcaPage, target, remote, String(cycle + 1), testInfo)
       }
       console.log(`[resource-accumulation] reconnects ${JSON.stringify(reconnectSamples)}`)
 
