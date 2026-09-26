@@ -29,7 +29,7 @@ function readPowerShellProbe(source = processCheck) {
 
 describe('NSIS process-check integration', () => {
   it('loads the capability hook through the installer and uninstaller include', () => {
-    expect(hooks).toContain('!include "${__FILEDIR__}/orca-process-check.nsh"')
+    expect(hooks).toContain('!include "${__FILEDIR__}\\orca-process-check.nsh"')
     expect(processCheck).toMatch(/!macro customCheckAppRunning\b/)
     expect(processCheck).toContain('!include "getProcessInfo.nsh"')
     expect(processCheck).toMatch(/^Var pid$/m)

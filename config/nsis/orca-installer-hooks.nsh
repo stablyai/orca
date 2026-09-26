@@ -3,7 +3,7 @@
 ; electron-builder accepts exactly ONE `nsis.include` file, so every customInstall /
 ; customUnInstall hook Orca needs lives here.
 
-!include "${__FILEDIR__}/orca-process-check.nsh"
+!include "${__FILEDIR__}\orca-process-check.nsh"
 
 ; ---------------------------------------------------------------------------
 ; Markdown "Open with Orca" (issue #10138)
