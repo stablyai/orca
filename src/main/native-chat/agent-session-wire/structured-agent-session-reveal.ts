@@ -16,10 +16,9 @@ import { StructuredAgentSessionReadableRestorer } from './structured-agent-sessi
 import { StructuredAgentSessionRestartRestoreGate } from './structured-agent-session-restart-restore-gate'
 import type {
   StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession,
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
-import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
+import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 
 /** Throws its refusal as the code itself, matching `resumeHeldStructuredAgentSession`. */
 export async function revealStructuredAgentSession(
@@ -52,27 +51,38 @@ export async function revealStructuredAgentSession(
 /**
  * The host's whole readable-restore surface: the startup sweep and the on-demand reveal.
  *
- * Bundled the way the handoff and lifetime collaborators are, because the two share the restorer
+ * Bundled the way the lifetime collaborators are, because the two share the restorer
  * and differ only in who is asking — startup, once, for everything; a surface, later, for one.
  */
 export function createStructuredAgentSessionHostRestore(
   deps: StructuredAgentSessionHostDeps,
-  sessions: Map<string, StructuredAgentSessionHostSession>,
-  now: () => number,
   wiring: Omit<
     ConstructorParameters<typeof StructuredAgentSessionReadableRestorer>[0],
-    'store' | 'journalRoot' | 'supportsRecord' | 'retrySettlement'
+    'store' | 'journalRoot' | 'supportsRecord' | 'settleStaleState'
   >
 ): {
   restoreReadableSessions: (sessionIds?: readonly string[]) => Promise<void>
   revealSession: (sessionId: string) => Promise<StructuredAgentSessionReveal>
+  /** One session, for a caller already inside its serialize. */
+  restoreReadableUnderSerialize: (sessionId: string) => Promise<boolean>
 } {
   const restorer = new StructuredAgentSessionReadableRestorer({
     store: deps.store,
     journalRoot: deps.journalRoot,
     supportsRecord: (record) => adapterSupportsRecord(deps.adapter, record),
-    retrySettlement: (sessionId, params) =>
-      retryPendingStructuredAgentSessionSettlement({ deps, sessions, sessionId, params, now }),
+    settleStaleState: async (sessionId, restored) => {
+      try {
+        await settleStaleStructuredAgentSessionState({
+          journal: restored.journal,
+          sessionId,
+          fence: restored.fence,
+          acquisitionGeneration: null,
+          deathEvidence: deps.store.getRecord(sessionId)?.lease.deathEvidence ?? null
+        })
+      } catch (error) {
+        deps.onEventSinkError?.({ sessionId, error })
+      }
+    },
     ...wiring
   })
   const gate = new StructuredAgentSessionRestartRestoreGate()
@@ -81,6 +91,7 @@ export function createStructuredAgentSessionHostRestore(
     revealSession: (sessionId) =>
       revealStructuredAgentSession(deps, sessionId, wiring.hasSession, (id) =>
         restorer.restoreOne(id)
-      )
+      ),
+    restoreReadableUnderSerialize: (sessionId) => restorer.restoreOneUnderSerialize(sessionId)
   }
 }

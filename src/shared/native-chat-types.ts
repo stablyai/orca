@@ -10,6 +10,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskRunState
 } from './agent-session-background-task-wire'
+import type { AgentJournalMessageSendMode } from './agent-session-journal-types'
 import type { AgentType } from './agent-status-types'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 
@@ -198,6 +199,8 @@ export type NativeChatMessage = {
   turnId?: string
   /** Provider goal snapshot identity; repeated accounting updates are presentation-only no-ops. */
   codexGoal?: { threadId: string; signature: string }
+  /** How a user message was delivered when it was not an ordinary prompt. */
+  sentAs?: AgentJournalMessageSendMode
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const

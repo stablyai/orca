@@ -35,6 +35,12 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn()
 }))
 
+vi.mock('./ssh-relay-ripgrep-install', () => ({
+  remoteRipgrepLayout: vi.fn().mockReturnValue(null),
+  recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),
+  ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue(undefined)
+}))
+
 vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))

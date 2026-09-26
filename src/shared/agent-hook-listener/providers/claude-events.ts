@@ -1,10 +1,12 @@
 import type { ParsedAgentStatusPayload } from '../../agent-status-types'
+import { isAgentStatusHeldOpenByChildWork } from '../../agent-lead-status-fold'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import { readClaudeBackgroundAgentTasks } from '../../claude-background-task-inventory'
 import {
   claudeRosterHasRestoredSnapshotSubagent,
   claudeRosterHasRuntimeWorkingSubagent,
   foldClaudeBackgroundTasksIntoRoster,
+  isClaudeChildTurnEndEvent,
   reapUnconfirmedRestoredClaudeSubagents,
   upsertWorkingClaudeSubagent
 } from '../../claude-subagent-roster'
@@ -19,6 +21,7 @@ import {
 import {
   getOrCreateClaudeSubagentRoster,
   resolveClaudePaneStatus,
+  setClaudeMainAgentTurnState,
   updateClaudeRunningNonAgentTask,
   voidClaimsOfReplacedClaudeSession
 } from './claude-roster-state'
@@ -34,8 +37,8 @@ export function normalizeClaudeEvent(
   const eventAgentId = readString(hookPayload, 'agent_id')
   if (
     eventName === 'SubagentStart' ||
-    eventName === 'SubagentStop' ||
-    eventName === 'TeammateIdle'
+    eventName === 'TeammateIdle' ||
+    isClaudeChildTurnEndEvent(eventName, eventAgentId)
   ) {
     return normalizeClaudeSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
@@ -62,7 +65,8 @@ export function normalizeClaudeEvent(
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-    state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done' })
+    // Why: a new session's main agent starts its own clock, not the old session's last Stop.
+    setClaudeMainAgentTurnState(state, paneKey, { state: 'done', stateStartedAt: Date.now() })
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       stateName: 'done',
       updateToolSnapshot: true,
@@ -70,14 +74,23 @@ export function normalizeClaudeEvent(
     })
   }
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
-  // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
+  // Why: only a turn boundary may declare a verdict or carry a prior cancellation forward; any
+  // other event starts a fresh turn and drops it. The verdict is a fact about the main agent's turn and
+  // nothing else: a cancel never touches the shell, cron or subagent the turn left running.
   const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
-  const interrupted =
-    isTurnBoundary &&
-    ((eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
-      previousLead?.interrupted === true)
-      ? true
-      : undefined
+  // Why: absent means unknown — a plain Stop never becomes `success`, so a cancel can never read as a
+  // success. Current Claude sends NO hook on a cancel and no `is_interrupt` on Stop, so the
+  // cancellation normally arrives through Orca's own inferred interrupt
+  // (`markClaudeLeadTurnInterrupted`) and is carried forward here; `is_interrupt` on a turn
+  // boundary is kept as the secondary source for builds that do send it.
+  const outcome = !isTurnBoundary
+    ? undefined
+    : (eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
+        previousLead?.outcome === 'cancellation'
+      ? ('cancellation' as const)
+      : eventName === 'StopFailure'
+        ? ('failure' as const)
+        : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
   const sessionCrons = hookPayload['session_crons']
   const sessionCronInventoryPresent = Array.isArray(sessionCrons)
@@ -116,15 +129,10 @@ export function normalizeClaudeEvent(
     return null
   }
   if (backgroundTasks.present && eventAgentId === undefined) {
-    updateClaudeRunningNonAgentTask(
-      state,
-      paneKey,
-      backgroundTasks.hasRunningNonAgentTask,
-      interrupted === true
-    )
+    updateClaudeRunningNonAgentTask(state, paneKey, backgroundTasks.hasRunningNonAgentTask)
   }
   if (sessionCronInventoryPresent && eventAgentId === undefined) {
-    if (hasActiveSessionCron && interrupted !== true) {
+    if (hasActiveSessionCron) {
       state.claudeActiveSessionCronPaneKeys.add(paneKey)
     } else {
       state.claudeActiveSessionCronPaneKeys.delete(paneKey)
@@ -185,13 +193,14 @@ export function normalizeClaudeEvent(
     }
     // Why: approval granted — update the tool snapshot (drop the pending card) as the lead's own next tool event would.
     // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
-    const restored = lead.stateBeforeWait ?? { state: 'working' as const }
-    state.claudeLeadStateByPaneKey.set(paneKey, restored)
+    const restored = setClaudeMainAgentTurnState(
+      state,
+      paneKey,
+      lead.stateBeforeWait ?? { state: 'working' as const }
+    )
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
       ...resolveClaudePaneStatus(state, paneKey, restored),
-      updateToolSnapshot: true,
-      interrupted: restored.interrupted,
-      turnCompletedAt: restored.turnCompletedAt
+      updateToolSnapshot: true
     })
   }
 
@@ -223,7 +232,10 @@ export function normalizeClaudeEvent(
         ? previousLead.stateBeforeWait
         : {
             state: previousLead.state,
-            ...(previousLead.interrupted ? { interrupted: true as const } : {}),
+            // Why: the verdict and the main agent's own clock are that turn's facts; a child's permission
+            // pause after a cancelled turn must not erase them when the wait clears.
+            ...(previousLead.outcome ? { outcome: previousLead.outcome } : {}),
+            stateStartedAt: previousLead.stateStartedAt,
             // Why: a child's permission pause displaces an already-finished lead; keep the end time so the later drain is still that turn's tail.
             ...(previousLead.turnCompletedAt !== undefined
               ? { turnCompletedAt: previousLead.turnCompletedAt }
@@ -231,11 +243,6 @@ export function normalizeClaudeEvent(
           }
       : undefined
   const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
-
-  if (interrupted && eventAgentId === undefined) {
-    state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-    state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-  }
 
   if (isManualCompactCompletion) {
     // Why: a manual /compact only ever completes at an idle prompt, so a child that exists ONLY as
@@ -253,26 +260,28 @@ export function normalizeClaudeEvent(
     }
   }
 
-  const resolvedStatus = resolveClaudePaneStatus(state, paneKey, {
-    state: reportedStateName,
-    interrupted
-  })
+  const resolvedStatus = resolveClaudePaneStatus(state, paneKey, { state: reportedStateName })
   // Why: #15202's compact-completion guard reads the resolved state; this branch replaced the
   // resolver with one that also reports workingMode, so bridge rather than resolve twice.
   const effectiveState = resolvedStatus.stateName
-  // Why: the lead already ended — the pane stays `working` only because background inventory is still registered. `stateStartedAt` is pinned for that whole run, so this end time is the per-turn identity and the later all-clear's pair key.
+  // Why: the main agent already ended — the pane stays `working` only because background inventory is
+  // still registered. `stateStartedAt` is pinned for that whole run, so this end time is the
+  // per-turn identity and the later all-clear's pair key. A cancelled turn is not a completion:
+  // the row still reads what the shell says, but it earns no completion stamp to announce.
   const turnCompletedAt =
     eventAgentId === undefined &&
     isTurnBoundary &&
-    reportedStateName === 'done' &&
-    resolvedStatus.stateName === 'working' &&
-    interrupted !== true
+    outcome !== 'cancellation' &&
+    isAgentStatusHeldOpenByChildWork({
+      state: resolvedStatus.stateName,
+      mainAgent: { state: reportedStateName }
+    })
       ? Date.now()
       : undefined
 
-  state.claudeLeadStateByPaneKey.set(paneKey, {
+  setClaudeMainAgentTurnState(state, paneKey, {
     state: reportedStateName,
-    ...(interrupted ? { interrupted } : {}),
+    ...(outcome ? { outcome } : {}),
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),
@@ -305,11 +314,9 @@ export function normalizeClaudeEvent(
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     ...resolvedStatus,
     updateToolSnapshot: true,
-    interrupted,
     // Why: a finished compact is a session-shaped boundary, not a completed turn. Without this the
     // clearing `done` would fire completion notifications, unread counts and automation-run
     // completion evidence for work nobody did.
-    sessionBoundary: isManualCompactCompletion ? true : undefined,
-    turnCompletedAt
+    sessionBoundary: isManualCompactCompletion ? true : undefined
   })
 }

@@ -7,6 +7,7 @@ import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
 
 export * from './agent-session-wire-refusals'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
+import type { AgentSessionContextUsage } from './agent-session-context-usage'
 // ─── Structured agent-session wire contract ─────────────────────────────────
 // The shapes `agentSession.*` accepts and publishes. Phase 2 builds provider
 // adapters and clients against exactly these types, so everything here must be
@@ -20,51 +21,28 @@ import type {
   AgentJournalResetReason,
   AgentJournalResolution,
   AgentJournalSubmission,
+  AgentJournalThreadGoal,
   AgentJournalTurnOutcome
 } from './agent-session-journal-types'
 import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
   type AgentSessionHandoffStage,
-  type AgentSessionOwnerRuntimeKind,
   type AgentSessionRecord
 } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
-export type AgentSessionHandoffDirection = 'to-tui' | 'to-native'
-export type AgentSessionHandoffMode = 'now' | 'after-turn' | 'stop-turn'
-export type AgentSessionHandoffAction = 'start' | 'cancel-queued' | 'retry' | 'recover'
-
+/** `agentSession.handoffStatus`. Named for the removed terminal handoff; released desktop clients
+ *  still read `owner`. Clients parse the reply as unknown, since older hosts sent more fields. */
 export type AgentSessionHandoffStatus = {
-  owner: AgentSessionOwnerRuntimeKind | 'none'
-  direction: AgentSessionHandoffDirection | null
-  phase: 'idle' | 'queued' | 'switching' | 'waiting-for-exit' | 'failed'
+  owner: 'native' | 'none'
+  direction: 'to-native' | null
+  phase: 'idle' | 'switching' | 'failed'
   stage: AgentSessionHandoffStage | null
   operationId: string | null
-  hostLabel?: string
-  terminal?: {
-    handle: string
-    tabId: string
-    paneKey: string
-    ptyId?: string
-  }
-  error?: {
-    message: string
-    details?: string
-    recoverableOwner: AgentSessionOwnerRuntimeKind | 'none'
-    canRetryProof?: boolean
-  }
+  error?: { message: string; recoverableOwner: 'none' }
 }
-
-export type AgentSessionHandoffRequest = {
-  envelope: AgentSessionMutationEnvelope
-  direction: AgentSessionHandoffDirection
-  mode: AgentSessionHandoffMode
-  action?: AgentSessionHandoffAction
-}
-
-export type AgentSessionHandoffResult = { status: AgentSessionHandoffStatus }
 
 export type {
   AgentSessionBackgroundTask,
@@ -161,7 +139,6 @@ export type AgentSessionSubscribeEvent =
       sessionId: string
       page: AgentSessionHistoryPage
       fence: number
-      handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
@@ -172,9 +149,8 @@ export type AgentSessionSubscribeEvent =
       type: 'batch'
       sessionId: string
       batch: AgentSessionJournalBatch
-      /** Added with handoff state so mixed-version cursors retain the ownership fence. */
+      /** Optional so mixed-version cursors retain the ownership fence. */
       fence?: number
-      handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
@@ -187,7 +163,6 @@ export type AgentSessionSubscribeEvent =
       reset: AgentJournalResetReason
       page: AgentSessionHistoryPage
       fence: number
-      handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
@@ -209,6 +184,9 @@ export type AgentSessionStatusSummary = {
   status: StructuredAgentSessionProjectedStatus | null
   /** Present only while this host has the provider child executing the session. */
   hostExecutionOwned?: true
+  /** With `hostExecutionOwned`: whether that child has proven its start. `starting` is a
+   *  published session whose provider has not yet answered startup; absent on older hosts. */
+  hostExecutionPhase?: 'starting' | 'ready'
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
@@ -218,12 +196,21 @@ export type AgentSessionStatusSummary = {
   toolInput?: string
   /** Preview of the newest assistant prose, so a settled row says what the agent said. */
   lastAssistantMessage?: string
+  /** The provider's verdict on the newest settled root turn. Present only while `status` is
+   *  `idle`: a running or attention-blocked turn has no verdict yet, and a stale one must not
+   *  ride along. Absent means UNKNOWN, never success. Optional for mixed-version hosts; the
+   *  agent-status row publishes it as `mainAgent.outcome`. */
+  turnOutcome?: AgentJournalTurnOutcome
   /** Live provider-owned background tasks, so session lists can render
    *  subagent children without holding a journal reader open. Optional for
    *  mixed-version hosts. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   providerSession?: AgentProviderSessionMetadata
   updatedAt: number
+  /** When the session's own agent entered `status`, dated by its own lifecycle edges and never by
+   *  row activity: `updatedAt` also moves for a subagent's rows. Absent from older hosts, and when
+   *  the journal records no such edge; readers then keep dating the state themselves. */
+  statusStartedAt?: number
 }
 
 /** A summary outlives its provider child: an evicted idle session is still idle, so the host
@@ -238,9 +225,12 @@ export type AgentSessionStatusEvent =
 /**
  * One root turn reaching a terminal outcome, derived by the EXECUTION HOST at journal commit.
  *
- * Deliberately not a field on `AgentSessionStatusSummary`: that summary carries no turn identity
- * and no outcome, it is re-broadcast on every status change, and adding an outcome would make
- * every status consumer a completion consumer. A completion is a rare edge, not a state.
+ * This is the EDGE, with turn identity; `AgentSessionStatusSummary.turnOutcome` is the STATE.
+ * The summary carries the verdict only while the session is idle, as a fact about the main agent's
+ * last turn that a status reader may act on (attention alerts, the `mainAgent.outcome` row field),
+ * and never a turn id: a reader that needs to know WHICH turn finished, or to react exactly once
+ * per finish, subscribes here. Re-broadcasting the summary on every status change therefore
+ * repeats a state, not a completion.
  *
  * `outcome` is A0's provider verdict and is never inferred — a turn the host only observed ending
  * carries no outcome and produces no event at all, because absent means UNKNOWN, not success.
@@ -307,6 +297,8 @@ export type AgentSessionAttachResult = {
   page: AgentSessionHistoryPage
   /** Submissions the crash boundary settled as `unknown` while attaching. */
   unconfirmedClientMessageIds: string[]
+  /** The host-owned id of the tab showing this chat, when it has one. Absent from older hosts. */
+  tabId?: string
 }
 
 export type AgentSessionSendResult = {
@@ -358,6 +350,22 @@ export type AgentSessionFastModeSupport = {
   reason?: string
 }
 
+/**
+ * The host's model catalog for an agent, answered from its own store and
+ * never through a session's queue. `unknown` means this host has no listing
+ * for the key yet — the client keeps its static seed. Additive read-only
+ * surface: an older host simply lacks the method.
+ */
+export type AgentSessionModelCatalogResult =
+  | { origin: 'unknown' }
+  | {
+      /** What produced the listing; any age is served, `fetchedAt` carries it. */
+      origin: 'live-session' | 'probe'
+      models: AgentSessionModelOption[]
+      fastModeSupport?: AgentSessionFastModeSupport
+      fetchedAt: number
+    }
+
 /** One entry of the `/` menu the running provider reports for itself. `skill`
  *  marks a name the session loaded as a skill rather than a built-in command;
  *  commands the provider reserves for a terminal UI are already removed. */
@@ -379,11 +387,34 @@ export type AgentSessionCommandsResult = {
   commands?: AgentSessionSlashCommand[]
 }
 
+/** Longest objective a client may send; matches the provider's own limit. */
+export const AGENT_SESSION_THREAD_GOAL_OBJECTIVE_MAX_LENGTH = 4000
+
+/** A client's change to the thread goal. `set` replaces the objective and makes
+ *  it active, which the provider pursues without a separate turn. */
+export type AgentSessionThreadGoalChange =
+  | { kind: 'set'; objective: string }
+  | { kind: 'status'; status: 'active' | 'paused' }
+  | { kind: 'clear' }
+
+export type AgentSessionThreadGoalResult = {
+  change: AgentSessionThreadGoalChange['kind']
+}
+
 /** Provider-reported choices and effective next-turn values. Additive read-only
  *  surface so older hosts can reject it without changing structured v1 writes. */
 export type AgentSessionOptionsResult = {
   rewind?: AgentSessionRewindSupport
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  /** Present only where this session can change its goal, so a host without
+   *  `agentSession.threadGoal` never offers the controls. `current` is the
+   *  latest goal the whole journal records, for a client whose loaded page
+   *  starts after it. */
+  threadGoal?: { current: AgentJournalThreadGoal | null }
+  /** Present only where this session writes context facts to its turn rows.
+   *  `current` is the newest of each part the whole journal records, for a
+   *  client whose loaded page starts after the row that carries it. */
+  contextUsage?: { current: AgentSessionContextUsage }
   models: AgentSessionModelOption[]
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport

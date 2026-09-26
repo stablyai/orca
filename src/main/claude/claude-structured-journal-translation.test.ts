@@ -869,7 +869,6 @@ function prompt(
   return {
     ...input,
     suggestions: [],
-    answers: new Map(),
     settle: () => {}
   }
 }

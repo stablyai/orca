@@ -98,6 +98,9 @@ vi.mock('../runtime/worktree-teardown', async () =>
 )
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
+// Why: every removal and listing reply now names the catalog it produced or scanned.
+const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
+
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
 
@@ -136,7 +139,10 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
 
     finishRemoval()
-    await expect(Promise.all([first, second])).resolves.toEqual([{}, {}])
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      { catalogVersion: anyCatalogVersion },
+      { catalogVersion: anyCatalogVersion }
+    ])
     expect(store.removeWorktreeMeta).toHaveBeenCalledTimes(1)
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledTimes(1)
     expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
@@ -172,7 +178,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
     finishRemoval()
-    await expect(first).resolves.toEqual({})
+    await expect(first).resolves.toEqual({ catalogVersion: anyCatalogVersion })
   })
 
   it('still rejects forced unregistered delete paths that exist on disk', async () => {

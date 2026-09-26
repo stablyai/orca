@@ -442,8 +442,14 @@ describe('producer linkage reaches the journal through every append path', () =>
     }
   })
 
-  it('forwards it on the resolved-append paths, which lost it once before', async () => {
-    for (const append of ['tryAppendResolvedItem', 'tryAppendResolvedItemAndPublish'] as const) {
+  it('forwards it on the resolved-append and lifecycle-transition paths', async () => {
+    // The resolved paths lost it once before; a transition is how a Codex
+    // child's goal row is written, so dropping it there files the goal as root.
+    for (const append of [
+      'tryAppendResolvedItem',
+      'tryAppendResolvedItemAndPublish',
+      'tryAppendLifecycleTransition'
+    ] as const) {
       const log: Recorded[] = []
       const deferred = createDeferredStructuredAgentSessionEventSink()
       deferred.bind(target(5, log))

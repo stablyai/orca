@@ -3,6 +3,8 @@ import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  currentSoftKeyboardHeight,
+  subscribeSoftKeyboard,
   useKeyboardAvoidingPadding,
   useKeyboardOcclusion,
   useSoftKeyboard,
@@ -198,6 +200,65 @@ describe('the keyboard the browser reports', () => {
     expect(viewport?.counts).toEqual({ resize: 2, scroll: 2 })
     await act(async () => tree.unmount())
     expect(viewport?.counts).toEqual({ resize: 0, scroll: 0 })
+  })
+})
+
+/** The pair a sheet animates with: events rather than state, each with duration 0. */
+describe('the keyboard as events, for a sheet', () => {
+  it('shows by the uncovered strip and hides once when it closes', () => {
+    const calls: string[] = []
+    const unsubscribe = subscribeSoftKeyboard(
+      (height, duration) => calls.push(`show ${height} ${duration}`),
+      (duration) => calls.push(`hide ${duration}`)
+    )
+    viewport?.resizeTo(464)
+    viewport?.resizeTo(LAYOUT_HEIGHT)
+    viewport?.resizeTo(LAYOUT_HEIGHT)
+    expect(calls).toEqual(['show 336 0', 'hide 0'])
+    unsubscribe()
+    expect(viewport?.counts).toEqual({ resize: 0, scroll: 0 })
+  })
+
+  it('hides a keyboard that was already up when it subscribed', async () => {
+    viewport?.resizeTo(464)
+    const calls: string[] = []
+    const unsubscribe = subscribeSoftKeyboard(
+      (height) => calls.push(`show ${height}`),
+      (duration) => calls.push(`hide ${duration}`)
+    )
+    viewport?.resizeTo(LAYOUT_HEIGHT)
+    expect(calls).toEqual(['hide 0'])
+    unsubscribe()
+    // The hook seeds from the same strip, so it must come back down too.
+    viewport?.resizeTo(464)
+    await mount()
+    expect(lift).toBe(336)
+    await act(async () => viewport?.resizeTo(LAYOUT_HEIGHT))
+    expect(lift).toBe(0)
+  })
+
+  it('stays silent when nothing is covered, which is the shell shortening the WebView', () => {
+    const calls: string[] = []
+    const unsubscribe = subscribeSoftKeyboard(
+      () => calls.push('show'),
+      () => calls.push('hide')
+    )
+    viewport?.resizeTo(LAYOUT_HEIGHT)
+    expect(calls).toEqual([])
+    unsubscribe()
+  })
+
+  it('reads a keyboard already up, and 0 without a visual viewport', () => {
+    viewport?.resizeTo(464)
+    expect(currentSoftKeyboardHeight()).toBe(336)
+    Object.defineProperty(window, 'visualViewport', { value: undefined, configurable: true })
+    expect(currentSoftKeyboardHeight()).toBe(0)
+    expect(() =>
+      subscribeSoftKeyboard(
+        () => {},
+        () => {}
+      )()
+    ).not.toThrow()
   })
 })
 

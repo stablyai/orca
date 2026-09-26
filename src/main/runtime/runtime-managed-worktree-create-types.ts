@@ -55,6 +55,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupAgentArgs?: string | null
   startupCwd?: string
   startupLaunchSource?: string
+  /** A caller-minted `tabId:leafId` for the startup terminal's pane. */
+  startupPaneKey?: string
   pendingFirstAgentMessageRename?: boolean
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance

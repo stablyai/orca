@@ -39,7 +39,7 @@ describe('structured session completion focus', () => {
 
     expect(store.focusGroup).toHaveBeenCalledWith(SESSION_WORKSPACE_ID, 'group-1')
     expect(store.activateTab).toHaveBeenCalledWith(TAB_ID)
-    expect(store.setActiveTabType).toHaveBeenCalledWith('agent-session')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('agent-session', SESSION_WORKSPACE_ID)
   })
 
   it('does not apply focus after the user moves to another workspace', async () => {
@@ -74,6 +74,6 @@ describe('structured session completion focus', () => {
 
     expect(store.focusGroup).toHaveBeenCalledWith(SESSION_WORKSPACE_ID, 'group-1')
     expect(store.activateTab).toHaveBeenCalledWith(TAB_ID)
-    expect(store.setActiveTabType).toHaveBeenCalledWith('agent-session')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('agent-session', SESSION_WORKSPACE_ID)
   })
 })

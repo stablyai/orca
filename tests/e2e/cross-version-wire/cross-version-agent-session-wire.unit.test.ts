@@ -23,7 +23,9 @@ import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-s
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
@@ -40,6 +42,8 @@ import {
   paramsFor,
   resetOperationIds,
   REWIND_METHOD,
+  CONVERSATION_OUTLINE_METHOD,
+  envelope,
   STATUS_FEED_METHOD,
   sendParams,
   SESSION,
@@ -275,6 +279,11 @@ describe('cross-version structured agent sessions', () => {
         expect(build.capabilities.includes(AGENT_SESSION_REWIND_RUNTIME_CAPABILITY)).toBe(
           build.methodNames.includes(REWIND_METHOD)
         )
+        // The message rail probes this before asking, so an older host leaves it on loaded
+        // messages instead of answering method_not_found.
+        expect(
+          build.capabilities.includes(AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY)
+        ).toBe(build.methodNames.includes(CONVERSATION_OUTLINE_METHOD))
       }
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
@@ -302,6 +311,41 @@ describe('cross-version structured agent sessions', () => {
             ok: false,
             error: { code: 'method_not_found' }
           })
+        }
+      }
+    })
+
+    it('takes structured question answers exactly where the host advertises them', async () => {
+      // A client sends `answers` only on this capability, so the two must never disagree:
+      // a strict older schema refuses the field and the answer is lost rather than degraded.
+      const method = 'agentSession.respondToQuestion'
+      const fields = {
+        itemId: 'item-1',
+        expectedRevision: 1,
+        answers: [{ questionId: 'q1', optionIds: [], other: 'Wait for the capture. '.repeat(80) }]
+      }
+      const params = { envelope: envelope({ method, fields, fence: 1 }), ...fields }
+      expect(current.capabilities).toContain(AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY)
+      for (const build of [current, baseline]) {
+        const advertised = build.capabilities.includes(
+          AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY
+        )
+        if (!build.methodNames.includes(method)) {
+          expect(advertised, `${build.label} advertises answers without the method`).toBe(false)
+          continue
+        }
+        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
+        await build.installStructuredHost(installableHost(hostCalls))
+        try {
+          const replies = await callBuild(build, method, params, {
+            clientKind: 'runtime',
+            clientCapabilities: current.capabilities
+          })
+          expect(replies, `${build.label}: ${method} must answer exactly once`).toHaveLength(1)
+          expect(replies[0]?.ok, `${build.label}: ${JSON.stringify(replies[0])}`).toBe(advertised)
+          expect(hostCalls.respondToPrompt).toHaveBeenCalledTimes(advertised ? 1 : 0)
+        } finally {
+          await build.installStructuredHost(null)
         }
       }
     })
@@ -719,15 +763,17 @@ describe('cross-version structured agent sessions', () => {
       expect(batch?.cursor.sequence).toBeGreaterThan(held.sequence)
     })
 
-    it('refuses a write still fenced to the host generation that died', async () => {
+    // Every released client still sends the fence it last saw; this host names a write by its
+    // target and ignores that fence. Only the attach keeps comparing one, which `reattach` pins.
+    it('delivers a write still fenced to the host generation that died', async () => {
       const created = await answer('agentSession.create', createIntentParams())
       await bootHost('b')
       const reattached = await reattach(created.fence)
       expect(reattached.fence).toBeGreaterThan(created.fence)
 
       expect(await answer('agentSession.send', sendParams('stale', created.fence))).toMatchObject({
-        ok: false,
-        refusal: { code: 'agent_session_checkpoint_stale' }
+        ok: true,
+        fence: reattached.fence
       })
     })
   })

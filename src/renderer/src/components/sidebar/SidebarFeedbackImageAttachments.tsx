@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import {
   FEEDBACK_IMAGE_FILE_ACCEPT,
   MAX_FEEDBACK_IMAGE_COUNT,
+  MAX_FEEDBACK_IMAGE_TOTAL_BYTES,
   formatFeedbackImageSize,
   type FeedbackImageDraft
 } from '@/lib/feedback-image-attachments'
@@ -26,7 +27,12 @@ export function SidebarFeedbackImageAttachments({
   onRemove
 }: SidebarFeedbackImageAttachmentsProps): React.JSX.Element {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const atCapacity = images.length >= MAX_FEEDBACK_IMAGE_COUNT
+  // Why: the byte budget binds long before the count does for full-screen
+  // screenshots, so an affordance that only knows the count invites picks that
+  // can only ever be rejected.
+  const attachedBytes = images.reduce((total, image) => total + image.bytes, 0)
+  const atCapacity =
+    images.length >= MAX_FEEDBACK_IMAGE_COUNT || attachedBytes >= MAX_FEEDBACK_IMAGE_TOTAL_BYTES
 
   return (
     <div
@@ -39,8 +45,12 @@ export function SidebarFeedbackImageAttachments({
         <span className="text-xs text-muted-foreground">
           {translate(
             'auto.components.sidebar.SidebarFeedbackImageAttachments.screenshotsHint',
-            'Attach up to {count} screenshots'
-          ).replace('{count}', String(MAX_FEEDBACK_IMAGE_COUNT))}
+            'Attach up to {{count}} screenshots, {{maxSize}} total',
+            {
+              count: MAX_FEEDBACK_IMAGE_COUNT,
+              maxSize: formatFeedbackImageSize(MAX_FEEDBACK_IMAGE_TOTAL_BYTES)
+            }
+          )}
         </span>
         <Button
           type="button"

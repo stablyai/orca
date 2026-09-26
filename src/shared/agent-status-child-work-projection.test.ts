@@ -11,21 +11,19 @@ import type { AgentChildWorkState } from './agent-status-child-work'
 
 function candidate(
   providerId: string,
-  overrides: Partial<AgentChildWorkLegacyProjectionCandidate['child']> = {}
+  overrides: Partial<AgentChildWorkLegacyProjectionCandidate> = {}
 ): AgentChildWorkLegacyProjectionCandidate {
   return {
     providerId,
-    child: {
-      kind: 'agent',
-      state: 'working',
-      membership: 'live',
-      firstObservedAt: 123,
-      description: 'Investigate',
-      agentType: 'researcher',
-      model: 'model-a',
-      stoppable: true,
-      ...overrides
-    }
+    kind: 'agent',
+    state: 'working',
+    membership: 'live',
+    firstObservedAt: 123,
+    description: 'Investigate',
+    agentType: 'researcher',
+    model: 'model-a',
+    stoppable: true,
+    ...overrides
   }
 }
 
@@ -140,16 +138,14 @@ describe('agentChildWorkProjectionCandidateFromBackgroundTask', () => {
       })
     ).toEqual({
       providerId: 'task-1',
-      child: {
-        kind: 'agent',
-        state: 'working',
-        membership: 'live',
-        firstObservedAt: 55,
-        name: 'researcher',
-        agentType: 'researcher',
-        description: 'Investigate',
-        stoppable: false
-      }
+      kind: 'agent',
+      state: 'working',
+      membership: 'live',
+      firstObservedAt: 55,
+      name: 'researcher',
+      agentType: 'researcher',
+      description: 'Investigate',
+      stoppable: false
     })
   })
 
@@ -160,10 +156,10 @@ describe('agentChildWorkProjectionCandidateFromBackgroundTask', () => {
       name: '',
       description: ''
     })
-    expect(projected.child).not.toHaveProperty('name')
-    expect(projected.child).not.toHaveProperty('agentType')
-    expect(projected.child).not.toHaveProperty('description')
-    expect(projected.child.stoppable).toBe(true)
+    expect(projected).not.toHaveProperty('name')
+    expect(projected).not.toHaveProperty('agentType')
+    expect(projected).not.toHaveProperty('description')
+    expect(projected.stoppable).toBe(true)
   })
 })
 

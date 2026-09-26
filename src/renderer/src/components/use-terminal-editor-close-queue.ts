@@ -73,7 +73,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
         setActiveWorktree(file.worktreeId)
       }
       setActiveFile(nextFileId)
-      setActiveTabType('editor')
+      setActiveTabType('editor', file?.worktreeId ?? state.activeWorktreeId)
       setSaveDialogFileId(nextFileId)
       return
     }

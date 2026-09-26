@@ -311,9 +311,10 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
   it('paces the drain it sends to the selected cell', () => {
     const drain = workflow.split('--mode drain')[1] ?? ''
     assert.match(drain.split('\n').slice(0, 2).join(' '), /--pace-window-ms "\$\{DRAIN_PACE_WINDOW_MS\}"/)
-    assert.match(workflow, /DRAIN_PACE_WINDOW_MS: '120000'/)
+    // 5 min is the cell's DRAIN_PACE_WINDOW_MAX_MS; a 2,700-host cell at 2 min overruns the director's sticky lane.
+    assert.match(workflow, /DRAIN_PACE_WINDOW_MS: '300000'/)
     // The transition wait has to outlast the pacing window on top of the leases it waits on.
-    assert.match(workflow, /--activity restart-safe[\s\S]*?--timeout-ms 1020000/)
+    assert.match(workflow, /--activity restart-safe[\s\S]*?--timeout-ms 1200000/)
   })
 
   it('passes this cell\'s rehome protocol and pool on every plan validation the job runs', () => {
@@ -367,10 +368,9 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     const trusted = SAME_CAP_CELLS.filter((cell) => REHOME_SOURCE_CELLS.has(cell))
     // Only a declared rehome source may roll at a trusted protocol at all; the job refuses
     // the rest before it plans, and the next test covers them at protocol 0.
-    // C30 is already a rehome source but stays migration-only until its Asia canary promotes it.
     assert.deepEqual(
       SAME_CAP_CELLS.filter((cell) => !REHOME_SOURCE_CELLS.has(cell)),
-      SAME_CAP_MIGRATION_ONLY_CELLS.filter((cell) => cell !== 'production-gce-c30')
+      SAME_CAP_MIGRATION_ONLY_CELLS
     )
     for (const [cellId, protocol] of trusted.flatMap((cell) => [[cell, 1], [cell, 3]])) {
       const { cap, pool } = cellShape(cellId)

@@ -4,12 +4,11 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { CodexJournalGoals } from '../../codex/codex-structured-journal-goals'
 import { parseCodexGoalJournalItemId } from '../../codex/codex-goal-journal-identity'
+import { currentAgentSessionThreadGoal } from '../../../shared/agent-session-thread-goal'
+import { stripNoiseMessages } from '../../../shared/native-chat-noise'
+import { projectStructuredItemsToNativeChat } from '../../../shared/structured-agent-session-projection'
 import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/structured-agent-session-event-sink'
-import { readNativeChatTranscript } from '../transcript-reader'
-import {
-  appendLegacyTranscriptMessages,
-  importLegacyTranscriptIntoJournal
-} from './journal-legacy-import'
+import { importLegacyTranscriptIntoJournal } from './journal-legacy-import'
 import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
 
@@ -56,9 +55,9 @@ it('adopts goal history under live identities and deduplicates resumed snapshots
   journals.pop()
   journal = await openAgentSessionJournal(options)
   journals.push(journal)
-  const sink = createDeferredStructuredAgentSessionEventSink()
+  let sink = createDeferredStructuredAgentSessionEventSink()
   sink.bind({ journal, fence: 1, publish: () => {} })
-  const goals = new CodexJournalGoals(sink.sink)
+  let goals = new CodexJournalGoals(sink.sink, () => ({}))
   const update = async (status: string, tokensUsed: number) => {
     goals.handle({
       threadId: THREAD,
@@ -69,38 +68,59 @@ it('adopts goal history under live identities and deduplicates resumed snapshots
           threadId: THREAD,
           objective: 'Keep the scratch folder tidy.',
           status,
+          tokenBudget: 2000,
           tokensUsed,
-          createdAt: 1790073005
+          timeUsedSeconds: tokensUsed,
+          createdAt: 1790073005,
+          updatedAt: 1790073005 + tokensUsed
         }
       }
     })
     expect(await sink.drained()).toEqual({ ok: true })
   }
   await update('active', 10)
-  expect(journal.snapshot().items).toEqual(initial)
+  expect(journal.snapshot().items.map((item) => item.itemId)).toEqual(
+    initial.map((item) => item.itemId)
+  )
+  expect(currentAgentSessionThreadGoal(journal.snapshot().items)).toMatchObject({
+    tokensUsed: 10,
+    timeUsedSeconds: 10
+  })
   await update('paused', 15)
   await update('active', 20)
   await update('active', 30)
-  expect(
+  const goalItems = () =>
     journal.snapshot().items.filter((item) => parseCodexGoalJournalItemId(item.itemId))
-  ).toHaveLength(3)
-  const decoded = await readNativeChatTranscript('codex', THREAD, { filePath })
-  if (!('messages' in decoded)) {
-    throw new Error(decoded.error)
+  expect(goalItems()).toHaveLength(3)
+  expect(currentAgentSessionThreadGoal(goalItems())?.tokensUsed).toBe(20)
+  const ids = goalItems().map((item) => item.itemId)
+  for (let restart = 0; restart < 2; restart++) {
+    goals.dispose()
+    sink.close()
+    await journal.close()
+    journals.pop()
+    journal = await openAgentSessionJournal(options)
+    journals.push(journal)
+    sink = createDeferredStructuredAgentSessionEventSink()
+    sink.bind({ journal, fence: 1, publish: () => {} })
+    goals = new CodexJournalGoals(sink.sink, () => ({}))
+    const visits = vi.spyOn(journal, 'visitItems')
+    await update('active', 30 + restart * 10)
+    await update('active', 30 + restart * 10)
+    expect(goalItems().map((item) => item.itemId)).toEqual(ids)
+    expect(currentAgentSessionThreadGoal(goalItems())?.tokensUsed).toBe(30 + restart * 10)
+    expect(visits).toHaveBeenCalledTimes(1)
+    visits.mockRestore()
   }
-  const visits = vi.spyOn(journal, 'visitItems')
-  await appendLegacyTranscriptMessages({
-    journal,
-    agent: 'codex',
-    sessionId: THREAD,
-    fence: 1,
-    messages: decoded.messages.filter((message) => message.codexGoal)
-  })
+  const projected = projectStructuredItemsToNativeChat(goalItems())
+  expect(stripNoiseMessages(projected).map((message) => message.blocks[0])).toMatchObject([
+    { type: 'text', text: 'Goal set: Keep the scratch folder tidy.' },
+    { type: 'text', text: 'Goal paused: Keep the scratch folder tidy.' },
+    { type: 'text', text: 'Goal set: Keep the scratch folder tidy.' }
+  ])
   expect(
-    journal.snapshot().items.filter((item) => parseCodexGoalJournalItemId(item.itemId))
+    stripNoiseMessages(projected.map((message) => ({ ...message, codexGoal: undefined })))
   ).toHaveLength(3)
-  expect(visits).not.toHaveBeenCalled()
-  visits.mockRestore()
   goals.dispose()
   sink.close()
 })

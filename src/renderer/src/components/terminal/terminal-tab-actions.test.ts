@@ -77,7 +77,7 @@ describe('createNewTerminalTab', () => {
     createNewTerminalTab('wt-1', 'zsh')
 
     expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh', undefined)
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
   })
@@ -150,7 +150,7 @@ describe('createNewTerminalTab', () => {
     expect(createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       startupCwd: '/repo/packages/app'
     })
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
   })
 
   it('delegates requested startup cwd to host runtime terminals', () => {

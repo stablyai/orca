@@ -14,10 +14,8 @@ import {
  * only before the first `@@` hunk; every `+`/`-` line inside a hunk is content.
  * Requires hunk headers: a diff with no `@@` counts zero, so do not reuse this
  * for header-less agent-tool diffs (see `diffFromText` in shared/native-chat-diff).
- *
- * @internal - exposed for tests only.
  */
-export function countDiffLines(diff: string): { additions: number; deletions: number } {
+function countDiffLines(diff: string): { additions: number; deletions: number } {
   let additions = 0
   let deletions = 0
   // Why: `---`/`+++` are file headers only before the first hunk. A removed line

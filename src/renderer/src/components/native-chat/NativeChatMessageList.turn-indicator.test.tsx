@@ -51,6 +51,7 @@ const session: NativeChatLiveSession = {
   agent: 'codex',
   hasMore: false,
   loadingEarlier: false,
+  olderHistoryGeneration: 0,
   loadEarlier: vi.fn(),
   readPhase: 'ready'
 }
@@ -126,9 +127,10 @@ describe('NativeChatMessageList turn indicator', () => {
       />
     )
 
-    const toolLabel = screen.getByText('Running pnpm test')
+    const toolLabel = screen.getByText('Running 1 command')
     expect(toolLabel).toHaveClass('animate-pulse')
-    expect(screen.getAllByText('Running pnpm test')).toHaveLength(1)
+    expect(screen.getAllByText('Running 1 command')).toHaveLength(1)
+    expect(screen.getByText('pnpm test')).toBeInTheDocument()
     const activity = screen.getByText('Working for 0s')
     expect(activity.textContent).not.toBe(toolLabel.textContent)
     expect(activity).not.toHaveTextContent('shell')
@@ -172,7 +174,7 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(container.querySelector('[data-native-chat-turn-activity]')).toBeNull()
     expect(screen.queryByText(/Working for/)).toBeNull()
     expect(screen.queryByText('Thinking')).toBeNull()
-    expect(screen.getByText('Running pnpm test')).toHaveClass('animate-pulse')
+    expect(screen.getByText('Running 1 command')).toHaveClass('animate-pulse')
   })
 
   it('keeps the live row up after a tool settles', () => {
@@ -217,7 +219,10 @@ describe('NativeChatMessageList turn indicator', () => {
     )
   })
 
-  it('keeps a completed tool row static while the turn tail spins, then removes the tail', () => {
+  // The run is the turn's trailing one, so it stays live between calls and only
+  // settles with the turn. Its motion is its own — the tail's spinner never
+  // migrates onto it — and both are gone once the turn is.
+  it('keeps the trailing run live while the turn tail spins, then settles both', () => {
     const workingSession: NativeChatLiveSession = {
       ...session,
       status: 'working',
@@ -249,10 +254,11 @@ describe('NativeChatMessageList turn indicator', () => {
       />
     )
 
-    const settledTool = screen.getByText('pnpm test')
-    expect(settledTool).toHaveTextContent('pnpm test')
-    expect(settledTool.closest('button')?.querySelector('.animate-pulse')).toBeNull()
-    expect(settledTool.closest('button')?.querySelector('.lucide-check')).toBeInTheDocument()
+    const liveRun = screen.getByText('Running 1 command').closest('button')
+    expect(liveRun).toHaveTextContent('pnpm test')
+    expect(liveRun?.querySelector('.animate-pulse')).toBeInTheDocument()
+    expect(liveRun?.querySelector('.animate-spin')).toBeNull()
+    expect(liveRun?.querySelector('.lucide-check')).toBeNull()
     const activity = screen.getByText('Preparing the answer')
     expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
     expect(activity.closest('[data-native-chat-turn-activity]')?.querySelector('svg')).toHaveClass(
@@ -272,6 +278,11 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(container.querySelector('[data-native-chat-turn-activity]')).toBeNull()
     expect(container.querySelector('.animate-pulse')).toBeNull()
     expect(container.querySelector('.animate-spin')).toBeNull()
+    // Same element, now settled: the lone command names it, marked done.
+    expect(liveRun).toBeInTheDocument()
+    expect(liveRun).toHaveTextContent('pnpm test')
+    expect(liveRun).not.toHaveTextContent('Running')
+    expect(liveRun?.querySelector('.lucide-check')).toBeInTheDocument()
   })
 
   it('keeps bridge chats on the legacy activity chrome', () => {

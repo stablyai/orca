@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
+import { dispatchRejectionReasonIsInternal } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   captureUnfinishedStructuredAgentSessionWork,
@@ -185,7 +186,11 @@ describe('dead structured-session generation settlement', () => {
     const settledSnapshot = journal.snapshot()
     const closedJournal: Pick<
       AgentSessionJournal,
-      'snapshot' | 'submissions' | 'markPendingSubmissionsUnknown' | 'appendLifecycleBatch'
+      | 'snapshot'
+      | 'submissions'
+      | 'markPendingSubmissionsUnknown'
+      | 'rejectPendingSubmissions'
+      | 'appendLifecycleBatch'
     > = {
       snapshot: () => ({
         ...settledSnapshot,
@@ -193,6 +198,9 @@ describe('dead structured-session generation settlement', () => {
       }),
       submissions: () => [],
       markPendingSubmissionsUnknown: async () => {
+        throw new Error('journal_closed')
+      },
+      rejectPendingSubmissions: async () => {
         throw new Error('journal_closed')
       },
       appendLifecycleBatch: async () => {
@@ -247,6 +255,112 @@ describe('dead structured-session generation settlement', () => {
         reason: 'provider write outcome unknown'
       })
     ])
+  })
+
+  it('rejects a send a child that never started left pending with its diagnostic, in words', async () => {
+    await journal.appendSubmission({
+      clientMessageId: 'client-held',
+      payloadFingerprint: 'fingerprint',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello?' }] },
+      fence: 7
+    })
+
+    await settleStructuredAgentSessionDeadGeneration({
+      journal,
+      sessionId: SESSION,
+      fence: 7,
+      settlementId: `provider-exit:${SESSION}:7:generation-1`,
+      pendingSubmissionReason: 'provider_closed_before_acknowledgement',
+      verdict: { state: 'interrupted', completedAt: 1_000 },
+      unexpectedExitReason: 'claude stream-json exited (code 1): not signed in',
+      exitedDuringStartup: true
+    })
+
+    const reason =
+      'The provider stopped before it finished starting: claude stream-json exited (code 1): not signed in.'
+    expect(journal.submissions()).toEqual([
+      expect.objectContaining({ clientMessageId: 'client-held', dispatchState: 'rejected', reason })
+    ])
+    expect(dispatchRejectionReasonIsInternal(reason)).toBe(false)
+  })
+
+  it("keeps a subagent's settled rows the subagent's, in one batch and after a reopen", async () => {
+    // One batch settles rows several agents wrote and names none of them. Each
+    // row keeps the producer its first write named, including after a replay.
+    const child = { agentId: 'thread-child', producerKind: 'agent' as const }
+    const childCall = {
+      provider: 'codex' as const,
+      threadId: 'thread-child',
+      turnId: 'c',
+      ordinal: 1
+    }
+    const childAsk = {
+      provider: 'codex' as const,
+      threadId: 'thread-child',
+      turnId: 'c',
+      ordinal: 2
+    }
+    await seedUnfinishedWork()
+    await journal.appendItem(
+      childCall,
+      { kind: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'running' },
+      { fence: 7, ...child }
+    )
+    await journal.appendItem(
+      childAsk,
+      {
+        kind: 'approval',
+        title: 'Run ls?',
+        detail: null,
+        options: [{ id: 'yes', label: 'Allow' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      { fence: 7, ...child }
+    )
+
+    await settleStructuredAgentSessionDeadGeneration({
+      journal,
+      sessionId: SESSION,
+      fence: 8,
+      settlementId: `restart-eviction:${SESSION}:8`,
+      pendingSubmissionReason: 'provider_exited_before_acknowledgement',
+      verdict: { state: 'unverifiable' },
+      showUnexpectedExitOutcome: false
+    })
+    const settledProducers = (): [string, number, string | undefined][] =>
+      journal
+        .snapshot()
+        .items.map((item): [string, number, string | undefined] => [
+          item.body.kind,
+          item.revision,
+          item.agentId
+        ])
+
+    const settled = settledProducers()
+    // Every seeded row was revised by the batch, so these are revision-2 producers.
+    expect(settled).toEqual([
+      ['message', 0, undefined],
+      ['tool-call', 2, undefined],
+      ['approval', 2, undefined],
+      ['question', 2, undefined],
+      ['turn', 2, undefined],
+      ['tool-call', 2, 'thread-child'],
+      ['approval', 2, 'thread-child']
+    ])
+
+    await journal.close()
+    journal = await openAgentSessionJournal({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: THREAD }
+      },
+      journalDir: root,
+      now: () => 1_000
+    })
+    expect(settledProducers()).toEqual(settled)
   })
 })
 

@@ -421,7 +421,77 @@ describe('OrcaRuntimeService', () => {
     expect(write).toHaveBeenCalledWith('pty-startup-draft', `\x1b[200~${draftUrl}\x1b[201~`)
   })
 
-  it('keeps the 8s main-runtime startup readiness budget for non-Codex agents', async () => {
+  it('keeps the 8s main-runtime startup readiness budget for agents without an override', async () => {
+    vi.useFakeTimers()
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        defaultTuiAgent: 'claude' as const,
+        agentCmdOverrides: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-claude-draft-timeout' })
+    const write = vi.fn().mockReturnValue(true)
+    runtime.setPtyController({
+      spawn,
+      write,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-claude-draft-timeout' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-claude-draft-timeout')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-claude-draft-timeout')
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-claude-draft-timeout',
+        head: 'def',
+        branch: 'runtime-claude-draft-timeout',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-claude-draft-timeout',
+      startupDraft: 'https://github.com/stablyai/orca/issues/456'
+    })
+
+    await vi.advanceTimersByTimeAsync(7999)
+    expect(write).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1)
+    runtime.onPtyData('pty-claude-draft-timeout', '\x1b[?2004h\x1b[?25h', Date.now())
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  // Why 20s for OpenCode: measured on two real Windows hosts, its composer takes
+  // ~10s to mount (bracketed paste is not even enabled until ~4.8s), so the 8s
+  // default expired first and the draft was pasted blind into a starting TUI.
+  it('gives OpenCode the 20s main-runtime startup readiness budget', async () => {
     vi.useFakeTimers()
     onTestFinished(() => {
       vi.useRealTimers()
@@ -435,7 +505,7 @@ describe('OrcaRuntimeService', () => {
       })
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-opencode-draft-timeout' })
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-opencode-draft-budget' })
     const write = vi.fn().mockReturnValue(true)
     runtime.setPtyController({
       spawn,
@@ -448,7 +518,7 @@ describe('OrcaRuntimeService', () => {
       reposChanged: vi.fn(),
       activateWorktree: vi.fn(),
       createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-opencode-draft-timeout' }),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-opencode-draft-budget' }),
       splitTerminal: vi.fn(),
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
@@ -459,33 +529,32 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
 
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-opencode-draft-timeout')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-opencode-draft-timeout')
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-opencode-draft-budget')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-opencode-draft-budget')
     vi.mocked(listWorktrees).mockResolvedValue([
       {
-        path: '/tmp/workspaces/runtime-opencode-draft-timeout',
+        path: '/tmp/workspaces/runtime-opencode-draft-budget',
         head: 'def',
-        branch: 'runtime-opencode-draft-timeout',
+        branch: 'runtime-opencode-draft-budget',
         isBare: false,
         isMainWorktree: false
       }
     ])
 
+    const draftUrl = 'https://github.com/stablyai/orca/issues/789'
     await runtime.createManagedWorktree({
       repoSelector: 'id:repo-1',
-      name: 'runtime-opencode-draft-timeout',
-      startupDraft: 'https://github.com/stablyai/orca/issues/456'
+      name: 'runtime-opencode-draft-budget',
+      startupDraft: draftUrl
     })
 
-    await vi.advanceTimersByTimeAsync(7999)
-    expect(write).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(1)
-    runtime.onPtyData('pty-opencode-draft-timeout', '\x1b[?2004h\x1b[?25h', Date.now())
+    // Past the old 8s default, where readiness would previously have been abandoned.
+    await vi.advanceTimersByTimeAsync(10_000)
+    runtime.onPtyData('pty-opencode-draft-budget', '\x1b[?2004h\x1b[?25h', Date.now())
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(write).not.toHaveBeenCalled()
+    expect(write).toHaveBeenCalledWith('pty-opencode-draft-budget', `\x1b[200~${draftUrl}\x1b[201~`)
   })
 
   it('rejects explicit startup commands for disabled selected agents', async () => {

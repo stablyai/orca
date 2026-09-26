@@ -63,31 +63,6 @@ export type LegacyImportResult =
     }
   | { ok: false; error: string }
 
-export async function appendLegacyTranscriptMessages(input: {
-  journal: AgentSessionJournal
-  agent: AgentType
-  sessionId: string
-  fence: number
-  messages: NativeChatMessage[]
-}): Promise<number> {
-  let appended = 0
-  for (const message of input.messages) {
-    const goal = codexGoalTranscriptIdentity(message, input.sessionId)
-    await input.journal.appendItem(
-      goal ?? {
-        provider: 'legacy',
-        agent: input.agent,
-        sessionId: input.sessionId,
-        recordId: message.id
-      },
-      legacyItemBody(message, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
-      { fence: input.fence, observedAt: message.timestamp ?? undefined }
-    )
-    appended += 1
-  }
-  return appended
-}
-
 export async function importLegacyTranscriptIntoJournal(input: {
   journal: AgentSessionJournal
   agent: AgentType

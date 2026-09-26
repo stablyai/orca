@@ -35,6 +35,7 @@ const session: NativeChatLiveSession = {
   agent: 'codex',
   hasMore: false,
   loadingEarlier: false,
+  olderHistoryGeneration: 0,
   loadEarlier: vi.fn(),
   readPhase: 'ready'
 }
@@ -90,9 +91,57 @@ describe('NativeChatMessageList assistant messages', () => {
       />
     )
 
-    expect(screen.getByText('Running sleep 5')).toBeInTheDocument()
+    expect(screen.getByText('Running 1 command')).toBeInTheDocument()
+    expect(screen.getByText('sleep 5')).toBeInTheDocument()
     expect(screen.queryByText('1×')).toBeNull()
     expect(document.querySelector('.text-destructive')).toBeNull()
+  })
+
+  // Only the turn's trailing run is live. Once the agent has said something
+  // after it, that run is done whatever its last call still reports; a
+  // reasoning aside is not "after it" — the agent is still inside the batch.
+  it('settles a run once prose follows it, but not for a reasoning aside', () => {
+    const run = {
+      id: 'assistant-tool-1',
+      role: 'assistant' as const,
+      blocks: [
+        {
+          type: 'tool-call' as const,
+          name: 'shell',
+          input: { command: 'sleep 5' },
+          state: 'running' as const
+        }
+      ],
+      timestamp: 1,
+      source: 'transcript' as const
+    }
+    const after = (role: 'assistant' | 'reasoning') => ({
+      id: `after-${role}`,
+      role,
+      blocks: [{ type: 'text' as const, text: 'Looking at the output.' }],
+      timestamp: 2,
+      source: 'transcript' as const
+    })
+    const { rerender } = render(
+      <NativeChatMessageList
+        session={{ ...session, status: 'working', messages: [run, after('reasoning')] }}
+        isWorking
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+    expect(screen.getByText('Running 1 command')).toBeInTheDocument()
+
+    rerender(
+      <NativeChatMessageList
+        session={{ ...session, status: 'working', messages: [run, after('assistant')] }}
+        isWorking
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+    expect(screen.queryByText('Running 1 command')).toBeNull()
+    expect(screen.getByText('sleep 5')).toBeInTheDocument()
   })
 
   it('keeps the current tool live when a stale completed lifecycle meets active hook state', () => {
@@ -125,7 +174,8 @@ describe('NativeChatMessageList assistant messages', () => {
       />
     )
 
-    expect(screen.getByText('Running sleep 5')).toBeInTheDocument()
+    expect(screen.getByText('Running 1 command')).toBeInTheDocument()
+    expect(screen.getByText('sleep 5')).toBeInTheDocument()
   })
 })
 

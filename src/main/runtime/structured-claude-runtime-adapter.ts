@@ -1,8 +1,6 @@
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
-import { proveClaudeTranscriptBranch } from '../claude/claude-transcript-branch-proof'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
-import { join } from 'node:path'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { createClaudeStructuredLaunchResolver } from '../claude/claude-structured-launch-resolution'
@@ -12,11 +10,11 @@ import {
 } from '../claude/claude-structured-session-adapter'
 import { claudeProviderHandleLink } from '../claude/claude-structured-owner-identity'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { ClaudeStructuredSessionEvent } from '../claude/claude-structured-session-state'
 import {
-  readClaudeTranscriptLeafUuid,
-  resolveSessionFilePath
-} from '../native-chat/session-file-resolver'
-import { recordAgentSessionProviderHandle } from './agent-session-provider-handle-transition'
+  recordAgentSessionProviderHandle,
+  reviseAgentSessionClaudeResumePoint
+} from './agent-session-provider-handle-transition'
 import type { ClaudeManagedAccountGateSettings } from '../native-chat/claude-structured-managed-account-support'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 
@@ -25,6 +23,8 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveClaudeCommand?: () => string
   resolveClaudeLaunchEnv?: () => Promise<Record<string, string>> | Record<string, string>
+  /** The env a Claude child inherits before auth stripping; absent inherits Orca's own. */
+  resolveClaudeInheritedEnv?: () => Promise<Record<string, string>>
   /** Managed-account auth state for a Claude launch, mirroring the terminal preflight.
    *  Required: an absent policy is what silently under-strips. */
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
@@ -33,12 +33,40 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   readClaudeManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
-  onUnexpectedExit: (event: StructuredAgentSessionLifecycleEvent) => void
+  modelCatalog?: ClaudeStructuredSessionAdapterDeps['modelCatalog']
+  onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
   onBackgroundTasksChanged?: (
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
+  onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
+}
+
+/** The adapter events the host's lifecycle handler consumes, in the host's vocabulary. */
+export function structuredClaudeLifecycleEvent(
+  event: ClaudeStructuredSessionEvent
+): StructuredAgentSessionLifecycleEvent | null {
+  if (event.type === 'started') {
+    return event
+  }
+  if (
+    event.type === 'ended' &&
+    event.cause === 'unexpected-exit' &&
+    event.fence !== undefined &&
+    event.acquisitionGeneration
+  ) {
+    return {
+      type: 'ended',
+      sessionId: event.sessionId,
+      reason: event.reason,
+      cause: event.cause,
+      fence: event.fence,
+      acquisitionGeneration: event.acquisitionGeneration,
+      ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {})
+    }
+  }
+  return null
 }
 
 export function createStructuredClaudeRuntimeAdapter(
@@ -51,6 +79,9 @@ export function createStructuredClaudeRuntimeAdapter(
       resolveWorkspacePath: deps.resolveWorkspacePath,
       resolveCommand: deps.resolveClaudeCommand ?? resolveClaudeCommand,
       ...(deps.resolveClaudeLaunchEnv ? { resolveEnv: deps.resolveClaudeLaunchEnv } : {}),
+      ...(deps.resolveClaudeInheritedEnv
+        ? { resolveInheritedEnv: deps.resolveClaudeInheritedEnv }
+        : {}),
       resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
       ...(deps.resolveClaudePermissionMode
         ? { resolvePermissionMode: deps.resolveClaudePermissionMode }
@@ -77,54 +108,30 @@ export function createStructuredClaudeRuntimeAdapter(
         })
       )
     },
-    readTranscriptLeaf: async ({
-      providerSessionId,
-      previousLeafUuid,
-      intentionalRewindUuid,
-      claudeConfigDir
-    }) => {
-      const transcriptPath = await resolveSessionFilePath('claude', providerSessionId, {
-        claudeProjectsDir: join(claudeConfigDir, 'projects')
-      })
-      if (transcriptPath && intentionalRewindUuid !== undefined) {
-        return (
-          await proveClaudeTranscriptBranch({
-            transcriptPath,
-            providerSessionId,
-            previousLeafUuid,
-            intentionalRewindUuid
-          })
-        ).leafUuid
-      }
-      return transcriptPath
-        ? await readClaudeTranscriptLeafUuid(transcriptPath, providerSessionId, previousLeafUuid)
-        : null
+    persistResumePoint: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
+      await store.transitionHandoff(sessionId, (record: AgentSessionRecord) =>
+        reviseAgentSessionClaudeResumePoint({
+          record,
+          fence,
+          providerSessionId,
+          leafUuid,
+          now: Date.now()
+        })
+      )
     },
     onEvent: (event) => {
-      if (
-        event.type === 'ended' &&
-        event.cause === 'unexpected-exit' &&
-        event.fence !== undefined &&
-        event.acquisitionGeneration
-      ) {
-        deps.onUnexpectedExit({
-          type: 'ended',
-          sessionId: event.sessionId,
-          reason: event.reason,
-          cause: event.cause,
-          fence: event.fence,
-          acquisitionGeneration: event.acquisitionGeneration,
-          ...(event.settlementRetryRequired
-            ? { settlementRetryRequired: event.settlementRetryRequired }
-            : {})
-        })
+      const lifecycle = structuredClaudeLifecycleEvent(event)
+      if (lifecycle) {
+        deps.onLifecycleEvent(lifecycle)
       }
     },
     ...(deps.onBackgroundTasksChanged
       ? { onBackgroundTasksChanged: deps.onBackgroundTasksChanged }
       : {}),
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
+    ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.openClaudeConnection ? { openConnection: deps.openClaudeConnection } : {}),
-    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
+    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+    ...(deps.modelCatalog ? { modelCatalog: deps.modelCatalog } : {})
   })
 }

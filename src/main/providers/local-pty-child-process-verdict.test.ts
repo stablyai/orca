@@ -3,20 +3,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { resolveForegroundMock } = vi.hoisted(() => ({ resolveForegroundMock: vi.fn() }))
 
+const { confirmShellForegroundMock } = vi.hoisted(() => ({
+  confirmShellForegroundMock: vi.fn()
+}))
+
 vi.mock('./agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: resolveForegroundMock,
-  confirmShellForegroundProcess: vi.fn()
+  confirmShellForegroundProcess: confirmShellForegroundMock
 }))
 import { isRetiredPtyMaster } from '../pty/node-pty-master-fd-retirement'
 import {
+  confirmLocalPtyShellForeground,
   hasLocalPtyChildProcesses,
   inspectLocalPtyChildProcesses
 } from './local-pty-foreground-inspection'
 import { LocalPtyProvider } from './local-pty-provider'
-import { ptyProcesses, ptyShellName } from './local-pty-provider-state'
+import { ptyProcesses, ptyShellPath } from './local-pty-provider-state'
 import { inspectPtyProviderProcess } from './pty-process-inspection'
 
-const POSIX_SHELL = '/bin/sh'
+// Bare, so the retired pane's spawn file equals the recorded name (the path's basename).
+const POSIX_SHELL = 'sh'
 
 function registerPane(id: string, foreground: string | (() => string), shell?: string): void {
   const pane: pty.IPty = {
@@ -38,7 +44,7 @@ function registerPane(id: string, foreground: string | (() => string), shell?: s
   }
   ptyProcesses.set(id, pane)
   if (shell) {
-    ptyShellName.set(id, shell)
+    ptyShellPath.set(id, shell)
   }
 }
 
@@ -64,7 +70,7 @@ async function registerRetiredPane(id: string): Promise<pty.IPty> {
     interval: 10
   })
   ptyProcesses.set(id, term)
-  ptyShellName.set(id, POSIX_SHELL)
+  ptyShellPath.set(id, POSIX_SHELL)
   return term
 }
 
@@ -75,7 +81,18 @@ beforeEach(() => {
 
 afterEach(() => {
   ptyProcesses.clear()
-  ptyShellName.clear()
+  ptyShellPath.clear()
+})
+
+describe('confirmLocalPtyShellForeground', () => {
+  it('proves against the spawned shell path, which tells the Git Bash launcher apart', async () => {
+    const launcher = 'C:\\Program Files\\Git\\bin\\bash.exe'
+    registerPane('pty-git-bash', 'bash.exe', launcher)
+    confirmShellForegroundMock.mockResolvedValueOnce(true)
+
+    await expect(confirmLocalPtyShellForeground('pty-git-bash')).resolves.toBe(true)
+    expect(confirmShellForegroundMock).toHaveBeenCalledWith(4242, launcher, expect.any(Object))
+  })
 })
 
 // Windows has no master fd to retire, and `WindowsTerminal.process` answers from the spawn name.
@@ -94,7 +111,7 @@ describe('inspectLocalPtyChildProcesses', () => {
   })
 
   it('still answers no-children when the shell itself is in the foreground', () => {
-    registerPane('pty-idle', '/bin/zsh', '/bin/zsh')
+    registerPane('pty-idle', 'zsh', '/bin/zsh')
     expect(inspectLocalPtyChildProcesses('pty-idle')).toBe('no-children')
   })
 
@@ -174,7 +191,7 @@ describe('inspectPtyProviderProcess child-process evidence', () => {
   })
 
   it('carries no-children evidence from the local inspectProcess operation', async () => {
-    registerPane('pty-idle', '/bin/zsh', '/bin/zsh')
+    registerPane('pty-idle', 'zsh', '/bin/zsh')
 
     const inspection = await inspectPtyProviderProcess(provider, 'pty-idle')
     expect(inspection.hasChildProcesses).toBe(false)

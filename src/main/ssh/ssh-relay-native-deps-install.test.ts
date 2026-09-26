@@ -1,5 +1,6 @@
 // Why: regression coverage for the install-probe contract — the "node-pty is not available" bug shipped because every guard layer was silent.
 
+import type * as RelayRipgrepInstallModule from './ssh-relay-ripgrep-install'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RelayInstallMarkerModule from './ssh-relay-install-marker'
 
@@ -42,6 +43,15 @@ vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
   createRelayInstallMarkerFileName: () => '.sftp-namespace-00000000000000000000000000000000'
 }))
 
+// Why: the post-launch ripgrep install would consume this file's queued exec mocks.
+// Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
+vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
+vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
+  ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
+  ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),
+  recordRemoteRipgrepReference: vi.fn().mockResolvedValue(true)
+}))
+
 vi.mock('./ssh-relay-versioned-install', () => ({
   readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+testhash'),
   computeRemoteRelayDir: (home: string, v: string) => `${home}/.orca-remote/relay-${v}`,
@@ -78,6 +88,7 @@ import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import {
   abandonInstall,
   finalizeInstall,
+  gcOldRelayVersions,
   isRelayAlreadyInstalled
 } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
@@ -619,6 +630,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     const conn1 = makeMockConnection(sftpCapture)
     feed(makeExecResponses({ npmInstall: 'ok', probe: 'ok' }))
     await deployAndLaunchRelay(conn1)
+    await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalled())
     const firstPath = sftpCapture.paths.find((p) => p.endsWith('/package.json')) as string
     const first = sftpCapture.contents[firstPath]
 

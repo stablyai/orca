@@ -1,6 +1,8 @@
 import {
+  AGENT_CHILD_WORK_DESCRIPTION_MAX_LENGTH,
   AGENT_CHILD_WORK_INVOCATION_HISTORY_MAX,
   AGENT_CHILD_WORK_KINDS,
+  AGENT_CHILD_WORK_LABEL_MAX_LENGTH,
   AGENT_CHILD_WORK_MEMBERSHIPS,
   AGENT_CHILD_WORK_OUTCOMES,
   AGENT_CHILD_WORK_STATES,
@@ -17,52 +19,21 @@ import {
   type AgentChildWorkState
 } from './agent-status-child-work'
 import { parseAgentStatusSubject } from './agent-status-subject'
+import {
+  hasOnlyKeys,
+  isBoundedString,
+  isChildWorkText,
+  isChildWorkTokenCount,
+  isRecord,
+  isTimestamp
+} from './agent-status-child-work-value-guards'
+import { parseAgentChildWorkActivityFields } from './agent-status-child-work-activity-codec'
+import { isAgentChildWorkLifecycleLegal } from './agent-status-child-work-legality'
 
-const MAX_ID_LENGTH = 256
-const MAX_LABEL_LENGTH = 512
-const MAX_DESCRIPTION_LENGTH = 8_000
 const CHILD_WORK_KIND_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_KINDS)
 const CHILD_WORK_STATE_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_STATES)
 const CHILD_WORK_MEMBERSHIP_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_MEMBERSHIPS)
 const CHILD_WORK_OUTCOME_SET: ReadonlySet<string> = new Set(AGENT_CHILD_WORK_OUTCOMES)
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function hasOnlyKeys(
-  record: Record<string, unknown>,
-  required: readonly string[],
-  optional: readonly string[] = []
-): boolean {
-  const keys = Object.keys(record)
-  return (
-    required.every((key) => Object.hasOwn(record, key)) &&
-    keys.every((key) => required.includes(key) || optional.includes(key))
-  )
-}
-
-function isBoundedString(value: unknown, maxLength = MAX_ID_LENGTH): value is string {
-  if (
-    typeof value !== 'string' ||
-    value.length === 0 ||
-    value.length > maxLength ||
-    value !== value.trim()
-  ) {
-    return false
-  }
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (code <= 0x1f || code === 0x7f) {
-      return false
-    }
-  }
-  return true
-}
-
-function isTimestamp(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0
-}
 
 function isRevision(value: unknown): value is number {
   return Number.isSafeInteger(value) && typeof value === 'number' && value >= 0
@@ -98,7 +69,9 @@ export function parseAgentChildWorkInvocationFence(
   return { invocationId: value.invocationId, generation: value.generation }
 }
 
-function parseProviderTiming(value: unknown): AgentChildWorkProviderTiming | null {
+export function parseAgentChildWorkProviderTiming(
+  value: unknown
+): AgentChildWorkProviderTiming | null {
   if (!isRecord(value) || !hasOnlyKeys(value, [], ['startedAt', 'completedAt'])) {
     return null
   }
@@ -156,10 +129,19 @@ function parseInvocationHistory(value: unknown): AgentChildWorkInvocationHistory
   return history
 }
 
-function parseOptionalLabel(value: unknown, maxLength = MAX_LABEL_LENGTH): string | null {
-  return value === undefined ? '' : isBoundedString(value, maxLength) ? value : null
+function parseOptionalLabel(
+  value: unknown,
+  maxLength = AGENT_CHILD_WORK_LABEL_MAX_LENGTH
+): string | null {
+  return value === undefined ? '' : isChildWorkText(value, maxLength) ? value : null
 }
 
+/** The host's integrity gate for its own store, strict by design: an unknown key or enum arm
+ *  rejects the whole record. Never a cross-version decoder — anything reading records or views
+ *  from another build must ignore unknown keys and degrade unknown arms, or negotiate
+ *  (docs/reference/remote-wire-compatibility.md, Rules 1 and 4).
+ *  Every malformed field rejects, descriptive or not: admission drops bad provider facts before
+ *  they get here, so a value outside its image is a writer bug, never data to repair silently. */
 export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | null {
   if (
     !isRecord(value) ||
@@ -186,6 +168,11 @@ export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | 
         'model',
         'totalTokens',
         'providerTiming',
+        'parentChildWorkId',
+        'residency',
+        'operation',
+        'lastMessage',
+        'settledAt',
         'previousInvocations'
       ]
     ) ||
@@ -195,15 +182,12 @@ export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | 
     !isState(value.state) ||
     !isMembership(value.membership) ||
     (value.outcome !== undefined && !isOutcome(value.outcome)) ||
-    (value.outcome !== undefined && value.membership !== 'settled') ||
+    (value.settledAt !== undefined && !isTimestamp(value.settledAt)) ||
     !isTimestamp(value.firstObservedAt) ||
     !isTimestamp(value.observedAt) ||
     value.firstObservedAt > value.observedAt ||
     typeof value.stoppable !== 'boolean' ||
-    (value.totalTokens !== undefined &&
-      (typeof value.totalTokens !== 'number' ||
-        !Number.isSafeInteger(value.totalTokens) ||
-        value.totalTokens < 0))
+    (value.totalTokens !== undefined && !isChildWorkTokenCount(value.totalTokens))
   ) {
     return null
   }
@@ -211,21 +195,56 @@ export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | 
   const invocation = parseAgentChildWorkInvocationFence(value.invocation)
   const provenance = parseProvenance(value.provenance)
   const timing =
-    value.providerTiming === undefined ? undefined : parseProviderTiming(value.providerTiming)
+    value.providerTiming === undefined
+      ? undefined
+      : parseAgentChildWorkProviderTiming(value.providerTiming)
   const history =
     value.previousInvocations === undefined
       ? undefined
       : parseInvocationHistory(value.previousInvocations)
   const labels = {
     name: parseOptionalLabel(value.name),
-    description: parseOptionalLabel(value.description, MAX_DESCRIPTION_LENGTH),
+    description: parseOptionalLabel(value.description, AGENT_CHILD_WORK_DESCRIPTION_MAX_LENGTH),
     agentType: parseOptionalLabel(value.agentType),
     model: parseOptionalLabel(value.model)
   }
-  if (!parent || !invocation || !provenance || timing === null || history === null) {
+  const activity = parseAgentChildWorkActivityFields(value, {
+    childWorkId: value.childWorkId,
+    firstObservedAt: value.firstObservedAt,
+    observedAt: value.observedAt
+  })
+  if (
+    !parent ||
+    !invocation ||
+    !provenance ||
+    timing === null ||
+    history === null ||
+    !activity ||
+    Object.values(labels).includes(null)
+  ) {
     return null
   }
-  if (Object.values(labels).includes(null)) {
+  // A settled record written without these fields (an older writer) reads as an unknown ending
+  // at its last evidence, never as success.
+  const settled = value.membership === 'settled'
+  const outcome = isOutcome(value.outcome) ? value.outcome : settled ? 'unknown' : undefined
+  const settledAt = isTimestamp(value.settledAt)
+    ? value.settledAt
+    : settled
+      ? value.observedAt
+      : undefined
+  if (
+    !isAgentChildWorkLifecycleLegal({
+      kind: value.kind,
+      state: value.state,
+      membership: value.membership,
+      outcome,
+      settledAt,
+      operation: activity.operation,
+      firstObservedAt: value.firstObservedAt,
+      observedAt: value.observedAt
+    })
+  ) {
     return null
   }
   const historyFenceKeys = history?.map(
@@ -246,15 +265,17 @@ export function parseAgentChildWorkInput(value: unknown): AgentChildWorkInput | 
     kind: value.kind,
     state: value.state,
     membership: value.membership,
-    ...(isOutcome(value.outcome) ? { outcome: value.outcome } : {}),
+    ...(outcome !== undefined ? { outcome } : {}),
     ...(labels.name ? { name: labels.name } : {}),
     ...(labels.description ? { description: labels.description } : {}),
     ...(labels.agentType ? { agentType: labels.agentType } : {}),
     ...(labels.model ? { model: labels.model } : {}),
     ...(typeof value.totalTokens === 'number' ? { totalTokens: value.totalTokens } : {}),
     ...(timing ? { providerTiming: timing } : {}),
+    ...activity,
     firstObservedAt: value.firstObservedAt,
     observedAt: value.observedAt,
+    ...(settledAt !== undefined ? { settledAt } : {}),
     stoppable: value.stoppable,
     invocation,
     ...(history ? { previousInvocations: history } : {}),

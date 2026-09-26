@@ -215,10 +215,11 @@ function declaredArchFromPath(filePath) {
   return match ? ARCH_BY_TOKEN[match[1].toLowerCase()] : null
 }
 
-function findArchViolation(filePath, targetArch) {
+function findArchViolation(filePath, targetArch, rootDir) {
   // A path that names an architecture is judged against that name, so a per-arch vendored package
   // is fine while `bin/linux-arm64-.../node-pty.node` holding an x86-64 binary is still caught.
-  const declared = declaredArchFromPath(filePath)
+  // Why relative: the arm64 slice's own dir (`linux-arm64-unpacked`) must not declare every file arm64.
+  const declared = declaredArchFromPath(rootDir ? relative(rootDir, filePath) : filePath)
   const expectedArch = declared ?? targetArch
   const expected = ELF_MACHINE_BY_ARCH[expectedArch]
   if (expected === undefined) {
@@ -373,7 +374,15 @@ function readDynamicInfo(filePath, objdumpPath) {
 
 /** Imported (undefined) dynamic symbols from `objdump -T` (fail-closed). */
 function readImportedSymbols(filePath, objdumpPath) {
-  return parseImportedSymbols(runObjdump(objdumpPath, '-T', filePath))
+  try {
+    return parseImportedSymbols(runObjdump(objdumpPath, '-T', filePath))
+  } catch (error) {
+    // Why: a statically linked binary (bundled ripgrep) has no dynamic symbol table to import from.
+    if (error instanceof Error && error.message.includes('not a dynamic object')) {
+      return new Set()
+    }
+    throw error
+  }
 }
 
 /**
@@ -403,7 +412,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
   // Why before the glibc pass: a wrong-architecture binary's symbol versions are valid but
   // meaningless, so reporting a floor violation for it would send the reader down the wrong path.
   const archOffenders = binaries
-    .map((filePath) => ({ filePath, violation: findArchViolation(filePath, targetArch) }))
+    .map((filePath) => ({ filePath, violation: findArchViolation(filePath, targetArch, rootDir) }))
     .filter(({ violation }) => violation !== null)
   if (archOffenders.length > 0) {
     const detail = archOffenders

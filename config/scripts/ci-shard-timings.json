@@ -587,7 +587,7 @@
       "src/main/bitbucket/pull-request-mappers.test.ts": 7,
       "src/main/bitbucket/repository-ref.test.ts": 24,
       "src/main/bitbucket/status-no-decrypt.test.ts": 171,
-      "src/main/browser/agent-browser-bridge-automation-visibility.test.ts": 91,
+      "src/main/browser/agent-browser-bridge-capture-paint-hold.test.ts": 91,
       "src/main/browser/agent-browser-bridge-command-transport.test.ts": 102,
       "src/main/browser/agent-browser-bridge-mouse-input.test.ts": 24,
       "src/main/browser/agent-browser-bridge-navigation.test.ts": 156,

@@ -36,6 +36,7 @@ import type {
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
+import { MACHINE_NAME_PUBLISH_WAIT_MS } from './runtime-machine-name'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
@@ -134,11 +135,25 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
       worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_RESULT_TTL_MS },
       ...(windowsProcessStartTimeAvailable ? { windowsProcessStartTimeAvailable } : {}),
       hostPlatform: process.platform,
+      machineName: this.readMachineName(),
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
       floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
       protocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleMobileVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
     }
+  }
+
+  /** The name status publishes: the configured override, else the detected one. */
+  readMachineName(): string {
+    return this.machineName.read()
+  }
+
+  /**
+   * Waits for the machine-name lookup up to the publish budget. A status read leaks the bare
+   * hostname only while a slow lookup is still running; the next read carries what it found.
+   */
+  machineNameReady(): Promise<void> {
+    return this.machineName.readyWithin(MACHINE_NAME_PUBLISH_WAIT_MS)
   }
 
   setPtyController(controller: RuntimePtyController | null): void {

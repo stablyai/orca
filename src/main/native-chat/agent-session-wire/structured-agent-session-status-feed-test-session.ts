@@ -3,6 +3,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 export function indexedStatusFeedSession(session: {
   journal: AgentSessionJournal
   hasProviderChild?: boolean
+  providerChildPhase?: 'starting' | 'ready'
   fence?: number
 }) {
   return {
@@ -11,6 +12,7 @@ export function indexedStatusFeedSession(session: {
     ...(session.hasProviderChild !== undefined
       ? { hasProviderChild: session.hasProviderChild }
       : {}),
+    ...(session.providerChildPhase ? { providerChildPhase: session.providerChildPhase } : {}),
     params: {
       location: {
         executionHostId: 'local' as const,

@@ -12,6 +12,11 @@ import { BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT } from './bridge-page-client-identit
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
+import {
+  sameSafeAreaInsets,
+  ZERO_SAFE_AREA_INSETS,
+  type BridgeSafeAreaInsets
+} from './bridge-safe-area-insets'
 
 /**
  * Every grant this app implements, which is the ceiling a session's own list is drawn from. A page
@@ -50,6 +55,8 @@ export function createBridgeInitFrame(args: {
   route: BridgeInitRoute
   /** The route patterns the page keeps for itself; everything else comes back as `navigate`. */
   pageRoutes: readonly string[]
+  /** How much of the WebView sits under a system bar, for a page that pads for them itself. */
+  safeAreaInsets?: BridgeSafeAreaInsets
   /** What each of those patterns declared, so the page can tell a hop it may keep from one it
    *  must hand back. Omitted by a shell that has none, which leaves the page on its old rule. */
   pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
@@ -82,6 +89,11 @@ export function createBridgeInitFrame(args: {
       native: [...args.granted]
     },
     route: args.route,
+    // Omitted when zero, like `storageOversize`: the page reads absent as zeros.
+    ...(args.safeAreaInsets === undefined ||
+    sameSafeAreaInsets(args.safeAreaInsets, ZERO_SAFE_AREA_INSETS)
+      ? {}
+      : { safeAreaInsets: { ...args.safeAreaInsets } }),
     pageRoutes: [...args.pageRoutes],
     // Omitted when empty for the reason `storageOversize` is: a shell that declares nothing and
     // one that declares an empty list are the same answer to the page's check.

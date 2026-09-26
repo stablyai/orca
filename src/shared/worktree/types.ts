@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
+import type { WorktreeCatalogVersion } from './catalog-version'
 import type { AutomationExecutionTargetType } from '../automations-types'
 import type { TaskSourceContext } from '../task-source-context'
 import type { TuiAgent } from '../tui-agent'
@@ -226,4 +227,6 @@ export type DetectedWorktreeListResult = {
   unavailableReason?: string
   /** Structured cause captured by the execution host when a scan fails. */
   failureKind?: WorktreeScanFailureKind
+  /** Which catalog this listing describes; additive, older hosts omit it. */
+  catalogVersion?: WorktreeCatalogVersion
 }

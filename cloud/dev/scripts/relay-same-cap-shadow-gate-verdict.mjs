@@ -23,7 +23,8 @@ export const BASELINE_OFFSET_HOURS = [24, 48]
 export const FLEET_POOL_CELL_IDS = [
   'production-gce-c27',
   'production-gce-c28',
-  'production-gce-c29'
+  'production-gce-c29',
+  'production-gce-c30'
 ]
 
 export const SHADOW_GATE_THRESHOLDS = {

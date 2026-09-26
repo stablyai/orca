@@ -1,6 +1,9 @@
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
-import type { JournalLifecycleMutationInput } from './journal-row-builders'
+import {
+  journalLifecycleMutationRow,
+  type JournalLifecycleMutationInput
+} from './journal-row-builders'
 import type { JournalLifecycleBatchRow, JournalLifecycleMutation } from './journal-row-schema'
 import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
@@ -69,13 +72,9 @@ function serializedLifecycleBatchFits(
 }
 
 function toLifecycleMutationRow(mutation: JournalLifecycleMutationInput): JournalLifecycleMutation {
-  const itemId = agentJournalItemKey(mutation.identity)
-  return mutation.kind === 'item'
-    ? {
-        kind: 'item',
-        itemId,
-        revision: Number.MAX_SAFE_INTEGER,
-        body: mutation.body
-      }
-    : { kind: 'tombstone', itemId, revision: Number.MAX_SAFE_INTEGER }
+  return journalLifecycleMutationRow(
+    mutation,
+    agentJournalItemKey(mutation.identity),
+    Number.MAX_SAFE_INTEGER
+  )
 }

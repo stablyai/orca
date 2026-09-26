@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { AlertCircle, Save } from 'lucide-react'
-import { computeEditorFontSize, resolveEditorFontFamilyOrInherit } from '@/lib/editor-font-zoom'
+import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,9 +14,13 @@ import {
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { editorShortcutMatches } from './editor-shortcuts'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { getConnectionId } from '@/lib/connection-context'
 import { IpynbCellToolbar, IpynbToolbarButton } from './IpynbCellToolbar'
-import { IpynbCodeCell, IpynbEditableTextCell, IpynbMarkdownCell } from './IpynbCellEditor'
-import { IpynbCellOutputs } from './IpynbCellOutputs'
+import { IpynbCellSource } from './IpynbCellEditor'
+import { IpynbCellRunOutputs, IpynbCellRunPrompt } from './IpynbCellRun'
+import { IpynbKernelToolbar } from './IpynbKernelToolbar'
 import { parseIpynb } from './ipynb-parse'
 import {
   getIpynbCellKey,
@@ -47,8 +51,8 @@ export default function IpynbViewer({
   onDirtyStateHint,
   onSave
 }: IpynbViewerProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const rootPath = useAppStore((s) => findWorktreeById(s.worktreesByRepo, worktreeId)?.path ?? null)
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null)
   const parsed = useMemo(() => {
     try {
@@ -83,9 +87,9 @@ export default function IpynbViewer({
   const execution = useIpynbCellExecution({
     filePath,
     worktreeId,
+    rootPath,
     flushSourceDrafts,
-    applyContent,
-    onSave
+    applyContent
   })
   useIpynbScrollRestoration(rootRef, scrollCacheKey, content)
   const saveShortcut = useShortcutKeyDetails('editor.save')
@@ -108,18 +112,24 @@ export default function IpynbViewer({
     [saveNotebook]
   )
 
-  const handleNotebookPointerDownCapture = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>): void => {
-      if (editingCellKey === null) {
-        return
-      }
-      const target = event.target instanceof Element ? event.target : null
-      if (!target?.closest('.monaco-editor')) {
-        setEditingCellKey(null)
-      }
-    },
-    [editingCellKey]
-  )
+  // Shift+Enter runs a cell and moves to the next; Cmd/Ctrl+Enter runs it in place.
+  const handleCellKeyDownCapture = (
+    event: React.KeyboardEvent<HTMLElement>,
+    index: number
+  ): void => {
+    const mod = getShortcutPlatform() === 'darwin' ? event.metaKey : event.ctrlKey
+    // Exactly one of Shift or Cmd/Ctrl.
+    if (event.key !== 'Enter' || event.altKey || event.shiftKey === mod) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    execution.runCell(index)
+    if (event.shiftKey) {
+      // Focusing the next cell's preview also ends editing here, so repeated presses walk the notebook.
+      event.currentTarget.nextElementSibling?.querySelector<HTMLElement>('[tabindex="0"]')?.focus()
+    }
+  }
 
   if (parsed.error || !parsed.notebook) {
     return (
@@ -141,13 +151,14 @@ export default function IpynbViewer({
   }
 
   const { notebook } = parsed
+  // Kernels are local Python only; other notebooks still render and edit.
+  const canRun = notebook.language === 'python' && !getConnectionId(worktreeId)
   return (
     <div
       ref={setRootRef}
       className="h-full min-h-0 overflow-auto bg-editor-surface scrollbar-editor"
-      style={{ fontSize, fontFamily: resolveEditorFontFamilyOrInherit(settings) }}
+      style={{ fontSize }}
       onKeyDownCapture={handleNotebookKeyDownCapture}
-      onPointerDownCapture={handleNotebookPointerDownCapture}
     >
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border/60 bg-background/95 px-4 py-2 text-xs text-muted-foreground backdrop-blur">
         <span className="font-medium text-foreground">{filePath.split(/[/\\]/).pop()}</span>
@@ -156,9 +167,15 @@ export default function IpynbViewer({
           {translate('auto.components.editor.IpynbViewer.07e7d96612', 'cells')}
         </span>
         <span>{notebook.language}</span>
-        {notebook.kernelName ? <span>{notebook.kernelName}</span> : null}
-        {execution.runError ? <span className="text-destructive">{execution.runError}</span> : null}
         <div className="ml-auto flex items-center gap-2">
+          {canRun ? (
+            <IpynbKernelToolbar
+              filePath={filePath}
+              rootPath={rootPath}
+              onRunAll={() => execution.runAll(notebook.cells.length)}
+              onClearAll={execution.clearAllOutputs}
+            />
+          ) : null}
           <IpynbToolbarButton
             label={translate('auto.components.editor.IpynbViewer.15ec40a735', 'Save notebook')}
             shortcut={saveShortcut}
@@ -166,16 +183,9 @@ export default function IpynbViewer({
           >
             <Save className="size-3.5" />
           </IpynbToolbarButton>
-          <span className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
-            {translate('auto.components.editor.IpynbViewer.329764e9fc', 'BETA')}
-          </span>
-          <span className="font-mono">
-            {translate('auto.components.editor.IpynbViewer.8c3b21369a', 'nbformat')}{' '}
-            {notebook.nbformat}
-          </span>
         </div>
       </div>
-      <div className="mx-auto flex max-w-[980px] flex-col gap-3 px-5 py-5">
+      <div className="mx-auto flex max-w-[980px] flex-col gap-2 py-5 pr-5 pl-2">
         {notebook.cells.length === 0 ? (
           <div className="flex items-center justify-center rounded-md border border-border bg-background p-8 text-sm text-muted-foreground">
             {translate('auto.components.editor.IpynbViewer.d6f37a640b', 'Empty notebook')}
@@ -189,34 +199,22 @@ export default function IpynbViewer({
             return (
               <section
                 key={cellKey}
-                className="overflow-hidden rounded-md border border-border bg-background"
+                className="group relative flex gap-2 py-1.5"
+                onKeyDownCapture={(event) => handleCellKeyDownCapture(event, index)}
               >
-                <IpynbCellToolbar
-                  cell={cell}
-                  index={index}
-                  running={execution.runningCellIndex === index}
-                  canMoveUp={index > 0}
-                  canMoveDown={index < notebook.cells.length - 1}
-                  onRun={() => void execution.runCell(index)}
-                  onKindChange={(kind) => updateCellKind(index, kind)}
-                  onInsertAbove={(kind) => insertCell(index, kind)}
-                  onInsertBelow={(kind) => insertCell(index + 1, kind)}
-                  onMoveUp={() => moveCell(index, -1)}
-                  onMoveDown={() => moveCell(index, 1)}
-                  onDelete={() => deleteCell(index)}
-                />
-                {cell.kind === 'markdown' ? (
-                  <div className="grid gap-0 lg:grid-cols-2">
-                    <IpynbEditableTextCell
-                      source={source}
-                      onChange={(nextSource) => updateCellSource(index, nextSource)}
+                {/* Mirrors the code surface's border and padding so the count shares the first line's box. */}
+                <div className="flex w-12 shrink-0 justify-center border-y border-transparent py-1">
+                  {cell.kind === 'code' ? (
+                    <IpynbCellRunPrompt
+                      filePath={filePath}
+                      cellKey={cellKey}
+                      executionCount={cell.executionCount}
+                      onRun={() => execution.runCell(index)}
                     />
-                    <div className="border-t border-border/50 lg:border-l lg:border-t-0">
-                      <IpynbMarkdownCell source={source} />
-                    </div>
-                  </div>
-                ) : cell.kind === 'code' ? (
-                  <IpynbCodeCell
+                  ) : null}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <IpynbCellSource
                     cell={cell}
                     source={source}
                     active={editingCellKey === cellKey}
@@ -225,22 +223,25 @@ export default function IpynbViewer({
                       setEditingCellKey((current) => (current === cellKey ? null : current))
                     }
                     onChange={(nextSource) => updateCellSource(index, nextSource)}
-                    onSaveRequest={saveNotebook}
                   />
-                ) : (
-                  <IpynbEditableTextCell
-                    source={source}
-                    onChange={(nextSource) => updateCellSource(index, nextSource)}
-                  />
-                )}
-                <IpynbCellOutputs cell={cell} />
+                  <IpynbCellRunOutputs filePath={filePath} cellKey={cellKey} cell={cell} />
+                </div>
+                <IpynbCellToolbar
+                  kind={cell.kind}
+                  canMoveUp={index > 0}
+                  canMoveDown={index < notebook.cells.length - 1}
+                  onKindChange={(kind) => updateCellKind(index, kind)}
+                  onInsert={(offset, kind) => insertCell(index + offset, kind)}
+                  onMove={(direction) => moveCell(index, direction)}
+                  onDelete={() => deleteCell(index)}
+                />
               </section>
             )
           })
         )}
       </div>
       <Dialog
-        open={execution.pendingRunCellIndex !== null}
+        open={execution.pendingRun !== null}
         onOpenChange={(open) => {
           if (!open) {
             execution.cancelPendingRun()

@@ -28,6 +28,7 @@ import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useBackClaim } from '../navigation/use-back-claim'
+import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -129,8 +130,9 @@ export function MountedBottomDrawer({
 
   // Why: KeyboardAvoidingView and useAnimatedKeyboard are both unreliable
   // inside Modal (iOS ignores KAV; Android needs adjustNothing for
-  // useAnimatedKeyboard). Keyboard event listeners work on both platforms
-  // and give us the exact height to shift the drawer by.
+  // useAnimatedKeyboard). The keyboard seam's events work on both platforms
+  // and give the exact height; inside the shell's page none fire, because
+  // the shell shortens the WebView above the IME.
   useEffect(() => {
     // Pinned-under sheets stay visible for size but must not ride the keyboard —
     // only the top interactive sheet owns inset/lift.
@@ -159,26 +161,24 @@ export function MountedBottomDrawer({
     // keyboard before listeners attach. Seed only in fill mode so content-sized
     // outer sheets do not inherit a stale metrics height after an inner dismiss.
     if (fillAvailable) {
-      const existing = Keyboard.metrics()
-      if (existing != null && existing.height > 0) {
-        applyKeyboardHeight(existing.height)
+      const existing = currentSoftKeyboardHeight()
+      if (existing > 0) {
+        applyKeyboardHeight(existing)
       }
     }
 
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-
-    const onShow = Keyboard.addListener(showEvent, (e) => {
-      applyKeyboardHeight(e.endCoordinates.height, e.duration || 250)
-    })
-    const onHide = Keyboard.addListener(hideEvent, (e) => {
-      setKeyboardInset(0)
-      keyboardOffset.value = withTiming(0, { duration: e.duration || 250 })
-    })
+    const unsubscribe = subscribeSoftKeyboard(
+      (height, duration) => {
+        applyKeyboardHeight(height, duration || 250)
+      },
+      (duration) => {
+        setKeyboardInset(0)
+        keyboardOffset.value = withTiming(0, { duration: duration || 250 })
+      }
+    )
 
     return () => {
-      onShow.remove()
-      onHide.remove()
+      unsubscribe()
       keyboardOffset.value = 0
       setKeyboardInset(0)
     }

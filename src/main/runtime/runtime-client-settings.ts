@@ -46,6 +46,7 @@ export type RuntimeClientSettings = Pick<
   | 'artifactSharingEnabled'
   | 'worktreeVisibilityDefaults'
   | 'agentSkillSharingEnabled'
+  | 'machineName'
 > & {
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
 }
@@ -75,6 +76,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'minimaxEndpoint'
   | 'prBotAuthorOverrides'
   | 'worktreeVisibilityDefaults'
+  | 'machineName'
 >
 
 export class RuntimeClientSettingsController {
@@ -82,7 +84,7 @@ export class RuntimeClientSettingsController {
   private reconciliationTail: Promise<void> = Promise.resolve()
 
   constructor(
-    private readonly store: RuntimeStore | null,
+    private readonly store: Pick<RuntimeStore, 'getSettings' | 'updateSettings'> | null,
     private readonly notifyReposChanged: (() => void) | undefined = undefined
   ) {}
 
@@ -105,7 +107,10 @@ export class RuntimeClientSettingsController {
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
       visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
       defaultRepoSelection: settings.defaultRepoSelection ?? null,
-      defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,
+      // Persisted settings can violate the paired client's string-array contract.
+      defaultLinearTeamSelection: Array.isArray(settings.defaultLinearTeamSelection)
+        ? settings.defaultLinearTeamSelection.filter((id): id is string => typeof id === 'string')
+        : null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       // The three that decide whether a new agent tab -- and so an orchestration worker -- is a
@@ -121,6 +126,7 @@ export class RuntimeClientSettingsController {
       artifactSharingEnabled: isArtifactSharingEnabled(settings),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
+      machineName: settings.machineName ?? '',
       hostSettingOverrides: Object.fromEntries(
         [
           ...getHostDisplayLabelOverrides({ hostSettingOverrides: settings.hostSettingOverrides })
