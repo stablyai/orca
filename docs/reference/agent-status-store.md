@@ -106,8 +106,9 @@ ingests the summary into the hook server as a status row:
 | prompt, tool, last message, model, provider session | the summary's fields                                                                                                                                                          |
 
 Sessions with no request (`status === null`) produce no row. A request is a
-turn record, an assistant message, an accepted or unanswered send, or a send the
-agent or its start refused; a send that was withdrawn, or left undelivered by a
+turn record, an assistant message, a user message the provider journaled itself
+(history, an older host), an accepted or unanswered send, or a send the agent or
+its start refused; a send that was withdrawn, or left undelivered by a
 restart or a close, fails nobody and makes nothing listable.
 `summary.turnOutcome` is the latest request's verdict: its turn's outcome, or
 `failure` for a send the agent or its start refused (a send that joined a running
