@@ -189,6 +189,37 @@ describe('resolveSessionFilePath', () => {
     }
   })
 
+  it('resolves Muse session.jsonl by parent-dir session id', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-muse-')
+    const museSessionsDir = join(root, 'muse-sessions')
+    const sessionDir = join(museSessionsDir, '2026', '09', '26', 'sess-muse-1')
+    await mkdir(sessionDir, { recursive: true })
+    const target = join(sessionDir, 'session.jsonl')
+    await writeFile(target, '{}\n')
+
+    const resolved = await resolveSessionFilePath('muse', 'sess-muse-1', { museSessionsDir })
+    expect(resolved).toBe(target)
+  })
+
+  it('never matches a Muse subagent log for the parent session id', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-muse-subagent-')
+    const museSessionsDir = join(root, 'muse-sessions')
+    const sessionDir = join(museSessionsDir, '2026', '09', '26', 'sess-muse-parent')
+    await mkdir(join(sessionDir, 'subagent', 'sess-muse-child'), { recursive: true })
+    await writeFile(join(sessionDir, 'session.jsonl'), '{}\n')
+    const childLog = join(sessionDir, 'subagent', 'sess-muse-child', 'session.jsonl')
+    await writeFile(childLog, '{}\n')
+
+    // The parent id resolves to the parent file even with a child log present.
+    await expect(
+      resolveSessionFilePath('muse', 'sess-muse-parent', { museSessionsDir })
+    ).resolves.toBe(join(sessionDir, 'session.jsonl'))
+    // A child id resolves to the child log through the same predicate.
+    await expect(
+      resolveSessionFilePath('muse', 'sess-muse-child', { museSessionsDir })
+    ).resolves.toBe(childLog)
+  })
+
   it('resolves a rollout from the orca-managed Codex home (ORCA_USER_DATA_PATH)', async () => {
     // Orca launches Codex with its own managed CODEX_HOME, so rollout files land
     // under <userData>/codex-runtime-home/home/sessions, NOT ~/.codex/sessions.

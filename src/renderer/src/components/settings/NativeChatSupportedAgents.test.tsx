@@ -17,7 +17,8 @@ const EXPECTED_SUPPORTED_AGENTS = [
   'openclaude',
   'codex',
   'grok',
-  'omp'
+  'omp',
+  'muse'
 ] as const satisfies readonly TuiAgent[]
 const SUPPORTED_AGENTS_LABEL_KEY = 'auto.components.settings.NativeChatSupportedAgents.label'
 
