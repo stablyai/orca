@@ -441,6 +441,17 @@ describe("the page pushes its terminal frame's box into the document", () => {
     mounted.dispose()
   })
 
+  it('fits a text scale too large to resize the grid while visible', async () => {
+    const { mounted, scales, send, layOut, grid } = await mountedOverGrid()
+    layOut(280, 600)
+    await framesUntil(() => scales.at(-1) === 280 / (7.5 * 55))
+    // fontPxForScale(2) = 26 px: 280 / (7.5 x 2) = 18 columns, under MIN_FIT_COLS, so no resize.
+    send({ type: 'set-font-scale', fontScale: 2 })
+    await framesUntil(() => scales.at(-1) === 280 / (15 * 55))
+    expect(grid().cols).toBe(55)
+    mounted.dispose()
+  })
+
   it('refits on show after a text scale too large to resize the grid while hidden', async () => {
     const { mounted, scales, send, layOut } = await mountedOverGrid()
     layOut(280, 600)

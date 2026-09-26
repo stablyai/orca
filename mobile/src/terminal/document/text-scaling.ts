@@ -79,10 +79,8 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
     if (cellW > 0 && cellH > 0) {
       const cols = Math.floor(scope.viewportRect().width / cellW)
       if (cols < MIN_FIT_COLS) {
-        // Why: too narrow to resize, but a hidden host still owes the refit at the new cell size on show.
-        if (scope.viewportRect().hidden) {
-          applyFitScale(scope, 'text-scale')
-        }
+        // Why: too narrow to resize the grid, but the fit still tracks the new cell size; hidden hosts hold it.
+        applyFitScale(scope, 'text-scale')
         return
       }
       const rows = Math.max(8, Math.floor(scope.viewportRect().height / cellH))
