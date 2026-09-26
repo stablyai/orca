@@ -7,18 +7,24 @@
 // + by-name decode) and the renderer (by-name re-encode + provider legend) use
 // one source of truth.
 
-/** Identifier-class token types (first 5+ cover the acceptance criteria colors). */
+/** Identifier-class token types (first 5+ cover the acceptance criteria colors).
+ *  Mirrors the names clangd actually emits (it distinguishes `enum` from
+ *  `enumMember`, and returns `typeParameter`/`operator`/`comment` too) so the
+ *  by-name decode/re-encode matches them instead of routing the enum-type
+ *  identifiers (e.g. `ADAPTER_TYPE`) to NO_STYLING (grey). */
 export const SEMANTIC_TOKEN_CLIENT_TYPES: readonly string[] = [
   'namespace',
   'type',
   'class',
+  'enum',
+  'enumMember',
   'function',
   'variable',
   'macro',
-  'enumMember',
   'parameter',
   'property',
-  'method'
+  'method',
+  'typeParameter'
 ]
 
 export const SEMANTIC_TOKEN_CLIENT_MODIFIERS: readonly string[] = [

@@ -31,8 +31,9 @@ export type SemanticTokenLegend = {
  * Decodes the LSP relative 5-tuple `data` against the server legend into
  * `{line,char,length,type,modifiers[]}` BY NAME. Each 5-tuple is
  * (deltaLine, deltaStartChar, length, tokenTypeIndex, tokenModifiersBitmask).
- * An out-of-range type index → `{ skip: true }` so the renderer drops it and
- * the Monarch lexical layer colors the identifier.
+ * An out-of-range type index → `{ skip: true }`; the renderer keeps it in the
+ * output at a NO_STYLING index (it must preserve the delta) while the Monarch
+ * lexical layer colors the identifier.
  *
  * Pure + transport-free so it stays unit-testable without clangd.
  */

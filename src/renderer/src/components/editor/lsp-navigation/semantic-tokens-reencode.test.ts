@@ -55,9 +55,13 @@ describe('reencodeSemanticTokensForMonaco', () => {
     ])
   })
 
-  it('skips tokens whose type name is unknown to the renderer legend (lexical color preserved)', () => {
-    // clangd self-invented names like 'unknown'/'bracket'/'label' are NOT in the
-    // renderer legend — they are dropped so the Monarch lexical layer colors them.
+  it('keeps unknown-name tokens at a NO_STYLING index so later deltas stay aligned', () => {
+    // clangd self-invented names like 'unknown'/'bracket'/'label' are NOT in
+    // the renderer legend. Dropping them would shift later tokens' relative
+    // deltas (Monaco accumulates each tuple against the previous one), so they
+    // are kept at a NO_STYLING (out-of-range) index — Monaco resolves an
+    // undefined legend entry to NO_STYLING and the lexical layer colors them.
+    const noStylingIndex = SEMANTIC_TOKEN_RENDERER_TYPES.length
     const tokens: LanguageServerSemanticToken[] = [
       { line: 0, char: 0, length: 3, type: 'function', modifiers: [] },
       { line: 0, char: 4, length: 1, type: 'bracket', modifiers: [] },
@@ -67,11 +71,24 @@ describe('reencodeSemanticTokensForMonaco', () => {
 
     const data = reencodeSemanticTokensForMonaco(tokens)
 
+    // The unknown tokens keep their deltas with a NO_STYLING index, so the
+    // 'variable' (1,0) delta stays relative to the 'label' token as clangd
+    // encoded it — not relative to 'function', which would misplace it.
     expect(Array.from(data)).toEqual([
       0,
       0,
       3,
       typeIndex('function'),
+      0,
+      0,
+      4,
+      1,
+      noStylingIndex,
+      0,
+      0,
+      6,
+      5,
+      noStylingIndex,
       0,
       1,
       0,
@@ -81,15 +98,35 @@ describe('reencodeSemanticTokensForMonaco', () => {
     ])
   })
 
-  it('skips the explicit skip-sentinel tokens (out-of-range server indices)', () => {
+  it('keeps skip-sentinel tokens at a NO_STYLING index so delta order is preserved', () => {
+    const noStylingIndex = SEMANTIC_TOKEN_RENDERER_TYPES.length
     const tokens: LanguageServerSemanticToken[] = [
       { line: 0, char: 0, length: 3, type: 'macro', modifiers: [] },
-      { line: 0, char: 4, length: 2, type: '', modifiers: [], skip: true }
+      { line: 0, char: 4, length: 2, type: '', modifiers: [], skip: true },
+      { line: 0, char: 7, length: 4, type: 'variable', modifiers: [] }
     ]
 
     const data = reencodeSemanticTokensForMonaco(tokens)
 
-    expect(Array.from(data)).toEqual([0, 0, 3, typeIndex('macro'), 0])
+    // The skip token keeps its delta so 'variable' (0,7) stays relative to the
+    // skip token (as the server encoded it), not relative to 'macro'.
+    expect(Array.from(data)).toEqual([
+      0,
+      0,
+      3,
+      typeIndex('macro'),
+      0,
+      0,
+      4,
+      2,
+      noStylingIndex,
+      0,
+      0,
+      7,
+      4,
+      typeIndex('variable'),
+      0
+    ])
   })
 
   it('returns an empty Uint32Array for no tokens', () => {

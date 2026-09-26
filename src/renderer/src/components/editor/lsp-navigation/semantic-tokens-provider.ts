@@ -23,19 +23,33 @@ import {
 const SELECTOR = ['cpp', 'c']
 
 // VS Code Dark+ approximations for identifier-class tokens (spike findings §1).
-// keyword/string/number are also defined with vs-dark values so the Monarch
-// lexical layer stacks without conflict (clangd does not emit those tokens).
+// Covers EVERY type in the client legend (SEMANTIC_TOKEN_RENDERER_TYPES) so a
+// token whose type matches the legend is never left NO_STYLING (grey) — the
+// spike only colored the original 5, leaving property/method/parameter/
+// namespace unstyled, which showed up as the `.`-access members all grey.
+// keyword/string/number/comment/operator are also defined with vs-dark values
+// so the Monarch lexical layer stacks without conflict (clangd self-invented
+// enum/comment/operator/typeParameter/unknown/bracket types route through
+// NO_STYLING to the lexical layer, whose rules these pin).
 const ORCA_LSP_DARK_RULES = [
   { token: 'function', foreground: 'dcdcaa' },
+  { token: 'method', foreground: 'dcdcaa' },
   { token: 'type', foreground: '4ec9b0' },
   { token: 'class', foreground: '4ec9b0' },
+  { token: 'enum', foreground: '4ec9b0' },
+  { token: 'namespace', foreground: '4ec9b0' },
+  { token: 'typeParameter', foreground: '4ec9b0' },
   { token: 'variable', foreground: '9cdcfe' },
+  { token: 'property', foreground: '9cdcfe' },
+  { token: 'parameter', foreground: '9cdcfe' },
   { token: 'macro', foreground: 'c586c0' },
   { token: 'enumMember', foreground: '4fc1ff' },
   // Lexical layer (clangd legend has no keyword/string/number) — keep vs-dark values.
   { token: 'keyword', foreground: '569cd6' },
   { token: 'string', foreground: 'ce9178' },
-  { token: 'number', foreground: 'b5cea8' }
+  { token: 'number', foreground: 'b5cea8' },
+  { token: 'comment', foreground: '608b4e' },
+  { token: 'operator', foreground: 'd4d4d4' }
 ]
 
 /**
