@@ -1,0 +1,44 @@
+diff --git a/ios/RNUITextView.mm b/ios/RNUITextView.mm
+index d0c31ed20b4865679ec1397543fc74056e47b978..205c5cdf0d6f4df2aa013bac44408e3121985762 100644
+--- a/ios/RNUITextView.mm
++++ b/ios/RNUITextView.mm
+@@ -73,11 +73,7 @@ - (instancetype)initWithFrame:(CGRect)frame
+ - (void)didMoveToWindow
+ {
+   [super didMoveToWindow];
+-  if (self.window) {
+-    [self.window addGestureRecognizer:_outsideTapRecognizer];
+-  } else {
+-    [_outsideTapRecognizer.view removeGestureRecognizer:_outsideTapRecognizer];
+-  }
++  [self syncOutsideTapRecognizer];
+ }
+ 
+ - (void)dealloc
+@@ -304,10 +300,26 @@ - (void)handleLongPressIfNecessary:(UILongPressGestureRecognizer*)sender
+   }
+ }
+ 
++// Only a view holding a selection needs outside taps; one window recognizer per
++// mounted view makes every touch pay for every view.
++- (void)syncOutsideTapRecognizer
++{
++  UIWindow *window = self.window;
++  const NSRange range = _textView.selectedRange;
++  const BOOL wants = window != nil && range.location != NSNotFound && range.length > 0;
++  if (wants && _outsideTapRecognizer.view != window) {
++    [_outsideTapRecognizer.view removeGestureRecognizer:_outsideTapRecognizer];
++    [window addGestureRecognizer:_outsideTapRecognizer];
++  } else if (!wants && _outsideTapRecognizer.view != nil) {
++    [_outsideTapRecognizer.view removeGestureRecognizer:_outsideTapRecognizer];
++  }
++}
++
+ // MARK: - UITextViewDelegate
+ 
+ - (void)textViewDidChangeSelection:(UITextView *)textView
+ {
++  [self syncOutsideTapRecognizer];
+   if (_suppressSelectionChange) {
+     return;
+   }
