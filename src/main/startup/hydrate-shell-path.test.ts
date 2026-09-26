@@ -210,6 +210,55 @@ describe('hydrateShellPath', () => {
     expect((await captureProbeEnv()).ORCA_SHELL_PATH_PROBE).toBe('1')
   })
 
+  // Why: on Windows the probe is PowerShell or Git Bash, so these argv are never produced.
+  it.skipIf(process.platform === 'win32')(
+    'keeps the POSIX login probe for bash and zsh',
+    /** bash and zsh still receive `-ilc` and `printf "$PATH"`. */
+    async () => {
+      await captureProbeEnv('/bin/zsh')
+
+      expect(spawnMock.mock.calls[0][1]).toEqual([
+        '-ilc',
+        `printf '%s' '__ORCA_SHELL_PATH__'; printf '%s' "$PATH"; printf '%s' '__ORCA_SHELL_PATH__'`
+      ])
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'asks nushell to join $env.PATH instead of printing the literal "$PATH"',
+    /** Nushell receives `-l -c` and a colon-separated reply becomes PATH segments. */
+    async () => {
+      const proc = createMockShellProcess()
+      spawnMock.mockReturnValue(proc)
+      const resultPromise = hydrateShellPath({
+        shellOverride: '/run/current-system/sw/bin/nu',
+        force: true
+      })
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+
+      expect(spawnMock.mock.calls[0][1]).toEqual([
+        '-l',
+        '-c',
+        [
+          "print -n '__ORCA_SHELL_PATH__';",
+          'print -n ($env.PATH | str join (char esep));',
+          "print -n '__ORCA_SHELL_PATH__'"
+        ].join(' ')
+      ])
+      proc.stdout.emit(
+        'data',
+        Buffer.from('__ORCA_SHELL_PATH__/etc/profiles/per-user/me/bin:/usr/bin__ORCA_SHELL_PATH__')
+      )
+      proc.emit('close', 0)
+
+      await expect(resultPromise).resolves.toEqual({
+        segments: ['/etc/profiles/per-user/me/bin', '/usr/bin'],
+        ok: true,
+        failureReason: 'none'
+      })
+    }
+  )
+
   it('overwrites the captured key in place so Windows never carries both Path and PATH', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const originalWindowsPath = process.env.Path
