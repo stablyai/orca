@@ -811,6 +811,48 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       legacy.dispose()
     })
 
+    it('reports busy, not idle, when a v11+ getForegroundProcess RPC fails or times out', async () => {
+      // Why: getForegroundProcess() swallows this same failure into null, and
+      // hasChildProcessesFromForeground(null) reads a null foreground as idle -- composing
+      // hasChildProcesses through the swallowing getter would silently turn a failed or
+      // deadline-expired read into busy:false, the unsafe outcome the SAFE DEFAULT doc
+      // comment on hasChildProcesses (and on the registry's busy field) says cannot happen.
+      const legacy = createInspectionAdapter(
+        GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+        vi.fn(async () => {
+          throw new Error('deadline exceeded')
+        })
+      )
+
+      await expect(legacy.hasChildProcesses('sess-a')).resolves.toBe(true)
+
+      legacy.dispose()
+    })
+
+    it('still reports idle for a v11+ read that succeeds with a bare shell foreground', async () => {
+      const legacy = createInspectionAdapter(
+        GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+        vi.fn(async () => ({ foregroundProcess: null }))
+      )
+
+      await expect(legacy.hasChildProcesses('sess-a')).resolves.toBe(false)
+
+      legacy.dispose()
+    })
+
+    it('leaves getForegroundProcess itself swallowing a failed read to null (unchanged contract for its other callers)', async () => {
+      const legacy = createInspectionAdapter(
+        GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+        vi.fn(async () => {
+          throw new Error('deadline exceeded')
+        })
+      )
+
+      await expect(legacy.getForegroundProcess('sess-a')).resolves.toBeNull()
+
+      legacy.dispose()
+    })
+
     it.each([COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION, PROTOCOL_VERSION])(
       'delegates protocol %s inspection to inspectProcess',
       async (protocolVersion) => {

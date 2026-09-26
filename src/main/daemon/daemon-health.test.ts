@@ -111,6 +111,31 @@ describe('daemon health', () => {
     }
   })
 
+  it('checks a legacy generation at its own protocol version, not the current constant', async () => {
+    const legacyProtocolVersion = 22
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      protocolVersion: legacyProtocolVersion,
+      ptySpawnHealthCheck: vi.fn(async () => {}),
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+
+    try {
+      // Why this matters: daemon-generation-retirement.ts's recycled-pid guard
+      // probes a LEGACY daemon before signaling it. Declaring the CURRENT protocol
+      // version in that hello would make an alive, healthy legacy daemon answer
+      // 'rejected' (a version mismatch), aborting retirement forever.
+      await expect(checkDaemonHealth(socketPath, tokenPath, legacyProtocolVersion)).resolves.toBe(
+        'healthy'
+      )
+      await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('rejected')
+    } finally {
+      await server.shutdown()
+    }
+  })
+
   it('fails when a protocol-healthy daemon cannot spawn PTYs', async () => {
     const server = new DaemonServer({
       socketPath,
