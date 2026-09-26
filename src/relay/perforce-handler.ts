@@ -1,10 +1,13 @@
 import { isAbsolute } from 'node:path'
 import type { RelayDispatcher } from './dispatcher'
 import { expandTilde } from './context'
+import { runWithPerforceSettings } from '../shared/perforce/p4-settings-context'
+import { normalizePerforceSettings } from '../shared/perforce/perforce-settings'
 import { localPerforceBackend } from '../shared/perforce/perforce-backend'
 import {
   requireChangelistId,
   requireChangelistTarget,
+  requireDepotPaths,
   requireDescription,
   requireDiscardEntries,
   requireRelativePath,
@@ -30,7 +33,12 @@ export class PerforceHandler {
   constructor(dispatcher: Pick<RelayDispatcher, 'onRequest'>) {
     const backend = localPerforceBackend
     const on = (method: string, run: (cwd: string, params: Params) => Promise<unknown>): void => {
-      dispatcher.onRequest(`perforce.${method}`, async (params) => run(requireCwd(params), params))
+      dispatcher.onRequest(`perforce.${method}`, async (params) =>
+        // Why: an older desktop sends no settings; defaults keep it working.
+        runWithPerforceSettings(normalizePerforceSettings(params.settings), () =>
+          run(requireCwd(params), params)
+        )
+      )
     }
     on('detect', (cwd) => backend.detect(cwd))
     on('status', (cwd) => backend.status(cwd))
@@ -56,6 +64,19 @@ export class PerforceHandler {
         requireChangelistId(p.sourceChangelist),
         requireChangelistTarget(p.changelist)
       )
+    )
+    on('shelveAndRevertFiles', (cwd, p) =>
+      backend.shelveAndRevertFiles(
+        cwd,
+        requireChangelistId(p.changelist),
+        requireRelativePaths(p.filePaths)
+      )
+    )
+    on('unshelveFiles', (cwd, p) =>
+      backend.unshelveFiles(cwd, requireChangelistId(p.changelist), requireDepotPaths(p.depotPaths))
+    )
+    on('deleteChangelistWithFiles', (cwd, p) =>
+      backend.deleteChangelistWithFiles(cwd, requireChangelistId(p.changelist))
     )
     on('deleteShelf', (cwd, p) => backend.deleteShelf(cwd, requireChangelistId(p.changelist)))
     on('createChangelist', (cwd, p) =>
@@ -84,6 +105,9 @@ export class PerforceHandler {
     on('deleteChangelist', (cwd, p) =>
       backend.deleteChangelist(cwd, requireChangelistId(p.changelist))
     )
+    on('diffText', (cwd, p) => backend.diffText(cwd, requireRelativePaths(p.filePaths)))
+    on('info', (cwd) => backend.info(cwd))
+    on('isReadOnlyFile', (cwd, p) => backend.isReadOnlyFile(cwd, requireRelativePath(p.filePath)))
     on('checkoutIfReadOnly', (cwd, p) =>
       backend.checkoutIfReadOnly(cwd, requireRelativePath(p.filePath))
     )

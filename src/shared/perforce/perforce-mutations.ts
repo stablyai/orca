@@ -101,6 +101,20 @@ export async function syncLatest(cwd: string): Promise<PerforceOperationResult> 
   return toResult(await runP4(['sync'], { cwd, timeoutMs: 1_800_000 }))
 }
 
+/** True for an existing regular file the user cannot write, i.e. a synced file not yet opened for edit. */
+export async function isReadOnlyWorkspaceFile(cwd: string, filePath: string): Promise<boolean> {
+  const absolute = resolve(cwd, filePath)
+  try {
+    if (!(await lstat(absolute)).isFile()) {
+      return false
+    }
+    await access(absolute, constants.W_OK)
+    return false
+  } catch (error) {
+    return isErrnoCode(error, 'EACCES') || isErrnoCode(error, 'EPERM')
+  }
+}
+
 /** Checks a read-only workspace file out for edit; writable, missing, and non-file paths are left alone. */
 export async function checkoutIfReadOnly(cwd: string, filePath: string): Promise<void> {
   const absolute = resolve(cwd, filePath)

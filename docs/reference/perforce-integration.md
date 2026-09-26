@@ -16,22 +16,27 @@ Orca can drive a Perforce (Helix Core) client workspace from the Source Control 
 
 ## Concepts mapped to the panel
 
-| Panel section        | Perforce meaning                                                                                                       |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Default changelist   | Files opened in the default changelist; described and submitted from the box at the top                                |
-| Changelist N         | Numbered pending changelists: edit description (pencil), Shelve, Unshelve, Delete shelf, Submit, and Delete when empty |
-| Modified, not opened | Files changed on disk but not checked out (`p4 reconcile -n`)                                                          |
-| New files            | Files on disk that are not in the depot                                                                                |
+| Panel section        | Perforce meaning                                                                                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Default changelist   | Files opened in the default changelist; described and submitted from the box at the top                                                                                            |
+| Changelist N         | Collapsible numbered pending changelists: edit description (pencil), Shelve, Unshelve, Revert shelved files, Submit (opened-only or shelved-only, not both), and Delete when empty |
+| Modified, not opened | Files changed on disk but not checked out (`p4 reconcile -n`)                                                                                                                      |
+| New files            | Files on disk that are not in the depot                                                                                                                                            |
 
 Row actions: click to diff against `#have`; **Open** runs `p4 reconcile` (add/edit/delete as the disk dictates);
-**Close** runs `p4 revert -k` (keeps local content); **Discard** reverts opened files, force-syncs modified ones,
-and deletes new ones. The header has Refresh and Get Latest (`p4 sync`).
+**Revert changes** reverts opened files, force-syncs modified ones, and deletes new ones. The header has Refresh and Get Latest (`p4 sync`).
 
 Selection: Cmd/Ctrl-click toggles a row, Shift-click selects a range. Right-clicking a checked-out file (or the
 selection) offers **Move to existing changelist** (a list of the other pending changelists, plus Default) and
 **Move to new changelist…**, which asks for a description first and only then creates the changelist and moves the
 files. The Unshelve button in the panel header restores any changelist's shelf by number (including another user's)
-into the default or an existing changelist.
+into the default or an existing changelist. The same right-click menu has **Shelf changes** (shelve the files, then
+revert them) and **Revert changes**. Shelved files are listed as `S` rows: click diffs the shelf against the
+workspace, and right-click offers **Open shelved file** and **Unshelve file**. Right-clicking a changelist offers
+**Copy changelist number** and **Delete changelist** (drops the shelf, reverts opened files, deletes it).
+
+Every one of these operations is also a `perforce.*` relay method, so SSH-hosted workspaces support them once the relay
+on the host has been updated (reconnecting the SSH target redeploys it).
 
 Saving a read-only workspace file from Orca's editor first runs `p4 edit` on it.
 
@@ -44,3 +49,17 @@ Saving a read-only workspace file from Orca's editor first runs `p4 edit` on it.
 - `src/main/ipc/perforce.ts` + `src/preload/api/perforce-*.ts` — `perforce:*` IPC; `connectionId` selects SSH.
 - `src/renderer/src/components/right-sidebar/perforce/` — panel and detection hook.
 - `git:diff` routes to `p4 print` for Perforce folders so the standard diff tabs work.
+
+## Settings > Perforce
+
+Preferences live in `GlobalSettings.perforce` (`src/shared/perforce/perforce-settings.ts`, always read through
+`normalizePerforceSettings`). They cover the p4 path and `P4PORT`/`P4USER`/`P4CLIENT`/`P4CONFIG`/`P4IGNORE` overrides,
+timeouts, panel section order and visibility, refresh interval, `#have` vs `#head` diffs, save-time checkout behavior,
+the `E` tab marker, new-changelist defaults, submit and destructive-action confirmations, what happens to a shelf on
+submit, and the AI description button.
+
+The p4 runner is shared with the relay, so settings reach it through a request-scoped context
+(`p4-settings-context.ts`): the desktop wraps local calls, and sends the same object with every `perforce.*` relay
+request (`settings` param; relays that predate it use defaults). "Test connection" runs `p4 info` through
+`perforce:info`. "Generate description" (`perforce:generateDescription`) runs the agent, model, and instructions from Settings >
+Perforce (independent of Git AI Author), feeding it `p4 diff -du` of the changelist's opened files.

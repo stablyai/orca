@@ -10,6 +10,18 @@ type WorktreeArgs = { worktreePath: string; connectionId?: string }
 type Result = Promise<PerforceOperationResult>
 
 export type PerforceApi = {
+  info: (
+    args: WorktreeArgs
+  ) => Promise<
+    | { success: true; info: { client: string; user: string; port: string; root: string } }
+    | { success: false; error: string }
+  >
+  generateDescription: (
+    args: WorktreeArgs & {
+      changelist: 'default' | 'new' | number
+      filePaths: string[]
+    }
+  ) => Promise<{ success: true; message: string } | { success: false; error: string }>
   detect: (args: WorktreeArgs) => Promise<PerforceDetectResult>
   status: (args: WorktreeArgs) => Promise<PerforceStatusResult>
   history: (args: WorktreeArgs & { limit?: number }) => Promise<PerforceHistoryEntry[]>
@@ -25,6 +37,9 @@ export type PerforceApi = {
   unshelveFrom: (
     args: WorktreeArgs & { sourceChangelist: number; changelist: 'default' | number }
   ) => Result
+  shelveAndRevertFiles: (args: WorktreeArgs & { changelist: number; filePaths: string[] }) => Result
+  unshelveFiles: (args: WorktreeArgs & { changelist: number; depotPaths: string[] }) => Result
+  deleteChangelistWithFiles: (args: WorktreeArgs & { changelist: number }) => Result
   deleteShelf: (args: WorktreeArgs & { changelist: number }) => Result
   createChangelist: (
     args: WorktreeArgs & { description: string; filePaths: string[] }

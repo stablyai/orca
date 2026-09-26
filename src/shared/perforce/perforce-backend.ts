@@ -2,7 +2,10 @@ import type { GitDiffResult } from '../git-diff-compare-types'
 import { detectPerforceWorkspace } from './perforce-detection'
 import {
   createChangelistWithFiles,
+  deleteChangelistWithFiles,
   deleteEmptyChangelist,
+  shelveAndRevertFiles,
+  unshelveFiles,
   deleteShelf,
   editChangelistDescription,
   unshelveFrom,
@@ -12,6 +15,7 @@ import {
 } from './perforce-changelists'
 import {
   checkoutIfReadOnly,
+  isReadOnlyWorkspaceFile,
   closeFilesKeepingContent,
   discardFiles,
   reconcileFiles,
@@ -19,7 +23,13 @@ import {
   submitDefaultChangelist,
   syncLatest
 } from './perforce-mutations'
-import { getPerforceDiff, getPerforceHistory, getPerforceStatus } from './perforce-status'
+import {
+  getPerforceDiff,
+  getPerforceDiffText,
+  getPerforceHistory,
+  getPerforceInfo,
+  getPerforceStatus
+} from './perforce-status'
 import type {
   PerforceDetectResult,
   PerforceEntry,
@@ -49,6 +59,16 @@ export type PerforceBackend = {
   shelve: (cwd: Cwd, changelist: number) => Promise<PerforceOperationResult>
   unshelve: (cwd: Cwd, changelist: number) => Promise<PerforceOperationResult>
   deleteShelf: (cwd: Cwd, changelist: number) => Promise<PerforceOperationResult>
+  shelveAndRevertFiles: (
+    cwd: Cwd,
+    changelist: number,
+    filePaths: Files
+  ) => Promise<PerforceOperationResult>
+  unshelveFiles: (
+    cwd: Cwd,
+    changelist: number,
+    depotPaths: Files
+  ) => Promise<PerforceOperationResult>
   unshelveFrom: (cwd: Cwd, source: number, target: Target) => Promise<PerforceOperationResult>
   createChangelist: (
     cwd: Cwd,
@@ -66,7 +86,11 @@ export type PerforceBackend = {
     changelist: Target
   ) => Promise<PerforceOperationResult>
   deleteChangelist: (cwd: Cwd, changelist: number) => Promise<PerforceOperationResult>
+  deleteChangelistWithFiles: (cwd: Cwd, changelist: number) => Promise<PerforceOperationResult>
   checkoutIfReadOnly: (cwd: Cwd, filePath: string) => Promise<void>
+  isReadOnlyFile: (cwd: Cwd, filePath: string) => Promise<boolean>
+  diffText: (cwd: Cwd, filePaths: Files) => Promise<string>
+  info: (cwd: Cwd) => ReturnType<typeof getPerforceInfo>
 }
 
 export const localPerforceBackend: PerforceBackend = {
@@ -85,10 +109,16 @@ export const localPerforceBackend: PerforceBackend = {
   shelve: shelveChangelist,
   unshelve: unshelveChangelist,
   deleteShelf,
+  unshelveFiles,
+  shelveAndRevertFiles,
   unshelveFrom,
   createChangelist: createChangelistWithFiles,
   editDescription: editChangelistDescription,
   moveToChangelist: moveFilesToChangelist,
   deleteChangelist: deleteEmptyChangelist,
-  checkoutIfReadOnly
+  deleteChangelistWithFiles,
+  checkoutIfReadOnly,
+  isReadOnlyFile: isReadOnlyWorkspaceFile,
+  diffText: getPerforceDiffText,
+  info: getPerforceInfo
 }

@@ -23,6 +23,18 @@ export function requireRelativePaths(value: unknown): string[] {
   return value.map(requireRelativePath)
 }
 
+export function requireDepotPaths(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error('At least one shelved file is required')
+  }
+  return value.map((raw: unknown) => {
+    if (typeof raw !== 'string' || !raw.startsWith('//') || raw.includes('\0')) {
+      throw new Error('Invalid Perforce depot path')
+    }
+    return raw
+  })
+}
+
 export function requireChangelistId(value: unknown): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
     throw new Error('A pending changelist number is required')

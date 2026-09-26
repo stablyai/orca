@@ -1,11 +1,19 @@
-import { useMemo, useState } from 'react'
-import { FolderPlus } from 'lucide-react'
+import { Fragment, useMemo, useState } from 'react'
+import { FolderPlus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
-import type { PerforceEntry } from '../../../../../shared/perforce/perforce-types'
+import {
+  perforceSectionOrder,
+  type PerforcePanelSection
+} from '../../../../../shared/perforce/perforce-settings'
+import { toShelvedDiffPath } from '../../../../../shared/perforce/perforce-shelved-paths'
+import type {
+  PerforceEntry,
+  PerforceShelvedFile
+} from '../../../../../shared/perforce/perforce-types'
 import { PerforceChangelistHeader } from './perforce-changelist-section'
 import { NewChangelistDialog, UnshelveDialog } from './perforce-dialogs'
 import { PerforceFileActions } from './perforce-file-actions'
@@ -13,27 +21,11 @@ import { PerforceFileContextMenu } from './perforce-file-context-menu'
 import { PerforceFileRow } from './perforce-file-row'
 import { PerforcePanelHeader } from './perforce-panel-header'
 import { usePerforceSelection } from './use-perforce-selection'
+import { usePerforceDescriptionTemplate } from './use-perforce-description-template'
+import { SectionHeader } from './perforce-section-header'
+import { usePerforceChangelistActions } from './use-perforce-changelist-actions'
+import { usePerforceSettings } from './use-perforce-settings'
 import { usePerforceStatus } from './use-perforce-status'
-
-function SectionHeader({
-  title,
-  count,
-  children
-}: {
-  title: string
-  count: number
-  children?: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center gap-1 px-2 pt-3 pb-1">
-      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {title}
-      </span>
-      {children}
-      <span className="text-[11px] text-muted-foreground">{count}</span>
-    </div>
-  )
-}
 
 function rowKey(entry: PerforceEntry): string {
   return `${entry.group}:${entry.path}`
@@ -49,13 +41,19 @@ export function PerforcePanel({
   connectionId?: string
 }) {
   const target = { worktreePath, connectionId }
-  const { status, error, busy, refresh, run } = usePerforceStatus(target)
+  const settings = usePerforceSettings()
+  const { status, error, busy, refresh, run } = usePerforceStatus(
+    target,
+    settings.refreshIntervalSeconds
+  )
   const openDiff = useAppStore((s) => s.openDiff)
   const [message, setMessage] = useState('')
   const [newChangelistPaths, setNewChangelistPaths] = useState<string[] | null>(null)
   const [unshelveOpen, setUnshelveOpen] = useState(false)
+  const [collapsedChangelists, setCollapsedChangelists] = useState<ReadonlySet<number>>(new Set())
   const { selected, select, focusForContextMenu } = usePerforceSelection()
   const api = window.api.perforce
+  const template = usePerforceDescriptionTemplate(settings, status, setMessage)
 
   const groups = useMemo(() => {
     const entries = status?.entries ?? []
@@ -80,7 +78,31 @@ export function PerforcePanel({
       false
     )
   }
+  // Why: shelved views reuse the read-only "staged" diff tab, keyed by a shelf-suffixed path.
+  const openShelvedFile = (
+    file: PerforceShelvedFile,
+    changelist: number,
+    viewOnly: boolean
+  ): void => {
+    if (!file.path) {
+      return
+    }
+    openDiff(
+      worktreeId,
+      joinPath(worktreePath, file.path),
+      toShelvedDiffPath(file.path, changelist, viewOnly),
+      detectLanguage(file.path),
+      true
+    )
+  }
   const paths = (entries: PerforceEntry[]): string[] => entries.map((entry) => entry.path)
+  const { ask, generateDescription, shelveChanges, buildActions } = usePerforceChangelistActions({
+    target,
+    run,
+    busy,
+    settings,
+    openShelvedFile
+  })
 
   const submitDefault = async (): Promise<void> => {
     const ok = await run(
@@ -88,13 +110,15 @@ export function PerforcePanel({
       'Submitted change'
     )
     if (ok) {
-      setMessage('')
+      setMessage(template)
     }
   }
 
   const confirmDiscard = (entries: PerforceEntry[]): void => {
     const noun = entries.length === 1 ? entries[0]?.path : `${entries.length} files`
-    if (window.confirm(`Discard local changes to ${noun}? This cannot be undone.`)) {
+    if (
+      ask(`Revert changes to ${noun}? This cannot be undone.`, settings.confirmDestructiveActions)
+    ) {
       void run(() => api.discard({ ...target, entries }))
     }
   }
@@ -123,6 +147,7 @@ export function PerforcePanel({
         <PerforceFileRow
           key={rowKey(entry)}
           entry={entry}
+          fullPath={joinPath(worktreePath, entry.path)}
           selected={selected.has(rowKey(entry))}
           onSelect={(event) => {
             if (select(rowKey(entry), event, orderedKeys) === 'plain') {
@@ -134,7 +159,6 @@ export function PerforcePanel({
             <PerforceFileActions
               entry={entry}
               busy={busy}
-              onClose={() => void run(() => api.close({ ...target, filePaths: [entry.path] }))}
               onOpen={() => void run(() => api.open({ ...target, filePaths: [entry.path] }))}
               onDiscard={() => confirmDiscard([entry])}
             />
@@ -152,10 +176,16 @@ export function PerforcePanel({
           changelists={status?.changelists ?? []}
           onMoveToChangelist={(changelist) =>
             void run(() =>
-              api.moveToChangelist({ ...target, filePaths: paths(targets), changelist })
+              api.moveToChangelist({
+                ...target,
+                filePaths: paths(targets),
+                changelist
+              })
             )
           }
           onMoveToNewChangelist={() => setNewChangelistPaths(paths(targets))}
+          onRevert={() => confirmDiscard(targets)}
+          onShelveChanges={() => shelveChanges(targets)}
         >
           {row}
         </PerforceFileContextMenu>
@@ -175,6 +205,104 @@ export function PerforcePanel({
     groups.defaultList.length + groups.modified.length + groups.fresh.length === 0 &&
     groups.numbered.length === 0
   const canSubmit = message.trim().length > 0 && groups.defaultList.length > 0
+  const createFilePaths = (files: PerforceEntry[]): string[] =>
+    settings.newChangelistMode === 'empty' ? [] : paths(files)
+
+  const sections: Record<PerforcePanelSection, React.ReactNode> = {
+    default:
+      groups.defaultList.length > 0 ? (
+        <>
+          <SectionHeader title="Default changelist" count={groups.defaultList.length}>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              title={
+                settings.newChangelistMode === 'empty'
+                  ? 'Create an empty changelist (uses the description above)'
+                  : 'Move to a new changelist (uses the description above)'
+              }
+              disabled={busy || message.trim().length === 0}
+              onClick={() =>
+                void run(
+                  () =>
+                    api.createChangelist({
+                      ...target,
+                      description: message,
+                      filePaths: createFilePaths(groups.defaultList)
+                    }),
+                  'Created changelist'
+                ).then((ok) => ok && setMessage(template))
+              }
+            >
+              <FolderPlus />
+            </Button>
+          </SectionHeader>
+          {renderRows(groups.defaultList)}
+        </>
+      ) : null,
+    numbered: (
+      <>
+        {groups.numbered.map(({ changelist, files }) => (
+          <div key={changelist.id}>
+            <PerforceChangelistHeader
+              changelist={changelist}
+              fileCount={files.length}
+              collapsed={collapsedChangelists.has(changelist.id)}
+              aiEnabled={settings.aiDescriptionEnabled}
+              onToggle={() =>
+                setCollapsedChangelists((prev) => {
+                  const next = new Set(prev)
+                  if (!next.delete(changelist.id)) {
+                    next.add(changelist.id)
+                  }
+                  return next
+                })
+              }
+              actions={buildActions(changelist, files)}
+            />
+            {collapsedChangelists.has(changelist.id) ? null : renderRows(files)}
+          </div>
+        ))}
+      </>
+    ),
+    modified:
+      groups.modified.length > 0 ? (
+        <>
+          <SectionHeader title="Modified, not opened" count={groups.modified.length}>
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={busy}
+              onClick={() =>
+                void run(() => api.open({ ...target, filePaths: paths(groups.modified) }))
+              }
+            >
+              Open all
+            </Button>
+          </SectionHeader>
+          {renderRows(groups.modified)}
+        </>
+      ) : null,
+    new:
+      groups.fresh.length > 0 ? (
+        <>
+          <SectionHeader title="New files" count={groups.fresh.length}>
+            <Button
+              variant="ghost"
+              size="xs"
+              disabled={busy}
+              onClick={() =>
+                void run(() => api.open({ ...target, filePaths: paths(groups.fresh) }))
+              }
+            >
+              Add all
+            </Button>
+          </SectionHeader>
+          {renderRows(groups.fresh)}
+        </>
+      ) : null
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PerforcePanelHeader
@@ -193,9 +321,35 @@ export function PerforcePanel({
           rows={3}
           className="min-h-0"
         />
-        <Button size="sm" disabled={busy || !canSubmit} onClick={() => void submitDefault()}>
-          Submit Change
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            className="flex-1"
+            disabled={busy || !canSubmit}
+            onClick={() => {
+              if (ask('Submit the default changelist?', settings.confirmSubmit)) {
+                void submitDefault()
+              }
+            }}
+          >
+            Submit Change
+          </Button>
+          {settings.aiDescriptionEnabled ? (
+            <Button
+              size="icon-sm"
+              variant="outline"
+              title="Generate description with AI"
+              disabled={busy || groups.defaultList.length === 0}
+              onClick={() =>
+                void generateDescription('default', paths(groups.defaultList)).then(
+                  (text) => text && setMessage(text)
+                )
+              }
+            >
+              <Sparkles />
+            </Button>
+          ) : null}
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-2 scrollbar-sleek">
         {nothingPending ? (
@@ -203,111 +357,28 @@ export function PerforcePanel({
             No pending changes
           </div>
         ) : null}
-        {groups.defaultList.length > 0 ? (
-          <>
-            <SectionHeader title="Default changelist" count={groups.defaultList.length}>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                title="Move to a new changelist (uses the description above)"
-                disabled={busy || message.trim().length === 0}
-                onClick={() =>
-                  void run(
-                    () =>
-                      api.createChangelist({
-                        ...target,
-                        description: message,
-                        filePaths: paths(groups.defaultList)
-                      }),
-                    'Created changelist'
-                  ).then((ok) => ok && setMessage(''))
-                }
-              >
-                <FolderPlus />
-              </Button>
-            </SectionHeader>
-            {renderRows(groups.defaultList)}
-          </>
-        ) : null}
-        {groups.numbered.map(({ changelist, files }) => (
-          <div key={changelist.id}>
-            <PerforceChangelistHeader
-              changelist={changelist}
-              fileCount={files.length}
-              actions={{
-                busy,
-                onEditDescription: (description) =>
-                  run(
-                    () =>
-                      api.editDescription({ ...target, changelist: changelist.id, description }),
-                    'Description updated'
-                  ),
-                onShelve: () =>
-                  void run(() => api.shelve({ ...target, changelist: changelist.id }), 'Shelved'),
-                onUnshelve: () =>
-                  void run(
-                    () => api.unshelve({ ...target, changelist: changelist.id }),
-                    'Unshelved'
-                  ),
-                onDeleteShelf: () =>
-                  void run(
-                    () => api.deleteShelf({ ...target, changelist: changelist.id }),
-                    'Shelf deleted'
-                  ),
-                onSubmit: () =>
-                  void run(
-                    () => api.submit({ ...target, changelist: changelist.id }),
-                    `Submitted changelist ${changelist.id}`
-                  ),
-                onDelete: () =>
-                  void run(() => api.deleteChangelist({ ...target, changelist: changelist.id }))
-              }}
-            />
-            {renderRows(files)}
-          </div>
+        {perforceSectionOrder(settings.groupOrder).map((id) => (
+          <Fragment key={id}>{sections[id]}</Fragment>
         ))}
-        {groups.modified.length > 0 ? (
-          <>
-            <SectionHeader title="Modified, not opened" count={groups.modified.length}>
-              <Button
-                variant="ghost"
-                size="xs"
-                disabled={busy}
-                onClick={() =>
-                  void run(() => api.open({ ...target, filePaths: paths(groups.modified) }))
-                }
-              >
-                Open all
-              </Button>
-            </SectionHeader>
-            {renderRows(groups.modified)}
-          </>
-        ) : null}
-        {groups.fresh.length > 0 ? (
-          <>
-            <SectionHeader title="New files" count={groups.fresh.length}>
-              <Button
-                variant="ghost"
-                size="xs"
-                disabled={busy}
-                onClick={() =>
-                  void run(() => api.open({ ...target, filePaths: paths(groups.fresh) }))
-                }
-              >
-                Add all
-              </Button>
-            </SectionHeader>
-            {renderRows(groups.fresh)}
-          </>
-        ) : null}
       </div>
       {newChangelistPaths ? (
         <NewChangelistDialog
-          fileCount={newChangelistPaths.length}
+          fileCount={settings.newChangelistMode === 'empty' ? 0 : newChangelistPaths.length}
+          initialDescription={template}
+          onGenerate={
+            settings.aiDescriptionEnabled
+              ? () => generateDescription('new', newChangelistPaths)
+              : undefined
+          }
           onCancel={() => setNewChangelistPaths(null)}
           onCreate={(description) =>
             run(
-              () => api.createChangelist({ ...target, description, filePaths: newChangelistPaths }),
+              () =>
+                api.createChangelist({
+                  ...target,
+                  description,
+                  filePaths: settings.newChangelistMode === 'empty' ? [] : newChangelistPaths
+                }),
               'Created changelist'
             )
           }
@@ -319,7 +390,12 @@ export function PerforcePanel({
           onCancel={() => setUnshelveOpen(false)}
           onUnshelve={(source, changelist) =>
             run(
-              () => api.unshelveFrom({ ...target, sourceChangelist: source, changelist }),
+              () =>
+                api.unshelveFrom({
+                  ...target,
+                  sourceChangelist: source,
+                  changelist
+                }),
               `Unshelved changelist ${source}`
             )
           }

@@ -14,12 +14,14 @@ import type {
   PerforceEntry
 } from '../../../../../shared/perforce/perforce-types'
 
-/** Right-click menu for checked-out files: move them between changelists. */
+/** Right-click menu for checked-out files: move them between changelists or revert them. */
 export function PerforceFileContextMenu({
   targets,
   changelists,
   onMoveToChangelist,
   onMoveToNewChangelist,
+  onRevert,
+  onShelveChanges,
   children
 }: {
   /** Opened files the menu acts on (the selection, or the clicked row). */
@@ -27,6 +29,8 @@ export function PerforceFileContextMenu({
   changelists: PerforceChangelist[]
   onMoveToChangelist: (changelist: 'default' | number) => void
   onMoveToNewChangelist: () => void
+  onRevert: () => void
+  onShelveChanges: () => void
   children: ReactNode
 }) {
   const everyTargetIn = (changelist: 'default' | number): boolean =>
@@ -64,6 +68,14 @@ export function PerforceFileContextMenu({
         <ContextMenuItem onSelect={onMoveToNewChangelist}>
           Move {noun} to new changelist…
         </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem
+          disabled={targets.some((entry) => entry.changelist === 'default')}
+          onSelect={onShelveChanges}
+        >
+          Shelf changes
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={onRevert}>Revert changes</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   )

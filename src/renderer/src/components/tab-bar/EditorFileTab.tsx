@@ -11,6 +11,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { useAppStore } from '@/store'
+import { usePerforceEditedTab } from '../right-sidebar/perforce/use-perforce-edited-tab'
 import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { OpenFile } from '../../store/slices/editor'
@@ -200,7 +201,8 @@ export default function EditorFileTab({
       ? null
       : (statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null)
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
-  const tabLabel = getEditorDisplayLabel(file)
+  const isOpenedForEdit = usePerforceEditedTab(file, worktree?.path ?? null, repo)
+  const tabLabel = `${isOpenedForEdit ? 'E ' : ''}${getEditorDisplayLabel(file)}`
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)

@@ -1,34 +1,22 @@
-import { Plus, Undo2, X } from 'lucide-react'
+import { Plus, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { PerforceEntry } from '../../../../../shared/perforce/perforce-types'
 
-/** Hover actions on a file row: close/open (add or edit) and discard. */
+/** Hover actions on a file row: open (add or edit) and revert. */
 export function PerforceFileActions({
   entry,
   busy,
-  onClose,
   onOpen,
   onDiscard
 }: {
   entry: PerforceEntry
   busy: boolean
-  onClose: () => void
   onOpen: () => void
   onDiscard: () => void
 }) {
   return (
     <>
-      {entry.group === 'opened' ? (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title="Close file (keep local changes)"
-          disabled={busy}
-          onClick={onClose}
-        >
-          <X />
-        </Button>
-      ) : (
+      {entry.group === 'opened' ? null : (
         <Button
           variant="ghost"
           size="icon-xs"
@@ -42,7 +30,7 @@ export function PerforceFileActions({
       <Button
         variant="ghost"
         size="icon-xs"
-        title="Discard changes"
+        title="Revert changes"
         disabled={busy}
         onClick={onDiscard}
       >

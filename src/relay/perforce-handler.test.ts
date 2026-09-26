@@ -25,19 +25,25 @@ describe('PerforceHandler', () => {
         'close',
         'createChangelist',
         'deleteChangelist',
+        'deleteChangelistWithFiles',
         'deleteShelf',
         'detect',
         'diff',
+        'diffText',
         'discard',
         'editDescription',
         'history',
+        'info',
+        'isReadOnlyFile',
         'moveToChangelist',
         'open',
         'shelve',
+        'shelveAndRevertFiles',
         'status',
         'submit',
         'sync',
         'unshelve',
+        'unshelveFiles',
         'unshelveFrom'
       ].map((name) => `perforce.${name}`)
     )
@@ -54,5 +60,34 @@ describe('PerforceHandler', () => {
     await expect(
       handlers.get('perforce.submit')?.({ cwd: '/ws', changelist: 'default', message: '  ' })
     ).rejects.toThrow('required')
+  })
+
+  it('validates arguments of the shelf and changelist-delete operations', async () => {
+    const handlers = register()
+    await expect(
+      handlers.get('perforce.shelveAndRevertFiles')?.({
+        cwd: '/ws',
+        changelist: 5,
+        filePaths: ['../x']
+      })
+    ).rejects.toThrow('escapes')
+    await expect(
+      handlers.get('perforce.unshelveFiles')?.({
+        cwd: '/ws',
+        changelist: 5,
+        depotPaths: ['src/main.py']
+      })
+    ).rejects.toThrow('depot path')
+    await expect(
+      handlers.get('perforce.deleteChangelistWithFiles')?.({ cwd: '/ws', changelist: 0 })
+    ).rejects.toThrow('changelist number')
+  })
+
+  it('applies the caller-supplied Perforce settings to p4 calls', async () => {
+    const result = await register().get('perforce.detect')?.({
+      cwd: '/ws',
+      settings: { p4Path: '/definitely/not/a/p4' }
+    })
+    expect(result).toMatchObject({ isWorkspace: false, reason: 'p4-not-found' })
   })
 })

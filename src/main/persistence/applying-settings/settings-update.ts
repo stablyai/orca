@@ -13,6 +13,7 @@ import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
+import { normalizePerforceSettings } from '../../../shared/perforce/perforce-settings'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
@@ -173,6 +174,9 @@ export function updateSettings(
     sanitizedUpdates.sourceControlGroupOrder = normalizeSourceControlGroupOrder(
       updates.sourceControlGroupOrder
     )
+  }
+  if ('perforce' in updates) {
+    sanitizedUpdates.perforce = normalizePerforceSettings(updates.perforce)
   }
   if ('appIcon' in updates) {
     sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)

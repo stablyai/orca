@@ -27,6 +27,8 @@ export type PerforceEntry = {
 
 export type PerforceShelvedFile = {
   depotPath: string
+  /** Workspace-relative path; absent when the file is not mapped into this client. */
+  path?: string
   action: PerforceFileAction
 }
 

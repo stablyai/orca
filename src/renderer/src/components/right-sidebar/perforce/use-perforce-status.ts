@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { publishPerforceOpenedFiles } from './perforce-opened-files'
 import type {
   PerforceOperationResult,
   PerforceStatusResult
 } from '../../../../../shared/perforce/perforce-types'
 
-const REFRESH_INTERVAL_MS = 15_000
-
 export type PerforceTarget = { worktreePath: string; connectionId?: string }
 
-export function usePerforceStatus(target: PerforceTarget) {
+export function usePerforceStatus(target: PerforceTarget, refreshIntervalSeconds: number) {
   const { worktreePath, connectionId } = target
   const [status, setStatus] = useState<PerforceStatusResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -22,6 +21,7 @@ export function usePerforceStatus(target: PerforceTarget) {
       const next = await window.api.perforce.status({ worktreePath, connectionId })
       if (id === requestId.current) {
         setStatus(next)
+        publishPerforceOpenedFiles(worktreePath, connectionId, next.entries)
         setError(null)
       }
     } catch (caught) {
@@ -33,9 +33,12 @@ export function usePerforceStatus(target: PerforceTarget) {
 
   useEffect(() => {
     void refresh()
-    const timer = window.setInterval(() => void refresh(), REFRESH_INTERVAL_MS)
+    if (refreshIntervalSeconds <= 0) {
+      return
+    }
+    const timer = window.setInterval(() => void refresh(), refreshIntervalSeconds * 1000)
     return () => window.clearInterval(timer)
-  }, [refresh])
+  }, [refresh, refreshIntervalSeconds])
 
   /** Runs a p4 mutation, surfaces failures as a toast, and refreshes afterwards. */
   const run = useCallback(

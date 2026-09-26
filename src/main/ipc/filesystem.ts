@@ -45,6 +45,6 @@ export function registerFilesystemHandlers(
   registerFilesystemGitDiffHandlers(context)
   registerFilesystemGitIndexHandlers(context)
   registerFilesystemGitUrlHandlers(context)
-  registerPerforceHandlers(store)
+  registerPerforceHandlers(store, commitMessageAgentEnv)
   registerLocalLogTailHandlers(store)
 }

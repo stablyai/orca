@@ -27,13 +27,16 @@ export function PerforceFileRow({
   selected,
   onSelect,
   onContextMenu,
-  actions
+  actions,
+  fullPath
 }: {
   entry: PerforceEntry
   selected: boolean
   onSelect: (event: MouseEvent) => void
   onContextMenu?: () => void
   actions: ReactNode
+  /** Absolute workspace path shown on hover. */
+  fullPath: string
 }) {
   const slash = entry.path.lastIndexOf('/')
   const name = entry.path.slice(slash + 1)
@@ -51,7 +54,7 @@ export function PerforceFileRow({
         type="button"
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
         onClick={onSelect}
-        title={entry.depotPath ?? entry.path}
+        title={fullPath}
       >
         <span className="w-3 shrink-0 text-center text-[11px] font-semibold" style={{ color }}>
           {label}

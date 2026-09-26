@@ -10,12 +10,16 @@ import type {
 import {
   requireChangelistId,
   requireChangelistTarget,
+  requireDepotPaths,
   requireDescription,
   requireDiscardEntries,
   requireRelativePaths
 } from '../../shared/perforce/perforce-arguments'
 import type { PerforceBackend } from '../../shared/perforce/perforce-backend'
-import { resolvePerforceBackend } from '../perforce/perforce-ssh-backend'
+import { normalizePerforceSettings } from '../../shared/perforce/perforce-settings'
+import { resolvePerforceBackend, setPerforceSettingsSource } from '../perforce/perforce-ssh-backend'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import { registerPerforceDescriptionGeneration } from './perforce-description-generation'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 
 type WorktreeArgs = { worktreePath: string; connectionId?: string }
@@ -36,7 +40,13 @@ async function withWorkspace<T>(
   return run(resolvePerforceBackend(args.connectionId), cwd)
 }
 
-export function registerPerforceHandlers(store: Store): void {
+export function registerPerforceHandlers(
+  store: Store,
+  commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
+): void {
+  setPerforceSettingsSource(() => normalizePerforceSettings(store.getSettings().perforce))
+  registerPerforceDescriptionGeneration(store, commitMessageAgentEnv)
+
   const handle = <A extends WorktreeArgs, T>(
     channel: string,
     run: (backend: PerforceBackend, cwd: string, args: A) => Promise<T>
@@ -47,6 +57,9 @@ export function registerPerforceHandlers(store: Store): void {
   }
 
   handle<WorktreeArgs, PerforceDetectResult>('detect', (b, cwd) => b.detect(cwd))
+  handle<WorktreeArgs, Awaited<ReturnType<PerforceBackend['info']>>>('info', (b, cwd) =>
+    b.info(cwd)
+  )
   handle<WorktreeArgs, PerforceStatusResult>('status', (b, cwd) => b.status(cwd))
   handle<WorktreeArgs & { limit?: number }, PerforceHistoryEntry[]>('history', (b, cwd, a) =>
     b.history(cwd, Math.min(a.limit ?? 30, 200))
@@ -83,6 +96,19 @@ export function registerPerforceHandlers(store: Store): void {
         requireChangelistId(a.sourceChangelist),
         requireChangelistTarget(a.changelist)
       )
+  )
+  handle<ChangelistArgs & { filePaths: string[] }, Result>('shelveAndRevertFiles', (b, cwd, a) =>
+    b.shelveAndRevertFiles(
+      cwd,
+      requireChangelistId(a.changelist),
+      requireRelativePaths(a.filePaths)
+    )
+  )
+  handle<ChangelistArgs & { depotPaths: string[] }, Result>('unshelveFiles', (b, cwd, a) =>
+    b.unshelveFiles(cwd, requireChangelistId(a.changelist), requireDepotPaths(a.depotPaths))
+  )
+  handle<ChangelistArgs, Result>('deleteChangelistWithFiles', (b, cwd, a) =>
+    b.deleteChangelistWithFiles(cwd, requireChangelistId(a.changelist))
   )
   handle<ChangelistArgs, Result>('deleteShelf', (b, cwd, a) =>
     b.deleteShelf(cwd, requireChangelistId(a.changelist))

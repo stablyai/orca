@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -23,15 +24,34 @@ import type { PerforceChangelist } from '../../../../../shared/perforce/perforce
 /** Asks for a changelist description; nothing is created until it is confirmed and accepted. */
 export function NewChangelistDialog({
   fileCount,
+  initialDescription = '',
+  onGenerate,
   onCancel,
   onCreate
 }: {
   fileCount: number
+  initialDescription?: string
+  /** Drafts a description from the selected files; omitted when AI descriptions are off. */
+  onGenerate?: () => Promise<string | null>
   onCancel: () => void
   onCreate: (description: string) => Promise<boolean>
 }) {
-  const [description, setDescription] = useState('')
+  const [description, setDescription] = useState(initialDescription)
   const [pending, setPending] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const generate = async (): Promise<void> => {
+    if (!onGenerate) {
+      return
+    }
+    setGenerating(true)
+    const drafted = await onGenerate()
+    setGenerating(false)
+    if (drafted) {
+      setDescription(drafted)
+      textareaRef.current?.focus()
+    }
+  }
   const submit = async (): Promise<void> => {
     setPending(true)
     const ok = await onCreate(description.trim())
@@ -42,27 +62,45 @@ export function NewChangelistDialog({
   }
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        // Why: Radix focuses the dialog itself on open, so autoFocus on the field is ignored.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          textareaRef.current?.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Move to new changelist</DialogTitle>
           <DialogDescription>
-            {fileCount === 1 ? '1 file' : `${fileCount} files`} will be moved into a new changelist
-            with this description.
+            {fileCount === 0
+              ? 'An empty changelist will be created with this description.'
+              : `${fileCount === 1 ? '1 file' : `${fileCount} files`} will be moved into a new changelist with this description.`}
           </DialogDescription>
         </DialogHeader>
         <Textarea
-          autoFocus
+          ref={textareaRef}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           placeholder="Changelist description"
           rows={4}
         />
         <DialogFooter>
+          {onGenerate ? (
+            <Button
+              variant="outline"
+              className="sm:mr-auto"
+              disabled={pending || generating}
+              onClick={() => void generate()}
+            >
+              <Sparkles /> {generating ? 'Generating…' : 'Generate with AI'}
+            </Button>
+          ) : null}
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
           <Button
-            disabled={pending || description.trim().length === 0}
+            disabled={pending || generating || description.trim().length === 0}
             onClick={() => void submit()}
           >
             Create changelist

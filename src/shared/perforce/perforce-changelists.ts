@@ -1,5 +1,7 @@
 import type { PerforceOperationResult } from './perforce-types'
-import { runP4, runP4OrThrow } from './p4-command'
+import { rm } from 'node:fs/promises'
+import { escapeP4FileArg, runP4, runP4OrThrow } from './p4-command'
+import { parseTaggedOutput } from './p4-tagged-output'
 import { fileArgs, toResult } from './perforce-mutations'
 
 export async function shelveChangelist(
@@ -114,6 +116,74 @@ export async function unshelveFrom(
   return toResult(
     await runP4(['unshelve', '-f', '-s', String(sourceChangelist), '-c', String(target)], { cwd })
   )
+}
+
+/** Shelves the given opened files of a changelist, then reverts them (their changes live only in the shelf). */
+export async function shelveAndRevertFiles(
+  cwd: string,
+  changelist: number,
+  filePaths: readonly string[]
+): Promise<PerforceOperationResult> {
+  const shelved = toResult(
+    await runP4(['shelve', '-f', '-c', String(changelist), ...fileArgs(filePaths)], { cwd })
+  )
+  // Why: never revert files whose changes did not reach the shelf.
+  if (!shelved.success) {
+    return shelved
+  }
+  return toResult(await runP4(['revert', ...fileArgs(filePaths)], { cwd }))
+}
+
+/** Restores only the given shelved files into their own changelist, overwriting workspace copies. */
+export async function unshelveFiles(
+  cwd: string,
+  changelist: number,
+  depotPaths: readonly string[]
+): Promise<PerforceOperationResult> {
+  return toResult(
+    await runP4(
+      [
+        'unshelve',
+        '-f',
+        '-s',
+        String(changelist),
+        '-c',
+        String(changelist),
+        ...depotPaths.map(escapeP4FileArg)
+      ],
+      { cwd }
+    )
+  )
+}
+
+/** Deletes the shelf, reverts every opened file in the changelist, then deletes the changelist. */
+export async function deleteChangelistWithFiles(
+  cwd: string,
+  changelist: number
+): Promise<PerforceOperationResult> {
+  const id = String(changelist)
+  // Why: the shelf must go first (p4 refuses to delete a changelist that has one); no shelf is not an error.
+  await runP4(['shelve', '-d', '-c', id], { cwd })
+  const opened = await runP4(
+    ['-ztag', 'fstat', '-Ro', '-e', id, '-T', 'clientFile,action', '//...'],
+    {
+      cwd
+    }
+  )
+  const added = parseTaggedOutput(opened.stdout)
+    .filter((record) => record.action === 'add' || record.action === 'branch')
+    .map((record) => record.clientFile)
+  const reverted = await runP4(['revert', '-c', id, '//...'], { cwd })
+  // Why: "no file(s) to revert" is a non-zero exit for an already-empty changelist.
+  if (reverted.code !== 0 && !/not opened|no file/i.test(reverted.stderr)) {
+    return toResult(reverted)
+  }
+  for (const file of added) {
+    if (file) {
+      await rm(file, { force: true })
+    }
+  }
+  return toResult(await runP4(['change', '-d', id], { cwd }))
 }
 
 export async function deleteShelf(

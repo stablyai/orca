@@ -10,11 +10,12 @@ import type {
   PerforceStatusResult,
   PerforceWorkspaceInfo
 } from './perforce-types'
-import { escapeP4FileArg, runP4, runP4OrThrow } from './p4-command'
+import { escapeP4FileArg, runP4, runP4OrThrow, type P4CommandResult } from './p4-command'
+import { currentPerforceSettings } from './p4-settings-context'
+import { parseShelvedDiffPath } from './perforce-shelved-paths'
 import { parseTaggedOutput } from './p4-tagged-output'
 import { detectPerforceWorkspace, toPosix } from './perforce-detection'
 
-const RECONCILE_TIMEOUT_MS = 180_000
 const MAX_TEXT_DIFF_BYTES = 5 * 1024 * 1024
 
 const KNOWN_ACTIONS: readonly PerforceFileAction[] = [
@@ -123,10 +124,35 @@ async function readChangelists(
     { cwd }
   )
   const shelved = parseShelvedFiles(described.stdout)
+  const localPaths = await mapDepotToWorkspace(
+    cwd,
+    [...shelved.values()].flatMap((files) => files.map((file) => file.depotPath))
+  )
   return changelists.map((changelist) => ({
     ...changelist,
-    shelvedFiles: shelved.get(changelist.id) ?? []
+    shelvedFiles: (shelved.get(changelist.id) ?? []).map((file) => {
+      const path = localPaths.get(file.depotPath)
+      return path ? { ...file, path } : file
+    })
   }))
+}
+
+async function mapDepotToWorkspace(
+  cwd: string,
+  depotPaths: string[]
+): Promise<Map<string, string>> {
+  const mapped = new Map<string, string>()
+  if (depotPaths.length === 0) {
+    return mapped
+  }
+  const result = await runP4(['-ztag', 'where', ...depotPaths.map(escapeP4FileArg)], { cwd })
+  for (const record of parseTaggedOutput(result.stdout)) {
+    const path = record.path ? toRelativePath(cwd, record.path) : null
+    if (record.depotFile && path) {
+      mapped.set(record.depotFile, path)
+    }
+  }
+  return mapped
 }
 
 async function readStream(cwd: string): Promise<string | undefined> {
@@ -140,6 +166,22 @@ async function readHaveChange(cwd: string): Promise<number | undefined> {
   return change ? Number(change) : undefined
 }
 
+/** Previews unopened changes; skipped entirely when the user hides both unopened sections. */
+async function runReconcilePreview(cwd: string): Promise<P4CommandResult> {
+  const settings = currentPerforceSettings()
+  const flags = [
+    ...(settings.showNewFiles ? ['-a'] : []),
+    ...(settings.showModifiedNotOpened ? ['-e', '-d'] : [])
+  ]
+  if (flags.length === 0) {
+    return { code: 0, stdout: '', stderr: '' }
+  }
+  return runP4(['-ztag', 'reconcile', '-n', ...flags, '...'], {
+    cwd,
+    timeoutMs: settings.statusScanTimeoutSeconds * 1000
+  })
+}
+
 export async function getPerforceStatus(cwd: string): Promise<PerforceStatusResult> {
   const detected = await detectPerforceWorkspace(cwd)
   if (!detected.isWorkspace) {
@@ -150,10 +192,7 @@ export async function getPerforceStatus(cwd: string): Promise<PerforceStatusResu
       ['-ztag', 'fstat', '-Ro', '-T', 'depotFile,clientFile,action,change,type', '...'],
       { cwd }
     ).catch(() => ''),
-    runP4(['-ztag', 'reconcile', '-n', '-a', '-e', '-d', '...'], {
-      cwd,
-      timeoutMs: RECONCILE_TIMEOUT_MS
-    }),
+    runReconcilePreview(cwd),
     readChangelists(cwd, detected.info),
     readStream(cwd),
     readHaveChange(cwd)
@@ -195,12 +234,19 @@ async function readWorkingFile(cwd: string, filePath: string): Promise<string | 
   }
 }
 
-/** Diff of the workspace file against the revision last synced (`#have`). */
-export async function getPerforceDiff(cwd: string, filePath: string): Promise<GitDiffResult> {
-  const printed = await runP4(['print', '-q', `${escapeP4FileArg(filePath)}#have`], { cwd })
+/** Diff of the workspace file against the synced revision (`#have`) or the depot head, per settings. */
+export async function getPerforceDiff(cwd: string, rawFilePath: string): Promise<GitDiffResult> {
+  const shelved = parseShelvedDiffPath(rawFilePath)
+  const filePath = shelved?.path ?? rawFilePath
+  const revision = shelved
+    ? `@=${shelved.changelist}`
+    : currentPerforceSettings().compareAgainst === 'head'
+      ? '#head'
+      : '#have'
+  const printed = await runP4(['print', '-q', `${escapeP4FileArg(filePath)}${revision}`], { cwd })
   // Why: a file with no have revision (new, or not in the depot) diffs against empty.
   const original = printed.code === 0 ? printed.stdout : ''
-  const modified = await readWorkingFile(cwd, filePath)
+  const modified = shelved?.viewOnly ? original : await readWorkingFile(cwd, filePath)
   if (looksBinary(original) || (modified !== null && looksBinary(modified))) {
     return {
       kind: 'binary',
@@ -235,4 +281,37 @@ export async function getPerforceHistory(
     time: Number(record.time ?? 0),
     description: (record.desc ?? '').trim()
   }))
+}
+
+/** Unified diff text of opened files, used to summarize a changelist. */
+export async function getPerforceDiffText(
+  cwd: string,
+  filePaths: readonly string[]
+): Promise<string> {
+  const result = await runP4(['diff', '-du', ...filePaths.map(escapeP4FileArg)], { cwd })
+  return result.stdout
+}
+
+/** `p4 info` for the connection test; reports the server and client even outside a workspace. */
+export async function getPerforceInfo(
+  cwd: string
+): Promise<{ success: true; info: PerforceWorkspaceInfo } | { success: false; error: string }> {
+  try {
+    const result = await runP4(['-ztag', 'info'], { cwd, timeoutMs: 15_000 })
+    if (result.code !== 0) {
+      return { success: false, error: result.stderr.trim() || 'p4 info failed' }
+    }
+    const record = parseTaggedOutput(result.stdout)[0]
+    return {
+      success: true,
+      info: {
+        client: record?.clientName ?? '',
+        user: record?.userName ?? '',
+        port: record?.serverAddress ?? '',
+        root: record?.clientRoot ?? ''
+      }
+    }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
 }
