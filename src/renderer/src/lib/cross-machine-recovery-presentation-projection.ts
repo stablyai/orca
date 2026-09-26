@@ -16,6 +16,7 @@ import {
 } from '../../../shared/cross-machine-recovery-presentation-types'
 import { sanitizeTerminalTabForRecovery } from '../../../shared/cross-machine-recovery-session-projection'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { findOpenFileByEditorId, withEditorBackingPath } from '../../../shared/owned-editor-file-id'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../shared/terminal-tab-id'
@@ -180,7 +181,8 @@ export function projectPresentationView(
   const activeFileId = session.activeFileIdByWorktree?.[key]
   return {
     tabs: (session.unifiedTabs?.[key] ?? []).map(
-      ({ worktreeId: _worktreeId, executionHostId: _executionHostId, ...tab }) => tab
+      ({ worktreeId: _worktreeId, executionHostId: _executionHostId, ...tab }) =>
+        withEditorBackingPath(tab, files, key)
     ),
     groups: (session.tabGroups?.[key] ?? []).map(({ worktreeId: _worktreeId, ...group }) => group),
     groupLayout: session.tabGroupLayouts?.[key] ?? null,
@@ -193,7 +195,7 @@ export function projectPresentationView(
     startupCwdRelative,
     editors,
     activeEditorRelativePath:
-      files.find((file) => file.filePath === activeFileId)?.relativePath ?? null,
+      findOpenFileByEditorId(files, key, activeFileId)?.relativePath ?? null,
     browsers: projectBrowsers(session, key),
     activeBrowserId: session.activeBrowserTabIdByWorktree?.[key] ?? null,
     activeTabType: session.activeTabTypeByWorktree?.[key] ?? null,

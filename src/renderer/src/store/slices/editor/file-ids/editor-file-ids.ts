@@ -2,6 +2,7 @@ import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { DiffSource, EditorOpenTargetOptions, OpenFile } from '../types/open-file'
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/cross-platform-path'
+import { formatOwnedEditorFileId } from '../../../../../../shared/owned-editor-file-id'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 
@@ -42,8 +43,7 @@ export function buildOwnedEditorFileId(
   worktreeId: string,
   runtimeEnvironmentId: string | null | undefined
 ): string {
-  const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId) ?? 'local'
-  return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+  return formatOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
 }
 
 export function buildDiffEditorFileId(

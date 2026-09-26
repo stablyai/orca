@@ -26,6 +26,10 @@ import {
   remapRecoveryPath,
   type RecoveryRemapContext
 } from './recovery-layout-remap'
+import {
+  structuredPlaceholderLeafId,
+  withStructuredSessionPlaceholders
+} from './recovery-structured-placeholders'
 
 export type PlannedRecoveryBinding = {
   binding: RecoveryAgentBinding
@@ -190,7 +194,8 @@ function mappedPlacement(
   remapped: RemappedRecoveryPanes
 ): { tabId: string; leafId: string } | null {
   const tabId = remapped.idMap.tabs[binding.sourceTabId]
-  const leafId = binding.sourceLeafId ? remapped.idMap.leaves[binding.sourceLeafId] : undefined
+  const sourceLeafId = binding.sourceLeafId ?? structuredPlaceholderLeafId(binding)
+  const leafId = sourceLeafId ? remapped.idMap.leaves[sourceLeafId] : undefined
   return tabId && leafId && leafBelongsToTab(remapped.terminalLayoutsByTabId, tabId, leafId)
     ? { tabId, leafId }
     : null
@@ -282,7 +287,12 @@ export function planRecoveryImport(
   ctx: RecoveryPlanContext
 ): RecoveryImportPlan {
   const selected = selectRecoveryView(descriptor, preferClientInstanceId)
-  const layout = withHostBindingTabs(selected.layout, descriptor.layout, descriptor.bindings)
+  const host = withStructuredSessionPlaceholders(descriptor.layout, descriptor.bindings)
+  const view =
+    selected.layout === descriptor.layout
+      ? host
+      : withStructuredSessionPlaceholders(selected.layout, descriptor.bindings)
+  const layout = withHostBindingTabs(view, host, descriptor.bindings)
   const remapped = remapRecoveryLayout(layout, ctx)
   return {
     presentationSource: selected.source,

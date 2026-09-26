@@ -8,6 +8,7 @@ import type {
   RecoveryTerminalLayout
 } from '../../../shared/cross-machine-recovery-descriptor'
 import { sanitizeTerminalTabForRecovery } from '../../../shared/cross-machine-recovery-session-projection'
+import { findOpenFileByEditorId, withEditorBackingPath } from '../../../shared/owned-editor-file-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
@@ -71,7 +72,8 @@ export function projectRecoveryLayout(
   }))
   return {
     tabs: (session.unifiedTabs?.[worktreeId] ?? []).map(
-      ({ worktreeId: _worktreeId, executionHostId: _executionHostId, ...tab }): RecoveryTab => tab
+      ({ worktreeId: _worktreeId, executionHostId: _executionHostId, ...tab }): RecoveryTab =>
+        withEditorBackingPath(tab, openFiles, worktreeId)
     ),
     groups: (session.tabGroups?.[worktreeId] ?? []).map(
       ({ worktreeId: _worktreeId, ...group }): RecoveryTabGroup => group
@@ -83,7 +85,7 @@ export function projectRecoveryLayout(
     startupCwdRelative,
     editors,
     activeEditorRelativePath:
-      openFiles.find((file) => file.filePath === activeFileId)?.relativePath ?? null,
+      findOpenFileByEditorId(openFiles, worktreeId, activeFileId)?.relativePath ?? null,
     browsers: projectBrowsers(session, worktreeId),
     activeBrowserId: session.activeBrowserTabIdByWorktree?.[worktreeId] ?? null,
     activeTabType: session.activeTabTypeByWorktree?.[worktreeId] ?? null,
