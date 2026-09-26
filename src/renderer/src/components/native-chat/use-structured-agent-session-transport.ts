@@ -20,10 +20,8 @@ export function useStructuredAgentSessionTransport(args: {
     enabled: providerVisible
   })
   // A worktree switch hides the pane, but a message the user already sent is still owed a
-  // delivery. The read is what carries the journal rows that retire it, and its subscription
-  // takes a retaining hold — without which the host evicts the session once its idle window runs
-  // out and then refuses the send outright. Gated on `enabled`: a session not yet published has
-  // nothing to read. Attention is not the signal; owed work is.
+  // delivery, and the read is what carries the journal rows that retire it. Gated on `enabled`:
+  // a session not yet published has nothing to read. Attention is not the signal; owed work is.
   const hasUndelivered = useUndeliveredStructuredAgentSessionOutbox(sessionId)
   const read = useStructuredAgentSessionRead({
     sessionId,

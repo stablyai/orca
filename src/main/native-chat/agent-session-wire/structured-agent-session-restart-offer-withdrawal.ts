@@ -31,12 +31,6 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
   /** The continuation each running resume action sends, by chat. */
   const actions = new Map<string, string>()
 
-  /** The action's own start is the one its continuation is still waiting on. */
-  const ownStart = (session: StructuredAgentSessionRestartOfferSession, own: string | undefined) =>
-    own !== undefined &&
-    session.journal.submissions().find((submission) => submission.dispatchState === 'pending')
-      ?.clientMessageId === own
-
   const movedOn = (marker: AgentSessionResumeMarker): boolean => {
     const session = deps.sessions.get(marker.sessionId)
     if (!session) {
@@ -59,11 +53,18 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
               marker.continuations?.includes(submission.clientMessageId)
             )
         ))
-    // Proven, not merely spawned: a start that failed during startup never ran the agent.
+    // Proven, not merely spawned: a start that failed during startup never ran the agent. Whose
+    // start it was is fixed when it was made, so a continuation rejected since still owns it.
     const started =
-      session.child?.phase === 'ready' ||
-      (session.lastEndedChild !== undefined && !session.lastEndedChild.duringStartup)
-    return accepted || (started && !ownStart(session, own))
+      session.child?.phase === 'ready'
+        ? session.child
+        : session.lastEndedChild?.duringStartup === false
+          ? session.lastEndedChild
+          : undefined
+    const ownStart =
+      started?.startedFor !== undefined &&
+      (started.startedFor === own || marker.continuations?.includes(started.startedFor) === true)
+    return accepted || (started !== undefined && !ownStart)
   }
 
   return {
@@ -82,7 +83,8 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
     onAgentStarted: (sessionId: string): void => {
       const session = deps.sessions.get(sessionId)
       const capsule = deps.capsule
-      if (!capsule || !session || ownStart(session, actions.get(sessionId))) {
+      const own = actions.get(sessionId)
+      if (!capsule || !session || (own !== undefined && session.child?.startedFor === own)) {
         return
       }
       void deps

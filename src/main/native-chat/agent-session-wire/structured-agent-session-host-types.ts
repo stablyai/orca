@@ -40,6 +40,9 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   /** A publish-first acquire is `starting` until the adapter's `started` event; only then are its
    *  reported options fact. */
   phase: StructuredAgentSessionProviderChildPhase
+  /** The queued message whose delivery started this child, fixed when the start is made; absent
+   *  for any other start. In memory only: it tells a restart offer its own start from another. */
+  readonly startedFor?: string
 }
 
 /** What ending a child established about its provider root. A stop's comes only from
@@ -63,6 +66,7 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     /** Descriptive text only — the provider's diagnostic, or the host's cause. Decides nothing. */
     reason: string | null
     duringStartup: boolean
+    startedFor?: string
     /** Where the conversation's journal stood when the child ended, to order the end against a
      *  message's acceptance. */
     endedAt: AgentJournalCursor

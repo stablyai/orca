@@ -11,9 +11,8 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
  * run still reads as live, so the release waits for that reconcile too.
  *
  * NOT yet handled, and deliberately follow-up: rebinding a restarted runtime to a structured
- * worker's hold and redrive subscription. Until that exists, a worker that survives a restart
- * keeps no hold, so its child is evictable and its parked mail waits for the next arrival rather
- * than a settle edge.
+ * worker's redrive subscription. Until that exists, a worker that survives a restart has its
+ * parked mail wait for the next arrival rather than a settle edge.
  */
 export async function prepareStructuredHostForWorkerRelease(
   runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,

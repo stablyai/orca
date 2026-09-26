@@ -259,6 +259,47 @@ it('keeps a failed resume retryable more than a day later, after the ledger prun
   expect(retried.continued).toMatchObject([{ sessionId: SESSION, outcome: 'continued' }])
 })
 
+// The start was the continuation's own even after the provider refused it: the child it started,
+// running or since stopped, is still the offer's, so the offer stays retryable.
+it('keeps a resume retryable when its agent started but refused the continuation', async () => {
+  const state = await offered()
+  const { host, store } = state
+  const acquire = state.acquire.getMockImplementation()
+  if (!acquire) {
+    throw new Error('the harness acquire has no implementation')
+  }
+  state.acquire.mockImplementationOnce(async (input) => ({
+    ...(await acquire(input)),
+    acquisitionGeneration: 'generation-continuation'
+  }))
+  state.dispatch.mockResolvedValueOnce({
+    state: 'rejected',
+    reason: 'the provider refused the turn'
+  })
+
+  const first = await host.restartResume.continueAfterRestart([SESSION], 'modal')
+
+  expect(state.acquire).toHaveBeenCalledOnce()
+  expect(first.failed).toMatchObject([{ sessionId: SESSION, retryable: true }])
+  expect(await host.restartResume.listFailures()).toMatchObject([
+    { sessionId: SESSION, retryable: true }
+  ])
+  // The child the continuation started exits after proving its start.
+  await host.handleAdapterEvent({
+    type: 'ended',
+    sessionId: SESSION,
+    fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 0,
+    acquisitionGeneration: 'generation-continuation',
+    reason: 'codex app-server exited',
+    cause: 'unexpected-exit'
+  })
+  expect(await host.restartResume.listFailures()).toMatchObject([
+    { sessionId: SESSION, retryable: true }
+  ])
+  const retried = await host.restartResume.continueAfterRestart([SESSION], 'retry')
+  expect(retried.continued).toMatchObject([{ sessionId: SESSION, outcome: 'continued' }])
+})
+
 // The rejected continuation is the chat's newest user message; the row still names the user's.
 it("names the user's prompt on a failed retry, not the rejected continuation", async () => {
   const state = await offered('submission')

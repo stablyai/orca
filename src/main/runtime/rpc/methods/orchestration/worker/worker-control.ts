@@ -200,9 +200,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       const abandoned = runtime.getOrchestrationDb().abandonWorkerDispatch(params.dispatch)
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {
-          // Abandon settles the Dispatch, so it owes the same hold release stop and release do.
-          // A surviving hold pins the provider child for the life of the app and makes host crash
-          // recovery respawn a worker nobody is waiting on.
+          // Abandon settles the Dispatch, so it owes the same binding release stop and release do:
+          // a surviving redrive subscription keeps nudging a worker nobody is waiting on.
           releaseStructuredWorkerSession(params.dispatch, runtime)
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
         }

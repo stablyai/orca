@@ -37,12 +37,13 @@ const AGENT_START_CALLER_KEY = 'trusted-local:agent-start'
  */
 export async function ensureStructuredAgentSessionAgent(
   context: StructuredAgentSessionAttachContext,
-  sessionId: string
+  sessionId: string,
+  startedFor?: string
 ): Promise<StructuredAgentSessionResumeOutcome> {
   if (context.sessions.get(sessionId)?.child) {
     return { ok: true }
   }
-  const started = await startStructuredAgentSessionAgent(context, sessionId)
+  const started = await startStructuredAgentSessionAgent(context, sessionId, startedFor)
   if (!started.ok || context.sessions.get(sessionId)?.child) {
     return started
   }
@@ -71,7 +72,8 @@ export function ensureStructuredAgentSessionAgentForOperation(
 
 async function startStructuredAgentSessionAgent(
   context: StructuredAgentSessionAttachContext,
-  sessionId: string
+  sessionId: string,
+  startedFor: string | undefined
 ): Promise<StructuredAgentSessionResumeOutcome> {
   const callerKey = AGENT_START_CALLER_KEY
   // The record is read only once this host has adjudicated it and exited any recovery stage a
@@ -120,7 +122,12 @@ async function startStructuredAgentSessionAgent(
   }
   let attached: AgentSessionMutationResult<AgentSessionAttachResult>
   try {
-    attached = await attachStructuredAgentSessionUnderSerialize(context, callerKey, params)
+    attached = await attachStructuredAgentSessionUnderSerialize(
+      context,
+      callerKey,
+      params,
+      startedFor === undefined ? {} : { startedFor }
+    )
   } catch (error) {
     // The attach settles an acquisition that failed — the ledger row, the released lease — before
     // it rethrows the cause. That row is the answer: a failure it recorded is this resume's
