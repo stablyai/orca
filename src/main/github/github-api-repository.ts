@@ -12,6 +12,7 @@ import {
   isValidGitHubApiRepository,
   type GitHubApiRepositoryResolution
 } from './github-api-repository-validation'
+import { resolveBranchHeadRepository } from './github-branch-head-remote'
 import {
   _resetOriginGitHubApiRepositoryCache,
   getGitHubApiRepositoryForRemote,
@@ -71,11 +72,22 @@ export type GitHubApiRepositoryCandidates = {
   headRepo: GitHubApiRepository | null
 }
 
-/** Hosted mirror of resolvePRRepositoryCandidates: upstream first, then origin. */
+/**
+ * Hosted mirror of resolvePRRepositoryCandidates: upstream first, then origin.
+ *
+ * `headRepo` names the repository whose branch a pull request would be opened
+ * from. With `branchName` supplied it is resolved from the remote that actually
+ * holds the branch, so a cross-fork head is filtered on the fork's owner rather
+ * than the canonical repo's (#12956); it is null when no single remote can be
+ * identified, which routes the caller to the head-owner-agnostic lookup that
+ * resolves cross-fork heads on its own. Without `branchName` it stays `origin`,
+ * preserving every caller that is not doing a branch lookup.
+ */
 export async function resolveGitHubApiRepositoryCandidates(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  branchName?: string | null
 ): Promise<GitHubApiRepositoryCandidates> {
   const originPromise = getGitHubApiRepositoryForRemote(
     repoPath,
@@ -120,7 +132,13 @@ export async function resolveGitHubApiRepositoryCandidates(
     seen.add(key)
     candidates.push(candidate)
   }
-  return { candidates, headRepo: origin }
+  const headRepo = branchName
+    ? await resolveBranchHeadRepository(
+        { repoPath, branchName, connectionId, localGitOptions },
+        (remote) => getGitHubApiRepositoryForRemote(repoPath, remote, connectionId, localGitOptions)
+      )
+    : origin
+  return { candidates, headRepo }
 }
 
 export type ResolvedGitHubApiRepositorySource = {
