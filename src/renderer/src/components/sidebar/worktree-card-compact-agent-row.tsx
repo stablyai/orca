@@ -5,6 +5,8 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
+import { UnreadAlertBadge } from '@/components/UnreadAlertBadge'
+import { showsAgentRowUnreadBadge } from '@/lib/agent-row-dot-state'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
@@ -89,6 +91,8 @@ type CompactAgentRowProps = {
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
   cacheTimerActive?: boolean
+  /** Why: same unvisited signal as the full DashboardAgentRow, so compact mode still marks a finished turn nobody has seen. */
+  isUnvisited?: boolean
 }
 
 export const CompactAgentRow = React.memo(function CompactAgentRow({
@@ -104,7 +108,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   disclosureInGutter = false,
   isFocusedPane = false,
   hideIdentityIcon = false,
-  cacheTimerActive = true
+  cacheTimerActive = true,
+  isUnvisited = false
 }: CompactAgentRowProps) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -214,12 +219,18 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         </button>
       ) : null}
       {/* Why: the row's actionable disabled reason must win on every hit area. */}
-      <AgentStateDot
-        state={dotState}
-        size="sm"
-        title={sendTargetDisabledReason ? null : undefined}
-        tooltipSide="right"
-      />
+      <span className="relative inline-flex shrink-0">
+        <AgentStateDot
+          state={dotState}
+          size="sm"
+          title={sendTargetDisabledReason ? null : undefined}
+          tooltipSide="right"
+        />
+        {/* Why: a glyph, not just bold, so a finished-but-unseen agent is findable at a glance among older done rows. */}
+        {isUnvisited && showsAgentRowUnreadBadge(dotState) && (
+          <UnreadAlertBadge data-agent-row-unread-alert="" className="-right-1 -top-1 size-[6px]" />
+        )}
+      </span>
       {!hideIcon && (
         <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
           <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
@@ -231,7 +242,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       >
         {/* Why: the selected-row fill is strong enough to wash out the dimmed
             prompt/secondary text, so lift both toward full foreground when focused. */}
-        <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
+        <span
+          className={cn(
+            isUnvisited
+              ? 'font-semibold text-foreground'
+              : isFocusedPane
+                ? 'text-foreground'
+                : 'text-muted-foreground/90'
+          )}
+        >
           {leadingText}
         </span>
         {trailingText && (

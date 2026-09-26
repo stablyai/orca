@@ -63,6 +63,7 @@
   --color-editor-surface: var(--editor-surface);
   --color-agent-question: var(--agent-question);
   --color-agent-question-text: var(--agent-question-text);
+  --color-unread-alert: var(--unread-alert);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -185,6 +186,8 @@
   --agent-question: var(--color-orange-600);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  /* Unread badge overlaid on status glyphs (worktree status lane, agent rows); same hue in both themes. */
+  --unread-alert: var(--color-amber-500);
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
