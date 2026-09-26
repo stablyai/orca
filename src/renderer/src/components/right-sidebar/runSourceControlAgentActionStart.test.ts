@@ -413,4 +413,73 @@ describe('runSourceControlAgentActionStart CLI arguments applicability', () => {
       expect.objectContaining({ agentArgs: '--model gpt-5' })
     )
   })
+
+  // #19379: an untouched arguments field is stored as '', which beats the launchers' undefined-keyed
+  // fallback the same way agentArgsApply:false would — so a blank field has to omit them too.
+  it('omits a blank per-action argument so the launch resolves the agent default', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-1' }
+    })
+
+    await expect(
+      runSourceControlAgentActionStart(buildArgs({ agentArgs: '', agentArgsApply: true }))
+    ).resolves.toBe(true)
+
+    const launchCall = mocks.launchAgentInNewTab.mock.calls[0]?.[0]
+    expect(launchCall).toHaveProperty('agentArgs', undefined)
+  })
+
+  it('omits a blank per-action argument on the onStart branch too', async () => {
+    const onStart = vi.fn().mockResolvedValue(true)
+
+    await expect(
+      runSourceControlAgentActionStart(
+        buildArgs({
+          agentArgs: '',
+          agentArgsApply: true,
+          onStart,
+          worktreeId: undefined,
+          groupId: undefined
+        })
+      )
+    ).resolves.toBe(true)
+
+    expect(onStart).toHaveBeenCalledWith({
+      agent: 'codex',
+      commandInput: 'Fix the bug',
+      agentArgs: undefined
+    })
+  })
+
+  it('keeps an explicit per-action argument', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-1' }
+    })
+
+    await runSourceControlAgentActionStart(
+      buildArgs({ agentArgs: '--sandbox', agentArgsApply: true })
+    )
+
+    const launchCall = mocks.launchAgentInNewTab.mock.calls[0]?.[0]
+    expect(launchCall).toHaveProperty('agentArgs', '--sandbox')
+  })
+
+  // Why: resolving for the launch must not leak into the stored recipe, or an untouched field would
+  // pin the current default and stop tracking a later change to the global setting.
+  it('saves the untouched argument field rather than omitting it', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      surface: { kind: 'local-terminal', tabId: 'tab-1' }
+    })
+    mocks.onSaveAgentDefault.mockResolvedValue(undefined)
+
+    await runSourceControlAgentActionStart(
+      buildArgs({ agentArgs: '', agentArgsApply: true, saveTargetValue: 'global' })
+    )
+
+    expect(mocks.onSaveAgentDefault).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'global' }),
+      'resolveComments',
+      expect.objectContaining({ agentArgs: '' })
+    )
+  })
 })

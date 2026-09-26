@@ -1,5 +1,6 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { sourceControlActionLaunchArgs } from '@/lib/source-control-action-launch-args'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -82,8 +83,9 @@ export async function runSourceControlAgentActionStart({
   let launchFailureNotified = false
   let launchAcceptedNotified = false
   // Why: `undefined` is what makes the launch fall back to the global Agents arguments;
-  // an empty string would beat that fallback and silently suppress them.
-  const launchAgentArgs = agentArgsApply ? agentArgs : undefined
+  // an empty string would beat that fallback and silently suppress them. An untouched field is
+  // stored as '' too, so it has to report absent for the same reason (#19379).
+  const launchAgentArgs = agentArgsApply ? sourceControlActionLaunchArgs(agentArgs) : undefined
   const notifyLaunchAccepted = (): void => {
     if (launchAcceptedNotified) {
       return
