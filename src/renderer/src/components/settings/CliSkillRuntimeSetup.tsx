@@ -17,12 +17,15 @@ import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
   isOrcaCliAvailableOnPath,
-  showOrcaCliRegistrationPromptToast
+  showOrcaCliRegistrationPromptToast,
+  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+  isOrcaCliRegistrationRequired
 } from '@/lib/agent-skill-cli-prerequisite'
 import { translate } from '@/i18n/i18n'
 
 export type LocalAgentRuntime = {
   runtime: 'host' | 'wsl'
+  managedCliAvailable?: boolean
   wslDistro?: string | null
   label: string
 }
@@ -296,6 +299,29 @@ export function getAgentSkillTerminalShellOverride(
     settings,
     runtime
   )
+}
+
+export type AgentSkillCliPrerequisite = {
+  preInstallNotice?: string
+  getPrerequisiteStatus?: () => Promise<CliInstallStatus>
+  ensureCli: () => Promise<void>
+}
+
+/** Keeps the WSL registration fallback until managed CLI support can be confirmed. */
+export function getAgentSkillCliPrerequisite(
+  runtime?: LocalAgentRuntime
+): AgentSkillCliPrerequisite {
+  if (!isOrcaCliRegistrationRequired(runtime)) {
+    return { ensureCli: async () => {} }
+  }
+  return {
+    preInstallNotice: AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
+    getPrerequisiteStatus: () =>
+      window.api.cli.getWslInstallStatus(getWslCliDistroRequest(runtime)),
+    ensureCli: async () => {
+      await ensureWslCliAvailableForAgentSkillTerminal(runtime)
+    }
+  }
 }
 
 export async function ensureWslCliAvailableForAgentSkillTerminal(

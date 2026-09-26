@@ -11,6 +11,8 @@ export type DaemonEndpointIdentity = {
   startedAtMs: number
   launchNonce: string
   /** Optional launch metadata. Absent from daemons that predate it; readers must fall back. */
+  /** Absent on older daemons; only true proves managed WSL PATH injection. */
+  managedWslCli?: boolean
   entryPath?: string
   appVersion?: string
   spawnerExecPath?: string

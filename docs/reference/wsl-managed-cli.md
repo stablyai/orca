@@ -35,3 +35,19 @@ entry, so its WSL panes lack the CLI until the daemon restarts.
 Run the opt-in end-to-end test on Windows with `ORCA_BACKGROUND_LAUNCH=1`,
 `ORCA_TEST_MANAGED_WSL=1`, and optionally `ORCA_TEST_WSL_DISTRO=<distro>`. The zsh
 case skips when the distro lacks `zsh` or `script`.
+
+
+## Skill setup prerequisites
+
+Skill setup asks the execution host's `host.wsl.managedCliAvailable` method about
+its selected distro. The host checks the daemon that owns fresh terminals (an
+optional `managedWslCli` hello field), then probes the distro's login shell,
+wrapper files, and managed bridge with `--version`. Concurrent checks for one
+distro share a probe; completed results are not cached on the host.
+
+A confirmed result removes the registration prerequisite from onboarding and
+skill setup, including the Linear sidebar. Missing methods on older hosts,
+older daemons without the hello field, unsupported shells, and failed probes
+retain the existing registration fallback. Switching the host or distro clears
+the renderer's proof. General → Shell command still manages registration for
+external shells. The skill installer itself uses `npx` and needs no Orca CLI.

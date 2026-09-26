@@ -42,14 +42,31 @@ function countAvailableNonMainWorktrees(worktreesByRepo: Record<string, Worktree
   )
 }
 
+export type AgentCapabilitiesState = {
+  browserUseSkillInstalled: boolean
+  computerUseSkillInstalled: boolean
+  computerUseReady: boolean
+  computerUseUnavailable: boolean
+  orchestrationSkillInstalled: boolean
+}
+
+export function isAgentCapabilitiesDone(state: AgentCapabilitiesState): boolean {
+  return (
+    state.browserUseSkillInstalled &&
+    state.computerUseSkillInstalled &&
+    (state.computerUseReady || state.computerUseUnavailable) &&
+    state.orchestrationSkillInstalled
+  )
+}
+
 export function getFeatureWallSetupProgress(
   input: FeatureWallSetupProgressInput
 ): FeatureWallSetupProgress {
-  const agentCapabilitiesDone =
-    input.browserUseSkillInstalled &&
-    input.computerUseSkillInstalled &&
-    (input.computerUsePermissionsReady || input.computerUseUnavailable === true) &&
-    input.orchestrationSkillInstalled
+  const agentCapabilitiesDone = isAgentCapabilitiesDone({
+    ...input,
+    computerUseReady: input.computerUsePermissionsReady,
+    computerUseUnavailable: input.computerUseUnavailable === true
+  })
   const stepDone: Record<FeatureWallSetupStepId, boolean> = {
     'default-agent':
       Boolean(input.settings?.defaultTuiAgent) && input.settings?.defaultTuiAgent !== 'blank',

@@ -447,6 +447,9 @@
           }
         },
         "wall": {
+          "AgentCapabilitiesSetupAction": {
+            "updateSkills": "Update skills"
+          },
           "ComputerUseAnimatedVisual": {
             "1719b28a81": "found \"Approve\"",
             "2adb561b44": "Claude Code session started",
@@ -471,6 +474,15 @@
           },
           "TasksAnimatedVisual": {
             "72f9e516a3": "pressing"
+          },
+          "agent": {
+            "capability": {
+              "setup": {
+                "status": {
+                  "openDesktopOnMac": "Open Orca Desktop on this Mac to use"
+                }
+              }
+            }
           },
           "agents": {
             "orchestration": {

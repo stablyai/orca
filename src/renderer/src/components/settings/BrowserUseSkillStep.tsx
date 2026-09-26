@@ -5,6 +5,7 @@ import { StepBadge } from './SetupStepBadge'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
+  stepIndex: number
   command: string
   installedCommand: string
   skillDetected: boolean
@@ -20,6 +21,7 @@ type Props = {
 }
 
 export function BrowserUseSkillStep({
+  stepIndex,
   command,
   installedCommand,
   skillDetected,
@@ -55,7 +57,7 @@ export function BrowserUseSkillStep({
       loading={skillLoading}
       error={skillError}
       installDisabled={disabled}
-      leading={<StepBadge index={2} state={skillDetected ? 'done' : 'pending'} />}
+      leading={<StepBadge index={stepIndex} state={skillDetected ? 'done' : 'pending'} />}
       preInstallNotice={preInstallNotice}
       getPrerequisiteStatus={getPrerequisiteStatus}
       onBeforeOpenTerminal={onBeforeOpenTerminal}

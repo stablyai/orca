@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { isOrcaCliRegistrationRequired } from '@/lib/agent-skill-cli-prerequisite'
 import { useAppStore } from '@/store'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
 import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
@@ -89,8 +90,8 @@ const BROWSER_ONLY_FEATURE_SETUP: OnboardingFeatureSetupSelection = {
   linearTickets: false
 }
 
-// The grab→agent flow relies on the Orca CLI and browser skill, so offer the same
-// install action the Enable Orca CLI step uses, scoped to just browser use.
+// The grab→agent flow relies on the browser skill, so offer the same install action
+// the agent skills step uses, scoped to just browser use.
 function BrowserSkillInstallButton(): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [command, setCommand] = useState<string | null>(null)
@@ -186,10 +187,12 @@ function BrowserSkillInstallButton(): React.JSX.Element {
             'auto.components.feature.wall.FeatureWallBrowserAction.5f97caf76b',
             'Installing…'
           )
-        : translate(
-            'auto.components.feature.wall.FeatureWallBrowserAction.c2df599513',
-            'Install CLI & Skill'
-          )}
+        : isOrcaCliRegistrationRequired(activeSkillRuntime.agentRuntime)
+          ? translate(
+              'auto.components.feature.wall.FeatureWallBrowserAction.c2df599513',
+              'Install CLI & Skill'
+            )
+          : translate('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
     </Button>
   )
 }

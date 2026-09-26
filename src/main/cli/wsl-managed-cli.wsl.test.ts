@@ -1,7 +1,17 @@
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import { getAppEnvironment } from '../../shared/app-environment'
+import { isManagedWslCliAvailable } from './wsl-managed-cli-availability'
+
+vi.mock('../persistence', () => ({
+  getCanonicalUserDataPath: () => getAppEnvironment().getPath('userData')
+}))
+vi.mock('../daemon/daemon-provider-state', () => ({
+  daemonOwnsFreshPersistentPtys: () => false,
+  getDaemonProvider: () => null
+}))
 import { runProcess } from '../../shared/child-process/run-process'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
@@ -137,6 +147,22 @@ it.skipIf(!enabled)(
       expect(output.stdout).toContain('"argv":["two words"]')
       expect(output.stdout).toContain(JSON.stringify(userDataPath))
       expect(output.stdout).toMatch(/path=\/mnt\/.*wsl-managed-cli\/[0-9a-f]{20}:\/usr\/bin:\/bin/)
+    }),
+  90_000
+)
+
+it.skipIf(!enabled)(
+  'confirms managed CLI availability through the real distro and bridge without guest registration',
+  () =>
+    withManagedCli(async ({ userDataPath }) => {
+      vi.stubEnv('ORCA_USER_DATA_PATH', userDataPath)
+      try {
+        expect(await isManagedWslCliAvailable(process.env.ORCA_TEST_WSL_DISTRO || undefined)).toBe(
+          true
+        )
+      } finally {
+        vi.unstubAllEnvs()
+      }
     }),
   90_000
 )

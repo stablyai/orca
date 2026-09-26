@@ -165,6 +165,7 @@ describe('DaemonClient', () => {
         startedAtMs: 456,
         launchNonce: 'launch-a',
         entryPath: '/Applications/Orca.app/Contents/Resources/daemon-entry.js',
+        managedWslCli: true,
         appVersion: '1.2.3',
         spawnerExecPath: '/Applications/Orca.app/Contents/MacOS/Orca'
       }

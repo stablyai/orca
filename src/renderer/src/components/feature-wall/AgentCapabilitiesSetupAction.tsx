@@ -5,8 +5,12 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store'
+import { AgentCapabilityStatusNote, AgentCapabilityStatusPill } from './AgentCapabilityStatusBadges'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
-import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
+import {
+  getOnboardingFeatureSetupAgentRuntime,
+  type OnboardingFeatureSetupRuntimeContext
+} from '../onboarding/onboarding-feature-setup-runtime'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
   hasSelectedOnboardingFeatureSetup,
@@ -15,13 +19,13 @@ import {
   type OnboardingFeatureSetupSelection
 } from '../onboarding/onboarding-feature-setup'
 import {
-  getAgentCapabilityStatusClassName,
   getDefaultAgentCapabilitySetupSelection,
   isAgentCapabilityReadinessChecking,
+  isAgentCapabilityReadinessComplete,
   useAgentCapabilitySetupStatus,
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
-import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
+import { isOrcaCliRegistrationRequired } from '@/lib/agent-skill-cli-prerequisite'
 import { translate } from '@/i18n/i18n'
 
 export function AgentCapabilitiesSetupAction(props: {
@@ -140,7 +144,11 @@ export function AgentCapabilitiesSetupAction(props: {
         featureSetupRuntime={featureSetupRuntime}
         setupBusyLabel={setupBusyLabel}
         onStartFeatureSetup={() => void handleStartFeatureSetup()}
+        allReady={isAgentCapabilityReadinessComplete(readiness)}
         installStatus={capabilitySetupStatus.installStatus}
+        cliRequired={isOrcaCliRegistrationRequired(
+          getOnboardingFeatureSetupAgentRuntime(activeSkillRuntime)
+        )}
       />
     </div>
   )
@@ -212,10 +220,14 @@ function AgentCapabilitySetupControls(props: {
   featureSetupRuntime: OnboardingFeatureSetupRuntimeContext | null
   setupBusyLabel: string | null
   onStartFeatureSetup: () => void
+  allReady: boolean
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
+  cliRequired: boolean
 }): React.JSX.Element {
   const hasSelectedFeatures = hasSelectedOnboardingFeatureSetup(props.featureSetup)
   const showSetupAction = !props.featureSetupCommand
+  // Why: a disabled install button is noise once everything is set up.
+  const showAllReady = props.allReady && !hasSelectedFeatures && !props.setupBusyLabel
 
   return (
     <>
@@ -224,8 +236,15 @@ function AgentCapabilitySetupControls(props: {
         onChange={props.onFeatureSetupChange}
         installStatus={props.installStatus}
       />
-      <FullDiskAccessSetupPrompt />
-      {showSetupAction ? (
+      {showSetupAction && showAllReady ? (
+        <p className="mt-6 flex items-center gap-1.5 text-sm font-medium text-status-success">
+          <Check className="size-4" />
+          {translate(
+            'auto.components.feature.wall.AgentCapabilitiesSetupAction.allInstalled',
+            'All skills installed'
+          )}
+        </p>
+      ) : showSetupAction ? (
         <div className="mt-6 flex items-center">
           <Button
             type="button"
@@ -240,10 +259,15 @@ function AgentCapabilitySetupControls(props: {
               <Terminal className="size-4" />
             )}
             {props.setupBusyLabel ??
-              translate(
-                'auto.components.feature.wall.AgentCapabilitiesSetupAction.c89534cbe9',
-                'Install CLI & Skills'
-              )}
+              (props.cliRequired
+                ? translate(
+                    'auto.components.feature.wall.AgentCapabilitiesSetupAction.c89534cbe9',
+                    'Install CLI & Skills'
+                  )
+                : translate(
+                    'auto.components.feature.wall.AgentCapabilitiesSetupAction.installSkills',
+                    'Install Skills'
+                  ))}
           </Button>
         </div>
       ) : null}
@@ -296,16 +320,22 @@ function AgentCapabilitySetupChecklist(props: {
                 >
                   {row.icon}
                 </span>
-                <span
-                  aria-hidden
-                  className={cn(
-                    'flex size-5 items-center justify-center rounded-full border transition-colors',
-                    selected
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-background'
-                  )}
-                >
-                  {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+                <span className="flex items-center gap-2">
+                  <AgentCapabilityStatusPill status={installStatus} />
+                  {/* Why: an empty circle on an installed card reads as "not done"; show it only when it means something. */}
+                  {selected || !installStatus.installed ? (
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'flex size-5 items-center justify-center rounded-full border transition-colors',
+                        selected
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-background'
+                      )}
+                    >
+                      {selected ? <Check className="size-3" strokeWidth={3} /> : null}
+                    </span>
+                  ) : null}
                 </span>
               </span>
               <span className="mt-3 text-sm font-medium text-foreground">{row.title}</span>
@@ -318,43 +348,5 @@ function AgentCapabilitySetupChecklist(props: {
         })}
       </div>
     </section>
-  )
-}
-
-function AgentCapabilityStatusNote(props: {
-  status: AgentCapabilityInstallStatus
-}): React.JSX.Element {
-  if (props.status.installed) {
-    return (
-      <span className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className="rounded-full border border-green-500/45 bg-green-500/10 px-2 py-0.5 text-[11px] font-semibold leading-none text-green-700 dark:text-green-300">
-          {translate(
-            'auto.components.feature.wall.AgentCapabilitiesSetupAction.b8dc9dd8a2',
-            'Installed'
-          )}
-        </span>
-        {props.status.tone !== 'ready' ? (
-          <span
-            className={cn(
-              'text-xs font-medium',
-              getAgentCapabilityStatusClassName(props.status.tone)
-            )}
-          >
-            {props.status.label}
-          </span>
-        ) : null}
-      </span>
-    )
-  }
-
-  return (
-    <span
-      className={cn(
-        'mt-1 text-xs font-medium',
-        getAgentCapabilityStatusClassName(props.status.tone)
-      )}
-    >
-      {props.status.label}
-    </span>
   )
 }

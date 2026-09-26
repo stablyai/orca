@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   },
   useInstalledAgentSkillNames: vi.fn(),
   getCliStatus: vi.fn(),
+  getWslCliStatus: vi.fn(),
   panelProps: [] as Record<string, unknown>[]
 }))
 
@@ -30,6 +32,8 @@ vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
 }))
 
 vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
+  isOrcaCliRegistrationRequired: (runtime?: { runtime: string } | null) =>
+    runtime?.runtime === 'wsl',
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE: 'CLI registration notice',
   ensureOrcaCliAvailableForAgentSkillTerminal: vi.fn(async () => null),
   isOrcaCliAvailableOnPath: (status: CliInstallStatus | null | undefined) =>
@@ -37,6 +41,14 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
 }))
 
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
+  getAgentSkillCliPrerequisite: (runtime?: { runtime: string }) =>
+    runtime?.runtime === 'wsl'
+      ? {
+          preInstallNotice: 'CLI registration notice',
+          getPrerequisiteStatus: () => mocks.getWslCliStatus(),
+          ensureCli: async () => {}
+        }
+      : { ensureCli: async () => {} },
   buildSkillCommandForRuntime: (command: string) => command,
   ensureWslCliAvailableForAgentSkillTerminal: vi.fn(async () => null),
   getWslCliDistroRequest: () => undefined
@@ -48,6 +60,20 @@ vi.mock('../settings/AgentSkillSetupPanel', () => ({
     return <section data-testid="linear-skill-panel">{String(props.installedCommand)}</section>
   }
 }))
+
+// Why: host terminals need no CLI registration, so an installed skill only still
+// shows the prompt (and its update command) on a WSL runtime with the CLI missing.
+const projectWslRuntime: ProjectExecutionRuntimeResolution = {
+  status: 'resolved',
+  runtime: {
+    kind: 'wsl',
+    hostPlatform: 'wsl',
+    projectId: 'repo-1',
+    distro: 'Ubuntu',
+    reason: 'project-override',
+    cacheKey: 'repo-1:wsl:Ubuntu'
+  }
+}
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -103,7 +129,14 @@ async function renderPrompt(
   root = createRoot(container)
   await act(async () => {
     root?.render(
-      <LinearAgentSkillSetupPrompt linked={true} remote={false} surface="modal" {...props} />
+      <LinearAgentSkillSetupPrompt
+        linked={true}
+        remote={false}
+        surface="modal"
+        currentPlatform="win32"
+        projectRuntime={projectWslRuntime}
+        {...props}
+      />
     )
   })
   await import('./LinearAgentSkillSetupDialog')
@@ -121,10 +154,14 @@ describe('LinearAgentSkillSetupPrompt update command', () => {
     mocks.useInstalledAgentSkillNames.mockReturnValue(mocks.skillState)
     mocks.getCliStatus.mockReset()
     mocks.getCliStatus.mockResolvedValue(cliStatus())
+    mocks.getWslCliStatus.mockReset()
+    mocks.getWslCliStatus.mockResolvedValue(cliStatus())
     mocks.panelProps.length = 0
     Object.defineProperty(window, 'api', {
       configurable: true,
-      value: { cli: { getInstallStatus: mocks.getCliStatus } }
+      value: {
+        cli: { getInstallStatus: mocks.getCliStatus, getWslInstallStatus: mocks.getWslCliStatus }
+      }
     })
     Object.defineProperty(window, 'localStorage', {
       configurable: true,

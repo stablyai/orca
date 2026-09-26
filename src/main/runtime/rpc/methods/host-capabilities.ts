@@ -1,9 +1,16 @@
+import { WslManagedCliAvailabilityParams } from '../../../../shared/rpc-contract/wsl-cli-params'
+import { isManagedWslCliAvailable } from '../../../cli/wsl-managed-cli-availability'
 import { defineMethod } from '../core'
 import { isPwshAvailableAsync } from '../../../pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../../../wsl'
 import { isGitBashAvailable } from '../../../git-bash'
 
 export const HOST_CAPABILITY_METHODS = [
+  defineMethod({
+    name: 'host.wsl.managedCliAvailable',
+    params: WslManagedCliAvailabilityParams,
+    handler: async (params) => isManagedWslCliAvailable(params.distro)
+  }),
   defineMethod({
     name: 'host.platform',
     params: null,

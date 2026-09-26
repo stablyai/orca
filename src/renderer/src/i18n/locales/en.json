@@ -6995,7 +6995,6 @@
           "9fca1f7f5d": "Registers the Orca CLI command so agents can orchestrate the browser from their shell.",
           "c6065d205d": "Enable Orca CLI",
           "c79eff0213": "Register the Orca CLI so agents can drive the browser.",
-          "702488a5f7": "Let coding agents drive this browser with your logins. Finish the three steps below.",
           "b8a1f2d84d": "Agent Browser Use",
           "96b91c6349": "Let coding agents drive this browser with your logins.",
           "2ea4617e3a": "Imported {{value0}} cookies from {{value1}}{{value2}}.",
@@ -7008,7 +7007,8 @@
           "0289434ed6": "Enabled",
           "8b3054dac7": "Registering...",
           "8f2675c2f3": "Imported {{value0}} cookies from file.",
-          "5301857d88": "From {{value0}}"
+          "5301857d88": "From {{value0}}",
+          "finishSteps": "Let coding agents drive this browser with your logins. Finish the steps below."
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Enables agents to navigate and verify pages in Orca's browser.",
@@ -14344,7 +14344,10 @@
             "3a59452a67": "Skill command copied and inserted below for review.",
             "c605f51f2b": "Capability setup ready",
             "1aa657d8f4": "Some capability setup needs attention",
-            "c89534cbe9": "Install CLI & Skills"
+            "c89534cbe9": "Install CLI & Skills",
+            "allInstalled": "All skills installed",
+            "updateSkills": "Update skills",
+            "installSkills": "Install Skills"
           },
           "AiCommitPrSettingsCard": {
             "8d4152701a": "e.g. ollama run llama3.1 {{value0}}",
@@ -14548,13 +14551,14 @@
               "setup": {
                 "status": {
                   "8eccfcb314": "Installed",
-                  "21d4f79c93": "click Install CLI & Skills to open macOS access settings",
                   "5c9293e51a": "checking app access",
-                  "aae94eeb52": "Click Install CLI & Skills",
                   "aa8e143a2f": "Could not check install",
                   "9b33e7fb13": "Checking install",
-                  "4c8e1f92a7": "open Orca Desktop on this Mac",
-                  "6d2b0a84e1": "Unavailable in this build"
+                  "6d2b0a84e1": "Unavailable in this build",
+                  "notInstalled": "Not installed",
+                  "openDesktopOnMac": "Open Orca Desktop on this Mac to use",
+                  "needsMacAccess": "Needs macOS access",
+                  "requiresOrcaDesktop": "Requires Orca Desktop"
                 }
               }
             }
@@ -14573,14 +14577,14 @@
                       "71bd9a8c95": "Know the moment an agent finishes, needs attention, or gets blocked.",
                       "46db810da8": "Choose your default agent",
                       "b8e5bae17f": "Start new work faster with your preferred agent already selected.",
-                      "fee5557b02": "Enable Orca CLI",
-                      "7bcb4097fa": "Register the Orca shell command and install agent skills for browser, computer, and orchestration workflows.",
                       "ad342dd4c6": "Connect integrations",
                       "06fe30fdb0": "Start an agent from a task in one click and keep PR status in view.",
                       "eddc532e58": "Automate workspace setup",
                       "56049b74c2": "Run install and setup commands automatically so every new worktree is ready for agents.",
                       "2cf795433b": "Start work in multiple repos",
-                      "42525ba8a4": "Bring your key repos into Orca so you can start agent work without hunting for folders."
+                      "42525ba8a4": "Bring your key repos into Orca so you can start agent work without hunting for folders.",
+                      "agentSkillsName": "Give agents Orca skills",
+                      "agentSkillsDescription": "Install the skills agents use to drive Orca's browser, control your computer, and coordinate multi-step work."
                     }
                   }
                 }

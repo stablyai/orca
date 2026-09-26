@@ -7,6 +7,7 @@ import type {
 import { getFeatureWallSetupStepsForSection } from '../../../../shared/feature-wall-setup-steps'
 import { cn } from '@/lib/utils'
 import type { FeatureWallSetupProgress } from './feature-wall-setup-progress'
+import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
 import { AgentCapabilitiesSetupAction } from './AgentCapabilitiesSetupAction'
 import {
   AddReposAction,
@@ -166,6 +167,15 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
   }
   if (activeStep.id === 'setup-script') {
     return <SetupScriptAction />
+  }
+  return null
+}
+
+// Full-width content below the caption/visual grid.
+function SelectedStepFooter(props: { stepId: FeatureWallSetupStepId }): React.JSX.Element | null {
+  // Why: Full Disk Access matters for projects in protected folders, so it sits with adding projects.
+  if (props.stepId === 'add-two-repos') {
+    return <FullDiskAccessSetupPrompt />
   }
   return null
 }
@@ -374,6 +384,7 @@ export function FeatureWallSetupChecklist(
               </div>
               <SelectedStepVisual stepId={activeStep.id} />
             </div>
+            <SelectedStepFooter stepId={activeStep.id} />
           </div>
         ) : null}
       </section>

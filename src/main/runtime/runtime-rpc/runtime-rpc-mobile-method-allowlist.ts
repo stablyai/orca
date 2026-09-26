@@ -143,6 +143,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'host.pwsh.isAvailable',
   'host.wsl.isAvailable',
   'host.wsl.listDistros',
+  'host.wsl.managedCliAvailable',
   'hostedReview.create',
   'hostedReview.createStacked',
   'hostedReview.forBranch',
