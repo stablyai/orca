@@ -84,8 +84,9 @@ export const terminalCloseHandler: CommandHandler = async ({ flags, client, cwd,
     )
   }
   const method = flags.get('tab') === true ? 'terminal.closeTab' : 'terminal.close'
+  const terminalHandle = await getTerminalHandle(flags, cwd, client)
   const result = await client.call<{ close: RuntimeTerminalClose }>(method, {
-    terminal: await getTerminalHandle(flags, cwd, client)
+    terminal: terminalHandle
   })
   // Why: a transport-level success must not hide a live or unverifiable PTY. Keep the receipt in
   // error.data so JSON callers retain the host's exact evidence while receiving a failing outcome.
