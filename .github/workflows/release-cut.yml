@@ -833,6 +833,7 @@ jobs:
     timeout-minutes: 30
     env:
       NODE_OPTIONS: --max-old-space-size=4096
+      WORKFLOW_SHA: ${{ github.workflow_sha }}
     strategy:
       fail-fast: false
       matrix:
@@ -852,16 +853,12 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
-      - name: Restore golden test harness from the workflow ref
+      # Why: tags run their own specs; main's copy of a vetted spec may only re-run the tests that failed.
+      - name: Restore golden harness rescue from the workflow ref
         shell: bash
-        env:
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- \
-            tests/e2e/golden-source-control-open-diff.spec.ts \
-            tests/e2e/golden-terminal-file-link.spec.ts \
-            tests/e2e/golden-worktree-create-switch.spec.ts
+          git checkout "$WORKFLOW_SHA" -- config/scripts/release-gate-harness-rescue.mjs
 
       - name: Install native build tools
         if: runner.os == 'Linux'
@@ -908,18 +905,18 @@ jobs:
       - name: Run terminal rendering golden on Linux
         if: runner.os == 'Linux'
         run: |
-          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
+          node config/scripts/release-gate-harness-rescue.mjs --label workspace-session-linux -- xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
 
       - name: Run source-control golden on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
+        run: node config/scripts/release-gate-harness-rescue.mjs --label source-control-linux -- xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
 
       - name: Run terminal rendering golden on macOS
         if: runner.os == 'macOS'
         run: |
-          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
+          node config/scripts/release-gate-harness-rescue.mjs --label workspace-session-mac -- env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
 
@@ -933,7 +930,7 @@ jobs:
 
       - name: Run source-control golden on macOS
         if: runner.os == 'macOS'
-        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
+        run: node config/scripts/release-gate-harness-rescue.mjs --label source-control-mac -- env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
 
       - name: Run fresh-startup golden on Windows
         if: runner.os == 'Windows'
@@ -950,6 +947,16 @@ jobs:
           name: golden-e2e-${{ matrix.platform }}-playwright-traces
           path: test-results/
           retention-days: 7
+          if-no-files-found: ignore
+
+      # Why: a rescue moves the tag run's traces out of test-results/ first; keep them even if its re-run writes no report.
+      - name: Upload harness rescue evidence
+        if: always() && hashFiles('release-gate-rescue/*/tag-run-test-results/**', 'release-gate-rescue/*/rescue-run.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: golden-e2e-${{ matrix.platform }}-harness-rescue
+          path: release-gate-rescue/
+          retention-days: 14
           if-no-files-found: ignore
 
   skill-sharing-release-gate:
@@ -975,16 +982,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
-
-      - name: Restore skill-sharing test harness from the workflow ref
-        shell: bash
-        env:
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          # Why not skill-freshness-inventory.test.ts: it holds behaviour tests, so main's copy fails a tag that predates the behaviour.
-          git checkout "$WORKFLOW_SHA" -- \
-            src/main/skills/skill-provider-runtime-roots.test.ts
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -1027,16 +1024,6 @@ jobs:
 
       - name: Trust the checked-out workspace in the job container
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-      - name: Restore skill-sharing test harness from the workflow ref
-        shell: bash
-        env:
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          # Why not skill-freshness-inventory.test.ts: it holds behaviour tests, so main's copy fails a tag that predates the behaviour.
-          git checkout "$WORKFLOW_SHA" -- \
-            src/main/skills/skill-provider-runtime-roots.test.ts
 
       - uses: ./.github/actions/install-node-dependencies
         with:
