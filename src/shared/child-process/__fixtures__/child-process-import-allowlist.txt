@@ -52,7 +52,6 @@ src/main/browser/agent-browser-bridge-state.ts
 src/main/browser/agent-browser-bridge-types.ts
 src/main/browser/browser-route-egress-electron-launch.ts
 src/main/browser/browser-route-persisted-worker-electron-process.ts
-src/main/claude-accounts/keychain.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
@@ -115,6 +114,7 @@ src/main/ipc/repos/repo-clone-lifecycle.ts
 src/main/ipc/worktree-apfs-clone.ts
 src/main/ipc/wsl-watcher-process-exit.ts
 src/main/local-builds/local-build-candidate.ts
+src/main/macos-keychain/generic-password.ts
 src/main/macos-system-sleep-assertion.ts
 src/main/macos-tcc-prompt-watch.ts
 src/main/memory/collector.ts

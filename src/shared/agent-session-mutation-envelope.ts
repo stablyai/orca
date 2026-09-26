@@ -11,10 +11,7 @@ import type {
   AgentSessionOperationDecision,
   AgentSessionOperationRow
 } from './agent-session-operation-ledger'
-import {
-  agentSessionLeaseAdmitsWriter,
-  isAgentSessionFenceCurrent
-} from './agent-session-lease-adjudication'
+import { agentSessionLeaseAdmitsWriter } from './agent-session-lease-adjudication'
 import type { AgentSessionLease } from './agent-session-record'
 import type { AgentSessionMutationEnvelope, AgentSessionWireRefusal } from './agent-session-wire'
 
@@ -81,10 +78,11 @@ export type AgentSessionMutationAdmission =
 
 /**
  * Fixed order: fingerprint agreement, then the ledger (so a retry replays
- * before anything else can refuse it), then the lease, then the fence. Putting
- * the ledger ahead of the fence is deliberate — a retry that crossed an owner
- * change must still return its recorded answer instead of a stale-checkpoint
- * refusal the client would then resend as a second effect.
+ * before anything else can refuse it), then the lease.
+ *
+ * `expectedRuntimeFence` is not checked: each write names its own target (a
+ * turn, an item revision, an epoch) or is last-writer-wins, so an owner restart
+ * the client has not seen yet refuses nothing. Older hosts still check it.
  */
 export function admitAgentSessionMutation(input: {
   envelope: AgentSessionMutationEnvelope
@@ -114,19 +112,6 @@ export function admitAgentSessionMutation(input: {
   const leaseRefusal = refuseUnlessWriterAdmitted(lease)
   if (leaseRefusal) {
     return { decision: 'refused', refusal: leaseRefusal }
-  }
-  if (
-    envelope.expectedRuntimeFence === null ||
-    !isAgentSessionFenceCurrent(lease, envelope.expectedRuntimeFence)
-  ) {
-    return {
-      decision: 'refused',
-      refusal: {
-        code: 'agent_session_checkpoint_stale',
-        message: `Expected runtime fence ${envelope.expectedRuntimeFence ?? 'none'}; the session is at ${lease.runtimeFence}.`,
-        currentFence: lease.runtimeFence
-      }
-    }
   }
   return { decision: 'admit', row: ledger.row }
 }
