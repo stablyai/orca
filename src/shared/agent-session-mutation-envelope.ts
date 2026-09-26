@@ -13,6 +13,7 @@ import type {
 } from './agent-session-operation-ledger'
 import { agentSessionLeaseAdmitsWriter } from './agent-session-lease-adjudication'
 import type { AgentSessionLease } from './agent-session-record'
+import { terminalOwnerRefusalMessage } from './agent-session-legacy-handoff-lease'
 import type { AgentSessionMutationEnvelope, AgentSessionWireRefusal } from './agent-session-wire'
 
 /**
@@ -132,9 +133,11 @@ function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireR
     return {
       code: 'agent_session_conflict',
       message:
-        lease.handoffStage === 'new-owner-proving'
-          ? 'The chat is still starting.'
-          : "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
+        lease.claimStatus === 'conflicted'
+          ? terminalOwnerRefusalMessage(lease)
+          : lease.handoffStage === 'new-owner-proving'
+            ? 'The chat is still starting.'
+            : "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
     }
   }
   return {
