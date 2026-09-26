@@ -55,7 +55,8 @@ export function observeClaudeSessionExit(
     .catch(() => undefined)
 }
 
-/** Lifecycle recovery is published only after the child tree proof is true. */
+/** Lifecycle recovery is published only after the close ladder ran and proved the tree gone or
+ *  observed the root's own exit. */
 export function settleClaudeUnexpectedExit(
   lifecycle: ClaudeExitLifecycle,
   sessionId: string,

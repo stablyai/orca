@@ -31,6 +31,7 @@ import type {
   AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire'
 import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
@@ -49,6 +50,14 @@ export class AgentSessionPromptUnavailableError extends Error {
   constructor(itemId: string) {
     super(`The provider is no longer waiting on ${itemId}.`)
     this.name = 'AgentSessionPromptUnavailableError'
+  }
+}
+
+/** The provider cannot take this answer. Thrown before the journal commit, so nothing is recorded. */
+export class AgentSessionPromptAnswerRejectedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AgentSessionPromptAnswerRejectedError'
   }
 }
 
@@ -264,13 +273,14 @@ export type StructuredAgentSessionAdapter = {
   /** The `/` surface the running provider reports for itself. Undefined when the
    *  provider never reports one, which is what keeps the client on its catalog. */
   readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
-  /** Claims the live callback, commits the journal CAS while that claim is held, then answers it.
-   *  A prompt cancel claims the same callback, so only one operation can commit. */
+  /** Claims the live callback, builds the provider reply, commits the journal CAS while that claim is
+   *  held, then answers it. A reply that cannot be built throws `AgentSessionPromptAnswerRejectedError`
+   *  before the commit. A prompt cancel claims the same callback, so only one operation can commit. */
   answerPrompt(input: {
     sessionId: string
     itemId: string
     kind: 'approval' | 'question'
-    optionId: string
+    response: AgentSessionPromptResponse
     fence: number
     commit: () => Promise<void>
   }): Promise<void>

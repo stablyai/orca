@@ -38,7 +38,7 @@ export type { ClaudeJournalTranslator } from './claude-journal-translator-contra
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
-  bindPromptItemId?: (journalItemId: string, promptKey: string, questionId?: string) => void
+  bindPromptItemId?: (journalItemId: string, promptKey: string) => void
   coalesceMs?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
   fallbackIdPrefix?: string
@@ -56,8 +56,7 @@ export function createClaudeSessionJournalTranslator(
         sink,
         fallbackIdPrefix,
         ...(onBackgroundTaskJournalFailure ? { onBackgroundTaskJournalFailure } : {}),
-        bindPromptItemId: (itemId, promptKey, questionId) =>
-          prompts.bindJournalItemId(itemId, promptKey, questionId)
+        bindPromptItemId: (itemId, promptKey) => prompts.bindJournalItemId(itemId, promptKey)
       })
     : null
 }

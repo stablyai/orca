@@ -233,6 +233,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   it.each(['agent_session_operation_conflict', 'agent_session_operation_expired'] as const)(
     'rotates a send operation after %s',
     async (code) => {
+      // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
       vi.mocked(globalThis.crypto.randomUUID)
         .mockReturnValueOnce('11111111-1111-4111-8111-111111111111')
         .mockReturnValueOnce('22222222-2222-4222-8222-222222222222')
@@ -593,6 +594,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   })
 
   it('retries an unknown head and advances a queued tail', async () => {
+    // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
@@ -655,6 +657,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   })
 
   it('rotates a history-rejected unknown head so the queued tail can advance', async () => {
+    // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
@@ -715,6 +718,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   })
 
   it('rotates the id after a refused write and delivers the message exactly once', async () => {
+    // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')

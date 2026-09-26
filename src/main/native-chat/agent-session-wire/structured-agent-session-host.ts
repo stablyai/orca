@@ -221,9 +221,10 @@ export class StructuredAgentSessionHost {
 
   listSessionTabs = () => sessionTabs.listStructuredAgentSessionTabs(this.sessions)
   getPersistedVisibleSessionTabIndex = () => this.deps.store.getVisibleSessionTabIndex()
+  getSessionTabId = (sessionId: string): string | null => this.deps.store.getSessionTabId(sessionId)
 
-  setSessionTabVisibility = (sessionId: string, visible: boolean): Promise<void> =>
-    sessionTabs.setStructuredAgentSessionTabVisibility(this, sessionId, visible)
+  setSessionTabVisibility = (sessionId: string, visible: boolean, tabId?: string): Promise<void> =>
+    sessionTabs.setStructuredAgentSessionTabVisibility(this, sessionId, visible, tabId)
 
   reconcileRestartLeases = async (): Promise<void> => {
     const refusal = await this.reconcileLeases('startup')

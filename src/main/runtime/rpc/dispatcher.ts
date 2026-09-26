@@ -23,6 +23,11 @@ import { mapDispatcherError } from './dispatcher-error-response'
 import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
 import { invokeDispatcherUnaryMethod } from './dispatcher-unary-method-invocation'
+import {
+  needsOrchestrationCallerResolution,
+  resolveOrchestrationSessionCaller,
+  type ResolvedOrchestrationRequest
+} from './orchestration-session-caller'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -69,7 +74,15 @@ export class RpcDispatcher {
       return migrationFence
     }
 
-    const parsedParams = parseRpcRequestParams(request, method, meta)
+    let resolved: ResolvedOrchestrationRequest = { request }
+    if (needsOrchestrationCallerResolution(request)) {
+      try {
+        resolved = await resolveOrchestrationSessionCaller(this.runtime, request, options)
+      } catch (error) {
+        return mapDispatcherError(request, meta, error)
+      }
+    }
+    const parsedParams = parseRpcRequestParams(resolved.request, method, meta)
     if (parsedParams.error) {
       return parsedParams.error
     }
@@ -89,7 +102,7 @@ export class RpcDispatcher {
     try {
       const result = await invokeDispatcherUnaryMethod({
         runtime: this.runtime,
-        request,
+        request: resolved.request,
         method,
         params: parsedParams.value,
         context: {
@@ -106,7 +119,8 @@ export class RpcDispatcher {
           clientCapabilities: options?.clientCapabilities,
           updateClientCapabilities: options?.updateClientCapabilities,
           orchestrationCapability: request.orchestrationCapability,
-          authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint
+          authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,
+          orchestrationCaller: resolved.caller
         },
         orchestrationMutations: this.orchestrationMutations,
         legacyOrchestration: this.legacyOrchestration

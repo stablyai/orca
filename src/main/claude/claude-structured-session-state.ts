@@ -209,7 +209,7 @@ export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAda
  */
 export type ClaudeSessionExit = {
   connection: ClaudeStreamJsonConnection
-  /** Full session identity retained until its child tree is proven gone. */
+  /** Full session identity retained until the exit settles. */
   session: ClaudeSession
   error: Error
   /** The exit path's first proof attempt; retries must observe this result. */
