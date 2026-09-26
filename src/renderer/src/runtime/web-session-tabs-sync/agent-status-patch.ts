@@ -117,15 +117,14 @@ export function buildMirroredAgentStatusPatch(
       entry.state === 'done' &&
       existing.state !== 'done' &&
       existing.stateStartedAt > entry.stateStartedAt
-    // Why: cross-machine wall clocks are not comparable, so the host frame could
-    // outrank live client status forever; a proven client writer keeps its own
-    // state (still adopting the host's identity fields below) unless the host
-    // carries a state class the client's bytes can never see.
+    // Why: cross-machine wall clocks are not comparable, so a host row is replaced
+    // only by a proven, fresh, client-owned row that the host does not pierce —
+    // wall clocks never adjudicate.
     const clientOwnsEntry =
       isFencedClientAgentStatus(entry.paneKey, existing, now) &&
       !hostAgentStatusPiercesClientAuthority(entry)
     const nextEntry =
-      existing && (clientOwnsEntry || existing.updatedAt > entry.updatedAt)
+      existing && clientOwnsEntry
         ? {
             ...normalizeCompatibleAgentStatusEntryForOwner(existing, entry.agentType),
             ...(clientOwnsEntry && existing.state === 'working' && entry.state === 'working'
