@@ -14,7 +14,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import {
   DISPATCH_REJECTED_CANCELLED,
-  DISPATCH_REJECTED_PROVIDER_CLOSED
+  DISPATCH_REJECTION_PROVIDER_CLOSED
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -568,7 +568,7 @@ describe('a quit with a message still queued', () => {
 
     expect(await afterRelaunch(id)).toMatchObject({
       dispatchState: 'rejected',
-      reason: DISPATCH_REJECTED_PROVIDER_CLOSED
+      ...DISPATCH_REJECTION_PROVIDER_CLOSED
     })
   })
 
@@ -596,7 +596,7 @@ describe('a quit with a message still queued', () => {
     expect(dispatch).not.toHaveBeenCalled()
     expect(await afterRelaunch(id)).toMatchObject({
       dispatchState: 'rejected',
-      reason: DISPATCH_REJECTED_PROVIDER_CLOSED
+      ...DISPATCH_REJECTION_PROVIDER_CLOSED
     })
   })
 })

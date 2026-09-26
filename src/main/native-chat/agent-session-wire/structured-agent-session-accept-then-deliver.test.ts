@@ -12,8 +12,8 @@ import type { AgentJournalSubmission } from '../../../shared/agent-session-journ
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import {
   DISPATCH_REJECTED_CANCELLED,
-  DISPATCH_REJECTED_HOST_RESTARTED,
-  DISPATCH_REJECTED_PROVIDER_CLOSED
+  DISPATCH_REJECTION_HOST_RESTARTED,
+  DISPATCH_REJECTION_PROVIDER_CLOSED
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
@@ -462,7 +462,7 @@ describe('what an earlier host process left behind', () => {
 
     expect(submission('queued')).toMatchObject({
       dispatchState: 'rejected',
-      reason: DISPATCH_REJECTED_HOST_RESTARTED
+      ...DISPATCH_REJECTION_HOST_RESTARTED
     })
     expect(dispatch).not.toHaveBeenCalled()
   })
@@ -599,7 +599,7 @@ describe('an eviction between acceptance and handover', () => {
 
     expect(await reopened(id)).toMatchObject({
       dispatchState: 'rejected',
-      reason: DISPATCH_REJECTED_PROVIDER_CLOSED
+      ...DISPATCH_REJECTION_PROVIDER_CLOSED
     })
     expect(dispatch).not.toHaveBeenCalled()
   })
@@ -623,7 +623,7 @@ describe('an eviction between acceptance and handover', () => {
 
     expect(await reopened(queued)).toMatchObject({
       dispatchState: 'rejected',
-      reason: DISPATCH_REJECTED_PROVIDER_CLOSED
+      ...DISPATCH_REJECTION_PROVIDER_CLOSED
     })
     expect(submission(handed)).toMatchObject({ dispatchState: 'unknown' })
     expect(dispatch).toHaveBeenCalledTimes(1)

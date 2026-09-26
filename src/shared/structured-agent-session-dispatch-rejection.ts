@@ -27,10 +27,12 @@ export const DISPATCH_REJECTED_CODEX_QUEUE_FULL = 'codex structured dispatch que
 /** The provider confirmed a queued frame was withdrawn before execution. */
 export const DISPATCH_REJECTED_CANCELLED = 'provider_cancelled_before_start'
 
-/** Accepted by a host process that ended before handing it to any provider. */
+/** Legacy marker: accepted by a host process that ended before handing it to any provider.
+ *  Read only; released clients print it raw, so new rows carry a sentence. */
 export const DISPATCH_REJECTED_HOST_RESTARTED = 'host_restarted_before_delivery'
 
-/** Accepted, then the provider was closed before the message was handed to it. */
+/** Legacy marker: accepted, then the provider was closed before the message was handed to it.
+ *  Read only, like the one above. */
 export const DISPATCH_REJECTED_PROVIDER_CLOSED = 'provider_closed_before_delivery'
 
 export function dispatchWriteFailureReason(error: unknown): string {
@@ -51,12 +53,12 @@ export const DISPATCH_REJECTION_CANCELLED: AgentJournalDispatchRejection = {
 }
 
 export const DISPATCH_REJECTION_HOST_RESTARTED: AgentJournalDispatchRejection = {
-  reason: DISPATCH_REJECTED_HOST_RESTARTED,
+  reason: 'Orca restarted before this message was sent.',
   rejection: { kind: 'hostRestarted' }
 }
 
 export const DISPATCH_REJECTION_PROVIDER_CLOSED: AgentJournalDispatchRejection = {
-  reason: DISPATCH_REJECTED_PROVIDER_CLOSED,
+  reason: 'The chat closed before this message was sent.',
   rejection: { kind: 'chatClosed' }
 }
 

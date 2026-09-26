@@ -20,7 +20,9 @@ import {
   type AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire-refusals'
 import {
+  DISPATCH_REJECTION_HOST_RESTARTED,
   DISPATCH_REJECTION_NOT_DELIVERED,
+  DISPATCH_REJECTION_PROVIDER_CLOSED,
   type AgentJournalDispatchRejection
 } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { AgentSessionAcquisitionRefusal } from './structured-agent-session-adapter'
@@ -91,8 +93,8 @@ const FAILURE_SENTENCES = {
   queueFull: () => 'Too many messages were waiting for the agent, so this one was not sent.',
   writeFailed: () => "Orca couldn't hand this message to the agent, so it was not sent.",
   cancelled: () => 'This message was withdrawn before the agent started it.',
-  chatClosed: () => 'The chat closed before this message was sent.',
-  hostRestarted: () => 'Orca restarted before this message was sent.',
+  chatClosed: () => DISPATCH_REJECTION_PROVIDER_CLOSED.reason,
+  hostRestarted: () => DISPATCH_REJECTION_HOST_RESTARTED.reason,
   notDelivered: () => DISPATCH_REJECTION_NOT_DELIVERED.reason,
   compactionFailed: (_, fact) => quotingPersonDetail('Compaction failed', fact.detail),
   compactionUnconfirmed: () => 'Compaction completion is unconfirmed.',

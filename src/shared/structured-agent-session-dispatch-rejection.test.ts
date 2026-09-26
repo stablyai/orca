@@ -7,6 +7,8 @@ import {
   DISPATCH_REJECTED_HOST_RESTARTED,
   DISPATCH_REJECTED_PROVIDER_CLOSED,
   DISPATCH_REJECTED_QUEUE_FULL,
+  DISPATCH_REJECTION_HOST_RESTARTED,
+  DISPATCH_REJECTION_PROVIDER_CLOSED,
   dispatchWriteFailureReason,
   isWriteFailureSubmission
 } from './structured-agent-session-dispatch-rejection'
@@ -56,6 +58,20 @@ describe('classifyDispatchRejection', () => {
     expect(
       classifyDispatchRejection({ reason: 'Not sent.', rejection: { kind: 'queueFull' } })
     ).toMatchObject({ category: 'transport', verdict: 'failure' })
+  })
+
+  it('writes a sentence, not a marker released clients would print, for a restart or a close', () => {
+    for (const [written, kind] of [
+      [DISPATCH_REJECTION_HOST_RESTARTED, 'hostRestarted'],
+      [DISPATCH_REJECTION_PROVIDER_CLOSED, 'chatClosed']
+    ] as const) {
+      expect(written.reason).not.toMatch(/^[a-z_]+$/)
+      expect(classifyDispatchRejection(written)).toEqual({
+        category: 'undelivered',
+        verdict: null,
+        kind
+      })
+    }
   })
 
   it('falls back to the reason when a newer host wrote a kind this build does not know', () => {
