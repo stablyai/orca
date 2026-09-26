@@ -1,3 +1,4 @@
+import { activateWorkspaceTab } from './workspace-tab-activation'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -63,8 +64,7 @@ export function activateTabNumberShortcut(index: number): boolean {
 
   const worktreeId = target.worktreeId
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
-  store.focusGroup(worktreeId, target.groupId)
-  store.activateTab(target.id)
+  activateWorkspaceTab(store, { worktreeId, groupId: target.groupId, tabId: target.id })
 
   if (target.contentType === 'terminal') {
     if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
