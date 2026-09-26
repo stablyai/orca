@@ -156,27 +156,27 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
       }
       const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
-      const leafId = surface?.tab.leafId ?? parsePaneKey(pty.pty.paneKey ?? '')?.leafId
-      if (ptyKilled && siblingCount > 1 && leafId) {
-        // Why: the pane's removal is this close's own commit, not a side effect of its exit.
-        this.closeTerminalLeaf(pty.pty.worktreeId, tabId, leafId)
-      }
-      if (!ptyKilled || siblingCount <= 1) {
-        if (surface) {
-          // Why: paired viewers keep ended streams mounted until the HUB publishes removal, so explicit close uses the durable host-tab transaction instead of viewer-local exit handling.
-          try {
-            await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
-              localPtyTeardownOwnedExternally: true
-            })
-          } catch (error) {
-            if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
-              throw error
-            }
-            this.notifier?.closeTerminal(tabId)
+      if (siblingCount > 1) {
+        const leafId = surface?.tab.leafId ?? parsePaneKey(pty.pty.paneKey ?? '')?.leafId
+        // Why: the pane's removal is this close's own commit, not a side effect of its exit. An
+        // unconfirmed stop is unverifiable, never a reason to close the live siblings with it.
+        if (leafId) {
+          this.closeTerminalLeaf(pty.pty.worktreeId, tabId, leafId)
+        }
+      } else if (surface) {
+        // Why: paired viewers keep ended streams mounted until the HUB publishes removal, so explicit close uses the durable host-tab transaction instead of viewer-local exit handling.
+        try {
+          await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
+            localPtyTeardownOwnedExternally: true
+          })
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+            throw error
           }
-        } else {
           this.notifier?.closeTerminal(tabId)
         }
+      } else {
+        this.notifier?.closeTerminal(tabId)
       }
       return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
     }

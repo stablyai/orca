@@ -18,7 +18,10 @@ import {
   createHarness,
   makeSession
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
-import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
+import {
+  retireTerminalSurfaceFromPersistence,
+  sanitizeWorkspaceSessionTerminalRetirements
+} from './mobile-session-terminal-persistence-retirement'
 import { advanceTerminalTopologyRevision } from './workspace-session-terminal-membership-authority'
 
 const splitLayout = {
@@ -212,6 +215,73 @@ describe('CLI close of one pane in a split tab', () => {
     })
     expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
     expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['reports no exit', false],
+    ['throws, as an unreachable SSH host does', new Error('ssh_host_unreachable')]
+  ] as const)(
+    'closes only that pane, never the live sibling, when its stop %s',
+    async (_case, stopResult) => {
+      const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
+      harness.syncSplitFixtureGraph()
+      harness.syncFixtureTabWithoutLeaf()
+      harness.setVerifiedStopResult(stopResult)
+      // A renderer that honours a whole-tab close, so a widened close shows as the lost sibling.
+      harness.setCloseTerminalTabAction(() => harness.retirePersistedTab())
+      const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+        (candidate) => candidate.ptyId === PTY_ID
+      )!
+
+      const receipt = await harness.runtime.closeTerminal(terminal.handle)
+
+      // A stale renderer save that still lists the pane can neither restore it nor drop the sibling.
+      const saved = sanitizeWorkspaceSessionTerminalRetirements(
+        { ...harness.getSession(), terminalLayoutsByTabId: { [TAB_ID]: splitLayout } },
+        harness.getSession()
+      )
+      expect(saved.tabsByWorktree[WORKTREE_ID]).toEqual([expect.objectContaining({ id: TAB_ID })])
+      expect(saved.terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
+        type: 'leaf',
+        leafId: SIBLING_LEAF_ID
+      })
+      expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
+      expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+      // The owed stop still goes out through the controller's kill, which records SSH pending kills.
+      expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+      expect(harness.kill).not.toHaveBeenCalledWith(SIBLING_PTY_ID)
+      expect(receipt).toMatchObject({
+        tabId: TAB_ID,
+        ptyKilled: false,
+        ptyStopVerdict: 'unverifiable'
+      })
+    }
+  )
+
+  it('drops only that pane from paired clients on a host with no renderer listing the tab', async () => {
+    const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
+    harness.syncSplitFixtureGraph()
+    harness.syncFixtureTabWithoutLeaf()
+    const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+      (candidate) => candidate.ptyId === PTY_ID
+    )!
+    harness.syncEmptyGraph()
+    // No exit arrives to retire the pane from the published snapshot.
+    harness.setVerifiedStopResult(new Error('ssh_host_unreachable'))
+
+    await harness.runtime.closeTerminal(terminal.handle)
+
+    const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    expect(snapshot.tabs).toEqual([
+      expect.objectContaining({ parentTabId: TAB_ID, leafId: SIBLING_LEAF_ID })
+    ])
+    expect(snapshot.retiredTerminalSurfaces).toEqual([
+      expect.objectContaining({ parentTabId: TAB_ID, leafId: LEAF_ID, ptyId: PTY_ID })
+    ])
+    expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]?.root).toEqual({
+      type: 'leaf',
+      leafId: SIBLING_LEAF_ID
+    })
   })
 
   it('keeps the sibling when the stop delivers the exit before the pane commit', async () => {
