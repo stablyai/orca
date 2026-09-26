@@ -6,8 +6,16 @@
 
 import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
 
-/** What the person was doing, which decides how they try again. */
-export type AgentSessionWriteKind = 'send' | 'stop' | 'answer' | 'option' | 'command' | 'goal'
+/** What the person was doing, which decides how they try again. `send` keeps the message
+ *  behind a Retry control; `composer-send` puts it back in the composer, as the phone does. */
+export type AgentSessionWriteKind =
+  | 'send'
+  | 'composer-send'
+  | 'stop'
+  | 'answer'
+  | 'option'
+  | 'command'
+  | 'goal'
 
 /** The kind of write an `agentSession.*` fingerprint method stands for. */
 export function agentSessionWriteKindForMethod(fingerprintMethod: string): AgentSessionWriteKind {
@@ -31,6 +39,7 @@ export function agentSessionWriteKindForMethod(fingerprintMethod: string): Agent
 
 const TRY_AGAIN: Record<AgentSessionWriteKind, string> = {
   send: 'Retry to send it again.',
+  'composer-send': 'Send it again.',
   stop: 'Press Stop again.',
   answer: 'Answer it again.',
   option: 'Choose it again.',
@@ -40,6 +49,7 @@ const TRY_AGAIN: Record<AgentSessionWriteKind, string> = {
 
 const NOT_DONE: Record<AgentSessionWriteKind, string> = {
   send: 'Your message was not sent.',
+  'composer-send': 'Your message was not sent.',
   stop: "The agent wasn't stopped.",
   answer: 'Your answer was not sent.',
   option: "The setting wasn't changed.",

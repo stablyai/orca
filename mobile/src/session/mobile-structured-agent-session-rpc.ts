@@ -10,7 +10,8 @@ import type {
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import {
   agentSessionRefusalNotice,
-  agentSessionWriteKindForMethod
+  agentSessionWriteKindForMethod,
+  type AgentSessionWriteKind
 } from '../../../src/shared/agent-session-refusal-notice'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
@@ -119,6 +120,12 @@ export function timeoutForDeadline(deadline: number | undefined): number | null 
   return timeoutMs >= MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS ? timeoutMs : null
 }
 
+/** A refused phone send goes back into the composer; there is no Retry control. */
+function phoneWriteKind(fingerprintMethod: string): AgentSessionWriteKind {
+  const write = agentSessionWriteKindForMethod(fingerprintMethod)
+  return write === 'send' ? 'composer-send' : write
+}
+
 export async function requestStructuredAgentSessionMutation<TValue>(args: {
   client: RpcClient
   method: string
@@ -170,10 +177,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       : {
           status: 'refused',
           code: result.refusal.code,
-          message: agentSessionRefusalNotice(
-            result.refusal,
-            agentSessionWriteKindForMethod(fingerprintMethod)
-          )
+          message: agentSessionRefusalNotice(result.refusal, phoneWriteKind(fingerprintMethod))
         }
   } catch (error) {
     if (error instanceof AgentSessionRpcResponseError && PRE_HANDLER_RPC_REFUSALS.has(error.code)) {

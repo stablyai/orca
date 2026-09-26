@@ -5,7 +5,15 @@ import {
   type AgentSessionWriteKind
 } from './agent-session-refusal-notice'
 
-const WRITES: AgentSessionWriteKind[] = ['send', 'stop', 'answer', 'option', 'command', 'goal']
+const WRITES: AgentSessionWriteKind[] = [
+  'send',
+  'composer-send',
+  'stop',
+  'answer',
+  'option',
+  'command',
+  'goal'
+]
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
 
 describe('agentSessionRefusalNotice', () => {

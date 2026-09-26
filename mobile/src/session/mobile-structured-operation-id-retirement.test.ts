@@ -157,7 +157,7 @@ describe('what a structured refusal says on the phone', () => {
     expect(result).toEqual({
       status: 'refused',
       code: 'agent_session_checkpoint_stale',
-      message: 'The agent was restarting. Your message was not sent. Retry to send it again.'
+      message: 'The agent was restarting. Your message was not sent. Send it again.'
     })
   })
 })

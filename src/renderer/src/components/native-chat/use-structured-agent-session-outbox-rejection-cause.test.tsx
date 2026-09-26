@@ -73,6 +73,7 @@ describe('a send the host rejected because the agent never started', () => {
 
 // Stable across renders, as a mounted pane's target is.
 const LOCAL_TARGET = { kind: 'local' } as const
+const NO_SUBMISSIONS: AgentJournalSubmission[] = []
 
 function submission(
   clientMessageId: string,
@@ -115,7 +116,7 @@ describe('a send refused while its agent restarted', () => {
           fence,
           submissions
         }),
-      { initialProps: { fence: 1, submissions: [] as AgentJournalSubmission[] } }
+      { initialProps: { fence: 1, submissions: NO_SUBMISSIONS } }
     )
 
     act(() => expect(result.current.send('hello')).toBe(true))
