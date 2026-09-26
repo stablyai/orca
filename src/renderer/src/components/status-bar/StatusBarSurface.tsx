@@ -8,7 +8,6 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import { getProviderDisplayName } from './tooltip'
 import { UsageRosterPanel } from './UsageRosterPanel'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import {
@@ -24,10 +23,9 @@ import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
-import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
-import { CodexSwitcherMenu } from './CodexSwitcherMenu'
-import { ProviderDetailsMenu, CLOSE_ALL_CONTEXT_MENUS_EVENT } from './ProviderDetailsMenu'
-import { ProviderLetterBadge, ProviderSegment } from './StatusBarProviderSegment'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './ProviderDetailsMenu'
+import { AccountUsageSegment } from './AccountUsageSegment'
+import { AccountUsageDetailsMenu } from './AccountUsageDetailsMenu'
 import { useStatusBarController } from './use-status-bar-controller'
 import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
@@ -75,7 +73,7 @@ export function StatusBarSurface({
     isEmptyUsageState,
     isRefreshing,
     petEnabled,
-    rosterProviders,
+    usageEntries,
     setMenuOpen,
     setMenuPoint,
     setStatusBarUsageMode,
@@ -107,7 +105,7 @@ export function StatusBarSurface({
         setMenuOpen(true)
       }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         {isEmptyUsageState ? (
           showEmptyUsageCta ? (
             <StatusBarUsageEmptyCta />
@@ -123,28 +121,22 @@ export function StatusBarSurface({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-3 rounded px-1 py-0.5 hover:bg-accent/70"
+                  className="inline-flex min-w-0 items-center gap-3 overflow-x-auto rounded px-1 py-0.5 scrollbar-sleek hover:bg-accent/70"
                   aria-label={translate(
                     'auto.components.status.bar.UsageRosterPanel.title',
                     'Usage'
                   )}
                 >
-                  {rosterProviders.map((p) =>
-                    iconOnly ? (
-                      // Narrow status bar: fall back to main's compact letter badge.
-                      <span key={p.provider} title={getProviderDisplayName(p.provider)}>
-                        <ProviderLetterBadge p={p} />
-                      </span>
-                    ) : (
-                      <ProviderSegment
-                        key={p.provider}
-                        p={p}
-                        compact={compact}
-                        display={usagePercentageDisplay}
-                        mode={statusBarUsageMode}
-                      />
-                    )
-                  )}
+                  {usageEntries.map((entry) => (
+                    <AccountUsageSegment
+                      key={entry.key}
+                      entry={entry}
+                      compact={compact}
+                      iconOnly={iconOnly}
+                      display={usagePercentageDisplay}
+                      mode={statusBarUsageMode}
+                    />
+                  ))}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -160,7 +152,7 @@ export function StatusBarSurface({
                 onCloseAutoFocus={usageMenuFocusHandoff.onCloseAutoFocus}
               >
                 <UsageRosterPanel
-                  providers={rosterProviders}
+                  entries={usageEntries}
                   display={usagePercentageDisplay}
                   statusBarUsageMode={statusBarUsageMode}
                   onStatusBarUsageModeChange={setStatusBarUsageMode}
@@ -171,46 +163,9 @@ export function StatusBarSurface({
                   canSignIn={(provider) => getUsageProviderAccountsSectionId(provider) !== null}
                   onManageAccounts={handleManageAccounts}
                   onUsageDetails={handleUsageDetails}
-                  renderRow={(p, rowNode) => {
-                    // Every provider drills into its detail panel (parity with the
-                    // per-provider dropdowns on main); Claude/Codex additionally get
-                    // the account switcher + runtime toggle + Codex reset credits.
-                    if (p.provider === 'claude') {
-                      return (
-                        <ClaudeSwitcherMenu
-                          claude={p}
-                          compact={compact}
-                          iconOnly={false}
-                          asSubmenu
-                          triggerContent={rowNode}
-                        />
-                      )
-                    }
-                    if (p.provider === 'codex') {
-                      return (
-                        <CodexSwitcherMenu
-                          codex={p}
-                          compact={compact}
-                          iconOnly={false}
-                          asSubmenu
-                          triggerContent={rowNode}
-                        />
-                      )
-                    }
-                    return (
-                      <ProviderDetailsMenu
-                        provider={p}
-                        compact={compact}
-                        iconOnly={false}
-                        asSubmenu
-                        triggerContent={rowNode}
-                        ariaLabel={translate(
-                          'auto.components.status.bar.UsageRosterPanel.openDetails',
-                          'Open usage details'
-                        )}
-                      />
-                    )
-                  }}
+                  renderRow={(_p, rowNode, entry) => (
+                    <AccountUsageDetailsMenu entry={entry} compact={compact} row={rowNode} />
+                  )}
                 />
               </DropdownMenuContent>
             </DropdownMenu>
@@ -241,9 +196,9 @@ export function StatusBarSurface({
         )}
       </div>
 
-      <div className="flex-1" />
+      <div className="min-w-0 flex-1" />
 
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3">
         {!isPairedWebClientWindow() ? <CaffeinateStatusSegment iconOnly={iconOnly} /> : null}
         <RemoteServerUpdateStatusSegment iconOnly={iconOnly} />
         <SkillUpdateStatusSegment iconOnly={iconOnly} />
