@@ -40,7 +40,12 @@ export class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMarkPtyLivene
     }
     // Why: display changes are async; a later PTY write must keep the floor
     // when an older phone-fit operation eventually completes.
-    if (!isCurrent()) {
+    // Disconnect can release the floor while the phone-fit operation is pending.
+    if (
+      !isCurrent() ||
+      (!this.mobileSubscribers.get(ptyId)?.has(clientId) &&
+        this.pendingSoftLeavers.get(ptyId)?.clientId !== clientId)
+    ) {
       return
     }
     this.setDriver(ptyId, { kind: 'mobile', clientId })

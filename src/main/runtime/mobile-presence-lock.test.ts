@@ -255,6 +255,40 @@ describe('mobile presence lock — driver state machine', () => {
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-B' })
   })
 
+  it.each(['before commit', 'during commit'] as const)(
+    'desktop take-back supersedes mobile input %s',
+    async (timing) => {
+      const { runtime, driverEvents, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+      await runtime.reclaimTerminalForDesktop('pty-1')
+
+      const claim = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+      let finishLayout = () => {}
+      let committing: Promise<void> | undefined
+      if (timing === 'during commit') {
+        vi.spyOn(runtime, 'applyMobileDisplayMode').mockImplementationOnce(
+          () =>
+            new Promise<boolean>((resolve) => {
+              finishLayout = () => resolve(true)
+            })
+        )
+        committing = claim.commit()
+      }
+
+      await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+      finishLayout()
+      await (committing ?? claim.commit())
+
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+      expect(driverEvents.at(-1)?.driver).toEqual({ kind: 'desktop' })
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+
+      await runtime.beginMobileInputFloor('pty-1', 'phone-A')!.commit()
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+    }
+  )
+
   it('mobile input without an active subscriber cannot create an orphaned floor lock', async () => {
     const { runtime } = createRuntime()
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
@@ -265,6 +299,37 @@ describe('mobile presence lock — driver state machine', () => {
 
     expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
   })
+
+  it.each(['input', 'legacy'] as const)(
+    'a %s phone-fit completion after disconnect cannot recreate the mobile lock',
+    async (entry) => {
+      const { runtime, driverEvents } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+      await runtime.reclaimTerminalForDesktop('pty-1')
+
+      let finishLayout!: () => void
+      vi.spyOn(runtime, 'applyMobileDisplayMode').mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            finishLayout = () => resolve(true)
+          })
+      )
+      const committing =
+        entry === 'input'
+          ? runtime.beginMobileInputFloor('pty-1', 'phone-A')!.commit()
+          : runtime.mobileTookFloor('pty-1', 'phone-A')
+      runtime.handleMobileUnsubscribe('pty-1', 'phone-A')
+      await vi.advanceTimersByTimeAsync(250)
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+
+      finishLayout()
+      await committing
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'idle' })
+      expect(driverEvents.at(-1)?.driver).toEqual({ kind: 'idle' })
+    }
+  )
 
   it('admits a soft-leaving client to reserve the input floor within the grace window', async () => {
     const { runtime } = createRuntime()
