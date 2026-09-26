@@ -61,27 +61,60 @@ describe('running terminal close confirmation store', () => {
     ).toBe('tab-2')
   })
 
-  it('shows one prompt for a repeat request but still resolves both closes', () => {
+  // Why: closing the same tab again while its prompt is up means "I'm sure" (Cmd+W
+  // x2, #21603) — the repeat confirms instead of waiting for a click, and both closes
+  // still resolve.
+  it('confirms the visible prompt when the same tab is closed again', () => {
     const first = vi.fn()
     const duplicate = vi.fn()
     const store = useRunningTerminalCloseConfirmStore.getState()
 
     store.requestRunningTerminalCloseConfirm(request('tab-1', first))
     store.requestRunningTerminalCloseConfirm(request('tab-1', duplicate))
-    store.confirmRunningTerminalClose()
 
     expect(first).toHaveBeenCalledTimes(1)
     expect(duplicate).toHaveBeenCalledTimes(1)
     expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
   })
 
-  it('cancels both callers when a folded repeat request is dismissed', () => {
+  it('still guards a repeat that lands on a freshly revealed prompt', () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    const repeat = vi.fn()
+    const store = useRunningTerminalCloseConfirmStore.getState()
+
+    store.requestRunningTerminalCloseConfirm(request('tab-1', first))
+    store.requestRunningTerminalCloseConfirm(request('tab-2', second))
+
+    store.confirmRunningTerminalClose()
+    // The prompt now shows tab-2 under the inter-request guard: a repeat close of
+    // tab-2 folds in but must not confirm until the guard lapses.
+    store.requestRunningTerminalCloseConfirm(request('tab-2', repeat))
+
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).not.toHaveBeenCalled()
+    expect(repeat).not.toHaveBeenCalled()
+    expect(
+      useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm?.terminalTabId
+    ).toBe('tab-2')
+
+    advancePastGuard()
+    store.confirmRunningTerminalClose()
+
+    expect(second).toHaveBeenCalledTimes(1)
+    expect(repeat).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels both callers when a folded queued repeat request is dismissed', () => {
     const store = useRunningTerminalCloseConfirmStore.getState()
     const firstCancel = vi.fn()
     const duplicateCancel = vi.fn()
 
-    store.requestRunningTerminalCloseConfirm(request('tab-1', vi.fn(), firstCancel))
-    store.requestRunningTerminalCloseConfirm(request('tab-1', vi.fn(), duplicateCancel))
+    store.requestRunningTerminalCloseConfirm(request('tab-1', vi.fn()))
+    store.requestRunningTerminalCloseConfirm(request('tab-2', vi.fn(), firstCancel))
+    store.requestRunningTerminalCloseConfirm(request('tab-2', vi.fn(), duplicateCancel))
+    store.dismissRunningTerminalClose()
+    advancePastGuard()
     store.dismissRunningTerminalClose()
 
     expect(firstCancel).toHaveBeenCalledTimes(1)
