@@ -52,6 +52,7 @@ export const CLI_COMMAND_NAMES = [
   'project',
   'reload',
   'repo',
+  'runtime-access',
   'screenshot',
   'scroll',
   'scrollintoview',

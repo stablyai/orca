@@ -1,3 +1,4 @@
+import { startSpan } from '../../observability/tracer'
 import { InvalidArgumentError, ZodError, formatZodError } from './core'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
 import {
@@ -39,5 +40,12 @@ export function mapDispatcherError(
   if (request.method.startsWith('emulator.')) {
     return mapEmulatorError(request.id, meta, error)
   }
-  return mapRuntimeError(request.id, meta, error)
+  const response = mapRuntimeError(request.id, meta, error)
+  if (request.method.startsWith('runtimeAccess.') && response.error.code === 'runtime_error') {
+    startSpan('rpc.runtime-access.unexpected-error').fail(
+      error instanceof Error ? error : String(error)
+    )
+    return errorResponse(request.id, meta, 'runtime_error', 'Unexpected runtime error.')
+  }
+  return response
 }

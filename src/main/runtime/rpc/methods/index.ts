@@ -1,4 +1,5 @@
 import { STATUS_METHODS } from './status'
+import { RUNTIME_ACCESS_METHODS } from './runtime-access'
 import { AI_VAULT_METHODS } from './ai-vault'
 import { AUTOMATION_METHODS } from './automations'
 import { REPO_METHODS } from './repo'
@@ -53,6 +54,7 @@ import { AGENT_LAUNCH_METHODS } from './agent-launch'
 // grep-point for "what methods does the RPC server expose?" — useful when
 // auditing the security boundary or wiring new CLI commands.
 export const ALL_RPC_METHODS = [
+  ...RUNTIME_ACCESS_METHODS,
   ...STATUS_METHODS,
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,

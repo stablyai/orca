@@ -440,6 +440,54 @@ If you later install the desktop CLI from Orca settings, use that CLI for normal
 shell workflows. Keep the AppImage path in systemd so service restarts do not
 depend on an interactive shell profile.
 
+## Revoking runtime access
+
+Run these commands directly on the machine hosting Orca, under the same OS account
+and user-data directory as the running server. For a container, run them inside
+that container. A native SSH login to the server works; Orca's forwarded SSH/WSL
+CLI bridge is deliberately refused. On Windows, use a host terminal.
+
+```sh
+orca runtime-access list --json
+orca runtime-access revoke --device <deviceId> --json
+```
+
+Use the full `deviceId` from the list. The list includes unused links as well as
+previously used grants, with names and creation/last-use timestamps; it never
+returns credentials. Both responses identify the answering runtime in
+`_meta.runtimeId`. Human-readable output also prints that identity.
+
+Revocation removes that grant durably and disconnects every client sharing it.
+Its credential cannot reconnect, including after a server restart. Other runtime
+grants, mobile pairings, accounts, sessions and projects are not removed. This is
+grant-level revocation: two people using the same link cannot be revoked separately.
+
+Remote selector flags and the ambient `ORCA_ENVIRONMENT`, `ORCA_PAIRING_CODE`, and
+`ORCA_REMOTE_PAIRING` variables are rejected. Unset those variables in the host
+terminal before running the command. This prevents a destructive command from
+silently answering for a different host than intended.
+
+A missing grant produces `runtime_access_not_found` and a nonzero exit. A storage
+failure also exits nonzero; do not treat it as successful revocation. Unexpected
+errors return a generic `runtime_error`; details go to host diagnostics when
+tracing is enabled. List again after resolving the failure. Repeating a successful
+revoke reports not found. If the registry failed to load, both commands return
+`runtime_access_unavailable` and report that grants are unknown;
+they do not treat a failed read as an empty list. Repair the underlying storage
+problem and restart the server before trying again. If an older running server
+reports `method_not_found`, update and restart it to use these commands.
+
+Regenerating a pairing link only rotates unused grants; it does not revoke used
+grants. A server started with pairing enabled may issue a new pending credential
+on startup. That does not restore a revoked credential. Use `--no-pairing` when
+starting a server that should not advertise a new link.
+
+The administrative RPC capability is supplied only after local socket/named-pipe
+authentication, never by paired WebSocket clients or request fields. This uses
+Orca's existing host-user trust boundary: processes with access to that user's
+private runtime metadata already have local authority. It is not a separate
+administrator role or a way to revoke operating-system access.
+
 ## Upgrade
 
 `orca serve` never updates itself. In headless mode Orca wires up no auto-updater

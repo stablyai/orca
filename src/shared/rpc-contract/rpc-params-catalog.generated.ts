@@ -435,6 +435,7 @@ import {
   RepoUpdate
 } from './repo-params'
 import { BrowserTarget } from './rpc-param-primitives'
+import { RevokeRuntimeAccessParams } from './runtime-access-params'
 import { ClientCapabilitiesUpdate } from './runtime-client-capabilities-params'
 import { SessionTabsUnsubscribeAllParams } from './session-tabs-params'
 import {
@@ -1069,6 +1070,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
   'runtime.clientEvents.subscribe': null,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
+  'runtimeAccess.list': null,
+  'runtimeAccess.revoke': RevokeRuntimeAccessParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,
   'session.tabs.closeLifecycle': CloseLifecycleTab,

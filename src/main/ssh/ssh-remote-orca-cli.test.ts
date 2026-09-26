@@ -42,6 +42,27 @@ function createFakeChild(): FakeChild {
 }
 
 describe('runRemoteOrcaCli', () => {
+  it.each(['list', 'revoke'])(
+    'refuses runtime-access %s before launching the host CLI',
+    async (command) => {
+      const spawn = vi.fn()
+      const response = await runRemoteOrcaCli(
+        new OrcaRuntimeService(),
+        {
+          argv: ['runtime-access', command, '--json'],
+          cwd: '/remote',
+          env: {}
+        },
+        { ...LEGACY_FALLBACK_OPTIONS, spawn, entryExists: () => true }
+      )
+      expect(response.exitCode).toBe(1)
+      expect(JSON.parse(response.stdout)).toMatchObject({
+        ok: false,
+        error: { code: 'unsupported_over_ssh' }
+      })
+      expect(spawn).not.toHaveBeenCalled()
+    }
+  )
   function createRuntime() {
     const messages: {
       id: string

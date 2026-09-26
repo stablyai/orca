@@ -88,6 +88,8 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  'runtime_access_not_found',
+  'runtime_access_unavailable',
   WORKTREE_CREATE_COLLISION_CODE,
   'worktree_id_requires_full_path',
   'run_not_found',
