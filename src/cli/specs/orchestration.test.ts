@@ -68,4 +68,12 @@ describe('orchestration check command spec', () => {
       ])
     )
   })
+
+  it('allows --no-keepalive flag to suppress keepalive frames during wait', () => {
+    const checkSpec = ORCHESTRATION_COMMAND_SPECS.find(
+      (spec) => spec.path.join(' ') === 'orchestration check'
+    )
+
+    expect(checkSpec?.allowedFlags).toContain('no-keepalive')
+  })
 })
