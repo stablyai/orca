@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-table-snapshot-reader'
+import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-table-snapshot'
 import { POLL_TIER_INTERVAL_MS } from './agent-completion-poll-cadence'
 import { nextCadenceInspectionDelayMs } from './agent-completion-poll-interval'
 
