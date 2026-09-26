@@ -5,34 +5,26 @@ import {
   recoveryBindingKeyOf,
   recoveryBindingKeyString,
   selectRecoveryBinding,
-  type RecoveryBindingKey,
   type RecoveryBindingSelector
 } from '../../../shared/cross-machine-recovery-binding-key'
 import type {
   RecoveryAgentBinding,
-  RecoveryImportBindingResult,
   RecoveryImportRequest,
   RecoveryImportResult,
   RecoveryProvenance
 } from '../../../shared/cross-machine-recovery-descriptor'
-import {
-  findRecoveryRecord,
-  worktreeHasSessionTabs
-} from '../../../shared/cross-machine-recovery-session-ops'
+import { worktreeHasSessionTabs } from '../../../shared/cross-machine-recovery-session-ops'
 import type { CrossMachineRecoveryImportParams } from '../../../shared/rpc-contract/cross-machine-recovery-params'
 import { OrcaRecoveryDescriptorV1Schema } from '../../../shared/rpc-contract/cross-machine-recovery-params'
 import { readRepoCommonDirFromGit } from '../../git/worktree-list-reader'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import {
   computeRecoveryImportKey,
-  localRecoveryBindingKey,
-  planRecoveryBindings,
   planRecoveryImport,
-  sourceProviderSessionId,
-  type PlannedRecoveryBinding,
   type RecoveryPlanContext
 } from './recovery-import-plan'
-import { resumeClaimedRecoveryBinding } from './recovery-resume'
+import { holdsOnlyRecoveryImport, replayRecoveryImport } from './recovery-import-replay'
+import { resumeSelectedRecoveryBindings } from './recovery-resume'
 import { applyRecoverySessionIdMap } from './recovery-session-id-map'
 import type { CrossMachineRecoveryHost } from './recovery-runtime-host'
 
@@ -64,43 +56,6 @@ async function resolveRecoveryRepo(
   }
   const repoRoot = path.basename(commonDir) === '.git' ? path.dirname(commonDir) : checkoutPath
   return (await host.addRepo(repoRoot)).id
-}
-
-async function resumeSelected(
-  host: CrossMachineRecoveryHost,
-  worktreeId: string,
-  planned: readonly PlannedRecoveryBinding[],
-  resumeKeys: ReadonlySet<string>
-): Promise<RecoveryImportBindingResult[]> {
-  const results: RecoveryImportBindingResult[] = []
-  for (const { binding, record, result } of planned) {
-    if (!record || !resumeKeys.has(recoveryBindingKeyString(recoveryBindingKeyOf(binding)))) {
-      results.push(result)
-      continue
-    }
-    try {
-      const resumed = await resumeClaimedRecoveryBinding(
-        host,
-        worktreeId,
-        recoveryBindingKeyOf(record),
-        {
-          launchPreferences: binding.launch.launchPreferences
-        }
-      )
-      results.push({
-        ...result,
-        localPaneKey: resumed.localPaneKey,
-        status: 'resumed',
-        terminalHandle: resumed.terminalHandle
-      })
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error)
-      // Why: a failed launch restores the record, so the binding stays dormant rather than lost.
-      const status = reason === 'recovery_session_live_locally' ? 'refused' : 'dormant'
-      results.push({ ...result, status, reason })
-    }
-  }
-  return results
 }
 
 function resolveResumeKeys(
@@ -158,68 +113,9 @@ export async function importRecoveryWorkspaceWithHost(
   const prior = meta?.recoveryProvenance
   const base = { importKey, repoId, worktreeId: worktree.id, instanceId }
 
+  const replay = { descriptor, ctx, resumeKeys, base, dryRun: params.dryRun === true }
   if (prior?.importKey === importKey) {
-    const runsLocally = (key: RecoveryBindingKey): boolean =>
-      host.isProviderSessionLive(key) || host.resumeHolds.isHeld(key)
-    const records = session.sleepingAgentSessionsByPaneKey
-    const fresh = descriptor.bindings.filter(
-      (binding) =>
-        !findRecoveryRecord(records, worktree.id, localRecoveryBindingKey(binding, ctx.pathMap))
-    )
-    const emptyIdMap = { tabs: {}, groups: {}, leaves: {}, browsers: {} }
-    const freshPlans = new Map(
-      planRecoveryBindings(fresh, { terminalLayoutsByTabId: {}, idMap: emptyIdMap }, ctx).map(
-        (plan) => [recoveryBindingKeyString(recoveryBindingKeyOf(plan.binding)), plan]
-      )
-    )
-    const planned = descriptor.bindings.map((binding): PlannedRecoveryBinding => {
-      const localKey = localRecoveryBindingKey(binding, ctx.pathMap)
-      const existing = findRecoveryRecord(records, worktree.id, localKey)
-      const result = {
-        sourcePaneKey: binding.sourcePaneKey,
-        binding: localKey,
-        sourceProviderSessionId: sourceProviderSessionId(binding, ctx),
-        localPaneKey: existing?.paneKey ?? ''
-      }
-      if (existing) {
-        return { binding, record: existing, result: { ...result, status: 'dormant' } }
-      }
-      // Why: a replay never adds a dormant twin beside a session this host already runs.
-      if (runsLocally(localKey)) {
-        return {
-          binding,
-          record: null,
-          result: { ...result, status: 'refused', reason: 'recovery_session_live_locally' }
-        }
-      }
-      const plan = freshPlans.get(recoveryBindingKeyString(recoveryBindingKeyOf(binding)))
-      if (!plan) {
-        throw new Error('recovery_binding_not_found')
-      }
-      return plan
-    })
-    if (!params.dryRun) {
-      await host.applyOp({
-        kind: 'merge-records',
-        records: [...freshPlans.values()].flatMap((p) =>
-          p.record && !runsLocally(recoveryBindingKeyOf(p.record)) ? [p.record] : []
-        )
-      })
-    }
-    return {
-      ...base,
-      disposition: 'replayed',
-      presentationSource: prior.presentationSource,
-      idMap: emptyIdMap,
-      bindings: params.dryRun
-        ? planned.map((p) => p.result)
-        : await resumeSelected(host, worktree.id, planned, resumeKeys),
-      provenance: prior
-    }
-  }
-
-  if (worktreeHasSessionTabs(session, worktree.id)) {
-    throw new Error('recovery_destination_not_empty')
+    return await replayRecoveryImport(host, { ...replay, provenance: prior })
   }
   const plan = planRecoveryImport(descriptor, params.preferClientInstanceId, ctx)
   const provenance: RecoveryProvenance = {
@@ -237,6 +133,16 @@ export async function importRecoveryWorkspaceWithHost(
       exportedAt: descriptor.exportedAt
     },
     presentationSource: plan.presentationSource
+  }
+  if (worktreeHasSessionTabs(session, worktree.id)) {
+    // Why: a crash between the layout apply and the provenance write leaves only this import's dormant records.
+    if (!holdsOnlyRecoveryImport(session, worktree.id, importKey)) {
+      throw new Error('recovery_destination_not_empty')
+    }
+    if (!params.dryRun) {
+      await host.setRecoveryProvenance(worktree.id, provenance)
+    }
+    return await replayRecoveryImport(host, { ...replay, provenance })
   }
   const result = {
     ...base,
@@ -257,7 +163,12 @@ export async function importRecoveryWorkspaceWithHost(
     throw new Error(outcome.code)
   }
   await host.setRecoveryProvenance(worktree.id, provenance)
-  const bindings = await resumeSelected(host, worktree.id, plan.bindings, resumeKeys)
+  const bindings = await resumeSelectedRecoveryBindings(
+    host,
+    worktree.id,
+    plan.bindings,
+    resumeKeys
+  )
   if (params.activate) {
     await host.activateWorktree(worktree.id)
   }

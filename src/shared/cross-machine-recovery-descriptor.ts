@@ -222,6 +222,8 @@ export type RecoveryProvenance = {
     exportedAt: number
   }
   presentationSource: RecoveryPresentationSource
+  /** Canonical binding keys already launched or released here; a replay never re-adds them. */
+  consumedBindings?: string[]
 }
 
 export type RecoveryImportRequest = {

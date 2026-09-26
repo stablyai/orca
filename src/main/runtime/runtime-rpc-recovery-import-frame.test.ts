@@ -46,7 +46,7 @@ describe('crossMachineRecovery.import frame budget over the unix socket', () => 
     await server.start()
     const metadata = readRuntimeMetadata(userDataPath)
     endpoint = metadata!.transports[0]!.endpoint
-    authToken = metadata!.authToken
+    authToken = metadata!.authToken!
   })
 
   afterEach(async () => {
