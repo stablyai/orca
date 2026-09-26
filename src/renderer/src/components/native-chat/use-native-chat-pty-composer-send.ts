@@ -1,3 +1,4 @@
+import { afterNativeChatCommandSent } from './native-chat-command-completion'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
@@ -86,11 +87,16 @@ export function useNativeChatPtyComposerSend(args: {
     }
     if (classification !== 'chat') {
       if (pendingHandle) {
-        args.trackPendingSend(pendingHandle)
+        args.trackPendingSend(
+          classification === 'command'
+            ? afterNativeChatCommandSent(pendingHandle, () =>
+                args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
+              )
+            : pendingHandle
+        )
       }
       if (classification === 'command') {
         args.onSlashCommand?.(text.trim())
-        args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
       }
     } else {
       const pendingId = args.onOptimisticSend?.(text, imagePaths)
