@@ -81,13 +81,13 @@ afterEach(() => vi.useRealTimers())
 describe('canonical alias publication respects current registration', () => {
   it.each(['canonical', 'legacy'] as const)(
     'retires an in-flight alias after %s SSH ownership',
-    async (shape) => {
+    async (hostEncoding) => {
       const repos = [{ ...local }]
       const store = fixture(repos)
       registerWorktreeRootsForRepo(store, local.id, [linked])
       const { authorization, normalization } = await deferredAlias(store)
       repos[0] =
-        shape === 'canonical'
+        hostEncoding === 'canonical'
           ? { ...local, executionHostId: 'ssh:remote' }
           : { ...local, connectionId: 'remote' }
       invalidateAuthorizedRootsCache()
@@ -273,14 +273,14 @@ describe('qualified registration', () => {
   })
   it.each(['canonical', 'legacy'] as const)(
     'discards obsolete %s SSH graph results',
-    async (shape) => {
+    async (hostEncoding) => {
       const graph = deferred<{ path: string }[]>()
       mocks.graph.mockReturnValueOnce(graph.promise)
       const repos = [{ ...local }]
       const store = fixture(repos)
       const rebuilding = rebuildAuthorizedRootsCache(store)
       repos[0] =
-        shape === 'canonical'
+        hostEncoding === 'canonical'
           ? { ...local, executionHostId: 'ssh:remote' }
           : { ...local, connectionId: 'remote' }
       invalidateAuthorizedRootsCache()
