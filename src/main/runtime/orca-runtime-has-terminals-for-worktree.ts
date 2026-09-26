@@ -42,13 +42,17 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
         recovery: this.shouldRestoreHeadlessGraph(windowId) ? 'headless' : 'reloading'
       }
     }
-    if (this.graphStatus !== 'ready') {
+    if (this.graphStatus === 'unavailable' && this.rendererGeneration === null) {
       return null
     }
-    return { revision: this.beginGraphReload(windowId), recovery: 'renderer' }
+    const recovery = this.graphStatus === 'ready' ? 'renderer' : 'unavailable'
+    return { revision: this.beginGraphReload(windowId), recovery }
   }
 
-  protected beginGraphReload(windowId: number): number {
+  protected beginGraphReload(windowId: number, retireDocument = true): number {
+    if (retireDocument && this.rendererGeneration !== null) {
+      this.retiredRendererGenerations.add(this.rendererGeneration)
+    }
     // Why: the rebuilt graph decides whether an incarnation survived; do not stale proven process identities before that comparison.
     this.rendererGraphEpoch += 1
     this.graphStatus = 'reloading'
@@ -91,7 +95,14 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
       this.restoreHeadlessGraphAuthority()
       return false
     }
-    if (fence.recovery === 'renderer') {
+    if (fence.recovery === 'renderer' || fence.recovery === 'unavailable') {
+      if (this.rendererGeneration !== null) {
+        this.retiredRendererGenerations.delete(this.rendererGeneration)
+      }
+      if (fence.recovery === 'unavailable') {
+        this.graphStatus = 'unavailable'
+        return true
+      }
       const restoresPublishedInventory =
         this.sessionTabsInventoryPublicationEpoch === this.rendererGraphEpoch - 1
       this.graphStatus = 'ready'
@@ -126,19 +137,32 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
 
   markGraphReloadFailed(
     windowId: number,
-    _reason: 'renderer-frame-unavailable' | 'renderer-process-gone'
+    reason: 'renderer-frame-unavailable' | 'renderer-process-gone'
   ): void {
     if (windowId !== this.authoritativeWindowId) {
       return
     }
+    if (reason === 'renderer-process-gone' && this.rendererGeneration !== null) {
+      this.retiredRendererGenerations.add(this.rendererGeneration)
+    }
     if (this.graphStatus === 'ready') {
-      this.beginGraphReload(windowId)
+      this.beginGraphReload(windowId, reason === 'renderer-process-gone')
     }
     this.graphReloadLifecycle.settleActive('failure')
+    if (reason === 'renderer-frame-unavailable' && !this.shouldRestoreHeadlessGraph(windowId)) {
+      // A failed send does not retire the document or its live PTY bindings.
+      this.graphStatus = 'unavailable'
+      this.setTerminalSideEffectConsumerAvailable(false)
+      this.refreshWritableFlags()
+      return
+    }
     this.transitionGraphReloadToTerminalState(windowId)
   }
 
   markGraphUnavailable(windowId: number): void {
+    if (windowId !== HEADLESS_RUNTIME_WINDOW_ID) {
+      this.retiredGraphWindowIds.add(windowId)
+    }
     if (
       this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
       windowId === this.pendingHeadlessPromotionWindowId

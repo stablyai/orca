@@ -80,6 +80,10 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected pendingHeadlessPromotionWindowId: number | null = null
 
+  protected readonly retiredRendererGenerations = new Set<string>()
+
+  protected readonly retiredGraphWindowIds = new Set<number>()
+
   protected rendererGeneration: string | null = null
 
   protected readonly graphReloadLifecycle = new RuntimeGraphReloadLifecycle({
