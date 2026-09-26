@@ -171,13 +171,18 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // 529 -> 530, and the host-JSX hash: `key="terminal-frame"`, so the page's frame mounts with its
 // onLayout rather than reusing the loading View. Native measured 47 rows before and after: its
 // frame reported either way, and its window is its frame, so both measure paths agree there.
+//
+// 531 -> 530, and the host-JSX and style hashes: the key left, and one `contentFrame` View wraps
+// every branch and carries the frame's onLayout, so the page's frame mounts with it. The page measured
+// 47 rows before and after; native was measured only on main's bundle (47), and the wrapper is a
+// flex:1 View around the same flex:1 frame, so its box is the frame's.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '1be5398cdbdf96b6f7738b63a0e19f536496844140a947939a7f71824b08fe50'
+  '7dd03af1ad61e2f394b8cba35a422f7195de60ae5d608923b52575a56a4dbe42'
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
-const HEAD_HOST_JSX_SHA256 = 'ca4c8b46af86a05cb671de91c22111c9e4aaeefd4a04c7b8b09976ca01a31c9b'
+const HEAD_HOST_JSX_SHA256 = '1478283a1597c88920aedfea9f6ed13d119ea8f93546e1628d0918cd0a5248ef'
 const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
-  '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
+  '56a005a1f65b30c11092e3422caef67810e1ec50f66fdd06471c370138b1eeb6'
 const HEAD_IDENTITY_FIELD_SHA256 =
   '91146853930a34dd1f3d80e5c97fbacd7cf19fb93dd26fe8fc6f29169622f9d6'
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
@@ -611,14 +616,14 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(531)
+    expect(strings).toHaveLength(530)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
-    expect(jsx.host).toHaveLength(124)
+    expect(jsx.host).toHaveLength(125)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
     expect(jsx.leaf).toHaveLength(61)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
-    expect(jsx.styleReferences).toHaveLength(172)
+    expect(jsx.styleReferences).toHaveLength(173)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)
   })
 })
