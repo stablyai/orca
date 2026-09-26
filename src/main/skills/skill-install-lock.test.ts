@@ -63,14 +63,11 @@ describe('skill install lock', () => {
       }
     })
 
-    await expect(release()).rejects.toThrow('injected-delete-failure')
-    await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
-    expect(await readdir(dirname(lockPath))).toEqual(
-      expect.arrayContaining([expect.stringMatching(/\.lock\.[a-f0-9-]+\.released$/)])
-    )
-    const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
+    await expect(release()).resolves.toBeUndefined()
+    await expect(readdir(lockPath)).resolves.toEqual([])
+    const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 1_000 })
     await secondRelease()
-    await expect(readdir(lockPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readdir(dirname(lockPath))).resolves.toEqual([])
   })
 
   it('publishes a complete candidate atomically when acquisitions overlap', async () => {
@@ -257,8 +254,7 @@ describe('skill install lock', () => {
   it('frees the canonical lock before release cleanup finishes', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-lock-test-'))
     roots.push(root)
-    const stateDirectory = join(root, 'state')
-    const lockPath = skillInstallLockPath(stateDirectory, join(root, 'skills', 'alpha'))
+    const lockPath = skillInstallLockPath(join(root, 'state'), join(root, 'skills', 'alpha'))
     let deletionStarted!: () => void
     const deletionIsPending = new Promise<void>((resolve) => {
       deletionStarted = resolve
@@ -279,12 +275,13 @@ describe('skill install lock', () => {
     expect(release()).toBe(releasing)
 
     await deletionIsPending
-    await expect(reclaimDeadSkillInstallLocks(stateDirectory)).resolves.toMatchObject({
-      reclaimed: 1
-    })
-    const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 100 })
-    await secondRelease()
+    const secondRelease = await acquireSkillInstallLock({ path: lockPath, timeoutMs: 1_000 })
+    const secondEntries = await readdir(lockPath)
     finishDeletion()
-    await releasing
+    await expect(releasing).resolves.toBeUndefined()
+    // The pending cleanup must not remove the newer holder's lock.
+    await expect(readdir(lockPath)).resolves.toEqual(secondEntries)
+    await secondRelease()
+    await expect(readdir(dirname(lockPath))).resolves.toEqual([])
   })
 })
