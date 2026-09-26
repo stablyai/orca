@@ -3241,6 +3241,9 @@
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "호스트를 사용할 수 없음",
             "54f29b7c0d": "호스트 로드 중…"
+          },
+          "TerminalRestoringPlaceholder": {
+            "restoring": "터미널 복원 중…"
           }
         }
       },

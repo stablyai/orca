@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
 
 export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'
@@ -64,6 +65,23 @@ export function useSshWorkspaceBrowserRoute(
   const [state, setState] = useState<SshWorkspaceBrowserRouteState>(
     targetId ? { kind: 'preparing' } : { kind: 'unrouted' }
   )
+  const hostConnection = useWorktreeHostConnection(worktreeId)
+  const routeHost =
+    targetId !== null && hostConnection.targetId === targetId ? hostConnection : null
+  // Why a ready route is exempt: its mounted page survives a reconnect, and re-preparing
+  // would unmount it. Only a route still waiting on, or failed by, its host follows the host.
+  const routeReady = state.kind === 'ready' && state.targetId === targetId
+  const awaitingHost = routeHost?.phase === 'connecting' && !routeReady
+  const connectedHostEpoch = routeHost?.connectedEpoch ?? null
+  const [seenConnectedHostEpoch, setSeenConnectedHostEpoch] = useState(connectedHostEpoch)
+  if (connectedHostEpoch !== seenConnectedHostEpoch) {
+    setSeenConnectedHostEpoch(connectedHostEpoch)
+    // Why: a host that connects — or reconnects under a new generation — re-derives a route
+    // it failed or held, the same as Retry, but keeps the user's probe choice.
+    if (connectedHostEpoch !== null && !routeReady) {
+      setAttempt((current) => ({ ...current, count: current.count + 1 }))
+    }
+  }
 
   // Why: a persisted "Try anyway" means the user vouched for this host once
   // (e.g. PermitOpen allows their sites while the loopback probe is refused);
@@ -74,8 +92,13 @@ export function useSshWorkspaceBrowserRoute(
       setState({ kind: 'unrouted' })
       return
     }
-    let cancelled = false
     setState({ kind: 'preparing' })
+    // Why: the SSH connection is still being established, so prepare could only fail with
+    // ssh-unavailable; the connected transition above restarts it.
+    if (awaitingHost) {
+      return
+    }
+    let cancelled = false
     window.api.browser
       .prepareSshWorkspacePartition({
         targetId,
@@ -100,7 +123,7 @@ export function useSshWorkspaceBrowserRoute(
     return () => {
       cancelled = true
     }
-  }, [targetId, browserProfileId, attempt, skipProbe])
+  }, [targetId, browserProfileId, attempt, skipProbe, awaitingHost])
 
   // Why (review P1-1): `state` lags one commit behind a targetId transition on
   // an already-mounted instance; returning stale 'unrouted' (or a stale
@@ -109,7 +132,9 @@ export function useSshWorkspaceBrowserRoute(
   // routed/unrouted decision must be derived from targetId in-render.
   const effectiveState: SshWorkspaceBrowserRouteState = !targetId
     ? { kind: 'unrouted' }
-    : state.kind === 'unrouted' || (state.kind === 'ready' && state.targetId !== targetId)
+    : awaitingHost ||
+        state.kind === 'unrouted' ||
+        (state.kind === 'ready' && state.targetId !== targetId)
       ? { kind: 'preparing' }
       : state
   return {

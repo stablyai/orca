@@ -80,6 +80,7 @@ function renderWatcherEffects(overrides: Partial<WatcherController> = {}): Promi
     pendingStartupByTabId: {},
     // Another workspace is on screen, so the mounted one is hidden and parks.
     renderedActiveWorktreeId: 'repo-1::/worktree-9',
+    startupTerminalTabHold: null,
     tabsByWorktree: {
       [PARKED_WORKTREE_ID]: [
         terminalTab('tab-parked', PARKED_WORKTREE_ID),
@@ -125,6 +126,20 @@ describe('parked terminal watcher sync entries', () => {
 
     const parkedEntry = lastSyncEntries().get(PARKED_WORKTREE_ID)
     expect([...(parkedEntry?.parkedTabIds ?? [])]).toEqual(['tab-parked'])
+  })
+
+  it('watches the tabs a startup hold keeps unmounted on the visible workspace', async () => {
+    const heldWorktreeId = surfaceIds[9]
+    const tab = terminalTab('held-agent', heldWorktreeId, 'live-pty')
+    await renderWatcherEffects({
+      mountedWorktreeIdsRef: { current: new Set([heldWorktreeId]) },
+      startupTerminalTabHold: { worktreeId: heldWorktreeId, heldTabIds: new Set([tab.id]) },
+      tabsByWorktree: { [heldWorktreeId]: [tab] }
+    })
+
+    const entry = lastSyncEntries().get(heldWorktreeId)
+    expect([...entry!.parkedTabIds]).toEqual([tab.id])
+    expect([...entry!.restoreTitleOnStartTabIds!]).toEqual([tab.id])
   })
 
   it('does not allocate a parked-tab-id set per unmounted surface', async () => {

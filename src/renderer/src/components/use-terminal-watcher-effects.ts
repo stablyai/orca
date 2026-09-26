@@ -15,6 +15,7 @@ import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-te
 import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
 import { AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS } from '../../../shared/agent-session-provider-handle'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
+import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'
 
 // Why shared: surfaces without watchable live tabs need no per-pass allocation.
 const NO_PARKED_TAB_IDS: ReadonlySet<string> = new Set()
@@ -41,6 +42,7 @@ type TerminalWatcherController = Pick<
   | 'pendingStartupByTabId'
   | 'reconcileWorktreeTabModel'
   | 'renderedActiveWorktreeId'
+  | 'startupTerminalTabHold'
   | 'tabsByWorktree'
   | 'terminalParkingEnabled'
   | 'terminalProviderSnapshotCapabilityRevision'
@@ -73,6 +75,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     pendingStartupByTabId,
     reconcileWorktreeTabModel,
     renderedActiveWorktreeId,
+    startupTerminalTabHold,
     tabsByWorktree,
     terminalParkingEnabled,
     terminalProviderSnapshotCapabilityRevision,
@@ -118,7 +121,11 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
             }
           }
         }
-        deferredTabIds = activationDeferredMountTabIdsByWorktreeRef.current.get(workspaceId) ?? null
+        deferredTabIds = selectParkedEquivalentMountTabIds(
+          activationDeferredMountTabIdsByWorktreeRef.current.get(workspaceId),
+          startupTerminalTabHold,
+          workspaceId
+        )
         for (const tab of tabs) {
           if (
             deferredTabIds?.has(tab.id) &&
@@ -172,6 +179,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     pairedRuntimeParkingEnvironmentIds,
     pendingStartupByTabId,
     renderedActiveWorktreeId,
+    startupTerminalTabHold,
     tabsByWorktree,
     terminalParkingEnabled,
     terminalProviderSnapshotCapabilityRevision,
