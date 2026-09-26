@@ -281,6 +281,70 @@ describe('useHostStatusGates', () => {
     }
   })
 
+  it('settles closed on a refusal and re-reads until the host answers', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, error: { code: 'unavailable', message: 'busy' } })
+      .mockResolvedValueOnce({ ok: true, result: { capabilities: ['browser.screencast.v1'] } })
+    const client = { sendRequest } as unknown as RpcClient
+    let gates: HostStatusGates | null = null
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      expect(gates).toMatchObject({ statusPending: false, statusReadable: false })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+      expect(gates).toMatchObject({
+        hostCapabilities: ['browser.screencast.v1'],
+        statusReadable: true
+      })
+    } finally {
+      renderer?.unmount()
+      vi.useRealTimers()
+    }
+  })
+
+  it('settles closed and stops on a status this app cannot decode', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi.fn().mockResolvedValue({ ok: true, result: 'not a status' })
+    const client = { sendRequest } as unknown as RpcClient
+    let gates: HostStatusGates | null = null
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      expect(gates).toMatchObject({ statusPending: false, statusReadable: false })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+      expect(sendRequest).toHaveBeenCalledOnce()
+    } finally {
+      renderer?.unmount()
+      vi.useRealTimers()
+    }
+  })
+
   it('stops re-reading once the host screen unmounts', async () => {
     vi.useFakeTimers()
     const sendRequest = vi.fn().mockRejectedValue(new Error('request timed out'))
