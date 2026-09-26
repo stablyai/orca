@@ -15,7 +15,7 @@ import type {
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import { readWindowsProcessTableFresh } from '../windows/windows-process-table'
 import {
-  PROCESS_START_TIME_TOLERANCE_MS,
+  processStartIdentitiesMatch,
   readProcessStartIdentity,
   readProcessStartTimesMs,
   type ProcessStartIdentity
@@ -176,10 +176,10 @@ export async function probeAgentSessionProcessIdentity(args: {
             .catch(() => null)
         : await readProcessStartIdentity(identity.pid, platform).catch(() => null)
     if (observedIdentity !== null) {
-      const startTimeMatches = identity.processStartTimeId
-        ? observedIdentity.exactId === identity.processStartTimeId
-        : Math.abs(observedIdentity.timeMs - identity.processStartTimeMs) <=
-          PROCESS_START_TIME_TOLERANCE_MS
+      const startTimeMatches = processStartIdentitiesMatch(identity, {
+        processStartTimeMs: observedIdentity.timeMs,
+        processStartTimeId: observedIdentity.exactId
+      })
       if (!startTimeMatches) {
         if (matchedOn.includes('spawn-token')) {
           // Why: contradictory evidence cannot prove that a token-authenticated child is dead.

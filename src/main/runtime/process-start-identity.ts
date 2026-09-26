@@ -21,7 +21,8 @@ export function processStartIdentitiesMatch(
   if (expected.processStartTimeMs === null || observed.processStartTimeMs === null) {
     return false
   }
-  if (expected.processStartTimeId) {
+  // Exact ids only fence when both sides have one; a row whose handle was denied lacks it.
+  if (expected.processStartTimeId && observed.processStartTimeId) {
     return observed.processStartTimeId === expected.processStartTimeId
   }
   return (
