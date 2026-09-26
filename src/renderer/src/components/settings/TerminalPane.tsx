@@ -283,12 +283,12 @@ export function TerminalPane({
         isMac={isMac}
       />
     ) : null
-  ].filter(Boolean)
+  ].filter((section) => section !== null)
 
   return (
     <div className="space-y-6">
       {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-6">
+        <div key={section.key} className="space-y-6">
           {index > 0 ? <Separator /> : null}
           {section}
         </div>
