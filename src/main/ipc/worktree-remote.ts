@@ -239,7 +239,7 @@ type RemoteLocalBaseRefRefreshability =
     }
   | {
       refreshable: false
-      // undefined = nothing to refresh (no local branch yet), so the caller reports no status at all.
+      // undefined = nothing to refresh (no local branch yet, or already current), so the caller reports no status at all.
       result: LocalBaseRefRefreshResult | undefined
     }
 
@@ -1667,10 +1667,6 @@ async function refreshLocalBaseRefForRemoteWorktreeCreate(
   if (!evaluation.refreshable) {
     return evaluation.result
   }
-  if (evaluation.behind <= 0) {
-    // Why: a local base already at the remote needs no refresh, so its owner checkout (possibly dirty) is irrelevant.
-    return undefined
-  }
 
   const resultBase = { baseRef: evaluation.baseRef, localBranch: evaluation.localBranch }
   try {
@@ -1712,14 +1708,8 @@ async function evaluateRemoteLocalBaseRefRefreshability(
     )
     behind = countNonEmptyGitOutputLines(stdout)
     if (!shouldInspectOwner(behind)) {
-      // Why: no behind commits means no update to advise; skip remote worktree/status round trips.
-      return {
-        refreshable: true,
-        ...resultBase,
-        fullRef,
-        remoteTrackingRef: remoteTrackingBase.ref,
-        behind
-      }
+      // Why: a current local base has nothing to refresh or advise, so its owner checkout (possibly dirty) is irrelevant; skip remote worktree/status round trips.
+      return { refreshable: false, result: undefined }
     }
   } catch {
     // Why (#15331): the probes above also fail when refs/heads/<branch> is simply absent; the relay's
