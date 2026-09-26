@@ -15,6 +15,14 @@ export const inflightHostedReviewRequests = new Map<
 >()
 
 export const hostedReviewRequestGenerations = new Map<string, number>()
+let hostedReviewRequestGenerationSequence = 0
+
+export function nextHostedReviewRequestGeneration(): number {
+  // Settled keys are removed while older requests can still be pending.
+  hostedReviewRequestGenerationSequence += 1
+  return hostedReviewRequestGenerationSequence
+}
+
 type HostedReviewRevalidationLane = {
   inFlight: Promise<HostedReviewInfo | null> | null
   lastRunDurationMs: number
