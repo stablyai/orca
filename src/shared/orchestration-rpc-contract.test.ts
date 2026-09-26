@@ -25,6 +25,8 @@ describe('orchestration RPC contract', () => {
     ['orchestration.federationAck', {}],
     ['orchestration.federationImport', {}],
     ['orchestration.federationStop', {}],
+    ['orchestration.federationReconcileAttachment', {}],
+    ['orchestration.workerReconcileAttachment', {}],
     ['orchestration.check', {}],
     ['orchestration.check', { wait: true }],
     ['orchestration.check', { unread: true }],

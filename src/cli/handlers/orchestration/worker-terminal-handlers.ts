@@ -60,6 +60,22 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     )
   },
 
+  'orchestration worker-reconcile-attachment': async ({ flags, client, json }) => {
+    const result = await callOrchestrationMutation<{
+      dispatchId: string
+      state: string
+      processAction: string
+      alreadyReconciled: boolean
+      warning?: string
+    }>(client, flags, 'orchestration.workerReconcileAttachment', {
+      dispatch: getRequiredStringFlag(flags, 'dispatch')
+    })
+    printResult(result, json, (value) => {
+      const warning = value.warning ? `\nWarning: ${value.warning}` : ''
+      return `Worker ${value.dispatchId} [${value.state}] process=${value.processAction} alreadyReconciled=${value.alreadyReconciled}${warning}`
+    })
+  },
+
   'orchestration worker-release': async ({ flags, client, json }) => {
     const result = await callOrchestrationMutation<WorkerReleaseReceipt>(
       client,

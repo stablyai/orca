@@ -89,6 +89,20 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     notes: ['Retains all possibly-live resources and performs no process or filesystem action.']
   },
   {
+    path: ['orchestration', 'worker-reconcile-attachment'],
+    summary: 'Retire one abandoned remote attachment without closing its terminal',
+    usage:
+      'orca orchestration worker-reconcile-attachment --dispatch <dispatch_id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
+    notes: [
+      'Explicit follow-up after worker-abandon. It does not run as part of abandon, stop, or release.',
+      'Revokes the saved remote attachment capability and mailbox consumer when the peer, runtime epoch, terminal, pane, and process incarnation still match.',
+      'Does not close the terminal, stop the agent turn, or prove the work ceased. Confirm cancel or hold before reusing the terminal.',
+      'An older server rejects the command and changes nothing. If the receipt is lost, retry the same --retry-request and do not infer that nothing was written.',
+      'process is always none. A repeated call reports alreadyReconciled and does not revoke the capability again.'
+    ]
+  },
+  {
     path: ['orchestration', 'worker-release'],
     summary: 'Release the terminal of one settled supervised worker',
     usage:

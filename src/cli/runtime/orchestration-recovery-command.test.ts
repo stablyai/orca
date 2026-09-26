@@ -112,6 +112,20 @@ describe('orchestration recovery command identity', () => {
     ).toEqual(['orca-ide', 'orchestration', 'worker-stop', '--dispatch', 'dispatch_1'])
   })
 
+  it('reconstructs worker-reconcile-attachment when raw argv is unavailable', () => {
+    expect(
+      buildOrchestrationRecoveryCommand('orchestration.workerReconcileAttachment', {
+        dispatch: 'dispatch_1'
+      })
+    ).toEqual([
+      resolveOrchestrationCliExecutable(),
+      'orchestration',
+      'worker-reconcile-attachment',
+      '--dispatch',
+      'dispatch_1'
+    ])
+  })
+
   it('reconstructs worker-retain when raw argv is unavailable', () => {
     expect(
       buildOrchestrationRecoveryCommand('orchestration.workerRetain', {
