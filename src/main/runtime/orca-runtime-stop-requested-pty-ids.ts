@@ -20,6 +20,7 @@ import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RuntimeResolvedWorktreeCache } from './runtime-resolved-worktree-cache'
 import { RuntimeWorktreeLineageController } from './runtime-worktree-lineage-controller'
 import { RuntimeAgentOrchestrationProjection } from './runtime-agent-orchestration-projection'
+import { RuntimeDelegatedWorktreeEdgeProjection } from './runtime-delegated-worktree-edge-projection'
 import { RuntimeTerminalList } from './runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
 import { RuntimePtyForegroundAgent } from './runtime-pty-foreground-agent'
@@ -112,6 +113,12 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
     getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
     getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot()
+  })
+
+  protected readonly delegatedWorktreeEdgeProjection = new RuntimeDelegatedWorktreeEdgeProjection({
+    getDb: () => this.getOrchestrationDbIfAvailable(),
+    getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle),
+    getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey)
   })
 
   protected readonly terminalList = new RuntimeTerminalList({

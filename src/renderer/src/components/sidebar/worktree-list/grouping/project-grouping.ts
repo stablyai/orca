@@ -21,6 +21,9 @@ export type WorktreeGroupEntry = {
   items: Worktree[]
   repo?: Repo
   repoIds: Set<string>
+  /** Repos present only through a nested federated worker. They carry notice rows and host
+   *  labels here but never the section's anchor or sort rank, which stay the coordinator's. */
+  anchoredChildRepoIds?: Set<string>
   /** Folder workspaces bucketed into this lane under non-repo grouping. Carries
    *  the owning group because FolderWorkspaceRow requires a non-optional one. */
   folderWorkspaces?: RenderableFolderWorkspace[]
@@ -166,4 +169,21 @@ export function getProjectHeaderRevealTarget(
 
 export function addRepoIdToGroup(group: WorktreeGroupEntry, repoId: string): void {
   group.repoIds.add(repoId)
+}
+
+export function addAnchoredChildRepoIdToGroup(group: WorktreeGroupEntry, repoId: string): void {
+  const ids = group.anchoredChildRepoIds ?? new Set<string>()
+  ids.add(repoId)
+  group.anchoredChildRepoIds = ids
+}
+
+/** Every repo whose rows this section renders, including ones a nested worker brought in. */
+export function getRenderedRepoIds(group: WorktreeGroupEntry): string[] {
+  const ids = [...group.repoIds]
+  for (const repoId of group.anchoredChildRepoIds ?? []) {
+    if (!group.repoIds.has(repoId)) {
+      ids.push(repoId)
+    }
+  }
+  return ids
 }

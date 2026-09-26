@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { WorktreeSlice } from './worktree-helpers'
+import type { DelegatedWorktreeEdge } from '../../../../shared/worktree/delegated-worktree-edge'
 import { worktreeSliceInitialState } from './worktrees/session/worktree-slice-initial-state'
 import { createFetchDetectedWorktrees } from './worktrees/listing/fetch-detected-worktrees'
 import { createFetchWorktrees } from './worktrees/listing/fetch-worktrees'
@@ -74,12 +75,37 @@ export { resetAuthoritativelyRemovedWorktreeMemoryForTests } from './worktrees/l
 export type { DirectSshDetectedWorktreeRefresh } from './worktrees/listing/known-ssh-worktree-fetch'
 export { acquireDirectSshDetectedWorktreeRefresh } from './worktrees/listing/known-ssh-worktree-fetch'
 
+function delegatedWorktreeEdgesEqual(
+  left: readonly DelegatedWorktreeEdge[],
+  right: readonly DelegatedWorktreeEdge[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((edge, index) => {
+      const other = right[index]
+      return (
+        edge.dispatchId === other.dispatchId &&
+        edge.parentWorktreeId === other.parentWorktreeId &&
+        edge.childHostId === other.childHostId &&
+        edge.childWorktreeId === other.childWorktreeId
+      )
+    })
+  )
+}
+
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
   ...worktreeSliceInitialState,
   fetchDetectedWorktrees: createFetchDetectedWorktrees(set, get),
   fetchWorktrees: createFetchWorktrees(set, get),
   fetchAllWorktrees: createFetchAllWorktrees(set, get),
   fetchWorktreeLineage: createFetchWorktreeLineage(set, get),
+  // Republished whole on every graph sync, so identity is reused when nothing moved.
+  setDelegatedWorktreeEdges: (edges) =>
+    set((state) =>
+      delegatedWorktreeEdgesEqual(state.delegatedWorktreeEdges, edges)
+        ? state
+        : { delegatedWorktreeEdges: edges }
+    ),
   updateWorktreeLineage: createUpdateWorktreeLineage(set, get),
   assignWorktreeParent: createAssignWorktreeParent(set, get),
   updateWorktreeGitIdentity: createUpdateWorktreeGitIdentity(set, get),

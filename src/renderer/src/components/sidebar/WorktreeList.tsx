@@ -63,6 +63,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const worktreeMap = useWorktreeMap()
   const repos = useAppStore((s) => s.repos)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
+  const delegatedWorktreeEdges = useAppStore((s) => s.delegatedWorktreeEdges)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -163,6 +164,7 @@ const WorktreeList = React.memo(function WorktreeList({
     repoMap,
     worktreeMap,
     worktreeLineageById,
+    delegatedWorktreeEdges,
     prCache,
     settings,
     workspaceStatuses,
