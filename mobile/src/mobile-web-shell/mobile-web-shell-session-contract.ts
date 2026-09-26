@@ -6,7 +6,16 @@ import type {
   MobileWebBundleCompatVerdict,
   MobileWebBundleHostStatus
 } from '../transport/mobile-web-bundle-compat'
+import type {
+  MobileWebShellUpdateFailureCause,
+  MobileWebShellUpdateFailureFacts
+} from './mobile-web-shell-update-failure'
 
+/** What one `ready` declared: what the page will report, and what it can be sent. */
+export type PageReadyDeclaration = {
+  readonly reports: readonly string[]
+  readonly accepts: readonly string[]
+}
 /**
  * Whether the host can be asked anything right now.
  *
@@ -64,10 +73,6 @@ export type MobileWebShellBlockedVerdict = Extract<
   { kind: 'blocked' }
 >
 
-/** Which side a bundle read failed on. `transport` is the link between phone and host, which says
- *  nothing about the bundle; `bundle` is a verdict about it, from the host or from the bytes. */
-export type MobileWebShellReadFailure = 'transport' | 'bundle'
-
 /** The shell's own failures plus the one the view cannot report: a download or a cache write that
  *  never produced a generation to hand it. */
 export type MobileWebShellFailureCause =
@@ -100,7 +105,9 @@ export type MobileWebShellSessionState =
       readonly totalBytes: number
     }
   /** Bytes are in; the store is staging and committing, or a cache hit is being opened. */
-  | { readonly kind: 'activating' }
+  /** `download` is a generation this flow fetched and is committing; `cache` is one already on
+   *  disk. Only a download's activation is an update that landed. */
+  | { readonly kind: 'activating'; readonly source: 'download' | 'cache' }
   | {
       readonly kind: 'ready'
       readonly generationDirectory: string
@@ -150,6 +157,12 @@ export type MobileWebShellSessionEffect =
    *  it was armed in, and nothing cancels it: a `ready` that lands first makes the expiry a no-op,
    *  so the runner owns a timer and none of the decision. */
   | { readonly kind: 'await-page-ready' }
+  /** Write down why an update read failed, on the device, for Troubleshoot to show: a release
+   *  build forwards no console output, so without it the banner is the only evidence. */
+  | { readonly kind: 'record-update-failure'; readonly failure: MobileWebShellUpdateFailureFacts }
+  /** Clear this host's recorded failures: a newer generation committed, so "last update failed"
+   *  would no longer be true. */
+  | { readonly kind: 'forget-update-failures' }
 
 /**
  * Events, in two kinds.
@@ -195,15 +208,26 @@ export type MobileWebShellSessionEvent =
   | {
       readonly type: 'download-failed'
       readonly flow: number
-      readonly failure: MobileWebShellReadFailure
+      readonly cause: MobileWebShellUpdateFailureCause
     }
   | { readonly type: 'shell-failed'; readonly reason: MobileWebShellFailureReason }
   | { readonly type: 'retry-pressed' }
+  /** The native view began a document. Unstamped, like the view's failure and for the same
+   *  reason: the view exists only under the generation on screen. */
+  | { readonly type: 'document-started' }
   /** The native view finished a document. Unstamped, like the view's failure and for the same
    *  reason: the view exists only under the generation on screen. */
   | { readonly type: 'document-loaded' }
-  /** The page said `ready` over the bridge, which is the only proof its code ran at all. */
-  | { readonly type: 'page-ready' }
+  /**
+   * The page said `ready` over the bridge, which is the only proof its code ran at all, carrying
+   * what that `ready` declared it reports and accepts.
+   */
+  | ({ readonly type: 'page-ready' } & PageReadyDeclaration)
+  /** The page has a frame on screen. Only a page that declared it ever sends one. */
+  | { readonly type: 'page-painted' }
+  /** The page is holding the device Back key, or has let it go. The host sends false on its own
+   *  for every way a document ends, so this never has to be inferred from silence. */
+  | { readonly type: 'page-back-claim'; readonly claimed: boolean }
   | { readonly type: 'page-ready-deadline'; readonly flow: number }
 
 /** Latches live beside the state because both outlive the state they were set in: `retriedOnce`
@@ -227,12 +251,31 @@ export type MobileWebShellSession = {
   /** Whether the document on screen has spoken over the bridge. Cleared by every new document,
    *  because each one has to prove itself: the last one's word says nothing about this one. */
   readonly pageReady: boolean
+  /** Whether this document said it would report its first paint. Cleared with `pageReady`, and
+   *  false for every page built before the report existed. */
+  readonly pageReportsPaint: boolean
+  /** Whether this document has reported a frame on screen. Cleared with `pageReady`. */
+  readonly pagePainted: boolean
+  /**
+   * Whether the document on screen is holding the device Back key.
+   *
+   * Cleared with the rest of what a document says about itself, and that is the load-bearing half:
+   * a claim that outlived its sheet would have the shell hand Back to a page with nothing to do
+   * with it, which is a key that does nothing at all.
+   */
+  readonly pageBackClaimed: boolean
+  /** Whether this document pads for the system bars itself, so the view may go edge-to-edge.
+   *  Cleared with `pageReady`, and false for every page built before the declaration existed. */
+  readonly pageOwnsSafeArea: boolean
   /** The gates the current step was taken on; null until the first one arrives. */
   readonly gates: MobileWebShellGates | null
   readonly cached: CachedGeneration | null
   /** Null unless the generation on screen is a fallback from an update this shell refused. Cleared
    *  by every entry into the flow, so it never outlives the screen it explains. */
   readonly updateNotice: MobileWebShellUpdateNotice | null
+  /** The generation this flow asked the host for, so a failed read can name it. Cleared by every
+   *  entry into the flow. */
+  readonly requestedBuildId: string | null
   /** Which run of the flow the session is on. Bumped by every restart, stamped on the effects that
    *  run belongs to, and echoed back on their results. */
   readonly flow: number

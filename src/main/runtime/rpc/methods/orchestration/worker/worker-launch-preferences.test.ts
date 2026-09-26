@@ -61,6 +61,30 @@ describe('orchestration worker launch preferences', () => {
     ).toThrow('does not support effort xhigh')
   })
 
+  it('passes a Muse model and reasoning effort through the shared catalog', () => {
+    expect(
+      resolveWorkerLaunchPreferences({ agent: 'muse', model: 'muse-spark-1.3', effort: 'xhigh' })
+    ).toEqual({
+      preferences: { model: 'muse-spark-1.3', effort: 'xhigh' },
+      receipt: {
+        requested: { agent: 'muse', model: 'muse-spark-1.3', effort: 'xhigh' },
+        effective: { agent: 'muse', model: 'muse-spark-1.3', effort: 'xhigh' }
+      }
+    })
+  })
+
+  it('rejects Muse effort values outside its reasoning ladder', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({ agent: 'muse', model: 'muse-spark-1.3', effort: 'turbo' })
+    ).toThrow('does not support effort turbo')
+  })
+
+  it('refuses an opencode model because the opencode 2 TUI rejects --model', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({ agent: 'opencode', model: 'meta/muse-spark-1.3' })
+    ).toThrow('does not support launch-time model selection')
+  })
+
   it('does not invent an effort when only a model is requested', () => {
     expect(
       resolveWorkerLaunchPreferences({ agent: 'codex', model: 'gpt-5.6-sol' }).preferences

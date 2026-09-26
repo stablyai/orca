@@ -26,6 +26,7 @@ export class RegionalRehomePollTelemetry {
   private gates = { ...EMPTY_GATES }
   private candidates = 0
   private selectionSamplesMs: number[] = []
+  private skippedOffRegionSourceCellsMax = 0
 
   constructor(private readonly write: (line: string) => void = (line) => console.warn(line)) {}
 
@@ -34,11 +35,16 @@ export class RegionalRehomePollTelemetry {
     gate: RegionalRehomePollGate
     candidates: number
     selectionMs?: number
+    skippedOffRegionSourceCells?: number
   }): void {
     if (this.windowStartedAt === null) this.windowStartedAt = input.now
     this.gates[input.gate] += 1
     this.candidates += input.candidates
     if (input.selectionMs !== undefined) this.selectionSamplesMs.push(input.selectionMs)
+    this.skippedOffRegionSourceCellsMax = Math.max(
+      this.skippedOffRegionSourceCellsMax,
+      input.skippedOffRegionSourceCells ?? 0
+    )
     if (input.now - this.windowStartedAt < REGIONAL_REHOME_POLL_SUMMARY_INTERVAL_MS) return
     this.write(
       JSON.stringify({
@@ -48,13 +54,16 @@ export class RegionalRehomePollTelemetry {
         ...this.gates,
         candidates: this.candidates,
         selectionMsMax: round(Math.max(0, ...this.selectionSamplesMs)),
-        selectionMsP95: round(percentile(this.selectionSamplesMs, 0.95))
+        selectionMsP95: round(percentile(this.selectionSamplesMs, 0.95)),
+        // A per-poll maximum: every poll reads the same inventory, so a sum counts polls.
+        skippedOffRegionSourceCells: this.skippedOffRegionSourceCellsMax
       })
     )
     this.windowStartedAt = input.now
     this.gates = { ...EMPTY_GATES }
     this.candidates = 0
     this.selectionSamplesMs = []
+    this.skippedOffRegionSourceCellsMax = 0
   }
 }
 

@@ -49,12 +49,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     worktreeId: string | undefined,
     execute: (sessionName: string) => Promise<T>
   ): Promise<T> {
-    return this.enqueueTargetedCommand(
-      worktreeId,
-      undefined,
-      async (sessionName) => execute(sessionName),
-      { ensureVisible: false }
-    )
+    return this.enqueueTargetedCommand(worktreeId, undefined, execute)
   }
 
   protected async enqueueTargetedCommand<T>(
@@ -64,13 +59,12 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
     this.assertCommandAdmission()
-    const target = this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
-    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
-
-    if (options.ensureSession !== false) {
-      await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
-    }
-    this.assertCommandAdmission()
+    const { browserPageId: pageId } = this.resolveCommandTarget(
+      worktreeId,
+      browserPageId,
+      options.requireScopedTarget
+    )
+    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
 
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)
@@ -79,14 +73,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
         this.commandQueues.set(sessionName, queue)
       }
       queue.push({
-        execute: (() =>
-          this.executeWithVisibleTarget(
-            sessionName,
-            worktreeId,
-            target,
-            execute,
-            options
-          )) as () => Promise<unknown>,
+        execute: () => this.executeQueuedCommand(worktreeId, pageId, execute, options),
         resolve: resolve as (value: unknown) => void,
         reject
       })
@@ -94,59 +81,20 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     })
   }
 
-  protected async executeWithVisibleTarget<T>(
-    sessionName: string,
+  protected async executeQueuedCommand<T>(
     worktreeId: string | undefined,
-    target: ResolvedBrowserCommandTarget,
+    browserPageId: string,
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
     options: EnqueueTargetedCommandOptions
   ): Promise<T> {
-    if (options.ensureVisible === false) {
-      return execute(sessionName, target)
+    this.assertCommandAdmission()
+    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
+    // Why: the page's guest can change while queued; bind to the one current at execution.
+    const target = this.resolveCommandTarget(worktreeId, browserPageId)
+    if (options.ensureSession !== false) {
+      await this.ensureSession(sessionName, browserPageId, target.webContentsId)
     }
-
-    // Why: inactive panes are display:none; the automation lease makes only this target paintable without selecting it.
-    const restore = await this.browserManager.acquireAutomationVisibility(target.webContentsId)
-    try {
-      const visibleTarget = await this.refreshTargetAfterAutomationVisibility(
-        sessionName,
-        worktreeId,
-        target,
-        options
-      )
-      return await execute(sessionName, visibleTarget)
-    } finally {
-      restore()
-    }
-  }
-
-  protected async refreshTargetAfterAutomationVisibility(
-    sessionName: string,
-    worktreeId: string | undefined,
-    target: ResolvedBrowserCommandTarget,
-    options: EnqueueTargetedCommandOptions
-  ): Promise<ResolvedBrowserCommandTarget> {
-    const visibleTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
-    if (visibleTarget.webContentsId === target.webContentsId) {
-      return visibleTarget
-    }
-
-    if (this.activeWebContentsId === target.webContentsId) {
-      this.activeWebContentsId = visibleTarget.webContentsId
-    }
-    if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === target.webContentsId) {
-      this.activeWebContentsPerWorktree.set(worktreeId, visibleTarget.webContentsId)
-    }
-
-    // Why: making a parked webview paintable can re-register the page with a new guest webContents; tear down the stale session.
-    await this.restartSessionForTarget(
-      sessionName,
-      visibleTarget.browserPageId,
-      visibleTarget.webContentsId,
-      { recreate: options.ensureSession !== false }
-    )
-
-    return visibleTarget
+    return execute(sessionName, target)
   }
 
   protected async processQueue(sessionName: string): Promise<void> {

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 
 /** Enough of the build id to tell two generations apart, and never enough to be one. */
-const BUILD_ID_PREFIX_LENGTH = 12
+export const BUILD_ID_PREFIX_LENGTH = 12
 
 export type MobileWebShellDevFacts = {
   buildId: string

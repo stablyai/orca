@@ -12,9 +12,11 @@ import type {
   MobileWebShellGates,
   MobileWebShellManifestFacts,
   MobileWebShellSession,
+  MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
   MobileWebShellStep
 } from './mobile-web-shell-session-contract'
+import type { MobileWebShellUpdateFailureCause } from './mobile-web-shell-update-failure'
 
 export function gates(overrides: Partial<MobileWebShellGates> = {}): MobileWebShellGates {
   return {
@@ -58,6 +60,24 @@ export const MANIFEST_WIRE: MobileWebBundleManifestRead = {
     { path: 'index.html', sha256: '4'.repeat(64), byteLength: 1024, contentType: 'text/html' }
   ],
   routes: PAGE_ROUTES
+}
+
+/** A refusal of the bytes that arrived, and a link that went: the two sides a failed read lands on. */
+export const BUNDLE_REFUSED: MobileWebShellUpdateFailureCause = {
+  reason: 'asset-checksum-mismatch',
+  hostCode: null
+}
+export const LINK_LOST: MobileWebShellUpdateFailureCause = {
+  reason: 'connection-lost',
+  hostCode: null
+}
+
+/** The effects a decision owes, without the record every failed read also writes: the record has
+ *  its own suite, and these assertions are about what the decision does to screen and disk. */
+export function withoutRecord(
+  effects: readonly MobileWebShellSessionEffect[]
+): MobileWebShellSessionEffect[] {
+  return effects.filter((effect) => effect.kind !== 'record-update-failure')
 }
 
 export function manifestFacts(wire: MobileWebBundleManifestRead): MobileWebShellManifestFacts {
@@ -106,8 +126,11 @@ export function stamp(flow: number, event: PendingEvent): MobileWebShellSessionE
     case 'gates-changed':
     case 'shell-failed':
     case 'retry-pressed':
+    case 'document-started':
     case 'document-loaded':
     case 'page-ready':
+    case 'page-painted':
+    case 'page-back-claim':
       return event
     case 'cache-read':
     case 'manifest-read':

@@ -15,6 +15,7 @@ import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
+import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 import {
@@ -85,23 +86,37 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     }
   )
 
+  const announced = createAnnouncedNotificationRegistry()
+
   ipcMain.removeHandler('notifications:dismiss')
-  ipcMain.handle('notifications:dismiss', (_event, ids: string[]): NotificationDismissResult => {
-    const uniqueIds = Array.from(
-      new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))
-    )
-    let dismissed = 0
-    for (const id of uniqueIds) {
-      const entry = activeNotificationsById.get(id)
-      if (entry) {
-        entry.notification.close()
-        entry.release()
-        dismissed += 1
+  ipcMain.handle(
+    'notifications:dismiss',
+    (_event, ids: string[], paneKeys?: string[]): NotificationDismissResult => {
+      const uniqueIds = new Set(
+        ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      )
+      // Why: an acknowledged subject retires everything announced for it, including ids minted
+      // from a row start that has since moved and so can no longer be rebuilt by the renderer.
+      for (const paneKey of Array.isArray(paneKeys) ? paneKeys : []) {
+        if (typeof paneKey === 'string') {
+          for (const id of announced.take(paneKey)) {
+            uniqueIds.add(id)
+          }
+        }
       }
-      runtime?.dismissMobileNotification(id)
+      let dismissed = 0
+      for (const id of uniqueIds) {
+        const entry = activeNotificationsById.get(id)
+        if (entry) {
+          entry.notification.close()
+          entry.release()
+          dismissed += 1
+        }
+        runtime?.dismissMobileNotification(id)
+      }
+      return { dismissed }
     }
-    return { dismissed }
-  })
+  )
 
   const deliveryService = createNotificationDeliveryService({
     readNotificationSettings: () => store.getSettings().notifications,
@@ -117,7 +132,12 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     recordDeliveryOutcome: recordNotificationDeliveryOutcome,
     deliverNative: deliverNativeNotification,
     platform: process.platform,
-    now: () => Date.now()
+    now: () => Date.now(),
+    recordAnnounced: (request) => {
+      if (request.paneKey && request.notificationId) {
+        announced.record(request.paneKey, request.notificationId)
+      }
+    }
   })
 
   ipcMain.removeHandler('notifications:dispatch')

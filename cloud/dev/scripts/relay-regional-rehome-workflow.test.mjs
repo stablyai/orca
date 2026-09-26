@@ -20,7 +20,7 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   assert.match(wrapper, /needs: \[gate, cell_2\]/)
   assert.match(wrapper, /needs: \[gate, cell_3\]/)
   assert.match(job, /on:\n  workflow_call:/)
-  assert.match(job, /c27\|c28\|c29/)
+  assert.match(job, /c27\|c28\|c29\|c30\)/)
   assert.match(job, /EXPECTED_HARD_CAP=3000/)
   assert.match(job, /EXPECTED_REGION=asia-east2/)
   assert.match(job, /--hard-cap "\$\{EXPECTED_HARD_CAP\}"/)

@@ -99,7 +99,7 @@ export async function openPairedClientTab(
       state?.setActiveView('terminal')
       state?.setActiveWorktree(worktreeId)
       state?.setActiveTab(webTabId)
-      state?.setActiveTabType('terminal')
+      state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     },
     { webTabId, worktreeId }
   )

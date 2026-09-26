@@ -235,7 +235,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
     }
     this.clearAssistantMessageRetry(resolvedPaneKey)
-    this.clearCodexSubagentPoll(resolvedPaneKey)
+    this.clearTranscriptPoll(resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
     if (existing.payload.state === 'done') {

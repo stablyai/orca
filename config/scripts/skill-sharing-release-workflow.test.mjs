@@ -103,7 +103,9 @@ describe('skill-sharing release workflow', () => {
 
       expect(restore.env.WORKFLOW_SHA).toBe('${{ github.workflow_sha }}')
       expect(restore.run).toContain('git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"')
-      expect(restore.run).toContain('skill-freshness-inventory.test.ts')
+      expect(restore.run.split('git checkout')[1]).not.toContain(
+        'skill-freshness-inventory.test.ts'
+      )
       expect(restore.run).toContain('skill-provider-runtime-roots.test.ts')
     }
   })

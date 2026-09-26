@@ -145,13 +145,19 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
   )
 
   unsubs.push(
-    window.api.ui.onFocusEditorTab(({ tabId, worktreeId }) => {
+    window.api.ui.onFocusEditorTab(({ tabId, worktreeId, userInitiated }) => {
       const store = useAppStore.getState()
       const tab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find((item) => item.id === tabId)
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
       // Why: chat-completion focus is a courtesy reveal, not navigation — never yank the user
-      // back into a workspace they deliberately left.
-      if (tab?.contentType === 'agent-session' && store.activeWorktreeId !== worktreeId) {
+      // back into a workspace they deliberately left. A notification click is the opposite: the
+      // user asked for this workspace, and the activateWorktree that precedes it is async, so
+      // the active id here is still the old one and would swallow the reveal.
+      if (
+        !userInitiated &&
+        tab?.contentType === 'agent-session' &&
+        store.activeWorktreeId !== worktreeId
+      ) {
         return
       }
       if (!tab) {
@@ -161,7 +167,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
           store.markWorktreeVisited(worktreeId)
           store.setActiveView('terminal')
           store.setActiveBrowserTab(browserTarget.workspaceId)
-          store.setActiveTabType('browser')
+          store.setActiveTabType('browser', worktreeId)
           store.revealWorktreeInSidebar(worktreeId)
         }
         return
@@ -172,14 +178,14 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       store.focusGroup(worktreeId, tab.groupId)
       store.activateTab(tab.id)
       if (tab.contentType === 'agent-session') {
-        store.setActiveTabType('agent-session')
+        store.setActiveTabType('agent-session', worktreeId)
       } else if (browserTarget) {
         // Why: browser tabs need their own active-page state, not the editor file activation path.
         store.setActiveBrowserTab(browserTarget.workspaceId)
-        store.setActiveTabType('browser')
+        store.setActiveTabType('browser', worktreeId)
       } else {
         store.setActiveFile(tab.entityId)
-        store.setActiveTabType('editor')
+        store.setActiveTabType('editor', worktreeId)
       }
       store.revealWorktreeInSidebar(worktreeId)
     })

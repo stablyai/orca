@@ -1,5 +1,6 @@
 import type { RelayDatabase, SqlRow } from './database.js'
 import { REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS } from './database.js'
+import { rehomeSourceRegionAllowed } from './idle-regional-rehome-selection.js'
 import { REGIONAL_REHOME_ABORT_REPORT_WINDOW_MS } from './regional-rehome-abort-reason.js'
 import {
   REGIONAL_REHOME_CONCURRENT_LIMIT,
@@ -27,6 +28,7 @@ export async function previewRegionalRehomeEligibility(input: {
   heartbeatTtlMs: number
   cohortPercent: number
   globalSafetyFailure: string | null
+  directorRegion?: string
   connectionHeadroom: ReadonlyMap<string, boolean>
   cellIsClean: (safety: SqlRow | undefined, runtime: SqlRow, now: number) => boolean
 }): Promise<RegionCorrectionPreview> {
@@ -133,6 +135,8 @@ export async function previewRegionalRehomeEligibility(input: {
       !input.cellIsClean(safety.get(String(host.cell_id)), runtimes.get(String(host.cell_id))!, now)
     )
       reason = 'source-unclean'
+    else if (!rehomeSourceRegionAllowed(String(source.region), input.directorRegion))
+      reason = 'source-outside-director-region'
     if (reason) {
       count(reason)
       continue

@@ -17,10 +17,11 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance
 } from '../../../automations/workspace-provenance'
-import type { AgentLaunchWorkspaceFactory } from '../../../agent-launch/agent-launch-executor'
+import type { AgentLaunchWorkspaceFactory } from '../../../agent-launch/agent-launch-surface-factories'
 import type { RpcContext } from '../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
+import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import type { AgentLaunchParams } from './agent-launch-schemas'
 
 type WorktreeCreateParams = Extract<
@@ -41,8 +42,11 @@ export function agentLaunchWorkspaceFactory(
       startupPrompt,
       agentArgs,
       cwd,
-      launchSource
+      launchSource,
+      paneKey,
+      options
     }) => {
+      const startupLaunchPreferences = toAgentLaunchPreferences(options)
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: already validated by `AgentLaunch`; the executor only removed the reserved agent fields, so the rest of the payload is the parsed shape.
       const params = create as WorktreeCreateParams
       const { runtime } = context
@@ -78,6 +82,8 @@ export function agentLaunchWorkspaceFactory(
           ...(agentArgs !== undefined ? { startupAgentArgs: agentArgs } : {}),
           ...(cwd ? { startupCwd: cwd } : {}),
           ...(launchSource ? { startupLaunchSource: launchSource } : {}),
+          ...(paneKey ? { startupPaneKey: paneKey } : {}),
+          ...(startupLaunchPreferences ? { startupLaunchPreferences } : {}),
           // The launch owns the agent whichever surface it settles on, so the workspace records
           // it even when no startup terminal was created for it.
           createdWithAgent: agent,
@@ -94,6 +100,9 @@ export function agentLaunchWorkspaceFactory(
         return {
           worktreeId: result.worktree.id,
           startupTerminalHandle: result.startupTerminal?.handle,
+          ...(result.startupTerminal?.paneKey
+            ? { startupTerminalPaneKey: result.startupTerminal.paneKey }
+            : {}),
           // Carried, not dropped: `createManagedWorktree` reports a failed startup terminal or an
           // uncopied working tree here, and it is the only place the host says so.
           ...(result.warning ? { warning: result.warning } : {})

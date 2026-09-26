@@ -292,7 +292,7 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
       assert.equal(String(cellShape(cellId).cap), tfvarsHardCap(cellId), cellId)
     }
     assert.equal(resolveCellShape('production-gce-c12').status, 1)
-    assert.equal(resolveCellShape('production-gce-c30').status, 1)
+    assert.equal(resolveCellShape('production-gce-c31').status, 1)
   })
 
   it('passes the same-cap allowlist on every canary invocation the job runs', () => {
@@ -311,9 +311,10 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
   it('paces the drain it sends to the selected cell', () => {
     const drain = workflow.split('--mode drain')[1] ?? ''
     assert.match(drain.split('\n').slice(0, 2).join(' '), /--pace-window-ms "\$\{DRAIN_PACE_WINDOW_MS\}"/)
-    assert.match(workflow, /DRAIN_PACE_WINDOW_MS: '120000'/)
+    // 5 min is the cell's DRAIN_PACE_WINDOW_MAX_MS; a 2,700-host cell at 2 min overruns the director's sticky lane.
+    assert.match(workflow, /DRAIN_PACE_WINDOW_MS: '300000'/)
     // The transition wait has to outlast the pacing window on top of the leases it waits on.
-    assert.match(workflow, /--activity restart-safe[\s\S]*?--timeout-ms 1020000/)
+    assert.match(workflow, /--activity restart-safe[\s\S]*?--timeout-ms 1200000/)
   })
 
   it('passes this cell\'s rehome protocol and pool on every plan validation the job runs', () => {

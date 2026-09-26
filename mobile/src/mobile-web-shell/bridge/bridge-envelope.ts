@@ -1,10 +1,14 @@
 import { z } from 'zod'
+import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
 import type { RpcResponse } from '../../transport/types'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge-init-route'
 import { BridgePageRouteGrantsSchema } from './bridge-page-route-grants'
+import { BridgeSafeAreaInsetsSchema } from './bridge-safe-area-insets'
 import { BridgeNotifySchema } from './bridge-notify-envelope'
+import { BRIDGE_BACK_FRAME } from './bridge-page-back'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
 
 export {
@@ -88,6 +92,22 @@ export { BridgeInitRouteSchema, type BridgeInitRoute }
 export const BridgeInitHostSchema = z.object({
   id: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
   name: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
+  // Why: `name` alone cannot say whether it is the phone's override or the desktop's name.
+  // Optional and additive: an older shell sends none and the page falls back to classifying `name`.
+  // Salvaged so a value this page cannot read (a newer shell's platform) drops the field, not `init`;
+  // the outer `.optional()` keeps the inferred key optional rather than required `T | undefined`.
+  personalName: salvagedOptional(
+    'personalName',
+    z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS)
+  ).optional(),
+  lastKnownMachineName: salvagedOptional(
+    'lastKnownMachineName',
+    z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS)
+  ).optional(),
+  lastKnownHostPlatform: salvagedOptional(
+    'lastKnownHostPlatform',
+    z.enum(NODE_PLATFORM_NAMES)
+  ).optional(),
   endpoint: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
   lastConnected: z.number().finite()
 })
@@ -161,6 +181,23 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
      * capability this shell has never implemented has to look like.
      */
     accepts: z
+      .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
+      .max(BRIDGE_MAX_PAGE_ACCEPTS)
+      .optional(),
+    /**
+     * What this page will post that the shell may have to wait for, which today is
+     * `BRIDGE_PAGE_PAINTED` and nothing else.
+     *
+     * `accepts` runs the other way and cannot stand in for this: it says what may be sent *to* the
+     * page. A shell waiting on a frame has to know the page will send one, because the generation
+     * is served by a desktop that updates independently of the installed shell — an undeclared
+     * wait would hide a working page built before the frame existed.
+     *
+     * Optional and additive in both directions, on the same bounds as `accepts`: a page that
+     * declares none is waited for by nothing, and an unknown name is a report this shell does not
+     * act on.
+     */
+    reports: z
       .array(z.string().min(1).max(BRIDGE_MAX_PAGE_ACCEPT_CHARS))
       .max(BRIDGE_MAX_PAGE_ACCEPTS)
       .optional()
@@ -244,6 +281,10 @@ const BridgeHostMessageSchema = z.union([
     type: z.literal('state'),
     connection: BridgeConnectionSnapshotSchema
   }),
+  // One Back press, and nothing else: the shell pops what it pushed, so a frame naming where to go
+  // back to would be naming a screen the page cannot see. Sent only to a page whose `ready` listed
+  // `BRIDGE_BACK_FRAME`, because an older page's reader refuses the whole frame.
+  z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
   z.object({
     v: versionSchema,
     type: z.literal('end'),
@@ -264,6 +305,8 @@ const BridgeHostMessageSchema = z.union([
     connection: BridgeConnectionSnapshotSchema,
     grants: BridgeGrantsSchema,
     route: BridgeInitRouteSchema.optional(),
+    /** How much of the WebView is under a system bar; absent reads as zeros. */
+    safeAreaInsets: BridgeSafeAreaInsetsSchema.optional(),
     host: BridgeInitHostSchema.optional(),
     storage: BridgeInitStorageSchema.optional(),
     /**

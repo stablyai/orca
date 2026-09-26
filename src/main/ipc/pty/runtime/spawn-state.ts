@@ -78,6 +78,7 @@ export type RuntimePtySpawnState = {
   preparedProvisionalExecutionContext: boolean
   releaseWorktreeSpawn: (() => void) | undefined
   reportPtySpawnCommitted: () => void
+  preSpawnHiddenMarkId: string | null
 }
 
 export type RuntimePtySpawnArgs = {
@@ -104,6 +105,8 @@ export type RuntimePtySpawnArgs = {
   sessionId?: string
   shellOverride?: string
   isNewSession?: boolean
+  /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
+  initiallyHidden?: boolean
   persistHostSessionBinding?: boolean
   expectedSourceBinding?: PtyBindingSourceExpectation
   terminalKittyKeyboardProtocol?: boolean
@@ -182,6 +185,7 @@ export function createRuntimePtySpawnState(
     snapshotKittyFlagsCoverReconciledSeq: true,
     preparedProvisionalExecutionContext: false,
     releaseWorktreeSpawn: undefined,
-    reportPtySpawnCommitted: () => {}
+    reportPtySpawnCommitted: () => {},
+    preSpawnHiddenMarkId: null
   }
 }

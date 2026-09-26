@@ -155,7 +155,10 @@ function createFakeStore(): {
     persistActiveManifest: async (_hostKey, manifest) => {
       persisted.push(manifest)
       return 'persisted'
-    }
+    },
+    recordUpdateFailure: async () => undefined,
+    readUpdateFailures: async () => [],
+    forgetHostUpdateFailures: async () => undefined
   }
   return {
     store,
@@ -207,7 +210,7 @@ type Mounted = {
   /** Whether the page had spoken, as every render of the hook reported it. */
   handshakes: () => readonly boolean[]
   documentLoaded: () => void
-  pageReady: () => void
+  pageReady: (reports?: readonly string[]) => void
   timers: ReturnType<typeof createTimerSeam>
 }
 
@@ -216,7 +219,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
   const handle: {
     retry: () => void
     documentLoaded: () => void
-    pageReady: () => void
+    pageReady: (ready: { reports: readonly string[]; accepts: readonly string[] }) => void
     states: MobileWebShellSessionState[]
     handshakes: boolean[]
   } = {
@@ -259,7 +262,7 @@ async function mount(store: GenerationStore): Promise<Mounted> {
     states: () => handle.states,
     handshakes: () => handle.handshakes,
     documentLoaded: () => handle.documentLoaded(),
-    pageReady: () => handle.pageReady(),
+    pageReady: (reports: readonly string[] = []) => handle.pageReady({ reports, accepts: [] }),
     timers
   }
 }

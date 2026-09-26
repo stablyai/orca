@@ -326,6 +326,30 @@ describe('bounded cell-inventory lock wait', () => {
     await database.close()
   })
 
+  // Why: after the rehome commit stopped locking the inventory, its only hold is
+  // one row. The alert reads the shared max, so the site label is what names it.
+  it('records a target-row hold under its own site without appending a lock clause', async () => {
+    const database = await openFakePostgres()
+    const statement = 'WITH target AS (SELECT 1 FOR UPDATE NOWAIT) UPDATE relay_cells SET x = 1'
+
+    await database.transaction(async (transaction) => {
+      await transaction.queryLocked(statement, [], {
+        failIfUnavailable: true,
+        lockClauseInStatement: true,
+        measureHoldMs: true,
+        holdSite: 'rehome-target-row'
+      })
+    })
+
+    expect(fakes.statements).toContain(statement)
+    expect(consumeRelayCellInventoryHold(database)).toMatchObject({
+      cellInventoryHolds: 1,
+      cellInventoryHoldMaxSite: 'rehome-target-row',
+      rehomeTargetRowHolds: 1
+    })
+    await database.close()
+  })
+
   it('records no hold for a PostgreSQL transaction that took no measured lock', async () => {
     const database = await openFakePostgres()
 

@@ -5,6 +5,8 @@ import type { AgentSessionBackgroundTask } from '../../../../shared/agent-sessio
 import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
+import type { NativeChatOlderPageResult } from './native-chat-pagination'
+import type { StructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
 import type { StructuredAgentSessionLaunchLifecycle } from '@/lib/structured-agent-session-launch'
 import type {
   SessionOptionSetResult,
@@ -25,6 +27,7 @@ type StructuredSessionMessageListProps = {
   showLiveTurnActivity?: boolean
   isWorking?: boolean
   runtimeContext?: unknown
+  session?: { hasMore: boolean; loadingEarlier: boolean; loadEarlier: () => Promise<void> }
 }
 
 const initialMessageListProps: StructuredSessionMessageListProps | null = null
@@ -40,6 +43,8 @@ export function createStructuredSessionMocks() {
     call: vi.fn<(...args: never[]) => unknown>(),
     fileLinkClick: vi.fn<(...args: never[]) => unknown>(),
     launchLifecycle: nullable<StructuredAgentSessionLaunchLifecycle>(),
+    launchFailureReason: nullable<string>(),
+    launchResumes: false,
     retryLaunch: vi.fn<(...args: never[]) => unknown>(),
     controllerProps: nullable<{ transportEnabled?: boolean }>(),
     mode: 'static' as 'static' | 'outbox',
@@ -67,12 +72,19 @@ export function createStructuredSessionMocks() {
     supportsBackgroundTaskStopAll: true,
     backgroundTasks: [] as AgentSessionBackgroundTask[],
     settledBackgroundTasks: [] as AgentSessionBackgroundTask[],
-    stopBackgroundTask: vi.fn<StopBackgroundTaskSpy>()
+    threadGoal: nullable<StructuredAgentSessionThreadGoal>(),
+    stopBackgroundTask: vi.fn<StopBackgroundTaskSpy>(),
+    hasOlder: false,
+    loadingOlder: false,
+    olderHistoryGeneration: 0,
+    loadOlder: vi.fn<() => Promise<NativeChatOlderPageResult>>()
   }
 
   const moduleFactories = {
     structuredAgentSessionClient: () => ({
-      callStructuredAgentSession: mocks.call
+      callStructuredAgentSession: mocks.call,
+      // The pane activates the host status feed for its startup phase; nothing here drives it.
+      subscribeStructuredAgentSessionStatus: async () => ({ unsubscribe: () => {} })
     }),
     useStructuredAgentSession: async () => {
       const { useStructuredAgentSessionOutbox } =
@@ -91,6 +103,7 @@ export function createStructuredSessionMocks() {
             submissions: mocks.submissions as never
           })
           return {
+            journalItems: [],
             messages:
               mocks.messages ??
               (mocks.mode === 'outbox'
@@ -111,9 +124,10 @@ export function createStructuredSessionMocks() {
                   ]),
             status: mocks.status,
             error: outbox.error,
-            hasOlder: false,
-            loadingOlder: false,
-            loadOlder: vi.fn<() => Promise<void>>(),
+            hasOlder: mocks.hasOlder,
+            loadingOlder: mocks.loadingOlder,
+            olderHistoryGeneration: mocks.olderHistoryGeneration,
+            loadOlder: mocks.loadOlder,
             prompts: mocks.promptItems,
             outbox: outbox.outbox,
             blockedClientMessageId: outbox.blockedClientMessageId,
@@ -129,6 +143,7 @@ export function createStructuredSessionMocks() {
               supportsStopAll: mocks.supportsBackgroundTaskStopAll
             },
             turnId: mocks.turnId,
+            threadGoal: mocks.threadGoal,
             cancel: mocks.cancel,
             stopBackgroundTask: (taskId?: string) =>
               mocks.stopBackgroundTask(props.sessionId, taskId),
@@ -162,7 +177,11 @@ export function createStructuredSessionMocks() {
     },
     structuredAgentSessionLaunch: () => ({
       retryStructuredAgentSessionLaunch: mocks.retryLaunch,
-      useStructuredAgentSessionLaunchLifecycle: () => mocks.launchLifecycle
+      getStructuredAgentSessionLaunchLifecycle: () => mocks.launchLifecycle,
+      getStructuredAgentSessionLaunchResumes: () => mocks.launchResumes,
+      useStructuredAgentSessionLaunchSelection: () => null,
+      useStructuredAgentSessionLaunchLifecycle: () => mocks.launchLifecycle,
+      useStructuredAgentSessionLaunchFailureReason: () => mocks.launchFailureReason
     }),
     useNativeChatFontScale: () => ({
       useNativeChatFontScale: () => ({ scale: 1 })
@@ -204,13 +223,13 @@ export function createStructuredSessionMocks() {
     nativeChatApprovalCard: () => ({
       NativeChatApprovalCard: (props: NativeChatApprovalCardProps) => {
         mocks.approvalCardProps = props
-        return null
+        return <div data-native-chat-approval-card-mock />
       }
     }),
     nativeChatQuestionCard: () => ({
       NativeChatQuestionCard: (props: NativeChatQuestionCardProps) => {
         mocks.questionCardProps = props
-        return null
+        return <div data-native-chat-question-card-mock />
       }
     })
   }
@@ -218,6 +237,8 @@ export function createStructuredSessionMocks() {
   const resetStructuredSessionMocks = (): void => {
     mocks.call.mockReset()
     mocks.launchLifecycle = null
+    mocks.launchFailureReason = null
+    mocks.launchResumes = false
     mocks.retryLaunch.mockReset()
     mocks.controllerProps = null
     mocks.mode = 'static'
@@ -242,6 +263,11 @@ export function createStructuredSessionMocks() {
     mocks.stopBackgroundTask.mockReset()
     mocks.backgroundTasks = []
     mocks.settledBackgroundTasks = []
+    mocks.threadGoal = null
+    mocks.hasOlder = false
+    mocks.loadingOlder = false
+    mocks.olderHistoryGeneration = 0
+    mocks.loadOlder.mockReset()
   }
 
   return { mocks, moduleFactories, resetStructuredSessionMocks }

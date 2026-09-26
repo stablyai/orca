@@ -15,7 +15,6 @@ import type {
   AgentSessionHandoffStage,
   AgentSessionRecord
 } from '../../shared/agent-session-record'
-import { adjudicateRestartedAgentSessionHandoff } from './agent-session-restart-handoff-adjudication'
 import { withLease } from './agent-session-lease-transitions'
 
 /** Apply one restart adjudication. Never consults deadlines — only proof moves a lease. */
@@ -25,32 +24,11 @@ export function applyAgentSessionRestartAdjudication(args: {
   now: number
 }): AgentSessionRecord {
   const { record } = args
-  if (
-    record.lease.handoffStage === 'old-owner-stopped' &&
-    record.lease.claimStatus === 'released' &&
-    record.lease.ownerProcess === null
-  ) {
-    return withLease(record, {
-      ...record.lease,
-      unreconciled: false,
-      lastRenewedAt: args.now
-    })
-  }
-  if (
-    record.lease.handoffStage === 'preparing' ||
-    record.lease.handoffStage === 'new-owner-proving'
-  ) {
-    return adjudicateRestartedAgentSessionHandoff(record, args.probe, args.now)
-  }
   const adjudication = adjudicateAgentSessionRestart({
     lease: record.lease,
     probe: args.probe,
     observedAt: args.now
   })
-  if (adjudication.disposition === 'readopt') {
-    // Why: re-adoption is not a new generation, so the fence does not move.
-    return withLease(record, { ...record.lease, unreconciled: false, lastRenewedAt: args.now })
-  }
   if (adjudication.disposition === 'settlement-pending') {
     return withLease(record, { ...record.lease, unreconciled: false, lastRenewedAt: args.now })
   }
@@ -67,6 +45,8 @@ export function applyAgentSessionRestartAdjudication(args: {
     })
   }
   if (adjudication.disposition === 'evicted') {
+    // A reservation that never proved its handle ran no turn, so no journal settlement is owed.
+    const settlementOwed = record.lease.handoffStage !== 'new-owner-proving'
     return withLease(record, {
       ...record.lease,
       runtimeFence: adjudication.nextFence,
@@ -79,8 +59,12 @@ export function applyAgentSessionRestartAdjudication(args: {
       lastRenewedAt: args.now,
       handoffOperationId: null,
       deathEvidence: adjudication.evidence,
-      settlementRetryRequired: true,
-      settlementRetryId: agentSessionRestartEvictionSettlementId(record.lease, adjudication)
+      ...(settlementOwed
+        ? {
+            settlementRetryRequired: true,
+            settlementRetryId: agentSessionRestartEvictionSettlementId(record.lease, adjudication)
+          }
+        : {})
     })
   }
   const stage: AgentSessionHandoffStage =

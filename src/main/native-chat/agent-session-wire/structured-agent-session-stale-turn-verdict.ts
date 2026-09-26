@@ -81,24 +81,22 @@ function staleSessionLifecycleRevisions(
   return revisions
 }
 
+/** The verdict owns the turn's end and nothing else; every other field the row
+ *  carries, including ones this build does not know, stays as it was. */
 function settledLifecycle(
   lifecycle: AgentJournalTurnLifecycle,
   verdict: StructuredAgentSessionTurnVerdict
 ): AgentJournalTurnLifecycle {
-  const settled: AgentJournalTurnLifecycle = { turnId: lifecycle.turnId, state: verdict.state }
-  if (lifecycle.userItemId !== undefined) {
-    settled.userItemId = lifecycle.userItemId
-  }
-  if (lifecycle.startedAt !== undefined) {
-    settled.startedAt = lifecycle.startedAt
-  }
-  if (lifecycle.requestedAt !== undefined) {
-    settled.requestedAt = lifecycle.requestedAt
-  }
-  if (verdict.state === 'interrupted') {
-    settled.completedAt = verdict.completedAt
-  }
-  return settled
+  const {
+    state: _state,
+    outcome: _outcome,
+    completedAt: _completedAt,
+    durationMs: _durationMs,
+    ...kept
+  } = lifecycle
+  return verdict.state === 'interrupted'
+    ? { ...kept, state: verdict.state, completedAt: verdict.completedAt }
+    : { ...kept, state: verdict.state }
 }
 
 /** A running row found when a NEW child is acquired belongs to a generation whose exit nobody

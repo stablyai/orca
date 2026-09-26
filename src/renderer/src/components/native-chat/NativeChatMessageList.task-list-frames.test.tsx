@@ -63,6 +63,7 @@ function transcript(messages: NativeChatMessage[], sessionId = 'live-codex') {
         agent: 'codex',
         hasMore: false,
         loadingEarlier: false,
+        olderHistoryGeneration: 0,
         loadEarlier: vi.fn(),
         readPhase: 'ready'
       }}

@@ -210,9 +210,15 @@ describe('the terminal handle a status row is stamped with', () => {
     if (!row) {
       throw new Error('expected seeded status row')
     }
+    // A settled main agent whose only live work is a child agent: the boundary is derived from these facts.
     const childOnlyRow = {
       ...row,
-      claudeLeadBoundaryChildOnly: true
+      claudeRunningNonAgentTask: false,
+      payload: {
+        ...row.payload,
+        mainAgent: { state: 'done' as const, stateStartedAt: 1 },
+        subagents: [{ id: 'child-1', state: 'working' as const, startedAt: 1 }]
+      }
     }
     seedLegacyAgentStatusForTests(server._getStateForTests(), childOnlyRow)
     enriched.mockClear()

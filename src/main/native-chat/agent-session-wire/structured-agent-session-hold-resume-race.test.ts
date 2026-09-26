@@ -1,8 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
+import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-hold-resume'
 import { StructuredAgentSessionHolds } from './structured-agent-session-holds'
 
 const GRACE_MS = 15_000
 const pendingHolds: StructuredAgentSessionHolds[] = []
+
+/** The host's per-session queue: a second hold waits for the attach the first one is running. */
+function keyedSerialize() {
+  const chains = new Map<string, Promise<void>>()
+  return <T>(sessionId: string, task: () => Promise<T>) =>
+    runKeyedSerializedOperation(chains, sessionId, task)
+}
 
 function resumeHarness() {
   const resumeGate = Promise.withResolvers<void>()
@@ -11,19 +20,23 @@ function resumeHarness() {
   const evict = vi.fn(async () => {
     child = false
   })
+  const resume = vi.fn(async () => {
+    await resumeGate.promise
+    child = true
+    return { ok: true as const }
+  })
   const holds = new StructuredAgentSessionHolds({
-    resume: async () => {
-      await resumeGate.promise
-      child = true
-    },
+    resume,
+    serialize: keyedSerialize(),
     hasProviderChild: () => child,
-    isTurnActive: () => turnActive,
+    hasOwedWork: () => turnActive,
     evict,
     graceMs: GRACE_MS
   })
   pendingHolds.push(holds)
   return {
     holds,
+    resume,
     resumeGate,
     evict,
     hasChild: () => child,
@@ -165,125 +178,83 @@ describe('a surface leaving while its structured session resumes', () => {
     expect(evict).toHaveBeenCalledExactlyOnceWith('session-1')
   })
 
-  it.each([false, true])(
-    'keeps a reused holder when old resume fails (replacement finished=%s)',
-    async (replacementFinished) => {
-      const firstGate = Promise.withResolvers<void>()
-      const replacementGate = Promise.withResolvers<void>()
-      let child = false
-      const resume = vi
-        .fn()
-        .mockImplementationOnce(() => firstGate.promise)
-        .mockImplementationOnce(async () => {
-          await replacementGate.promise
-          child = true
-        })
-      const evict = vi.fn(async () => {})
-      const holds = new StructuredAgentSessionHolds({
-        resume,
-        hasProviderChild: () => child,
-        isTurnActive: () => false,
-        evict,
-        graceMs: GRACE_MS
-      })
-      pendingHolds.push(holds)
-      const first = holds.hold('session-1', 'same-holder')
-      const rejected = expect(first).rejects.toThrow('old acquisition failed')
-      holds.release('session-1', 'same-holder')
-      const replacement = holds.hold('session-1', 'same-holder')
-      if (replacementFinished) {
-        replacementGate.resolve()
-        await replacement
-      }
+  it('lets a holder that left and came back make its own attempt behind a failing one, and its failure releases it', async () => {
+    const { holds, resume, resumeGate, evict } = resumeHarness()
+    const first = holds.hold('session-1', 'same-holder')
+    const firstRejected = expect(first).rejects.toThrow('acquisition failed')
+    holds.release('session-1', 'same-holder')
+    const replacement = holds.hold('session-1', 'same-holder')
+    const replacementRejected = expect(replacement).rejects.toThrow('acquisition failed')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(holds.isHeld('session-1')).toBe(true)
+    expect(resume).toHaveBeenCalledOnce()
 
-      firstGate.reject(new Error('old acquisition failed'))
-      await rejected
-      expect(holds.isHeld('session-1')).toBe(true)
-      replacementGate.resolve()
-      await replacement
-      await vi.advanceTimersByTimeAsync(GRACE_MS * 2)
-      expect(evict).not.toHaveBeenCalled()
+    // The gate stays rejected, so the replacement's own attempt fails the same way.
+    resumeGate.reject(new Error('acquisition failed'))
+    await Promise.all([firstRejected, replacementRejected])
 
-      holds.release('session-1', 'same-holder')
-      await vi.advanceTimersByTimeAsync(GRACE_MS)
-      expect(evict).toHaveBeenCalledExactlyOnceWith('session-1')
-    }
-  )
+    expect(resume).toHaveBeenCalledTimes(2)
+    expect(holds.isHeld('session-1')).toBe(false)
+    expect(holds.isReleasePending('session-1')).toBe(false)
+    await vi.advanceTimersByTimeAsync(GRACE_MS * 2)
+    expect(evict).not.toHaveBeenCalled()
+  })
 
-  it('removes a failed replacement while the released old hold is still pending', async () => {
-    const firstGate = Promise.withResolvers<void>()
-    const resume = vi
-      .fn()
-      .mockImplementationOnce(() => firstGate.promise)
-      .mockRejectedValueOnce(new Error('replacement acquisition failed'))
+  it('keeps a re-hold that finds the child the failing attempt ahead of it left behind', async () => {
+    const gate = Promise.withResolvers<void>()
+    let child = false
     const holds = new StructuredAgentSessionHolds({
-      resume,
-      hasProviderChild: () => false,
-      isTurnActive: () => false,
+      // The child is up before the attempt settles, and then the attempt fails behind it.
+      resume: async () => {
+        child = true
+        await gate.promise
+        return { ok: true as const }
+      },
+      serialize: keyedSerialize(),
+      hasProviderChild: () => child,
+      hasOwedWork: () => false,
       evict: async () => {},
       graceMs: GRACE_MS
     })
     pendingHolds.push(holds)
     const first = holds.hold('session-1', 'same-holder')
-    const rejected = expect(first).rejects.toThrow('old acquisition failed')
+    const rejected = expect(first).rejects.toThrow('acquisition failed')
     holds.release('session-1', 'same-holder')
+    const replacement = holds.hold('session-1', 'same-holder')
 
-    await expect(holds.hold('session-1', 'same-holder')).rejects.toThrow(
-      'replacement acquisition failed'
-    )
-    expect(holds.isHeld('session-1')).toBe(false)
-    expect(holds.isReleasePending('session-1')).toBe(false)
-
-    firstGate.reject(new Error('old acquisition failed'))
+    gate.reject(new Error('acquisition failed'))
     await rejected
-    expect(holds.isHeld('session-1')).toBe(false)
+    // The first hold's failure released only the holder it added, at the incarnation it added;
+    // the replacement then ran, found the child, and kept the holder it re-took.
+    await replacement
+
+    expect(holds.isHeld('session-1')).toBe(true)
+    expect(holds.isReleasePending('session-1')).toBe(false)
   })
 
-  it.each(['old-holder', 'different-holder'])(
-    'releases the old acquisition after replacement %s fails, once its turn finishes',
-    async (replacementHolder) => {
-      const firstGate = Promise.withResolvers<void>()
-      const replacementGate = Promise.withResolvers<void>()
-      let child = false
-      let turnActive = true
-      const resume = vi
-        .fn()
-        .mockImplementationOnce(async () => {
-          await firstGate.promise
-          child = true
-        })
-        .mockImplementationOnce(() => replacementGate.promise)
-      const evict = vi.fn(async () => {
-        child = false
+  it('starts a fresh resume once the failed one has settled', async () => {
+    let child = false
+    const resume = vi
+      .fn<() => Promise<StructuredAgentSessionResumeOutcome>>()
+      .mockRejectedValueOnce(new Error('first acquisition failed'))
+      .mockImplementationOnce(async () => {
+        child = true
+        return { ok: true }
       })
-      const holds = new StructuredAgentSessionHolds({
-        resume,
-        hasProviderChild: () => child,
-        isTurnActive: () => turnActive,
-        evict,
-        graceMs: GRACE_MS
-      })
-      pendingHolds.push(holds)
-      const first = holds.hold('session-1', 'old-holder')
-      holds.release('session-1', 'old-holder')
-      const replacement = holds.hold('session-1', replacementHolder)
-      const rejected = expect(replacement).rejects.toThrow('replacement acquisition failed')
-      firstGate.resolve()
-      await first
-      expect(holds.isReleasePending('session-1')).toBe(false)
+    const holds = new StructuredAgentSessionHolds({
+      resume,
+      serialize: keyedSerialize(),
+      hasProviderChild: () => child,
+      hasOwedWork: () => false,
+      evict: async () => {},
+      graceMs: GRACE_MS
+    })
+    pendingHolds.push(holds)
 
-      replacementGate.reject(new Error('replacement acquisition failed'))
-      await rejected
-      expect(holds.isHeld('session-1')).toBe(false)
-      expect(holds.isReleasePending('session-1')).toBe(true)
-      await vi.advanceTimersByTimeAsync(GRACE_MS)
-      expect(evict).not.toHaveBeenCalled()
-      expect(child).toBe(true)
+    await expect(holds.hold('session-1', 'chat-1')).rejects.toThrow('first acquisition failed')
+    await holds.hold('session-1', 'chat-1')
 
-      turnActive = false
-      await vi.advanceTimersByTimeAsync(GRACE_MS)
-      expect(evict).toHaveBeenCalledExactlyOnceWith('session-1')
-      expect(child).toBe(false)
-    }
-  )
+    expect(resume).toHaveBeenCalledTimes(2)
+    expect(holds.isHeld('session-1')).toBe(true)
+  })
 })

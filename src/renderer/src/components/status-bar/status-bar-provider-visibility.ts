@@ -17,7 +17,11 @@ export type UsageProviderSettings = Pick<
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
+  // Why: the OpenCode Go key can live in OPENCODE_API_KEY or in OpenCode's own
+  // store, neither of which the renderer can see; main reports presence.
+  opencodeGoApiKeyConfigured: boolean
   grokAuthConfigured: boolean
+  cursorAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -29,6 +33,7 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
+  cursor: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -75,11 +80,13 @@ export function hasUsageProviderSettings(
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
     settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
+    settings?.opencodeGoApiKeyConfigured === true ||
     // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
-    settings?.grokAuthConfigured === true
+    settings?.grokAuthConfigured === true ||
+    settings?.cursorAuthConfigured === true
   )
 }
 
@@ -100,7 +107,10 @@ export function hasUsageProviderSettingsForProvider(
     return settings.geminiCliOAuthEnabled === true
   }
   if (providerId === 'opencode-go') {
-    return Boolean(settings.opencodeSessionCookie?.trim())
+    return (
+      Boolean(settings.opencodeSessionCookie?.trim()) ||
+      settings.opencodeGoApiKeyConfigured === true
+    )
   }
   if (providerId === 'antigravity') {
     // Why: the Antigravity snapshot mirrors the Gemini fetch, which stays
@@ -114,6 +124,9 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
   }
+  if (providerId === 'cursor') {
+    return settings.cursorAuthConfigured === true
+  }
   return false
 }
 
@@ -123,7 +136,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     session: null,
     weekly: null,
     ...(providerId === 'opencode-go' ? { monthly: null } : {}),
-    ...(providerId === 'gemini' ? { buckets: [] } : {}),
+    ...(providerId === 'gemini' || providerId === 'cursor' ? { buckets: [] } : {}),
     updatedAt: 0,
     error: null,
     status: 'fetching'
@@ -167,7 +180,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
-    isProviderSnapshotPending(providers.grok)
+    isProviderSnapshotPending(providers.grok) ||
+    isProviderSnapshotPending(providers.cursor)
   ) {
     return false
   }
@@ -180,6 +194,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
-    !isProviderConfigured(providers.grok)
+    !isProviderConfigured(providers.grok) &&
+    !isProviderConfigured(providers.cursor)
   )
 }

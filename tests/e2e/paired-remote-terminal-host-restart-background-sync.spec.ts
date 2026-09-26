@@ -225,7 +225,7 @@ async function openClientTab(page: Page, worktreeId: string, webTabId: string): 
       state?.setActiveView('terminal')
       state?.setActiveWorktree(worktreeId)
       state?.setActiveTab(webTabId)
-      state?.setActiveTabType('terminal')
+      state?.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     },
     { worktreeId, webTabId }
   )

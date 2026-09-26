@@ -60,7 +60,7 @@ async function hashAsset(root: string, asset: MobileWebBundleAsset): Promise<boo
  * layer materialises once under the OS temp dir and then reuses for the life of the process, so a
  * positional read costs one pread and never re-inflates the archive. Nothing to cache here.
  */
-export async function readMobileWebBundleAssetChunk(
+export async function readMobileWebBundleAssetWindow(
   root: string,
   asset: MobileWebBundleAsset,
   offset: number,

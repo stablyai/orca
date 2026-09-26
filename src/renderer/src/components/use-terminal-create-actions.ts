@@ -54,7 +54,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
         return
       }
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)
-      setActiveTabType('terminal')
+      setActiveTabType('terminal', activeWorktreeId)
       const state = useAppStore.getState()
       const currentTerminals = state.tabsByWorktree[activeWorktreeId] ?? []
       const currentEditors = state.openFiles.filter((file) => file.worktreeId === activeWorktreeId)

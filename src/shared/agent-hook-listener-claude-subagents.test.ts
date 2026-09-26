@@ -663,7 +663,10 @@ describe('shared agent-hook-listener', () => {
       expect(wait?.payload.state).toBe('waiting')
       expect(wait?.payload.interactivePrompt).toBeDefined()
 
-      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({
+        state: 'working',
+        mainAgent: { state: 'working', stateStartedAt: expect.any(Number) }
+      })
 
       // Why: a child-driven refresh re-emits the cached lead state; the linger
       // bug would come back if it could resurrect the dismissed question.
@@ -714,10 +717,13 @@ describe('shared agent-hook-listener', () => {
       // emitted state is gated up to working only while that child still runs.
       expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({
         state: 'working',
-        turnCompletedAt: expect.any(Number)
+        turnCompletedAt: expect.any(Number),
+        // The main agent's own fact rides beside the gated state: it finished, no verdict was given.
+        mainAgent: { state: 'done', stateStartedAt: expect.any(Number) }
       })
       expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({
         state: 'done',
+        stateStartedAt: expect.any(Number),
         turnCompletedAt: expect.any(Number)
       })
 
@@ -726,7 +732,10 @@ describe('shared agent-hook-listener', () => {
     })
 
     it('falls back to working when no lead record exists', () => {
-      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({
+        state: 'working',
+        mainAgent: { state: 'working', stateStartedAt: expect.any(Number) }
+      })
     })
   })
 })

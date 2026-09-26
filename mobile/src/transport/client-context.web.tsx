@@ -52,7 +52,9 @@ export function RpcClientProvider({
       release: () => {},
       releaseAndCloseIfUnused: () => {},
       closeIfUnused: () => {},
-      forceReconnect: () => Promise.resolve(),
+      // Absent rather than inert: a Retry or Reconnect wired to it would be a control that can only
+      // do nothing, so callers read null as "offer none" and wait for the shell's own reconnect.
+      forceReconnect: null,
       refreshHostClient: () => {},
       forgetHostClient: () => {},
       disconnectHostClient: () => {},
@@ -95,6 +97,18 @@ export function RpcClientProvider({
       <Ctx.Provider value={value}>{children}</Ctx.Provider>
     </PageClientCtx.Provider>
   )
+}
+
+/**
+ * The page's bridge when this tree is inside one, and null when it is not.
+ *
+ * For the seams a component shared with the native app reaches through: `MountedBottomDrawer`
+ * renders under the page's provider on a route and under nothing at all in a bare mount, and a
+ * shared component that threw for want of a shell would take the screen down rather than degrade.
+ * A seam that needs a bridge to mean anything answers nothing without one.
+ */
+export function usePageBridgeClientIfPresent(): BridgeRpcClient | null {
+  return useContext(PageClientCtx) ?? null
 }
 
 /** For the page-only seams that need the bridge itself rather than the client contract over it. */

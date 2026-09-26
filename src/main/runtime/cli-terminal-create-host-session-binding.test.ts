@@ -48,6 +48,14 @@ describe('host-initiated terminal creation under an attached window', () => {
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ persistHostSessionBinding: true }))
   })
 
+  it('spawns hidden so main answers startup queries before any pane mounts', async () => {
+    const { runtime, spawn } = createRuntimeWithAttachedWindow()
+
+    await runtime.createTerminal('id:repo-1::/tmp/wt-cli', {})
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ initiallyHidden: true }))
+  })
+
   it('marks the spawned PTY runtime-session-owned', async () => {
     const { runtime } = createRuntimeWithAttachedWindow()
 

@@ -22,7 +22,8 @@ import type {
 export type NotificationsApi = {
   getDesktopAwayState: () => Promise<boolean | undefined>
   dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
-  dismiss: (ids: string[]) => Promise<NotificationDismissResult>
+  /** `paneKeys` also retires every id main announced for those subjects. */
+  dismiss: (ids: string[], paneKeys?: string[]) => Promise<NotificationDismissResult>
   openSystemSettings: () => Promise<void>
   getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
   probeDelivery: (args?: { force?: boolean }) => Promise<NotificationDeliveryProbeResult>

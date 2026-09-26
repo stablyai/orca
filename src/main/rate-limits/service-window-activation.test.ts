@@ -7,7 +7,7 @@ import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
-import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { fetchOpenCodeGoUsage } from './opencode-go-usage-source-selection'
 import {
   asRateLimitWindow,
   deferred,
@@ -37,8 +37,8 @@ vi.mock('./kimi-fetcher', () => ({
   fetchKimiRateLimits: vi.fn()
 }))
 
-vi.mock('./opencode-go-usage-fetcher', () => ({
-  fetchOpenCodeGoRateLimits: vi.fn()
+vi.mock('./opencode-go-usage-source-selection', () => ({
+  fetchOpenCodeGoUsage: vi.fn()
 }))
 
 vi.mock('./minimax/minimax-fetcher', () => ({
@@ -47,6 +47,14 @@ vi.mock('./minimax/minimax-fetcher', () => ({
 
 vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-fetcher', () => ({
+  fetchCursorRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-auth', () => ({
+  readCursorAuthSession: vi.fn()
 }))
 
 vi.mock('./grok-auth', () => ({
@@ -188,7 +196,7 @@ describe('RateLimitService', () => {
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
-      expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchOpenCodeGoUsage).toHaveBeenCalledTimes(1)
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchMiniMaxRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
@@ -546,7 +554,7 @@ describe('RateLimitService', () => {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(unavailableProvider('claude'))
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(unavailableProvider('codex'))
       vi.mocked(fetchGeminiRateLimits).mockResolvedValue(unavailableProvider('gemini'))
-      vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(unavailableProvider('opencode-go'))
+      vi.mocked(fetchOpenCodeGoUsage).mockResolvedValue(unavailableProvider('opencode-go'))
       vi.mocked(fetchKimiRateLimits).mockResolvedValue(unavailableProvider('kimi'))
 
       const service = new RateLimitService()
@@ -563,7 +571,7 @@ describe('RateLimitService', () => {
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
-      expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchOpenCodeGoUsage).toHaveBeenCalledTimes(1)
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
 
       await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
@@ -573,7 +581,7 @@ describe('RateLimitService', () => {
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
       expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(2)
-      expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchOpenCodeGoUsage).toHaveBeenCalledTimes(2)
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(2)
 
       service.stop()

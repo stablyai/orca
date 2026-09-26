@@ -7,7 +7,7 @@ import {
   type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-state'
-import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionEndedEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
 export function handleCodexSessionExit(input: {
   sessions: Map<string, CodexSession>
@@ -25,7 +25,7 @@ export function handleCodexSessionExit(input: {
     return false
   }
   session.exitObservedAt ??= Date.now()
-  const event: StructuredAgentSessionLifecycleEvent = {
+  const event: StructuredAgentSessionEndedEvent = {
     type: 'ended',
     sessionId: input.sessionId,
     reason: input.error.message,

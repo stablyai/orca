@@ -1,6 +1,7 @@
-import { useEffect, useCallback } from 'react'
-import { BackHandler, Keyboard, Platform } from 'react-native'
+import { useCallback } from 'react'
+import { Keyboard, Platform } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
+import { useBackClaim } from '../navigation/use-back-claim'
 import { markdownTabSave } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
@@ -9,11 +10,10 @@ import type { MobileSessionDiffCommentsModel } from './use-mobile-session-diff-c
 /**
  * What these actions read, which is fourteen of the session model's two hundred and sixty-eight.
  *
- * Declared rather than taking the whole model, so the hook can be rendered on its own: the gate
- * below is the only `BackHandler` registration in this tree without a unit test of its own
- * (ruling 33.2), and a probe that had to build the whole session to reach it would be testing the
- * session. `MobileSessionDiffCommentsModel` satisfies this by construction, so the one caller is
- * unchanged.
+ * Declared rather than taking the whole model, so the hook can be rendered on its own: its Back
+ * claim is tested directly (ruling 33.2), and a probe that had to build the whole session to reach
+ * it would be testing the session. `MobileSessionDiffCommentsModel` satisfies this by
+ * construction, so the one caller is unchanged.
  */
 export type MobileSessionMarkdownActionsScope = Pick<
   MobileSessionDiffCommentsModel,
@@ -120,22 +120,18 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     setLeaveDrafts(dirtyDrafts)
   }, [getDirtyMarkdownDrafts, leaveSession])
 
-  useEffect(() => {
-    // Native only, as the drawers and the file preview already are: react-native-web's
-    // `BackHandler.addEventListener` logs "BackHandler is not supported on web and should not be
-    // used." and hands back an inert subscription, and this effect re-registers whenever the
-    // dirty-draft list changes — two lines on the console at mount, measured. There is no hardware
-    // back to intercept in a WebView; the shell owns the phone's, and the page's own Back control
-    // is where the unsaved-draft prompt lives.
-    if (Platform.OS === 'web') {
-      return
-    }
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      requestLeaveSession()
-      return true
-    })
-    return () => subscription.remove()
-  }, [requestLeaveSession])
+  // Native holds the key always: `leaveSession` replaces to the host at the root, where an
+  // unclaimed press would exit the app. On the page an unclaimed press is the shell's own pop,
+  // which is already "leave", so the claim is held only while there is a draft to ask about.
+  const hasDirtyDraft = getDirtyMarkdownDrafts().length > 0
+  useBackClaim(
+    Platform.OS === 'web' && !hasDirtyDraft
+      ? null
+      : () => {
+          requestLeaveSession()
+          return true
+        }
+  )
 
   const discardMarkdownLocalContent = useCallback(
     (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {

@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router'
 import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-probe-row'
 import { MobileWebShellDevRow } from '../src/diagnostics/mobile-web-shell-dev-row'
+import { MobileWebShellUpdateFailureRow } from '../src/diagnostics/mobile-web-shell-update-failure-row'
 import { TroubleshootView } from '../src/diagnostics/troubleshoot-view'
 import { useTroubleshootDiagnostics } from '../src/diagnostics/use-troubleshoot-diagnostics'
 import { mobileWebShellFlagCanBeOn } from '../src/storage/preferences'
@@ -24,12 +25,14 @@ export default function NativeTroubleshootRoute() {
       onBack={() => router.back()}
       onConnectionLog={() => router.push('/connection-log')}
       developerRow={
-        // The shell row wherever the flag can be on, which in an OTA build is the only way back to
-        // the native screens. The bundle probe stays development-only: it fetches.
+        // The shell rows wherever the flag can be on, which in an OTA build is the only way back to
+        // the native screens and the only place its update failures show. The bundle probe stays
+        // development-only: it fetches.
         mobileWebShellFlagCanBeOn() ? (
           <>
             {isDevelopmentBuild ? <MobileWebBundleProbeRow /> : null}
             <MobileWebShellDevRow />
+            <MobileWebShellUpdateFailureRow />
           </>
         ) : null
       }

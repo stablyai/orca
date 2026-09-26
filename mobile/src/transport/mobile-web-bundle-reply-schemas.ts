@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { MOBILE_WEB_BUNDLE_CHUNK_BYTES } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+import {
+  MOBILE_WEB_BUNDLE_CHUNK_BYTES,
+  MOBILE_WEB_BUNDLE_RANGE_BYTES,
+  MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH
+} from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   computeMobileWebBundleId,
   MobileWebBundleAssetPathSchema,
@@ -7,7 +11,8 @@ import {
   MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES,
   MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS,
   MOBILE_WEB_BUNDLE_MAX_ROUTES,
-  MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES
+  MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES,
+  SHA256_PATTERN
 } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 
 // Hoisted, never built inside a reader: a schema constructed per parse cost 2275 ns against 156 ns
@@ -17,10 +22,6 @@ import {
 // own schemas describe what it produces and stay `.strict()`; a phone that rejected an unknown
 // member would turn a later optional field into a released-client break instead of the Rule 1
 // addition `docs/reference/remote-wire-compatibility.md` allows.
-
-/** Lowercase hex digest. The shared contract keeps its copy private, so this is the one place the
- *  client states the shape it accepts. */
-const SHA256_PATTERN = /^[a-f0-9]{64}$/
 
 /** Base64 of one chunk, bounded by the same arithmetic as `skill-upload-session-contract.ts`, so a
  *  host that overshoots is refused at the boundary instead of at reassembly. */
@@ -113,20 +114,43 @@ export const MobileWebBundleManifestReadSchema = z
  *  the constant because a larger value would overshoot `dataBase64` above. */
 export const MobileWebBundleManifestReplySchema = z.looseObject({
   manifest: MobileWebBundleManifestReadSchema,
-  chunkBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_CHUNK_BYTES)
+  chunkBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_CHUNK_BYTES),
+  /** The range grid, named only by a host that serves `mobileWeb.bundle.range`. A value this build
+   *  cannot page within its `dataBase64` bound reads as absent, which keeps the fetch on chunks
+   *  rather than refusing the manifest. */
+  rangeBytes: z
+    .number()
+    .int()
+    .positive()
+    .max(MOBILE_WEB_BUNDLE_RANGE_BYTES)
+    .optional()
+    .catch(undefined)
 })
 
 /** Self-describing on purpose: `buildId`, `path` and `offset` are echoed so a reassembler cannot
  *  misplace a reply, and `sha256`/`assetByteLength` describe the whole asset rather than this
- *  chunk, which is what lets the fetch verify without a second index. */
-export const MobileWebBundleChunkReplySchema = z.looseObject({
+ *  window, which is what lets the fetch verify without a second index. Shared by both read replies. */
+const windowHeaderFields = {
   buildId: z.string().regex(SHA256_PATTERN),
   path: MobileWebBundleAssetPathSchema,
   offset: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
   assetByteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
   sha256: z.string().regex(SHA256_PATTERN),
-  dataBase64: z.string().max(MAX_DATA_BASE64_LENGTH),
   eof: z.boolean()
+}
+
+export const MobileWebBundleChunkReplySchema = z.looseObject({
+  ...windowHeaderFields,
+  dataBase64: z.string().max(MAX_DATA_BASE64_LENGTH)
+})
+
+/** The window header plus the encoding of `dataBase64`. `encoding` is read as a string, not a closed
+ *  enum: an encoding this build cannot decode is a typed refusal at the decoder, which names it,
+ *  rather than a reply-shape failure that names nothing. */
+export const MobileWebBundleRangeReplySchema = z.looseObject({
+  ...windowHeaderFields,
+  encoding: z.string().min(1).max(32),
+  dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
 })
 
 export type MobileWebBundleManifestReply = z.output<typeof MobileWebBundleManifestReplySchema>

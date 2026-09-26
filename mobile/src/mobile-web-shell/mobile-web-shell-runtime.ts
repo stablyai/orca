@@ -1,8 +1,8 @@
 import * as ExpoCrypto from 'expo-crypto'
 import { encodeBase64Url } from '../transport/mobile-endpoint-supervisor-support'
 import { BRIDGE_READY_RETRY_MAX_MS } from './bridge/bridge-client-init-handshake'
-import { createGenerationStore, type GenerationStore } from './generation-store'
-import { createExpoGenerationFileSystem } from './generation-store-file-system'
+import type { GenerationStore } from './generation-store'
+import { processGenerationStore } from './process-generation-store'
 
 /**
  * Everything the shell session touches that a test cannot: entropy, the clock, the filesystem.
@@ -36,7 +36,7 @@ export type MobileWebShellRuntime = {
 
 export function createMobileWebShellRuntime(): MobileWebShellRuntime {
   return {
-    createStore: () => createGenerationStore({ fileSystem: createExpoGenerationFileSystem() }),
+    createStore: processGenerationStore,
     mintSessionId: () => encodeBase64Url(ExpoCrypto.getRandomBytes(SESSION_ID_BYTES)),
     now: Date.now,
     setTimer: (run, delayMs) => {

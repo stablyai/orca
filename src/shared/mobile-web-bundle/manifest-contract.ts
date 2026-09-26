@@ -15,7 +15,7 @@ export const MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES = 10 * 1024 * 1024
 export const MOBILE_WEB_BUNDLE_MAX_ROUTES = 64
 export const MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS = 16
 
-const SHA256_PATTERN = /^[a-f0-9]{64}$/
+export const SHA256_PATTERN = /^[a-f0-9]{64}$/
 const ASSET_PATH_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/
 const WINDOWS_RESERVED_SEGMENT = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 // One spelling only, lowercase with a single space before `charset`: content type feeds the build

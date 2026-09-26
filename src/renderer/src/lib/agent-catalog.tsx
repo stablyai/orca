@@ -121,6 +121,20 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://docs.trae.cn/cli_get-started-with-trae-cli'
   },
   {
+    id: 'muse',
+    label: translate('auto.lib.agent.catalog.muse_label', 'Muse'),
+    cmd: 'muse',
+    faviconDomain: 'dev.meta.ai',
+    homepageUrl: 'https://dev.meta.ai/docs/muse-code'
+  },
+  {
+    id: 'zcode',
+    label: translate('auto.lib.agent.catalog.zcode_label', 'ZCode'),
+    cmd: 'zcode',
+    faviconDomain: 'zcode.z.ai',
+    homepageUrl: 'https://zcode.z.ai/en/docs'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',
@@ -227,13 +241,6 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'codebuff',
     faviconDomain: 'codebuff.com',
     homepageUrl: 'https://www.codebuff.com/docs/help/quick-start'
-  },
-  {
-    id: 'freebuff',
-    label: translate('auto.lib.agent.catalog.b0b350de65', 'Freebuff'),
-    cmd: 'freebuff',
-    faviconDomain: 'freebuff.com',
-    homepageUrl: 'https://freebuff.com/cli'
   },
   {
     id: 'command-code',

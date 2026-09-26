@@ -151,6 +151,32 @@ describe('Option-composed characters in kitty keyboard panes', () => {
     })
   })
 
+  // #22447: Option+$ composes € on a French Mac layout. The Polish cases above all
+  // sit on `Key*` codes whose unmodified character the US fallback table also knows;
+  // a punctuation code resolves `characterWithoutOption` through the layout map alone.
+  it.each([1, 3, 5, 7])(
+    'types a currency symbol composed on a punctuation key under kitty flags %s',
+    (flags) => {
+      const frenchMac = (code: string, shifted: boolean): string | undefined =>
+        code === 'BracketRight' ? (shifted ? '*' : '$') : undefined
+      for (const [mode, side] of [
+        ['false', 0],
+        ['left', 2],
+        ['right', 1]
+      ] as const) {
+        expect(
+          resolveKitty(
+            event({ key: '€', code: 'BracketRight', altKey: true }),
+            mode,
+            side,
+            frenchMac,
+            flags
+          )
+        ).toMatchObject({ type: 'sendInput', data: '€' })
+      }
+    }
+  )
+
   it.each([1, 5])('types every Polish letter and uppercase form under kitty flags %s', (flags) => {
     const letters = [
       ['a', 'ą'],

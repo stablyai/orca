@@ -2,7 +2,6 @@
 // when the hook fired, so re-read the same body on a timer and re-apply only if it changed. Both
 // timer families live in one owner so pane teardown and server stop tear both down in one ordered
 // place before the listener caches are cleared.
-import { hasCodexTranscriptSubagents } from '../shared/agent-hook-listener/providers/codex-state'
 import {
   hasPendingAgentResultText,
   preparePendingGrokResultDiscovery
@@ -11,13 +10,17 @@ import { normalizeHookPayload } from '../shared/agent-hook-listener'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookSource } from '../shared/agent-hook-relay'
+import {
+  shouldPollHookTranscript,
+  transcriptPollUpdate
+} from '../shared/agent-hook-listener/transcript-poll-policy'
 import { CodexSubagentPollScheduler } from '../shared/codex-subagent-poll-scheduler'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
 const CODEX_SUBAGENT_POLL_MS = 1_000
 
-type CodexSubagentPoll = {
+type TranscriptPoll = {
   source: AgentHookSource
   body: unknown
   original: AgentHookEventPayload
@@ -40,14 +43,14 @@ export type AgentHookResultRetryHost = {
 
 export class AgentHookResultRetryScheduler {
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  private codexSubagentPollScheduler: CodexSubagentPollScheduler<CodexSubagentPoll>
+  private transcriptPollScheduler: CodexSubagentPollScheduler<TranscriptPoll>
   private host: AgentHookResultRetryHost
 
   constructor(host: AgentHookResultRetryHost) {
     this.host = host
-    this.codexSubagentPollScheduler = new CodexSubagentPollScheduler(
+    this.transcriptPollScheduler = new CodexSubagentPollScheduler(
       CODEX_SUBAGENT_POLL_MS,
-      (paneKey, poll) => this.runCodexSubagentPoll(paneKey, poll)
+      (paneKey, poll) => this.runTranscriptPoll(paneKey, poll)
     )
   }
 
@@ -56,7 +59,7 @@ export class AgentHookResultRetryScheduler {
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
-    this.codexSubagentPollScheduler.clearAll()
+    this.transcriptPollScheduler.clearAll()
   }
 
   clearAssistantMessageRetry(paneKey: string): void {
@@ -68,26 +71,26 @@ export class AgentHookResultRetryScheduler {
     this.assistantMessageRetryTimers.delete(paneKey)
   }
 
-  clearCodexSubagentPoll(paneKey: string): void {
-    this.codexSubagentPollScheduler.clear(paneKey)
+  clearTranscriptPoll(paneKey: string): void {
+    this.transcriptPollScheduler.clear(paneKey)
   }
 
-  scheduleCodexSubagentPoll(
+  scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,
     original: AgentHookEventPayload,
     env?: string,
     version?: string
   ): void {
-    // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
-    if (source !== 'codex') {
+    // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
+    if (source !== 'codex' && source !== 'muse') {
       return
     }
-    this.codexSubagentPollScheduler.clear(original.paneKey)
-    if (!hasCodexTranscriptSubagents(this.host.state, original.paneKey)) {
+    this.transcriptPollScheduler.clear(original.paneKey)
+    if (!shouldPollHookTranscript(this.host.state, source, original)) {
       return
     }
-    this.codexSubagentPollScheduler.schedule(original.paneKey, {
+    this.transcriptPollScheduler.schedule(original.paneKey, {
       source,
       body,
       original,
@@ -96,7 +99,7 @@ export class AgentHookResultRetryScheduler {
     })
   }
 
-  private runCodexSubagentPoll(paneKey: string, poll: CodexSubagentPoll): void {
+  private runTranscriptPoll(paneKey: string, poll: TranscriptPoll): void {
     const { source, body, original, env, version } = poll
     // Keep the identity check at callback time: a newer event supersedes this
     // payload even when its pane still has transcript children.
@@ -111,13 +114,12 @@ export class AgentHookResultRetryScheduler {
     if (!event) {
       return
     }
-    const subagentsChanged =
-      JSON.stringify(event.payload.subagents) !== JSON.stringify(original.payload.subagents)
-    const next = subagentsChanged ? event : original
-    if (subagentsChanged) {
-      this.host.applyEvent(event, source, env, version)
+    const update = transcriptPollUpdate(source, original, event)
+    const next = update ?? original
+    if (update) {
+      this.host.applyEvent(update, source, env, version)
     }
-    this.scheduleCodexSubagentPoll(source, body, next, env, version)
+    this.scheduleTranscriptPoll(source, body, next, env, version)
   }
 
   scheduleAssistantMessageRetry(

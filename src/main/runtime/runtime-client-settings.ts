@@ -46,6 +46,7 @@ export type RuntimeClientSettings = Pick<
   | 'artifactSharingEnabled'
   | 'worktreeVisibilityDefaults'
   | 'agentSkillSharingEnabled'
+  | 'machineName'
 > & {
   hostSettingOverrides: RuntimeHostDisplayLabelOverrides
 }
@@ -75,6 +76,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'minimaxEndpoint'
   | 'prBotAuthorOverrides'
   | 'worktreeVisibilityDefaults'
+  | 'machineName'
 >
 
 export class RuntimeClientSettingsController {
@@ -82,7 +84,7 @@ export class RuntimeClientSettingsController {
   private reconciliationTail: Promise<void> = Promise.resolve()
 
   constructor(
-    private readonly store: RuntimeStore | null,
+    private readonly store: Pick<RuntimeStore, 'getSettings' | 'updateSettings'> | null,
     private readonly notifyReposChanged: (() => void) | undefined = undefined
   ) {}
 
@@ -125,6 +127,7 @@ export class RuntimeClientSettingsController {
       artifactSharingEnabled: isArtifactSharingEnabled(settings),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
       agentSkillSharingEnabled: isAgentSkillSharingEnabled(settings),
+      machineName: settings.machineName ?? '',
       hostSettingOverrides: Object.fromEntries(
         [
           ...getHostDisplayLabelOverrides({ hostSettingOverrides: settings.hostSettingOverrides })

@@ -37,6 +37,7 @@ const dependencies = vi.hoisted((): Dependencies => {
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  BackHandler: { addEventListener: () => ({ remove: () => {} }) },
   Keyboard: { addListener: () => ({ remove: () => {} }) },
   Linking: { openURL: vi.fn() },
   Platform: { OS: 'ios' },
@@ -105,7 +106,8 @@ vi.mock('expo-router', () => ({
     back: vi.fn(),
     canGoBack: () => false
   }),
-  usePathname: () => '/h/host-1'
+  usePathname: () => '/h/host-1',
+  useNavigation: () => ({ setOptions: vi.fn() })
 }))
 vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
   const React = await import('react')

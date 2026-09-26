@@ -68,13 +68,15 @@ describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
   const adopted = {
     app_version_match: 'different',
     spawner_path_class: 'updater-cache',
+    code_identity: 'unresolvable',
     tcc_attribution: 'intact',
     live_session_count_bucket: '2-5'
   }
   const denied = {
     cwd_class: 'documents',
     app_version_match: 'different',
-    spawner_path_class: 'updater-cache'
+    spawner_path_class: 'updater-cache',
+    code_identity: 'parked'
   }
 
   it('accepts the enum payloads', () => {
@@ -100,6 +102,9 @@ describe('daemon_adopted / daemon_pty_cwd_denied schemas', () => {
     ).toBe(false)
     expect(
       eventSchemas.daemon_pty_cwd_denied.safeParse({ ...denied, cwd_class: 'Documents' }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.daemon_adopted.safeParse({ ...adopted, code_identity: 'severed' }).success
     ).toBe(false)
   })
 })

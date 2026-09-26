@@ -89,9 +89,9 @@ afterEach(() => {
 })
 
 /**
- * React Native Web logs "BackHandler is not supported on web and should not be used." and hands
- * back an inert subscription, so inside the shell's page every open of this drawer put that line on
- * the console and armed nothing. There is no hardware back in a WebView; the shell owns the phone's.
+ * The drawer claims the device Back key through one seam on both platforms. Here that seam is the
+ * hardware key; inside the shell's page it is a claim the shell hands one press over on, which is
+ * `use-back-claim.web.ts` and is tested there.
  */
 describe('the right drawer and the phone hardware back button', () => {
   it('arms it on iOS while the drawer is open', () => {
@@ -116,10 +116,11 @@ describe('the right drawer and the phone hardware back button', () => {
     act(() => renderer.unmount())
   })
 
-  it('does not reach for it on web', () => {
-    native.platform.os = 'web'
+  // Which module answers is the bundler's and not this component's: inside the page
+  // `use-back-claim.web.ts` claims the key from the shell instead of registering here.
+  it('releases it on unmount, so a drawer taken off screen leaves the key alone', () => {
     const renderer = render(true)
-    expect(native.addEventListener).not.toHaveBeenCalled()
     act(() => renderer.unmount())
+    expect(native.remove).toHaveBeenCalledTimes(1)
   })
 })

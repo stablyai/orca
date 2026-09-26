@@ -73,9 +73,11 @@ import {
 } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
+import { MobileWebBundleFetchError } from '../transport/mobile-web-bundle-fetch-refusal'
 import { MobileWebBundleManifestReadSchema } from '../transport/mobile-web-bundle-reply-schemas'
 import {
   createFakeGenerationFileSystem,
+  FAKE_GENERATION_ROOT,
   type FakeGenerationFileSystem
 } from './generation-file-system-fake'
 import { createGenerationStore } from './generation-store'
@@ -154,10 +156,15 @@ async function cacheGeneration(
   await store.commitGeneration(await store.stageGeneration(HOST_KEY, fetchResultFor(manifest)))
 }
 
-/** What a truncated asset really produces: the fetch hashes each one, and a plain rejection is what
- *  reaches the session — nothing the transport predicate recognises as the link going. */
+/** What a truncated asset really produces: the fetch's own refusal, which is nothing the transport
+ *  predicate recognises as the link going. */
 function refuseTheAssets(): Promise<MobileWebBundleFetchResult> {
-  return Promise.reject(new Error('bundle asset assets/app.js ended at 1 of 2 declared bytes'))
+  return Promise.reject(
+    new MobileWebBundleFetchError(
+      'asset-short',
+      'bundle asset assets/app.js ended at 1 of 2 declared bytes'
+    )
+  )
 }
 
 type Mounted = {
@@ -299,6 +306,66 @@ describe('an update the shell refuses while the host is reachable', () => {
 
     expect(mounted.state()).toMatchObject({ kind: 'ready', buildId: GOOD_BUILD_ID })
     expect(mounted.updateNotice()).toBe('update-failed')
+  })
+
+  it('writes down why on the device, which is all a release build keeps', async () => {
+    const fileSystem = createFakeGenerationFileSystem()
+    await cacheGeneration(fileSystem)
+
+    const mounted = await mountRoute(fileSystem)
+    expect(mounted.state()).toMatchObject({ kind: 'ready', buildId: GOOD_BUILD_ID })
+
+    expect(await createGenerationStore({ fileSystem }).readUpdateFailures()).toEqual([
+      {
+        hostId: HOST_ID,
+        at: 0,
+        reason: 'asset-short',
+        hostCode: null,
+        offeredBuildId: NEWER_BUILD_ID,
+        cachedBuildId: GOOD_BUILD_ID,
+        outcome: 'opened-cached',
+        wall: null
+      }
+    ])
+  })
+
+  it('records a failure whose error named an endpoint and a token without either', async () => {
+    doubles.fetch = () =>
+      Promise.reject(new Error('dial wss://relay.example/pair?token=SECRET-123 refused'))
+    const fileSystem = createFakeGenerationFileSystem()
+    await cacheGeneration(fileSystem)
+
+    await mountRoute(fileSystem)
+
+    const log = await fileSystem.readText(`${FAKE_GENERATION_ROOT}/update-failures.json`)
+    expect(log).toContain('unrecognised-error')
+    expect(log).not.toMatch(/SECRET|token|\?|:\/\/|relay/)
+  })
+
+  it("forgets this host's failures once a newer generation commits, and no other host's", async () => {
+    const fileSystem = createFakeGenerationFileSystem()
+    await cacheGeneration(fileSystem)
+    const other = {
+      hostId: 'host-2',
+      at: 0,
+      reason: 'connection-lost',
+      hostCode: null,
+      offeredBuildId: null,
+      cachedBuildId: null,
+      outcome: 'opened-cached',
+      wall: null
+    } as const
+    await createGenerationStore({ fileSystem }).recordUpdateFailure(other)
+
+    await (await mountRoute(fileSystem)).unmount()
+    const afterRefusal = await createGenerationStore({ fileSystem }).readUpdateFailures()
+    expect(afterRefusal.map((entry) => entry.hostId)).toEqual(['host-2', HOST_ID])
+
+    doubles.fetch = () => Promise.resolve(fetchResultFor(NEWER_MANIFEST))
+    const updated = await mountRoute(fileSystem)
+    expect(updated.state()).toMatchObject({ kind: 'ready', buildId: NEWER_BUILD_ID })
+
+    expect(await createGenerationStore({ fileSystem }).readUpdateFailures()).toEqual([other])
   })
 
   it('asks the host again on the next launch rather than living under the fallback', async () => {

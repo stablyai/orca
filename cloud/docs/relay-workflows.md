@@ -165,6 +165,30 @@ or moving a cell and rejects intervening drift. Then
 atomically register the new cells as migration-only, binding every mutation to
 the exact live selector generation and a durable attempt ID. Deploy and verify
 the director configuration only after registration, then promote C27 alone before C28/C29.
+
+The production Asia set is C27-C30. C27-C29 launched as one wave; C30 is an additive wave of its
+own at the same shape. Its plan names C30's template, MIG, and backend plus the shared URL map, and
+the URL map pulls every existing cell's backend, MIG, and template into the plan. Committed images
+lag what same-cap rolls serve, so the workflow first reads each non-target cell's served image out
+of its live template in state and plans that cell at it. It reads the committed cell map from a
+no-refresh, unlocked plan over the same targets, not `terraform console`. Console evaluates every
+output against state, so `relay_gce_cell_deployments` wraps each per-cell resource lookup in
+`try`: until C30's topology apply, console succeeds and that output shows C30 with null MIG,
+backend, and template fields. The validator then rejects any change to a
+cell outside the wave, so the plan must read as C30's three creations plus the URL map update.
+Before the apply dispatch, run the plan mode and read its `Plan:` line; any other drift, such as a
+cell whose startup script changed since its last roll, fails the plan and must be rolled first.
+Register C30 alone as migration-only, configure the director with `cell-ids` set to C30 while
+regional rehome is paused, then promote it alone. Promotion requires C27-C29 to be general and takes
+no input evidence. It runs the same five-minute production control and splice canary C27 ran, on
+C30: the evidence must show the canary control was placed on C30, read C30's own runtime metrics,
+and bind the selector generation, and any failure returns C30 to migration-only. The SQL-failure and
+database-pool rules read C30's own metrics only. Director values are recorded under
+`director`-prefixed names but do not fail the canary, because directors show a steady baseline of
+`relay_cells` lock refusals and pool waits unrelated to C30. C30 was promoted to general on
+2026-09-23, so the same-cap job now rolls it as a general cell and the shadow gate's fleet pool list
+reads it beside C27-C29. A later Asia cell stays in the same-cap migration-only list and out of the
+fleet pool list until its own promotion, then moves to both together, as its own reviewed wave.
 Rollback returns
 Asia cells to migration-only; it does not destroy the network or use
 existing-only. The production topology dispatch remains unavailable until the

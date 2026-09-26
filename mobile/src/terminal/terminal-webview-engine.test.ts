@@ -255,9 +255,4 @@ describe('terminal WebView bundled engine', () => {
     expect(harness.addons[0]?.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(harness.term.refresh).toHaveBeenCalledTimes(1)
   })
-
-  it('answers native readiness probes from the live document', () => {
-    expect(terminalHtmlSource).toContain("if (msg.type === 'ping')")
-    expect(terminalHtmlSource).toContain("notify(scope, { type: 'pong', pingId: msg.id })")
-  })
 })

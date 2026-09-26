@@ -144,6 +144,26 @@ describe('buildAgentStartupPlan', () => {
     ).toBe("traecli -- 'help me name this config'")
   })
 
+  it('delivers the Muse prompt after its composer is ready', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'muse',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'muse',
+      launchCommand: 'muse --trust-workspace',
+      expectedProcess: 'muse',
+      followupPrompt: 'Summarize the failing tests',
+      launchConfig: {
+        ...emptyLaunchConfig('muse'),
+        agentCommand: 'muse --trust-workspace'
+      }
+    })
+  })
+
   it('passes the prompt to Prime Agent as a positional argv behind a `--` separator', () => {
     expect(
       buildAgentStartupPlan({

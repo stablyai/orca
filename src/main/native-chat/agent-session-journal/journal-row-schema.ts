@@ -10,14 +10,22 @@ import {
   type AgentJournalDispatchState,
   type AgentJournalItemBody,
   type AgentJournalMessageItem,
+  type AgentJournalProducerLinkage,
   type AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import {
   isAdmissibleAgentJournalItemBody,
   isAdmissibleAgentJournalMessageBody
 } from '../../../shared/agent-session-journal-schemas'
+import { isAdmissibleAgentSessionContextUsage } from '../../../shared/agent-session-context-usage-schema'
 
-type JournalRowBase = {
+/** Producer linkage rides the row BASE rather than the body: the two nested
+ *  prompt shapes are `.strict()`, so an unknown key on a body would make the
+ *  whole row parse as malformed. It is also deliberately not a `v` bump — an
+ *  unknown `v` makes a row unreadable and latches the host read-only, while an
+ *  unknown KEY is ignored below, so an older host reads a stamped row and
+ *  behaves exactly as it does today. */
+type JournalRowBase = AgentJournalProducerLinkage & {
   /** Schema version of THIS row. */
   v: number
   epoch: string
@@ -80,13 +88,17 @@ export type JournalDispatchRow = JournalRowBase & {
   reason: string | null
 }
 
+/** An item mutation may name its own producer, because one batch can CREATE
+ *  rows several agents produced. Naming none keeps the row's existing producer.
+ *  Inline like the row base, and for the same reason no `v` bump: an older host
+ *  ignores the unknown keys and reads the mutation as root, as it always did. */
 export type JournalLifecycleMutation =
-  | {
+  | (AgentJournalProducerLinkage & {
       kind: 'item'
       itemId: string
       revision: number
       body: AgentJournalItemBody
-    }
+    })
   | { kind: 'tombstone'; itemId: string; revision: number }
 
 /** One durable append whose nested mutations share the outer ordering facts. */
@@ -150,7 +162,59 @@ export function parseJournalRow(line: string): JournalRowParse {
     return { ok: false, unreadable: true }
   }
   const upcast = upcastRow(record, version)
+  dropUnusableProducerLinkage(upcast)
+  if (upcast.kind === 'lifecycle-batch' && Array.isArray(upcast.mutations)) {
+    for (const mutation of upcast.mutations) {
+      if (isPlainObject(mutation)) {
+        dropUnusableProducerLinkage(mutation)
+      }
+    }
+  }
+  dropUnusableContextUsage(upcast)
   return isJournalRow(upcast) ? { ok: true, row: upcast } : { ok: false, unreadable: false }
+}
+
+/** Linkage ids this build cannot trust, removed from a row it still keeps.
+ *
+ *  Deliberately NOT part of `isJournalRow`: rejecting a row there drops it from
+ *  the timeline, so a validator tightened against one bad field becomes a
+ *  whole-store kill switch. Dropping the field degrades the row to the
+ *  session's own agent — what every row said before linkage existed — while
+ *  keeping the content, which is always the safer direction. An `agentId` that
+ *  survives is a real one: the reader scopes on PRESENCE, so `''` or a
+ *  non-string left in place would hide the row from its own author for good. */
+function dropUnusableProducerLinkage(record: Record<string, unknown>): void {
+  for (const field of ['agentId', 'parentAgentId', 'providerParentRef', 'producerKind']) {
+    const value = record[field]
+    if (value !== undefined && (typeof value !== 'string' || value.length === 0)) {
+      delete record[field]
+    }
+  }
+  if (record.attempt !== undefined && !Number.isInteger(record.attempt)) {
+    delete record.attempt
+  }
+}
+
+/** Context facts this build cannot read, removed from the turn row that carries
+ *  them. Same reasoning as linkage: they are an annotation on the turn, and
+ *  rejecting the row for them would truncate the journal from that row on. */
+function dropUnusableContextUsage(record: Record<string, unknown>): void {
+  const bodies = [
+    record.kind === 'item' ? record.body : undefined,
+    ...(record.kind === 'lifecycle-batch' && Array.isArray(record.mutations)
+      ? record.mutations.map((mutation) => (isPlainObject(mutation) ? mutation.body : undefined))
+      : [])
+  ]
+  for (const body of bodies) {
+    if (
+      isPlainObject(body) &&
+      body.kind === 'turn' &&
+      body.contextUsage !== undefined &&
+      !isAdmissibleAgentSessionContextUsage(body.contextUsage)
+    ) {
+      delete body.contextUsage
+    }
+  }
 }
 
 /** Read-time upcast chain. Each step raises a row exactly one version. */

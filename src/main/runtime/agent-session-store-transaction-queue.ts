@@ -38,16 +38,15 @@ function agentSessionStoreStateChanged(
   operations: ReadonlyMap<string, AgentSessionOperationRow>,
   retiredClaimKeys: AgentSessionStoreState['retiredClaimKeys'],
   unreadableRecords: AgentSessionStoreState['unreadableRecords'],
-  visibleSessionIds: AgentSessionStoreState['visibleSessionIds'],
-  visibleSessionIdsIndexPresent: AgentSessionStoreState['visibleSessionIdsIndexPresent']
+  sessionTabs: AgentSessionStoreState['sessionTabs']
 ): boolean {
   return (
     !mapEntriesMatch(state.records, records) ||
     !mapEntriesMatch(state.operations, operations) ||
     !mapEntriesMatch(state.unreadableRecords, unreadableRecords) ||
-    state.visibleSessionIdsIndexPresent !== visibleSessionIdsIndexPresent ||
-    state.visibleSessionIds.size !== visibleSessionIds.size ||
-    [...state.visibleSessionIds].some((id) => !visibleSessionIds.has(id)) ||
+    (state.sessionTabs && sessionTabs
+      ? !state.sessionTabs.equals(sessionTabs)
+      : state.sessionTabs !== sessionTabs) ||
     state.retiredClaimKeys.length !== retiredClaimKeys.length ||
     state.retiredClaimKeys.some((entry, index) => entry !== retiredClaimKeys[index])
   )
@@ -99,8 +98,7 @@ export class AgentSessionStoreTransactionQueue {
         const operations = new Map(this.state.operations)
         const retiredClaimKeys = [...this.state.retiredClaimKeys]
         const unreadableRecords = new Map(this.state.unreadableRecords)
-        const visibleSessionIds = new Set(this.state.visibleSessionIds)
-        const visibleSessionIdsIndexPresent = this.state.visibleSessionIdsIndexPresent
+        const sessionTabs = this.state.sessionTabs?.clone() ?? null
         try {
           // The lost commit may have granted a higher fence than the backup records show. Rather
           // than refuse forever, raise every recovered fence clear of anything that commit could
@@ -119,8 +117,7 @@ export class AgentSessionStoreTransactionQueue {
               operations,
               retiredClaimKeys,
               unreadableRecords,
-              visibleSessionIds,
-              visibleSessionIdsIndexPresent
+              sessionTabs
             )
           ) {
             return result
@@ -139,8 +136,7 @@ export class AgentSessionStoreTransactionQueue {
           this.state.operations = operations
           this.state.retiredClaimKeys = retiredClaimKeys
           this.state.unreadableRecords = unreadableRecords
-          this.state.visibleSessionIds = visibleSessionIds
-          this.state.visibleSessionIdsIndexPresent = visibleSessionIdsIndexPresent
+          this.state.sessionTabs = sessionTabs
           throw error
         }
       })

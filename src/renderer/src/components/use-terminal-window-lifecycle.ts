@@ -104,7 +104,7 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
       if (fallbackBrowserTab) {
         setActiveBrowserTab(fallbackBrowserTab.id)
       } else {
-        setActiveTabType('terminal')
+        setActiveTabType('terminal', renderedActiveWorktreeId)
       }
     }
   }, [

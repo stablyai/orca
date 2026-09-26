@@ -199,6 +199,42 @@ export async function readBridgeFaultGrant() {
   return match[1]
 }
 
+/** The name the page posts its first frame under, read where the page and the shell both read it. */
+export async function readBridgePagePainted() {
+  const source = await readFile(
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-painted.ts'),
+    'utf8'
+  )
+  const match = /BRIDGE_PAGE_PAINTED = '([a-zA-Z]+)'/.exec(source)
+  if (!match) {
+    throw new Error('could not read BRIDGE_PAGE_PAINTED from bridge-page-painted.ts')
+  }
+  return match[1]
+}
+
+/**
+ * Every name a Back press can travel under, read where the product reads them: the claim and the
+ * frame this lane added, and the pop the page asks for when it has nothing to spend a press on.
+ * The third is what separates "the sheet closed" from "the whole screen went".
+ */
+export async function readBridgeBackNames() {
+  const lane = await readFile(
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-back.ts'),
+    'utf8'
+  )
+  const fields = await readFile(
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    'utf8'
+  )
+  const claim = /BRIDGE_BACK_CLAIM_NOTIFY = '([a-z-]+)'/.exec(lane)
+  const frame = /BRIDGE_BACK_FRAME = '([a-z-]+)'/.exec(lane)
+  const navigateBack = /BRIDGE_NAVIGATE_BACK_NOTIFY = '([a-z-]+)'/.exec(fields)
+  if (!claim || !frame || !navigateBack) {
+    throw new Error('could not read the Back names the page and the shell exchange')
+  }
+  return { claim: claim[1], frame: frame[1], navigateBack: navigateBack[1] }
+}
+
 /**
  * The shell's half of the bridge, as the page's channel sees it.
  *
@@ -229,9 +265,11 @@ export function installShellDouble({
   pageRoutes = null,
   pageRouteGrants = null,
   accepts = null,
+  backFrame = null,
   replies,
   streams = [],
-  windowCaps = null
+  windowCaps = null,
+  safeAreaInsets = null
 }) {
   // Where the page's own fault reports land. Read back after the render, so a route that threw
   // under the boundary names itself instead of timing out as a page that never mounted.
@@ -253,6 +291,52 @@ export function installShellDouble({
   // acked every frame look the same from the page's side.
   globalThis.__orcaRenderCheckAcks = []
   const openStreams = new Map()
+  // One Back press, on demand. The shell decides when the key goes to the page, so a check has no
+  // other way to make one happen: nothing the document does produces this frame.
+  globalThis.__orcaRenderCheckSendBack = () => {
+    if (backFrame === null) {
+      throw new Error('this shell double was not given the back frame name')
+    }
+    channel.onmessage?.({ data: JSON.stringify({ v: version, type: backFrame }) })
+  }
+  // One `init` as the shell builds it; a second one for the same session is how the shell moves
+  // the route or the safe-area insets under a live page.
+  const initFrame = (patch = {}) => ({
+    v: version,
+    type: 'init',
+    sessionId,
+    buildId,
+    connection: {
+      state: 'connected',
+      reconnectAttempt: 0,
+      lastConnectedAt: 1,
+      lastInboundAt: 1,
+      generation: 0
+    },
+    grants: {
+      rpc: { maxPendingRequests: 64, maxSubscriptions: 32 },
+      // The fault grant alone unless the caller named a set: every check needs that one,
+      // and a check that names none must not be handed an undefined list.
+      native: grants ?? [faultGrant]
+    },
+    ...(pageRoutes === null ? {} : { pageRoutes }),
+    // Omitted when the caller names none, which is the older-shell case the page falls back
+    // on: an absent field is not an empty one, and the page reads the difference.
+    ...(pageRouteGrants === null ? {} : { pageRouteGrants }),
+    // Omitted when a check names none, which is the shell that performs no swap and the
+    // state every other rig in this directory runs in.
+    ...(accepts === null ? {} : { accepts }),
+    // Omitted for a shell too old to name one, which is the case the page has a panel for.
+    ...(route === null ? {} : { route }),
+    ...(host === null ? {} : { host }),
+    storage,
+    // Omitted when a check names none, which is every shell before the field.
+    ...(safeAreaInsets === null ? {} : { safeAreaInsets }),
+    ...patch
+  })
+  globalThis.__orcaRenderCheckResendInit = (patch) => {
+    channel.onmessage?.({ data: JSON.stringify(initFrame(patch)) })
+  }
   const channel = {
     postMessage: (json) => {
       const frame = JSON.parse(json)
@@ -264,36 +348,7 @@ export function installShellDouble({
         })
       }
       if (frame.type === 'ready') {
-        answer({
-          v: version,
-          type: 'init',
-          sessionId,
-          buildId,
-          connection: {
-            state: 'connected',
-            reconnectAttempt: 0,
-            lastConnectedAt: 1,
-            lastInboundAt: 1,
-            generation: 0
-          },
-          grants: {
-            rpc: { maxPendingRequests: 64, maxSubscriptions: 32 },
-            // The fault grant alone unless the caller named a set: every check needs that one,
-            // and a check that names none must not be handed an undefined list.
-            native: grants ?? [faultGrant]
-          },
-          ...(pageRoutes === null ? {} : { pageRoutes }),
-          // Omitted when the caller names none, which is the older-shell case the page falls back
-          // on: an absent field is not an empty one, and the page reads the difference.
-          ...(pageRouteGrants === null ? {} : { pageRouteGrants }),
-          // Omitted when a check names none, which is the shell that performs no swap and the
-          // state every other rig in this directory runs in.
-          ...(accepts === null ? {} : { accepts }),
-          // Omitted for a shell too old to name one, which is the case the page has a panel for.
-          ...(route === null ? {} : { route }),
-          ...(host === null ? {} : { host }),
-          storage
-        })
+        answer(initFrame())
         return
       }
       if (frame.type === 'notify') {

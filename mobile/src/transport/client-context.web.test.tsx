@@ -14,7 +14,7 @@ import type { RpcClientContextValue } from './rpc-client-context-contract'
 // this test does not have. Nothing below calls one.
 vi.mock('./host-client-hooks', () => ({
   useDisconnectHostClient: () => () => {},
-  useForceReconnect: () => () => Promise.resolve(),
+  useForceReconnect: () => null,
   useForgetHostClient: () => () => {},
   useHostClient: () => ({ client: null, clientId: null, state: 'disconnected' }),
   usePrimeHosts: () => () => {},
@@ -268,9 +268,18 @@ describe('the page provider', () => {
     context.disconnectHostClient('host-a')
     context.forgetHostClient('host-a')
     context.refreshHostClient('host-a')
-    await context.forceReconnect('host-a')
 
     expect(close).not.toHaveBeenCalled()
     expect(context.acquire('host-a', {})).toBe(client)
+  })
+
+  it('offers no re-dial at all, so no screen can wire a Retry to one', () => {
+    // Null and not an inert function: every Retry and Reconnect reads it to decide whether it
+    // renders, and an inert one painted controls whose only effect on the page was nothing.
+    const channel = installChannel()
+    act(() => {
+      create(render(createReadyClient(channel.deliver)))
+    })
+    expect(readContext().forceReconnect).toBeNull()
   })
 })
