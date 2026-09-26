@@ -98,9 +98,8 @@ async function completeWorkerTerminalReleaseOnce(
     // here is what lets the release see the session instead of reporting it unreadable.
     //
     // NOT yet handled, and deliberately follow-up: rebinding a restarted runtime to a structured
-    // worker's hold and redrive subscription. Until that exists, a worker that survives a restart
-    // keeps no hold, so its child is evictable and its parked mail waits for the next arrival
-    // rather than a settle edge.
+    // worker's redrive subscription. Until that exists, a worker that survives a restart has its
+    // parked mail wait for the next arrival rather than a settle edge.
     await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
       console.warn(
         '[orchestration] structured host install failed before release',

@@ -89,12 +89,9 @@ export function structuredSessionTeardownHostId(
  * The workspace's structured sessions, split into what belongs to it and what is attached.
  *
  * MEMBERSHIP and LIVENESS answer different questions, and folding them into one list is what let
- * a chat tab outlive its workspace. A provider child is scoped to a VISIBLE pane — the hold that
- * keeps one is `enabled: isVisible && isWorktreeActive`, and dropping the last hold evicts the
- * child after the release grace — so `live` really means "this chat is the visible pane in the
- * active workspace, or was moments ago". Deleting a workspace from the sidebar while a different
- * one is active makes every chat in the target non-live. Those are exactly the sessions a
- * liveness-only list never saw.
+ * a chat tab outlive its workspace. A provider child runs from a send until the idle sweep rests
+ * it, so `live` only means "this chat's agent worked recently", and every chat at rest in the
+ * target is non-live. Those are exactly the sessions a liveness-only list never saw.
  */
 export type StructuredSessionsForWorktree = {
   /** Every session bound to this workspace on the fenced host, attached or not. */
@@ -259,11 +256,10 @@ export async function closeStructuredSessionsForWorktree(
   } = {}
 ): Promise<void> {
   const { runtime, mayRefuse } = options
-  // No `afterClose` for a dispatched worker: `host.close` drops the holds, so nothing keeps a
-  // provider child un-evictable, but the dispatch's redrive subscription and registry entry do
-  // survive until it settles by another verb. That is a bounded leak, not a hazard — and passing
-  // one here would mean resolving a dispatch id per session on a teardown path that must stay
-  // inside the sweep deadline.
+  // No `afterClose` for a dispatched worker: `host.close` stops the child, but the dispatch's
+  // redrive subscription and registry entry survive until it settles by another verb. That is a
+  // bounded leak, not a hazard — and passing one here would mean resolving a dispatch id per
+  // session on a teardown path that must stay inside the sweep deadline.
   for (const session of progress.sessions) {
     // Stops ISSUING new closes once the budget is spent; an in-flight one is left to finish, since
     // nothing here can cancel a provider round trip. Without this, one slow round trip starved

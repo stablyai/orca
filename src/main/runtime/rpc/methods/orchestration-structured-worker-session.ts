@@ -153,8 +153,8 @@ export async function createStructuredWorkerSession(args: {
  *
  * `ok` is not the test. `commit` answers `agent_session_operation_unknown` when `attach` SUCCEEDED
  * and only the tab publish failed, and a throw out of the commit half is past `attach` too — the
- * pre-commit half never throws, it refuses. Both leave a live provider child that took no hold and
- * has no binding, so nothing else in the runtime will ever retire it. Only a DEFINITIVE refusal
+ * pre-commit half never throws, it refuses. Both leave a session with a published tab and no
+ * binding, so nothing else in the runtime will ever retire it. Only a DEFINITIVE refusal
  * proves there is nothing to discard; everything else gets the best-effort close.
  */
 function structuredCreateMayHaveCommitted(

@@ -84,7 +84,7 @@ export async function stopStructuredWorker(
   return closeStructuredAgentSessionChild(identity.sessionId, {
     ...(runtime ? { runtime } : {}),
     // Between the close and the proof, never after: an unsettled close returns early, and a
-    // surviving hold keeps the provider child un-evictable for the life of the app.
+    // surviving redrive subscription keeps nudging a session no dispatch owns.
     afterClose: () => releaseStructuredWorkerSession(dispatchId, runtime)
   })
 }
