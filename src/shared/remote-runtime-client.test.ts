@@ -13,6 +13,7 @@ import {
 } from './e2ee-crypto'
 import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
+import { RUNTIME_SNAPSHOT_DEFLATE_CAPABILITY } from './remote-runtime-snapshot-compression'
 import { MAX_TIMER_DELAY_MS } from './timer-delay'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -75,7 +76,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
     await expect(server.nextAuth).resolves.toEqual({
       type: 'e2ee_auth',
       deviceToken: 'device-token',
-      clientCapabilities: remoteRuntimeClientCapabilities()
+      clientCapabilities: remoteRuntimeClientCapabilities([RUNTIME_SNAPSHOT_DEFLATE_CAPABILITY])
     })
     const bytes = new Uint8Array([1, 2, 3])
     expect(subscription.sendBinary(bytes)).toBe(true)
@@ -105,7 +106,8 @@ describe('subscribeRemoteRuntimeRequest', () => {
       type: 'e2ee_auth',
       deviceToken: 'device-token',
       clientCapabilities: remoteRuntimeClientCapabilities([
-        BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
+        BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+        RUNTIME_SNAPSHOT_DEFLATE_CAPABILITY
       ])
     })
     expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)

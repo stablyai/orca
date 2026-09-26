@@ -65,6 +65,12 @@ frame _content_. PR #12641 is the worked example: the host stopped synthesizing 
 finished agent status, and clients running older code saw different content in an
 identical frame.
 
+The [remote snapshot bandwidth contract](./remote-runtime-bandwidth.md) describes
+the client-advertised `remote-runtime.snapshot-deflate.v1` envelope extension,
+its uncompressed private-text sidecar, size limits, and legacy fallback. Only an
+authenticated client advertising that decoder may receive `compressedResult`;
+all other peers keep the original result.
+
 Treat these as wire changes even though nothing in the codec moves:
 
 - a field the host stops populating (an old client reading it now sees `undefined`);
