@@ -209,9 +209,12 @@ export async function getTerminalHandle(
   client: RuntimeClient,
   options: { requireUnambiguous?: boolean } = {}
 ): Promise<string> {
-  const explicit = getOptionalStringFlag(flags, 'terminal')
-  if (explicit) {
-    return explicit
+  const explicit = flags.get('terminal')
+  if (explicit !== undefined) {
+    if (typeof explicit === 'string' && explicit.length > 0) {
+      return explicit
+    }
+    throw new RuntimeClientError('invalid_argument', 'Missing required --terminal')
   }
   const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
   const response = await client.call<{ handle: string }>('terminal.resolveActive', {
