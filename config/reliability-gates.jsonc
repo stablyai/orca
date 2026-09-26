@@ -22,25 +22,10 @@
         "preview settings updates",
         "preview box fit and grid claim"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
-      "coveredProviders": [
-        "local",
-        "remote-runtime"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "remote-runtime"],
       "coverageNotes": "Mounted production component and real settings action with cloned IPC replies, inert xterm/input adapters, and simulated metrics. Local/remote-qualified renderer identities covered; no physical provider, native geometry, focus, IME or rendered app claim. Subsequent hidden/offscreen Electron component proof uses real xterm and synthetic snapshots, preserving the rendered terminal across unrelated updates and measuring equivalent fallback scale/fit requests after a font-size change.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/dashboard-popout/AgentTerminalPreview.tsx",
@@ -9181,6 +9166,77 @@
         "Live SSH and paired-runtime launch journeys are covered by existing authority contracts rather than this focused oracle."
       ],
       "demotionRule": "Demote if discovery and launch can resolve different authorities, a scoped Floating probe overwrites the active-project inventory, or local context selection adds recurring scans or retained in-flight entries."
+    },
+    {
+      "id": "agent-session.opencode2-hook-cleanup",
+      "title": "OpenCode 2 setup releases acquired hook owners after failure",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-integrations",
+      "layer": "main-unit",
+      "surfaces": ["OpenCode 2 generated plugin setup and unload"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Actual generated wrapper with synthetic factories, prompt registrations and event iterators. Supporting generated-module tests cover both OpenCode variants; no native provider execution.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/opencode2/status-plugin-setup-source.ts"
+      ],
+      "invariant": "After a hook factory is acquired, prompt registration failure or a throwing/rejecting prompt disposer cannot skip hook disposal. Unload waits for in-flight event delivery before disposing the hook factory and remains fail-open.",
+      "oracle": "Fault-injected setup and unload each call hook disposal once. The ordered control completes delivery and subscription before hook cleanup. Normal unload disposes both owners once.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/opencode2/status-plugin-setup-lifetime.test.ts"
+      ],
+      "testFiles": ["src/main/opencode2/status-plugin-setup-lifetime.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "src/main/opencode2/status-plugin-setup-lifetime.test.ts",
+          "assertions": [
+            "disposes the factory after prompt registration %s",
+            "disposes the factory after prompt cleanup %s",
+            "waits for in-flight delivery before factory cleanup after a prompt cleanup failure"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/opencode2/status-plugin-setup-lifetime.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.125,
+          "summary": "10 permanent cases pass; baseline seven fail and three controls pass. Fresh-main run including existing setup/lineage suites: 59 pass."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Synthetic wrapper unit suite; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local deterministic validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline seven failures and three controls; candidate ten passed. Hook disposal after prompt registration/cleanup failure changes from zero to one."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No new polling, scans, subprocesses or successful-startup awaits. Failure paths now await the existing hook disposer; teardown retains event-delivery ordering. No latency or heap improvement claimed."
+      },
+      "knownGaps": [
+        "Native Linux/Windows, SSH/WSL and remote-runtime plugin execution not run.",
+        "Local/daemon PTY and mobile/relay transport behavior is unaffected.",
+        "Pending non-abortable registration, event delivery or disposal promises can still delay cleanup; no timeout or cancellation redesign.",
+        "Malformed form normalization remains a separate defect.",
+        "CI soak pending."
+      ],
+      "promotionCriteria": [
+        "Retain cleanup-count and delivery-order oracles; add provider/platform execution and CI soak."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate failures without weakening cleanup or delivery-order assertions."
     },
     {
       "id": "agent-session.provider-ownership",
