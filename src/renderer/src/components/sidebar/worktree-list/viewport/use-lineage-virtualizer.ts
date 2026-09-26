@@ -2,6 +2,8 @@ import { useCallback, useLayoutEffect, useMemo, useReducer, useRef, useState } f
 import type React from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { LineageScrollAdjustment } from './lineage-scroll-adjustment'
+import { getInitialLineageMeasurements } from './lineage-measurement-cache'
+import { scrollLineageVirtualizer } from './lineage-scroll-to'
 import {
   ESTIMATED_LINEAGE_CARD_HEIGHT,
   LINEAGE_SIBLING_GAP,
@@ -20,6 +22,10 @@ export function useLineageVirtualizer(args: {
   const { tree, scrollRef, measuredHeights, groupStart } = args
   const childrenRef = useRef<HTMLDivElement>(null)
   const [scrollMargin, setScrollMargin] = useState(groupStart)
+  // Restored heights must also restore measured status for the fold adjustment policy.
+  const [initialMeasurementsCache] = useState(() =>
+    getInitialLineageMeasurements(tree, measuredHeights, groupStart)
+  )
   const [measurementRevision, measurementsChanged] = useReducer(
     (revision: number) => revision + 1,
     0
@@ -38,6 +44,8 @@ export function useLineageVirtualizer(args: {
     scrollMargin,
     // Mounting an offscreen group must not reset the shared scroller to zero.
     initialOffset: () => scrollRef.current?.scrollTop ?? 0,
+    initialMeasurementsCache,
+    scrollToFn: scrollLineageVirtualizer,
     overscan: LINEAGE_VIRTUAL_OVERSCAN,
     useFlushSync: false
   })

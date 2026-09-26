@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -41,6 +42,66 @@ test('restores the descendant title after switching sidebar bodies', async ({ or
   await orcaPage.evaluate(() => window.__store!.getState().setSidebarBody('workspaces'))
   await expect(title).toBeInViewport()
   await expect.poll(async () => Math.abs((await title.boundingBox())!.y - before)).toBeLessThan(2)
+})
+
+test('remounted measured descendants grow below the fold without shifting the reading anchor', async ({
+  orcaPage
+}, testInfo) => {
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  await seedVirtualLineage(orcaPage, false)
+  await expect(worktreeRow(orcaPage, 'e2e-virtual-child-0')).toBeInViewport()
+  await seedOrdinaryRowsAboveLineage(orcaPage)
+  await orcaPage.waitForTimeout(650)
+  const targetId = 'e2e-virtual-child-200'
+  const target = worktreeRow(orcaPage, targetId)
+  const reveal = () =>
+    orcaPage.evaluate((id) => {
+      window.__store!.getState().revealWorktreeInSidebar(id, { behavior: 'auto' })
+    }, targetId)
+  await reveal()
+  await expect(target).toBeInViewport()
+  await orcaPage.waitForTimeout(700)
+  const scroller = orcaPage.locator('[data-worktree-sidebar]')
+  await scroller.evaluate((element) => {
+    element.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }))
+    element.scrollTop = 0
+  })
+  await expect(orcaPage.locator('[data-lineage-virtual-children]')).toHaveCount(0)
+  await orcaPage.waitForTimeout(700)
+  await reveal()
+  await expect(target).toBeInViewport()
+  await target.evaluate((element) => {
+    const scroller = element.closest<HTMLElement>('[data-worktree-sidebar]')!
+    scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, bubbles: true }))
+    scroller.scrollTop +=
+      element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + 20
+  })
+  await orcaPage.waitForTimeout(700)
+  const geometry = () =>
+    target.evaluate((element) => {
+      const scroller = element.closest<HTMLElement>('[data-worktree-sidebar]')!
+      const bounds = element.getBoundingClientRect()
+      return {
+        top: bounds.top - scroller.getBoundingClientRect().top,
+        height: bounds.height,
+        scrollTop: scroller.scrollTop
+      }
+    })
+  const before = await geometry()
+  expect(Math.abs(before.top + 20)).toBeLessThan(2)
+  expect(before.top + before.height).toBeGreaterThan(0)
+  await seedWorkspaceAgentStatus(orcaPage, targetId, 'REMOUNT_SPANNING_GROWTH')
+  await expect.poll(async () => (await geometry()).height).toBeGreaterThan(before.height + 10)
+  await orcaPage.waitForTimeout(700)
+  const after = await geometry()
+  await writeFile(
+    testInfo.outputPath('remounted-spanning-growth.json'),
+    JSON.stringify({ before, after, drift: after.top - before.top }, null, 2)
+  )
+  expect(Math.abs(after.top - before.top)).toBeLessThan(2)
+  expect(Math.abs(after.scrollTop - before.scrollTop)).toBeLessThan(2)
+  await scroller.screenshot({ path: testInfo.outputPath('remounted-spanning-growth.png') })
 })
 
 test('remeasures recycled descendants after card style and viewport changes', async ({

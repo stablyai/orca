@@ -38,19 +38,35 @@ test('rename-current-workspace survives wheel input during smooth reveal', async
   await expect(scroller).toHaveAttribute('data-rename-interrupted-at', /[1-9]/)
   const target = worktreeRow(orcaPage, targetId)
   await expect(target.getByRole('textbox')).toHaveValue('Virtual child 400')
-  await expect(target.getByRole('textbox')).toBeInViewport()
-  await expect(target).not.toHaveAttribute('data-scroll-reveal-highlight', 'true')
+  const geometry = () =>
+    target.evaluate((element) => {
+      const scroller = element.closest<HTMLElement>('[data-worktree-sidebar]')!
+      const containerTop = scroller.getBoundingClientRect().top
+      const input = element.querySelector<HTMLInputElement>('[data-worktree-title-rename-input]')
+      const inputBounds = input?.getBoundingClientRect()
+      return {
+        top: element.getBoundingClientRect().top - containerTop,
+        inputTop: inputBounds ? inputBounds.top - containerTop : null,
+        inputBottom: inputBounds ? inputBounds.bottom - containerTop : null,
+        inputFocused: document.activeElement === input,
+        scrollTop: scroller.scrollTop,
+        scrollHeight: scroller.scrollHeight,
+        viewportHeight: scroller.clientHeight,
+        interruptedAt: scroller.dataset.renameInterruptedAt
+      }
+    })
   await writeFile(
-    testInfo.outputPath('interrupted-rename.json'),
-    JSON.stringify(
-      await target.evaluate((element) => {
-        const scroller = element.closest<HTMLElement>('[data-worktree-sidebar]')!
-        return {
-          top: element.getBoundingClientRect().top - scroller.getBoundingClientRect().top,
-          scrollTop: scroller.scrollTop
-        }
-      })
-    )
+    testInfo.outputPath('interrupted-rename-before-visibility.json'),
+    JSON.stringify(await geometry(), null, 2)
   )
+  try {
+    await expect(target.getByRole('textbox')).toBeInViewport()
+    await expect(target).not.toHaveAttribute('data-scroll-reveal-highlight', 'true')
+  } finally {
+    await writeFile(
+      testInfo.outputPath('interrupted-rename.json'),
+      JSON.stringify(await geometry(), null, 2)
+    )
+  }
   await orcaPage.screenshot({ path: testInfo.outputPath('interrupted-rename.png') })
 })
