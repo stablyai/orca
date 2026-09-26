@@ -50,10 +50,8 @@ export async function fetchInactiveClaudeAccountUsage(
   let token = parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file').token
   if (isOauthTokenExpiring(credentialsJson)) {
     const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
-    if (options.signal?.aborted) {
-      return abortedClaudeRateLimitResult()
-    }
     if (refreshed) {
+      // Why: the server consumed the single-use refresh token already, so persist before honoring an abort.
       try {
         await writeClaudeManagedCredentialsJson(location, refreshed)
       } catch {
@@ -61,6 +59,9 @@ export async function fetchInactiveClaudeAccountUsage(
       }
       credentialsJson = refreshed
       token = parseClaudeOAuthCredentialsJson(refreshed, 'credentials-file').token
+    }
+    if (options.signal?.aborted) {
+      return abortedClaudeRateLimitResult()
     }
   }
 

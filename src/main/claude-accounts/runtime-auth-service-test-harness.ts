@@ -42,6 +42,7 @@ export function createElectronMock() {
 export function createOauthRefreshMock() {
   return {
     isOauthTokenExpiring: vi.fn(() => false),
+    isOauthTokenExpiredPastGrace: vi.fn(() => false),
     refreshClaudeOauthCredentials: vi.fn(async () => null)
   }
 }

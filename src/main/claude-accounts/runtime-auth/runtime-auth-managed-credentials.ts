@@ -53,8 +53,8 @@ export class ClaudeRuntimeAuthManagedCredentials extends ClaudeRuntimeAuthCreden
    * managed storage. Returns the refreshed credentials JSON, or null when no
    * refresh happened (token valid, no refresh token, or network failure).
    *
-   * Caller guarantees this account isn't the live/active one and runs inside the
-   * serialized mutation queue, so the single-use refresh token can't rotate concurrently.
+   * Caller runs inside the serialized mutation queue, so Orca can't rotate the
+   * single-use refresh token concurrently; runtime-auth-sync.ts owns the live-PTY gate.
    */
   protected async refreshManagedAccountTokenIfNeeded(
     account: ClaudeManagedAccount,
