@@ -310,7 +310,7 @@ export async function closeStructuredSessionsForWorktree(
  * The close path already does this for a session it CLOSED. This is the complement: the members
  * with no attached child, which the close list never contained and nothing else will hide. Their
  * durable reference survives every purge a removal already performs: the renderer drops `unifiedTabsByWorktree` and the main
- * process drops the workspace metadata, and neither touches `visibleSessionIds`. Startup replays
+ * process drops the workspace metadata, and neither touches the chat tab table. Startup replays
  * that index, restores the session from it and republishes the tab, so the chat comes back at the
  * next launch pointing at a workspace that is gone. Worktree ids are path-derived and can be
  * recreated, so a later workspace at the same path inherits the tab — which is the hazard

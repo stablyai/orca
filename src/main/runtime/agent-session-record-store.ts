@@ -1,4 +1,3 @@
-import { setVisibleSessionId } from './agent-session-visible-tab-index'
 import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 /** Durable single-writer session records and their operation ledger. */
@@ -69,9 +68,9 @@ import {
 import {
   agentSessionStoreRevision,
   agentSessionStorePath,
-  type AgentSessionStoreState,
-  backfillAgentSessionSurfaceTabIds
+  type AgentSessionStoreState
 } from './agent-session-record-store-file'
+import { setAgentSessionTabVisibility } from './agent-session-tab-table'
 import { loadProtectedAgentSessionStore } from './agent-session-record-store-security'
 import {
   AgentSessionStoreTransactionQueue,
@@ -90,19 +89,14 @@ export class AgentSessionRecordStore {
     // Why: every persisted lease is unreconciled until this host adjudicates it, so a restart
     // grants no writer on the strength of what the previous process wrote.
     const diskRevision = agentSessionStoreRevision(loaded.state)
-    // After the revision, so the file still hashes to what was read. The filled ids, like the
-    // normalized legacy leases, reach disk with this store's first transaction rather than a write
-    // here: a rewrite at open would read as an external change to any other holder of the file
-    // mid-restart.
-    const backfilled = backfillAgentSessionSurfaceTabIds(loaded.state)
+    // The normalized legacy leases reach disk with this store's first transaction rather than a
+    // write here: a rewrite at open would read as an external change to any other holder of the
+    // file mid-restart.
     markAgentSessionStoreLeasesUnreconciled(loaded.state)
     const transactions = AgentSessionStoreTransactionQueue.fromLoadedStore(
       filePath,
       args.hostId,
-      {
-        ...loaded,
-        needsRewrite: loaded.needsRewrite || backfilled > 0 || loaded.legacyHandoffLeasesNormalized
-      },
+      { ...loaded, needsRewrite: loaded.needsRewrite || loaded.legacyHandoffLeasesNormalized },
       diskRevision
     )
     if (loaded.needsRewrite && !loaded.readOnly && !loaded.recoveredFromBackup) {
@@ -133,16 +127,25 @@ export class AgentSessionRecordStore {
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
   listVisibleSessionIds = (): string[] =>
-    [...this.state.visibleSessionIds].filter((sessionId) => this.state.records.has(sessionId))
+    (this.state.sessionTabs?.sessionIds() ?? []).filter((sessionId) =>
+      this.state.records.has(sessionId)
+    )
 
   getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } => ({
-    present: this.state.visibleSessionIdsIndexPresent,
+    present: this.state.sessionTabs !== null,
     sessionIds: this.listVisibleSessionIds()
   })
 
-  /** Persist the user-visible tab reference separately from the rollback-sensitive profile tabs. */
-  setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
-    return this.transact(() => setVisibleSessionId(this.state, sessionId, visible))
+  /** The id of the chat tab showing this conversation, if one does. */
+  getSessionTabId = (sessionId: string): string | null =>
+    this.state.sessionTabs?.tabIdFor(sessionId) ?? null
+
+  /**
+   * Persist the user-visible tab reference separately from the rollback-sensitive profile tabs.
+   * Showing keeps a tab the session already has; `tabId` puts a hidden one back under its old id.
+   */
+  setSessionTabVisibility(sessionId: string, visible: boolean, tabId?: string): Promise<void> {
+    return this.transact(() => setAgentSessionTabVisibility(this.state, sessionId, visible, tabId))
   }
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {

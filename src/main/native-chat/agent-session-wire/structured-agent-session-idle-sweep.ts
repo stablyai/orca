@@ -8,6 +8,7 @@
 //
 // Owed work is derived on every tick, never stored, so there is nothing to disagree with it.
 
+import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
@@ -138,7 +139,7 @@ export class StructuredAgentSessionIdleSweep {
     return (
       activeStructuredAgentSessionTurnId(items) !== null ||
       this.queuedOrDelivering(sessionId, session) ||
-      (this.deps.backgroundTaskState(sessionId)?.tasks?.length ?? 0) > 0 ||
+      agentChildWorkLiveness(this.deps.backgroundTaskState(sessionId)?.tasks) !== null ||
       this.deps.hasOpenDispatch(sessionId) ||
       hasPendingStructuredAgentSessionPrompt(items)
     )

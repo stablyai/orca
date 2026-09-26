@@ -225,4 +225,22 @@ describe('resolution receipts', () => {
       ).toEqual([{ question: null, answer: null }])
     }
   })
+
+  it('reads the recorded structured answers before the packed form', () => {
+    const typed = 'Wait for the capture to finish. '.repeat(50).trim()
+    const body: AgentJournalQuestionItem = {
+      kind: 'question',
+      question: 'Name?',
+      options: [{ id: 'q1:choice-1', label: 'Default' }],
+      freeTextQuestionId: 'q1',
+      resolution: {
+        ...approval.resolution,
+        // The packed copy only older clients read; it must not win over the recorded answer.
+        selectedOptionId: 'q1:choice-1',
+        answers: [{ questionId: 'q1', optionIds: [], other: typed }]
+      }
+    }
+
+    expect(nativeChatReceiptAnswers(body)).toEqual([{ question: null, answer: typed }])
+  })
 })
