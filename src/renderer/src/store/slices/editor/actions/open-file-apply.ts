@@ -117,9 +117,16 @@ export function applyOpenFileToState(
     // keeping View Log from downgrading an already writable tab.
     const nextReadOnly = existing.readOnly === true && file.readOnly === true ? true : undefined
     const nextLiveTail = file.liveTail === true && nextReadOnly === true ? true : undefined
+    const changesAgainstIndex = file.mode === 'edit' && file.changesAgainstIndex === true
+    const changesBaselineChanged = (existing.changesAgainstIndex === true) !== changesAgainstIndex
+    const diffContentReloadNonce =
+      file.mode === 'edit' && (changesAgainstIndex || changesBaselineChanged)
+        ? (existing.diffContentReloadNonce ?? 0) + 1
+        : existing.diffContentReloadNonce
     const needsExistingUpdate =
       existing.mode !== file.mode ||
       existing.diffSource !== file.diffSource ||
+      changesBaselineChanged ||
       existing.branchCompare?.compareVersion !== file.branchCompare?.compareVersion ||
       existing.commitCompare?.compareVersion !== file.commitCompare?.compareVersion ||
       existing.conflict?.kind !== file.conflict?.kind ||
@@ -135,7 +142,8 @@ export function applyOpenFileToState(
       refreshExternalSshProvenance ||
       existing.fileContentReloadNonce !== fileContentReloadNonce ||
       existing.readOnly !== nextReadOnly ||
-      existing.liveTail !== nextLiveTail
+      existing.liveTail !== nextLiveTail ||
+      existing.diffContentReloadNonce !== diffContentReloadNonce
     if (!needsExistingUpdate) {
       return activeResult
     }
@@ -154,6 +162,8 @@ export function applyOpenFileToState(
                 : f.operationProvenance,
               mode: file.mode,
               diffSource: file.diffSource,
+              changesAgainstIndex: changesAgainstIndex || undefined,
+              diffContentReloadNonce,
               branchCompare: file.branchCompare,
               commitCompare: file.commitCompare,
               branchOldPath: file.branchOldPath,

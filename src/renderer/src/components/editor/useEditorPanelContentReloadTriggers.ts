@@ -102,7 +102,7 @@ export function useEditorPanelContentReloadTriggers({
       return
     }
     const current = openFilesRef.current.find((f) => f.id === activeFile.id)
-    if (!current || !isReloadableSingleFileDiffTab(current)) {
+    if (!current || !(isReloadableSingleFileDiffTab(current) || isChangesMode)) {
       return
     }
     invalidateDiffContent([current.id])
@@ -113,6 +113,7 @@ export function useEditorPanelContentReloadTriggers({
   }, [
     activeFile?.diffContentReloadNonce,
     activeFile?.id,
+    isChangesMode,
     invalidateDiffContent,
     loadDiffContent,
     isVisibleRef,
