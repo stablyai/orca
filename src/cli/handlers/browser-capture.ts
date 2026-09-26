@@ -85,10 +85,10 @@ export const BROWSER_CAPTURE_HANDLERS: Record<string, CommandHandler> = {
     Object.assign(params, await getBrowserCommandTarget(flags, cwd, client))
     const result = await client.call<BrowserNetworkLogResult>('browser.network', params)
     printResult(result, json, (v) => {
-      if (v.entries.length === 0) {
+      if (v.requests.length === 0) {
         return 'No network entries'
       }
-      return v.entries.map((e) => `${e.status} ${e.url} (${e.mimeType}, ${e.size}B)`).join('\n')
+      return v.requests.map((e) => `${e.status ?? 'pending'} ${e.method} ${e.url}`).join('\n')
     })
   }
 }

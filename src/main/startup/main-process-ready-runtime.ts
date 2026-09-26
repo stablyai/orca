@@ -52,9 +52,13 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
   state.starNag.registerIpcHandlers()
-  state.agentBrowserBridge = new AgentBrowserBridge(browserManager, {
+  const agentBrowserBridge = new AgentBrowserBridge(browserManager, {
     onTabsChanged: (worktreeId) => runtime.notifyMobileSessionTabsChanged(worktreeId)
   })
+  state.agentBrowserBridge = agentBrowserBridge
+  // Why: the bridge attributes owned popup requests to the opener's capture, so it
+  // subscribes to the popup open/close notices the manager emits on both popup paths.
+  browserManager.setPopupCaptureObserver(agentBrowserBridge)
   runtime.setAgentBrowserBridge(state.agentBrowserBridge)
   // Why: daemons a crashed or SIGKILL'd previous run left behind answer to nobody; nothing else reclaims them.
   void state.agentBrowserBridge.sweepOrphanedSessions()

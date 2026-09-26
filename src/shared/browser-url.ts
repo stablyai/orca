@@ -340,3 +340,16 @@ export function normalizeExternalBrowserUrl(rawUrl: string): string | null {
   }
   return normalized
 }
+
+// Why: popup network entries must never retain authorization query values
+// (OAuth codes, state) or fragments — keep only origin and path for debugging.
+export function stripUrlQueryAndFragment(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl)
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.toString()
+  } catch {
+    return rawUrl
+  }
+}

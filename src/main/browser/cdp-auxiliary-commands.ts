@@ -205,9 +205,16 @@ export class CdpAuxiliaryCommands {
 
   networkLog(limit = 100): BrowserNetworkLogResult {
     const { state } = this.host.current()
+    // Why: the shared result is the daemon's {requests} shape — map the legacy
+    // internal entries onto its field names, keeping the last-N slice.
     return {
-      entries: state.networkLog.slice(-limit),
-      truncated: state.networkLog.length > limit
+      requests: state.networkLog.slice(-limit).map((entry) => ({
+        url: entry.url,
+        method: entry.method,
+        timestamp: entry.timestamp,
+        status: entry.status,
+        mimeType: entry.mimeType
+      }))
     }
   }
 }

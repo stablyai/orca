@@ -25,6 +25,9 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     }
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
+      // Why: popups are never registered tabs, so this attach is the only signal
+      // that lets the opener's capture include the popup's requests.
+      this.notifyPopupCaptureOpened(inheritedOwnerContext.browserTabId, guest)
     }
     const disposeAuthDetachTracking = this.trackDebuggerDetachForAuthUserAgent(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.

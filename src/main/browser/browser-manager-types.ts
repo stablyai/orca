@@ -44,6 +44,14 @@ export type PopupOwnerContext = {
   rootGuestWebContentsId: number
 }
 
+// Why an observer instead of a manager→bridge import: the bridge already depends
+// on the manager, so the reverse edge would be circular. The manager owns both
+// popup creation paths and only reports open/close; the observer owns capture.
+export type BrowserPopupCaptureObserver = {
+  onPopupOpened: (browserPageId: string, popup: Electron.WebContents) => void
+  onPopupClosed: (popupWebContentsId: number) => void
+}
+
 /**
  * What a guest is allowed to be. A browsing guest is the web — popups, clicked-link routing and
  * auth-identity tracking all apply. A workspace-document guest renders one granted document and gets none

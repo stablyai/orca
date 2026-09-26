@@ -9,6 +9,7 @@ import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken,
   resolveRemoteFailureExternalUrl,
+  stripUrlQueryAndFragment,
   toSecureCertificateEndpoint,
   toHttpsRecoveryUrl
 } from './browser-url'
@@ -282,5 +283,16 @@ describe('browser-url helpers', () => {
     expect(redactKagiSessionToken('https://kagi.com/search/?token=secret&q=hi')).toBe(
       'https://kagi.com/search/?q=hi'
     )
+  })
+
+  it('hides query and fragment values while keeping origin and path', () => {
+    expect(stripUrlQueryAndFragment('https://sso.example.com/auth?code=SECRET&state=x')).toBe(
+      'https://sso.example.com/auth'
+    )
+    expect(stripUrlQueryAndFragment('https://example.com/app#token=abc')).toBe(
+      'https://example.com/app'
+    )
+    expect(stripUrlQueryAndFragment('https://example.com/app')).toBe('https://example.com/app')
+    expect(stripUrlQueryAndFragment('not a url')).toBe('not a url')
   })
 })
