@@ -38,6 +38,7 @@ import type { JiraApi } from './api/jira-api'
 import type { LinearApi } from './api/linear-api'
 import type { MobileApi } from './api/mobile-api'
 import type { NativeChatApi } from './api/native-chat-api'
+import type { CrossMachineRecoveryApi } from '../shared/cross-machine-recovery-provider-ipc'
 import type { OnboardingApi, StarNagApi } from './api/onboarding-api'
 import type { OrcaProfileApi } from './api/orca-profile-api'
 import type {
@@ -136,6 +137,7 @@ export type PreloadApi = {
   museUsage: MuseUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
+  crossMachineRecovery: CrossMachineRecoveryApi
   fs: FilesystemApi['fs']
   git: Merged<GitInspectionApi & GitOperationApi>
   ui: Merged<UiCommandEventApi & UiWindowApi>
