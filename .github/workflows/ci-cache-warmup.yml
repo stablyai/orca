@@ -9,6 +9,7 @@ on:
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
       - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/prepare-git-compatibility/**'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
@@ -21,6 +22,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/ci-cache-warmup.yml'
+      - '.github/actions/prepare-git-compatibility/**'
       - 'config/scripts/ci-cache-warmup-workflow.test.mjs'
 
 permissions:
@@ -46,6 +48,8 @@ jobs:
         with:
           native-runtime: node
           node-version: '24'
+
+      - uses: ./.github/actions/prepare-git-compatibility
 
       - name: Cache TypeScript incremental state
         id: typecheck-cache

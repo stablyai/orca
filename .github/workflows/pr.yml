@@ -312,39 +312,7 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
-      # Why: the 2.25.5 lane is a source build of a pinned tarball, so it produced the
-      # same binary on every PR for minutes of runner time. The key carries the version
-      # because that is the only input; the sha256 assertion below still guards the
-      # tarball on the miss path that actually builds. Only this PR's own later pushes
-      # can restore it — GitHub scopes a cache written from a pull_request run to that
-      # ref — so a first push always takes the build path below.
-      - name: Cache baseline Git build
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/orca-git-compat/git-2.25.5
-          key: git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5
-
-      # Why its own step: this is `make -j$(nproc)` on every core, and the lanes below
-      # spend their wall clock waiting on container starts, not on Git. Sharing a runner
-      # with the build stretched one ~1.5s boundary case past Vitest's 30s timeout, so
-      # the build has to finish before anything timed starts.
-      - name: Build the baseline Git binary
-        run: |
-          archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
-          source="$HOME/.cache/orca-git-compat/git-2.25.5"
-          if [ -x "$source/git" ]; then
-            exit 0
-          fi
-          curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
-          echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
-            | sha256sum --check
-          mkdir -p "$source"
-          tar -xzf "$archive" -C "$source" --strip-components=1
-          make -C "$source" -j"$(nproc)" \
-            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
-          # Why: the linked binaries are what the next run needs; the objects that
-          # produced them are most of the tree and would bloat the cache entry.
-          find "$source" -name '*.o' -delete
+      - uses: ./.github/actions/prepare-git-compatibility
 
       - name: Verify Git binary compatibility matrix
         run: |

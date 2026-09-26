@@ -38,13 +38,38 @@ coverage, and release behavior:
   environment, setup, import, and test durations for the existing shard planner.
   Shard 4 spent 535 worker-seconds importing and 357 executing tests; a uniform
   per-file import estimate misses that cost. See [timing refresh](../../config/scripts/ci-shard-timings.md).
-- Seed Node 24 native modules and TypeScript state on the default branch, hourly
+- Seed Node 24 native modules, the pinned Git compatibility binary, and TypeScript
+  state on the default branch, hourly
   and when dependency/toolchain inputs change. One ten-minute-bounded hosted job
   reuses existing cache keys and skips typechecking an already-cached commit.
   New PRs can restore default-branch caches, while caches saved by another PR
   are inaccessible. The audit found 80 entries totaling 10.67 GiB, including
   9.31 GiB of pnpm stores, but no main-branch Node 24 native or TypeScript state.
   Seven PRs held separate copies of the same pnpm key (2.36 GB combined).
+  Git preparation now has one shared action with the unchanged cache key,
+  checksum, and build command. In
+  [36212101873](https://github.com/stablyai/orca/actions/runs/36212101873), a new PR
+  spent 40 seconds compiling the same Git 2.25.5 binary; main-branch warming
+  makes that cache available to new PRs too.
+
+The next hosted trial also removes repeated work in mobile bundle checks. The
+builder keeps private snapshots of the default real output for read-only checks
+(15 identical builds become two), and haptics checks reuse each route closure
+(32 builds become eight). Determinism, custom inputs, malformed routes, stale
+outputs, and tampered manifests retain independent builds. A mutation regression
+proves Buffer/manifest consumers cannot change another assertion's fixture.
+The grant census reuses parsed references for unchanged file contents, still
+reads source every time, and has a real-file edit invalidation regression.
+The first hosted mobile lane used 400 seconds for its 448 assertions; the grant
+census alone took 259 seconds. Locally, the same one-worker invocation of the
+three changed files fell from 243.07 seconds (101 passing tests) to 49.49 seconds
+(103 passing tests). Hosted before/after measurements are pending.
+
+A four-worker unit trial is scoped to the four-core Linux unit step. No local,
+Windows, isolation, timeout, retry, or coverage settings change. The existing
+three-worker baseline and unchanged timing weights provide the comparison;
+retain the override only after the complete suite passes and aggregate active
+time improves. Failed timing reports never replace the checked-in baseline.
 
 No account settings, paid services, or runner entitlements changed. Standard
 public-repository runners remain free. GitHub documents plan concurrency limits
@@ -53,9 +78,27 @@ increases. The organization's actual entitlement was not exposed by the API.
 See [runner specifications](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 and [concurrency limits](https://docs.github.com/en/actions/reference/limits).
 
-Hosted validation and timing results for [PR #23053](https://github.com/stablyai/orca/pull/23053)
-are in progress. Queue changes are observational and should not be attributed to
-this PR without separating account traffic from active job duration.
+Hosted observations from [PR run 36215718607](https://github.com/stablyai/orca/actions/runs/36215718607):
+
+| Check                                     | Earlier sample |        Trial | Result               |
+| ----------------------------------------- | -------------: | -----------: | -------------------- |
+| Detection plus repository guards          |  54s, two jobs | 26s, one job | Passed               |
+| Typecheck (whole job)                     |       109s x64 |      81s ARM | Passed               |
+| Typecheck command, cold incremental state |        76s x64 |      51s ARM | Passed               |
+| Cloud secret scan (whole job)             |            69s |          55s | Passed               |
+| Cloud checkout/history fetch              |            55s |          40s | Identical scan scope |
+
+The [warmup trial](https://github.com/stablyai/orca/actions/runs/36215718295)
+passed in 54 seconds. Its x64 compiler restored the ARM job's incremental state
+and rechecked the same source in eight seconds. Unit shard 3 subsequently
+restored its pnpm/native cache keys successfully. Actual sharing across different
+PRs requires the producer to land on the default branch; this trial validates
+commands and key compatibility, not a completed default-branch rollout.
+
+These are small observational samples from different revisions, not controlled
+benchmarks. The cold typecheck log confirms an incremental-cache miss. Queue
+changes must be separated from active duration and concurrent account traffic.
+Complete unit timing refresh and final PR validation are still in progress.
 
 ## September 5 audit
 

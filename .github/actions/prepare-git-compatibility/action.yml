@@ -1,0 +1,30 @@
+name: Prepare baseline Git compatibility binary
+description: Restore or build the pinned Linux Git binary for the compatibility contract.
+
+runs:
+  using: composite
+  steps:
+    - name: Cache baseline Git build
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/orca-git-compat/git-2.25.5
+        key: git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5
+
+    # Finish the CPU-heavy build before any timed compatibility lanes start.
+    - name: Build the baseline Git binary
+      shell: bash
+      run: |
+        archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
+        source="$HOME/.cache/orca-git-compat/git-2.25.5"
+        if [ -x "$source/git" ]; then
+          exit 0
+        fi
+        curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
+        echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
+          | sha256sum --check
+        mkdir -p "$source"
+        tar -xzf "$archive" -C "$source" --strip-components=1
+        make -C "$source" -j"$(nproc)" \
+          NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+        # Object files are no longer needed after linking the cached binary.
+        find "$source" -name '*.o' -delete

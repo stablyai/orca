@@ -129,6 +129,9 @@ describe('per-job path classification', () => {
     expectClassification(['src/shared/git-binary-compatibility.test.ts'], {
       git_compatibility: true
     })
+    expectClassification(['.github/actions/prepare-git-compatibility/action.yml'], {
+      git_compatibility: true
+    })
   })
 
   it('runs the Codex index-heal contract only when the heal or its transport changes', () => {

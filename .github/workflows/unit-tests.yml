@@ -41,6 +41,8 @@ jobs:
         env:
           ORCA_BALANCE_UNIT_SHARDS: '1'
           ORCA_BACKGROUND_LAUNCH: '1'
+          # Four isolated workers fit the four CPUs on the hosted Linux runner.
+          VITEST_MAX_WORKERS: '4'
         run: |
           export ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
           pnpm exec vitest run --config config/vitest.config.ts \
