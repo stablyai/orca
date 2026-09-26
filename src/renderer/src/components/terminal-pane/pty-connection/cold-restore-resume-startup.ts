@@ -31,6 +31,13 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const sleepingRecord = sleepingRecordEntry?.record
 
     const useLiveEntry = entry && entry.state !== 'done'
+    // Why: the operator closed this agent, so the anchor is history. It is kept
+    // for a manual resume, but a restore must not act on it by itself (#14228).
+    // Keyed on `useLiveEntry`, not on `entry`: a `done` row leaves `entry` set
+    // while the resume identity below still comes from the flagged record.
+    if (!useLiveEntry && sleepingRecord?.agentExited === true) {
+      return null
+    }
     const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
     if (!agent || !isResumableTuiAgent(agent)) {
       return null

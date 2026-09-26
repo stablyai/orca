@@ -62,6 +62,29 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     const [paneKey, record] = selectedLegacyMatch
     return { paneKey, record }
   }
+  session.markSleepingRecordProviderDuplicatesAgentExited = (
+    state: ReturnType<typeof useAppStore.getState>,
+    consumed: { paneKey: string; record: SleepingAgentSessionRecord }
+  ): void => {
+    const paneKeys = [consumed.paneKey]
+    for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
+      if (
+        paneKey !== consumed.paneKey &&
+        record.worktreeId === consumed.record.worktreeId &&
+        record.agent === consumed.record.agent &&
+        agentProviderSessionsEqual(
+          record.agent,
+          record.providerSession,
+          consumed.record.providerSession
+        )
+      ) {
+        // Why: mirrors the clear path — legacy pane aliases can leave several
+        // rows for one provider session, and all of them describe the exit.
+        paneKeys.push(paneKey)
+      }
+    }
+    state.markSleepingAgentSessionsAgentExited(paneKeys)
+  }
   session.clearSleepingRecordProviderDuplicates = (
     state: ReturnType<typeof useAppStore.getState>,
     consumed: { paneKey: string; record: SleepingAgentSessionRecord }

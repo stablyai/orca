@@ -21,6 +21,7 @@ export function createAgentStatusRecoveryActions(
   | 'captureSleepingAgentSessionsByWorktree'
   | 'captureAllSleepingAgentSessions'
   | 'clearSleepingAgentSession'
+  | 'markSleepingAgentSessionsAgentExited'
   | 'clearSleepingAgentSessionsByPaneKey'
   | 'clearSleepingAgentSessionsByWorktree'
   | 'pruneSleepingAgentSessions'
@@ -106,6 +107,25 @@ export function createAgentStatusRecoveryActions(
     },
 
     clearSleepingAgentSession: (paneKey) => clearSleepingAgentSessionsByPaneKey([paneKey]),
+
+    markSleepingAgentSessionsAgentExited: (paneKeys) => {
+      set((s) => {
+        let changed = false
+        const next: Record<string, SleepingAgentSessionRecord> = {
+          ...s.sleepingAgentSessionsByPaneKey
+        }
+        for (const paneKey of paneKeys) {
+          const record = next[paneKey]
+          if (!record || record.agentExited === true) {
+            continue
+          }
+          next[paneKey] = { ...record, agentExited: true }
+          changed = true
+        }
+        return changed ? { sleepingAgentSessionsByPaneKey: next } : s
+      })
+    },
+
     clearSleepingAgentSessionsByPaneKey,
 
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {

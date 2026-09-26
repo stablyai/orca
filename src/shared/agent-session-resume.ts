@@ -71,6 +71,12 @@ export type SleepingAgentSessionRecord = {
    *  opened, so a mobile wake must not background-mount every such tab and
    *  respawn the whole workspace the user just slept (#11598). */
   restoreOnTabOpenOnly?: boolean
+  /** The pane's agent was seen returning to its shell, so this anchor points at
+   *  a session the operator closed rather than one that was lost. The record is
+   *  kept — it still describes real history, and the evidence behind the flag is
+   *  a foreground read that can misfire — but nothing may relaunch `--resume`
+   *  from it on its own (#14228). */
+  agentExited?: boolean
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
