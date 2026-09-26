@@ -11369,7 +11369,7 @@
           "failed": "更新失败",
           "serviceManagerHelp": "通过启动此服务器的服务管理器更新 Orca。",
           "unpackedHelp": "开发版本必须从其源代码检出进行更新。",
-          "legacyHelp": "手动更新此服务器一次以启用远程更新。"
+          "legacyHelp": "此服务器无法远程更新。请在服务器主机上更新 Orca。"
         },
         "BrowserLinkRoutingSetting": {
           "description": "在 Orca 内置浏览器中打开来自终端、Markdown 和编辑器的 http(s) 链接。{{shortcut}} 始终使用系统浏览器。",

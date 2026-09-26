@@ -11369,7 +11369,7 @@
           "failed": "업데이트 실패",
           "serviceManagerHelp": "이 서버를 시작하는 서비스 관리자를 통해 Orca를 업데이트하세요.",
           "unpackedHelp": "개발 빌드는 소스 체크아웃에서 업데이트해야 합니다.",
-          "legacyHelp": "원격 업데이트를 활성화하려면 이 서버를 수동으로 한 번 업데이트하세요."
+          "legacyHelp": "이 서버에서는 원격 업데이트를 사용할 수 없습니다. 서버에서 Orca를 업데이트하세요."
         },
         "BrowserLinkRoutingSetting": {
           "description": "터미널, Markdown, 편집기의 http(s) 링크를 Orca 내장 브라우저에서 엽니다. {{shortcut}}을(를) 누르면 항상 시스템 브라우저를 사용합니다.",

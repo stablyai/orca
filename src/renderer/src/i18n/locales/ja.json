@@ -11369,7 +11369,7 @@
           "failed": "更新に失敗しました",
           "serviceManagerHelp": "このサーバーを開始するサービスマネージャーを通じて Orca を更新してください。",
           "unpackedHelp": "開発ビルドはソースチェックアウトから更新する必要があります。",
-          "legacyHelp": "リモート更新を有効にするには、このサーバーを一度手動で更新してください。"
+          "legacyHelp": "このサーバーではリモート更新を利用できません。サーバー上で Orca を更新してください。"
         },
         "BrowserLinkRoutingSetting": {
           "description": "ターミナル、Markdown、エディターの http(s) リンクを Orca の組み込みブラウザで開きます。{{shortcut}} は常にシステムブラウザを使用します。",

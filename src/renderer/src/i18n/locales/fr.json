@@ -11450,7 +11450,7 @@
           "failed": "Échec de la mise à jour",
           "serviceManagerHelp": "Mettez à jour Orca via le gestionnaire de services qui démarre ce serveur.",
           "unpackedHelp": "Les builds de développement doivent être mis à jour depuis leur checkout source.",
-          "legacyHelp": "Mettez à jour ce serveur une fois manuellement pour activer les mises à jour à distance."
+          "legacyHelp": "Les mises à jour à distance ne sont pas disponibles pour ce serveur. Mettez Orca à jour sur le serveur."
         },
         "BrowserLinkRoutingSetting": {
           "description": "Ouvre les liens http(s) dans le navigateur intégré d'Orca — depuis le terminal, le markdown et l'éditeur. {{shortcut}} utilise toujours votre navigateur système.",

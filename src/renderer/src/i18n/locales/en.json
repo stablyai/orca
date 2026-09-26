@@ -11508,7 +11508,7 @@
           "failed": "Update failed",
           "serviceManagerHelp": "Update Orca on the server host — through its system package manager if it was installed from a .deb or .rpm, otherwise through the service manager that starts it.",
           "unpackedHelp": "Development builds must be updated from their source checkout.",
-          "legacyHelp": "Update this server manually once to enable remote updates."
+          "legacyHelp": "Remote updates are unavailable for this server. Update Orca on the server host."
         },
         "BrowserLinkRoutingSetting": {
           "description": "Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. {{shortcut}} always uses your system browser.",
