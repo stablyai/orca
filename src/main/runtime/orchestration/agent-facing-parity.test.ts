@@ -14,6 +14,7 @@ import {
 } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { deliverWorkerDispatchPreamble } from '../rpc/methods/orchestration/worker/deliver-worker-dispatch-preamble'
+import { decideWorkerStartMode } from '../rpc/methods/orchestration-worker-start-mode'
 import {
   localOrchestrationCliCommand,
   resolveTerminalOrchestrationCliCommand,
@@ -195,6 +196,27 @@ describe('a chat agent and a terminal agent see the same text but for the addres
       }
     }
   )
+})
+
+describe('the worker-start receipt for a reused agent', () => {
+  it.each([
+    [
+      'a structured default',
+      {
+        experimentalNativeChat: true,
+        experimentalStructuredNativeChat: true,
+        openAgentTabsInChatByDefault: true
+      }
+    ],
+    ['a terminal default', {}]
+  ])('names neither kind, whichever the address is, under %s', (_label, settings) => {
+    const chat = decideWorkerStartMode({ params: { terminal: CHAT_ADDRESS }, settings })
+    const terminal = decideWorkerStartMode({ params: { terminal: TERMINAL_HANDLE }, settings })
+
+    expect(chat).toEqual(terminal)
+    expect(chat.mode).toBe('reused')
+    expect(chat.detail).not.toMatch(/terminal agent|chat|structured/i)
+  })
 })
 
 describe('the orchestration guide an agent loads', () => {

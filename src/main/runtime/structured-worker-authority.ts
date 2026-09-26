@@ -8,7 +8,7 @@
  */
 
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import type { OrcaSessionId } from '../../shared/orca-session-address'
+import { parseOrcaSessionAddress, type OrcaSessionId } from '../../shared/orca-session-address'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrchestrationDb } from './orchestration/db'
@@ -143,6 +143,23 @@ export function structuredWorkerTerminalState(
   liveness: StructuredWorkerObservation['status']
 ): RuntimeTerminalState {
   return liveness === 'exited' ? 'exited' : liveness === 'live' ? 'running' : 'unknown'
+}
+
+/**
+ * The liveness of whatever structured session an assignee address names — a minted worker's handle
+ * or a chat's `session:<id>` — observed on the session running it now; null when the address names
+ * neither. worker-show and the fleet projection both read it, so they cannot disagree.
+ */
+export function observeStructuredAssignee(
+  address: string,
+  db: OrchestrationDb | null | undefined
+): StructuredWorkerObservation | null {
+  const chat = parseOrcaSessionAddress(address)
+  if (chat) {
+    return observeStructuredSession(executingSessionId(chat))
+  }
+  const worker = resolveStructuredWorkerIdentity(address, db)
+  return worker ? observeStructuredWorker(worker) : null
 }
 
 /** A worker's liveness, observed on the session running it now (see `structuredWorkerSessionId`). */

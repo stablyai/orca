@@ -10,6 +10,10 @@ import type * as WaitCap from '../orchestration/session-caller-wait-cap'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime'
 import {
+  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
+import {
   ADDRESS_X,
   createSessionCallerHarness,
   idOf,
@@ -222,6 +226,28 @@ describe('dispatch --inject to a chat', () => {
     await vi.waitFor(() => expect(turns).toEqual([{ sessionId: SESSION_Z, text: preamble }]))
   })
 
+  it("never reroutes a settled Dispatch's owed preamble to the coordinator", async () => {
+    busy.add(SESSION_Z)
+    const { runId, dispatchId } = await injectToChat()
+    // The chat is mid-check on its own Dispatch mailbox when the Dispatch settles under it.
+    const waiting = call(SESSION_Z, 'orchestration.check', {
+      wait: true,
+      types: 'status',
+      timeoutMs: 5_000
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    await as(SESSION_X, 'orchestration.workerStop', { dispatch: dispatchId })
+    await waiting
+
+    expect(h.db.getAllMessagesForHandle(`run:${runId}`, 100).map((m) => m.type)).not.toContain(
+      'dispatch'
+    )
+    busy.delete(SESSION_Z)
+    h.runtime.onStructuredSessionStatusForMail({ sessionId: SESSION_Z, status: 'idle' })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(turns).toEqual([])
+  })
+
   it('never delivers the preamble of a Dispatch stopped before the chat could take it', async () => {
     busy.add(SESSION_Z)
     const { dispatchId } = await injectToChat()
@@ -378,6 +404,38 @@ describe('worker-start --terminal session:<chat>', () => {
     void taskId
   })
 
+  it('is live in worker-list, by the same observation worker-show reports', async () => {
+    const { response } = await startOnChat()
+    const dispatchId = String(resultOf(response).dispatchId)
+
+    const listed = await as(SESSION_X, 'orchestration.workerList', {})
+    const workers = Array.isArray(listed.workers) ? listed.workers : []
+    expect(workers).toEqual([
+      expect.objectContaining({
+        dispatchId,
+        projection: expect.objectContaining({
+          liveness: expect.objectContaining({ verdict: 'live', source: 'execution_host' })
+        })
+      })
+    ])
+
+    // The session ends: both surfaces now read the same exit.
+    h.records.set(
+      SESSION_Z,
+      sessionRecord(SESSION_Z, {
+        lease: {
+          claimStatus: 'released',
+          deathEvidence: { kind: 'exit-observed', detail: 'closed', observedAt: 2 }
+        }
+      })
+    )
+    const shown = await as(SESSION_X, 'orchestration.workerShow', { dispatch: dispatchId })
+    expect(shown).toMatchObject({
+      observation: { status: 'exited' },
+      projection: { liveness: { verdict: 'exited', source: 'execution_host' } }
+    })
+  })
+
   it('releases as retained, leaving the chat open', async () => {
     const { taskId, response } = await startOnChat()
     const dispatchId = String(resultOf(response).dispatchId)
@@ -453,6 +511,68 @@ describe('worker-start from a chat caller', () => {
     await vi.waitFor(() => expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('ready'), {
       timeout: 5_000
     })
+  })
+})
+
+describe('worker-start --on from a chat caller', () => {
+  it("returns the not-yet-ready receipt inside the caller's shell-tool limit, and keeps attaching", async () => {
+    capRef.ms = 50
+    const { runId, taskId } = await coordinatorTask()
+    let finishAttach: (receipt: Record<string, unknown>) => void = () => {}
+    vi.spyOn(h.runtime, 'resolveOrchestrationWorkerServer').mockReturnValue(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start reads only these server facts.
+      {
+        environmentId: 'env_box',
+        name: 'box',
+        pairingRevision: 1,
+        peerFingerprint: 'fp'
+      } as ReturnType<typeof h.runtime.resolveOrchestrationWorkerServer>
+    )
+    vi.spyOn(h.runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+    vi.spyOn(h.runtime, 'callOrchestrationWorkerServer').mockImplementation(
+      async (_environment, method) =>
+        method === 'status.get'
+          ? {
+              capabilities: [
+                ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+                ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+              ]
+            }
+          : new Promise((resolve) => {
+              finishAttach = resolve
+            })
+    )
+
+    const receipt = await as(SESSION_X, 'orchestration.workerStart', {
+      task: taskId,
+      on: 'box',
+      worktree: 'path:/remote/wt',
+      agent: 'claude',
+      run: runId
+    })
+
+    const dispatchId = String(receipt.dispatchId)
+    expect(receipt).toMatchObject({
+      state: 'outcome_unknown',
+      server: { name: 'box' },
+      nextCommands: [
+        `orca orchestration worker-show --dispatch ${dispatchId} --json`,
+        `orca orchestration worker-abandon --dispatch ${dispatchId} --json`
+      ]
+    })
+    expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('starting')
+
+    finishAttach({
+      dispatchId,
+      state: 'ready',
+      runtimeEpoch: 'epoch_box',
+      worktreeId: 'wt_remote',
+      terminalHandle: 'term_remote',
+      setup: { state: 'not_applicable' },
+      effects: [],
+      residualResources: []
+    })
+    await vi.waitFor(() => expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('ready'))
   })
 })
 

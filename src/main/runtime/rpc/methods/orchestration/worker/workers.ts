@@ -68,7 +68,8 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
           runId: run.id,
           task: existingTask,
           orchestrationMutation,
-          callerSession: orchestrationCaller
+          callerSession: orchestrationCaller,
+          callerCapDeadline
         })
         return receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
       }

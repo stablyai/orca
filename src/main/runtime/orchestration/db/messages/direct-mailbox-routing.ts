@@ -125,8 +125,9 @@ export function routeUnreadDispatchMailboxToRunMailbox(
     params.push(ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1)
     const rows = this.db
       .prepare(
+        // A `dispatch` row is the assignee's owed preamble, never mail: it dies with its Dispatch.
         `SELECT id, type FROM messages INDEXED BY idx_messages_unread_current_inbox
-         WHERE run_id = ? AND to_handle = ? AND read = 0
+         WHERE run_id = ? AND to_handle = ? AND read = 0 AND type <> 'dispatch'
            AND delivery_contract = 'current_delivery'${throughClause}
          ORDER BY sequence LIMIT ?`
       )

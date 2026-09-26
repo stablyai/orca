@@ -23,7 +23,16 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 
 export type WorkerStartMode = AgentLaunchMode
 export type WorkerStartModeReason = AgentLaunchModeReason
-export type WorkerStartModeReceipt = AgentLaunchModeReceipt
+/**
+ * `reused`: `--terminal` names an agent already running — a terminal or a chat, told apart only by
+ * its address — so worker-start launched nothing and names neither kind.
+ */
+export type WorkerStartModeReceipt =
+  | AgentLaunchModeReceipt
+  | { mode: 'reused'; preferred: AgentLaunchMode; reason: 'reused_terminal'; detail: string }
+
+export const REUSED_WORKER_DETAIL =
+  '--terminal names an agent that is already running; worker-start reused it and launched nothing.'
 
 /** Orchestration's receipts are read next to dispatch records, so they name the worker and the
  *  flag that reused a terminal. Pinned here because the exact strings are asserted. */
@@ -31,8 +40,7 @@ export const WORKER_START_VOCABULARY: AgentLaunchModeVocabulary = {
   structured: 'a structured chat session worker',
   terminal: 'a terminal agent worker',
   detailOverrides: {
-    remote_execution_host: 'this worker runs on a remote execution host',
-    reused_terminal: '--terminal reuses a running terminal agent'
+    remote_execution_host: 'this worker runs on a remote execution host'
   }
 }
 
@@ -52,11 +60,19 @@ export function decideWorkerStartMode(args: {
   params: WorkerStartModePlacement
   settings: AgentLaunchModeSettings | null | undefined
 }): WorkerStartModeReceipt {
-  return decideAgentLaunchMode({
+  const decided = decideAgentLaunchMode({
     placement: args.params,
     settings: args.settings,
     vocabulary: WORKER_START_VOCABULARY
   })
+  return args.params.terminal
+    ? {
+        mode: 'reused',
+        preferred: decided.preferred,
+        reason: 'reused_terminal',
+        detail: REUSED_WORKER_DETAIL
+      }
+    : decided
 }
 
 export async function resolveWorkerStartModeOnHost(
@@ -65,14 +81,18 @@ export async function resolveWorkerStartModeOnHost(
   worktreeId: string | undefined,
   agent: TuiAgent | undefined
 ): Promise<WorkerStartModeReceipt> {
-  return resolveAgentLaunchModeOnHost(runtime, mode, worktreeId, agent, WORKER_START_VOCABULARY)
+  return mode.mode === 'reused'
+    ? mode
+    : resolveAgentLaunchModeOnHost(runtime, mode, worktreeId, agent, WORKER_START_VOCABULARY)
 }
 
 export function downgradeWorkerStartModeForHost(
   receipt: WorkerStartModeReceipt,
   support: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null
 ): WorkerStartModeReceipt {
-  return downgradeAgentLaunchModeForHost(receipt, support, WORKER_START_VOCABULARY)
+  return receipt.mode === 'reused'
+    ? receipt
+    : downgradeAgentLaunchModeForHost(receipt, support, WORKER_START_VOCABULARY)
 }
 
 export function readWorkerStartModeSettings(

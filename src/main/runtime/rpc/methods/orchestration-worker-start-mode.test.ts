@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   decideWorkerStartMode,
+  REUSED_WORKER_DETAIL,
   downgradeWorkerStartModeForHost,
   type WorkerStartModeReceipt
 } from './orchestration-worker-start-mode'
@@ -62,7 +63,6 @@ describe('worker start mode from the user default', () => {
 describe('a structured default this dispatch cannot honour', () => {
   it.each([
     ['a remote --on', { on: 'server-1' }, 'remote_execution_host'],
-    ['an existing --terminal', { terminal: 'term_1' }, 'reused_terminal'],
     ['a non-structured agent', { agent: 'cursor' }, 'agent_without_structured_session'],
     ['no agent at all', { agent: undefined }, 'agent_without_structured_session']
   ])('falls back to a terminal worker for %s', (_name, params, reason) => {
@@ -70,6 +70,18 @@ describe('a structured default this dispatch cannot honour', () => {
     expect(receipt).toMatchObject({ mode: 'terminal', preferred: 'structured', reason })
     // Never a silent fallback: the receipt states the default AND why it did not apply.
     expect(receipt.detail).toContain('Your default is a structured chat session')
+  })
+
+  it.each([
+    ['a terminal', 'term_1'],
+    ['a chat', 'session:4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37']
+  ])('launches nothing for an existing --terminal, %s alike', (_name, terminal) => {
+    expect(decide({ params: { agent: 'claude', terminal } })).toEqual({
+      mode: 'reused',
+      preferred: 'structured',
+      reason: 'reused_terminal',
+      detail: REUSED_WORKER_DETAIL
+    })
   })
 
   it.each([
