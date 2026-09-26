@@ -14,7 +14,8 @@ export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAge
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
     agentEnv: { ...config.agentEnv },
-    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
+    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {}),
+    ...(config.claudeAccountId ? { claudeAccountId: config.claudeAccountId } : {})
   }
 }
 
