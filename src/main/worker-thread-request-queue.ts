@@ -43,6 +43,7 @@ type PendingCall<TRequest, TResponse> = {
   resolve: (value: TResponse) => void
   reject: (error: Error) => void
   timer: NodeJS.Timeout | null
+  signal?: AbortSignal
   cleanupAbort: () => void
 }
 
@@ -108,6 +109,7 @@ export class WorkerThreadRequestQueue<
         resolve,
         reject,
         timer: null,
+        signal,
         cleanupAbort: () => signal?.removeEventListener('abort', abort)
       }
       const abort = (): void => {
@@ -137,6 +139,19 @@ export class WorkerThreadRequestQueue<
 
   private pump(): void {
     if (this.active || this.queue.length === 0) {
+      return
+    }
+    // A shared signal is already aborted before its remaining listeners run.
+    while (this.queue[0]?.signal?.aborted) {
+      const cancelled = this.queue.shift()
+      if (cancelled) {
+        this.settle(cancelled, () =>
+          cancelled.reject(cancelled.signal?.reason ?? new Error('Worker request aborted'))
+        )
+      }
+    }
+    if (this.queue.length === 0) {
+      this.host.scheduleIdleTeardown()
       return
     }
     const worker = this.host.ensure()

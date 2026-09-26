@@ -1,4 +1,5 @@
 import type { Worker } from 'node:worker_threads'
+import { getEventListeners } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorkerThreadRequestQueue } from './worker-thread-request-queue'
 
@@ -148,6 +149,42 @@ describe('WorkerThreadRequestQueue', () => {
     await expect(send(queue, 'later')).rejects.toThrow('disposed')
     expect(workers[0].terminated).toBe(true)
   })
+
+  it.each([false, true])(
+    'does not respawn for queued calls sharing the cancelled active signal (survivor: %s)',
+    async (hasSurvivor) => {
+      const workers: FakeWorker[] = []
+      const queue = makeQueue(workers)
+      const controller = new AbortController()
+      const reason = new Error('scan cancelled')
+      const pending = Array.from({ length: 8 }, (_, index) =>
+        settle(
+          queue.dispatch(
+            (id) => ({ id, label: `cancelled-${index}` }),
+            TIMEOUT_MS,
+            controller.signal
+          )
+        )
+      )
+      const survivor = hasSurvivor ? send(queue, 'survivor') : undefined
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(8)
+
+      controller.abort(reason)
+
+      expect(await Promise.all(pending)).toEqual(Array.from({ length: 8 }, () => reason))
+      expect(workers[0].terminated).toBe(true)
+      expect(workers).toHaveLength(hasSurvivor ? 2 : 1)
+      expect(workers.flatMap(labels)).toEqual(
+        hasSurvivor ? ['cancelled-0', 'survivor'] : ['cancelled-0']
+      )
+      expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0)
+      if (survivor) {
+        workers[1].respond()
+        await expect(survivor).resolves.toMatchObject({ label: 'survivor' })
+      }
+      queue.dispose()
+    }
+  )
 
   it('posts one request at a time and in the order it was dispatched', async () => {
     const workers: FakeWorker[] = []
