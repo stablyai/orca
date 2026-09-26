@@ -16,10 +16,13 @@ import type {
 } from '@/attention/agent-attention-contract'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import type { Tab } from '../../../../shared/tab-types'
+import { findTabAndWorktree } from '@/store/slices/tab-group-state'
 import { isOrcaWindowForegroundFocused } from '../terminal-pane/terminal-notification-pane-visibility'
 import { isStructuredTab, type StructuredTab } from './structured-agent-session-tabs'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
+const tabsByIdBySnapshot = new WeakMap<Record<string, Tab[]>, Map<string, Tab>>()
 
 function structuredTabsIn(state: StoreSnapshot, workspaceId: string): StructuredTab[] {
   return (state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab)
@@ -125,9 +128,20 @@ export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAtt
       state.activeWorktreeId === workspaceId && isOrcaWindowForegroundFocused(),
     isWorkspaceActive: (workspaceId) => state.activeWorktreeId === workspaceId,
     resolveViewedSubjectKey: (groupId) => {
-      const tab = Object.values(state.unifiedTabsByWorktree)
-        .flat()
-        .find((candidate) => candidate.id === groupId)
+      let tabsById = tabsByIdBySnapshot.get(state.unifiedTabsByWorktree)
+      if (!tabsById) {
+        tabsById = new Map()
+        tabsByIdBySnapshot.set(state.unifiedTabsByWorktree, tabsById)
+      }
+      let tab = tabsById.get(groupId)
+      if (!tab) {
+        // Why: trusted pointer input repeats this lookup even without a store change.
+        tab = findTabAndWorktree(state.unifiedTabsByWorktree, groupId)?.tab
+        if (tab) {
+          // Cache only matches so stale IDs cannot grow the cache.
+          tabsById.set(groupId, tab)
+        }
+      }
       return tab && isStructuredTab(tab)
         ? structuredAgentSessionPaneKey(tab.id, tab.entityId)
         : null
