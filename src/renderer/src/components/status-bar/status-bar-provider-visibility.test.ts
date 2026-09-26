@@ -78,6 +78,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     opencodeGoApiKeyConfigured: false,
     grokAuthConfigured: false,
     cursorAuthConfigured: false,
+    deepseekAuthConfigured: false,
     ...overrides
   }
 }
@@ -143,6 +144,7 @@ describe('hasUsageProviderSettings', () => {
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxApiKeyConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ deepseekAuthConfigured: true }))).toBe(true)
   })
 
   it('does not treat empty or unloaded settings as configured', () => {
@@ -235,6 +237,17 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
+  })
+
+  it('treats deepseekAuthConfigured as the durable signal for DeepSeek', () => {
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'deepseek',
+        usageSettings({ deepseekAuthConfigured: true })
+      )
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('deepseek', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('deepseek', null)).toBe(false)
   })
 })
 
@@ -329,6 +342,21 @@ describe('getVisibleUsageProvider', () => {
       status: 'fetching',
       session: null,
       weekly: null
+    })
+  })
+
+  it('keeps DeepSeek visible while the snapshot is pending when an API key is configured', () => {
+    const visible = getVisibleUsageProvider(
+      'deepseek',
+      null,
+      usageSettings({ deepseekAuthConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'deepseek',
+      status: 'fetching',
+      session: null,
+      weekly: null,
+      monthly: null
     })
   })
 
@@ -440,7 +468,8 @@ describe('isUsageEmptyState', () => {
           antigravity: undefined,
           minimax: undefined,
           grok: undefined,
-          cursor: undefined
+          cursor: undefined,
+          deepseek: undefined
         },
         usageSettings()
       )
@@ -459,7 +488,8 @@ describe('isUsageEmptyState', () => {
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
-          cursor: provider('unavailable', { provider: 'cursor' })
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          deepseek: provider('unavailable', { provider: 'deepseek' })
         },
         usageSettings()
       )
@@ -478,7 +508,8 @@ describe('isUsageEmptyState', () => {
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
-          cursor: provider('unavailable', { provider: 'cursor' })
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          deepseek: provider('unavailable', { provider: 'deepseek' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -512,7 +543,8 @@ describe('isUsageEmptyState', () => {
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
           grok: provider('unavailable', { provider: 'grok' }),
-          cursor: provider('unavailable', { provider: 'cursor' })
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          deepseek: provider('unavailable', { provider: 'deepseek' })
         },
         usageSettings()
       )
@@ -531,7 +563,8 @@ describe('isUsageEmptyState', () => {
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          cursor: provider('unavailable', { provider: 'cursor' })
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          deepseek: provider('unavailable', { provider: 'deepseek' }),
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
@@ -552,7 +585,8 @@ describe('isUsageEmptyState', () => {
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          cursor: provider('unavailable', { provider: 'cursor' })
+          cursor: provider('unavailable', { provider: 'cursor' }),
+          deepseek: provider('unavailable', { provider: 'deepseek' }),
         },
         usageSettings({ antigravityUsageConfigured: true })
       )

@@ -120,6 +120,8 @@ export type PersistedUIState = {
   _grokStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on Cursor status item. */
   _cursorStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on DeepSeek status item. */
+  _deepseekStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   /** Why: this is client-side presentation, not a provider/account or execution-host setting. */

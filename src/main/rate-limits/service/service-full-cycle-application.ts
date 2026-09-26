@@ -36,7 +36,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         miniMaxResult
       ],
       grokResultPromise,
-      cursorResultPromise
+      cursorResultPromise,
+      deepseekResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -193,12 +194,17 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled] = await Promise.all([grokResultPromise, cursorResultPromise])
+    const [grokSettled, cursorSettled, deepseekSettled] = await Promise.all([
+      grokResultPromise,
+      cursorResultPromise,
+      deepseekResultPromise
+    ])
     if (signal.aborted) {
       return
     }
     const grok = settleSiblingProviderResult('grok', grokSettled)
     const cursor = settleSiblingProviderResult('cursor', cursorSettled)
+    const deepseek = settleSiblingProviderResult('deepseek', deepseekSettled)
     // Why: the stale policy keeps a recent snapshot through a failed refresh, but
     // a snapshot belonging to a different Cursor account must not survive the
     // switch — the Accounts pane would name the new account beside the old
@@ -212,10 +218,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       previousCursorAccount !== cursorAccount
     this.trackActiveFailureStreak('grok', grok)
     this.trackActiveFailureStreak('cursor', cursor)
+    this.trackActiveFailureStreak('deepseek', deepseek)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok),
-      cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor)
+      cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor),
+      deepseek: this.applyStalePolicy(deepseek, previousState.deepseek)
     })
   }
 }

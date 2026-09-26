@@ -22,6 +22,8 @@ export type UsageProviderSettings = Pick<
   opencodeGoApiKeyConfigured: boolean
   grokAuthConfigured: boolean
   cursorAuthConfigured: boolean
+  // Why: DeepSeek uses DEEPSEEK_API_KEY env; main sets this each poll.
+  deepseekAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -34,6 +36,7 @@ type UsageProviderSnapshots = {
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
+  deepseek: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -86,7 +89,8 @@ export function hasUsageProviderSettings(
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
-    settings?.cursorAuthConfigured === true
+    settings?.cursorAuthConfigured === true ||
+    settings?.deepseekAuthConfigured === true
   )
 }
 
@@ -127,6 +131,9 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'cursor') {
     return settings.cursorAuthConfigured === true
   }
+  if (providerId === 'deepseek') {
+    return settings.deepseekAuthConfigured === true
+  }
   return false
 }
 
@@ -135,7 +142,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     provider: providerId,
     session: null,
     weekly: null,
-    ...(providerId === 'opencode-go' ? { monthly: null } : {}),
+    ...(providerId === 'opencode-go' || providerId === 'deepseek' ? { monthly: null } : {}),
     ...(providerId === 'gemini' || providerId === 'cursor' ? { buckets: [] } : {}),
     updatedAt: 0,
     error: null,
@@ -181,7 +188,8 @@ export function isUsageEmptyState(
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
-    isProviderSnapshotPending(providers.cursor)
+    isProviderSnapshotPending(providers.cursor) ||
+    isProviderSnapshotPending(providers.deepseek)
   ) {
     return false
   }
@@ -195,6 +203,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
-    !isProviderConfigured(providers.cursor)
+    !isProviderConfigured(providers.cursor) &&
+    !isProviderConfigured(providers.deepseek)
   )
 }

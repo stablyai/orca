@@ -10,6 +10,7 @@ import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { fetchCursorRateLimits } from './cursor-fetcher'
 import { readCursorAuthSession } from './cursor-auth'
+import { fetchDeepSeekRateLimits, isDeepSeekAuthConfigured } from './deepseek-fetcher'
 import { fetchOpenCodeGoUsage } from './opencode-go-usage-source-selection'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 
@@ -110,6 +111,8 @@ export function resetRateLimitProviderMocks(): void {
     status: 'unavailable'
   })
   vi.mocked(fetchCursorRateLimits).mockResolvedValue(unavailableProvider('cursor'))
+  vi.mocked(fetchDeepSeekRateLimits).mockResolvedValue(unavailableProvider('deepseek'))
+  vi.mocked(isDeepSeekAuthConfigured).mockReturnValue(false)
   vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
   vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
   vi.mocked(readCursorAuthSession).mockResolvedValue({ status: 'missing' })

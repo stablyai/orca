@@ -5,6 +5,7 @@ import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
 import { fetchCursorRateLimits } from '../cursor-fetcher'
 import { readCursorAuthSession } from '../cursor-auth'
+import { fetchDeepSeekRateLimits, isDeepSeekAuthConfigured } from '../deepseek-fetcher'
 import { fetchMiniMaxRateLimits } from '../minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../opencode-go-usage-source-selection'
@@ -44,6 +45,7 @@ export type FetchAllCyclePrepared = {
   ]
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
+  deepseekResultPromise: Promise<SettledProviderResult>
 }
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceFetchPolicy {
@@ -130,8 +132,17 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
-      cursor: this.withFetchingStatus(previousState.cursor, 'cursor')
+      cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
+      deepseek: this.withFetchingStatus(previousState.deepseek, 'deepseek')
     })
+
+    // Why: the key is env-only, so the flag is known before the request and a
+    // thrown balance read must not reject the rest of the cycle.
+    this.deepseekAuthConfigured = isDeepSeekAuthConfigured()
+    const deepseekResultPromise = fetchDeepSeekRateLimits({ signal }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
 
     // Why: the Cursor probe reads the macOS Keychain, so it is awaited inside the
     // provider's own promise instead of blocking the rest of the cycle on it.
@@ -231,7 +242,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         miniMaxResult
       ],
       grokResultPromise,
-      cursorResultPromise
+      cursorResultPromise,
+      deepseekResultPromise
     }
   }
 }

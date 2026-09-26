@@ -32,12 +32,16 @@ export abstract class RateLimitServiceState {
     antigravity: null,
     minimax: null,
     grok: null,
-    cursor: null
+    cursor: null,
+    deepseek: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
   // Why: the Cursor probe reads the macOS Keychain, so it cannot run synchronously
   // at construction the way Grok's auth-file probe does; each fetch cycle sets it.
   protected cursorAuthConfigured = false
+  // Why: DEEPSEEK_API_KEY is an env probe, not a keychain read, but it still
+  // changes between launches, so each fetch cycle refreshes the flag.
+  protected deepseekAuthConfigured = false
   protected openCodeGoApiKeyConfigured = false
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
@@ -52,7 +56,8 @@ export abstract class RateLimitServiceState {
     minimax: 0,
     grok: 0,
     antigravity: 0,
-    cursor: 0
+    cursor: 0,
+    deepseek: 0
   }
   // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -64,7 +69,8 @@ export abstract class RateLimitServiceState {
     minimax: 0,
     grok: 0,
     antigravity: 0,
-    cursor: 0
+    cursor: 0,
+    deepseek: 0
   }
   protected mainWindow: BrowserWindow | null = null
   protected detachWindowListeners: (() => void) | null = null

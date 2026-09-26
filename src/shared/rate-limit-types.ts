@@ -56,6 +56,7 @@ export type ProviderRateLimits = {
     | 'kimi'
     | 'minimax'
     | 'grok'
+    | 'deepseek'
     | 'antigravity'
     | 'cursor'
   /** 5-hour session window, null if not available. */
@@ -139,6 +140,7 @@ export type RateLimitState = {
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
+  deepseek: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the
@@ -168,6 +170,8 @@ export type RateLimitState = {
    * stored login. The token itself never leaves main.
    */
   cursorAuthConfigured: boolean
+  /** True when DEEPSEEK_API_KEY is set in the environment for the main process. */
+  deepseekAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]
