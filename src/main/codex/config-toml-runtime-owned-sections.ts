@@ -150,8 +150,9 @@ export function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSec
 }
 
 export function getProjectTrustLevel(block: string): 'trusted' | 'untrusted' | null {
+  // Why: same quoted-key forms as upsert (#22592); otherwise mirror/dedupe reads null.
   const match =
-    /^[ \t]*trust_level[ \t]*=[ \t]*(?:"(trusted|untrusted)"|'(trusted|untrusted)')[ \t\r]*(?:#.*)?$/m.exec(
+    /^[ \t]*(?:trust_level|"trust_level"|'trust_level')[ \t]*=[ \t]*(?:"(trusted|untrusted)"|'(trusted|untrusted)')[ \t\r]*(?:#.*)?$/m.exec(
       block
     )
   const trustLevel = match?.[1] ?? match?.[2] ?? null

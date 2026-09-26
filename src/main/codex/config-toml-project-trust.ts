@@ -31,8 +31,11 @@ export function upsertProjectTrustContent(
   const nextHeaderOffset = findNextTomlTableHeader(existing.slice(headerLineEnd))
   const blockEnd = nextHeaderOffset === -1 ? existing.length : headerLineEnd + nextHeaderOffset
   const existingBlock = existing.slice(headerLineEnd, blockEnd)
+  // Why: Codex may write `"trust_level"` / `'trust_level'` (issue #22592 exact
+  // bytes). Matching only the bare key found the header then inserted a second
+  // trust_level line — a duplicate key Codex rejects the same way as a duplicate table.
   const trustLevelPattern =
-    /^[ \t]*trust_level[ \t]*=[ \t]*(?:"(?:trusted|untrusted)"|'(?:trusted|untrusted)')[ \t\r]*(?:#.*)?$/m
+    /^[ \t]*(?:trust_level|"trust_level"|'trust_level')[ \t]*=[ \t]*(?:"(?:trusted|untrusted)"|'(?:trusted|untrusted)')[ \t\r]*(?:#.*)?$/m
   if (trustLevelPattern.test(existingBlock)) {
     return (
       existing.slice(0, headerLineEnd) +

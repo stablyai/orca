@@ -28,7 +28,11 @@ export function parseHookStateTomlHeaderKey(line: string): string | null {
 
 export function parseProjectTomlHeaderPath(line: string): string | null {
   const trimmed = line.replace(/\r$/, '').trimStart()
-  const prefixMatch = /^\[[ \t]*projects[ \t]*\.[ \t]*/.exec(trimmed)
+  // Why: Codex serializes project tables as ["projects"."/path"] (and the
+  // literal-key form ['projects'.'/path']). Matching only the bare `projects.`
+  // spelling made upsert treat those blocks as missing and append a duplicate
+  // [projects."…"] table, which TOML rejects as a duplicate key.
+  const prefixMatch = /^\[[ \t]*(?:projects|"projects"|'projects')[ \t]*\.[ \t]*/.exec(trimmed)
   return prefixMatch ? parseTomlTableStringKey(trimmed, prefixMatch[0].length) : null
 }
 

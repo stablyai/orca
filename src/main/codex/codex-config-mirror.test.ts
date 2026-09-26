@@ -478,6 +478,28 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     expect(runtimeConfig).toContain("[projects.'c:\\gemini_etl']")
   })
 
+  it('deduplicates a Codex quoted-key system project header against a bare runtime header', () => {
+    const projectPath = join(fakeHomeDir, 'p')
+    mkdirSync(projectPath, { recursive: true })
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(
+      getRuntimeConfigPath(),
+      [`[projects."${projectPath}"]`, 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+    writeFileSync(
+      getSystemConfigPath(),
+      [`["projects"."${projectPath}"]`, 'trust_level = "trusted"', ''].join('\n'),
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+    expect(runtimeConfig.match(/\[[^\]]*projects/g)).toHaveLength(1)
+    expect(runtimeConfig).toContain('trust_level = "trusted"')
+  })
+
   it('deduplicates a CRLF system project header against an LF runtime header', () => {
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
     const projectHeader = '[projects."C:/Users/jinwo/orca/workspaces/orca/repo"]'
