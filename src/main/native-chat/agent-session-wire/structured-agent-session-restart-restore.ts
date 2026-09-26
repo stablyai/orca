@@ -13,27 +13,30 @@
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
-import {
-  restoreStructuredAgentSessionRead,
-  type RestoredStructuredAgentSessionRead
-} from './structured-agent-session-read-restore'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type {
+  OpenedStructuredAgentSessionConversation,
+  StructuredAgentSessionConversationOpenDeps
+} from './structured-agent-session-conversation-open'
+import type { AgentSessionAttachParams } from './structured-agent-session-attach'
+import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
 
 const JOURNAL_RESTORE_CONCURRENCY = 4
 
 export type StructuredAgentSessionReadRestoreDeps = {
-  store: AgentSessionRecordStore
-  journalRoot: string
+  openDeps: StructuredAgentSessionConversationOpenDeps & {
+    store: Pick<AgentSessionRecordStore, 'getRecord' | 'listRecords'>
+  }
   reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
   resolveRecovery: (sessionId: string) => Promise<unknown>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   hasSession: (sessionId: string) => boolean
-  onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
-  retrySettlement: (
+  onReadable: (
     sessionId: string,
-    params: RestoredStructuredAgentSessionRead['params']
-  ) => Promise<boolean>
+    opened: OpenedStructuredAgentSessionConversation
+  ) => Promise<void> | void
+  retrySettlement: (sessionId: string, params: AgentSessionAttachParams) => Promise<boolean>
 }
 
 /**
@@ -62,7 +65,7 @@ export async function restoreOneStructuredAgentSessionRead(
 export async function restoreOneStructuredAgentSessionReadUnderSerialize(
   input: Pick<
     StructuredAgentSessionReadRestoreDeps,
-    'store' | 'journalRoot' | 'hasSession' | 'onReadable' | 'retrySettlement'
+    'openDeps' | 'hasSession' | 'onReadable' | 'retrySettlement'
   >,
   sessionId: string
 ): Promise<void> {
@@ -70,16 +73,12 @@ export async function restoreOneStructuredAgentSessionReadUnderSerialize(
     // A surface that took a hold mid-restore already attached this one.
     return
   }
-  const restored = await restoreStructuredAgentSessionRead(
-    input.store,
-    input.journalRoot,
-    sessionId
-  )
-  if (!restored) {
+  const opened = await restoreStructuredAgentSessionRead(input.openDeps, sessionId)
+  if (!opened) {
     return
   }
-  input.onReadable(sessionId, restored)
-  await input.retrySettlement(sessionId, restored.params)
+  await input.onReadable(sessionId, opened)
+  await input.retrySettlement(sessionId, opened.session.params)
 }
 
 export async function restoreStructuredAgentSessionsOnRestart(

@@ -91,6 +91,9 @@ export function admitAgentSessionMutation(input: {
   /** Decision from the durable ledger, evaluated under `hostFingerprint`. */
   ledger: AgentSessionOperationDecision
   lease: AgentSessionLease
+  /** A write to the conversation, not to the provider child: a send is accepted and a Stop
+   *  withdraws queued messages whoever owns the child, so the lease does not admit them. */
+  conversationWrite?: true
 }): AgentSessionMutationAdmission {
   const { envelope, lease, ledger } = input
   const mismatch = agentSessionFingerprintConflict(envelope, input.hostFingerprint)
@@ -108,6 +111,9 @@ export function admitAgentSessionMutation(input: {
   }
   if (ledger.decision === 'replay') {
     return { decision: 'replay', row: ledger.row }
+  }
+  if (input.conversationWrite) {
+    return { decision: 'admit', row: ledger.row }
   }
   const leaseRefusal = refuseUnlessWriterAdmitted(lease)
   if (leaseRefusal) {

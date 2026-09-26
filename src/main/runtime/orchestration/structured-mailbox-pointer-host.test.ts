@@ -91,7 +91,7 @@ describe('structured mailbox pointer host', () => {
         value: { submission: { dispatchState } }
       })
     )
-    hostRef.current = { send }
+    hostRef.current = { send, waitForSendSettlement: async () => undefined }
     await expect(
       createStructuredMailboxPointerHost().send({
         sessionId: 's1',
@@ -105,6 +105,28 @@ describe('structured mailbox pointer host', () => {
     // Per-dispatch, so one worker's nudges cannot exhaust the shared operation-ledger budget.
     expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
     expect(send.mock.calls[0]![1]!.retryUnknown).toBeUndefined()
+  })
+
+  it('consumes mail once an accepted nudge is delivered while the worker starts (W10)', async () => {
+    hostRef.current = {
+      send: async () => ({
+        ok: true,
+        value: { clientMessageId: 'op1', submission: { dispatchState: 'pending' } }
+      }),
+      waitForSendSettlement: async () => ({
+        value: { clientMessageId: 'op1', submission: { dispatchState: 'accepted' } }
+      })
+    }
+    await expect(
+      createStructuredMailboxPointerHost().send({
+        sessionId: 's1',
+        dispatchId: 'd1',
+        operationId: 'op1',
+        expectedRuntimeFence: 1,
+        payloadFingerprint: 'fp',
+        body: { kind: 'message', role: 'user', blocks: [] }
+      } as never)
+    ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
   })
 
   it('scopes direct peer mail to the session when there is no dispatch to scope to', async () => {

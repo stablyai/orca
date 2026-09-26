@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as conversationCommands from './structured-conversation-command-send'
+import { agentSessionErrorText } from '../../../../shared/agent-session-error-text'
 import type { AgentSessionMutationResult } from '../../../../shared/agent-session-wire'
 import { agentSessionRefusalOperationState } from '../../../../shared/agent-session-refusal-retry'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
@@ -75,7 +76,7 @@ export function useStructuredAgentSessionMutate(args: {
         })
       } catch (error) {
         if (enabledRef.current && stateRef.current.fence === targetFence) {
-          setWriteError(error instanceof Error ? error.message : 'Request was not sent')
+          setWriteError(agentSessionErrorText(error, 'Request was not sent'))
         }
         return null
       }

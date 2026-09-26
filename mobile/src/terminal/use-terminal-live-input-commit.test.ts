@@ -121,6 +121,7 @@ function createTerminalLiveInputCommitHarness({
 describe('terminal live input commit hook', () => {
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('Given Hangul composition and no marked-text report When steps arrive Then no jamo leaks', async () => {
@@ -166,6 +167,41 @@ describe('terminal live input commit hook', () => {
 
     // Then
     expect(sent).toEqual([])
+  })
+
+  it('Given an Android WebView composing each word When letters follow a slash Then each reaches the terminal as typed', async () => {
+    // Given: the page's field event is the DOM's, and an Android keyboard composes Latin words
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Linux; Android 16; wv) Chrome/140' })
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+
+    // When
+    changeLiveInput(handlers, '/', false)
+    await vi.waitFor(() => expect(sent).toHaveLength(1))
+    for (const fieldText of ['/t', '/tu', '/tui']) {
+      changeLiveInput(handlers, fieldText, true)
+      // Each keystroke on its own, so a held letter cannot hide inside a later batch.
+      await vi.waitFor(() => expect(sent).toHaveLength(fieldText.length))
+    }
+
+    // Then: what native Android sends for the same keys, which report no range there
+    await vi.waitFor(() => expect(sent).toEqual(['/', 't', 'u', 'i']))
+  })
+
+  it('Given an Android WebView composing Hangul When steps arrive Then the non-ASCII run still settles on the timer', async () => {
+    // Given
+    vi.useFakeTimers()
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Linux; Android 16; wv) Chrome/140' })
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+
+    // When
+    for (const fieldText of ['ㅎ', '하', '한']) {
+      changeLiveInput(handlers, fieldText, true)
+      await vi.advanceTimersByTimeAsync(50)
+    }
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS)
+
+    // Then
+    await vi.waitFor(() => expect(sent).toEqual(['한']))
   })
 
   it('Given an iOS pinyin preedit When accessory Backspace edits it Then only the candidate reaches the terminal', async () => {

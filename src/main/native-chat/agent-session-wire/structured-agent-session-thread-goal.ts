@@ -68,13 +68,11 @@ export async function performThreadGoalChange(
       },
       { fence: ctx.fence }
     )
-    ctx.publish()
   }
   const withdrawObjective = async (): Promise<void> => {
     if (change.kind === 'set') {
       // Nothing was sent as a goal.
       await ctx.journal.appendTombstone(identity, { fence: ctx.fence })
-      ctx.publish()
     }
   }
   let result: Awaited<ReturnType<typeof ctx.adapter.changeThreadGoal>>

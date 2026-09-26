@@ -15,8 +15,8 @@ import type { AgentSessionStoreState } from './agent-session-record-store-file'
  * How the failed attempt's provider process was accounted for.
  * - `exit-proven`: cleanup observed the whole tree gone.
  * - `root-exit-observed`: the owner root's exit was observed first-hand, so the
- *   identity this lease is keyed on is dead, but its descendants could not be
- *   verified. Releases the lease and says exactly that, claiming nothing more.
+ *   identity this lease is keyed on is dead, but its descendants were not proven
+ *   gone. Releases the lease and says exactly that, claiming nothing more.
  * - `processless`: the attempt failed before a process existed.
  * - `unproven`: nothing about the process was observed; the reservation latches.
  */
@@ -104,7 +104,7 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
             args.exitProof === 'root-exit-observed'
               ? {
                   kind: 'exit-observed',
-                  detail: 'the provider process exited; its descendants were not verifiable',
+                  detail: 'the provider process exited; its descendants were not proven gone',
                   observedAt: args.now
                 }
               : {
@@ -166,7 +166,7 @@ function acquisitionDeathEvidence(
   if (exitProof === 'root-exit-observed') {
     return {
       kind: 'exit-observed',
-      detail: 'the provider process exited; its descendants were not verifiable',
+      detail: 'the provider process exited; its descendants were not proven gone',
       observedAt
     }
   }

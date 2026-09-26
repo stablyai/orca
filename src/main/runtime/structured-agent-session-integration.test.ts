@@ -218,6 +218,11 @@ function createIntentParams() {
 }
 
 let codex: CodexScript
+/** Accepted first; the delivery loop hands the send over as `turn/start` after the reply. */
+const handedOverAs = (params: Record<string, unknown>) =>
+  vi.waitFor(() =>
+    expect(codex.live().calls.at(-1)).toMatchObject({ method: 'turn/start', params })
+  )
 let root: string
 let dispatcher: RpcDispatcher
 let bootEnvironmentReads: number
@@ -466,10 +471,7 @@ describe('a structured codex session over agentSession.*', () => {
     // send coalesced into a running turn is answered with that turn's id, so
     // which message landed where is knowable only from the echo.
     expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
-    expect(codex.live().calls.at(-1)).toMatchObject({
-      method: 'turn/start',
-      params: { threadId: THREAD, clientUserMessageId: sent.clientMessageId }
-    })
+    await handedOverAs({ threadId: THREAD, clientUserMessageId: sent.clientMessageId })
 
     codex.notify('turn/started', { turn: { id: TURN } })
     // Codex echoes the message back carrying the `clientId` it was sent under,
@@ -557,14 +559,11 @@ describe('a structured codex session over agentSession.*', () => {
     // "delivery unconfirmed" — it carries no identity yet, because the response
     // to a coalesced send names the running turn rather than this message.
     expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
-    expect(codex.live().calls.at(-1)).toMatchObject({
-      method: 'turn/start',
-      params: {
-        threadId: THREAD,
-        clientUserMessageId: sent.clientMessageId,
-        model: 'gpt-live',
-        effort: 'high'
-      }
+    await handedOverAs({
+      threadId: THREAD,
+      clientUserMessageId: sent.clientMessageId,
+      model: 'gpt-live',
+      effort: 'high'
     })
 
     // ── stream ──────────────────────────────────────────────────────────────

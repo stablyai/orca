@@ -147,6 +147,15 @@ const Question = z
 const Resolution = z.object({
   state: z.string().min(1),
   selectedOptionId: z.string().nullable(),
+  answers: z
+    .array(
+      z.object({
+        questionId: z.string(),
+        optionIds: z.array(z.string()),
+        other: z.string().optional()
+      })
+    )
+    .optional(),
   resolvedBy: z.string().nullable(),
   resolvedAt: z.number().nullable()
 })
@@ -295,7 +304,9 @@ export const AgentJournalSubmissionSchema = z.object({
   reason: z.string().nullable(),
   submittedAt: z.number(),
   resolvedAt: z.number().nullable(),
-  recovered: z.literal(true).optional()
+  recovered: z.literal(true).optional(),
+  handoverRecorded: z.literal(true).optional(),
+  handedOverAt: z.number().optional()
 })
 
 export function isAdmissibleAgentJournalItemBody(value: unknown): value is AgentJournalItemBody {

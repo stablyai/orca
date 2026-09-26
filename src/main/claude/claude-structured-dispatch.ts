@@ -35,10 +35,8 @@ import {
 import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
 import {
   claudeStartupFailureReason,
-  claudeStartupHoldsWrites,
-  failClaudeStartupGate,
-  holdClaudeStartupWrite
-} from './claude-structured-session-startup-gate'
+  failClaudeStartup
+} from './claude-structured-session-startup-state'
 
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
 
@@ -226,7 +224,7 @@ export function settleCancelledClaudeDispatchWaiters(
  *  Retired rather than dropped: their identities stay joinable, bounded by
  *  `MAX_RETIRED_DISPATCH_WAITERS`. */
 export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
-  failClaudeStartupGate(session, new Error('claude stream-json ended before startup completed'))
+  failClaudeStartup(session, new Error('claude stream-json ended before startup completed'))
   for (const waiter of session.dispatchWaiters.splice(0)) {
     retireWaiter(session, waiter)
     waiter.resolve(null)
@@ -236,8 +234,7 @@ export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
   input: { clientMessageId?: string; body: AgentJournalMessageItem; requestedAt?: number },
-  beforeDispatch?: () => Promise<void>,
-  onSettledLate?: ClaudeLateDispatchSettlement
+  beforeDispatch?: () => Promise<void>
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
   try {
@@ -275,14 +272,6 @@ export async function dispatchClaudeTurn(
     message: { role: 'user', content },
     parent_tool_use_id: null,
     session_id: session.providerSessionId
-  }
-  if (claudeStartupHoldsWrites(session)) {
-    return holdClaudeStartupWrite(session, {
-      message,
-      arm,
-      ...(beforeDispatch ? { beforeDispatch } : {}),
-      ...(onSettledLate ? { settleLate: onSettledLate } : {})
-    })
   }
   const pending = { replay: beforeDispatch ? undefined : arm() }
   const authorize = beforeDispatch

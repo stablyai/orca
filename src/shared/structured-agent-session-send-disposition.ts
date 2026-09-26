@@ -7,6 +7,7 @@
 // the refs, the React state and the storage write, and nothing else decides an
 // entry's state.
 
+import type { AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentSessionMutationResult, AgentSessionSendResult } from './agent-session-wire'
 import {
   dispatchRejectionReasonIsInternal,
@@ -72,6 +73,40 @@ function refusedRedelivery(
   )
 }
 
+/** Whether the journal already answers a send still in flight, so its own reply adds nothing: the
+ *  host holds the message, or rejected it — a later `pending` reply must not undo that. */
+export function journalAnswersInFlightSend(
+  submissions: readonly AgentJournalSubmission[],
+  clientMessageId: string | null
+): boolean {
+  return submissions.some(
+    (submission) =>
+      submission.clientMessageId === clientMessageId && submission.dispatchState !== 'unknown'
+  )
+}
+
+/** What to say for a message the reconcile just settled as accepted and then not delivered, which
+ *  keeps its Retry; null when there is none. A Stop's withdrawal is dropped there, so says nothing. */
+export function reconciledRejectionNotice(
+  previous: readonly StructuredAgentSessionOutboxEntry[],
+  reconciled: readonly StructuredAgentSessionOutboxEntry[],
+  submissions: readonly AgentJournalSubmission[]
+): string | null {
+  const was = (
+    entries: readonly StructuredAgentSessionOutboxEntry[],
+    clientMessageId: string,
+    state: StructuredAgentSessionOutboxEntry['state']
+  ): boolean =>
+    entries.some((entry) => entry.clientMessageId === clientMessageId && entry.state === state)
+  const rejected = submissions.find(
+    (submission) =>
+      submission.dispatchState === 'rejected' &&
+      was(previous, submission.clientMessageId, 'dispatching') &&
+      was(reconciled, submission.clientMessageId, 'rejected')
+  )
+  return rejected ? structuredAgentSessionRejectionNotice(rejected.reason) : null
+}
+
 /**
  * What to put on screen for a rejection.
  *
@@ -124,12 +159,17 @@ export function disposeStructuredAgentSessionSendResult(
           )
         : candidate
     )
+    const refused = entries[refusedIndex]
     return {
       entries,
       error: result.refusal.message,
       // Read back by index rather than from the input: a refusal can rotate the id, and the
       // refused entry is not always the head now that an admitted one no longer holds the queue.
-      blockedClientMessageId: entries[refusedIndex]?.clientMessageId ?? null,
+      // A rejected one holds nothing: it can no longer land, and it keeps its own Retry.
+      blockedClientMessageId:
+        !refused || refused.state === 'rejected'
+          ? input.blockedClientMessageId
+          : refused.clientMessageId,
       retryWithFreshClientMessageId: null
     }
   }
@@ -152,9 +192,9 @@ export function disposeStructuredAgentSessionSendResult(
   }
   if (submission.dispatchState === 'rejected') {
     return {
-      entries: replaceEntryState(input, 'queued'),
+      entries: replaceEntryState(input, 'rejected'),
       error: structuredAgentSessionRejectionNotice(submission.reason),
-      blockedClientMessageId: input.entry.clientMessageId,
+      blockedClientMessageId: input.blockedClientMessageId,
       retryWithFreshClientMessageId: input.entry.clientMessageId
     }
   }

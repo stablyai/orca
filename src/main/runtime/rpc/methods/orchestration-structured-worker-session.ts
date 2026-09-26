@@ -14,6 +14,7 @@
 import { randomUUID } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../shared/agent-session-definitive-refusal'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session-journal-types'
+import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../../shared/orchestration-timing-budgets'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -213,13 +214,22 @@ export async function discardStructuredWorkerSession(
   retireSettledStructuredWorkerTab(sessionId, runtime)
 }
 
-/** Delivers the dispatch preamble as the worker's first turn. */
+/** What a preamble send reads of the host. */
+type StructuredWorkerPreambleHost = Pick<
+  StructuredAgentSessionHost,
+  'send' | 'waitForSendSettlement'
+> & {
+  deps: { store: { getRecord: (sessionId: string) => { lease: { runtimeFence: number } } | null } }
+}
+
+/** Delivers the dispatch preamble as the worker's first turn. `pending`: the worker's agent had
+ *  not taken it within the wait; the host still holds it for that agent, and never re-sends it. */
 export async function sendStructuredWorkerPreamble(args: {
-  host: StructuredAgentSessionHost
+  host: StructuredWorkerPreambleHost
   sessionId: string
   dispatchId: string
   preamble: string
-}): Promise<void> {
+}): Promise<'accepted' | 'pending'> {
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
@@ -244,9 +254,19 @@ export async function sendStructuredWorkerPreamble(args: {
   if (!result.ok) {
     throw new Error(`The dispatch preamble was refused: ${result.refusal.message}`)
   }
-  const submission = result.value.submission
-  if (submission.dispatchState === 'accepted') {
-    return
+  // Accepted is not delivered: the worker's agent may still be starting.
+  const submission =
+    result.value.submission.dispatchState === 'pending'
+      ? ((
+          await args.host
+            .waitForSendSettlement(args.sessionId, result.value.clientMessageId, {
+              budgetMs: ORCHESTRATION_READINESS_TIMEOUT_MS
+            })
+            .catch(() => undefined)
+        )?.value.submission ?? result.value.submission)
+      : result.value.submission
+  if (submission.dispatchState === 'accepted' || submission.dispatchState === 'pending') {
+    return submission.dispatchState
   }
   if (submission.dispatchState === 'rejected') {
     // A rejection is a verdict, not a mystery: the preamble provably did not happen.

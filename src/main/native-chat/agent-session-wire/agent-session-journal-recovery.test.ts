@@ -6,14 +6,14 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { openJournalDatabase } from '../agent-session-journal/journal-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from '../agent-session-journal/journal-database-schema'
-import { loadJournal } from '../agent-session-journal/journal-open'
+import { loadJournal, replayJournal } from '../agent-session-journal/journal-open'
 import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
 import { readJournalEpochRows } from '../agent-session-journal/journal-row-table'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
@@ -23,6 +23,12 @@ import {
   providerHistoryId,
   recoveryJournalDir
 } from './agent-session-journal-recovery'
+
+// Only the store's own replay goes through the mock; the probe's, inside the same module, does not.
+vi.mock('../agent-session-journal/journal-open', async (importOriginal) => {
+  const actual = await importOriginal<{ replayJournal: typeof replayJournal }>()
+  return { ...actual, replayJournal: vi.fn(actual.replayJournal) }
+})
 
 const CODEX_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
@@ -158,6 +164,21 @@ describe('openAgentSessionJournalWithRecovery', () => {
       }).then((result) => result.journal)
     )
     expect(opened.snapshot().items).toHaveLength(2)
+  })
+
+  it('reads the journal once: the probe is the open', async () => {
+    await seedJournal(2)
+    vi.mocked(replayJournal).mockClear()
+    const opened = journals.track(
+      await openAgentSessionJournalWithRecovery({
+        identity: IDENTITY,
+        journalDir,
+        fence: 1,
+        historyFilePath
+      }).then((result) => result.journal)
+    )
+    expect(opened.snapshot().items).toHaveLength(2)
+    expect(replayJournal).not.toHaveBeenCalled()
   })
 
   it('rebuilds a holed journal in place on a fresh epoch', async () => {

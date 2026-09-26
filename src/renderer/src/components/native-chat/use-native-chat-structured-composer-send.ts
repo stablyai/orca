@@ -5,6 +5,7 @@ import {
   isStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionGoalCommand
 } from '../../../../shared/structured-agent-session-composer'
+import { agentSessionErrorText } from '../../../../shared/agent-session-error-text'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
 import { pushHistory, type HistoryState } from './native-chat-composer-state'
@@ -83,9 +84,7 @@ export function useNativeChatStructuredComposerSend({
           clearSkillOrigin()
           clearImageAttachments()
         })
-        .catch((error) =>
-          structuredTransport.onError(error instanceof Error ? error.message : String(error))
-        )
+        .catch((error) => structuredTransport.onError(agentSessionErrorText(error)))
     },
     [
       agent,

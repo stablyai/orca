@@ -12,6 +12,7 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
+import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 
 export class StructuredAgentSessionBackgroundTaskChannel {
   constructor(
@@ -48,7 +49,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     return this.subscribers.open({
       ...input,
       journal: session.journal,
-      fence: this.deps.store.getRecord(input.sessionId)?.lease.runtimeFence ?? 0,
+      fence: structuredAgentSessionConversationFence(this.deps.store, input.sessionId),
       ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
     })
   }
@@ -57,7 +58,11 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     const session = this.sessions.get(sessionId)
     const state = publishedState !== undefined ? publishedState : this.state(sessionId)
     if (session && state !== undefined) {
-      this.subscribers.backgroundTasks(sessionId, state, session.fence)
+      this.subscribers.backgroundTasks(
+        sessionId,
+        state,
+        structuredAgentSessionConversationFence(this.deps.store, sessionId)
+      )
       this.onPublished(sessionId)
     }
   }

@@ -6,7 +6,6 @@ import {
   AGENT_SESSION_RESTART_NOT_CONNECTED_NOTE
 } from '../../../shared/agent-session-restart-continuation'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { latestStructuredAgentSessionUserItem } from '../../../shared/structured-agent-session-projection'
 import { StructuredAgentSessionResumeAdmission } from './structured-agent-session-restart-resume-runner'
 import {
@@ -39,17 +38,17 @@ it('files a continuation superseded by a replayed message, lists it and says so 
   await host.restartResume.list()
   await host.hold(SESSION, 'pane')
   const events = providerEvents(acquire)
-  const append = AgentSessionJournal.prototype.appendSubmission
-  vi.spyOn(AgentSessionJournal.prototype, 'appendSubmission').mockImplementationOnce(
-    async function (this: AgentSessionJournal, input) {
-      const cursor = await append.call(this, input)
-      events.appendItem(
-        { provider: 'codex', threadId: THREAD, turnId: 'replayed-turn', ordinal: 1 },
-        hostTestMessage('A queued notification the provider replayed')
-      )
-      return cursor
-    }
-  )
+  // The replay lands after the reattach and just before the continuation is accepted, which is
+  // where a send asks whether its offer still stands.
+  const send = host.send
+  vi.spyOn(host, 'send').mockImplementationOnce(async (caller, params) => {
+    events.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'replayed-turn', ordinal: 1 },
+      hostTestMessage('A queued notification the provider replayed')
+    )
+    await host.flushStreamedEvents(SESSION)
+    return send(caller, params)
+  })
 
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
 

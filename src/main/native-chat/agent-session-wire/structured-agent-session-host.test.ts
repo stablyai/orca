@@ -547,12 +547,13 @@ describe('restart', () => {
    *  them. Every lease loads unreconciled, so this is the state that decides
    *  whether a persisted session is reachable at all. */
   async function reboot(
-    probeOwner: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
+    probeOwner: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>,
+    adapterOverrides: Partial<StructuredAgentSessionAdapter> = {}
   ) {
     store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
     host = new StructuredAgentSessionHost({
       store,
-      adapter: adapter(),
+      adapter: { ...adapter(), ...adapterOverrides },
       journalRoot: root,
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-b',
@@ -633,14 +634,14 @@ describe('restart', () => {
       handoffStage: null,
       handoffOperationId: null
     })
-    await expect(host.handoffStatus(SESSION)).resolves.toMatchObject({
+    expect(host.handoffStatus(SESSION)).toMatchObject({
       owner: 'native',
       phase: 'idle',
       stage: null
     })
   })
 
-  it('answers the owner status of a starting chat once its start settles', async () => {
+  it('answers native for a chat whose start is still in flight', async () => {
     await attach()
     await reboot(async () => ({ outcome: 'pid-absent' }))
     await host.restoreReadableSessions()
@@ -658,11 +659,26 @@ describe('restart', () => {
 
     const hold = host.hold(SESSION, 'surface-1')
     await started.promise
+    const claimMidStart = store.getRecord(SESSION)?.lease.claimStatus
     const status = host.handoffStatus(SESSION)
     release.resolve()
     await hold
 
-    await expect(status).resolves.toMatchObject({ owner: 'native', stage: null })
+    // Mid-start the lease is only reserved; ownership does not wait for the agent.
+    expect(claimMidStart).toBe('reserved')
+    expect(status).toMatchObject({ owner: 'native' })
+  })
+
+  it('vouches for no owner of a chat in manual recovery or one this host cannot run', async () => {
+    await attach()
+    await store.transitionHandoff(SESSION, (record) => ({
+      ...record,
+      lease: { ...record.lease, handoffStage: 'manual-recovery' }
+    }))
+    expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'none', phase: 'failed' })
+
+    await reboot(async () => ({ outcome: 'pid-absent' }), { supportsCreate: () => false })
+    expect(() => host.handoffStatus(SESSION)).toThrow('structured_agent_session_unsupported')
   })
 
   it("keeps a session whose owner cannot be probed out of a live writer's hands", async () => {
@@ -766,9 +782,19 @@ describe('subscribe', () => {
       body
     })
 
-    expect(result).toMatchObject({ ok: true, value: { submission: { dispatchState: 'accepted' } } })
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    expect(events.some((event) => event.type === 'batch')).toBe(true)
+    expect(result).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
+    // The failed transport does not stop the delivery loop either: the handover still lands and
+    // reaches the live subscriber.
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() =>
+      expect(
+        events.some(
+          (event) =>
+            event.type === 'batch' &&
+            event.batch.submissions?.some((entry) => entry.dispatchState === 'accepted')
+        )
+      ).toBe(true)
+    )
   })
 
   it('resets a subscriber whose epoch is gone', async () => {

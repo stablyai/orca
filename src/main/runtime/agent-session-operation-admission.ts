@@ -36,6 +36,7 @@ export type AgentSessionMutationOperationAdmission = {
   hostFingerprint: string
   now: number
   operationIdScope?: 'global'
+  conversationWrite?: true
 }
 
 export type AgentSessionMutationOperationDecision = {
@@ -149,7 +150,8 @@ export function admitAgentSessionMutationOperation(
     envelope: args.envelope,
     hostFingerprint: args.hostFingerprint,
     ledger: ledger.decision,
-    lease: record.lease
+    lease: record.lease,
+    ...(args.conversationWrite ? { conversationWrite: true } : {})
   })
   if (ledger.decision.decision === 'admit' && admission.decision === 'refused') {
     ledger.rows.delete(agentSessionOperationKey(operation.callerKey, operation.operationId))

@@ -11,6 +11,7 @@ import {
   cancelledJournalPromptBody
 } from '../agent-session-journal/journal-prompt-body-bounds'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { structuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row'
 import {
   runningTurnLifecycleRevisions,
   type StructuredAgentSessionTurnVerdict
@@ -55,6 +56,14 @@ export function providerStartupFailureOutcome(reason?: string): string {
     : 'The provider stopped before it finished starting.'
 }
 
+/** Why a message accepted but not yet handed over was rejected when its child exited. */
+export function providerExitBeforeDeliveryRejection(reason?: string): string {
+  const detail = exitReasonDetail(reason)
+  return detail
+    ? `The provider stopped before this message was sent: ${detail}.`
+    : 'The provider stopped before this message was sent.'
+}
+
 /** Why a send a child that never started left unwritten was rejected. The child's own diagnostic is
  *  the cause the user can act on, so it is the reason, in the words the chat row uses. */
 export function providerStartupFailureRejection(cause?: unknown): string {
@@ -72,7 +81,7 @@ function exitReasonDetail(reason: string | undefined): string | undefined {
 
 type DeadGenerationSubmission = Pick<
   ReturnType<AgentSessionJournal['submissions']>[number],
-  'clientMessageId' | 'dispatchState' | 'recovered'
+  'clientMessageId' | 'dispatchState' | 'recovered' | 'handoverRecorded' | 'handedOverAt'
 >
 
 export type DeadGenerationJournal = {
@@ -142,8 +151,9 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
   showUnexpectedExitOutcome?: boolean
   /** Why the provider stopped, when the host has it. Rendered with the outcome copy. */
   unexpectedExitReason?: string
-  /** The provider never finished starting; the outcome says so instead of naming a response. */
-  exitedDuringStartup?: boolean
+  /** The provider never finished starting: the start that failed, keyed by the child's
+   *  generation. Its row is the one the delivery loop writes for the same start. */
+  exitedDuringStartup?: { generation: string | null }
   onError?: (sessionId: string, error: unknown) => void
 }): Promise<boolean> {
   try {
@@ -152,9 +162,10 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     if (!showUnexpectedExitOutcome && !hasUnfinishedWork) {
       return true
     }
-    // A child that never proved its start accepted nothing — input is written only after it
-    // initializes — so every send it left unanswered is provably unwritten and is rejected with the
-    // child's own diagnostic. A proven child's unanswered sends stay in doubt.
+    // A queued message is the delivery loop's to settle: it was never handed to this child. A
+    // child that never proved its start accepted nothing either — input is written only after it
+    // initializes — so every send it was handed is rejected with the child's own diagnostic. A
+    // proven child's handed-over sends stay in doubt.
     await (input.exitedDuringStartup
       ? input.journal.rejectPendingSubmissions(
           input.fence,
@@ -163,17 +174,21 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
       : input.journal.markPendingSubmissionsUnknown(input.fence, input.pendingSubmissionReason))
     const items = input.journal.snapshot().items
     const mutations: JournalLifecycleMutationInput[] = []
-    if (showUnexpectedExitOutcome) {
+    if (showUnexpectedExitOutcome && input.exitedDuringStartup) {
+      // Until views stop starting children, a start can die with nothing queued for the loop.
+      mutations.push(
+        structuredAgentSessionStartFailureRow(
+          input.exitedDuringStartup.generation ?? input.settlementId,
+          providerStartupFailureOutcome(input.unexpectedExitReason)
+        )
+      )
+    } else if (showUnexpectedExitOutcome) {
       mutations.push({
         kind: 'item',
         identity: { provider: 'orca', clientMessageId: input.settlementId },
         body: {
           kind: 'status',
-          text: boundJournalStatusText(
-            input.exitedDuringStartup
-              ? providerStartupFailureOutcome(input.unexpectedExitReason)
-              : unexpectedProviderExitOutcome(input.unexpectedExitReason)
-          )
+          text: boundJournalStatusText(unexpectedProviderExitOutcome(input.unexpectedExitReason))
         }
       })
     }
@@ -247,7 +262,9 @@ function hasUnsettledSubmission(journal: DeadGenerationJournal): boolean {
   return submissions
     ? submissions.some(
         (submission) =>
-          submission.dispatchState === 'pending' ||
+          // A queued message is not work in progress: nothing has it yet.
+          (submission.dispatchState === 'pending' &&
+            !(submission.handoverRecorded && submission.handedOverAt === undefined)) ||
           (submission.dispatchState === 'unknown' && submission.recovered !== true)
       )
     : (journal.pendingSubmissions?.().length ?? 0) > 0

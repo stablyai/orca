@@ -15,6 +15,7 @@ import {
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
 } from '../../../shared/agent-session-wire'
+import { sameJournalCursor } from '../agent-session-journal/journal-cursor'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import {
@@ -213,6 +214,11 @@ export class AgentSessionSubscribers {
       ? this.activityField(subscriber.sessionId).activity
       : undefined
     const publishedActivity = activity !== undefined ? activity : checkpointActivity
+    // Caught up, so there are no rows to read: every publish behind a commit's own delivery.
+    if (!journal.isReadOnly && sameJournalCursor(subscriber.cursor, journal.cursor())) {
+      this.emitCaughtUp(subscriber, hostNow, emitCheckpoint, backgroundTasks, publishedActivity)
+      return
+    }
     const readPage = createAgentSessionCatchUpReader(journal)
     while (true) {
       const result = readPage({
@@ -239,20 +245,7 @@ export class AgentSessionSubscribers {
       const page = result.page
       const advanced = page.window.nextCursor.sequence > subscriber.cursor.sequence
       if (!advanced) {
-        const commandsChanged =
-          this.hooks.readCommands !== undefined &&
-          (this.hooks.readCommands(subscriber.sessionId) ?? null) !== subscriber.commands
-        if (emitCheckpoint || publishedActivity !== undefined || commandsChanged) {
-          this.emit(subscriber, {
-            type: 'batch',
-            sessionId: subscriber.sessionId,
-            batch: emptyAgentSessionBatch(page.window.nextCursor),
-            fence: subscriber.fence,
-            hostNow,
-            ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
-            ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
-          })
-        }
+        this.emitCaughtUp(subscriber, hostNow, emitCheckpoint, backgroundTasks, publishedActivity)
         return
       }
       this.emit(subscriber, {
@@ -273,6 +266,29 @@ export class AgentSessionSubscribers {
       if (!page.hasNewer || !this.isActive(subscriber)) {
         return
       }
+    }
+  }
+
+  private emitCaughtUp(
+    subscriber: Subscriber,
+    hostNow: number,
+    emitCheckpoint: boolean,
+    backgroundTasks: AgentSessionBackgroundTaskState | null | undefined,
+    activity: AgentSessionTurnActivity | null | undefined
+  ): void {
+    const commandsChanged =
+      this.hooks.readCommands !== undefined &&
+      (this.hooks.readCommands(subscriber.sessionId) ?? null) !== subscriber.commands
+    if (emitCheckpoint || activity !== undefined || commandsChanged) {
+      this.emit(subscriber, {
+        type: 'batch',
+        sessionId: subscriber.sessionId,
+        batch: emptyAgentSessionBatch(subscriber.cursor),
+        fence: subscriber.fence,
+        hostNow,
+        ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
+        ...(activity !== undefined ? { activity } : {})
+      })
     }
   }
 

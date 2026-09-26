@@ -21,10 +21,9 @@ import {
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
 import { normalizeLegacyHandoffRecord } from '../../shared/agent-session-legacy-handoff-lease'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import { agentSessionStoreBackupPath as backupPath } from './agent-session-record-store-write'
 export { saveAgentSessionStore } from './agent-session-record-store-write'
-import { parseVisibleSessionIds } from './agent-session-visible-tab-index'
+import { parseAgentSessionTabTable, type AgentSessionTabTable } from './agent-session-tab-table'
 import { serializeAgentSessionStoreState } from './agent-session-store-serialization'
 
 export const AGENT_SESSION_STORE_SCHEMA_VERSION = 2 as const
@@ -41,10 +40,8 @@ export type AgentSessionStoreState = {
   retiredClaimKeys: RetiredAgentSessionClaimKey[]
   /** Rows this build cannot validate, kept with a durable refusal reason. */
   unreadableRecords: Map<string, { reason: string; raw: unknown }>
-  /** Structured sessions that currently have a visible chat tab. */
-  visibleSessionIds: Set<string>
-  /** True once this store has committed the visibility index field. */
-  visibleSessionIdsIndexPresent: boolean
+  /** Chat tab id → the conversation it shows; null until this store first records a tab. */
+  sessionTabs: AgentSessionTabTable | null
 }
 
 export type LoadedAgentSessionStore = {
@@ -72,31 +69,8 @@ function emptyState(hostId: string): AgentSessionStoreState {
     operations: new Map(),
     retiredClaimKeys: [],
     unreadableRecords: new Map(),
-    visibleSessionIds: new Set(),
-    visibleSessionIdsIndexPresent: false
+    sessionTabs: null
   }
-}
-
-/**
- * Gives every record written before the host owned a chat's tab id the string clients derived for
- * it, so read state, notification ids and worker rows keyed by that id stay valid on upgrade.
- *
- * Runs once per open, after the disk revision is taken and before the load rewrite: it is not part
- * of parsing, because a parsed state must hash to what is on disk or every transaction would read
- * the file as externally changed. Returns how many records it filled.
- */
-export function backfillAgentSessionSurfaceTabIds(state: AgentSessionStoreState): number {
-  let filled = 0
-  for (const [sessionId, record] of state.records) {
-    if (record.surfaceTabId === undefined) {
-      state.records.set(sessionId, {
-        ...record,
-        surfaceTabId: structuredAgentSessionTabId(sessionId)
-      })
-      filled += 1
-    }
-  }
-  return filled
 }
 
 export function agentSessionStoreRevision(state: AgentSessionStoreState): string {
@@ -131,6 +105,7 @@ function parseState(
     operations?: unknown
     retiredClaimKeys?: unknown
     unusableRecords?: unknown
+    sessionTabs?: unknown
     visibleSessionIds?: unknown
   }
   if (
@@ -245,16 +220,15 @@ function parseState(
       state.retiredClaimKeys.push({ keyId: key.keyId, retiredAt: key.retiredAt as number })
     }
   }
-  const visibleSessionIds = parseVisibleSessionIds(
-    file.visibleSessionIds,
-    schemaVersion,
-    AGENT_SESSION_STORE_SCHEMA_VERSION
+  const sessionTabs = parseAgentSessionTabTable(
+    file,
+    state.records,
+    schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION
   )
-  if (!visibleSessionIds.valid) {
+  if (!sessionTabs.valid) {
     return null
   }
-  state.visibleSessionIdsIndexPresent = visibleSessionIds.present
-  visibleSessionIds.ids.forEach((sessionId) => state.visibleSessionIds.add(sessionId))
+  state.sessionTabs = sessionTabs.table
   return { state, needsRewrite, legacyHandoffLeasesNormalized }
 }
 

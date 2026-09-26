@@ -9,12 +9,21 @@ export async function recoverInterruptedCompaction(
   fence: number
 ): Promise<void> {
   const command = store.getRecord(sessionId)?.conversationCommand
-  if (
-    command?.command !== 'compact' ||
-    command.phase !== 'prepared' ||
-    command.runtimeFence === undefined ||
-    command.runtimeFence === fence
-  ) {
+  if (command?.runtimeFence === undefined || command.runtimeFence === fence) {
+    return
+  }
+  await settleInterruptedCompaction(store, sessionId, journal, fence)
+}
+
+/** A compaction still prepared whose child can no longer finish it: its outcome is unknown. */
+export async function settleInterruptedCompaction(
+  store: AgentSessionRecordStore,
+  sessionId: string,
+  journal: AgentSessionJournal,
+  fence: number
+): Promise<void> {
+  const command = store.getRecord(sessionId)?.conversationCommand
+  if (command?.command !== 'compact' || command.phase !== 'prepared') {
     return
   }
   const error = 'Previous compaction completion could not be confirmed after session recovery.'

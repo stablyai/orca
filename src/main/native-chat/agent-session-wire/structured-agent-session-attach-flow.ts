@@ -41,6 +41,7 @@ import {
   type AgentSessionCreatePhaseRecorder
 } from '../../observability/agent-session-instrumentation'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
@@ -66,8 +67,11 @@ export type AttachFlowInput = {
   onAcquiring?: () => Promise<void> | void
   /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
-  /** Closes and removes partial publication after journal attachment fails. */
-  onAttachFailed?: () => Promise<void>
+  /** The conversation's own open journal, which the attach adopts: it never opens one itself. */
+  openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
+  /** A failure after acquisition released the session's acquisition; `cause` is that failure and
+   *  `rootGone` whether the release saw the provider root go. */
+  onAcquisitionReleased?: (cause: unknown, verdict: { rootGone: boolean }) => void
 }
 
 export async function performAttach(
@@ -208,6 +212,7 @@ export async function performAttach(
       params,
       journalRoot: input.journalRoot,
       adapter: input.adapter,
+      openConversation: input.openConversation,
       providerHistoryWindow
     })
     await importAdoptedTranscript(params, attached, record, preparedTranscript.items)
@@ -222,6 +227,7 @@ export async function performAttach(
   }
 
   const fence = record.lease.runtimeFence
+  const tabId = store.getSessionTabId(sessionId)
   return {
     ok: true,
     replayed,
@@ -232,7 +238,7 @@ export async function performAttach(
       fence,
       page: readAgentSessionHydrationPage(attached.journal, fence),
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
-      ...(record.surfaceTabId ? { tabId: record.surfaceTabId } : {})
+      ...(tabId ? { tabId } : {})
     }
   }
 }

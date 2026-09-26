@@ -1,36 +1,55 @@
 import { parseAgentChildWorkAliasRecord } from './agent-status-child-work-alias'
+import type { AgentChildWorkAliasRecord } from './agent-status-child-work-alias'
+import type { AgentChildWorkRecord } from './agent-status-child-work'
 import {
   deserializeAgentChildWorkBindingKey,
   serializeAgentChildWorkBindingKey
 } from './agent-status-child-work-binding'
 import { parseAgentChildWorkRecord } from './agent-status-child-work-codec'
 import type {
+  AgentStatusFactRecord,
   AgentStatusStoreMutation,
-  AgentStatusTombstoneEntity
+  AgentStatusTombstoneEntity,
+  AgentStatusTombstoneRecord
 } from './agent-status-store-contract'
 import {
   AGENT_STATUS_STORE_LIMITS,
   AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS
 } from './agent-status-store-contract'
 import { parseAgentStatusFactRecord } from './agent-status-store-fact-codec'
-import { parseAgentStatusParentRecord } from './agent-status-store-parent'
+import {
+  parseAgentStatusParentRecord,
+  type AgentStatusParentRecord
+} from './agent-status-store-parent'
 import {
   agentStatusFactMapKey,
   agentStatusTombstoneMapKey,
-  cloneAgentStatusStoreState,
-  deepFreezeAgentStatusStoreValue,
-  validateAgentStatusStoreState,
-  type AgentStatusStoreState
+  deepFreezeAgentStatusStoreValue
 } from './agent-status-store-state'
+import type { AgentStatusStoreTable } from './agent-status-store-table'
 import {
-  agentStatusSubjectsEqual,
   deserializeAgentStatusSubject,
   serializeAgentStatusSubject,
   type AgentStatusSubject
 } from './agent-status-subject'
 
+/** The store as one mutation reads and writes it. The queries return present keys in map order. */
+export type AgentStatusStoreMutationTables = {
+  revision: number
+  parents: AgentStatusStoreTable<AgentStatusParentRecord>
+  children: AgentStatusStoreTable<AgentChildWorkRecord>
+  aliases: AgentStatusStoreTable<AgentChildWorkAliasRecord>
+  facts: AgentStatusStoreTable<AgentStatusFactRecord>
+  tombstones: AgentStatusStoreTable<AgentStatusTombstoneRecord>
+  childrenOf(parentKey: string): string[]
+  factsOf(parentKey: string): string[]
+  aliasesOfChildren(childWorkIds: ReadonlySet<string>): string[]
+}
+
+type Tables = AgentStatusStoreMutationTables
+
 function addTombstone(
-  state: AgentStatusStoreState,
+  state: Tables,
   entity: AgentStatusTombstoneEntity,
   key: string,
   revision: number
@@ -41,8 +60,8 @@ function addTombstone(
   state.tombstones.set(mapKey, record)
 }
 
-function compactTombstones(state: AgentStatusStoreState): void {
-  for (const [key, tombstone] of state.tombstones) {
+function compactTombstones(state: Tables): void {
+  for (const [key, tombstone] of state.tombstones.entries()) {
     if (
       state.tombstones.size <= AGENT_STATUS_STORE_LIMITS.tombstones &&
       state.revision - tombstone.revision < AGENT_STATUS_STORE_TOMBSTONE_RETENTION_REVISIONS
@@ -53,18 +72,18 @@ function compactTombstones(state: AgentStatusStoreState): void {
   }
 }
 
-function removeAlias(state: AgentStatusStoreState, key: string, revision: number): void {
+function removeAlias(state: Tables, key: string, revision: number): void {
   state.aliases.delete(key)
   addTombstone(state, 'alias', key, revision)
 }
 
-function removeFact(state: AgentStatusStoreState, key: string, revision: number): void {
+function removeFact(state: Tables, key: string, revision: number): void {
   state.facts.delete(key)
   addTombstone(state, 'fact', key, revision)
 }
 
 function removeChild(
-  state: AgentStatusStoreState,
+  state: Tables,
   childWorkId: string,
   revision: number,
   removedChildWorkIds: Set<string>
@@ -75,19 +94,20 @@ function removeChild(
 }
 
 function removeAliasesForChildren(
-  state: AgentStatusStoreState,
+  state: Tables,
   removedChildWorkIds: ReadonlySet<string>,
   revision: number
 ): void {
-  for (const [key, alias] of state.aliases) {
-    if (removedChildWorkIds.has(alias.childWorkId)) {
-      removeAlias(state, key, revision)
-    }
+  if (removedChildWorkIds.size === 0) {
+    return
+  }
+  for (const key of state.aliasesOfChildren(removedChildWorkIds)) {
+    removeAlias(state, key, revision)
   }
 }
 
 function removeParent(
-  state: AgentStatusStoreState,
+  state: Tables,
   subject: AgentStatusSubject,
   revision: number,
   removedChildWorkIds: Set<string>
@@ -95,20 +115,16 @@ function removeParent(
   const key = serializeAgentStatusSubject(subject)
   state.parents.delete(key)
   addTombstone(state, 'parent', key, revision)
-  for (const child of state.children.values()) {
-    if (agentStatusSubjectsEqual(child.parent, subject)) {
-      removeChild(state, child.childWorkId, revision, removedChildWorkIds)
-    }
+  for (const childWorkId of state.childrenOf(key)) {
+    removeChild(state, childWorkId, revision, removedChildWorkIds)
   }
-  for (const [factMapKey, fact] of state.facts) {
-    if (agentStatusSubjectsEqual(fact.subject, subject)) {
-      removeFact(state, factMapKey, revision)
-    }
+  for (const factMapKey of state.factsOf(key)) {
+    removeFact(state, factMapKey, revision)
   }
 }
 
 function applyExplicitTombstone(
-  state: AgentStatusStoreState,
+  state: Tables,
   tombstone: { entity: AgentStatusTombstoneEntity; key: string },
   revision: number,
   removedChildWorkIds: Set<string>
@@ -136,7 +152,7 @@ function applyExplicitTombstone(
 }
 
 function upsertParent(
-  state: AgentStatusStoreState,
+  state: Tables,
   input: NonNullable<AgentStatusStoreMutation['parent']>,
   revision: number
 ): boolean {
@@ -161,7 +177,7 @@ function upsertParent(
 }
 
 function upsertChildren(
-  state: AgentStatusStoreState,
+  state: Tables,
   children: NonNullable<AgentStatusStoreMutation['children']>,
   revision: number
 ): boolean {
@@ -185,7 +201,7 @@ function upsertChildren(
 }
 
 function upsertAliases(
-  state: AgentStatusStoreState,
+  state: Tables,
   aliases: NonNullable<AgentStatusStoreMutation['aliases']>,
   revision: number
 ): boolean {
@@ -203,7 +219,7 @@ function upsertAliases(
 }
 
 function upsertFacts(
-  state: AgentStatusStoreState,
+  state: Tables,
   facts: NonNullable<AgentStatusStoreMutation['facts']>,
   revision: number
 ): boolean {
@@ -217,47 +233,46 @@ function upsertFacts(
   return true
 }
 
-export function applyAgentStatusStoreMutation(
-  current: AgentStatusStoreState,
+/** Apply every step of one mutation; false when a step refuses. Invariants are checked after. */
+export function applyAgentStatusStoreMutationSteps(
+  state: Tables,
   mutation: AgentStatusStoreMutation,
   revision: number
-): AgentStatusStoreState | null {
-  const next = cloneAgentStatusStoreState(current)
-  next.revision = revision
+): boolean {
   const removedChildWorkIds = new Set<string>()
   if (mutation.removeParent) {
-    removeParent(next, mutation.removeParent, revision, removedChildWorkIds)
+    removeParent(state, mutation.removeParent, revision, removedChildWorkIds)
   }
   for (const childWorkId of mutation.removeChildren ?? []) {
-    removeChild(next, childWorkId, revision, removedChildWorkIds)
+    removeChild(state, childWorkId, revision, removedChildWorkIds)
   }
   for (const key of mutation.removeAliases ?? []) {
     if (!deserializeAgentChildWorkBindingKey(key)) {
-      return null
+      return false
     }
-    removeAlias(next, key, revision)
+    removeAlias(state, key, revision)
   }
   for (const identity of mutation.removeFacts ?? []) {
-    removeFact(next, agentStatusFactMapKey(identity), revision)
+    removeFact(state, agentStatusFactMapKey(identity), revision)
   }
   for (const tombstone of mutation.tombstones ?? []) {
-    if (!applyExplicitTombstone(next, tombstone, revision, removedChildWorkIds)) {
-      return null
+    if (!applyExplicitTombstone(state, tombstone, revision, removedChildWorkIds)) {
+      return false
     }
   }
-  removeAliasesForChildren(next, removedChildWorkIds, revision)
-  if (mutation.parent && !upsertParent(next, mutation.parent, revision)) {
-    return null
+  removeAliasesForChildren(state, removedChildWorkIds, revision)
+  if (mutation.parent && !upsertParent(state, mutation.parent, revision)) {
+    return false
   }
-  if (mutation.children && !upsertChildren(next, mutation.children, revision)) {
-    return null
+  if (mutation.children && !upsertChildren(state, mutation.children, revision)) {
+    return false
   }
-  if (mutation.aliases && !upsertAliases(next, mutation.aliases, revision)) {
-    return null
+  if (mutation.aliases && !upsertAliases(state, mutation.aliases, revision)) {
+    return false
   }
-  if (mutation.facts && !upsertFacts(next, mutation.facts, revision)) {
-    return null
+  if (mutation.facts && !upsertFacts(state, mutation.facts, revision)) {
+    return false
   }
-  compactTombstones(next)
-  return validateAgentStatusStoreState(next) ? next : null
+  compactTombstones(state)
+  return true
 }

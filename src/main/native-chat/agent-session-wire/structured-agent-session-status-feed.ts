@@ -21,6 +21,7 @@ import {
   type AgentSessionStatusEvent,
   type AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -41,9 +42,7 @@ export type StructuredAgentSessionStatusSubscriber = {
 type StatusFeedSession = {
   journal: AgentSessionJournal
   params: { location: AgentSessionRecord['location']; provider: AgentSessionRecord['provider'] }
-  hasProviderChild?: boolean
-  providerChildPhase?: StructuredAgentSessionProviderChildPhase
-  fence?: number
+  child?: { phase: StructuredAgentSessionProviderChildPhase } | null
 }
 
 export type StructuredAgentSessionStatusFeedDeps = {
@@ -238,7 +237,9 @@ export class StructuredAgentSessionStatusFeed {
     // An unreadable journal projects as "no turn": the chat itself shows the reset.
     const cursor = journal.cursor()
     const readOnly = journal.isReadOnly
-    const fence = session.fence
+    const record = this.deps.getRecord(sessionId)
+    // The conversation's fence, which a child's end moves: its unanswered sends stop counting.
+    const fence = record?.lease.runtimeFence
     let projection = this.journalProjections.get(journal)
     if (
       !projection ||
@@ -262,7 +263,6 @@ export class StructuredAgentSessionStatusFeed {
       }
       this.journalProjections.set(journal, projection)
     }
-    const record = this.deps.getRecord(sessionId)
     const providerSession = structuredAgentSessionProviderSessionMetadata(record)
     // The journal has no model: the record's acknowledged options are where a mid-session
     // switch lands, so the row follows whichever is in force.
@@ -277,13 +277,8 @@ export class StructuredAgentSessionStatusFeed {
       sessionId,
       workspaceId: session.params.location.workspaceId,
       agent: session.params.provider,
-      ...(session.hasProviderChild
-        ? {
-            hostExecutionOwned: true as const,
-            ...(session.providerChildPhase
-              ? { hostExecutionPhase: session.providerChildPhase }
-              : {})
-          }
+      ...(session.child
+        ? { hostExecutionOwned: true as const, hostExecutionPhase: session.child.phase }
         : {}),
       ...projection.summary,
       ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
@@ -293,6 +288,19 @@ export class StructuredAgentSessionStatusFeed {
       ...(backgroundTasks && backgroundTasks.length > 0 ? { backgroundTasks } : {}),
       ...(providerSession ? { providerSession } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()
+    }
+  }
+
+  /** Child-work evidence for a session this feed publishes; a failing sink costs nothing else. */
+  publishChildWork(sessionId: string, evidence: AgentChildWorkEvidence[]): void {
+    const session = this.deps.sessions.get(sessionId)
+    if (!session) {
+      return
+    }
+    try {
+      this.ownership.publishChildWork(sessionId, evidence, session.params.provider)
+    } catch (error) {
+      console.warn('[structured-session-status] child work publish failed', error)
     }
   }
 

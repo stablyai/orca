@@ -139,6 +139,14 @@ async function seed(acceptedSubmissions = false) {
           }
         })
       ).toMatchObject({ ok: true })
+      // Accepted into the conversation first; the delivery loop hands it over after.
+      await vi.waitFor(() =>
+        expect(
+          host
+            .journalSnapshot(HOST_TEST_SESSION)
+            .submissions.find((entry) => entry.clientMessageId === clientOperationId)?.dispatchState
+        ).toBe('accepted')
+      )
       if (i === 1) {
         selectedItemId = agentJournalSubmissionKey(clientOperationId)
       }

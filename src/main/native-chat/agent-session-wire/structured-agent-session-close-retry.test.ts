@@ -78,10 +78,7 @@ function hostSession(journal: AgentSessionJournal): StructuredAgentSessionHostSe
   return {
     journal,
     params: {} as StructuredAgentSessionHostSession['params'],
-    fence: 1,
-    hasProviderChild: false,
-    providerChildPhase: 'ready',
-    acquisitionGeneration: null
+    child: null
   }
 }
 
@@ -178,40 +175,34 @@ describe('the registry', () => {
 })
 
 describe('the attach orchestration', () => {
-  it('ABORTS the map replacement when the previous journal will not close', async () => {
-    const previousDir = join(root, 'previous')
-    const provisionalDir = join(root, 'provisional')
-    const previous = flakyClose(
-      await journals.open({ identity: IDENTITY, journalDir: previousDir }),
-      1
-    )
-    const provisional = await journals.open({
-      identity: IDENTITY,
-      journalDir: provisionalDir
-    })
-    attachFlow.journal = provisional
-    const sessions = new Map([[SESSION, hostSession(previous)]])
+  // The attach adopts the conversation's one open journal; it never opens a second handle, so
+  // there is no replacement to abort and no provisional journal to close.
+  it('keeps the journal it adopted indexed and open when an attach succeeds', async () => {
+    const directory = join(root, 'adopted')
+    const journal = await journals.open({ identity: IDENTITY, journalDir: directory })
+    attachFlow.journal = journal
+    const sessions = new Map([[SESSION, hostSession(journal)]])
 
+    await attachStructuredAgentSession(attachContext(sessions), 'caller-1', attachParams)
+
+    expect(sessions.get(SESSION)?.journal).toBe(journal)
     await expect(
-      attachStructuredAgentSession(attachContext(sessions), 'caller-1', attachParams)
-    ).rejects.toThrow('close rejected')
-
-    // The live entry is UNTOUCHED: overwriting it would have left its handle
-    // open with nothing able to reach it again.
-    expect(sessions.get(SESSION)?.journal).toBe(previous)
-    // And the provisional journal is owned by the registry, not orphaned.
+      journal.appendItem(
+        { provider: 'orca', clientMessageId: 'after-attach' },
+        {
+          kind: 'status',
+          text: 'still writable'
+        }
+      )
+    ).resolves.toBeDefined()
     expect(agentSessionJournalCloseRetries.pendingDirectories).toEqual([])
-    await expectNothingHoldsTheDirectory(provisionalDir)
   })
 
-  it('retains the provisional journal when its own close rejects on the barrier path', async () => {
-    const provisionalDir = join(root, 'provisional-barrier')
-    const provisional = flakyClose(
-      await journals.open({ identity: IDENTITY, journalDir: provisionalDir }),
-      1
-    )
-    attachFlow.journal = provisional
-    const sessions = new Map<string, StructuredAgentSessionHostSession>()
+  it('leaves the conversation indexed and open when the sink barrier fails', async () => {
+    const directory = join(root, 'adopted-barrier')
+    const journal = await journals.open({ identity: IDENTITY, journalDir: directory })
+    attachFlow.journal = journal
+    const sessions = new Map([[SESSION, hostSession(journal)]])
     const context = attachContext(sessions)
     const failing = {
       sink: {},
@@ -229,9 +220,19 @@ describe('the attach orchestration', () => {
       'sink barrier failed'
     )
 
-    expect(sessions.size).toBe(0)
-    // Retained rather than dropped, so teardown can still release the handle.
-    expect(agentSessionJournalCloseRetries.pendingDirectories).toEqual([provisionalDir])
+    // A failed attach does not end the conversation: its queued messages and the failure row
+    // are written into this same journal.
+    expect(sessions.get(SESSION)?.journal).toBe(journal)
+    await expect(
+      journal.appendItem(
+        { provider: 'orca', clientMessageId: 'after-failure' },
+        {
+          kind: 'status',
+          text: 'still writable'
+        }
+      )
+    ).resolves.toBeDefined()
+    expect(agentSessionJournalCloseRetries.pendingDirectories).toEqual([])
   })
 })
 

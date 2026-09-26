@@ -120,11 +120,16 @@ describe('structured send idempotency', () => {
     await performSend(context, input)
     const replay = await performSend(context, input)
 
+    // Acceptance records the one submission; the reused id answers with it and writes nothing.
+    // Handing it over is the delivery loop's, never a second accept's.
     expect(replay).toMatchObject({
       ok: true,
-      value: { clientMessageId: 'shared-send-id', submission: { dispatchState: 'accepted' } }
+      value: {
+        clientMessageId: 'shared-send-id',
+        submission: { dispatchState: 'pending', handoverRecorded: true }
+      }
     })
-    expect(dispatch).toHaveBeenCalledOnce()
+    expect(dispatch).not.toHaveBeenCalled()
     expect(journal.submissions()).toHaveLength(1)
   })
 })

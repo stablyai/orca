@@ -28,7 +28,8 @@ import { readJournalRowsAfterCursor, type JournalLoad } from './journal-open'
 import { journalDatabaseFile } from './journal-paths'
 import {
   markJournalPendingSubmissionsUnknown,
-  rejectJournalPendingSubmissions
+  rejectJournalPendingSubmissions,
+  rejectJournalQueuedSubmissions
 } from './journal-pending-submission-recovery'
 import {
   applyJournalRow,
@@ -75,7 +76,9 @@ export class AgentSessionJournal {
   private state: JournalReducerState
   private readOnly = false
   private malformedRows = 0
+  private openedThrough: AgentJournalCursor = { epoch: '', sequence: 0 }
   private database: OpenJournalDatabase | null = null
+  private onCommitted: (() => void) | null = null
   private readonly queue: JournalWriteQueue
   private readonly closer: JournalConnectionCloser
   private readonly rowWriter: JournalRowWriter
@@ -111,8 +114,14 @@ export class AgentSessionJournal {
         this.readOnly = readOnly
       },
       cursor: this.cursor,
-      adopt: (loaded) => this.adoptLoadedJournal(loaded),
-      commit: (row) => applyJournalRow(this.state, row),
+      adopt: (loaded) => {
+        this.adoptLoadedJournal(loaded)
+        this.onCommitted?.()
+      },
+      commit: (row) => {
+        applyJournalRow(this.state, row)
+        this.onCommitted?.()
+      },
       loaded: () => this.loaded,
       malformedRows: () => this.malformedRows,
       setMalformedRows: (count) => {
@@ -140,6 +149,16 @@ export class AgentSessionJournal {
     return this.journalDir
   }
 
+  /** Whether a row at this sequence was on disk when this handle opened, so an earlier handle
+   *  wrote it. Sequences restart with each epoch, so a row of a later epoch never was. */
+  wroteBeforeOpen(sequence: number | undefined): boolean {
+    return (
+      sequence !== undefined &&
+      this.state.epoch === this.openedThrough.epoch &&
+      sequence <= this.openedThrough.sequence
+    )
+  }
+
   /** What the last open's repair did. */
   get repair(): { malformedRows: number } {
     return { malformedRows: this.malformedRows }
@@ -150,6 +169,7 @@ export class AgentSessionJournal {
     this.database = openJournalDatabase(this.dbPath)
     try {
       await this.restore()
+      this.openedThrough = this.cursor()
     } catch (error) {
       // Nothing else holds a reference to this connection, so a throw here is
       // the leak site unless the store releases it itself — and a close that
@@ -165,6 +185,12 @@ export class AgentSessionJournal {
   close(): Promise<void> {
     this.queue.markClosed()
     return this.closer.close()
+  }
+
+  /** Told of every durable change, epoch replacements included, so a reader learns of a write
+   *  without its writer saying so. One listener: a later call replaces it. It must not throw. */
+  observeCommits(listener: () => void): void {
+    this.onCommitted = listener
   }
 
   cursor = (): AgentJournalCursor => ({
@@ -295,6 +321,15 @@ export class AgentSessionJournal {
   /** Reject unanswered sends after an owner that never proved its start ended: none was written. */
   async rejectPendingSubmissions(fence: number, reason: string): Promise<string[]> {
     return rejectJournalPendingSubmissions(this, fence, reason)
+  }
+
+  /** Reject sends accepted but never handed over, optionally only those `which` names. */
+  async rejectQueuedSubmissions(
+    fence: number,
+    reason: string,
+    which?: (submission: AgentJournalSubmission) => boolean
+  ): Promise<string[]> {
+    return rejectJournalQueuedSubmissions(this, fence, reason, which)
   }
 
   /** The escape hatch for corruption, an unreconcilable prefix, a forked handle,

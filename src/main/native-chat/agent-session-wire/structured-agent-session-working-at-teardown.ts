@@ -17,6 +17,7 @@ import {
   agentSessionProviderHandleRoot
 } from '../../../shared/agent-session-provider-handle'
 import { latestStructuredAgentSessionUserItem } from '../../../shared/structured-agent-session-projection'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionResumeMarker,
@@ -135,8 +136,7 @@ function liveTasks(
 type WorkingCandidateSession = {
   journal: AgentSessionJournal
   /** Only this host generation's own child counts. A restored-for-reading journal has none. */
-  hasProviderChild: boolean
-  fence?: number
+  child: { fence: number } | null
 }
 
 /** The offer one session is owed, taken right before teardown stops its provider child; null when
@@ -154,16 +154,24 @@ export function structuredAgentSessionWorkingAtStop(input: {
 }): AgentSessionResumeMarker | null {
   const { sessionId, session } = input
   // A journal this host cannot read tells us nothing about what the turn was doing.
-  if (!session?.hasProviderChild || session.journal.isReadOnly) {
+  if (!session?.child || session.journal.isReadOnly) {
     return null
   }
   const snapshot = session.journal.snapshot()
+  // A queued message reached no agent, so it is no work to resume: quit rejects it as never sent.
+  const handedOver = snapshot.submissions.filter(
+    (submission) => !isQueuedAgentJournalSubmission(submission)
+  )
   const roster = input.backgroundTasks(sessionId)
-  const status = structuredAgentSessionShownStatus(snapshot, roster, session.fence)
+  const status = structuredAgentSessionShownStatus(
+    { items: snapshot.items, submissions: handedOver },
+    roster,
+    session.child.fence
+  )
   if (status.state === 'done') {
     return null
   }
-  const work = structuredAgentSessionResumeWork(snapshot.items, snapshot.submissions)
+  const work = structuredAgentSessionResumeWork(snapshot.items, handedOver)
   const head = agentSessionProviderHandleChainHead(
     input.getRecord(sessionId)?.providerHandleChain ?? []
   )

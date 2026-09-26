@@ -46,23 +46,32 @@ function harness(
     return task()
   }
   const restorer = new StructuredAgentSessionReadableRestorer({
-    store: {
-      getRecord: (sessionId: string) => records.find((r) => r.sessionId === sessionId) ?? null,
-      listRecords: () => records
-    } as never,
-    journalRoot: '/journals',
+    openDeps: {
+      store: {
+        getRecord: (sessionId: string) => records.find((r) => r.sessionId === sessionId) ?? null,
+        listRecords: () => records
+      },
+      journalRoot: '/journals',
+      adapter: {}
+    },
     supportsRecord: options.supports ?? (() => true),
     reconcile: async () => null,
     resolveRecovery: async () => undefined,
     serialize,
     hasSession: (sessionId) => live.has(sessionId),
-    onReadable: (sessionId, restored) => live.set(sessionId, restored),
+    onReadable: (sessionId, restored) => {
+      live.set(sessionId, restored)
+    },
     retrySettlement: async () => true
   })
   return { restorer, live, serializedIds }
 }
 
-const readable = { journal: {}, params: {}, fence: 1 } as never
+const readable = {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restorer only indexes the session it is handed; no member of it is read here.
+  session: { journal: {}, params: {}, fence: 1 } as never,
+  reset: null
+}
 
 afterEach(() => {
   vi.restoreAllMocks()

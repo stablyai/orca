@@ -1,7 +1,12 @@
+// Switching away from a chat starts the release clock, and the clock must never stop a provider
+// child that still owes the user work.
+//
 // A Claude chat is published before its CLI answers initialize, and a message sent in that window
-// is held until it does. Switching away from the chat starts the release clock; the clock must
-// treat that held message as work still owed, exactly as it treats a running turn, or it evicts
-// the session and refuses a message the user already sent.
+// is accepted and stays queued until it does; the delivery loop hands it over once startup lands.
+// Switching away from the chat starts the release clock; the clock must treat that queued message
+// as work still owed, exactly as it treats a running turn, or it evicts the session and rejects a
+// message the user already sent. And a lead whose turn has settled can leave subagents, commands
+// and monitors running inside the child; evicting then ends them silently.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -38,7 +43,7 @@ let landInit: () => void
 let lifecycle: Promise<void>[]
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-starting-release-'))
+  root = await mkdtemp(join(tmpdir(), 'orca-owed-work-release-'))
   resetHostTestOperationIds()
   claude = fakeClaude()
   lifecycle = []
@@ -62,7 +67,7 @@ beforeEach(async () => {
         lifecycle.push(host.handleAdapterEvent(mapped))
       }
     },
-    // As the runtime wires it: a held prompt's outcome reaches the journal out of band.
+    // As the runtime wires it: an admitted prompt's outcome reaches the journal out of band.
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     // Initialize answers only when the test says so.
     openConnection: async (launch, handlers) => {
@@ -136,13 +141,21 @@ function dispatchState(clientMessageId: string): string | undefined {
     .submissions.find((entry) => entry.clientMessageId === clientMessageId)?.dispatchState
 }
 
+/** The delivery loop hands a message over on its own serialized steps after startup lands; this
+ *  yields to them without advancing the (possibly faked) release clock. */
+async function untilSent(connection: { sent: unknown[] }): Promise<void> {
+  for (let turn = 0; turn < 2000 && connection.sent.length === 0; turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve))
+  }
+}
+
 /** Long enough for several grace windows to elapse, so "not evicted" means the clock declined. */
 function waitOutSeveralGraceWindows(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, GRACE_MS * 20))
 }
 
 describe('a chat left while its Claude CLI is still starting', () => {
-  it('keeps the session for a message it is holding, and delivers it once startup lands', async () => {
+  it('keeps the session for a message still queued, and delivers it once startup lands', async () => {
     await attachStarting()
     const held = await send('sent while starting')
 
@@ -154,9 +167,12 @@ describe('a chat left while its Claude CLI is still starting', () => {
     expect(dispatchState(held)).toBe('pending')
 
     landInit()
-    await adapter.drainStartup(SESSION)
+    await adapter.awaitStarted(SESSION)
 
-    expect(claude.connections[0].sent).toEqual([expect.objectContaining({ type: 'user' })])
+    await vi.waitFor(
+      () => expect(claude.connections[0].sent).toEqual([expect.objectContaining({ type: 'user' })]),
+      { timeout: 3000 }
+    )
     await vi.waitFor(() => expect(dispatchState(held)).toBe('accepted'))
   })
 
@@ -175,8 +191,9 @@ describe('a chat left while its Claude CLI is still starting', () => {
 
     // Startup lands just before the clock's next tick.
     landInit()
-    await adapter.drainStartup(SESSION)
+    await adapter.awaitStarted(SESSION)
     await Promise.all(lifecycle)
+    await untilSent(connection)
     expect(connection.sent).toEqual([expect.objectContaining({ type: 'user' })])
     await vi.advanceTimersByTimeAsync(GRACE_MS - 1)
 
@@ -192,8 +209,9 @@ describe('a chat left while its Claude CLI is still starting', () => {
   it('is released after the grace once its turn has finished', async () => {
     await attachStarting()
     landInit()
-    await adapter.drainStartup(SESSION)
-    await send('answered', 'accepted')
+    await adapter.awaitStarted(SESSION)
+    const answered = await send('answered')
+    await vi.waitFor(() => expect(dispatchState(answered)).toBe('accepted'))
     claude.connections[0].handlers.onMessage?.({
       type: 'result',
       subtype: 'success',
@@ -215,6 +233,61 @@ describe('a chat left while its Claude CLI is still starting', () => {
     await attachStarting()
 
     host.release(SESSION, SURFACE)
+
+    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+    expect(claude.connections[0].closeCount).toBe(1)
+  })
+})
+
+describe('a chat left while its settled lead still has background work running', () => {
+  function frame(message: Record<string, unknown>): void {
+    claude.connections[0].handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
+  }
+
+  async function settleTurnLeavingTask(taskType: string): Promise<void> {
+    await attachStarting()
+    landInit()
+    await adapter.awaitStarted(SESSION)
+    const fanOut = await send('fan out')
+    await vi.waitFor(() => expect(dispatchState(fanOut)).toBe('accepted'))
+    frame({
+      type: 'system',
+      subtype: 'task_started',
+      uuid: 'task-start-1',
+      task_id: 'task-1',
+      task_type: taskType,
+      is_backgrounded: true
+    })
+    frame({ type: 'result', subtype: 'success', uuid: 'result-1', is_error: false, result: 'ok' })
+    await host.flushStreamedEvents(SESSION)
+    expect(adapter.backgroundTaskState(SESSION)?.tasks).toEqual([
+      expect.objectContaining({ id: 'task-1' })
+    ])
+  }
+
+  it.each([
+    ['a subagent', 'local_agent'],
+    ['a background command', 'local_bash'],
+    ['a monitor', 'monitor']
+  ])('keeps the session while %s runs, then releases it once that settles', async (_, type) => {
+    await settleTurnLeavingTask(type)
+
+    host.release(SESSION, SURFACE)
+    await waitOutSeveralGraceWindows()
+
+    expect(host.hasSession(SESSION)).toBe(true)
+    expect(claude.connections[0].closeCount).toBe(0)
+
+    frame({
+      type: 'system',
+      subtype: 'task_notification',
+      uuid: 'task-done-1',
+      task_id: 'task-1',
+      status: 'completed'
+    })
+    // A finished background task can wake the lead; that turn is owed too until it settles.
+    frame({ type: 'result', subtype: 'success', uuid: 'result-2', is_error: false, result: 'ok' })
+    await host.flushStreamedEvents(SESSION)
 
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
     expect(claude.connections[0].closeCount).toBe(1)

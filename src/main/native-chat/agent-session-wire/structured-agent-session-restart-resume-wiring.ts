@@ -11,7 +11,9 @@ import type {
   AgentSessionMutationResult,
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
+import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 import type { StructuredAgentSessionRestartResumeSurfaces } from './structured-agent-session-restart-resume-host'
+import type { SendSettlementWaitOptions } from './structured-agent-session-send-settlement'
 
 /** The caller key the continuation sends under, so its writes are attributable to Orca itself. */
 export const STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER =
@@ -34,21 +36,25 @@ type RestartResumeHostBindings = {
   /** The host's existing settlement waiter; a send returns while its dispatch is still pending. */
   waitForSendSettlement: (
     sessionId: string,
-    clientMessageId: string
+    clientMessageId: string,
+    options: SendSettlementWaitOptions
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
 }
 
 export function structuredAgentSessionRestartResumeSurfaces(
   host: RestartResumeHostBindings,
   now: () => number
-): Omit<StructuredAgentSessionRestartResumeSurfaces, 'publish'> {
+): StructuredAgentSessionRestartResumeSurfaces {
   return {
     revealSession: host.revealSession,
     hold: host.hold,
     release: host.release,
     send: (params) =>
       host.send({ callerKey: STRUCTURED_AGENT_SESSION_RESTART_CONTINUATION_CALLER }, params),
-    awaitSendSettlement: host.waitForSendSettlement,
+    // Accepted like any send, so its verdict is its delivery, however long the start takes; the
+    // wait ends when the submission settles or the session closes.
+    awaitSendSettlement: (sessionId, clientMessageId) =>
+      host.waitForSendSettlement(sessionId, clientMessageId, { budgetMs: MAX_TIMER_DELAY_MS }),
     onNoteFailed: () =>
       console.warn('[structured-agent-session] restart continuation attribution failed'),
     now

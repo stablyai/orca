@@ -67,7 +67,9 @@ export async function openAgentSessionJournalWithRecovery(input: {
   }
   const journal = await openAgentSessionJournal({
     identity: input.identity,
-    journalDir: input.journalDir
+    journalDir: input.journalDir,
+    // The probe is this open's replay; omitted, not `null`, when there was nothing to load.
+    ...(probe ? { loaded: probe } : {})
   })
   if (!probe?.corrupt) {
     return { journal, recovery: null }

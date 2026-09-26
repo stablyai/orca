@@ -16,6 +16,7 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { nativeSessionOptionsFromReport } from './structured-agent-session-option-restoration'
+import { markProviderChildStarted } from './structured-agent-session-provider-child'
 
 export type StructuredAgentSessionProviderStartedContext = {
   deps: StructuredAgentSessionHostDeps
@@ -35,13 +36,14 @@ export function settleStructuredAgentSessionProviderStarted(
   return context.serialize(event.sessionId, async () => {
     const session = context.sessions.get(event.sessionId)
     if (
-      !session?.hasProviderChild ||
-      session.fence !== event.fence ||
-      session.acquisitionGeneration !== event.acquisitionGeneration
+      !session ||
+      !markProviderChildStarted(session, {
+        generation: event.acquisitionGeneration,
+        fence: event.fence
+      })
     ) {
       return
     }
-    session.providerChildPhase = 'ready'
     // Prompts held for the start are written now but open a turn only on their echo; a release
     // tick in between would stop the child before it runs them.
     context.restartReleaseGrace(event.sessionId)

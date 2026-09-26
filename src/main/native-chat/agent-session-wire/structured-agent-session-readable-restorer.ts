@@ -1,10 +1,7 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { RestoredStructuredAgentSessionRead } from './structured-agent-session-read-restore'
+import type { StructuredAgentSessionReadRestoreDeps } from './structured-agent-session-restart-restore'
 import {
   restoreOneStructuredAgentSessionRead,
-  restoreOneStructuredAgentSessionReadUnderSerialize,
   restoreStructuredAgentSessionsOnRestart
 } from './structured-agent-session-restart-restore'
 
@@ -12,19 +9,8 @@ export class StructuredAgentSessionReadableRestorer {
   private restorePromise: Promise<void> | null = null
 
   constructor(
-    private readonly input: {
-      store: AgentSessionRecordStore
-      journalRoot: string
+    private readonly input: StructuredAgentSessionReadRestoreDeps & {
       supportsRecord: (record: AgentSessionRecord) => boolean
-      reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
-      resolveRecovery: (sessionId: string) => Promise<unknown>
-      serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
-      hasSession: (sessionId: string) => boolean
-      onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
-      retrySettlement: (
-        sessionId: string,
-        params: RestoredStructuredAgentSessionRead['params']
-      ) => Promise<boolean>
     }
   ) {}
 
@@ -55,19 +41,8 @@ export class StructuredAgentSessionReadableRestorer {
     return this.input.hasSession(sessionId)
   }
 
-  /** `restoreOne` for a caller already inside the session's serialize. Reconciliation is skipped
-   *  on purpose: a lease this host has not adjudicated is the attach's problem, and a replay
-   *  needs only the journal. */
-  async restoreOneUnderSerialize(sessionId: string): Promise<boolean> {
-    if (!this.supports(sessionId)) {
-      return false
-    }
-    await restoreOneStructuredAgentSessionReadUnderSerialize(this.input, sessionId)
-    return this.input.hasSession(sessionId)
-  }
-
   private supports(sessionId: string): boolean {
-    const record = this.input.store.getRecord(sessionId)
+    const record = this.input.openDeps.store.getRecord(sessionId)
     return record !== null && this.input.supportsRecord(record)
   }
 
@@ -75,7 +50,7 @@ export class StructuredAgentSessionReadableRestorer {
     const targetOrder = sessionIds
       ? new Map(sessionIds.map((sessionId, index) => [sessionId, index]))
       : null
-    const records = this.input.store
+    const records = this.input.openDeps.store
       .listRecords()
       .filter(
         (record) =>

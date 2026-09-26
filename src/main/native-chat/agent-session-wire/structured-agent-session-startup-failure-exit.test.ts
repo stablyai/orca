@@ -19,10 +19,9 @@ function startedSession(): StructuredAgentSessionUnexpectedExitSession & {
   journal: { appendLifecycleBatch: ReturnType<typeof vi.fn> }
 } {
   return {
-    hasProviderChild: true,
-    fence: 7,
-    acquisitionGeneration: GENERATION,
+    child: { generation: GENERATION, fence: 7, phase: 'ready' },
     journal: {
+      cursor: () => ({ epoch: 'epoch-1', sequence: 0 }),
       // Nothing ran: the start failed before any response or acknowledged prompt.
       snapshot: () => ({ items: [] }),
       appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
@@ -86,7 +85,9 @@ describe('a provider that ends before it finished starting', () => {
       expect.objectContaining({
         mutations: [
           expect.objectContaining({
-            body: { kind: 'status', text: providerStartupFailureOutcome(REASON) }
+            // The same row the delivery loop writes for a failed start: an error, keyed by it.
+            identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
+            body: { kind: 'status', text: providerStartupFailureOutcome(REASON), tone: 'error' }
           })
         ]
       })
@@ -104,7 +105,10 @@ describe('a provider that ends before it finished starting', () => {
   })
 
   it("reads a start that failed off the host's own phase when the provider omits the flag", async () => {
-    const session = { ...startedSession(), providerChildPhase: 'starting' as const }
+    const session = {
+      ...startedSession(),
+      child: { generation: GENERATION, fence: 7, phase: 'starting' as const }
+    }
 
     const ticket = await settleUnexpectedStructuredAgentSessionExit(contextFor(session), ended)
 
@@ -113,7 +117,9 @@ describe('a provider that ends before it finished starting', () => {
       expect.objectContaining({
         mutations: [
           expect.objectContaining({
-            body: { kind: 'status', text: providerStartupFailureOutcome(REASON) }
+            // The same row the delivery loop writes for a failed start: an error, keyed by it.
+            identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
+            body: { kind: 'status', text: providerStartupFailureOutcome(REASON), tone: 'error' }
           })
         ]
       })

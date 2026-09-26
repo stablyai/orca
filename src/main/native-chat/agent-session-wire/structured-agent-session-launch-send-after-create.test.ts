@@ -57,12 +57,20 @@ async function launchAndDeliver(): Promise<{
     text: 'fix the failing test'
   })
   const sent = await send.mock.results[0]!.value
-  return {
-    messageId,
-    dispatchState: sent.ok
-      ? sent.value.submission.dispatchState
-      : `refused:${sent.refusal.code}:${sent.refusal.message}`
+  if (!sent.ok) {
+    return { messageId, dispatchState: `refused:${sent.refusal.code}:${sent.refusal.message}` }
   }
+  // Accepted first; the delivery loop hands it over, and that outcome is what reached the agent.
+  let dispatchState = sent.value.submission.dispatchState
+  await vi.waitFor(() => {
+    dispatchState =
+      host
+        .journalSnapshot(created.value.sessionId)
+        .submissions.find((entry) => entry.clientMessageId === sent.value.clientMessageId)
+        ?.dispatchState ?? 'missing'
+    expect(dispatchState).not.toBe('pending')
+  })
+  return { messageId, dispatchState }
 }
 
 beforeEach(() => {

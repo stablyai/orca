@@ -4,8 +4,9 @@ import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
-import { createClaudeSessionStartupGate } from './claude-structured-session-startup-gate'
+import { createClaudeSessionStartup } from './claude-structured-session-startup-state'
 
 /** The session as published at spawn: nothing the CLI reports at init is assumed yet. */
 export function createClaudeSessionPublication(input: {
@@ -52,6 +53,7 @@ export function createClaudeSessionPublication(input: {
       retiredDispatchWaiters: [],
       replayContentFallbackBlocked: false,
       backgroundTasks: new ClaudeBackgroundTaskTracker(),
+      childWork: new ClaudeChildWorkDecoder(),
       // Undefined until init: an unread catalog is unavailable, not empty.
       commands: new ClaudeSlashCommandCatalog(),
       dispatchSequence: 0,
@@ -65,7 +67,7 @@ export function createClaudeSessionPublication(input: {
       translator: input.translator,
       events: input.events,
       ...(input.unbindReadingControl ? { unbindReadingControl: input.unbindReadingControl } : {}),
-      startup: createClaudeSessionStartupGate()
+      startup: createClaudeSessionStartup()
     }
   }
 }

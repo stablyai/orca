@@ -29,6 +29,12 @@ export const DISPATCH_REJECTED_CODEX_QUEUE_FULL = 'codex structured dispatch que
 /** The provider confirmed a queued frame was withdrawn before execution. */
 export const DISPATCH_REJECTED_CANCELLED = 'provider_cancelled_before_start'
 
+/** Accepted by a host process that ended before handing it to any provider. */
+export const DISPATCH_REJECTED_HOST_RESTARTED = 'host_restarted_before_delivery'
+
+/** Accepted, then the provider was closed before the message was handed to it. */
+export const DISPATCH_REJECTED_PROVIDER_CLOSED = 'provider_closed_before_delivery'
+
 export function dispatchWriteFailureReason(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
   return `${DISPATCH_REJECTED_WRITE_FAILED}: ${detail}`
@@ -54,6 +60,8 @@ export function dispatchRejectionReasonIsInternal(reason: string | null | undefi
     dispatchRejectionWasTransportWriteFailure(reason) ||
     reason === DISPATCH_REJECTED_QUEUE_FULL ||
     reason === DISPATCH_REJECTED_CODEX_QUEUE_FULL ||
-    reason === DISPATCH_REJECTED_CANCELLED
+    reason === DISPATCH_REJECTED_CANCELLED ||
+    reason === DISPATCH_REJECTED_HOST_RESTARTED ||
+    reason === DISPATCH_REJECTED_PROVIDER_CLOSED
   )
 }

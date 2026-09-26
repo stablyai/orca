@@ -102,7 +102,7 @@ describe('a publish-first Claude create whose init is slow', () => {
     expect(store.getRecord(SESSION)?.options?.model).toBeUndefined()
     expect(lastPhase()).toBe('starting')
 
-    await adapter.drainStartup(SESSION)
+    await adapter.awaitStarted(SESSION)
     await Promise.all(lifecycle)
 
     expect(store.getRecord(SESSION)?.options?.model).toBe('claude-opus-9')
@@ -116,7 +116,7 @@ describe('a publish-first Claude create whose init is slow', () => {
     ).resolves.toMatchObject({ ok: true })
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
 
-    await adapter.drainStartup(SESSION)
+    await adapter.awaitStarted(SESSION)
     await Promise.all(lifecycle)
 
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
@@ -126,7 +126,7 @@ describe('a publish-first Claude create whose init is slow', () => {
   it('keeps the picked model across a resume whose new child starts on its own default', async () => {
     const params = claudeParams()
     await host.attach(CALLER, { ...params, options: { model: 'opus' } })
-    await adapter.drainStartup(SESSION)
+    await adapter.awaitStarted(SESSION)
     await Promise.all(lifecycle)
     await host.close(SESSION)
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
@@ -138,7 +138,7 @@ describe('a publish-first Claude create whose init is slow', () => {
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')
     expect(lastPhase()).toBe('starting')
 
-    await adapter.drainStartup(SESSION)
+    await adapter.awaitStarted(SESSION)
     await Promise.all(lifecycle)
 
     expect(store.getRecord(SESSION)?.options?.model).toBe('opus')

@@ -71,6 +71,18 @@ function journal(): AgentSessionJournal {
   ).sessions.get(SESSION)!.journal
 }
 
+/** A send is accepted first; this waits for the delivery loop to hand it to the provider. */
+async function handedOver(clientMessageId: string): Promise<void> {
+  await vi.waitFor(() => {
+    expect(
+      journal()
+        .submissions()
+        .find((entry) => entry.clientMessageId === clientMessageId)?.handedOverAt
+    ).toBeDefined()
+    expect(dispatch).toHaveBeenCalled()
+  })
+}
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wire-late-settle-'))
   resetHostTestOperationIds()
@@ -152,10 +164,13 @@ describe('settling a send the provider proves it received after the ack window',
       finishDispatch({ state: 'unknown', reason: 'ack timeout' })
       unsubscribe()
     }
-    await expect(pending).resolves.toMatchObject({
-      ok: true,
-      value: { submission: { dispatchState: 'accepted' } }
-    })
+    await expect(pending).resolves.toMatchObject({ ok: true })
+    // The late `unknown` from the handover does not reopen the proven acceptance.
+    await vi.waitFor(() =>
+      expect(submissions()).toMatchObject([
+        { clientMessageId: params.envelope.clientOperationId, dispatchState: 'accepted' }
+      ])
+    )
     await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }
@@ -167,6 +182,8 @@ describe('settling a send the provider proves it received after the ack window',
     dispatch.mockResolvedValueOnce({ state: 'unknown', reason: 'ack timeout' })
     const params = sendParams('received just before shutdown')
     await host.send(CALLER, params)
+    await handedOver(params.envelope.clientOperationId)
+    await vi.waitFor(() => expect(submissions()).toMatchObject([{ dispatchState: 'unknown' }]))
     let settlement: Promise<void> | undefined
     closeSession.mockImplementationOnce(async () => {
       settlement = host.settleLateDispatch({
@@ -188,8 +205,9 @@ describe('settling a send the provider proves it received after the ack window',
   it('moves a durable unknown to accepted so nothing offers to send it again', async () => {
     dispatch.mockRejectedValueOnce(new Error('socket closed'))
     const params = sendParams('sent while a turn was running')
-    const first = await host.send(CALLER, params)
-    expect(first).toMatchObject({ ok: true, value: { submission: { dispatchState: 'unknown' } } })
+    await host.send(CALLER, params)
+    await handedOver(params.envelope.clientOperationId)
+    await vi.waitFor(() => expect(submissions()).toMatchObject([{ dispatchState: 'unknown' }]))
 
     await host.settleLateDispatch({
       sessionId: SESSION,
@@ -209,6 +227,7 @@ describe('settling a send the provider proves it received after the ack window',
     dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const params = sendParams('queued behind the active turn')
     await host.send(CALLER, params)
+    await handedOver(params.envelope.clientOperationId)
 
     await host.settleLateDispatch({
       sessionId: SESSION,
@@ -230,6 +249,7 @@ describe('settling a send the provider proves it received after the ack window',
     dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const params = sendParams('settle from provider echo')
     await host.send(CALLER, params)
+    await handedOver(params.envelope.clientOperationId)
     vi.spyOn(journal(), 'resolveDispatch').mockRejectedValueOnce(
       new Error('direct settlement write failed')
     )
@@ -259,6 +279,7 @@ describe('settling a send the provider proves it received after the ack window',
   it('leaves an already accepted send alone', async () => {
     const params = sendParams('ordinary send')
     await host.send(CALLER, params)
+    await vi.waitFor(() => expect(submissions()).toMatchObject([{ dispatchState: 'accepted' }]))
 
     await host.settleLateDispatch({
       sessionId: SESSION,

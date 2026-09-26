@@ -10,7 +10,6 @@ import {
 } from '../../runtime/agent-session-recovery-capsule'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { parseAgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { StructuredAgentSessionResumeAdmission } from './structured-agent-session-restart-resume-runner'
 import {
@@ -52,6 +51,8 @@ export async function interruptedRestart(
     previous.dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const body = hostTestMessage('Perform the original task')
     await previous.host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+    // Accepted first, handed over after: the work in flight is a send the provider took.
+    await vi.waitFor(() => expect(previous.dispatch).toHaveBeenCalledOnce())
   } else if (work === 'children') {
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'settled-turn', ordinal: 1 },
@@ -150,15 +151,17 @@ export async function supersededRefusal(userAnswers?: 'before' | 'after') {
   if (!events) {
     throw new Error('missing resumed provider event sink')
   }
-  const append = AgentSessionJournal.prototype.appendSubmission
-  const writing = vi.spyOn(AgentSessionJournal.prototype, 'appendSubmission')
-  writing.mockImplementationOnce(async function (this: AgentSessionJournal, input) {
-    const cursor = await append.call(this, input)
+  // The newer message lands after the reattach and just before the continuation is accepted,
+  // which is where a send asks whether its offer still stands.
+  const send = host.send
+  const writing = vi.spyOn(host, 'send')
+  writing.mockImplementationOnce(async (caller, params) => {
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'newer-turn', ordinal: 1 },
       hostTestMessage('A newer task from another client')
     )
-    return cursor
+    await host.flushStreamedEvents(SESSION)
+    return send(caller, params)
   })
   const admit = StructuredAgentSessionResumeAdmission.prototype.run
   const admitting = vi.spyOn(StructuredAgentSessionResumeAdmission.prototype, 'run')

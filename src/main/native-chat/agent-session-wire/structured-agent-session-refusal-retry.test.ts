@@ -106,6 +106,7 @@ async function createHarness(options: { attached?: boolean } = {}) {
 async function abandonHost(host: StructuredAgentSessionHost): Promise<void> {
   host['runtimeState'].stopLeaseRenewal()
   host['holds'].dispose()
+  host['conversationDelivery'].loop.dispose()
   await Promise.all([...host['sessions'].values()].map((session) => session.journal.close()))
   host['sessions'].clear()
 }
@@ -225,16 +226,20 @@ const UNREACHABLE = new Set<Pair>([
   // StructuredAgentSessionHost.mutate maps an absent record to AGENT_SESSION_NOT_ATTACHED.
   'agentSession.setOption:agent_session_identity_required',
   'agentSession.send:agent_session_identity_required',
-  // No structured-agent-session host branch emits agent_session_journal_unreadable.
+  // Only a send opens the conversation it writes to.
   'agentSession.setOption:agent_session_journal_unreadable',
-  'agentSession.send:agent_session_journal_unreadable',
   // Send reconstructs doubt from its global tombstone instead of refusing it.
   'agentSession.send:agent_session_operation_unknown',
   // Only a send restarts a lost owner.
   'agentSession.setOption:agent_session_owner_restart_failed',
   // A write names its target, not an owner generation; only an attach compares fences.
   'agentSession.setOption:agent_session_checkpoint_stale',
-  'agentSession.send:agent_session_checkpoint_stale'
+  'agentSession.send:agent_session_checkpoint_stale',
+  // A send is a conversation write: admitted whoever owns the lease, and a start it needs that
+  // fails rejects the accepted message rather than refusing the call.
+  'agentSession.send:agent_session_conflict',
+  'agentSession.send:execution_owner_reconciling',
+  'agentSession.send:agent_session_owner_restart_failed'
 ])
 
 describe('agentSessionRefusalOperationState host oracle', () => {
@@ -251,7 +256,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     expect(stale.setOption).toHaveBeenCalledTimes(1)
 
     const conflict = await createHarness()
-    for (const method of ['agentSession.setOption', 'agentSession.send'] as const) {
+    for (const method of ['agentSession.setOption'] as const) {
       await setLease(conflict, (current) => ({
         ...current,
         lease: { ...current.lease, handoffStage: 'new-owner-proving' }
@@ -331,7 +336,7 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     record(await assertHostAgreement(unknown, optionUnknown, 'agent_session_operation_unknown'))
 
     const reconciling = await createHarness()
-    for (const method of ['agentSession.setOption', 'agentSession.send'] as const) {
+    for (const method of ['agentSession.setOption'] as const) {
       await setLease(reconciling, (current) => ({
         ...current,
         lease: { ...current.lease, unreconciled: true }
@@ -348,16 +353,21 @@ describe('agentSessionRefusalOperationState host oracle', () => {
       )
     }
 
-    const unrecoverable = await createHarness()
-    await unrecoverable.host.close(SESSION)
-    unrecoverable.host.deps.adapter.acquire = async () => {
-      throw new Error('no provider thread to resume')
+    const unreadable = await createHarness()
+    await unreadable.host.close(SESSION)
+    unreadable.host.deps.adapter.historyFilePath = async () => {
+      throw new Error('transcript unreadable')
     }
+    const unreadableSend = { method: 'agentSession.send' as const, operationId: operationId() }
     record(
       await assertHostAgreement(
-        unrecoverable,
-        { method: 'agentSession.send', operationId: operationId() },
-        'agent_session_owner_restart_failed'
+        unreadable,
+        unreadableSend,
+        'agent_session_journal_unreadable',
+        async () => {
+          delete unreadable.host.deps.adapter.historyFilePath
+          return { harness: unreadable, spec: unreadableSend }
+        }
       )
     )
 

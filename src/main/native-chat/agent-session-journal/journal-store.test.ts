@@ -424,3 +424,31 @@ async function withJournalDatabase(
     opened.db.close()
   }
 }
+
+describe('what a handle found on disk when it opened', () => {
+  const submission = (clientMessageId: string) => ({
+    clientMessageId,
+    payloadFingerprint: 'fp',
+    body: { kind: 'message' as const, role: 'user' as const, blocks: [] },
+    fence: 1,
+    handoverRecorded: true as const
+  })
+
+  it('names rows an earlier handle wrote, and never a row of a later epoch', async () => {
+    const earlier = await open()
+    await earlier.appendItem(item(1), body('one'), { fence: 1 })
+    await earlier.appendSubmission(submission('earlier'))
+    await earlier.close()
+
+    const journal = await open()
+    const leftover = journal.submissions().find((entry) => entry.clientMessageId === 'earlier')
+    expect(journal.wroteBeforeOpen(leftover?.acceptedSequence)).toBe(true)
+
+    // Sequences restart with an epoch, so a row accepted after it can sit below the open cursor.
+    await journal.replaceEpochItems('handle_forked', 1, [])
+    await journal.appendSubmission(submission('later'))
+    const later = journal.submissions().find((entry) => entry.clientMessageId === 'later')
+    expect(later?.acceptedSequence).toBeLessThanOrEqual(2)
+    expect(journal.wroteBeforeOpen(later?.acceptedSequence)).toBe(false)
+  })
+})

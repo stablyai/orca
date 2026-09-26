@@ -9,6 +9,7 @@
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
 import type { StructuredAgentSessionRestartResume } from './structured-agent-session-restart-resume-host'
 import {
+  abandonQueuedStructuredAgentSessionMessages,
   evictOwnedStructuredAgentSessions,
   type StructuredAgentSessionLifetimeContext
 } from './structured-agent-session-host-lifetime'
@@ -93,6 +94,8 @@ export async function tearDownStructuredAgentSessionHost(input: {
   sessions: Map<string, StructuredAgentSessionHostSession>
   retainSessionIds?: ReadonlySet<string>
   acknowledgeSessionRelease?: (sessionId: string) => void
+  /** Quit closes every conversation, so it settles what they still queue as a close does. */
+  abandonQueued?: (sessionId: string, session: StructuredAgentSessionHostSession) => Promise<void>
 }): Promise<void> {
   const failures: unknown[] = []
   for (const phase of input.phases) {
@@ -107,7 +110,12 @@ export async function tearDownStructuredAgentSessionHost(input: {
     ([sessionId]) => !input.retainSessionIds?.has(sessionId)
   )
   // `allSettled`, so one rejected close cannot skip the others.
-  const closed = await Promise.allSettled(entries.map(([, session]) => session.journal.close()))
+  const closed = await Promise.allSettled(
+    entries.map(async ([sessionId, session]) => {
+      await input.abandonQueued?.(sessionId, session)
+      await session.journal.close()
+    })
+  )
   closed.forEach((result, index) => {
     const sessionId = entries[index]?.[0]
     if (result.status === 'fulfilled') {
@@ -160,6 +168,8 @@ export async function flushStructuredAgentSessionHost(
     sessions: context.sessions,
     retainSessionIds,
     acknowledgeSessionRelease: (sessionId) =>
-      context.deps.adapter.acknowledgeSessionRelease?.(sessionId)
+      context.deps.adapter.acknowledgeSessionRelease?.(sessionId),
+    abandonQueued: (sessionId, session) =>
+      abandonQueuedStructuredAgentSessionMessages(context.deps, sessionId, session.journal)
   })
 }

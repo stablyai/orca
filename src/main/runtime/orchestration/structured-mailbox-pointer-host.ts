@@ -6,6 +6,7 @@
  * the send and reports what the host said.
  */
 
+import { ORCHESTRATION_READINESS_TIMEOUT_MS } from '../../../shared/orchestration-timing-budgets'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-delivery'
@@ -94,8 +95,19 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           ? { kind: 'unattached' }
           : { kind: 'sent', state: 'rejected' }
       }
-      // `pending` is not yet an acknowledgement; only `accepted` may consume mail.
-      const state = result.value.submission.dispatchState
+      // `pending` is not yet an acknowledgement; only `accepted` may consume mail. Accepted is not
+      // delivered, so wait out a start; a wait that runs out parks for the next journal edge.
+      const submission =
+        result.value.submission.dispatchState === 'pending'
+          ? ((
+              await host
+                .waitForSendSettlement(input.sessionId, result.value.clientMessageId, {
+                  budgetMs: ORCHESTRATION_READINESS_TIMEOUT_MS
+                })
+                .catch(() => undefined)
+            )?.value.submission ?? result.value.submission)
+          : result.value.submission
+      const state = submission.dispatchState
       return {
         kind: 'sent',
         state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'

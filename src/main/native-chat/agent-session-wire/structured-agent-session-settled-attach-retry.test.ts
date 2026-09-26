@@ -322,6 +322,8 @@ describe('settled attach retry', () => {
     }
     const first = await host.send(CALLER, unknownParams)
     expect(first).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
+    // Handed over before the host dies: that is what makes the restart's answer doubt.
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
 
     await host.flushAllStreamedEvents()
     store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
@@ -351,7 +353,7 @@ describe('settled attach retry', () => {
     if (!sent.ok) {
       throw new Error(`unexpected restored send refusal: ${sent.refusal.message}`)
     }
-    expect(dispatch).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2))
     const restoredHistory = host.history({ sessionId: SESSION, direction: 'tail' })
     if (!restoredHistory.ok) {
       throw new Error(`unexpected restored history reset: ${restoredHistory.reset}`)

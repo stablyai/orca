@@ -56,6 +56,18 @@ export function readMountedStructuredAgentSessionOutbox(
   )
 }
 
+/** A send left dispatching when its owner changed goes out again, under the same id. */
+export function requeueInterruptedStructuredAgentSessionDispatches(
+  entries: StructuredAgentSessionOutboxEntry[],
+  fence: number | null
+): StructuredAgentSessionOutboxEntry[] {
+  return entries.map((entry) =>
+    entry.state === 'dispatching' && !hasInFlightLaunchDispatch(entry, fence)
+      ? { ...entry, state: 'queued' as const }
+      : entry
+  )
+}
+
 export function dispatchStructuredAgentSessionOutboxEntry(args: {
   next: StructuredAgentSessionOutboxEntry
   persisted: readonly StructuredAgentSessionOutboxEntry[]

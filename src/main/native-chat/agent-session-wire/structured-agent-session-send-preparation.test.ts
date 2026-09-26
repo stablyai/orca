@@ -1,11 +1,11 @@
-// A send, or a hold, that finds the session's provider child gone, against the real host.
+// A send, or a hold, that finds the session's provider child gone, against the real host. The
+// send is accepted at once; its delivery restarts the child, or rejects it with the reason.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { agentSessionRefusalOperationState } from '../../../shared/agent-session-refusal-retry'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
@@ -24,6 +24,11 @@ import {
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
+
+/** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
+function eventually(assertion: () => void): Promise<void> {
+  return vi.waitFor(assertion, { timeout: 10_000 })
+}
 // Long enough that no release fires mid-test; whether one is pending is asserted directly.
 const GRACE_MS = 60_000
 
@@ -105,15 +110,39 @@ function sendParams(text: string, operationId = hostTestOperationId()) {
   return { envelope, body }
 }
 
-/** Every status row the chat shows, oldest first; none when the session is not even readable. */
-function journalStatuses(): string[] {
-  if (!host.hasSession(SESSION)) {
-    return []
-  }
-  const history = host.history({ sessionId: SESSION, direction: 'tail' })
-  return history.ok
-    ? history.page.items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
-    : []
+/** Accepted at once, before any owner exists for it; answers the message id. */
+async function accept(params: ReturnType<typeof sendParams>): Promise<string> {
+  const result = await host.send(CALLER, params)
+  expect(result, JSON.stringify(result)).toMatchObject({
+    ok: true,
+    replayed: false,
+    value: { submission: { dispatchState: 'pending', handoverRecorded: true } }
+  })
+  return params.envelope.clientOperationId
+}
+
+function submission(clientMessageId: string) {
+  return host
+    .journalSnapshot(SESSION)
+    .submissions.find((entry) => entry.clientMessageId === clientMessageId)
+}
+
+/** The submission once delivery is done with it: handed over, or rejected unwritten. */
+async function settled(clientMessageId: string) {
+  await eventually(() => {
+    const current = submission(clientMessageId)
+    expect(current?.dispatchState !== 'pending' || current.handedOverAt !== undefined).toBe(true)
+  })
+  return submission(clientMessageId)
+}
+
+/** The failure rows a start the chat needed left, oldest first. */
+function errorStatuses(): string[] {
+  return host
+    .journalSnapshot(SESSION)
+    .items.flatMap((item) =>
+      item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.text] : []
+    )
 }
 
 /** The child timed out or exited: its lease is handed back and the host holds no session. */
@@ -130,15 +159,14 @@ describe('a send with no live owner', () => {
   it('restarts the owner once and delivers against it', async () => {
     await loseOwner()
 
-    const result = await host.send(CALLER, sendParams('after the child died'))
+    await accept(sendParams('after the child died'))
 
-    expect(result).toMatchObject({ ok: true, replayed: false })
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
     expect(acquire).toHaveBeenCalledOnce()
-    expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
   })
 
-  it('restarts the owner before the send is admitted, so the send is admitted once', async () => {
+  it('accepts the send before anything restarts, and the restart hands it over', async () => {
     await loseOwner()
     const order: string[] = []
     const spawnChild = acquire.getMockImplementation()!
@@ -152,21 +180,18 @@ describe('a send with no live owner', () => {
       return admit(args)
     })
 
-    await expect(host.send(CALLER, sendParams('ensure first'))).resolves.toMatchObject({
-      ok: true,
-      replayed: false
-    })
+    await accept(sendParams('accept first'))
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
 
-    expect(order).toEqual(['acquire', 'admit'])
+    expect(order).toEqual(['admit', 'acquire'])
   })
 
   it('leaves a live owner alone', async () => {
     acquire.mockClear()
 
-    await expect(host.send(CALLER, sendParams('owner is live'))).resolves.toMatchObject({
-      ok: true
-    })
+    await accept(sendParams('owner is live'))
 
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
     expect(acquire).not.toHaveBeenCalled()
   })
 
@@ -184,36 +209,35 @@ describe('a send with no live owner', () => {
       }
     }))
 
-    await host.send(CALLER, sendParams('into a cleared chat'))
+    await expect(host.send(CALLER, sendParams('into a cleared chat'))).resolves.toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_invalid' }
+    })
 
     expect(acquire).not.toHaveBeenCalled()
   })
 
   it('renews the idle window on journal activity in an unheld session', async () => {
     await loseOwner()
-    await expect(host.send(CALLER, sendParams('restart'))).resolves.toMatchObject({ ok: true })
+    await accept(sendParams('restart'))
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
     const arm = vi.spyOn(host['holds']['clock'], 'arm')
 
-    await expect(host.send(CALLER, sendParams('more activity'))).resolves.toMatchObject({
-      ok: true
-    })
+    await accept(sendParams('more activity'))
 
-    expect(arm).toHaveBeenCalledWith(SESSION)
+    await eventually(() => expect(arm).toHaveBeenCalledWith(SESSION))
   })
 
   it('releases the restarted child on the usual clock only when no surface holds it', async () => {
     await loseOwner()
-    await expect(host.send(CALLER, sendParams('nobody is watching'))).resolves.toMatchObject({
-      ok: true
-    })
-    expect(host['holds'].isReleasePending(SESSION)).toBe(true)
+    await accept(sendParams('nobody is watching'))
+    await eventually(() => expect(host['holds'].isReleasePending(SESSION)).toBe(true))
 
     await host.close(SESSION)
     // A reading surface that does not itself restart the agent.
     await host.hold(SESSION, 'desktop-chat:1', { resume: false })
-    await expect(host.send(CALLER, sendParams('the chat is open'))).resolves.toMatchObject({
-      ok: true
-    })
+    await accept(sendParams('the chat is open'))
+    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(2))
     expect(host['holds'].isReleasePending(SESSION)).toBe(false)
   })
 
@@ -231,15 +255,15 @@ describe('a send with no live owner', () => {
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     acquire.mockClear()
 
-    await expect(host.send(CALLER, sendParams('after an exit'))).resolves.toMatchObject({
-      ok: true
-    })
+    await accept(sendParams('after an exit'))
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
     expect(acquire).toHaveBeenCalledOnce()
   })
 
   it('restarts nothing for a resend the journal already answers', async () => {
     const params = sendParams('sent once')
-    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: false })
+    await accept(params)
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
     // The child died during startup: the lease is handed back, the fence moves, and the session
     // stays readable. The client resends against the new fence.
     await host.handleAdapterEvent({
@@ -268,12 +292,9 @@ describe('a send with no live owner', () => {
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
 
     // Retry rotates the id: a genuinely new send restarts the owner once.
-    await expect(host.send(CALLER, sendParams('sent once'))).resolves.toMatchObject({
-      ok: true,
-      replayed: false
-    })
+    await accept(sendParams('sent once'))
+    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(2))
     expect(acquire).toHaveBeenCalledOnce()
-    expect(dispatch).toHaveBeenCalledTimes(2)
   })
 
   it('restarts nothing for a send the ledger holds but the journal never saw', async () => {
@@ -320,7 +341,7 @@ describe('a send with no live owner', () => {
     expect(dispatch).not.toHaveBeenCalled()
   })
 
-  it('admits a send that arrives after the restart has already claimed the lease', async () => {
+  it('accepts a send that arrives while a restart holds the queue, and hands both over in order', async () => {
     await loseOwner()
     const lostFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     let claimed = () => {}
@@ -334,18 +355,22 @@ describe('a send with no live owner', () => {
       return spawnChild!(input)
     })
 
-    const first = host.send(CALLER, sendParams('first'))
+    const first = await accept(sendParams('first'))
     await claim
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBe(lostFence + 1)
+    // Written against the lost owner's fence, which admits it: a send is a conversation write.
     const late = sendParams('second')
     late.envelope.expectedRuntimeFence = lostFence
     const second = host.send(CALLER, late)
     release()
 
-    expect(await first).toMatchObject({ ok: true })
     expect(await second).toMatchObject({ ok: true })
+    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(2))
     expect(acquire).toHaveBeenCalledOnce()
-    expect(dispatch).toHaveBeenCalledTimes(2)
+    expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([
+      first,
+      late.envelope.clientOperationId
+    ])
   })
 
   it('shares one restart between concurrent sends', async () => {
@@ -358,8 +383,8 @@ describe('a send with no live owner', () => {
     ])
 
     expect(results.map((result) => result.ok)).toEqual([true, true, true])
+    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(3))
     expect(acquire).toHaveBeenCalledOnce()
-    expect(dispatch).toHaveBeenCalledTimes(3)
   })
 
   it('shares one restart between a hold and a send that arrive in the same gap', async () => {
@@ -372,21 +397,22 @@ describe('a send with no live owner', () => {
 
     expect(held).toMatchObject({ status: 'fulfilled' })
     expect(sent).toMatchObject({ status: 'fulfilled', value: { ok: true } })
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
     expect(acquire).toHaveBeenCalledOnce()
-    expect(dispatch).toHaveBeenCalledOnce()
     expect(host['holds'].isHeld(SESSION)).toBe(true)
     expect(host['holds'].isReleasePending(SESSION)).toBe(false)
   })
 
   it('replays into a closed session without spawning anything', async () => {
     const params = sendParams('sent once')
-    await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: false })
+    await accept(params)
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
     await loseOwner()
 
     await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
     await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
 
-    // The journal was made readable for the answer; the record's lease was left as it was.
+    // The conversation was opened for the answer; the record's lease was left as it was.
     expect(host.hasSession(SESSION)).toBe(true)
     expect(acquire).not.toHaveBeenCalled()
     expect(dispatch).toHaveBeenCalledOnce()
@@ -394,104 +420,83 @@ describe('a send with no live owner', () => {
     expect(host['holds'].isReleasePending(SESSION)).toBe(false)
   })
 
-  it("refuses with the restart's own cause, in the answer and in the chat", async () => {
+  it("rejects the accepted message with the restart's own cause, and says so in the chat once", async () => {
     await loseOwner()
     acquire.mockRejectedValue(new Error('Not signed in. Run codex login'))
     const params = sendParams('while signed out')
-
-    const result = await host.send(CALLER, params)
-
-    expect(result).toEqual({
-      ok: false,
-      refusal: {
-        code: 'agent_session_owner_restart_failed',
-        message: "Codex couldn't restart: Not signed in. Run codex login.",
-        // The failed attach proved its child gone: nothing runs for this session.
-        ownerVerdict: 'exited'
-      }
-    })
-    expect(dispatch).not.toHaveBeenCalled()
-    expect(hostErrors).not.toEqual([])
-    expect(agentSessionRefusalOperationState('agent_session_owner_restart_failed')).toBe(
-      'settled-rejected'
-    )
-    // Refused before admission: the ledger holds nothing a resend would replay.
-    expect(store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)).toBeNull()
-    // The same status row a failed start leaves, so the reason outlives the error strip.
-    expect(journalStatuses()).toEqual([
+    const cause =
       'The provider stopped before it finished starting: Not signed in. Run codex login.'
-    ])
+
+    const id = await accept(params)
+
+    expect(await settled(id)).toMatchObject({ dispatchState: 'rejected', reason: cause })
+    expect(dispatch).not.toHaveBeenCalled()
+    // Accepted, so the ledger answers a resend with the rejection rather than a second attempt.
+    expect(
+      store.getOperationRow(CALLER.callerKey, params.envelope.clientOperationId)
+    ).toMatchObject({ outcome: { status: 'succeeded' } })
+    // One row, in the error tone, so the reason outlives the error strip.
+    expect(errorStatuses()).toEqual([cause])
   })
 
-  it('restarts again for a Retry of the refused send, under its own id or a new one', async () => {
+  it('restarts again for a Retry under a new id, and replays a resend of the same id', async () => {
     await loseOwner()
     acquire.mockRejectedValue(new Error('Not signed in'))
     const params = sendParams('while signed out')
-    await expect(host.send(CALLER, params)).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_owner_restart_failed' }
-    })
+    await settled(await accept(params))
+    expect(acquire).toHaveBeenCalledTimes(1)
 
-    // A client that resends the same id gets another attempt, and the chat no second row.
+    // A client that resends the same id gets the recorded rejection, and the chat no second row.
     await expect(host.send(CALLER, params)).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_owner_restart_failed' }
+      ok: true,
+      replayed: true,
+      value: { submission: { dispatchState: 'rejected' } }
+    })
+    expect(acquire).toHaveBeenCalledTimes(1)
+    expect(errorStatuses()).toHaveLength(1)
+
+    // The outbox's Retry rotates the id: a fresh attempt, with its own row.
+    expect(await settled(await accept(sendParams('while signed out')))).toMatchObject({
+      dispatchState: 'rejected'
     })
     expect(acquire).toHaveBeenCalledTimes(2)
-    expect(journalStatuses()).toHaveLength(1)
-
-    // The outbox's Retry rotates the id: also a fresh attempt.
-    await expect(host.send(CALLER, sendParams('while signed out'))).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_owner_restart_failed' }
-    })
-    expect(acquire).toHaveBeenCalledTimes(3)
+    expect(errorStatuses()).toHaveLength(2)
     expect(dispatch).not.toHaveBeenCalled()
   })
 
   it('restarts and delivers a later send once the cause clears', async () => {
     await loseOwner()
     acquire.mockRejectedValueOnce(new Error('Not signed in'))
-    await expect(host.send(CALLER, sendParams('while signed out'))).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_owner_restart_failed' }
+    expect(await settled(await accept(sendParams('while signed out')))).toMatchObject({
+      dispatchState: 'rejected'
     })
 
     // The user signed in; nothing about the failed attempt is remembered.
-    await expect(host.send(CALLER, sendParams('signed in now'))).resolves.toMatchObject({
-      ok: true,
-      replayed: false
-    })
+    await accept(sendParams('signed in now'))
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
     expect(acquire).toHaveBeenCalledTimes(2)
-    expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
   })
 
   it('suggests a new chat only when this host has nothing to restart the chat from', async () => {
     await loseOwner()
     acquire.mockRejectedValue(new Error('Not signed in'))
-    const failed = await host.send(CALLER, sendParams('restart fails'))
-    expect(failed).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_owner_restart_failed' }
-    })
-    expect(failed.ok ? '' : failed.refusal.message).not.toMatch(/new chat/)
+    const failed = await settled(await accept(sendParams('restart fails')))
+    expect(failed).toMatchObject({ dispatchState: 'rejected' })
+    expect(failed?.reason).not.toMatch(/new chat/)
 
     // The adapter cannot run this record where it lives: no retry would bring it back.
     host.deps.adapter.supportsLocation = () => false
-    const unresumable = await host.send(CALLER, sendParams('cannot resume here'))
+    const unresumable = await settled(await accept(sendParams('cannot resume here')))
 
     expect(unresumable).toMatchObject({
-      ok: false,
-      refusal: {
-        code: 'agent_session_owner_restart_failed',
-        message:
-          "Codex couldn't restart: This execution host cannot resume the requested structured agent session. Start a new chat to continue."
-      }
+      dispatchState: 'rejected',
+      reason:
+        "Codex couldn't restart: This execution host cannot resume the requested structured agent session. Start a new chat to continue."
     })
   })
 
-  it('runs the send as the lease stands when the restart met a lease someone else is settling', async () => {
+  it('rejects the message with the cause when the restart met a lease someone else is settling', async () => {
     await loseOwner()
     vi.spyOn(host['holds'], 'ensureProviderChild').mockResolvedValueOnce({
       ok: false,
@@ -501,33 +506,30 @@ describe('a send with no live owner', () => {
       }
     })
 
-    const result = await host.send(CALLER, sendParams('owner being settled'))
+    const id = await accept(sendParams('owner being settled'))
 
-    // The ordinary lease check answers, retryably; nothing terminal and nothing in the chat.
-    expect(result).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_ownership_unknown' }
-    })
+    const cause = "Codex couldn't restart: Another runtime is still adjudicating this lease."
+    expect(await settled(id)).toMatchObject({ dispatchState: 'rejected', reason: cause })
     expect(acquire).not.toHaveBeenCalled()
-    expect(journalStatuses()).toEqual([])
+    expect(errorStatuses()).toEqual([cause])
   })
 
-  it('runs the send as the lease stands when the restart itself faults', async () => {
+  it('rejects the message, and reports the fault, when the restart itself faults', async () => {
     await loseOwner()
     vi.spyOn(host['holds'], 'ensureProviderChild').mockRejectedValueOnce(
       new Error('spawn-token mint failed')
     )
 
-    const result = await host.send(CALLER, sendParams('bookkeeping failed'))
+    const id = await accept(sendParams('bookkeeping failed'))
 
-    expect(result).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_ownership_unknown' }
+    expect(await settled(id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: "Codex couldn't restart: spawn-token mint failed."
     })
     expect(hostErrors).toContainEqual(
       expect.objectContaining({ message: 'spawn-token mint failed' })
     )
-    expect(journalStatuses()).toEqual([])
+    expect(errorStatuses()).toHaveLength(1)
   })
 
   it('keeps a second surface holder taken during an auto-restart, and starts nothing for it', async () => {
@@ -663,20 +665,22 @@ describe('a send with no live owner', () => {
     })
   })
 
-  it('leaves a lease it cannot adjudicate alone', async () => {
+  it('adjudicates a lease this host has not reconciled before its delivery resumes it', async () => {
     await loseOwner()
     await store.transitionHandoff(SESSION, (current) => ({
       ...current,
       lease: { ...current.lease, unreconciled: true }
     }))
 
-    const result = await host.send(CALLER, sendParams('owner unverifiable'))
+    // The send's start is the same serialized resume a hold runs, reconciliation first.
+    await accept(sendParams('owner unverified'))
 
-    expect(result).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_ownership_unknown' }
+    await eventually(() => expect(dispatch).toHaveBeenCalledOnce())
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      unreconciled: false,
+      claimStatus: 'live'
     })
-    expect(acquire).not.toHaveBeenCalled()
   })
 })
 
@@ -689,20 +693,17 @@ describe('a write fenced to an owner the pane has not seen replaced', () => {
     const params = sendParams('after the release')
     params.envelope.expectedRuntimeFence = seenFence
 
-    expect(await host.send(CALLER, params)).toMatchObject({
-      ok: true,
-      replayed: false,
-      value: { submission: { dispatchState: 'accepted' } }
-    })
+    const id = await accept(params)
+    expect(await settled(id)).toMatchObject({ dispatchState: 'accepted' })
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(seenFence + 1)
   })
 
-  // Clients resend a refused message when the fence they hold moves, and a refused restart leaves
-  // no ledger row, so a frame carrying each failed attempt's fence would resend it forever.
-  it("keeps the pane's fence on the row a failed restart publishes", async () => {
+  // Clients resend a refused message when the fence they hold moves. A failed start is a
+  // rejected message now, never a refused send, and the pane keeps the fence it subscribed under.
+  it("keeps the pane's fence on the rows a failed start publishes, and rejects the message", async () => {
     const seenFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     const frames: AgentSessionSubscribeEvent[] = []
     host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => frames.push(event) })
@@ -710,11 +711,12 @@ describe('a write fenced to an owner the pane has not seen replaced', () => {
     acquire.mockRejectedValueOnce(new Error('Not signed in'))
     const subscribed = frames.length
 
-    expect(await host.send(CALLER, sendParams('while signed out'))).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_owner_restart_failed' }
-    })
+    const id = await accept(sendParams('while signed out'))
 
+    expect(await settled(id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: expect.stringContaining('Not signed in')
+    })
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(seenFence + 1)
     const published = frames.slice(subscribed)
     expect(published.length).toBeGreaterThan(0)
@@ -736,7 +738,8 @@ describe('a write fenced to an owner the pane has not seen replaced', () => {
       return spawnChild(input)
     })
 
-    const first = host.send(CALLER, sendParams('starts the agent'))
+    const firstParams = sendParams('starts the agent')
+    const first = host.send(CALLER, firstParams)
     await claim
     const cancelFields = { turnId: 'turn-1' }
     const stop = host.cancel(CALLER, {
@@ -760,7 +763,14 @@ describe('a write fenced to an owner the pane has not seen replaced', () => {
     expect(await first).toMatchObject({ ok: true })
     expect(await stop).toMatchObject({ ok: true, replayed: false })
     expect(await second).toMatchObject({ ok: true, replayed: false })
+    // The Stop withdrew the message its start held; the one typed after it is delivered.
+    expect(await settled(late.envelope.clientOperationId)).toMatchObject({
+      dispatchState: 'accepted'
+    })
+    expect(submission(firstParams.envelope.clientOperationId)).toMatchObject({
+      dispatchState: 'rejected'
+    })
     expect(acquire).toHaveBeenCalledOnce()
-    expect(dispatch).toHaveBeenCalledTimes(2)
+    expect(dispatch).toHaveBeenCalledTimes(1)
   })
 })

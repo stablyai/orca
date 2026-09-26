@@ -107,7 +107,8 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     envelope,
     hostFingerprint,
     now: request.now(),
-    ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
+    ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {}),
+    ...(plan.conversationWrite ? { conversationWrite: true } : {})
   })
   if (!admitted) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
@@ -141,7 +142,8 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       envelope,
       hostFingerprint,
       ledger: { decision: 'admit', row: admission.row },
-      lease: record.lease
+      lease: record.lease,
+      ...(plan.conversationWrite ? { conversationWrite: true } : {})
     })
     if (rerun.decision === 'refused') {
       return refuseAgentSessionMutation(rerun.refusal)

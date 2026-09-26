@@ -10,7 +10,7 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
-import { attachParamsForRecord } from './structured-agent-session-read-restore'
+import { attachParamsForRecord } from './structured-agent-session-conversation-open'
 
 export function isResumableStructuredAgentSessionRecord(record: AgentSessionRecord): boolean {
   return (

@@ -15,6 +15,12 @@ import {
   restoreStructuredAgentSessionsOnRestart
 } from './structured-agent-session-restart-restore'
 
+const NO_OPEN_DEPS = {
+  store: { getRecord: () => null, listRecords: () => [] },
+  journalRoot: '/tmp/journals',
+  adapter: {}
+}
+
 describe('restart journal restoration', () => {
   beforeEach(() => restoreRead.mockReset())
 
@@ -22,17 +28,19 @@ describe('restart journal restoration', () => {
     const gate = Promise.withResolvers<void>()
     let active = 0
     let peak = 0
-    restoreRead.mockImplementation(async (_store, _root, sessionId: string) => {
+    restoreRead.mockImplementation(async (_deps, sessionId: string) => {
       active += 1
       peak = Math.max(peak, active)
       await gate.promise
       active -= 1
       return {
-        journal: {},
-        params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' },
-        fence: 1,
-        hasProviderChild: false,
-        sessionId
+        session: {
+          journal: {},
+          params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' },
+          child: null,
+          sessionId
+        },
+        reset: null
       }
     })
     const records = Array.from(
@@ -41,8 +49,7 @@ describe('restart journal restoration', () => {
     )
 
     const restoration = restoreStructuredAgentSessionsOnRestart({
-      store: {} as never,
-      journalRoot: '/tmp/journals',
+      openDeps: NO_OPEN_DEPS,
       records,
       reconcile: async () => null,
       resolveRecovery: async () => undefined,
@@ -82,17 +89,19 @@ describe('restart journal restoration', () => {
       runtimeKind: 'native'
     }
     restoreRead.mockResolvedValue({
-      journal: {},
-      params,
-      fence: 4,
-      hasProviderChild: false,
-      acquisitionGeneration: null
+      session: {
+        journal: {},
+        params,
+        fence: 4,
+        child: null,
+        acquisitionGeneration: null
+      },
+      reset: null
     })
 
     await restoreOneStructuredAgentSessionRead(
       {
-        store: {} as never,
-        journalRoot: '/tmp/journals',
+        openDeps: NO_OPEN_DEPS,
         reconcile: async () => null,
         resolveRecovery: async () => {
           calls.push('resolveRecovery')
@@ -118,17 +127,19 @@ describe('restart journal restoration', () => {
   it('does not rerun settlement retry when a second restore finds the session already open', async () => {
     const retrySettlement = vi.fn(async () => true)
     restoreRead.mockResolvedValue({
-      journal: {},
-      params: {},
-      fence: 4,
-      hasProviderChild: false,
-      acquisitionGeneration: null
+      session: {
+        journal: {},
+        params: {},
+        fence: 4,
+        child: null,
+        acquisitionGeneration: null
+      },
+      reset: null
     })
 
     await restoreOneStructuredAgentSessionRead(
       {
-        store: {} as never,
-        journalRoot: '/tmp/journals',
+        openDeps: NO_OPEN_DEPS,
         reconcile: async () => null,
         resolveRecovery: async () => undefined,
         serialize: async (_sessionId, task) => task(),

@@ -8,6 +8,7 @@
 // journal rather than skipping or compacting past it.
 
 import type { AgentType } from './agent-status-types'
+import type { AgentSessionQuestionAnswer } from './agent-session-question-answer'
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
@@ -128,8 +129,11 @@ export type AgentJournalResolutionState = (typeof AGENT_JOURNAL_RESOLUTION_STATE
  *  invoking the provider callback twice. */
 export type AgentJournalResolution = {
   state: AgentJournalResolutionState
-  /** Option id the winner picked; null while pending or cancelled. */
+  /** Option id the winner picked; null while pending or cancelled. For a question, the answer in the
+   *  packed form older clients read; `answers` is the same answer structured. */
   selectedOptionId: string | null
+  /** Question answers. Absent on approvals and on rows written before hosts recorded it. */
+  answers?: AgentSessionQuestionAnswer[]
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
   resolvedAt: number | null
@@ -360,6 +364,13 @@ export type AgentJournalSubmission = {
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live
    *  `unknown` is a send still outstanding; a recovered one outlived its writer. */
   recovered?: true
+  /** The host accepted this send to hand over later; absent on sends dispatched as they were
+   *  recorded (older hosts). With no `handedOverAt` yet, a pending one is still queued. */
+  handoverRecorded?: true
+  /** When the host handed it to the provider (its `dispatch{pending}` row). */
+  handedOverAt?: number
+  /** Host-only: the submission row's sequence, which tells which host process accepted it. */
+  acceptedSequence?: number
 }
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an

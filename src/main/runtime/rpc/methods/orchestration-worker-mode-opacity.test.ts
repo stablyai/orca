@@ -42,6 +42,7 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
   ...(await importOriginal<Record<string, unknown>>()),
   sendStructuredWorkerPreamble: async (args: { preamble: string }) => {
     structuredPreambles.push(args.preamble)
+    return 'accepted'
   },
   releaseStructuredWorkerSession: () => {},
   discardStructuredWorkerSession: async () => {}

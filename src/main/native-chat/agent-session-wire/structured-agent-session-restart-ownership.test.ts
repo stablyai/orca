@@ -178,9 +178,8 @@ it('refuses at send admission once the user has sent a newer message', async () 
     { outcome: 'refused', reason: 'agent_session_restart_work_superseded' }
   ])
   expect(dispatch).not.toHaveBeenCalled()
-  expect(host.journalSnapshot(SESSION).submissions).toMatchObject([
-    { dispatchState: 'rejected', reason: 'agent_session_restart_work_superseded' }
-  ])
+  // Refused where it would have been accepted, so the chat records no continuation at all.
+  expect(host.journalSnapshot(SESSION).submissions).toEqual([])
   host.release(SESSION, 'pane')
   expect(host.isHeld(SESSION)).toBe(false)
 })
@@ -249,6 +248,8 @@ it.each([false, true])(
         hostTestMessage('A newer task from another client'),
         { lifecycle: true }
       )
+      // Journaled before the continuation's acceptance asks whether its offer still stands.
+      await host.flushStreamedEvents(SESSION)
     })
 
     const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
@@ -257,8 +258,8 @@ it.each([false, true])(
       { outcome: 'refused', reason: 'agent_session_restart_work_superseded' }
     ])
     expect(dispatch).not.toHaveBeenCalled()
-    expect(host.journalSnapshot(SESSION).submissions).toHaveLength(2)
-    expect(host.journalSnapshot(SESSION).submissions[1]?.dispatchState).toBe('rejected')
+    // Refused before acceptance: only the interrupted send is in the journal.
+    expect(host.journalSnapshot(SESSION).submissions).toHaveLength(1)
     host.release(SESSION, 'pane')
     expect(host.isHeld(SESSION)).toBe(false)
     // The offer is spent, but the refusal is kept as a durable failure: a retry finds it, and the
@@ -560,7 +561,7 @@ it('fails closed on corrupt recovery storage while ordinary hold and send still 
   expect(
     await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
   ).toMatchObject({ ok: true })
-  expect(dispatch).toHaveBeenCalledTimes(1)
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
   // list; the action's read of offers and of failures; the post-action refresh of both.
   expect(warning).toHaveBeenCalledTimes(5)
   warning.mockRestore()

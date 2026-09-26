@@ -1,4 +1,5 @@
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -26,24 +27,60 @@ export type StructuredAgentSessionReveal = {
   readable: boolean
 }
 
+/** Which provider child: the adapter acquisition and the lease fence it writes at. */
+export type StructuredAgentSessionProviderChildIdentity = {
+  readonly generation: string | null
+  readonly fence: number
+}
+
+/** The provider process behind a conversation. Written only in
+ *  `structured-agent-session-provider-child`. */
+export type StructuredAgentSessionProviderChild = StructuredAgentSessionProviderChildIdentity & {
+  /** A publish-first acquire is `starting` until the adapter's `started` event; only then are its
+   *  reported options fact. */
+  phase: StructuredAgentSessionProviderChildPhase
+}
+
+/** What ending a child established about its provider root. A stop's comes only from
+ *  `stopAgentSessionProviderRoot`; an observed exit's root is gone by definition. */
+export type StructuredAgentSessionStopVerdict = { rootGone: boolean }
+
+export type StructuredAgentSessionChildEndCause =
+  | 'user-stop'
+  | 'host-stop'
+  | 'exit'
+  | 'attach-failed'
+  | 'evict'
+
+/** How the conversation's last child ended. In memory only: the delivery loop reads it to tell a
+ *  Stop from a failure. */
+export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChildIdentity &
+  StructuredAgentSessionStopVerdict & {
+    /** `user-stop` is a Stop the user asked for; `host-stop` is the host stopping the child for a
+     *  cause of its own, which fails the start the delivery loop was waiting on. */
+    cause: StructuredAgentSessionChildEndCause
+    /** Descriptive text only — the provider's diagnostic, or the host's cause. Decides nothing. */
+    reason: string | null
+    duringStartup: boolean
+    /** Where the conversation's journal stood when the child ended, to order the end against a
+     *  message's acceptance. */
+    endedAt: AgentJournalCursor
+  }
+
+/** The conversation: its journal, params and readers outlive any child that serves it. */
 export type StructuredAgentSessionHostSession = {
-  journal: AgentSessionJournal
+  /** Readonly: a new handle enters only through the session map's `set`, which binds its delivery. */
+  readonly journal: AgentSessionJournal
   params: AgentSessionAttachParams
-  fence: number
-  /** Whether THIS host generation is running the provider process behind the session. A journal
-   *  restored for reading has none — so it may not be evicted to free a child, nor have its lease
-   *  released as an observed exit. */
-  hasProviderChild: boolean
-  /** Whether the child behind `hasProviderChild` has proven its start. A publish-first acquire
-   *  is `starting` until the adapter's `started` event; only then are its reported options fact. */
-  providerChildPhase: StructuredAgentSessionProviderChildPhase
+  /** The child THIS host generation runs for the conversation. A conversation opened for reading
+   *  has none — so it may not be evicted to free a child, nor have its lease released as an
+   *  observed exit. */
+  child: StructuredAgentSessionProviderChild | null
   /** The wind-down this host still owes for a child it started: settling that generation's work
-   *  and handing the lease back. A separate fact from `hasProviderChild`, which goes false the
-   *  moment the adapter proves the exit — an eviction that aborts after that point must still be
-   *  able to finish the wind-down on the next close. */
-  owesProviderChildWindDown?: boolean
-  /** Exact adapter acquisition behind `hasProviderChild`; retained after exit to fence recovery. */
-  acquisitionGeneration: string | null
+   *  and handing the lease back. Outlives `child`, which ends the moment the adapter proves the
+   *  exit — an eviction that aborts after that point must still finish it on the next close. */
+  owesProviderChildWindDown?: StructuredAgentSessionProviderChildIdentity
+  lastEndedChild?: StructuredAgentSessionEndedChild
 }
 
 export type StructuredAgentSessionHostDeps = {

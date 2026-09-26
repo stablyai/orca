@@ -65,6 +65,7 @@ export function journalSubmissionRowBuilder(
     payloadFingerprint: string
     body: AgentJournalMessageItem
     fence: number
+    handoverRecorded?: true
   }
 ): RowBuilder<JournalSubmissionRow> {
   return (seq, ts) =>
@@ -267,6 +268,7 @@ export function buildJournalSubmissionRow(input: {
   seq: number
   fence: number
   ts: number
+  handoverRecorded?: true
 }): JournalSubmissionRow {
   return {
     kind: 'submission',
@@ -274,7 +276,8 @@ export function buildJournalSubmissionRow(input: {
     payloadFingerprint: input.payloadFingerprint,
     providerHandle: input.providerHandle,
     body: input.body,
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
+    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
+    ...(input.handoverRecorded ? { handoverRecorded: true } : {})
   }
 }
 

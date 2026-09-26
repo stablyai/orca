@@ -296,7 +296,7 @@ describe('holds', () => {
 
 describe('the teardown deadline', () => {
   it('leaves the child loaded instead of forcing it, and keeps the session indexed', async () => {
-    const forget = vi.fn()
+    const acknowledgeRelease = vi.fn()
     const releaseLease = vi.fn(async () => {})
 
     await expect(
@@ -309,7 +309,7 @@ describe('the teardown deadline', () => {
             close: vi.fn()
           } as never,
           adapter: { closeSession: () => new Promise<void>(() => {}) } as never,
-          forget,
+          acknowledgeRelease,
           discardSink: vi.fn(),
           releaseLease
         },
@@ -317,7 +317,7 @@ describe('the teardown deadline', () => {
       )
     ).rejects.toMatchObject({ step: 'stop-provider-child' })
 
-    expect(forget).not.toHaveBeenCalled()
+    expect(acknowledgeRelease).not.toHaveBeenCalled()
     expect(releaseLease).not.toHaveBeenCalled()
   })
 

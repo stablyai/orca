@@ -25,12 +25,18 @@ import {
 
 const CALLER = { callerKey: 'client-1' }
 
+/** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
+function eventually(assertion: () => void): Promise<void> {
+  return vi.waitFor(assertion, { timeout: 10_000 })
+}
+
 let root: string
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let probe: Mock<() => Promise<AgentSessionOwnerProbe>>
 let stopOwnerProcess: Mock<(pid: number, signal: 'SIGTERM' | 'SIGKILL') => void>
+let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 
 function openHost(): void {
   host = new StructuredAgentSessionHost({
@@ -39,7 +45,7 @@ function openHost(): void {
       acquire,
       closeSession: vi.fn(async () => true),
       releaseAcquisition: vi.fn(async () => true),
-      dispatch: vi.fn(async () => ({ state: 'admitted' as const })),
+      dispatch,
       cancelTurn: vi.fn(async () => ({ cancelled: false })),
       answerPrompt: vi.fn(async () => undefined),
       setOption: vi.fn(async () => undefined)
@@ -65,6 +71,24 @@ async function persistFromOlderBuild(lease: Partial<PersistedAgentSessionLease>)
   openHost()
 }
 
+/** A send is accepted at once; what became of it is the submission's state once the host's
+ *  delivery settles it — handed over, or rejected with the reason the chat shows. */
+async function delivered(text: string) {
+  const sent = await send(text)
+  expect(sent).toMatchObject({ ok: true })
+  const clientMessageId = sent.ok ? sent.value.clientMessageId : ''
+  const submission = () =>
+    host
+      .journalSnapshot(SESSION)
+      .submissions.find((candidate) => candidate.clientMessageId === clientMessageId)
+  await eventually(() =>
+    expect(
+      submission()?.dispatchState !== 'pending' || submission()?.handedOverAt !== undefined
+    ).toBe(true)
+  )
+  return submission()
+}
+
 async function send(text: string) {
   const body = hostTestMessage(text)
   return host.send(CALLER, {
@@ -87,6 +111,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   probe = vi.fn(async () => ({ outcome: 'pid-absent' as const }))
   stopOwnerProcess = vi.fn()
+  dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
   acquire = vi.fn(async ({ fence, spawnToken }) => ({
     process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW - 1_000, spawnToken },
     link: {
@@ -137,7 +162,8 @@ describe('a record an older build left mid terminal handoff', () => {
       handoffOperationId: null,
       settlementRetryRequired: undefined
     })
-    expect(await send('after the upgrade')).toMatchObject({ ok: true })
+    expect(await delivered('after the upgrade')).toMatchObject({ dispatchState: 'pending' })
+    expect(dispatch).toHaveBeenCalledOnce()
     expect(acquire).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
@@ -169,7 +195,8 @@ describe('a record an older build left mid terminal handoff', () => {
       handoffStage: null,
       handoffOperationId: null
     })
-    expect(await send('after the upgrade')).toMatchObject({ ok: true })
+    expect(await delivered('after the upgrade')).toMatchObject({ dispatchState: 'pending' })
+    expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'live' })
   })
 
@@ -188,7 +215,8 @@ describe('a record an older build left mid terminal handoff', () => {
       handoffStage: null,
       claimStatus: 'released'
     })
-    expect(await send('after the upgrade')).toMatchObject({ ok: true })
+    expect(await delivered('after the upgrade')).toMatchObject({ dispatchState: 'pending' })
+    expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
       claimStatus: 'live'
@@ -210,10 +238,16 @@ describe('a record an older build left mid terminal handoff', () => {
       claimStatus: 'conflicted',
       handoffStage: 'manual-recovery'
     })
-    expect(await send('while the terminal still runs')).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_conflict' }
+    // Accepted, then rejected by the start that cannot take the lease: the chat says why.
+    expect(await delivered('while the terminal still runs')).toMatchObject({
+      dispatchState: 'rejected'
     })
+    expect(
+      host
+        .journalSnapshot(SESSION)
+        .items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
+    ).toHaveLength(1)
+    expect(dispatch).not.toHaveBeenCalled()
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(acquire).not.toHaveBeenCalled()
 
@@ -222,7 +256,10 @@ describe('a record an older build left mid terminal handoff', () => {
     await host.hold(SESSION, 'surface-1')
 
     expect(stopOwnerProcess).not.toHaveBeenCalled()
-    expect(await send('after the terminal closed')).toMatchObject({ ok: true })
+    expect(await delivered('after the terminal closed')).toMatchObject({
+      dispatchState: 'pending'
+    })
+    expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       runtimeKind: 'native',
       claimStatus: 'live',

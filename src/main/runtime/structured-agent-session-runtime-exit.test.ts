@@ -128,7 +128,8 @@ describe('structured session runtime provider-exit wiring', () => {
     await expect(
       host.send({ callerKey: 'runtime-test' }, { envelope, body })
     ).resolves.toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
-    expect(turn).toBe(1)
+    // The send answers at acceptance; the delivery loop hands it to the reacquired child after.
+    await vi.waitFor(() => expect(turn).toBe(1))
   })
 
   it('does not reacquire when the production exit callback comes from a requested close', async () => {

@@ -233,6 +233,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   it.each(['agent_session_operation_conflict', 'agent_session_operation_expired'] as const)(
     'rotates a send operation after %s',
     async (code) => {
+      // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
       vi.mocked(globalThis.crypto.randomUUID)
         .mockReturnValueOnce('11111111-1111-4111-8111-111111111111')
         .mockReturnValueOnce('22222222-2222-4222-8222-222222222222')
@@ -247,7 +248,7 @@ describe('useStructuredAgentSessionOutbox', () => {
       )
 
       act(() => expect(result.current.send('hello')).toBe(true))
-      await waitFor(() => expect(result.current.outbox[0]?.state).toBe('queued'))
+      await waitFor(() => expect(result.current.outbox[0]?.state).toBe('rejected'))
       const firstId = (mocks.call.mock.calls[0]![2] as { envelope: { clientOperationId: string } })
         .envelope.clientOperationId
       const retryId = result.current.outbox[0]!.clientMessageId
@@ -550,7 +551,9 @@ describe('useStructuredAgentSessionOutbox', () => {
 
     expect(mocks.call).toHaveBeenCalledOnce()
     expect(result.current.outbox).toHaveLength(1)
-    expect(result.current.blockedClientMessageId).toBe(result.current.outbox[0]?.clientMessageId)
+    // Never sent, and never re-sent on its own: it waits for Retry and holds nothing up.
+    expect(result.current.outbox[0]?.state).toBe('rejected')
+    expect(result.current.blockedClientMessageId).toBeNull()
     // Settled, not pending: the refused id never ran, so a Retry is a new operation.
     const sentId: unknown = mocks.call.mock.calls[0]![2].envelope.clientOperationId
     const retryId = result.current.outbox[0]!.clientMessageId
@@ -591,6 +594,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   })
 
   it('retries an unknown head and advances a queued tail', async () => {
+    // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
@@ -653,6 +657,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   })
 
   it('rotates a history-rejected unknown head so the queued tail can advance', async () => {
+    // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
@@ -713,6 +718,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   })
 
   it('rotates the id after a refused write and delivers the message exactly once', async () => {
+    // oxlint-disable-next-line no-restricted-properties -- stubbing the global the generator reads, to pin ids in this test
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
@@ -769,8 +775,8 @@ describe('useStructuredAgentSessionOutbox', () => {
         "Couldn't reach the agent. Your message was not sent — Retry to send it again."
       )
     )
-    expect(result.current.outbox[0]?.state).toBe('queued')
-    expect(result.current.blockedClientMessageId).toBe(firstId)
+    expect(result.current.outbox[0]?.state).toBe('rejected')
+    expect(result.current.blockedClientMessageId).toBeNull()
 
     // Retry immediately, before the journal subscription can publish the rejected row.
     act(() => result.current.retry(firstId))

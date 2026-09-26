@@ -48,7 +48,7 @@ describe('deriving what was working at teardown', () => {
   it('marks a session this host was running a turn for', () => {
     const markers = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
       ]),
       getRecord: () => record(),
       backgroundTasks: () => undefined,
@@ -74,7 +74,7 @@ describe('deriving what was working at teardown', () => {
   it('carries the update trigger so the surface can say the restart was not the user choice', () => {
     const [recorded] = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
       ]),
       getRecord: () => record(),
       backgroundTasks: () => undefined,
@@ -89,7 +89,7 @@ describe('deriving what was working at teardown', () => {
   it('marks nothing for an idle session', () => {
     expect(
       markersAtTeardown({
-        sessions: new Map([[SESSION, { journal: journal([]), hasProviderChild: true }]]),
+        sessions: new Map([[SESSION, { journal: journal([]), child: { fence: 1 } }]]),
         getRecord: () => record(),
         backgroundTasks: () => undefined,
         trigger: 'quit',
@@ -103,7 +103,7 @@ describe('deriving what was working at teardown', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
         ]),
         getRecord: () => record(),
         backgroundTasks: () => undefined,
@@ -115,12 +115,12 @@ describe('deriving what was working at teardown', () => {
   })
 
   // The user's stated fear. A journal restored for READING carries whatever `running` row an older
-  // crash left behind, and it is the live `hasProviderChild` — not that row — that decides.
+  // crash left behind, and it is the live `child` — not that row — that decides.
   it('marks nothing for a stale running row this host was not executing', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: false }]
+          [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: null }]
         ]),
         getRecord: () => record(),
         backgroundTasks: () => undefined,
@@ -141,7 +141,7 @@ describe('deriving what was working at teardown', () => {
           SESSION,
           {
             journal: journal([turnItem('turn-1', 'running'), pendingApproval()]),
-            hasProviderChild: true
+            child: { fence: 1 }
           }
         ]
       ]),
@@ -165,7 +165,7 @@ describe('deriving what was working at teardown', () => {
   it('marks a settled lead whose subagent was still running, anchored on its last turn', () => {
     const markers = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
       ]),
       getRecord: () => record(),
       backgroundTasks: () => [
@@ -188,7 +188,7 @@ describe('deriving what was working at teardown', () => {
   it('records only the live rows of the roster, bounded', () => {
     const [recorded] = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
       ]),
       getRecord: () => record(),
       backgroundTasks: () => [
@@ -213,7 +213,7 @@ describe('deriving what was working at teardown', () => {
   it('marks a settled lead whose only live work is a monitor', () => {
     const markers = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
       ]),
       getRecord: () => record(),
       backgroundTasks: () => [{ id: 'task-m', kind: 'monitor', name: 'ci-watch' }],
@@ -230,7 +230,7 @@ describe('deriving what was working at teardown', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), hasProviderChild: true }]
+          [SESSION, { journal: journal([turnItem('turn-1', 'completed')]), child: { fence: 1 } }]
         ]),
         getRecord: () => record(),
         backgroundTasks: () => [
@@ -248,7 +248,7 @@ describe('deriving what was working at teardown', () => {
   it('records the identity root so an advancing Claude leaf cannot invalidate the marker', () => {
     const [recorded] = markersAtTeardown({
       sessions: new Map([
-        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
+        [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
       ]),
       getRecord: () => claudeRecord(null),
       backgroundTasks: () => undefined,
@@ -264,7 +264,7 @@ describe('deriving what was working at teardown', () => {
     expect(
       markersAtTeardown({
         sessions: new Map([
-          [SESSION, { journal: journal([turnItem('turn-1', 'running')]), hasProviderChild: true }]
+          [SESSION, { journal: journal([turnItem('turn-1', 'running')]), child: { fence: 1 } }]
         ]),
         getRecord: () => record({ chain: [] }),
         backgroundTasks: () => undefined,
@@ -285,7 +285,7 @@ describe('deriving what was working at teardown', () => {
           SESSION,
           {
             journal: journal([], false, [submission('msg-1', 'pending')]),
-            hasProviderChild: true
+            child: { fence: 1 }
           }
         ]
       ]),
@@ -310,7 +310,7 @@ describe('deriving what was working at teardown', () => {
             journal: journal([turnItem('turn-0', 'completed')], false, [
               submission('msg-1', 'pending')
             ]),
-            hasProviderChild: true
+            child: { fence: 1 }
           }
         ]
       ]),
@@ -324,6 +324,67 @@ describe('deriving what was working at teardown', () => {
     expect(recorded?.work).toEqual({ kind: 'submission', id: 'msg-1' })
   })
 
+  // Accepted while the agent was starting and never handed over: the chat shows working, but no
+  // agent had the message, and quit rejects it as never sent.
+  it('marks nothing for a session whose only work is a message still queued', () => {
+    const queued = { ...submission('msg-1', 'pending'), handoverRecorded: true as const }
+    expect(
+      markersAtTeardown({
+        sessions: new Map([
+          [
+            SESSION,
+            {
+              journal: journal([turnItem('turn-0', 'completed')], false, [queued]),
+              child: { fence: 1 }
+            }
+          ]
+        ]),
+        getRecord: () => claudeRecord(null),
+        backgroundTasks: () => undefined,
+        trigger: 'quit',
+        teardownId: TEARDOWN_CURRENT,
+        now: NOW
+      })
+    ).toEqual([])
+  })
+
+  it('marks a handed-over message over a newer queued one, and a turn a queued one waits behind', () => {
+    const handedOver = {
+      ...submission('msg-1', 'pending'),
+      handoverRecorded: true as const,
+      handedOverAt: NOW
+    }
+    const queued = { ...submission('msg-2', 'pending'), handoverRecorded: true as const }
+    const markers = markersAtTeardown({
+      sessions: new Map([
+        [
+          SESSION,
+          {
+            journal: journal([turnItem('turn-0', 'completed')], false, [handedOver, queued]),
+            child: { fence: 1 }
+          }
+        ],
+        [
+          'session-running',
+          {
+            journal: journal([turnItem('turn-1', 'running')], false, [queued]),
+            child: { fence: 1 }
+          }
+        ]
+      ]),
+      getRecord: () => claudeRecord(null),
+      backgroundTasks: () => undefined,
+      trigger: 'quit',
+      teardownId: TEARDOWN_CURRENT,
+      now: NOW
+    })
+
+    expect(markers.map((entry) => entry.work)).toEqual([
+      { kind: 'submission', id: 'msg-1' },
+      { kind: 'turn', id: 'turn-1' }
+    ])
+  })
+
   // Once a turn exists it is the better identity: it is what eviction rewrites, so it is what the
   // journal can be asked about at launch.
   it('prefers the running turn over the send that opened it', () => {
@@ -335,7 +396,7 @@ describe('deriving what was working at teardown', () => {
             journal: journal([turnItem('turn-1', 'running')], false, [
               submission('msg-1', 'accepted')
             ]),
-            hasProviderChild: true
+            child: { fence: 1 }
           }
         ]
       ]),

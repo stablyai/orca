@@ -1,12 +1,11 @@
 // A session that published and then lost its child before startup (not signed in, say) keeps a
 // released lease and a chat the user can still type into. The send is the user asking for the
-// child back: the host restarts it before admitting the write and delivers against the new owner,
-// instead of parking the message behind a lease nothing would ever re-acquire.
+// child back: the host accepts the message, and its delivery restarts the child and hands the
+// message to the new owner, instead of parking it behind a lease nothing would ever re-acquire.
 //
 // A child is published before it has proven its start, and it owns the send from that moment: the
-// message is admitted against it and the adapter holds it for the start. When the child exits
-// first, the exit settlement rejects the message and writes the cause into the chat, once, and
-// the next send is a fresh restart.
+// message is handed to it. When the child exits first, the exit settlement rejects the message and
+// writes the cause into the chat, once, and the next send is a fresh restart.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -28,6 +27,11 @@ import {
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
+
+/** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
+function eventually(assertion: () => void): Promise<void> {
+  return vi.waitFor(assertion, { timeout: 10_000 })
+}
 const EXIT_REASON = 'Claude Code is not signed in. Sign in with the Claude CLI'
 
 let root: string
@@ -53,7 +57,7 @@ function sendEnvelope(
   }
 }
 
-/** A send is admitted against the child it meets, proven or not; the adapter holds the rest. */
+/** A send is accepted at once and handed to the child delivery finds or starts. */
 async function send(
   text: string,
   fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
@@ -63,9 +67,11 @@ async function send(
   expect(sent, JSON.stringify(sent)).toMatchObject({
     ok: true,
     replayed: false,
-    value: { submission: { dispatchState: 'pending' } }
+    value: { submission: { dispatchState: 'pending', handoverRecorded: true } }
   })
-  return sent.ok ? sent.value.clientMessageId : ''
+  const clientMessageId = sent.ok ? sent.value.clientMessageId : ''
+  await eventually(() => expect(submission(clientMessageId)?.handedOverAt).toBeDefined())
+  return clientMessageId
 }
 
 /** The child of the current acquisition, as the adapter would identify it in a lifecycle event. */
@@ -166,8 +172,7 @@ describe('a send into a published session whose child ended before startup', () 
 
     await send('hello again', releasedFence)
 
-    // A send still fenced to the lost owner is admitted once against the restarted one, with no
-    // stale round trip.
+    // Accepted at the lost owner's fence and handed to the child delivery started, once.
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('live')
     expect(dispatch).toHaveBeenCalledOnce()
@@ -207,7 +212,7 @@ describe('a send into a published session whose child ended before startup', () 
     // One spawn per user action: nothing restarted it a second time.
     expect(acquire).toHaveBeenCalledTimes(2)
 
-    // Retry is a fresh action: it restarts once and is admitted against the new child.
+    // Retry is a fresh action: it restarts once and is handed to the new child.
     await send('signed in now')
     expect(acquire).toHaveBeenCalledTimes(3)
     expect(dispatch).toHaveBeenCalledTimes(2)
@@ -216,7 +221,7 @@ describe('a send into a published session whose child ended before startup', () 
 })
 
 describe('a send while the child of the first start is still proving itself', () => {
-  it('is admitted against the starting child, and nothing restarts it', async () => {
+  it('is handed to the starting child, and nothing restarts it', async () => {
     await send('hello')
 
     expect(dispatch).toHaveBeenCalledOnce()
