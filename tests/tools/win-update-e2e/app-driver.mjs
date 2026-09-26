@@ -238,7 +238,7 @@ export async function waitForTerminalReady(page, timeoutMs = 60_000, terminalTab
  *     workspace (which would mask a broken restore).
  */
 export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_000 } = {}) {
-  // Why: the agent-CLI feature-wall modal can already be up at first interaction
+  // Why: a feature-tip modal can already be up at first interaction
   // (it renders off an async capability check that races app launch). Use the
   // Escape-free dismissal so we never inject a keypress into a restored terminal.
   await dismissKnownOverlays(page)
@@ -296,14 +296,20 @@ async function createWorkspaceFromSeededRepo(page, timeoutMs) {
 }
 
 const OVERLAY_DISMISS_LABELS = ['Got it', 'Dismiss setup scripts', 'Dismiss tip', 'Dismiss update']
-const CLI_FEATURE_TIP_TITLE = 'Let agents drive Orca with the Orca CLI'
+const FEATURE_TIP_DIALOG_TITLES = [
+  'Let agents drive Orca with the Orca CLI',
+  'Search every agent session'
+]
 
 async function dismissKnownOverlays(page) {
   let acted = false
-  const cliFeatureTip = page.getByRole('dialog', { name: CLI_FEATURE_TIP_TITLE }).first()
-  if (await cliFeatureTip.isVisible().catch(() => false)) {
+  for (const name of FEATURE_TIP_DIALOG_TITLES) {
+    const featureTip = page.getByRole('dialog', { name }).first()
+    if (!(await featureTip.isVisible().catch(() => false))) {
+      continue
+    }
     // Why: a global "Close" role also matches the Windows/Linux title-bar button.
-    const dialogClose = cliFeatureTip.locator('[data-slot="dialog-close"]').first()
+    const dialogClose = featureTip.locator('[data-slot="dialog-close"]').first()
     if (await dialogClose.isVisible().catch(() => false)) {
       const clicked = await dialogClose
         .click({ timeout: 3_000 })
