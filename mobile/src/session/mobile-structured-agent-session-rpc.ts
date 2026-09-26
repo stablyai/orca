@@ -8,6 +8,15 @@ import type {
   AgentSessionWireRefusalCode
 } from '../../../src/shared/agent-session-wire'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
+import {
+  agentSessionRefusalNotice,
+  agentSessionRpcErrorFailure,
+  agentSessionWriteFailureNotice,
+  agentSessionWriteKindForMethod,
+  agentSessionWriteNoticeEnglish,
+  agentSessionWriteNoticeParts,
+  type AgentSessionWriteKind
+} from '../../../src/shared/agent-session-refusal-notice'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
@@ -45,13 +54,6 @@ class AgentSessionRpcResponseError extends Error {
     super(message)
   }
 }
-
-const PRE_HANDLER_RPC_REFUSALS = new Set([
-  'invalid_argument',
-  'method_not_found',
-  'method_not_supported',
-  'unauthorized'
-])
 
 export async function callAgentSession<TResult>(
   client: RpcClient,
@@ -115,6 +117,15 @@ export function timeoutForDeadline(deadline: number | undefined): number | null 
   return timeoutMs >= MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS ? timeoutMs : null
 }
 
+/** A refused phone send goes back into the composer; there is no Retry control. */
+function phoneWriteKind(
+  fingerprintMethod: string,
+  fields: Record<string, unknown>
+): AgentSessionWriteKind {
+  const write = agentSessionWriteKindForMethod(fingerprintMethod, fields)
+  return write === 'send' ? 'composer-send' : write
+}
+
 export async function requestStructuredAgentSessionMutation<TValue>(args: {
   client: RpcClient
   method: string
@@ -163,10 +174,25 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     }
     return result.ok
       ? { status: 'accepted', value: result.value }
-      : { status: 'refused', code: result.refusal.code, message: result.refusal.message }
+      : {
+          status: 'refused',
+          code: result.refusal.code,
+          message: agentSessionRefusalNotice(
+            result.refusal,
+            phoneWriteKind(fingerprintMethod, fields)
+          )
+        }
   } catch (error) {
-    if (error instanceof AgentSessionRpcResponseError && PRE_HANDLER_RPC_REFUSALS.has(error.code)) {
-      return { status: 'failed', message: error.message }
+    const answered =
+      error instanceof AgentSessionRpcResponseError ? agentSessionRpcErrorFailure(error.code) : null
+    if (answered && answered.kind !== 'unconfirmed') {
+      // The host turned the request away before running it; its text is written for a log.
+      return {
+        status: 'failed',
+        message: agentSessionWriteNoticeEnglish(
+          agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields))
+        )
+      }
     }
     if (
       isRpcDeliveryUnknown(error) ||
@@ -177,7 +203,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     }
     return {
       status: 'failed',
-      message: error instanceof Error ? error.message : 'Request not sent'
+      message: agentSessionWriteFailureNotice(phoneWriteKind(fingerprintMethod, fields))
     }
   }
 }

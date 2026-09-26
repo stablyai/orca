@@ -9,6 +9,7 @@ import {
   structuredAgentSessionPayloadFingerprint
 } from '../../../shared/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   StructuredAgentSessionLaunchCancelledError,
@@ -20,6 +21,11 @@ import {
   subscribeStructuredAgentLaunchStatus,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
+import {
+  agentSessionRefusalFailure,
+  agentSessionRpcErrorFailure,
+  type AgentSessionWriteFailure
+} from '../../../shared/agent-session-refusal-notice'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
@@ -31,7 +37,7 @@ export type StructuredLaunchSelection = {
 
 export type StructuredLaunchOptionOutcome =
   | { kind: 'accepted'; options: Readonly<Record<string, string>> }
-  | { kind: 'refused'; message: string }
+  | { kind: 'refused'; failure: AgentSessionWriteFailure }
   | { kind: 'superseded' }
 
 type OptionReply = (outcome: StructuredLaunchOptionOutcome) => void
@@ -100,9 +106,14 @@ async function setLaunchOption(
     })
     return result.ok
       ? { kind: 'accepted', options: result.value.options ?? { [key]: value } }
-      : { kind: 'refused', message: result.refusal.message }
+      : { kind: 'refused', failure: agentSessionRefusalFailure(result.refusal) }
   } catch (error) {
-    return { kind: 'refused', message: error instanceof Error ? error.message : String(error) }
+    return {
+      kind: 'refused',
+      failure: agentSessionRpcErrorFailure(
+        error instanceof RuntimeRpcCallError ? error.code : undefined
+      )
+    }
   }
 }
 

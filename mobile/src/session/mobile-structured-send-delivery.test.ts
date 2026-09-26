@@ -58,7 +58,7 @@ describe('mobileStructuredSendDelivery', () => {
     ).toEqual({
       outcome: 'rejected',
       operationIdSpent: true,
-      error: "Couldn't reach the agent. Your message was not sent — Retry to send it again."
+      error: "Orca couldn't reach the agent. Your message was not sent. Send it again."
     })
   })
 
@@ -94,13 +94,16 @@ describe('mobileStructuredSendDelivery', () => {
         message: 'Outcome unknown'
       })
     ).toEqual({ outcome: 'unknown', operationIdSpent: false, error: null })
-    expect(mobileStructuredSendDelivery({ status: 'failed', message: 'Request not sent' })).toEqual(
-      {
-        outcome: 'rejected',
-        operationIdSpent: true,
-        error: 'Message not sent'
-      }
-    )
+    expect(
+      mobileStructuredSendDelivery({
+        status: 'failed',
+        message: 'Your message was not sent. Send it again.'
+      })
+    ).toEqual({
+      outcome: 'rejected',
+      operationIdSpent: true,
+      error: 'Your message was not sent. Send it again.'
+    })
   })
 
   it('never releases an ambiguous id on a later RPC refusal or failure', () => {
@@ -115,8 +118,15 @@ describe('mobileStructuredSendDelivery', () => {
       )
     ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Operation expired' })
     expect(
-      mobileStructuredSendDelivery({ status: 'failed', message: 'Request not sent' }, true)
-    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Message not sent' })
+      mobileStructuredSendDelivery(
+        { status: 'failed', message: 'Your message was not sent. Send it again.' },
+        true
+      )
+    ).toEqual({
+      outcome: 'rejected',
+      operationIdSpent: false,
+      error: 'Your message was not sent. Send it again.'
+    })
   })
 
   it('fails closed when an invalid host response omits the required submission', () => {

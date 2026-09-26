@@ -11,7 +11,18 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
 }))
 
+import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
+import { agentSessionWriteNoticeEnglish } from '../../../../shared/agent-session-refusal-notice'
+import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
+import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+
+function shownFailure(entry: StructuredAgentSessionOutboxEntry | undefined): string | undefined {
+  return (
+    entry?.lastFailure &&
+    agentSessionWriteNoticeEnglish(structuredAgentSessionAttemptFailureParts(entry.lastFailure))
+  )
+}
 
 // What the host answers when the child it restarted for this send died before starting.
 const REASON =
@@ -45,7 +56,7 @@ describe('a send the host rejected because the agent never started', () => {
     localStorage.clear()
   })
 
-  it('names the cause under the composer and keeps the message for Retry', async () => {
+  it('names the cause on the message and keeps it for Retry', async () => {
     mocks.call.mockImplementationOnce(
       async (
         _target: unknown,
@@ -64,8 +75,76 @@ describe('a send the host rejected because the agent never started', () => {
 
     act(() => expect(result.current.send('hello')).toBe(true))
 
-    await waitFor(() => expect(result.current.error).toBe(REASON))
+    await waitFor(() => expect(shownFailure(result.current.outbox[0])).toBe(REASON))
     expect(result.current.outbox[0]?.state).toBe('queued')
     expect(result.current.blockedClientMessageId).toBe(result.current.outbox[0]?.clientMessageId)
+  })
+})
+
+// Stable across renders, as a mounted pane's target is.
+const LOCAL_TARGET = { kind: 'local' } as const
+const NO_SUBMISSIONS: AgentJournalSubmission[] = []
+
+function submission(
+  clientMessageId: string,
+  dispatchState: 'pending' | 'accepted'
+): AgentJournalSubmission {
+  return {
+    clientMessageId,
+    fence: 3,
+    payloadFingerprint: 'fingerprint',
+    dispatchState,
+    providerItemId: null,
+    reason: null,
+    submittedAt: 10,
+    resolvedAt: dispatchState === 'accepted' ? 11 : null
+  }
+}
+
+describe('a send refused while its agent restarted', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+  })
+
+  // The live order: the restart takes seconds, so the journal settles the resend before its reply.
+  it('leaves no error behind once a send refused before an agent restart is delivered', async () => {
+    mocks.call
+      .mockResolvedValueOnce({
+        ok: false,
+        refusal: {
+          code: 'agent_session_checkpoint_stale',
+          message: 'Expected runtime fence 1; the session is at 3.'
+        }
+      })
+      .mockReturnValueOnce(new Promise(() => {}))
+    const { result, rerender } = renderHook(
+      ({ fence, submissions }: { fence: number; submissions: AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence,
+          submissions
+        }),
+      { initialProps: { fence: 1, submissions: NO_SUBMISSIONS } }
+    )
+
+    act(() => expect(result.current.send('hello')).toBe(true))
+    await waitFor(() =>
+      expect(shownFailure(result.current.outbox[0])).toBe('Your message was not sent.')
+    )
+
+    // The pane learns the new owner and sends the same message again.
+    rerender({ fence: 3, submissions: [] })
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    expect(result.current.outbox[0]).toMatchObject({ state: 'dispatching' })
+    expect(shownFailure(result.current.outbox[0])).toBeUndefined()
+
+    const id = result.current.outbox[0]!.clientMessageId
+    rerender({ fence: 3, submissions: [submission(id, 'pending')] })
+    rerender({ fence: 3, submissions: [submission(id, 'accepted')] })
+    await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+    expect(result.current.error).toBeNull()
+    expect(result.current.blockedClientMessageId).toBeNull()
   })
 })

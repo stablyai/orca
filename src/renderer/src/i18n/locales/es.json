@@ -14919,6 +14919,24 @@
   },
   "components": {
     "native-chat": {
+      "writeNotice": {
+        "notDoneSend": "Su mensaje no se envió.",
+        "tryAgainComposerSend": "Vuelva a enviarlo.",
+        "notDoneStop": "El agente no se detuvo.",
+        "notDoneStopTask": "La tarea en segundo plano no se detuvo.",
+        "notDoneStopTasks": "Las tareas en segundo plano no se detuvieron.",
+        "notDoneAnswer": "Su respuesta no se envió.",
+        "notDoneOption": "La configuración no se cambió.",
+        "notDoneCommand": "El comando no se ejecutó.",
+        "notDoneGoal": "El objetivo no se cambió.",
+        "restartFailed": "El agente no pudo reiniciarse.",
+        "capacity": "Orca ha recibido demasiadas solicitudes en el último día.",
+        "outcomeUnknown": "Orca no pudo confirmar qué pasó. Revise el chat.",
+        "questionChanged": "Esta pregunta ya se respondió o ha cambiado.",
+        "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
+        "unsupported": "La versión de Orca que ejecuta este chat no lo admite. Actualice Orca y vuelva a intentarlo.",
+        "unreachable": "Orca no pudo comunicarse con el agente."
+      },
       "composer": {
         "imageUnsupported": "Este agente no admite pegar imágenes.",
         "send": "Enviar",

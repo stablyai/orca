@@ -17459,6 +17459,24 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "writeNotice": {
+        "notDoneSend": "Your message was not sent.",
+        "tryAgainComposerSend": "Send it again.",
+        "notDoneStop": "The agent wasn't stopped.",
+        "notDoneStopTask": "The background task wasn't stopped.",
+        "notDoneStopTasks": "The background tasks weren't stopped.",
+        "notDoneAnswer": "Your answer was not sent.",
+        "notDoneOption": "The setting wasn't changed.",
+        "notDoneCommand": "The command didn't run.",
+        "notDoneGoal": "The goal wasn't changed.",
+        "restartFailed": "The agent couldn't restart.",
+        "capacity": "Orca has received too many requests in the last day.",
+        "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
+        "questionChanged": "This question was already answered or has changed.",
+        "historyUnreadable": "Orca couldn't read this chat's saved history.",
+        "unsupported": "The Orca running this chat doesn't support this. Update Orca, then try again.",
+        "unreachable": "Orca couldn't reach the agent."
+      },
       "taskList": {
         "title": "Tasks",
         "completed": "Completed",

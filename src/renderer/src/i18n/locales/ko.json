@@ -17338,6 +17338,24 @@
       }
     },
     "native-chat": {
+      "writeNotice": {
+        "notDoneSend": "메시지가 전송되지 않았습니다.",
+        "tryAgainComposerSend": "다시 보내세요.",
+        "notDoneStop": "에이전트가 중지되지 않았습니다.",
+        "notDoneStopTask": "백그라운드 작업이 중지되지 않았습니다.",
+        "notDoneStopTasks": "백그라운드 작업이 중지되지 않았습니다.",
+        "notDoneAnswer": "답변이 전송되지 않았습니다.",
+        "notDoneOption": "설정이 변경되지 않았습니다.",
+        "notDoneCommand": "명령이 실행되지 않았습니다.",
+        "notDoneGoal": "목표가 변경되지 않았습니다.",
+        "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
+        "capacity": "Orca가 지난 하루 동안 너무 많은 요청을 받았습니다.",
+        "outcomeUnknown": "Orca가 무슨 일이 있었는지 확인하지 못했습니다. 채팅을 확인하세요.",
+        "questionChanged": "이 질문은 이미 답변되었거나 변경되었습니다.",
+        "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
+        "unsupported": "이 채팅을 실행 중인 Orca가 이 기능을 지원하지 않습니다. Orca를 업데이트한 후 다시 시도하세요.",
+        "unreachable": "Orca가 에이전트에 연결하지 못했습니다."
+      },
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
         "send": "보내기",

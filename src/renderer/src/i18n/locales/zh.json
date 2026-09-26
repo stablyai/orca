@@ -17303,6 +17303,24 @@
   },
   "components": {
     "native-chat": {
+      "writeNotice": {
+        "notDoneSend": "您的消息未发送。",
+        "tryAgainComposerSend": "请重新发送。",
+        "notDoneStop": "智能体未停止。",
+        "notDoneStopTask": "后台任务未停止。",
+        "notDoneStopTasks": "后台任务未停止。",
+        "notDoneAnswer": "您的回答未发送。",
+        "notDoneOption": "设置未更改。",
+        "notDoneCommand": "命令未运行。",
+        "notDoneGoal": "目标未更改。",
+        "restartFailed": "智能体无法重新启动。",
+        "capacity": "Orca 在过去一天内收到的请求过多。",
+        "outcomeUnknown": "Orca 无法确认发生了什么。请查看聊天。",
+        "questionChanged": "此问题已被回答或已更改。",
+        "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录。",
+        "unsupported": "运行此聊天的 Orca 不支持此操作。请更新 Orca 后重试。",
+        "unreachable": "Orca 无法连接到智能体。"
+      },
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",
         "send": "发送",

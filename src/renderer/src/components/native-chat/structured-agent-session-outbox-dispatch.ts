@@ -77,7 +77,11 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
     const staged = updateStructuredAgentSessionOutboxEntry(
       args.persisted,
       args.next.clientMessageId,
-      (entry) => ({ ...entry, state: 'dispatching' as const, lastAttemptAt: Date.now() })
+      ({ lastFailure: _sentAgain, ...entry }) => ({
+        ...entry,
+        state: 'dispatching' as const,
+        lastAttemptAt: Date.now()
+      })
     )
     if (!writeOutbox(args.sessionId, staged)) {
       args.inFlightIdRef.current = null

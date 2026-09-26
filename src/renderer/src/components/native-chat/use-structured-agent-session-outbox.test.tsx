@@ -323,7 +323,8 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
     const id = result.current.outbox[0]!.clientMessageId
     await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
-    expect(result.current.error).toBe('Message delivery is unconfirmed')
+    // The Retry row already says delivery is unconfirmed; nothing repeats it.
+    expect([result.current.error, result.current.outbox[0]?.lastFailure]).toEqual([null, undefined])
 
     rerender({
       submissions: [
@@ -530,7 +531,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     ).toBe(firstId)
   })
 
-  it('stops on a host that could not restart the agent and shows its message', async () => {
+  it('stops on a host that could not restart the agent and keeps its refusal on the message', async () => {
     const message = "Claude couldn't restart: Not logged in. Please run /login."
     mocks.call.mockResolvedValue({
       ok: false,
@@ -546,7 +547,13 @@ describe('useStructuredAgentSessionOutbox', () => {
     )
 
     act(() => expect(result.current.send('hello')).toBe(true))
-    await waitFor(() => expect(result.current.error).toBe(message))
+    await waitFor(() =>
+      expect(result.current.outbox[0]?.lastFailure).toEqual({
+        kind: 'refused',
+        code: 'agent_session_owner_restart_failed'
+      })
+    )
+    expect(result.current.error).toBeNull()
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
 
     expect(mocks.call).toHaveBeenCalledOnce()
@@ -765,14 +772,9 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     const firstId = mocks.call.mock.calls[0]![2].envelope.clientOperationId as string
 
-    // A refused write is answered, not doubted: the entry parks with human copy
-    // rather than under the "delivery is unconfirmed" banner. The durable reason
-    // stays `provider_write_failed: …`; it must not reach the screen.
-    await waitFor(() =>
-      expect(result.current.error).toBe(
-        "Couldn't reach the agent. Your message was not sent — Retry to send it again."
-      )
-    )
+    // A refused write is answered, not doubted: the entry parks with its rejection rather than
+    // under the "delivery is unconfirmed" banner. The disposition tests pin its words.
+    await waitFor(() => expect(result.current.outbox[0]?.lastFailure?.kind).toBe('rejected'))
     expect(result.current.outbox[0]?.state).toBe('queued')
     expect(result.current.blockedClientMessageId).toBe(firstId)
 
@@ -842,7 +844,9 @@ describe('useStructuredAgentSessionOutbox', () => {
     )
 
     act(() => expect(result.current.send('hello')).toBe(true))
-    await waitFor(() => expect(result.current.error).toBe('agent_session_checkpoint_stale'))
+    const refused = { kind: 'refused', code: 'agent_session_checkpoint_stale' }
+    await waitFor(() => expect(result.current.outbox[0]?.lastFailure).toEqual(refused))
+    expect(result.current.error).toBeNull()
 
     rerender({ sessionId: 'session-2' })
     expect(result.current.error).toBeNull()

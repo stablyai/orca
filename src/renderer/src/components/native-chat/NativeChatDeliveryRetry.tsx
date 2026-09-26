@@ -3,6 +3,8 @@ import {
   admitStructuredAgentSessionOutboxEntry,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
+import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
+import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
@@ -30,10 +32,14 @@ export function NativeChatDeliveryRetry({
               'auto.components.native.chat.NativeChatStructuredSession.1f772bb5d0',
               'Message delivery is unconfirmed.'
             )
-          : translate(
-              'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
-              'Message was not sent.'
-            )}
+          : retryable.lastFailure
+            ? agentSessionWriteNoticeText(
+                structuredAgentSessionAttemptFailureParts(retryable.lastFailure)
+              )
+            : translate(
+                'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
+                'Message was not sent.'
+              )}
       </span>
       <Button
         type="button"
