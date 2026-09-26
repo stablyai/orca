@@ -66,6 +66,7 @@ const {
   registerWorkspacePortHandlersMock,
   registerLocalhostWorktreeLabelHandlersMock,
   registerNativeChatHandlersMock,
+  registerCrossMachineRecoveryProviderHandlersMock,
   registerEmulatorFrameStreamHandlersMock,
   registerEmulatorVideoStreamHandlersMock
 } = vi.hoisted(() => ({
@@ -134,6 +135,7 @@ const {
   registerWorkspacePortHandlersMock: vi.fn(),
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
   registerNativeChatHandlersMock: vi.fn(),
+  registerCrossMachineRecoveryProviderHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
   registerEmulatorVideoStreamHandlersMock: vi.fn()
 }))
@@ -400,6 +402,10 @@ vi.mock('../native-chat', () => ({
   registerNativeChatHandlers: registerNativeChatHandlersMock
 }))
 
+vi.mock('../cross-machine-recovery-provider', () => ({
+  registerCrossMachineRecoveryProviderHandlers: registerCrossMachineRecoveryProviderHandlersMock
+}))
+
 import { registerCoreHandlers } from './register-core-handlers'
 
 describe('registerCoreHandlers', () => {
@@ -465,6 +471,7 @@ describe('registerCoreHandlers', () => {
     registerWorkspacePortHandlersMock.mockReset()
     registerLocalhostWorktreeLabelHandlersMock.mockReset()
     registerNativeChatHandlersMock.mockReset()
+    registerCrossMachineRecoveryProviderHandlersMock.mockReset()
     registerEmulatorFrameStreamHandlersMock.mockReset()
     registerEmulatorVideoStreamHandlersMock.mockReset()
   })
@@ -579,6 +586,7 @@ describe('registerCoreHandlers', () => {
     )
     expect(aiVaultOptions.getActiveRuntimeAiVaultHostInfos()).toEqual([])
     expect(registerNativeChatHandlersMock).toHaveBeenCalled()
+    expect(registerCrossMachineRecoveryProviderHandlersMock).toHaveBeenCalled()
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
     expect(registerShellHandlersMock).toHaveBeenCalledWith(store)
