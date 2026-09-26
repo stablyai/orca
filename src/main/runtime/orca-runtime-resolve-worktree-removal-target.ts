@@ -14,7 +14,7 @@ import type { ForceDeleteWorktreeBranchResult } from '../../shared/worktree/crea
 import type { RuntimeTerminalRename } from '../../shared/runtime-types'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
-import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { refuseDisabledAgentLaunch } from '../../shared/agent-disabled-launch-refusal'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
@@ -199,8 +199,8 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
     // shape must match the PTY route this scope already resolved.
     const isRemote = Boolean(workspace.connectionId)
-    if (opts.startupAgent && !isTuiAgentEnabled(opts.startupAgent, settings.disabledTuiAgents)) {
-      throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)
+    if (opts.startupAgent) {
+      refuseDisabledAgentLaunch(opts.startupAgent, settings.disabledTuiAgents)
     }
     const agent =
       opts.startupAgent ??

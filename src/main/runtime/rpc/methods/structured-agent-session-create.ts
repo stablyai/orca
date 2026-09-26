@@ -25,6 +25,7 @@ import {
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { StructuredAgentSessionResumeSource } from '../../../../shared/structured-agent-session-create'
+import { refuseDisabledAgentForRuntime } from '../../../agent-launch/agent-launch-enablement'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   resolveUncommittedStructuredCreate,
@@ -83,6 +84,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
    *  gets the id clients derive. Beside `options`, after the fingerprint, likewise. */
   tabId?: string
 }): Promise<PreparedStructuredAgentSessionCreate> {
+  // Every chat create passes here, so none starts an agent the user turned off.
+  refuseDisabledAgentForRuntime(args.runtime, args.agent)
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
   let host = args.resumeFrom ? await args.ensureHost() : null
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
