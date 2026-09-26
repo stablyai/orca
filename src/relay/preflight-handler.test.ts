@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 
 const { execFileAsyncMock, runProcessMock } = vi.hoisted(() => ({
@@ -395,5 +395,169 @@ describe('PreflightHandler', () => {
         value: originalPlatform
       })
     }
+  })
+})
+
+// Why: spy on the prototype method rather than the underlying exec calls —
+// install detection goes through platform-specific shell probing that's
+// already covered by resolveCommandPathForRelay's own tests.
+type PreflightHandlerWithCommandProbe = {
+  resolveCommandPath: (command: string) => Promise<string | null>
+}
+
+type ForgeCliDetectionResult = {
+  results: Record<string, { installed: boolean; authenticated: boolean }>
+}
+
+function requestFromNewHandler(): (
+  method: string,
+  params: Record<string, unknown>
+) => Promise<ForgeCliDetectionResult> {
+  const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+  const dispatcher = {
+    onRequest: vi.fn(
+      (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+        requestHandlers.set(method, handler)
+      }
+    )
+  }
+  new PreflightHandler(dispatcher as never)
+  return (method, params) => {
+    const handler = requestHandlers.get(method)
+    if (!handler) {
+      throw new Error(`no handler registered for ${method}`)
+    }
+    return handler(params) as Promise<ForgeCliDetectionResult>
+  }
+}
+
+describe('preflight.detectForgeClis', () => {
+  let resolveCommandPathSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    resolveCommandPathSpy = vi.spyOn(
+      PreflightHandler.prototype as unknown as PreflightHandlerWithCommandProbe,
+      'resolveCommandPath'
+    )
+  })
+
+  afterEach(() => {
+    resolveCommandPathSpy.mockRestore()
+  })
+
+  it('probes install and auth for allowlisted forge CLIs', async () => {
+    resolveCommandPathSpy.mockResolvedValue('/usr/local/bin/forge-cli')
+    execFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+    const request = requestFromNewHandler()
+
+    const result = await request('preflight.detectForgeClis', { clis: ['glab'] })
+
+    expect(result).toEqual({ results: { glab: { installed: true, authenticated: true } } })
+    // Why: detection resolves through a login shell, so the auth probe must
+    // spawn the resolved executable — a bare name would ENOENT whenever PATH
+    // came from a shell startup file, reporting installed-but-unauthenticated.
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      '/usr/local/bin/forge-cli',
+      ['auth', 'status'],
+      // Why: lookup + auth together must stay under the caller's 8s budget.
+      expect.objectContaining({ timeout: 5_000 })
+    )
+  })
+
+  it('treats non-zero auth exit with "Logged in" marker as authenticated', async () => {
+    resolveCommandPathSpy.mockResolvedValue('/usr/local/bin/forge-cli')
+    execFileAsyncMock.mockRejectedValueOnce({ stdout: '', stderr: 'Logged in as octocat\n' })
+    const request = requestFromNewHandler()
+
+    const result = await request('preflight.detectForgeClis', { clis: ['glab'] })
+
+    expect(result.results.glab.authenticated).toBe(true)
+  })
+
+  // Why: execFile preserves stdout/stderr when `timeout` kills the child, so a
+  // hung `auth status` that had already printed the marker must not read as a
+  // yes. A killed probe is "unknown".
+  it('rejects a timed-out auth probe even when partial output carries the marker', async () => {
+    resolveCommandPathSpy.mockResolvedValue('/usr/local/bin/forge-cli')
+    execFileAsyncMock.mockRejectedValueOnce({
+      stdout: 'Logged in as octocat\n',
+      stderr: '',
+      killed: true,
+      signal: 'SIGTERM'
+    })
+    const request = requestFromNewHandler()
+
+    const result = await request('preflight.detectForgeClis', { clis: ['glab'] })
+
+    expect(result.results.glab.authenticated).toBe(false)
+  })
+
+  it('treats gh "Active account: true" marker as authenticated', async () => {
+    resolveCommandPathSpy.mockResolvedValue('/usr/local/bin/forge-cli')
+    execFileAsyncMock.mockRejectedValueOnce({ stdout: '', stderr: 'Active account: true\n' })
+    const request = requestFromNewHandler()
+
+    const result = await request('preflight.detectForgeClis', { clis: ['gh'] })
+
+    expect(result.results.gh.authenticated).toBe(true)
+  })
+
+  it('does not treat glab "Active account: true" marker as authenticated (gh-only marker)', async () => {
+    resolveCommandPathSpy.mockResolvedValue('/usr/local/bin/forge-cli')
+    execFileAsyncMock.mockRejectedValueOnce({ stdout: '', stderr: 'Active account: true\n' })
+    const request = requestFromNewHandler()
+
+    const result = await request('preflight.detectForgeClis', { clis: ['glab'] })
+
+    expect(result.results.glab.authenticated).toBe(false)
+  })
+
+  it('reports an installed CLI that is not logged in as unauthenticated', async () => {
+    resolveCommandPathSpy.mockResolvedValue('/usr/local/bin/forge-cli')
+    execFileAsyncMock.mockRejectedValueOnce({ stdout: '', stderr: 'not logged in' })
+    const request = requestFromNewHandler()
+
+    const result = await request('preflight.detectForgeClis', { clis: ['gh'] })
+
+    expect(result).toEqual({ results: { gh: { installed: true, authenticated: false } } })
+  })
+
+  it('probes each allowlisted CLI once regardless of duplicate requests', async () => {
+    resolveCommandPathSpy.mockResolvedValue(null)
+    const request = requestFromNewHandler()
+
+    const result = await request('preflight.detectForgeClis', {
+      clis: [...Array<string>(500).fill('gh'), 'glab', 'glab']
+    })
+
+    expect(resolveCommandPathSpy).toHaveBeenCalledTimes(2)
+    expect(result).toEqual({
+      results: {
+        gh: { installed: false, authenticated: false },
+        glab: { installed: false, authenticated: false }
+      }
+    })
+  })
+
+  it('reports not-installed without running auth', async () => {
+    resolveCommandPathSpy.mockResolvedValue(null)
+    const request = requestFromNewHandler()
+
+    const result = await request('preflight.detectForgeClis', { clis: ['gh'] })
+
+    expect(result).toEqual({ results: { gh: { installed: false, authenticated: false } } })
+    expect(execFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('silently ignores non-allowlisted binaries', async () => {
+    const request = requestFromNewHandler()
+
+    const result = await request('preflight.detectForgeClis', {
+      clis: ['bash', '../glab', 'gh; rm -rf /']
+    })
+
+    expect(result).toEqual({ results: {} })
+    expect(resolveCommandPathSpy).not.toHaveBeenCalled()
+    expect(execFileAsyncMock).not.toHaveBeenCalled()
   })
 })

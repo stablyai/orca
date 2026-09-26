@@ -31,6 +31,14 @@ const mocks = vi.hoisted(() => ({
       giteaAccount: null
     },
     unavailable: false,
+    hostForge: undefined as
+      | {
+          connectionId: string
+          hostLabel: string
+          gh?: { installed: boolean; authenticated: boolean }
+          glab?: { installed: boolean; authenticated: boolean }
+        }
+      | undefined,
     refresh: vi.fn()
   }
 }))
@@ -75,6 +83,7 @@ describe('CLI source-control integration card account scope', () => {
     mocks.preflight.statuses.ghStatus = 'connected'
     mocks.preflight.statuses.glabStatus = 'connected'
     mocks.preflight.unavailable = false
+    mocks.preflight.hostForge = undefined
     mocks.preflight.refresh.mockClear()
   })
 
@@ -125,5 +134,42 @@ describe('CLI source-control integration card account scope', () => {
       'Credentials and account checks for this provider are owned by this remote server. Use Settings > Remote Orca Servers > Advanced to edit another default runtime scope.'
     )
     expect(rendered.textContent).toContain('glab auth login')
+  })
+
+  it('shows the host-side hint when the SSH host has an authed CLI the local card lacks', async () => {
+    mocks.store.current = {
+      settings: { activeRuntimeEnvironmentId: null },
+      openSettingsPage: vi.fn(),
+      openSettingsTarget: vi.fn()
+    }
+    mocks.preflight.statuses.glabStatus = 'not-installed'
+    mocks.preflight.hostForge = {
+      connectionId: 'ssh-1',
+      hostLabel: 'work-box',
+      glab: { installed: true, authenticated: true }
+    }
+
+    const rendered = await renderCard(<GitLabIntegrationCard />)
+
+    expect(rendered.textContent).toContain(
+      'glab is installed and authenticated on work-box — these features currently run locally.'
+    )
+  })
+
+  it('omits the host-side hint once the local CLI is connected', async () => {
+    mocks.store.current = {
+      settings: { activeRuntimeEnvironmentId: null },
+      openSettingsPage: vi.fn(),
+      openSettingsTarget: vi.fn()
+    }
+    mocks.preflight.hostForge = {
+      connectionId: 'ssh-1',
+      hostLabel: 'work-box',
+      gh: { installed: true, authenticated: true }
+    }
+
+    const rendered = await renderCard(<GitHubIntegrationCard />)
+
+    expect(rendered.textContent).not.toContain('is installed and authenticated on')
   })
 })

@@ -38,6 +38,12 @@ const SUPPORTED_POSIX_SHELLS = new Set(['sh', 'dash', 'bash', 'zsh', 'fish'])
 const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
 const AGENT_PATH_PREFIX = '__ORCA_AGENT_PATH__'
 
+const FORGE_CLI_ALLOWLIST = new Set(['gh', 'glab'])
+// Why: the caller abandons at 8s (REMOTE_FORGE_PROBE_TIMEOUT_MS in
+// src/main/ipc/preflight.ts), and a forge probe pays lookup then auth, so the
+// auth budget must stay well under it.
+const FORGE_AUTH_TIMEOUT_MS = 5_000
+
 export class PreflightHandler {
   private dispatcher: RelayDispatcher
 
@@ -51,6 +57,7 @@ export class PreflightHandler {
     this.dispatcher.onRequest('preflight.detectWindowsTerminalCapabilities', () =>
       this.detectWindowsTerminalCapabilities()
     )
+    this.dispatcher.onRequest('preflight.detectForgeClis', (p) => this.detectForgeClis(p))
   }
 
   // Why: the client sends the command list rather than importing TUI_AGENT_CONFIG
@@ -134,6 +141,38 @@ export class PreflightHandler {
     }
   }
 
+  private async resolveCommandPath(command: string): Promise<string | null> {
+    return resolveCommandPathForRelay(command)
+  }
+
+  // Why: ignore rather than error on non-allowlisted entries — a newer desktop
+  // probing a CLI this relay doesn't know must degrade, mirroring how missing
+  // methods degrade.
+  private async detectForgeClis(
+    params: Record<string, unknown>
+  ): Promise<{ results: Record<string, { installed: boolean; authenticated: boolean }> }> {
+    // Why: iterate the allowlist, not the request — duplicated names would
+    // otherwise spawn one probe per repetition.
+    const requested = new Set(Array.isArray(params.clis) ? (params.clis as string[]) : [])
+    const clis = [...FORGE_CLI_ALLOWLIST].filter((cli) => requested.has(cli))
+    const results: Record<string, { installed: boolean; authenticated: boolean }> = {}
+    await Promise.all(
+      clis.map(async (cli) => {
+        // Why: detection resolves through a login shell, so a PATH set in a
+        // shell startup file is visible here but not to a bare execFile. Reuse
+        // the resolved executable so "installed" and "authenticated" can never
+        // disagree about which binary they mean.
+        const executable = await this.resolveCommandPath(cli)
+        results[cli] = {
+          installed: executable !== null,
+          authenticated:
+            executable !== null && (await isForgeCliAuthenticated(cli as 'gh' | 'glab', executable))
+        }
+      })
+    )
+    return { results }
+  }
+
   // Why: SSH exec channels give the relay a minimal environment without shell
   // startup files sourced. Ask the user's configured shell so agent dirs added
   // by zsh/bash/fish startup hooks match the remote terminal experience.
@@ -165,6 +204,39 @@ async function probeCommandVersion(executablePath: string): Promise<string | nul
     return output.length > 0 ? output : null
   } catch {
     return null
+  }
+}
+
+// Why: glab writes auth status to stderr in some versions and can exit
+// non-zero while still logged in, so check output markers on failure too.
+// Markers mirror the main-process per-CLI checks (isGhAuthenticated /
+// isGlabAuthenticated in src/main/ipc/preflight.ts).
+async function isForgeCliAuthenticated(cli: 'gh' | 'glab', executable: string): Promise<boolean> {
+  try {
+    await execFileAsync(executable, ['auth', 'status'], {
+      encoding: 'utf-8',
+      env: buildRelayCommandEnv(),
+      timeout: FORGE_AUTH_TIMEOUT_MS,
+      windowsHide: true
+    })
+    return true
+  } catch (error) {
+    // Why: killed or timed-out probes keep partial output, so a hung `auth status`
+    // that already printed a marker must read as unknown, never a yes.
+    const failure = error as {
+      stdout?: string
+      stderr?: string
+      killed?: boolean
+      signal?: string
+      code?: string
+    }
+    if (failure.killed === true || failure.signal != null || failure.code === 'ETIMEDOUT') {
+      return false
+    }
+    const output = `${failure.stdout ?? ''}\n${failure.stderr ?? ''}`
+    return cli === 'gh'
+      ? output.includes('Logged in') || output.includes('Active account: true')
+      : output.includes('Logged in')
   }
 }
 

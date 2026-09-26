@@ -34,14 +34,16 @@ function buildPreflightArgs(
   const wslDistro = context?.wslDistro
   const wslDefault = context?.wslDefault === true
   const projectRuntime = context?.projectRuntime
-  if (!force && !wslDistro && !wslDefault && !projectRuntime) {
+  const sshHost = context?.sshHost
+  if (!force && !wslDistro && !wslDefault && !projectRuntime && !sshHost) {
     return undefined
   }
   return {
     ...(force ? { force: true } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),
     ...(wslDistro ? { wslDistro } : {}),
-    ...(wslDefault ? { wslDefault: true } : {})
+    ...(wslDefault ? { wslDefault: true } : {}),
+    ...(sshHost ? { sshHost } : {})
   }
 }
 
