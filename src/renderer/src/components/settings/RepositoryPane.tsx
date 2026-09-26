@@ -1,4 +1,5 @@
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
+import type { RepoAgentAccounts } from '../../../../shared/claude/project-claude-account-preference'
 import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, RepoHookSettings } from '../../../../shared/orca-yaml-hook-types'
 import type { Project, ProjectUpdateArgs } from '../../../../shared/project-types'
@@ -37,11 +38,12 @@ export { matchesRepositoryIdentitySearch } from './repository-identity-search'
 
 type RepositoryPaneRepoUpdate = Omit<
   Partial<Repo>,
-  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount'
+  'sourceControlAi' | 'externalWorktreeVisibility' | 'ghAccount' | 'agentAccounts'
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
   ghAccount?: GhAccountBinding | null
+  agentAccounts?: RepoAgentAccounts | null
 }
 
 const EMPTY_WSL_DISTROS: string[] = []

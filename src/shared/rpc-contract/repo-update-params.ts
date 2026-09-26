@@ -3,6 +3,7 @@ import { normalizeRepoSourceControlAiOverrides } from '../source-control-ai'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
 import { sanitizeRepoIcon } from '../repo-icon'
 import { normalizeGhAccountBinding } from '../github/account-binding'
+import { normalizeRepoAgentAccounts } from '../claude/project-claude-account-preference'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -69,6 +70,18 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
           }
           // Why: malformed bindings must omit the key (IPC deletes); never clear via undefined.
           return normalizeGhAccountBinding(value) ?? undefined
+        }),
+      agentAccounts: z
+        .unknown()
+        .optional()
+        .transform((value) => {
+          if (value === undefined) {
+            return undefined
+          }
+          if (value === null) {
+            return null
+          }
+          return normalizeRepoAgentAccounts(value) ?? undefined
         }),
       forkSyncMode: z.enum(['ask', 'safe-auto', 'off']).optional(),
       externalWorktreeVisibility: z.enum(['hide', 'show']).nullable().optional(),
