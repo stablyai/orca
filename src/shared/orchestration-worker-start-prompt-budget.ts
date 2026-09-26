@@ -8,12 +8,20 @@ import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES
 } from './terminal-input'
+import { TUI_AGENT_CONFIG } from './tui-agent-config'
 
+// Why: the host holds worker-start for the agent's retry Enter before turn observation begins.
+const AGENT_PROMPT_SUBMIT_RETRY_MAX_MS = Math.max(
+  0,
+  ...Object.values(TUI_AGENT_CONFIG).map((config) => config.submitRetryDelayMs ?? 0)
+)
 const WORKER_START_PROMPT_INGEST_BUDGET_MS =
-  ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS - AGENT_PROMPT_EFFECT_TIMEOUT_MS
+  ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS -
+  AGENT_PROMPT_EFFECT_TIMEOUT_MS -
+  AGENT_PROMPT_SUBMIT_RETRY_MAX_MS
 const WORKER_START_PREAMBLE_RESERVED_BYTES = TERMINAL_INPUT_CHUNK_MAX_BYTES * 4
 
-/** Keeps worst-case Windows ingest plus effect settlement inside worker-start's fixed RPC grace. */
+/** Keeps worst-case Windows ingest, the retry Enter and effect settlement inside worker-start's fixed RPC grace. */
 export const ORCHESTRATION_WORKER_START_PROMPT_MAX_BYTES = Math.min(
   TERMINAL_INPUT_MAX_BYTES,
   getMaxTerminalPasteBytesForIngestMs('win32', WORKER_START_PROMPT_INGEST_BUDGET_MS)

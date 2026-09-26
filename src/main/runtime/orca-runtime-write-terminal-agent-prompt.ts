@@ -15,6 +15,7 @@ import {
   resolveAgentPromptSubmitDelayForAgent
 } from '../../shared/agent-prompt-injection'
 import type { AgentPromptWaitTextCache } from './agent-prompt-submission-verification'
+import { writeAgentPromptSubmitRetry } from './agent-prompt-submit-retry'
 import {
   isTerminalSendSettlementAgent,
   resolveAgentPromptEffectTimeoutMs,
@@ -108,16 +109,8 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       }
     }
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
-    if (!options.acceptQueued || !options.requestId) {
-      await verifyAgentPromptSubmission({
-        baseline,
-        readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
-        timeoutMs: effectTimeoutMs,
-        signal: options.signal
-      })
-      return { submits: 1 }
-    }
-    const binding = this.getTerminalPromptRequestBinding(handle)
+    const queued = Boolean(options.acceptQueued && options.requestId)
+    const binding = queued ? this.getTerminalPromptRequestBinding(handle) : null
     const foregroundAgent = this.ptysById.get(ptyId)?.foregroundAgent
     const launchAgent = this.ptysById.get(ptyId)?.launchAgent
     const settlementAgent = isTerminalSendSettlementAgent(foregroundAgent)
@@ -125,37 +118,72 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       : isTerminalSendSettlementAgent(launchAgent)
         ? launchAgent
         : null
-    const inputAccepted: RuntimeTerminalPromptDelivery = {
-      requestId: options.requestId,
-      stages: ['input_accepted'],
-      provider: settlementAgent ?? 'unsupported',
-      observation: settlementAgent ? 'supported' : 'unsupported',
-      processIncarnation: binding.processIncarnation,
-      generation,
-      baselineWorkingSequence: baseline.workingSequence,
-      baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
-      baselinePermissionSequence: baseline.permissionSequence
+    const inputAccepted: RuntimeTerminalPromptDelivery | undefined = binding
+      ? {
+          requestId: options.requestId,
+          stages: ['input_accepted'],
+          provider: settlementAgent ?? 'unsupported',
+          observation: settlementAgent ? 'supported' : 'unsupported',
+          processIncarnation: binding.processIncarnation,
+          generation,
+          baselineWorkingSequence: baseline.workingSequence,
+          baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
+          baselinePermissionSequence: baseline.permissionSequence
+        }
+      : undefined
+    if (inputAccepted) {
+      const checkpoint: RuntimeTerminalSend = {
+        handle,
+        accepted: true,
+        bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
+        prompt: inputAccepted
+      }
+      // Checkpoint before the retry wait so an abort in that window keeps the accepted receipt.
+      options.onInputAccepted?.(checkpoint)
+      if (settlementAgent) {
+        this.registerAgentPromptRequest(
+          ptyId,
+          generation,
+          options.requestId,
+          baseline.workingSequence,
+          baseline.explicitWorkingStartedAt
+        )
+      }
     }
-    const checkpoint: RuntimeTerminalSend = {
-      handle,
-      accepted: true,
-      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
-      prompt: inputAccepted
+    const retried =
+      !submitWithPaste &&
+      (await writeAgentPromptSubmitRetry({
+        agent: foregroundAgent ?? launchAgent,
+        signal: options.signal,
+        assertWritable: async () => {
+          assertAgentPromptRequestActive(options.signal)
+          this.assertAgentPromptGeneration(ptyId, generation)
+          await options.beforeWrite?.(ptyId)
+          assertAgentPromptRequestActive(options.signal)
+          this.assertAgentPromptGeneration(ptyId, generation)
+          this.assertAgentPromptPermissionSafe(
+            permissionBaseline,
+            this.getAgentPromptActivity(handle, ptyId)
+          )
+        },
+        write: (data) => this.ptyController?.write(ptyId, data) === true
+      }))
+    const submits = retried ? 2 : 1
+    if (!inputAccepted) {
+      await verifyAgentPromptSubmission({
+        baseline,
+        readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+        timeoutMs: effectTimeoutMs,
+        signal: options.signal
+      })
+      return { submits }
     }
-    options.onInputAccepted?.(checkpoint)
     // Providers without a lifecycle verifier still get an honest accepted
     // receipt; they must not fail a Dispatch merely because Orca cannot prove
     // submission through hooks.
     if (!settlementAgent) {
-      return { submits: 1, prompt: inputAccepted }
+      return { submits, prompt: inputAccepted }
     }
-    this.registerAgentPromptRequest(
-      ptyId,
-      generation,
-      options.requestId,
-      baseline.workingSequence,
-      baseline.explicitWorkingStartedAt
-    )
     try {
       await verifyAgentPromptSubmission({
         baseline,
@@ -175,7 +203,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       })
       this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
       return {
-        submits: 1,
+        submits,
         prompt: {
           ...inputAccepted,
           stages: ['input_accepted', 'turn_started']
@@ -183,12 +211,17 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       }
     } catch (error) {
       if (error instanceof Error && error.message === 'agent_prompt_stalled') {
-        return { submits: 1, prompt: inputAccepted }
+        return { submits, prompt: inputAccepted }
+      }
+      // The input was accepted; a reset during the retry wait is the observation stage's to judge.
+      if (error instanceof Error && error.message === 'terminal_handle_stale') {
+        this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
+        return { submits, prompt: inputAccepted }
       }
       if (error instanceof Error && error.message === 'agent_prompt_blocked') {
         this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
         return {
-          submits: 1,
+          submits,
           prompt: { ...inputAccepted, observation: 'permission' }
         }
       }
