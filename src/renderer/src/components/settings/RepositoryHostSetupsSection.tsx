@@ -9,6 +9,7 @@ import { buildExecutionHostRegistry } from '../../../../shared/execution-host-re
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { useAppStore } from '../../store'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
 import { cn } from '../../lib/utils'
@@ -304,6 +305,17 @@ export function RepositoryHostSetupsSection({
                   }
                 )
               : (hostOptionById.get(setup.hostId)?.label ?? getExecutionHostLabel(setup.hostId))
+          // Why: a WSL-UNC setup path is where this project's worktrees live, so
+          // the row names the storage distro instead of reading as plain Windows.
+          const setupStorageDistro = parseWslUncPath(setup.path)?.distro ?? null
+          const setupHostLabelWithDistro =
+            setupStorageDistro && executionHost?.kind === 'local'
+              ? translate(
+                  'auto.components.settings.RepositoryPane.wslStorageHostLabel',
+                  '{{value0}} · WSL ({{distro}})',
+                  { value0: setupHostLabel, distro: setupStorageDistro }
+                )
+              : setupHostLabel
           const isCurrentSetup = setup.id === selectedProjectHostSetup?.id
           const canOpenSetup = setup.repoId.trim().length > 0
           const canRemoveSetup = !canOpenSetup && deletingSetupId !== setup.id
@@ -318,7 +330,7 @@ export function RepositoryHostSetupsSection({
             >
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate text-sm font-medium">{setupHostLabel}</span>
+                  <span className="truncate text-sm font-medium">{setupHostLabelWithDistro}</span>
                   <SettingsBadge tone={setupReady ? 'accent' : 'muted'}>
                     {setupStateLabel}
                   </SettingsBadge>

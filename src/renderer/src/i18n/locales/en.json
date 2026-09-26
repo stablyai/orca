@@ -8147,7 +8147,8 @@
           "show": "Show",
           "hide": "Hide",
           "externalWorktreesGlobal": "Global default: {{value0}}",
-          "useGlobal": "Use global"
+          "useGlobal": "Use global",
+          "wslStorageHostLabel": "{{value0}} · WSL ({{distro}})"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
