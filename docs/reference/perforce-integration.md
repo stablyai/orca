@@ -10,16 +10,18 @@ Orca can drive a Perforce (Helix Core) client workspace from the Source Control 
   "Git repositories only" message.
 - Everything runs the `p4` command-line client on the machine that owns the folder. Install `p4` on `PATH`, or
   point `ORCA_P4_PATH` at the binary. Credentials come from your normal `P4PORT`/`P4USER`/`P4CONFIG`/ticket setup.
-- SSH-hosted folders are not supported yet; detection is local-only.
+- **SSH-hosted folders work the same way.** The desktop app sends `perforce.*` requests over the existing relay
+  connection and the relay runs `p4` on the remote host, so `p4` (and its login ticket) only has to exist there.
+  A relay that predates this feature answers method-not-found; the app tells the user to reconnect the SSH target.
 
 ## Concepts mapped to the panel
 
-| Panel section        | Perforce meaning                                                                        |
-| -------------------- | --------------------------------------------------------------------------------------- |
-| Default changelist   | Files opened in the default changelist; described and submitted from the box at the top |
-| Changelist N         | Numbered pending changelists, each with Shelve and Submit                               |
-| Modified, not opened | Files changed on disk but not checked out (`p4 reconcile -n`)                           |
-| New files            | Files on disk that are not in the depot                                                 |
+| Panel section        | Perforce meaning                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Default changelist   | Files opened in the default changelist; described and submitted from the box at the top                                |
+| Changelist N         | Numbered pending changelists: edit description (pencil), Shelve, Unshelve, Delete shelf, Submit, and Delete when empty |
+| Modified, not opened | Files changed on disk but not checked out (`p4 reconcile -n`)                                                          |
+| New files            | Files on disk that are not in the depot                                                                                |
 
 Row actions: click to diff against `#have`; **Open** runs `p4 reconcile` (add/edit/delete as the disk dictates);
 **Close** runs `p4 revert -k` (keeps local content); **Discard** reverts opened files, force-syncs modified ones,
@@ -29,7 +31,10 @@ Saving a read-only workspace file from Orca's editor first runs `p4 edit` on it.
 
 ## Code map
 
-- `src/main/perforce/` — `p4` runner, tagged-output parser, detection, status/diff, mutations.
-- `src/main/ipc/perforce.ts` + `src/preload/api/perforce-*.ts` — `perforce:*` IPC.
+- `src/shared/perforce/` — everything that runs `p4`: runner, tagged-output parser, detection, status/diff,
+  mutations, changelists, and `PerforceBackend` (the full operation set). Shared so the relay can use it.
+- `src/relay/perforce-handler.ts` — exposes `PerforceBackend` as `perforce.*` relay RPC (validates every argument).
+- `src/main/perforce/` — picks the backend (local vs SSH relay) and routes diffs and read-only checkout.
+- `src/main/ipc/perforce.ts` + `src/preload/api/perforce-*.ts` — `perforce:*` IPC; `connectionId` selects SSH.
 - `src/renderer/src/components/right-sidebar/perforce/` — panel and detection hook.
 - `git:diff` routes to `p4 print` for Perforce folders so the standard diff tabs work.

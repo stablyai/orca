@@ -1,6 +1,6 @@
 import { access, constants } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
-import { runProcess } from '../../shared/child-process/run-process'
+import { runProcess } from '../child-process/run-process'
 
 const P4_TIMEOUT_MS = 60_000
 const P4_MAX_OUTPUT_BYTES = 64 * 1024 * 1024

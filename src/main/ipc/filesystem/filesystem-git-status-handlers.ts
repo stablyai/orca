@@ -4,7 +4,6 @@ import type {
   GitStagingArea,
   GitStatusResult
 } from '../../../shared/git-status-types'
-import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
 import type { GitStatusUpstreamRefWatchRequest } from '../git-status-upstream-ref-watch-request'
 import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
@@ -13,11 +12,9 @@ import {
   getSubmoduleStatus,
   abortMerge,
   abortRebase,
-  detectConflictOperation,
-  getDiff
+  detectConflictOperation
 } from '../../git/status'
 import { getHistory } from '../../git/history'
-import { getPerforceFolderDiff } from '../../perforce/perforce-diff-routing'
 import { checkIgnoredPaths } from '../../git/check-ignored-paths'
 import {
   appendFolderToGitignore,
@@ -270,48 +267,6 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         worktreePath
       )
       await abortRebase(worktreePath, { ...gitOptions, admissionTier: 'interactive' })
-    }
-  )
-
-  ipcMain.handle(
-    'git:diff',
-    async (
-      _event,
-      args: {
-        worktreePath: string
-        filePath: string
-        staged: boolean
-        compareAgainstHead?: boolean
-        connectionId?: string
-      }
-    ): Promise<GitDiffResult> => {
-      if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-        }
-        return provider.getDiff(
-          args.worktreePath,
-          args.filePath,
-          args.staged,
-          args.compareAgainstHead
-        )
-      }
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      const p4Diff = await getPerforceFolderDiff(store, args.worktreePath, worktreePath, filePath)
-      if (p4Diff) {
-        return p4Diff
-      }
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
-      return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead, {
-        ...gitOptions,
-        admissionTier: 'interactive'
-      })
     }
   )
 }

@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react'
-import type { PerforceEntry, PerforceFileAction } from '../../../../../shared/perforce-types'
+import type {
+  PerforceEntry,
+  PerforceFileAction
+} from '../../../../../shared/perforce/perforce-types'
 
 const ACTION_LABELS: Partial<Record<PerforceFileAction, string>> = {
   add: 'A',

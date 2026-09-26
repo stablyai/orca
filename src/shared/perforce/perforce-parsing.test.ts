@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { escapeP4FileArg } from './p4-command'
-import { buildChangeSpec } from './perforce-mutations'
+import { buildChangeSpec } from './perforce-changelists'
 import { parseOpenedEntries, parseReconcilePreview } from './perforce-status'
 
 describe('parseOpenedEntries', () => {

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { PerforceDetectResult, PerforceWorkspaceInfo } from '../../shared/perforce-types'
+import type { PerforceDetectResult, PerforceWorkspaceInfo } from './perforce-types'
 import { P4NotFoundError, runP4 } from './p4-command'
 import { parseTaggedOutput, type P4Record } from './p4-tagged-output'
 

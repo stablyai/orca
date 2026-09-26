@@ -3,11 +3,14 @@ import { toast } from 'sonner'
 import type {
   PerforceOperationResult,
   PerforceStatusResult
-} from '../../../../../shared/perforce-types'
+} from '../../../../../shared/perforce/perforce-types'
 
 const REFRESH_INTERVAL_MS = 15_000
 
-export function usePerforceStatus(worktreePath: string) {
+export type PerforceTarget = { worktreePath: string; connectionId?: string }
+
+export function usePerforceStatus(target: PerforceTarget) {
+  const { worktreePath, connectionId } = target
   const [status, setStatus] = useState<PerforceStatusResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -16,7 +19,7 @@ export function usePerforceStatus(worktreePath: string) {
   const refresh = useCallback(async (): Promise<void> => {
     const id = ++requestId.current
     try {
-      const next = await window.api.perforce.status({ worktreePath })
+      const next = await window.api.perforce.status({ worktreePath, connectionId })
       if (id === requestId.current) {
         setStatus(next)
         setError(null)
@@ -26,7 +29,7 @@ export function usePerforceStatus(worktreePath: string) {
         setError(caught instanceof Error ? caught.message : String(caught))
       }
     }
-  }, [worktreePath])
+  }, [worktreePath, connectionId])
 
   useEffect(() => {
     void refresh()

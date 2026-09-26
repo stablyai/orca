@@ -25,10 +25,16 @@ export type PerforceEntry = {
   fileType?: string
 }
 
+export type PerforceShelvedFile = {
+  depotPath: string
+  action: PerforceFileAction
+}
+
 export type PerforceChangelist = {
   id: number
   description: string
-  shelved: boolean
+  /** Files stored in the changelist's shelf; empty when nothing is shelved. */
+  shelvedFiles: PerforceShelvedFile[]
 }
 
 export type PerforceWorkspaceInfo = {

@@ -6,168 +6,102 @@ import type {
   PerforceHistoryEntry,
   PerforceOperationResult,
   PerforceStatusResult
-} from '../../shared/perforce-types'
+} from '../../shared/perforce/perforce-types'
 import {
-  closeFilesKeepingContent,
-  createChangelistWithFiles,
-  deleteEmptyChangelist,
-  discardFiles,
-  moveFilesToChangelist,
-  reconcileFiles,
-  shelveChangelist,
-  submitChangelist,
-  submitDefaultChangelist,
-  syncLatest
-} from '../perforce/perforce-mutations'
-import { detectPerforceWorkspace } from '../perforce/perforce-detection'
-import { getPerforceHistory, getPerforceStatus } from '../perforce/perforce-status'
+  requireChangelistId,
+  requireChangelistTarget,
+  requireDescription,
+  requireDiscardEntries,
+  requireRelativePaths
+} from '../../shared/perforce/perforce-arguments'
+import type { PerforceBackend } from '../../shared/perforce/perforce-backend'
+import { resolvePerforceBackend } from '../perforce/perforce-ssh-backend'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
-import { validateGitRelativeFilePath } from './filesystem-path-containment'
 
-type WorktreeArgs = { worktreePath: string }
+type WorktreeArgs = { worktreePath: string; connectionId?: string }
 type FilesArgs = WorktreeArgs & { filePaths: string[] }
+type ChangelistArgs = WorktreeArgs & { changelist: number }
+type Result = PerforceOperationResult
 
-async function resolveWorkspace(store: Store, args: WorktreeArgs): Promise<string> {
-  return resolveRegisteredWorktreePath(args.worktreePath, store)
-}
-
-function validateFiles(cwd: string, filePaths: string[]): string[] {
-  if (!Array.isArray(filePaths) || filePaths.length === 0) {
-    throw new Error('At least one file is required')
-  }
-  return filePaths.map((filePath) => validateGitRelativeFilePath(cwd, filePath))
-}
-
-function requireChangelistId(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
-    throw new Error('A pending changelist number is required')
-  }
-  return value
+/** Resolves where the workspace lives and hands its operations to the matching backend. */
+async function withWorkspace<T>(
+  store: Store,
+  args: WorktreeArgs,
+  run: (backend: PerforceBackend, cwd: string) => Promise<T>
+): Promise<T> {
+  // Why: SSH paths belong to the remote host; only local paths are checked against registered roots.
+  const cwd = args.connectionId
+    ? args.worktreePath
+    : await resolveRegisteredWorktreePath(args.worktreePath, store)
+  return run(resolvePerforceBackend(args.connectionId), cwd)
 }
 
 export function registerPerforceHandlers(store: Store): void {
-  ipcMain.handle(
-    'perforce:detect',
-    async (_event, args: WorktreeArgs): Promise<PerforceDetectResult> =>
-      detectPerforceWorkspace(await resolveWorkspace(store, args))
-  )
+  const handle = <A extends WorktreeArgs, T>(
+    channel: string,
+    run: (backend: PerforceBackend, cwd: string, args: A) => Promise<T>
+  ): void => {
+    ipcMain.handle(`perforce:${channel}`, (_event, args: A) =>
+      withWorkspace(store, args, (backend, cwd) => run(backend, cwd, args))
+    )
+  }
 
-  ipcMain.handle(
-    'perforce:status',
-    async (_event, args: WorktreeArgs): Promise<PerforceStatusResult> =>
-      getPerforceStatus(await resolveWorkspace(store, args))
+  handle<WorktreeArgs, PerforceDetectResult>('detect', (b, cwd) => b.detect(cwd))
+  handle<WorktreeArgs, PerforceStatusResult>('status', (b, cwd) => b.status(cwd))
+  handle<WorktreeArgs & { limit?: number }, PerforceHistoryEntry[]>('history', (b, cwd, a) =>
+    b.history(cwd, Math.min(a.limit ?? 30, 200))
   )
-
-  ipcMain.handle(
-    'perforce:history',
-    async (_event, args: WorktreeArgs & { limit?: number }): Promise<PerforceHistoryEntry[]> =>
-      getPerforceHistory(await resolveWorkspace(store, args), Math.min(args.limit ?? 30, 200))
+  handle<FilesArgs, Result>('open', (b, cwd, a) => b.open(cwd, requireRelativePaths(a.filePaths)))
+  handle<FilesArgs, Result>('close', (b, cwd, a) => b.close(cwd, requireRelativePaths(a.filePaths)))
+  handle<WorktreeArgs & { entries: Pick<PerforceEntry, 'path' | 'group' | 'action'>[] }, Result>(
+    'discard',
+    (b, cwd, a) => b.discard(cwd, requireDiscardEntries(a.entries))
   )
-
-  ipcMain.handle(
-    'perforce:open',
-    async (_event, args: FilesArgs): Promise<PerforceOperationResult> => {
-      const cwd = await resolveWorkspace(store, args)
-      return reconcileFiles(cwd, validateFiles(cwd, args.filePaths))
-    }
-  )
-
-  ipcMain.handle(
-    'perforce:close',
-    async (_event, args: FilesArgs): Promise<PerforceOperationResult> => {
-      const cwd = await resolveWorkspace(store, args)
-      return closeFilesKeepingContent(cwd, validateFiles(cwd, args.filePaths))
-    }
-  )
-
-  ipcMain.handle(
-    'perforce:discard',
-    async (
-      _event,
-      args: WorktreeArgs & { entries: Pick<PerforceEntry, 'path' | 'group' | 'action'>[] }
-    ): Promise<PerforceOperationResult> => {
-      const cwd = await resolveWorkspace(store, args)
-      const paths = validateFiles(
+  handle<WorktreeArgs & { changelist: 'default' | number; message?: string }, Result>(
+    'submit',
+    (b, cwd, a) => {
+      const target = requireChangelistTarget(a.changelist)
+      return b.submit(
         cwd,
-        args.entries.map((entry) => entry.path)
+        target,
+        target === 'default' ? requireDescription(a.message, 'Submit description') : undefined
       )
-      return discardFiles(
+    }
+  )
+  handle<WorktreeArgs, Result>('sync', (b, cwd) => b.sync(cwd))
+  handle<ChangelistArgs, Result>('shelve', (b, cwd, a) =>
+    b.shelve(cwd, requireChangelistId(a.changelist))
+  )
+  handle<ChangelistArgs, Result>('unshelve', (b, cwd, a) =>
+    b.unshelve(cwd, requireChangelistId(a.changelist))
+  )
+  handle<ChangelistArgs, Result>('deleteShelf', (b, cwd, a) =>
+    b.deleteShelf(cwd, requireChangelistId(a.changelist))
+  )
+  handle<FilesArgs & { description: string }, Result & { changelist?: number }>(
+    'createChangelist',
+    (b, cwd, a) =>
+      b.createChangelist(
         cwd,
-        args.entries.map((entry, index) => ({
-          path: paths[index] ?? entry.path,
-          group: entry.group,
-          action: entry.action
-        }))
+        requireDescription(a.description, 'Changelist description'),
+        a.filePaths.length > 0 ? requireRelativePaths(a.filePaths) : []
       )
-    }
   )
-
-  ipcMain.handle(
-    'perforce:submit',
-    async (
-      _event,
-      args: WorktreeArgs & { changelist: 'default' | number; message?: string }
-    ): Promise<PerforceOperationResult> => {
-      const cwd = await resolveWorkspace(store, args)
-      if (args.changelist === 'default') {
-        if (typeof args.message !== 'string' || args.message.trim().length === 0) {
-          throw new Error('Submit description is required')
-        }
-        return submitDefaultChangelist(cwd, args.message.trim())
-      }
-      return submitChangelist(cwd, requireChangelistId(args.changelist))
-    }
+  handle<ChangelistArgs & { description: string }, Result>('editDescription', (b, cwd, a) =>
+    b.editDescription(
+      cwd,
+      requireChangelistId(a.changelist),
+      requireDescription(a.description, 'Changelist description')
+    )
   )
-
-  ipcMain.handle(
-    'perforce:sync',
-    async (_event, args: WorktreeArgs): Promise<PerforceOperationResult> =>
-      syncLatest(await resolveWorkspace(store, args))
+  handle<FilesArgs & { changelist: 'default' | number }, Result>('moveToChangelist', (b, cwd, a) =>
+    b.moveToChangelist(
+      cwd,
+      requireRelativePaths(a.filePaths),
+      requireChangelistTarget(a.changelist)
+    )
   )
-
-  ipcMain.handle(
-    'perforce:shelve',
-    async (_event, args: WorktreeArgs & { changelist: number }): Promise<PerforceOperationResult> =>
-      shelveChangelist(await resolveWorkspace(store, args), requireChangelistId(args.changelist))
-  )
-
-  ipcMain.handle(
-    'perforce:createChangelist',
-    async (
-      _event,
-      args: FilesArgs & { description: string }
-    ): Promise<PerforceOperationResult & { changelist?: number }> => {
-      const cwd = await resolveWorkspace(store, args)
-      if (typeof args.description !== 'string' || args.description.trim().length === 0) {
-        throw new Error('Changelist description is required')
-      }
-      return createChangelistWithFiles(
-        cwd,
-        args.description,
-        args.filePaths.length > 0 ? validateFiles(cwd, args.filePaths) : []
-      )
-    }
-  )
-
-  ipcMain.handle(
-    'perforce:moveToChangelist',
-    async (
-      _event,
-      args: FilesArgs & { changelist: 'default' | number }
-    ): Promise<PerforceOperationResult> => {
-      const cwd = await resolveWorkspace(store, args)
-      const target =
-        args.changelist === 'default' ? 'default' : requireChangelistId(args.changelist)
-      return moveFilesToChangelist(cwd, validateFiles(cwd, args.filePaths), target)
-    }
-  )
-
-  ipcMain.handle(
-    'perforce:deleteChangelist',
-    async (_event, args: WorktreeArgs & { changelist: number }): Promise<PerforceOperationResult> =>
-      deleteEmptyChangelist(
-        await resolveWorkspace(store, args),
-        requireChangelistId(args.changelist)
-      )
+  handle<ChangelistArgs, Result>('deleteChangelist', (b, cwd, a) =>
+    b.deleteChangelist(cwd, requireChangelistId(a.changelist))
   )
 }

@@ -1,14 +1,15 @@
 import { readFile, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve } from 'node:path'
-import type { GitDiffResult } from '../../shared/git-diff-compare-types'
+import type { GitDiffResult } from '../git-diff-compare-types'
 import type {
   PerforceChangelist,
   PerforceEntry,
   PerforceFileAction,
   PerforceHistoryEntry,
+  PerforceShelvedFile,
   PerforceStatusResult,
   PerforceWorkspaceInfo
-} from '../../shared/perforce-types'
+} from './perforce-types'
 import { escapeP4FileArg, runP4, runP4OrThrow } from './p4-command'
 import { parseTaggedOutput } from './p4-tagged-output'
 import { detectPerforceWorkspace, toPosix } from './perforce-detection'
@@ -80,6 +81,23 @@ export function parseReconcilePreview(cwd: string, stdout: string): PerforceEntr
   return entries
 }
 
+export function parseShelvedFiles(stdout: string): Map<number, PerforceShelvedFile[]> {
+  const shelved = new Map<number, PerforceShelvedFile[]>()
+  for (const record of parseTaggedOutput(stdout)) {
+    const files: PerforceShelvedFile[] = []
+    for (let index = 0; record[`depotFile${index}`] !== undefined; index += 1) {
+      files.push({
+        depotPath: record[`depotFile${index}`] ?? '',
+        action: toAction(record[`action${index}`])
+      })
+    }
+    if (record.change && files.length > 0) {
+      shelved.set(Number(record.change), files)
+    }
+  }
+  return shelved
+}
+
 async function readChangelists(
   cwd: string,
   info: PerforceWorkspaceInfo
@@ -91,10 +109,23 @@ async function readChangelists(
   if (result.code !== 0) {
     return []
   }
-  return parseTaggedOutput(result.stdout).map((record) => ({
+  const changelists = parseTaggedOutput(result.stdout).map((record): PerforceChangelist => ({
     id: Number(record.change),
     description: (record.desc ?? '').trim(),
-    shelved: false
+    shelvedFiles: []
+  }))
+  if (changelists.length === 0) {
+    return changelists
+  }
+  // Why: `describe -S` reports a per-change error for changelists without a shelf, so only stdout is parsed.
+  const described = await runP4(
+    ['-ztag', 'describe', '-S', '-s', ...changelists.map((changelist) => String(changelist.id))],
+    { cwd }
+  )
+  const shelved = parseShelvedFiles(described.stdout)
+  return changelists.map((changelist) => ({
+    ...changelist,
+    shelvedFiles: shelved.get(changelist.id) ?? []
   }))
 }
 

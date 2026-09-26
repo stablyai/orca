@@ -5,7 +5,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
-import type { PerforceEntry } from '../../../../../shared/perforce-types'
+import type { PerforceEntry } from '../../../../../shared/perforce/perforce-types'
+import { PerforceChangelistHeader } from './perforce-changelist-section'
 import { PerforceFileRow } from './perforce-file-row'
 import { usePerforceStatus } from './use-perforce-status'
 
@@ -31,12 +32,15 @@ function SectionHeader({
 
 export function PerforcePanel({
   worktreeId,
-  worktreePath
+  worktreePath,
+  connectionId
 }: {
   worktreeId: string
   worktreePath: string
+  connectionId?: string
 }) {
-  const { status, error, busy, refresh, run } = usePerforceStatus(worktreePath)
+  const target = { worktreePath, connectionId }
+  const { status, error, busy, refresh, run } = usePerforceStatus(target)
   const openDiff = useAppStore((s) => s.openDiff)
   const [message, setMessage] = useState('')
   const api = window.api.perforce
@@ -46,12 +50,10 @@ export function PerforcePanel({
     const opened = entries.filter((entry) => entry.group === 'opened')
     return {
       defaultList: opened.filter((entry) => entry.changelist === 'default'),
-      numbered: (status?.changelists ?? [])
-        .map((changelist) => ({
-          changelist,
-          files: opened.filter((entry) => entry.changelist === changelist.id)
-        }))
-        .filter((item) => item.files.length > 0),
+      numbered: (status?.changelists ?? []).map((changelist) => ({
+        changelist,
+        files: opened.filter((entry) => entry.changelist === changelist.id)
+      })),
       modified: entries.filter((entry) => entry.group === 'modified'),
       fresh: entries.filter((entry) => entry.group === 'new')
     }
@@ -70,8 +72,8 @@ export function PerforcePanel({
 
   const submitDefault = async (): Promise<void> => {
     const ok = await run(
-      () => api.submit({ worktreePath, changelist: 'default', message }),
-      'Submitted changelist'
+      () => api.submit({ ...target, changelist: 'default', message }),
+      'Submitted change'
     )
     if (ok) {
       setMessage('')
@@ -81,7 +83,7 @@ export function PerforcePanel({
   const confirmDiscard = (entries: PerforceEntry[]): void => {
     const noun = entries.length === 1 ? entries[0]?.path : `${entries.length} files`
     if (window.confirm(`Discard local changes to ${noun}? This cannot be undone.`)) {
-      void run(() => api.discard({ worktreePath, entries }))
+      void run(() => api.discard({ ...target, entries }))
     }
   }
 
@@ -93,7 +95,7 @@ export function PerforcePanel({
           size="icon-xs"
           title="Close file (keep local changes)"
           disabled={busy}
-          onClick={() => void run(() => api.close({ worktreePath, filePaths: [entry.path] }))}
+          onClick={() => void run(() => api.close({ ...target, filePaths: [entry.path] }))}
         >
           <X />
         </Button>
@@ -103,7 +105,7 @@ export function PerforcePanel({
           size="icon-xs"
           title={entry.group === 'new' ? 'Mark for add' : 'Open for edit'}
           disabled={busy}
-          onClick={() => void run(() => api.open({ worktreePath, filePaths: [entry.path] }))}
+          onClick={() => void run(() => api.open({ ...target, filePaths: [entry.path] }))}
         >
           <Plus />
         </Button>
@@ -140,11 +142,9 @@ export function PerforcePanel({
 
   const { info } = status
   const nothingPending =
-    groups.defaultList.length +
-      groups.numbered.length +
-      groups.modified.length +
-      groups.fresh.length ===
-    0
+    groups.defaultList.length + groups.modified.length + groups.fresh.length === 0 &&
+    groups.numbered.length === 0
+  const canSubmit = message.trim().length > 0 && groups.defaultList.length > 0
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
@@ -172,7 +172,7 @@ export function PerforcePanel({
           size="icon-xs"
           title="Get latest revisions (p4 sync)"
           disabled={busy}
-          onClick={() => void run(() => api.sync({ worktreePath }), 'Workspace synced')}
+          onClick={() => void run(() => api.sync(target), 'Workspace synced')}
         >
           <ArrowDownToLine />
         </Button>
@@ -186,12 +186,8 @@ export function PerforcePanel({
           rows={3}
           className="min-h-0"
         />
-        <Button
-          size="sm"
-          disabled={busy || message.trim().length === 0 || groups.defaultList.length === 0}
-          onClick={() => void submitDefault()}
-        >
-          Submit {groups.defaultList.length} file{groups.defaultList.length === 1 ? '' : 's'}
+        <Button size="sm" disabled={busy || !canSubmit} onClick={() => void submitDefault()}>
+          Submit Change
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto pb-2 scrollbar-sleek">
@@ -206,13 +202,13 @@ export function PerforcePanel({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                title="Move to a new changelist"
+                title="Move to a new changelist (uses the description above)"
                 disabled={busy || message.trim().length === 0}
                 onClick={() =>
                   void run(
                     () =>
                       api.createChangelist({
-                        worktreePath,
+                        ...target,
                         description: message,
                         filePaths: paths(groups.defaultList)
                       }),
@@ -228,34 +224,38 @@ export function PerforcePanel({
         ) : null}
         {groups.numbered.map(({ changelist, files }) => (
           <div key={changelist.id}>
-            <SectionHeader
-              title={`Changelist ${changelist.id}${changelist.description ? ` · ${changelist.description.split('\n')[0]}` : ''}`}
-              count={files.length}
-            >
-              <Button
-                variant="ghost"
-                size="xs"
-                disabled={busy}
-                onClick={() =>
-                  void run(() => api.shelve({ worktreePath, changelist: changelist.id }), 'Shelved')
-                }
-              >
-                Shelve
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                disabled={busy}
-                onClick={() =>
+            <PerforceChangelistHeader
+              changelist={changelist}
+              fileCount={files.length}
+              actions={{
+                busy,
+                onEditDescription: (description) =>
+                  run(
+                    () =>
+                      api.editDescription({ ...target, changelist: changelist.id, description }),
+                    'Description updated'
+                  ),
+                onShelve: () =>
+                  void run(() => api.shelve({ ...target, changelist: changelist.id }), 'Shelved'),
+                onUnshelve: () =>
                   void run(
-                    () => api.submit({ worktreePath, changelist: changelist.id }),
+                    () => api.unshelve({ ...target, changelist: changelist.id }),
+                    'Unshelved'
+                  ),
+                onDeleteShelf: () =>
+                  void run(
+                    () => api.deleteShelf({ ...target, changelist: changelist.id }),
+                    'Shelf deleted'
+                  ),
+                onSubmit: () =>
+                  void run(
+                    () => api.submit({ ...target, changelist: changelist.id }),
                     `Submitted changelist ${changelist.id}`
-                  )
-                }
-              >
-                Submit
-              </Button>
-            </SectionHeader>
+                  ),
+                onDelete: () =>
+                  void run(() => api.deleteChangelist({ ...target, changelist: changelist.id }))
+              }}
+            />
             {renderRows(files)}
           </div>
         ))}
@@ -267,7 +267,7 @@ export function PerforcePanel({
                 size="xs"
                 disabled={busy}
                 onClick={() =>
-                  void run(() => api.open({ worktreePath, filePaths: paths(groups.modified) }))
+                  void run(() => api.open({ ...target, filePaths: paths(groups.modified) }))
                 }
               >
                 Open all
@@ -284,7 +284,7 @@ export function PerforcePanel({
                 size="xs"
                 disabled={busy}
                 onClick={() =>
-                  void run(() => api.open({ worktreePath, filePaths: paths(groups.fresh) }))
+                  void run(() => api.open({ ...target, filePaths: paths(groups.fresh) }))
                 }
               >
                 Add all

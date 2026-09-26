@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
-import { getBranchDiff, getCommitDiff } from '../../git/status'
+import { getBranchDiff, getCommitDiff, getDiff } from '../../git/status'
+import { getPerforceFolderDiff } from '../../perforce/perforce-diff-routing'
 import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
@@ -123,6 +124,52 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
         },
         { ...gitOptions, admissionTier: 'interactive' }
       )
+    }
+  )
+
+  ipcMain.handle(
+    'git:diff',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        filePath: string
+        staged: boolean
+        compareAgainstHead?: boolean
+        connectionId?: string
+      }
+    ): Promise<GitDiffResult> => {
+      if (args.connectionId) {
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        const p4Diff = await getPerforceFolderDiff(
+          store,
+          args.connectionId,
+          args.worktreePath,
+          args.filePath
+        )
+        return (
+          p4Diff ??
+          provider.getDiff(args.worktreePath, args.filePath, args.staged, args.compareAgainstHead)
+        )
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const p4Diff = await getPerforceFolderDiff(store, null, worktreePath, filePath)
+      if (p4Diff) {
+        return p4Diff
+      }
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 }

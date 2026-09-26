@@ -48,7 +48,8 @@ export function useRightSidebarActivityItems({
   const isSshRepo = Boolean(activeRepo?.connectionId)
   const isPerforce = usePerforceWorkspace(
     activeWorktree?.path ?? null,
-    isFolder && !isFolderWorkspace && !isSshRepo
+    activeRepo?.connectionId,
+    isFolder && !isFolderWorkspace
   )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()
