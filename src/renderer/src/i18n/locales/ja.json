@@ -14852,6 +14852,7 @@
           "f1aa04b5cf": "このファイル",
           "8b87612461": "すべての未送信のメモ"
         },
+        "diffCommentSaveFailed": "コメントの保存に失敗しました",
         "DiffSectionBody": {
           "35d6afb5be": "バイナリファイルが変更されました",
           "cef4cf0ff5": "再試行",
@@ -15495,7 +15496,10 @@
             "2b3ce6d394": "キャンセル",
             "e05063cfc1": "{{value0}} 行目",
             "c845170b3b": "行 {{value0}}-{{value1}}",
-            "commentTooLarge": "コメントが大きすぎるため安全に送信できません。"
+            "commentTooLarge": "コメントが大きすぎるため安全に送信できません。",
+            "f6c449191e": "AI に関するメモを追加",
+            "5fa4bfebaa": "メモを追加",
+            "5e9b3d0c2e": "追加中…"
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "このメモ"
@@ -17477,8 +17481,8 @@
         "responding": "Agent が応答中です",
         "working": "処理中…",
         "thinking": "考え",
-        "workingFor": "{{value0}} で働いています",
-        "workedFor": "{{value0}}で働いていました",
+        "workingFor": "{{value0}} 処理中",
+        "workedFor": "{{value0}} で完了",
         "toggleDetails": "ターンの詳細を切り替えます"
       },
       "jumpToLatest": "最新にジャンプ",
@@ -17861,7 +17865,7 @@
           "appliedFilters": "適用されたフィルター",
           "removeFilter": "フィルター {{value0}} を削除します",
           "chip": {
-            "idleDays": "アイドル {{value0}}d+",
+            "idleDays": "アイドル {{value0}}日以上",
             "neverVisited": "訪れたことがない",
             "minSize": "少なくとも {{value0}} MB",
             "maxSize": "最大 {{value0}} MB",
@@ -17984,9 +17988,9 @@
     "cmd-j": {
       "paletteSessionAge": {
         "minutes": "{{value0}}分",
-        "hours": "{{value0}}h",
-        "days": "{{value0}}d",
-        "underOneMinute": "<1m"
+        "hours": "{{value0}}時間",
+        "days": "{{value0}}日",
+        "underOneMinute": "<1分"
       }
     },
     "settings": {

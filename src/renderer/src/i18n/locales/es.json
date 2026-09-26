@@ -13029,6 +13029,7 @@
           "f1aa04b5cf": "Este archivo",
           "8b87612461": "Todas las notas no enviadas"
         },
+        "diffCommentSaveFailed": "No se pudo guardar el comentario",
         "DiffSectionBody": {
           "35d6afb5be": "Archivo binario cambiado",
           "cef4cf0ff5": "Reintentar",
@@ -13625,7 +13626,10 @@
             "2b3ce6d394": "Cancelar",
             "e05063cfc1": "Línea {{value0}}",
             "c845170b3b": "Líneas {{value0}}-{{value1}}",
-            "commentTooLarge": "El comentario es demasiado grande para enviarlo de forma segura."
+            "commentTooLarge": "El comentario es demasiado grande para enviarlo de forma segura.",
+            "f6c449191e": "Agregar nota para la IA",
+            "5fa4bfebaa": "Agregar nota",
+            "5e9b3d0c2e": "Agregando..."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "esta nota"

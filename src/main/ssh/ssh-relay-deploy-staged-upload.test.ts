@@ -52,6 +52,9 @@ vi.mock('./ssh-remote-node-resolution', () => ({
 // Why: the post-launch ripgrep install is fire-and-forget and would drain the queued exec mocks.
 // Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
 vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
 vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
   ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),

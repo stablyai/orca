@@ -230,15 +230,19 @@ export async function listWslDistrosAsync(): Promise<string[]> {
 
 /** Running user distros only — see `resolveRunningWslDistros` for the fallback/backoff and
  *  single-flight contract shared by every caller. */
-export async function listRunningWslDistrosAsync(): Promise<string[]> {
+export async function listRunningWslDistrosAsync(
+  options: { requireConfirmed?: boolean } = {}
+): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []
   }
-  return resolveRunningWslDistros(() =>
-    execFileUtf8('wsl.exe', ['--list', '--running', '--quiet'], {
-      ...process.env,
-      WSL_UTF8: '1'
-    }).then((output) => filterUserWslDistros(parseWslDistros(output)))
+  return resolveRunningWslDistros(
+    () =>
+      execFileUtf8('wsl.exe', ['--list', '--running', '--quiet'], {
+        ...process.env,
+        WSL_UTF8: '1'
+      }).then((output) => filterUserWslDistros(parseWslDistros(output))),
+    options
   )
 }
 
