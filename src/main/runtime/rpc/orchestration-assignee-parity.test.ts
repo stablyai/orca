@@ -133,14 +133,17 @@ function installTerminal(): void {
   vi.spyOn(h.runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
     handle === WORKER_HANDLE ? WORKER_INCARNATION : null
   )
-  vi.spyOn(h.runtime, 'getTerminalLivenessVerdict').mockReturnValue({ status: 'live' } as never)
+  vi.spyOn(h.runtime, 'getTerminalLivenessVerdict').mockReturnValue({
+    status: 'live',
+    ptyIds: ['pty_worker']
+  })
   vi.spyOn(h.runtime, 'waitForTerminal').mockResolvedValue({
     handle: WORKER_HANDLE,
     condition: 'tui-idle',
     satisfied: true,
     status: 'running',
     exitCode: null
-  } as never)
+  })
   // The preamble is typed and queued behind the agent's running turn, which starts it on release.
   const prompt = {
     requestId: 'prompt_1',

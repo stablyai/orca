@@ -74,18 +74,26 @@ function record(sessionId: string, closed: boolean): AgentSessionRecord {
 }
 
 const records = new Map<string, AgentSessionRecord>()
+/** Set to make the record store unreadable. */
+let storeFailure: Error | null = null
 const closed: string[] = []
 const historyAsked: string[] = []
 
 /** As the clear RPC leaves it: the minted session closed, the successor live and working. */
 function installClearedWorkerHost(): void {
+  storeFailure = null
   records.clear()
   records.set(MINTED, record(MINTED, true))
   records.set(SUCCESSOR, record(SUCCESSOR, false))
   hostRef.current = {
     deps: {
       store: {
-        getRecord: (id: string) => records.get(id) ?? null,
+        getRecord: (id: string) => {
+          if (storeFailure) {
+            throw storeFailure
+          }
+          return records.get(id) ?? null
+        },
         listRecords: () => [...records.values()]
       }
     },
@@ -237,10 +245,7 @@ describe('one lineage walk, one failure contract', () => {
 
   it('refuses when the record store cannot be read, instead of serving the pre-clear session', async () => {
     const identity = registerWorker()
-    const host = hostRef.current as { deps: { store: { getRecord: unknown } } }
-    host.deps.store.getRecord = () => {
-      throw new Error('disk gone')
-    }
+    storeFailure = new Error('disk gone')
 
     expect(() =>
       readStructuredWorkerJournal({
