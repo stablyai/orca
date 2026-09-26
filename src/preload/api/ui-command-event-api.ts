@@ -129,6 +129,9 @@ export type UiCommandEventApi = {
   onSwitchTabAcrossAllTypes: (callback: (direction: 1 | -1) => void) => () => void
   onSwitchRecentTab: (callback: () => void) => () => void
   onSwitchTerminalTab: (callback: (direction: 1 | -1) => void) => () => void
+  onMoveActiveTab: (
+    callback: (payload: { direction: 1 | -1; sourceId?: string }) => void
+  ) => () => void
   onCtrlTabKeyDown: (callback: (data: { shiftKey: boolean }) => void) => () => void
   onCtrlTabKeyUp: (callback: () => void) => () => void
   onToggleStatusBar: (callback: () => void) => () => void

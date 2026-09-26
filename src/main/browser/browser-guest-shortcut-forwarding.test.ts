@@ -639,6 +639,23 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
   })
 
+  it('forwards tab-reorder shortcuts from focused guest pages', () => {
+    const guest = makeGuest()
+    setupGuestShortcutForwarding({ browserTabId, guest, resolveRenderer: () => makeRenderer() })
+
+    triggerBeforeInput({
+      key: 'PageUp',
+      meta: false,
+      control: true,
+      shift: true
+    })
+
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:moveActiveTab', {
+      direction: -1,
+      sourceId: browserTabId
+    })
+  })
+
   it('forwards workspace delete shortcuts from focused guest pages', () => {
     setupGuestShortcutForwarding({
       browserTabId,

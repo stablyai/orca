@@ -206,6 +206,24 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     allowInTerminal: true
   },
   {
+    id: 'tab.moveLeft',
+    title: 'Move active tab left',
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'move', 'left', 'reorder', 'previous'],
+    defaultBindings: platformBindings(['Ctrl+Shift+PageUp']),
+    allowInTerminal: true
+  },
+  {
+    id: 'tab.moveRight',
+    title: 'Move active tab right',
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'move', 'right', 'reorder', 'next'],
+    defaultBindings: platformBindings(['Ctrl+Shift+PageDown']),
+    allowInTerminal: true
+  },
+  {
     id: 'tab.nextTerminal',
     title: 'Next terminal tab',
     group: 'Tab Navigation',

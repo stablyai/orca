@@ -4,6 +4,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
+import { moveFloatingWorkspaceTab } from '@/lib/floating-workspace-tab-reorder'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import {
@@ -106,6 +107,12 @@ export function useFloatingTerminalGlobalShortcutListeners({
           switchAllTypesDirection ?? switchSameTypeDirection ?? 1,
           switchAllTypesDirection !== null ? 'all-types' : 'same-type'
         )
+        return
+      }
+      const moveTabDirection = matches('tab.moveLeft') ? -1 : matches('tab.moveRight') ? 1 : null
+      if (moveTabDirection !== null) {
+        consume()
+        moveFloatingWorkspaceTab(useAppStore.getState(), moveTabDirection)
         return
       }
       const terminalTabDirection = matches('tab.nextTerminal')
