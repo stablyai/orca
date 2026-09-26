@@ -137,6 +137,22 @@ describe('MCP-compatible Linear issue listing', () => {
     expect(result.meta.workspaceId).toBe('workspace-1')
   })
 
+  it('sends cycle keywords as Linear cycle comparators', async () => {
+    rawRequest.mockResolvedValue({
+      data: { issues: { nodes: [], pageInfo: { hasNextPage: false } } }
+    })
+    const { listMcpIssues } = await import('./mcp-issue-list')
+
+    await listMcpIssues({ cycle: 'current', team: 'ENG' })
+
+    expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({
+      filter: {
+        cycle: { isActive: { eq: true } },
+        team: { or: expect.arrayContaining([{ key: { eqIgnoreCase: 'ENG' } }]) }
+      }
+    })
+  })
+
   it('uses UUID comparators only for values Linear accepts as IDs', async () => {
     rawRequest.mockResolvedValue({
       data: { issues: { nodes: [], pageInfo: { hasNextPage: false } } }
