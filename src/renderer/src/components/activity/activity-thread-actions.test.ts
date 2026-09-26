@@ -116,6 +116,7 @@ describe('activity thread host routing', () => {
     'reveals the floating agent pane when the panel is open=%s without switching workspace',
     (open) => {
       const floatingThread = makeFloatingThread()
+      state.settings = { floatingTerminalEnabled: true }
       state.tabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingThread.tab] }
       mocks.activateAndRevealWorkspace.mockReturnValue(false)
       mocks.isFloatingWorkspacePanelVisible.mockReturnValue(open)
@@ -138,6 +139,29 @@ describe('activity thread host routing', () => {
       )
     }
   )
+
+  it('enables a disabled floating workspace before revealing its agent pane', async () => {
+    const floatingThread = makeFloatingThread()
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrame)
+    state.settings = { floatingTerminalEnabled: false }
+    state.updateSettings = updateSettings
+    state.tabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingThread.tab] }
+
+    makeActions().selectThread(floatingThread)
+
+    expect(updateSettings).toHaveBeenCalledWith({ floatingTerminalEnabled: true })
+    expect(mocks.dispatchEvent).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalled()
+    await vi.waitFor(() => expect(requestAnimationFrame).toHaveBeenCalledTimes(1))
+    expect(mocks.dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: TOGGLE_FLOATING_TERMINAL_EVENT })
+    )
+  })
 
   it('does not open the floating panel for a retained thread whose tab was closed', () => {
     makeActions().selectThread(makeFloatingThread())
