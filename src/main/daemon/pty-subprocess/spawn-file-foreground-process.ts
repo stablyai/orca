@@ -8,7 +8,10 @@ import {
   collectDescendantsFromIndex,
   getProcessTableIndex
 } from '../../../shared/process-table-index'
-import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
+import {
+  hasControllingTerminal,
+  type ProcessTableRow
+} from '../../../shared/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
   getProcessTableSnapshot
@@ -52,7 +55,7 @@ export function resolveSpawnFileForegroundFromRows(
 ): AgentForegroundProcessResolution {
   const index = getProcessTableIndex(rows)
   const root = index.byPid.get(rootPid)
-  if (!root || !root.tpgid || root.tpgid < 0 || !root.tty || root.tty === '?') {
+  if (!root || !root.tpgid || root.tpgid < 0 || !hasControllingTerminal(root.tty)) {
     return { available: false, processName: null }
   }
   const tree = [{ ...root, depth: 0 }, ...collectDescendantsFromIndex(index, rootPid)]
