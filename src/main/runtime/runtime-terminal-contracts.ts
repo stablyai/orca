@@ -211,4 +211,10 @@ export type RuntimeAgentPromptWriteOptions = RuntimeTerminalWriteOptions & {
   observationTimeoutMs?: number
   requestId?: string
   onInputAccepted?: (send: RuntimeTerminalSend) => void
+  /** Set only by a caller delivering the first prompt to an agent it just launched in this
+   *  terminal; such a queued (`acceptQueued` + `requestId`) prompt gets the agent's retry Enter
+   *  (`writeAgentPromptSubmitRetry`). */
+  promptTarget?: AgentPromptTarget
 }
+
+export type AgentPromptTarget = 'just-launched-agent'

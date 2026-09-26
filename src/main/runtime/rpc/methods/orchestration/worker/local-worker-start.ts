@@ -231,6 +231,8 @@ export async function startLocalWorker(args: {
       dispatchCapability: capability,
       devMode: params.devMode,
       requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
+      // A `--terminal` worker's agent was already running; only a created one was just launched.
+      promptTarget: params.terminal ? undefined : 'just-launched-agent',
       agent: agent ?? null,
       setupReceipt,
       launchReceipt: launch.receipt,

@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { AgentPromptTarget } from '../../../../runtime-terminal-contracts'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
@@ -34,6 +35,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   dispatchCapability: string
   devMode: boolean | undefined
   requestId: string
+  promptTarget: AgentPromptTarget | undefined
   agent: string | null
   setupReceipt: WorkerSetupReceipt
   launchReceipt: OrchestrationWorkerLaunchReceipt
@@ -58,7 +60,8 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     coordinatorHandle: args.coordinatorHandle,
     dispatchCapability: args.dispatchCapability,
     devMode: args.devMode,
-    requestId: args.requestId
+    requestId: args.requestId,
+    promptTarget: args.promptTarget
   })
   effects.push({
     kind: 'dispatch_input',

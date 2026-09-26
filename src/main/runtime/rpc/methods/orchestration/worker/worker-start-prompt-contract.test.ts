@@ -49,21 +49,29 @@ type PromptContractHarness = {
   request: RpcRequest
   requestId: string
   taskId: string
-  submittedTurns: () => number
+  pastes: () => number
+  enters: () => number
   startedTurns: () => number
   prematureSubmits: () => number
   writes: string[]
 }
 
+// 'first-swallowed': Codex's cold-boot gate eats the first Enter and the retry Enter submits.
 async function createPromptContractHarness(
-  outcome: 'accepted' | 'swallowed'
+  outcome: 'accepted' | 'first-swallowed' | 'swallowed',
+  // 'reused-terminal': `--terminal` names a pane whose agent was already running.
+  placement: 'created-terminal' | 'reused-terminal' = 'created-terminal'
 ): Promise<PromptContractHarness> {
   let composerReady = false
-  let submittedTurns = 0
+  let draftPending = false
+  let pastes = 0
+  let enters = 0
   let startedTurns = 0
   let prematureSubmits = 0
   const fixture = await createAgentPromptSubmissionRuntime((runtime, data) => {
     if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+      pastes += 1
+      draftPending = true
       setTimeout(() => runtime.onPtyData('pty-prompt', 'partial composer frame', Date.now()), 650)
       setTimeout(() => runtime.onPtyData('pty-prompt', '\x1b[?25h', Date.now()), 750)
       setTimeout(() => {
@@ -75,11 +83,14 @@ async function createPromptContractHarness(
     if (data !== '\r') {
       return
     }
-    submittedTurns += 1
+    enters += 1
     if (!composerReady) {
       prematureSubmits += 1
     }
-    if (outcome === 'accepted') {
+    const submits = outcome === 'accepted' || (outcome === 'first-swallowed' && enters > 1)
+    // An Enter on the empty composer after a submit starts nothing.
+    if (draftPending && submits) {
+      draftPending = false
       startedTurns += 1
       runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
     }
@@ -110,11 +121,17 @@ async function createPromptContractHarness(
     candidate === handle ? `runtime_test:${handle}:1` : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-  vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-    handle: 'term_coord',
-    worktreeId: 'repo::parent',
-    status: 'running'
-  } as never)
+  const reused = placement === 'reused-terminal'
+  vi.spyOn(runtime, 'showTerminal').mockImplementation(
+    async (candidate) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worker-start reads only handle, worktreeId and status from a shown terminal here.
+      ({
+        handle: candidate,
+        worktreeId: reused ? AGENT_PROMPT_TEST_WORKTREE_ID : 'repo::parent',
+        status: 'running'
+      }) as never
+  )
+  vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
   vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
     id: 'repo::parent',
     repoId: 'repo-1'
@@ -147,14 +164,15 @@ async function createPromptContractHarness(
       params: {
         task: task.id,
         from: 'term_coord',
-        worktree: 'new-child',
-        name: `prompt-contract-${outcome}`,
-        agent: 'codex'
+        ...(reused
+          ? { worktree: 'current', terminal: handle }
+          : { worktree: 'new-child', name: `prompt-contract-${outcome}`, agent: 'codex' })
       }
     },
     requestId: `${REQUEST_ID}_${outcome}`,
     taskId: task.id,
-    submittedTurns: () => submittedTurns,
+    pastes: () => pastes,
+    enters: () => enters,
     startedTurns: () => startedTurns,
     prematureSubmits: () => prematureSubmits,
     writes: fixture.writes
@@ -205,10 +223,11 @@ describe('orchestration worker-start prompt contract', () => {
       throw new Error(response.error.message)
     }
     const dispatchId = (response.result as { dispatchId: string }).dispatchId
-    expect(harness.submittedTurns()).toBe(1)
+    // The Codex retry Enter lands on the empty composer: one paste, one turn, never a resend.
+    expect(harness.pastes()).toBe(1)
     expect(harness.startedTurns()).toBe(1)
     expect(harness.prematureSubmits()).toBe(0)
-    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(1)
+    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(2)
     const persisted = reopenPromptContractDb(harness)
     expect(persisted.getTask(harness.taskId)?.status).toBe('dispatched')
     expect(persisted.getDispatchContextById(dispatchId)).toMatchObject({
@@ -279,7 +298,8 @@ describe('orchestration worker-start prompt contract', () => {
       capability_hash: expect.any(String),
       capability_revoked_at: null
     })
-    expect(harness.submittedTurns()).toBe(1)
+    expect(harness.pastes()).toBe(1)
+    expect(harness.enters()).toBe(2)
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -333,11 +353,13 @@ describe('orchestration worker-start prompt contract', () => {
     }
     const dispatchId = (response.result as { dispatchId: string }).dispatchId
     await vi.advanceTimersByTimeAsync(20_000)
-    // Unverifiable is not failure: exactly one submit, no blind retry, nothing torn down.
-    expect(harness.submittedTurns()).toBe(1)
+    // Unverifiable is not failure: the brief is pasted once, Codex gets its one retry Enter and
+    // nothing more, and nothing is torn down.
+    expect(harness.pastes()).toBe(1)
+    expect(harness.enters()).toBe(2)
     expect(harness.startedTurns()).toBe(0)
     expect(harness.prematureSubmits()).toBe(0)
-    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(1)
+    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(2)
     const persisted = reopenPromptContractDb(harness)
     expect(persisted.getTask(harness.taskId)?.status).toBe('blocked')
     expect(persisted.getDispatchContextById(dispatchId)).toMatchObject({
@@ -374,6 +396,51 @@ describe('orchestration worker-start prompt contract', () => {
         stages: ['input_accepted']
       }
     })
+  })
+
+  it('starts the turn with the Codex retry Enter when the first Enter is swallowed', async () => {
+    vi.useFakeTimers()
+    const harness = await createPromptContractHarness('first-swallowed')
+    const pending = harness.dispatcher.dispatch(harness.request)
+
+    await vi.runAllTimersAsync()
+    const response = await pending
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        state: 'ready',
+        mutation: { requestId: harness.requestId, replayed: false },
+        effects: expect.arrayContaining([
+          expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
+        ])
+      }
+    })
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(harness.pastes()).toBe(1)
+    expect(harness.enters()).toBe(2)
+    expect(harness.startedTurns()).toBe(1)
+    expect(harness.prematureSubmits()).toBe(0)
+  })
+
+  it('sends one Enter to a `--terminal` worker, whose agent was already running', async () => {
+    vi.useFakeTimers()
+    const harness = await createPromptContractHarness('accepted', 'reused-terminal')
+    const pending = harness.dispatcher.dispatch(harness.request)
+
+    await vi.runAllTimersAsync()
+    const response = await pending
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        state: 'ready',
+        effects: expect.arrayContaining([
+          expect.objectContaining({ kind: 'terminal', action: 'reused', id: harness.handle })
+        ])
+      }
+    })
+    expect(harness.pastes()).toBe(1)
+    expect(harness.enters()).toBe(1)
+    expect(harness.startedTurns()).toBe(1)
   })
 
   it('does not attribute output from the old busy turn to a queued prompt', async () => {

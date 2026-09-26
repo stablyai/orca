@@ -15,6 +15,7 @@ import {
   resolveAgentPromptSubmitDelayForAgent
 } from '../../shared/agent-prompt-injection'
 import type { AgentPromptWaitTextCache } from './agent-prompt-submission-verification'
+import { writeAgentPromptSubmitRetry } from './agent-prompt-submit-retry'
 import {
   isTerminalSendSettlementAgent,
   resolveAgentPromptEffectTimeoutMs,
@@ -143,11 +144,31 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       prompt: inputAccepted
     }
     options.onInputAccepted?.(checkpoint)
+    const retry = submitWithPaste
+      ? 'none'
+      : await writeAgentPromptSubmitRetry({
+          target: options.promptTarget,
+          agent: foregroundAgent ?? launchAgent,
+          signal: options.signal,
+          assertWritable: async () => {
+            assertAgentPromptRequestActive(options.signal)
+            this.assertAgentPromptGeneration(ptyId, generation)
+            await options.beforeWrite?.(ptyId)
+            assertAgentPromptRequestActive(options.signal)
+            this.assertAgentPromptGeneration(ptyId, generation)
+            this.assertAgentPromptPermissionSafe(
+              permissionBaseline,
+              this.getAgentPromptActivity(handle, ptyId)
+            )
+          },
+          write: (data) => this.ptyController?.write(ptyId, data) === true
+        })
+    const submits = retry === 'written' ? 2 : 1
     // Providers without a lifecycle verifier still get an honest accepted
     // receipt; they must not fail a Dispatch merely because Orca cannot prove
     // submission through hooks.
     if (!settlementAgent) {
-      return { submits: 1, prompt: inputAccepted }
+      return { submits, prompt: inputAccepted }
     }
     this.registerAgentPromptRequest(
       ptyId,
@@ -175,7 +196,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       })
       this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
       return {
-        submits: 1,
+        submits,
         prompt: {
           ...inputAccepted,
           stages: ['input_accepted', 'turn_started']
@@ -183,12 +204,17 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       }
     } catch (error) {
       if (error instanceof Error && error.message === 'agent_prompt_stalled') {
-        return { submits: 1, prompt: inputAccepted }
+        return { submits, prompt: inputAccepted }
+      }
+      // The input was accepted; a reset during the retry wait is the observation stage's to judge.
+      if (retry !== 'none' && error instanceof Error && error.message === 'terminal_handle_stale') {
+        this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
+        return { submits, prompt: inputAccepted }
       }
       if (error instanceof Error && error.message === 'agent_prompt_blocked') {
         this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
         return {
-          submits: 1,
+          submits,
           prompt: { ...inputAccepted, observation: 'permission' }
         }
       }
