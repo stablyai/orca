@@ -170,6 +170,119 @@ describe('fetchGrokRateLimits', () => {
     expect(netFetchMock).toHaveBeenCalledTimes(2)
   })
 
+  // Why: #20657 — an account with no extra-usage pool ships the onDemand and
+  // prepaid zeros structurally. The reporter saw those same zeros alongside a
+  // real `creditUsagePercent: 23` the week before, so once the weekly reset
+  // drops the zero percent they must read as 0%, not as "not reported".
+  it('maps an omitted percent as zero after a weekly reset when the extra-usage cap is zero', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-09-13T16:33:14.392197+00:00',
+            end: '2026-09-20T16:33:14.392197+00:00'
+          },
+          onDemandCap: { val: 0 },
+          onDemandUsed: { val: 0 },
+          prepaidBalance: { val: 0 },
+          isUnifiedBillingUser: true,
+          billingPeriodStart: '2026-09-13T16:33:14.392197+00:00',
+          billingPeriodEnd: '2026-09-20T16:33:14.392197+00:00'
+        }
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(0)
+    expect(result.weekly?.windowMinutes).toBe(10_080)
+    expect(result.weekly?.resetsAt).toBe(Date.parse('2026-09-20T16:33:14.392197+00:00'))
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: #20657 must not reopen #15740 — a positive extra-usage cap is what
+  // makes a sibling zero real evidence, so the percent stays unreported there
+  // even when the second view carries nothing.
+  it('still reports unavailable for an omitted percent beside a zero under a positive cap', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          config: {
+            currentPeriod: {
+              type: 'USAGE_PERIOD_TYPE_WEEKLY',
+              start: '2026-08-16T12:54:39.515635+00:00',
+              end: '2026-08-23T12:54:39.515635+00:00'
+            },
+            onDemandCap: { val: 250 },
+            onDemandUsed: { val: 0 },
+            isUnifiedBillingUser: true,
+            billingPeriodStart: '2026-08-16T12:54:39.515635+00:00',
+            billingPeriodEnd: '2026-08-23T12:54:39.515635+00:00'
+          }
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ config: {} }))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(result.weekly).toBeNull()
+    expect(result.error).toMatch(/did not report a usage percentage/i)
+  })
+
+  // Why: narrowing the rule to a positive cap must not let a no-pool account
+  // that actually spent on this period read as 0% — the payload says the
+  // opposite. `used` is consumption; #9214/#9219's prepaidBalance is not.
+  it('reports unavailable when the extra-usage cap is zero but the period carries spend', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValue(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-09-13T16:33:14.392197+00:00',
+            end: '2026-09-20T16:33:14.392197+00:00'
+          },
+          onDemandCap: { val: 0 },
+          used: { val: 37.5 },
+          isUnifiedBillingUser: true,
+          billingPeriodStart: '2026-09-13T16:33:14.392197+00:00',
+          billingPeriodEnd: '2026-09-20T16:33:14.392197+00:00'
+        }
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(result.weekly).toBeNull()
+  })
+
+  // Why: an absent onDemandCap takes the same no-pool branch as an explicit
+  // zero. That branch had no coverage while the rule was being narrowed.
+  it('maps an omitted percent as zero when no extra-usage cap is reported at all', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-09-13T16:33:14.392197+00:00',
+            end: '2026-09-20T16:33:14.392197+00:00'
+          },
+          isUnifiedBillingUser: true,
+          billingPeriodStart: '2026-09-13T16:33:14.392197+00:00',
+          billingPeriodEnd: '2026-09-20T16:33:14.392197+00:00'
+        }
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(0)
+  })
+
   // Why: the monthly budget pair is a monthly window wherever it arrives — the
   // credits view must not relabel it 'Weekly credits'.
   it('publishes a credits-view monthly budget pair as a monthly window without a second request', async () => {

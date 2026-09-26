@@ -114,7 +114,21 @@ function usageScalars(config: GrokBillingConfig): (GrokMoneyVal | undefined)[] {
 // ships `onDemandUsed: {val: 0}`, so there the omission means "not reported"
 // and must never render as 0%. Non-zero money fields prove nothing either way,
 // so #9214/#9219 accounts that carry only those keep their genuine 0%.
-function emitsExplicitZeroScalar(config: GrokBillingConfig): boolean {
+//
+// An account with no extra-usage pool is the exception (#20657): it ships
+// `onDemandCap/onDemandUsed/prepaidBalance: {val: 0}` structurally, and the
+// same account was observed sending exactly those zeros next to a real
+// `creditUsagePercent: 23`. Zeros that appear whether or not a percent does
+// cannot prove the percent was withheld, so only a positive extra-usage cap
+// makes them evidence.
+function omittedPercentIsUnreported(config: GrokBillingConfig): boolean {
+  const extraUsageCap = parseMoneyVal(config.onDemandCap)
+  if (extraUsageCap === null || extraUsageCap <= 0) {
+    // Why: the structural zeros say nothing, but spend on this period does —
+    // 0% next to a non-zero consumed amount claims the opposite of the payload.
+    // A balance is not consumption, so #9214/#9219 keeps its genuine 0%.
+    return [config.onDemandUsed, config.used].some((v) => (parseMoneyVal(v) ?? 0) > 0)
+  }
   return usageScalars(config).some((value) => parseMoneyVal(value) === 0)
 }
 
@@ -133,7 +147,7 @@ function resolveWeeklyPercent(config: GrokBillingConfig): number | null {
   // Why: infer the dropped zero only when nothing else in the payload speaks
   // for consumption — an explicit zero proves the encoder keeps defaults, and a
   // computable budget pair is a real monthly number this must not shadow.
-  if (emitsExplicitZeroScalar(config) || mapMonthlyUsage(config) !== null) {
+  if (omittedPercentIsUnreported(config) || mapMonthlyUsage(config) !== null) {
     return null
   }
   return hasConfirmedWeeklyPeriod(config) ? 0 : null
