@@ -97,10 +97,13 @@ orca worktree show --worktree active --json
 orca worktree create --repo id:<repoId> --name fix-login --json
 orca worktree create --name child-task --agent codex --prompt "Investigate the flaky login test" --json
 orca worktree set --worktree active --comment "reproduced failure; testing token refresh fix" --json
+orca worktree set --worktree active --workspace-status in-review --unread --json
 orca worktree rm --worktree id:<worktreeId> --force --json
 ```
 
 When `worktree create` runs from inside an Orca-managed worktree, Orca records the new worktree as a child when it can infer the relationship. Pass `--parent-worktree active` to be explicit, or `--no-parent` when the new work is independent.
+
+`worktree set --unread` puts the unread dot on the workspace in the sidebar, the same one Orca shows when an agent finishes; `--read` clears it.
 
 Agent startup flags:
 
