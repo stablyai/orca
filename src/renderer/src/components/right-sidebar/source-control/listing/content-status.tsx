@@ -23,6 +23,7 @@ export function SourceControlContentStatus({
   onRetryStatus,
   showGenericEmptyState,
   normalizedFilter,
+  hasFileVisibilityFilter = false,
   branchBaseRef,
   filterTooLarge,
   hasFilteredUncommittedEntries,
@@ -41,6 +42,7 @@ export function SourceControlContentStatus({
   onRetryStatus: (signal: AbortSignal) => Promise<void>
   showGenericEmptyState: boolean
   normalizedFilter: string
+  hasFileVisibilityFilter?: boolean
   branchBaseRef: string | null
   filterTooLarge: boolean
   hasFilteredUncommittedEntries: boolean
@@ -83,7 +85,7 @@ export function SourceControlContentStatus({
           />
         </div>
       )}
-      {showGenericEmptyState && !normalizedFilter ? (
+      {showGenericEmptyState && !normalizedFilter && !hasFileVisibilityFilter ? (
         <EmptyState
           heading={translate(
             'auto.components.right.sidebar.source.control.content.status.3f425c239c',
@@ -115,19 +117,28 @@ export function SourceControlContentStatus({
           )}
         />
       )}
-      {normalizedFilter && !hasFilteredUncommittedEntries && !hasFilteredBranchEntries && (
-        <EmptyState
-          heading={translate(
-            'auto.components.right.sidebar.source.control.content.status.1b6caf533d',
-            'No matching files'
-          )}
-          supportingText={translate(
-            'auto.components.right.sidebar.source.control.content.status.00c07771b7',
-            'No changed files match "{{value0}}"',
-            { value0: filterQuery }
-          )}
-        />
-      )}
+      {(normalizedFilter || hasFileVisibilityFilter) &&
+        !hasFilteredUncommittedEntries &&
+        !hasFilteredBranchEntries && (
+          <EmptyState
+            heading={translate(
+              'auto.components.right.sidebar.source.control.content.status.1b6caf533d',
+              'No matching files'
+            )}
+            supportingText={
+              hasFileVisibilityFilter
+                ? translate(
+                    'sourceControl.fileFilters.noMatches',
+                    'Change or reset the file filters to see more files.'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.source.control.content.status.00c07771b7',
+                    'No changed files match "{{value0}}"',
+                    { value0: filterQuery }
+                  )
+            }
+          />
+        )}
     </>
   )
 }

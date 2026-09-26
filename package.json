@@ -265,6 +265,7 @@
     "html-to-image": "^1.11.13",
     "husky": "^9.1.7",
     "i18next-cli": "1.65.0",
+    "ignore": "^7.0.10",
     "katex": "^0.16.45",
     "lint-staged": "^16.4.0",
     "lowlight": "^3.3.0",

@@ -1,3 +1,5 @@
+import type { SourceControlFileGroup } from './source-control-file-groups'
+
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 export type SetupAgentStartupPolicy = 'start-immediately' | 'wait-for-setup'
 export type HookCommandSourcePolicy = 'shared-only' | 'local-only' | 'run-both'
@@ -14,6 +16,7 @@ export type OrcaHooks = {
   environmentRecipes?: OrcaVmRecipe[] // Project-scoped per-workspace environment recipes
   environmentRecipeDiagnostics?: OrcaVmRecipeDiagnostic[] // Non-fatal validation issues from environmentRecipes
   worktree?: OrcaWorktreeDefaults // Project-scoped defaults applied when a worktree is created
+  sourceControl?: { fileGroups: SourceControlFileGroup[] }
 }
 
 export type OrcaWorktreeDefaults = {

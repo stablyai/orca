@@ -15,12 +15,14 @@ import { SubmodulePlaceholderRow } from './submodule-placeholder-row'
 import { UncommittedEntryRow } from './uncommitted-entry-row'
 import { VirtualizedList } from '../../../virtualized-list'
 
+/** Renders the chosen list mode and withholds directory-wide actions while filtering. */
 export function SourceControlSectionFileList({
   sourceControlViewMode,
   treeRows,
   listRows,
   fileListScrollElement,
   normalizedFilter,
+  hasFileVisibilityFilter = false,
   isExecutingBulk,
   collapsedTreeDirs,
   toggleTreeDir,
@@ -48,6 +50,7 @@ export function SourceControlSectionFileList({
   listRows: RenderableSubmoduleListItem[]
   fileListScrollElement: HTMLDivElement | null
   normalizedFilter: string
+  hasFileVisibilityFilter?: boolean
   isExecutingBulk: boolean
   collapsedTreeDirs: Set<string>
   toggleTreeDir: (key: string) => void
@@ -92,7 +95,7 @@ export function SourceControlSectionFileList({
               key={node.key}
               node={node}
               actionPaths={getSourceControlDirectoryActionPaths(node)}
-              hideBulkActions={Boolean(normalizedFilter)}
+              hideBulkActions={Boolean(normalizedFilter) || hasFileVisibilityFilter}
               isExecutingBulk={isExecutingBulk}
               isCollapsed={collapsedTreeDirs.has(node.key)}
               onToggle={() => toggleTreeDir(node.key)}

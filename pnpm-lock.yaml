@@ -397,6 +397,9 @@ importers:
       i18next-cli:
         specifier: 1.65.0
         version: 1.65.0(@types/node@25.9.5)(react-dom@19.2.8(react@19.2.8))(typescript@7.0.2)
+      ignore:
+        specifier: ^7.0.10
+        version: 7.0.10
       katex:
         specifier: ^0.16.45
         version: 0.16.45
@@ -5230,6 +5233,10 @@ packages:
 
   ignore@5.3.2:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
+    engines: {node: '>= 4'}
+
+  ignore@7.0.10:
+    resolution: {integrity: sha512-HpbUakT7xp5miBUywCHf36ZEuAJNklBJDDsGpUIjMzOSmM8ELSfA9Sa/QDPeNeqeoN31u+UTCkL4klCOVvRm4Q==}
     engines: {node: '>= 4'}
 
   ignore@7.0.5:
@@ -12156,6 +12163,8 @@ snapshots:
       safer-buffer: 2.1.2
 
   ignore@5.3.2: {}
+
+  ignore@7.0.10: {}
 
   ignore@7.0.5: {}
 

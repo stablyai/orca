@@ -1,4 +1,7 @@
 import { BulkActionBar } from '../commit/bulk-action-bar'
+import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
+import { SourceControlFileFilterMenu } from './file-filter-menu'
 import { SourceControlHeaderToolbar } from './header-toolbar'
 import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
@@ -24,6 +27,16 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     diffCommentsForActive,
     filterExpanded,
     filterQuery,
+    excludedExtensions,
+    extensionCounts,
+    fileGroups,
+    fileGroupsFailed,
+    hasFileVisibilityFilter,
+    hiddenFileCount,
+    hiddenFileGroups,
+    refreshFileGroups,
+    setExcludedExtensions,
+    setHiddenFileGroups,
     gitIdentityDisplay,
     handleBulkStage,
     handleBulkUnstage,
@@ -54,15 +67,36 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     suppressedGitHubPRState,
     visibleCreatePrHeaderAction
   } = model
+  const isFiltering = Boolean(filterQuery) || hasFileVisibilityFilter
+  const resetFilters = () => {
+    setFilterQuery('')
+    setExcludedExtensions(new Set())
+    setHiddenFileGroups(new Set())
+  }
 
   return (
     <>
       <div
         ref={setSourceControlRoot}
+        data-testid="source-control-panel"
         className="relative flex h-full flex-col overflow-hidden"
         onKeyDown={handleSourceControlKeyDown}
       >
         <SourceControlHeaderToolbar
+          fileFilters={
+            <SourceControlFileFilterMenu
+              extensionCounts={extensionCounts}
+              excludedExtensions={excludedExtensions}
+              onExcludedExtensionsChange={setExcludedExtensions}
+              fileGroups={fileGroups}
+              hiddenFileGroups={hiddenFileGroups}
+              onHiddenFileGroupsChange={setHiddenFileGroups}
+              fileGroupsFailed={fileGroupsFailed}
+              onOpen={refreshFileGroups}
+              onReset={resetFilters}
+              isFiltering={isFiltering}
+            />
+          }
           filterQuery={filterQuery}
           filterExpanded={filterExpanded}
           onFilterQueryChange={setFilterQuery}
@@ -91,6 +125,19 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           headDisplay={gitIdentityDisplay}
           manualReviewUrl={manualReviewUrl}
         />
+
+        {hiddenFileCount > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground">
+            <span role="status">
+              {translate('sourceControl.fileFilters.hidden', 'Hidden files: {{count}}', {
+                count: hiddenFileCount
+              })}
+            </span>
+            <Button variant="link" size="xs" onClick={resetFilters}>
+              {translate('sourceControl.fileFilters.reset', 'Reset filters')}
+            </Button>
+          </div>
+        )}
 
         {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (

@@ -1,4 +1,5 @@
 import { parseDocument } from 'yaml'
+import { normalizeSourceControlFileGroups } from './source-control-file-groups'
 import type {
   OrcaDefaultTabTemplate,
   OrcaHooks,
@@ -236,6 +237,8 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   const environmentRecipes = environmentRecipeParse.recipes
   const environmentRecipeDiagnostics = environmentRecipeParse.diagnostics
   const worktreeRecord = asRecord(record.worktree)
+  const sourceControlRecord = asRecord(record.sourceControl)
+  const fileGroups = normalizeSourceControlFileGroups(sourceControlRecord?.fileGroups)
   const sharedDirectories = worktreeRecord
     ? normalizeSharedDirectories(worktreeRecord.sharedDirectories)
     : []
@@ -248,7 +251,8 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     defaultTabs.length === 0 &&
     environmentRecipes.length === 0 &&
     environmentRecipeDiagnostics.length === 0 &&
-    sharedDirectories.length === 0
+    sharedDirectories.length === 0 &&
+    fileGroups.length === 0
   ) {
     return null
   }
@@ -263,6 +267,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
     ...(defaultTabs.length > 0 ? { defaultTabs } : {}),
     ...(environmentRecipes.length > 0 ? { environmentRecipes } : {}),
     ...(environmentRecipeDiagnostics.length > 0 ? { environmentRecipeDiagnostics } : {}),
-    ...(sharedDirectories.length > 0 ? { worktree: { sharedDirectories } } : {})
+    ...(sharedDirectories.length > 0 ? { worktree: { sharedDirectories } } : {}),
+    ...(fileGroups.length > 0 ? { sourceControl: { fileGroups } } : {})
   }
 }

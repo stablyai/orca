@@ -16,6 +16,7 @@ import { shouldShowSourceControlBranchContextChrome } from './branch-context-sta
 import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
 
 type SourceControlHeaderToolbarProps = {
+  fileFilters?: React.ReactNode
   filterQuery: string
   filterExpanded: boolean
   onFilterQueryChange: (value: string) => void
@@ -137,7 +138,9 @@ function renderOverflowMenu(
   return <SourceControlHeaderOverflowMenu {...props} />
 }
 
+/** Keeps file filters accessible with either the compact toolbar or expanded name search. */
 export function SourceControlHeaderToolbar({
+  fileFilters,
   filterQuery,
   filterExpanded,
   onFilterQueryChange,
@@ -254,6 +257,7 @@ export function SourceControlHeaderToolbar({
                 <span className="absolute right-1 top-1 size-1.5 rounded-full bg-foreground" />
               ) : null}
             </button>
+            {fileFilters}
             {renderOverflowMenu(overflowProps)}
           </>
         ) : (
@@ -285,6 +289,7 @@ export function SourceControlHeaderToolbar({
                 )}
               />
             </div>
+            {fileFilters}
             <Button
               type="button"
               variant="ghost"

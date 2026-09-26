@@ -4,6 +4,7 @@ import { useSourceControlWorktreeContext } from '../listing/use-worktree-context
 import { useSourceControlBranchLineTotalGate } from '../sync/use-branch-line-total-gate'
 import { useSourceControlStatusRefresh } from '../sync/use-status-refresh'
 import { useSourceControlPanelViewState } from './use-panel-view-state'
+import { useSourceControlFileGroupConfig } from '../listing/use-file-group-config'
 import { useSourceControlWorktreeOperationState } from './use-worktree-operation-state'
 
 /**
@@ -39,6 +40,12 @@ export function useSourceControlPanelState() {
     settings,
     updateSettings: storeActions.updateSettings
   })
+  const fileGroupConfig = useSourceControlFileGroupConfig({
+    settings: activeRepoSettings,
+    worktreeId: activeWorktreeId,
+    worktreePath: isFolder ? null : worktreePath,
+    connectionId: activeConnectionId ?? undefined
+  })
   const operationState = useSourceControlWorktreeOperationState({
     activeWorktreeId,
     conflictOperationsByWorktree,
@@ -67,6 +74,7 @@ export function useSourceControlPanelState() {
     ...storeActions,
     ...notes,
     ...viewState,
+    ...fileGroupConfig,
     ...operationState,
     ...statusRefresh
   }

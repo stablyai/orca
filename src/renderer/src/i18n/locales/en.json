@@ -18303,6 +18303,19 @@
   "sourceControl": {
     "unlinkedPr": {
       "status": "PR #{{number}} unlinked"
+    },
+    "fileFilters": {
+      "noMatches": "Change or reset the file filters to see more files.",
+      "title": "Filter files by extension or group",
+      "extensions": "Show extensions",
+      "allExtensions": "All extensions",
+      "noExtension": "No extension",
+      "groups": "Hide file groups",
+      "allGroups": "All groups",
+      "loadError": "Could not load file groups.",
+      "reset": "Reset filters",
+      "scope": "Filters change this list only.",
+      "hidden": "Hidden files: {{count}}"
     }
   },
   "agentsSidebarIntro": {
