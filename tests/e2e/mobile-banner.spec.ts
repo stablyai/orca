@@ -1,4 +1,10 @@
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
+import { parsePairingCode } from '../../src/shared/pairing'
+import {
+  subscribeRemoteRuntimeRequest,
+  type RemoteRuntimeSubscription
+} from '../../src/shared/remote-runtime-client'
+import type { BrowserScreencastResult } from '../../src/shared/runtime-browser-contracts'
 import { test, expect } from './helpers/orca-app'
 import {
   ensureTerminalVisible,
@@ -26,6 +32,14 @@ import {
 // renderer-side IPC listener → state mirror → banner JSX chain.
 
 test.describe.configure({ mode: 'serial' })
+
+test.beforeEach(async ({ orcaPage }) => {
+  await waitForSessionReady(orcaPage)
+  // Why: these locators assert English copy, while fresh profiles follow the host OS locale.
+  await orcaPage.evaluate(async () => {
+    await window.__store?.getState().updateSettings({ uiLanguage: 'en' })
+  })
+})
 
 test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', async ({
   orcaPage,
@@ -87,6 +101,91 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
   await expectRestoreTerminalFitCalls(electronApp, [ptyId])
   await sendDesktopRestoreIpc(electronApp, { ptyId })
   await expect(overlay).toBeHidden({ timeout: 15_000 })
+})
+
+test('browser Take back releases its retained driver state', async ({ orcaPage }) => {
+  test.setTimeout(180_000)
+  let mobileSubscription: RemoteRuntimeSubscription | null = null
+  try {
+    await waitForSessionReady(orcaPage)
+    const worktreeId = await waitForActiveWorktree(orcaPage)
+    const browserPageId = await orcaPage.evaluate((targetWorktreeId) => {
+      const tab = window.__store!.getState().createBrowserTab(targetWorktreeId, 'about:blank', {
+        title: 'Mobile driver test',
+        activate: true
+      })
+      return tab.activePageId
+    }, worktreeId)
+    if (!browserPageId) {
+      throw new Error('Browser page was not created')
+    }
+
+    const addressBar = orcaPage.locator('[data-orca-browser-address-bar="true"]:visible')
+    await expect(addressBar).toBeVisible({ timeout: 15_000 })
+    const offer = await orcaPage.evaluate(() =>
+      window.api.mobile.getPairingQR({
+        address: '127.0.0.1',
+        connectionMode: 'local-only',
+        rotate: true
+      })
+    )
+    if (!offer.available) {
+      throw new Error(`Mobile pairing unavailable: ${offer.reason ?? 'unknown'}`)
+    }
+    const pairing = parsePairingCode(offer.pairingUrl)
+    if (!pairing) {
+      throw new Error('Mobile pairing URL was invalid')
+    }
+    let resolveReady!: () => void
+    let rejectReady!: (error: unknown) => void
+    const ready = new Promise<void>((resolve, reject) => {
+      resolveReady = resolve
+      rejectReady = reject
+    })
+    mobileSubscription = await subscribeRemoteRuntimeRequest<BrowserScreencastResult>(
+      pairing,
+      'browser.screencast',
+      { page: browserPageId },
+      60_000,
+      {
+        onResponse: (response) => {
+          if (!response.ok) {
+            rejectReady(new Error(`Browser screencast failed: ${JSON.stringify(response)}`))
+          } else if (response.result.type === 'ready') {
+            resolveReady()
+          }
+        },
+        onBinary: () => {},
+        onError: rejectReady
+      }
+    )
+    await ready
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(async (targetPageId) => {
+          const drivers = await window.api.runtime.getBrowserDrivers()
+          return drivers.find(({ browserPageId: id }) => id === targetPageId)?.driver ?? null
+        }, browserPageId)
+      )
+      .toMatchObject({ kind: 'mobile' })
+    await expect(addressBar).toBeDisabled()
+
+    const overlay = orcaPage.locator('.mobile-browser-driver-banner')
+    await expect(overlay).toBeVisible({ timeout: 15_000 })
+    await overlay.getByRole('button').click()
+    await expect(overlay).toBeHidden({ timeout: 15_000 })
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(async (targetPageId) => {
+          const drivers = await window.api.runtime.getBrowserDrivers()
+          return drivers.some(({ browserPageId: id }) => id === targetPageId)
+        }, browserPageId)
+      )
+      .toBe(false)
+    await expect(addressBar).toBeEnabled()
+  } finally {
+    mobileSubscription?.close()
+  }
 })
 
 test('held phone-fit state mounts restore overlay without collapse', async ({
