@@ -39,6 +39,14 @@ async function setupOpenCode2Status(ctx) {
           type = "session.status";
           properties = { ...properties, status: { type: "busy" } };
         } else if (type === "session.execution.succeeded" || type === "session.execution.failed" || type === "session.execution.interrupted") {
+          // Why: these terminal events are OpenCode 2's only turn verdict (there is no
+          // session.error), so restate it as one before the idle; only a user stop cancels.
+          const turnErrorName = type === "session.execution.failed"
+            ? (typeof properties?.error?.type === "string" && properties.error.type) || "UnknownError"
+            : type === "session.execution.interrupted" && properties?.reason === "user" ? "MessageAbortedError" : "";
+          if (turnErrorName) {
+            await hooks.event({ event: { type: "session.error", properties: { sessionID: properties?.sessionID, error: { name: turnErrorName } } } });
+          }
           type = "session.status";
           properties = { ...properties, status: { type: "idle" } };
         } else if (type === "permission.asked") {

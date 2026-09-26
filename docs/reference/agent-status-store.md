@@ -196,7 +196,9 @@ rows and terminal-title-only rows carry none, and readers fall back to `state`. 
 plugin sends the root session's own state (`root_state`) and the name of the error that ended
 its turn (`root_turn_error_name`) beside its pane fold; `MessageAbortedError` is a
 `cancellation`, any other name a `failure`, and a plugin that predates the fields publishes no
-`mainAgent`:
+`mainAgent`. OpenCode 2 sends no `session.error`, so its setup bridge names the turn from the
+terminal event: `session.execution.failed` by its error type, and a user's
+`session.execution.interrupted` as `MessageAbortedError`:
 
 ```ts
 mainAgent?: { state: AgentStatusState; outcome?: AgentJournalTurnOutcome; stateStartedAt: number }

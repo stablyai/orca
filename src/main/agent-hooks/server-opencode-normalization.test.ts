@@ -189,6 +189,9 @@ describe('OpenCode main agent from the root session state', () => {
     ['StructuredOutputError', 'failure'],
     ['ContextOverflowError', 'failure'],
     ['SomeFutureError', 'failure'],
+    // OpenCode 2 names a failed execution by its error type; only a user stop is aborted.
+    ['provider.invalid-request', 'failure'],
+    ['aborted', 'failure'],
     ['MessageAbortedError', 'cancellation'],
     [undefined, undefined],
     [42, undefined],
