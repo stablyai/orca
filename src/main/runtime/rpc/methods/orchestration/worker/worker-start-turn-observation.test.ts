@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../shared/orchestration-timing-budgets'
 import type { RuntimeTerminalPromptDelivery } from '../../../../../../shared/runtime-terminal-contracts'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { observeWorkerTurnStart } from './worker-start-turn-observation'
+import {
+  describeUnobservedWorkerTurnStart,
+  observeWorkerTurnStart
+} from './worker-start-turn-observation'
 
 function delivery(
   overrides: Partial<RuntimeTerminalPromptDelivery> = {}
@@ -116,5 +120,20 @@ describe('observeWorkerTurnStart', () => {
       observeWorkerTurnStart({ runtime, terminalHandle: 'term_w', prompt })
     ).resolves.toEqual({ verdict: 'unobserved', prompt })
     expect(observe).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('describeUnobservedWorkerTurnStart', () => {
+  it('reports written input without claiming the prompt was submitted', () => {
+    const message = describeUnobservedWorkerTurnStart('claude')
+    const timeoutSeconds = Math.round(AGENT_PROMPT_EFFECT_TIMEOUT_MS / 1000)
+
+    expect(message).not.toMatch(/written and submitted/i)
+    expect(message).not.toMatch(/\bsubmitted\b/i)
+    expect(message).toContain('Dispatch input (text and Enter) was written')
+    expect(message).toContain(`claude's turn start was not observed within ${timeoutSeconds}s`)
+    expect(message).toContain('unsent in the composer')
+    expect(message).toContain('`terminal read`')
+    expect(message).toContain('unverifiable, not proof the worker is dead')
   })
 })
