@@ -220,6 +220,8 @@ export type GlobalSettings = {
   openLinksInAppModifierInverts?: boolean
   /** Show link actions on plain click in the terminal and chat; off restores modifier-click-only terminal links. */
   terminalLinkActionPopoverEnabled?: boolean
+  /** Opt-in: in-app links open beside the source pane (splitting right when there is no sibling) instead of as another tab in the active group. */
+  openLinksInSidePane?: boolean
   /** Plain-click behavior for terminal links; optional for profiles saved before this setting existed. */
   terminalLinkClickBehavior?: 'actions' | 'open' | 'none'
   /** Middle mouse URL behavior; defaults to opening the primary routed destination. */
