@@ -61,7 +61,11 @@ export function RecoveredSessionResumeButton({
       .finally(() => setPending(false))
   }
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center p-2">
+    <div
+      className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center p-2"
+      data-testid="recovered-session-placeholder"
+      data-pane-key={paneKey}
+    >
       <div className="pointer-events-auto flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 text-card-foreground shadow-xs">
         <span className="text-xs text-muted-foreground">
           {translate('crossMachineRecovery.recoveredSession', 'Recovered session')}

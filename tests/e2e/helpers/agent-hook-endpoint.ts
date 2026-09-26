@@ -90,16 +90,19 @@ export async function emitCodexHookStatus(
   }
 }
 
-export async function emitGrokHookPayload(
+type AgentHookPayloadEvent = {
+  paneKey: string
+  worktreeId: string
+  payload: Record<string, unknown>
+}
+
+async function postAgentHookPayload(
   endpoint: AgentHookEndpoint,
-  event: {
-    paneKey: string
-    worktreeId: string
-    payload: Record<string, unknown>
-  }
+  route: 'claude' | 'grok',
+  event: AgentHookPayloadEvent
 ): Promise<void> {
   const [tabId] = event.paneKey.split(':')
-  const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/grok`, {
+  const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/${route}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -115,6 +118,20 @@ export async function emitGrokHookPayload(
     })
   })
   if (response.status !== 204) {
-    throw new Error(`Grok hook POST returned ${response.status}`)
+    throw new Error(`${route} hook POST returned ${response.status}`)
   }
+}
+
+export async function emitGrokHookPayload(
+  endpoint: AgentHookEndpoint,
+  event: AgentHookPayloadEvent
+): Promise<void> {
+  await postAgentHookPayload(endpoint, 'grok', event)
+}
+
+export async function emitClaudeHookPayload(
+  endpoint: AgentHookEndpoint,
+  event: AgentHookPayloadEvent
+): Promise<void> {
+  await postAgentHookPayload(endpoint, 'claude', event)
 }
