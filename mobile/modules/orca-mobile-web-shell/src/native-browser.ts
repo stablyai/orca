@@ -60,7 +60,7 @@ export async function closeNativeBrowser(page: NativeBrowserPage): Promise<void>
   await nativeModule().closeBrowser(page.generation)
 }
 
-// The guest pauses the shell Activity; keep its existing JS runtime available for commands.
+// Each Expo module keeps its own existing JS runtime available while it controls a native page.
 AppRegistry.registerHeadlessTask(
   'OrcaBrowserGuest',
   () => async (data: { generation: string; taskToken: string }) => {

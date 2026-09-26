@@ -3,15 +3,17 @@ package expo.modules.orcamobilewebshell
 import android.app.Activity
 import android.content.Intent
 import android.os.*
-import com.facebook.react.bridge.ReactContext
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
 internal class BrowserGuestOwner {
+  companion object { val process = BrowserGuestOwner() }
   private val main = Handler(Looper.getMainLooper())
   private var lease: Lease? = null
   private var sequence = 0
-  private class Lease(val generation: String, val open: CompletableFuture<String>, val task: BrowserGuestReactTask) {
+  private class Lease(val generation: String, val open: CompletableFuture<String>, val context: android.content.Context) {
+    var connection: android.content.ServiceConnection? = null
+    val ended = CompletableFuture<String>()
     var foreground = false
     var resume: CompletableFuture<String>? = null
     var endpoint: Messenger? = null
@@ -26,10 +28,9 @@ internal class BrowserGuestOwner {
     if (message.arg1 == -2) {
       current.foreground = message.data.getBoolean("foreground")
       if (current.foreground && !current.retired) {
-        current.task.start()
         current.resume?.complete("{}")
         current.resume = null
-      } else current.task.stop()
+      }
     } else if (message.arg1 == -1) {
       val endpoint = message.replyTo
       if (error != null || endpoint == null) {
@@ -58,7 +59,7 @@ internal class BrowserGuestOwner {
     true
   })
 
-  fun open(activity: Activity, route: String, reactContext: ReactContext): CompletableFuture<String> {
+  fun open(activity: Activity, route: String): CompletableFuture<String> {
     val result = CompletableFuture<String>()
     main.post {
       try {
@@ -67,20 +68,30 @@ internal class BrowserGuestOwner {
         BrowserGuestRoute.parse(route)
         check(lease == null) { "guest_process_occupied" }
         val generation = UUID.randomUUID().toString()
-        val current = Lease(generation, result, BrowserGuestReactTask(reactContext, generation))
+        val current = Lease(generation, result, activity.applicationContext)
         lease = current
         try {
-          current.task.start()
-          activity.startActivity(Intent(activity, BrowserGuestActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          val connection = object : android.content.ServiceConnection {
+            override fun onServiceConnected(name: android.content.ComponentName, service: IBinder) {}
+            override fun onServiceDisconnected(name: android.content.ComponentName) { unbind(current) }
+            override fun onBindingDied(name: android.content.ComponentName) { unbind(current) }
+            override fun onNullBinding(name: android.content.ComponentName) { unbind(current) }
+          }
+          current.connection = connection
+          val bound = current.context.bindService(Intent(current.context, BrowserGuestService::class.java).apply {
             putExtra("owner", receiver)
             putExtra("generation", current.generation)
             putExtra("route", route)
-          })
+          }, connection, android.content.Context.BIND_AUTO_CREATE)
+          if (!bound) {
+            unbind(current)
+            lease = null
+            error("guest_bind_failed")
+          }
         } catch (error: Exception) {
-          current.task.stop()
-          lease = null
-          throw error
+          result.completeExceptionally(error)
+          if (lease === current) retire(current)
+          return@post
         }
         main.postDelayed({
           if (!result.isDone && lease === current) {
@@ -98,7 +109,6 @@ internal class BrowserGuestOwner {
     main.post {
       try {
         val current = requireLease(generation)
-        check(current.foreground) { "guest_not_foreground" }
         check(current.pending.isEmpty()) { "guest_busy" }
         require(request.length <= 65536) { "command_too_large" }
         val id = ++sequence
@@ -139,7 +149,10 @@ internal class BrowserGuestOwner {
         check(current.resume == null) { "guest_resume_pending" }
         if (current.foreground) { result.complete("{}"); return@post }
         current.resume = result
-        activity.startActivity(Intent(activity, BrowserGuestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        activity.startActivity(Intent(activity, BrowserGuestActivity::class.java).apply {
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          putExtra("generation", generation)
+        })
         main.postDelayed({
           if (current.resume === result) {
             current.resume = null
@@ -150,16 +163,6 @@ internal class BrowserGuestOwner {
         if (lease?.resume === result) lease?.resume = null
         result.completeExceptionally(error)
       }
-    }
-    return result
-  }
-
-  fun waitForTaskStop(generation: String, token: String): CompletableFuture<String> {
-    val result = CompletableFuture<String>()
-    main.post {
-      val current = lease
-      if (current == null || current.generation != generation) result.complete("{}")
-      else current.task.waitForStop(token).whenComplete { value, _ -> result.complete(value) }
     }
     return result
   }
@@ -176,12 +179,19 @@ internal class BrowserGuestOwner {
     return result
   }
 
-  fun destroy() {
+  fun whenEnded(generation: String): CompletableFuture<String> {
+    val result = CompletableFuture<String>()
     main.post {
-      lease?.let { current ->
-        retire(current)
-      }
+      val current = lease
+      if (current == null || current.generation != generation) result.complete("{}")
+      else current.ended.whenComplete { value, _ -> result.complete(value) }
     }
+    return result
+  }
+
+  fun checkActiveGeneration(generation: String) {
+    check(Looper.myLooper() == Looper.getMainLooper()) { "main_thread_required" }
+    requireLease(generation)
   }
 
   private fun requireLease(generation: String): Lease {
@@ -194,7 +204,7 @@ internal class BrowserGuestOwner {
   private fun retire(current: Lease) {
     if (current.retired) return
     current.retired = true
-    current.task.stop()
+    current.ended.complete("{}")
     current.open.completeExceptionally(IllegalStateException("guest_closed"))
     current.resume?.completeExceptionally(IllegalStateException("guest_closed"))
     current.resume = null
@@ -221,13 +231,22 @@ internal class BrowserGuestOwner {
     }
   }
 
+  private fun unbind(current: Lease) {
+    val connection = current.connection ?: return
+    current.connection = null
+    try { current.context.unbindService(connection) } catch (_: IllegalArgumentException) {
+      // Binding may have failed before Android registered the connection.
+    }
+  }
+
   private fun died(current: Lease) {
+    current.ended.complete("{}")
     current.resume?.completeExceptionally(IllegalStateException("guest_process_exited"))
-    current.task.stop()
     current.open.completeExceptionally(IllegalStateException("guest_process_exited"))
     current.pending.values.forEach { it.completeExceptionally(IllegalStateException("guest_process_exited")) }
     current.pending.clear()
     current.close?.complete("{}")
+    unbind(current)
     if (lease === current) lease = null
   }
 }

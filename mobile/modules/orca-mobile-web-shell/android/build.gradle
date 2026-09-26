@@ -37,7 +37,8 @@ dependencies { browserLifecycleCompiler 'org.jetbrains.kotlin:kotlin-compiler-em
 def lifecycleSources = files(
   fileTree('../tests/browser-lifecycle') { include '*.kt' },
   'src/main/java/expo/modules/orcamobilewebshell/BrowserGuestOwner.kt',
-  'src/main/java/expo/modules/orcamobilewebshell/BrowserGuestReactTask.kt'
+  'src/main/java/expo/modules/orcamobilewebshell/BrowserGuestReactTask.kt',
+  'src/main/java/expo/modules/orcamobilewebshell/BrowserGuestReactSession.kt'
 )
 def lifecycleClasses = layout.buildDirectory.dir('browser-lifecycle-classes')
 def compileLifecycle = tasks.register('compileBrowserLifecycle', JavaExec) {

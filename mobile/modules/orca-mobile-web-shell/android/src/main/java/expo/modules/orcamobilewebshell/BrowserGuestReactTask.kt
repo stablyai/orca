@@ -7,7 +7,7 @@ import com.facebook.react.jstasks.HeadlessJsTaskContext
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
-/** Runs in the shell runtime only while its guest Activity is foreground. */
+/** Keeps this module’s shell runtime available for its native page commands. */
 internal class BrowserGuestReactTask(context: ReactContext, private val generation: String) {
   private val tasks = HeadlessJsTaskContext.getInstance(context)
   private class Run(val token: String = UUID.randomUUID().toString()) {

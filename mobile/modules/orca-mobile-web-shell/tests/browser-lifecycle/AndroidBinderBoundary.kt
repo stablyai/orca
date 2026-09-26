@@ -4,7 +4,11 @@ open class RemoteException : Exception()
 class TransactionTooLargeException : RemoteException()
 class DeadObjectException : RemoteException()
 object Build { object VERSION { const val SDK_INT = 36 } }
-class Looper { companion object { fun getMainLooper() = Looper() } }
+class Looper { companion object {
+  private val main = Looper()
+  fun getMainLooper() = main
+  fun myLooper() = main
+} }
 
 object Scheduler {
   private var now = 0L
@@ -36,6 +40,8 @@ class Bundle {
   fun putBoolean(key: String, value: Boolean) { values[key] = value }
   fun getBoolean(key: String) = values[key] == true
 }
+
+typealias IBinder = Binder
 
 class Binder {
   var alive = true

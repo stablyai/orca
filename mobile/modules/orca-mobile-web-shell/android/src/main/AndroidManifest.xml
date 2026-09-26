@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <application>
+    <service android:name=".BrowserGuestService" android:process=":orca_browser" android:exported="false" />
     <activity android:name=".BrowserGuestActivity" android:process=":orca_browser"
       android:launchMode="singleTask" android:taskAffinity="${applicationId}.browser"
       android:exported="false" android:excludeFromRecents="true"
