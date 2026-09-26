@@ -53,4 +53,31 @@ describe('formatComputerAction', () => {
     expect(output).toContain('Inspect with the command above')
     expect(output).not.toContain('Click completed')
   })
+
+  it('quotes worktree selectors safely for PowerShell follow-up command', () => {
+    const result: ComputerActionResult = {
+      snapshot: {
+        id: 'snap-1',
+        app: { name: 'App', bundleId: 'com.example.app', pid: 100 },
+        window: { title: 'App', id: 42, width: 800, height: 600 },
+        coordinateSpace: 'window',
+        treeText: 'tree',
+        elementCount: 5,
+        focusedElementId: null
+      },
+      screenshot: null,
+      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' },
+      action: {
+        path: 'synthetic',
+        verification: { state: 'verified', property: 'value' }
+      }
+    }
+
+    const output = formatComputerAction('click', result, {
+      worktree: 'path:C:/work/$review',
+      shell: 'powershell'
+    })
+
+    expect(output).toContain("--worktree 'path:C:/work/$review'")
+  })
 })

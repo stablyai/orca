@@ -19,6 +19,7 @@ import type {
   ComputerSnapshotResult
 } from '../shared/runtime-types'
 import type { RuntimeRpcSuccess } from './runtime-client'
+import type { AgentStartupShell } from '../shared/tui-agent-startup-shell'
 
 export function formatGetAppState(result: ComputerSnapshotResult): string {
   const app = result.snapshot.app
@@ -197,6 +198,7 @@ export type ComputerActionFollowUpTarget = {
   windowId?: number
   windowIndex?: number
   restoreWindow?: boolean
+  shell?: AgentStartupShell
 }
 
 export function formatComputerAction(
@@ -220,17 +222,18 @@ function formatComputerFollowUpCommand(
   result: ComputerActionResult,
   target: ComputerActionFollowUpTarget
 ): string {
+  const quote = (arg: string): string => quoteCliCommandArgument(arg, target.shell)
   const args = [
     'orca',
     'computer',
     'get-app-state',
     '--app',
-    quoteCliCommandArgument(result.snapshot.app.bundleId ?? result.snapshot.app.name)
+    quote(result.snapshot.app.bundleId ?? result.snapshot.app.name)
   ]
   if (target.session) {
-    args.push('--session', quoteCliCommandArgument(target.session))
+    args.push('--session', quote(target.session))
   } else if (target.worktree) {
-    args.push('--worktree', quoteCliCommandArgument(target.worktree))
+    args.push('--worktree', quote(target.worktree))
   }
   const windowChanged =
     result.action?.verification?.state === 'unverified' &&
