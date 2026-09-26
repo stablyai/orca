@@ -187,7 +187,10 @@ export function reconcileFederatedWorkerStop(
         to: 'failed',
         projection: {
           completed_at: dispatch.completed_at ?? new Date().toISOString(),
-          last_failure: 'stopped'
+          last_failure: 'stopped',
+          // The remote proved the stop after all: re-assert revocation so a capability a
+          // stop_unknown restore handed back cannot still verify on a failed dispatch.
+          capability_revoked_at: dispatch.capability_revoked_at ?? new Date().toISOString()
         }
       })
     }
@@ -257,6 +260,20 @@ export function markWorkerStopUnknown(
         updated_at: new Date().toISOString()
       }
     })
+    // beginWorkerStop revoked on intent; this outcome says the intent never landed. An unproven
+    // stop takes nobody's authority — same principle as failWorkerStart's retainCapability
+    // (#16095): a worker that may still be running keeps the way to report, and handing the
+    // token back to one that did die costs nothing because the dead send no messages.
+    const dispatch = this.getDispatchContextById(dispatchId)
+    if (dispatch && ['pending', 'dispatched'].includes(dispatch.status)) {
+      transitionLifecycleWithDb(this.db, {
+        entity: 'dispatch',
+        id: dispatchId,
+        from: dispatch.status,
+        to: dispatch.status,
+        projection: { capability_revoked_at: null }
+      })
+    }
     this.db.exec('RELEASE mark_worker_stop_unknown')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {

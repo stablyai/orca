@@ -31,7 +31,9 @@ export function enqueueFederationRelay(
   try {
     if (params.settleRemoteOutcome) {
       const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
-      if (!attachment || attachment.state !== 'ready') {
+      // `stop_unknown` is admissible on legacy-protocol peers: their worker_done settles at
+      // enqueue, and an unproven stop must not mute the report that disproves it.
+      if (!attachment || !['ready', 'stop_unknown'].includes(attachment.state)) {
         throw new OrchestrationError(
           'dispatch_inactive',
           `Remote Dispatch ${params.dispatchId} is not active.`
