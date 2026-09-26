@@ -129,23 +129,16 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     await flushRepoGitRemoteIdentityEnrichmentForTests()
   })
 
-  it('never hands a runtime row nested SSH target to this client dispatch table', async () => {
-    // Why: `connectionId` on a `runtime:` row names a target inside that server's namespace, so
-    // dialing it here reaches a same-named box of ours. The row keeps the probe this process has
-    // always run for it; what it must never do is dial our same-named target.
+  it('never probes a runtime row through this client dispatch table', async () => {
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'unavailable' })
     const store = makeStore(
       makeRepo({ connectionId: 'nested-1', executionHostId: 'runtime:env-a' })
     )
 
-    enrichMissingRepoGitRemoteIdentities(store)
+    await sweep(store)
 
-    expect(probeGitRemoteIdentity).toHaveBeenCalledWith(
-      '/workspace/sample-app',
-      'local',
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
-    )
-    await flushRepoGitRemoteIdentityEnrichmentForTests()
+    expect(probeGitRemoteIdentity).not.toHaveBeenCalled()
+    expect(store.updateRepo).not.toHaveBeenCalled()
   })
 
   it('keeps same-path rows on two different SSH hosts from sharing one backoff', async () => {
@@ -208,7 +201,7 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store)
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: null })
+    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: null }, 'local')
     expect(repo.gitRemoteIdentity).toBeNull()
   })
 
@@ -243,7 +236,11 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store)
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: remoteIdentity })
+    expect(store.updateRepo).toHaveBeenCalledWith(
+      'repo-1',
+      { gitRemoteIdentity: remoteIdentity },
+      'local'
+    )
   })
 
   it('does not re-probe a resolved identity before the refresh window elapses', async () => {
@@ -296,7 +293,11 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged })
     await drainEnrichmentSweep()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: movedIdentity })
+    expect(store.updateRepo).toHaveBeenCalledWith(
+      'repo-1',
+      { gitRemoteIdentity: movedIdentity },
+      'local'
+    )
     expect(repo.gitRemoteIdentity).toEqual(movedIdentity)
     expect(onChanged).toHaveBeenCalledTimes(1)
   })

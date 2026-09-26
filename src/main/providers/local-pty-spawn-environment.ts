@@ -12,7 +12,6 @@ import { applyScrubSafeAgentEnvAliases } from '../../shared/agent-hook-scrub-saf
 import { removeUnspecifiedPaneIdentityEnv } from './local-pty-launch-helpers'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
-import { awaitCancelableLocalPtySpawn } from './local-pty-spawn-state'
 import type { PtySpawnOptions } from './types'
 
 /** Pane ownership must be fresh even when Orca itself was launched inside an agent. */
@@ -61,21 +60,16 @@ export function buildLocalPtySpawnEnvironment(args: {
   if (!getOptions().buildSpawnEnv) {
     return spawnEnv
   }
-  // Why (#16441): building the env now awaits Codex hook installs and trust
-  // grants, so shutdown must be able to cancel this session id here too.
-  return awaitCancelableLocalPtySpawn(
-    id,
-    getOptions().buildSpawnEnv!(id, spawnEnv, {
-      explicitEnv: spawn.env ?? {},
-      command: spawn.command,
-      launchAgent: spawn.launchAgent,
-      codexHomePathOverride: spawn.codexHomePathOverride,
-      cwd: plan.cwd,
-      shellPath: plan.shellPath,
-      isWsl: plan.isWslShell,
-      wslDistro: plan.launchWslDistro
-    })
-  )
+  return getOptions().buildSpawnEnv!(id, spawnEnv, {
+    explicitEnv: spawn.env ?? {},
+    command: spawn.command,
+    launchAgent: spawn.launchAgent,
+    codexHomePathOverride: spawn.codexHomePathOverride,
+    cwd: plan.cwd,
+    shellPath: plan.shellPath,
+    isWsl: plan.isWslShell,
+    wslDistro: plan.launchWslDistro
+  })
 }
 
 /** App-level env builders can reintroduce deleted keys; enforce isolation after they finish. */

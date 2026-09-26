@@ -10,8 +10,9 @@ describe('CI dependency download caches', () => {
   it('scopes desktop stores to the root lockfile and lets mixed installs opt in', () => {
     expect(action.inputs['cache-dependency-path'].default).toBe('pnpm-lock.yaml')
     for (const step of action.runs.steps.filter((step) => step.uses === 'actions/setup-node@v6')) {
-      expect(step.with.cache).toBe('pnpm')
+      expect(step.with.cache).toBe("${{ github.event_name != 'pull_request' && 'pnpm' || '' }}")
       expect(step.with['cache-dependency-path']).toBe('${{ inputs.cache-dependency-path }}')
+      expect(step.with['package-manager-cache']).toBe(false)
     }
     const install = action.runs.steps.find((step) => step.name === 'Install dependencies')
     expect(install.if).toBeUndefined()
@@ -26,6 +27,28 @@ describe('CI dependency download caches', () => {
       'pnpm-lock.yaml',
       'mobile/pnpm-lock.yaml'
     ])
+  })
+
+  it('restores PR stores with setup-node keys without registering a post-job save', () => {
+    const resolve = action.runs.steps.find((step) => step.id === 'pnpm-store')
+    const restore = action.runs.steps.find(
+      (step) => step.name === 'Restore pnpm download store without saving'
+    )
+    expect(resolve.if).toBe("github.event_name == 'pull_request'")
+    expect(restore.if).toBe(resolve.if)
+    expect(restore.uses).toBe('actions/cache/restore@v5')
+    expect(restore.with.path).toBe('${{ steps.pnpm-store.outputs.path }}')
+    expect(restore.with.key).toBe(
+      'node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}'
+    )
+    expect(restore.with['restore-keys']).toBeUndefined()
+    expect(resolve.env.LOCKFILE_HASH).toBe('${{ hashFiles(inputs.cache-dependency-path) }}')
+    expect(action.runs.steps.indexOf(resolve)).toBeLessThan(action.runs.steps.indexOf(restore))
+    expect(action.runs.steps.indexOf(restore)).toBeLessThan(
+      action.runs.steps.findIndex((step) => step.name === 'Install dependencies')
+    )
+    const saves = action.runs.steps.filter((step) => step.uses === 'actions/cache/save@v5')
+    expect(saves).toEqual([])
   })
 })
 

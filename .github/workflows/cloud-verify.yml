@@ -32,7 +32,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+
+      # Scan every ancestor of HEAD without downloading unrelated branch/tag histories.
+      - name: Fetch complete scan history
+        working-directory: .
+        run: |
+          git fetch --no-tags --unshallow origin "$GITHUB_SHA"
+          test "$(git rev-parse --is-shallow-repository)" = false
 
       - name: Scan Cloud history reachable from HEAD with Gitleaks
         run: >-
