@@ -27,18 +27,40 @@ export function clearedInto(record: AgentSessionRecord): string | null {
     : null
 }
 
+/** The last session the lineage names from `sessionId`, which has no record if the chain broke. */
+function lineageHeadSessionId(store: AgentSessionRecordReader, sessionId: string): string {
+  let head = sessionId
+  const later = new Set([sessionId])
+  let next = clearedIntoId(store, head)
+  while (next && !later.has(next)) {
+    later.add(next)
+    head = next
+    next = clearedIntoId(store, head)
+  }
+  return head
+}
+
+function clearedIntoId(store: AgentSessionRecordReader, sessionId: string): string | null {
+  const record = store.getRecord(sessionId)
+  return record ? clearedInto(record) : null
+}
+
 /** The session running the lineage now; null when the chain names a session with no record. */
 export function lineageLiveSession(
   store: AgentSessionRecordReader,
   sessionId: string
 ): AgentSessionRecord | null {
-  let live = store.getRecord(sessionId)
-  const later = new Set([sessionId])
-  let next = live ? clearedInto(live) : null
-  while (live && next && !later.has(next)) {
-    later.add(next)
-    live = store.getRecord(next)
-    next = live ? clearedInto(live) : null
-  }
-  return live
+  return store.getRecord(lineageHeadSessionId(store, sessionId))
+}
+
+/**
+ * The session running `sessionId`'s conversation now: itself, or its live `/clear` successor. Every
+ * read, observation and stop of a session Orca assigned work to goes through this, the same walk
+ * mail takes; the assigned id only keys identity. Without a record store it stands for itself.
+ */
+export function executingSessionId(
+  sessionId: string,
+  store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
+): string {
+  return store ? lineageHeadSessionId(store, sessionId) : sessionId
 }

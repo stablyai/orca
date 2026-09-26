@@ -37,6 +37,7 @@ import {
   observeStructuredWorker,
   resolveStructuredWorkerIdentity,
   structuredWorkerAgent,
+  structuredWorkerSessionId,
   structuredWorkerTerminalState,
   type StructuredWorkerObservation
 } from '../../structured-worker-authority'
@@ -80,7 +81,8 @@ export async function stopStructuredWorker(
     'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
   >
 ): Promise<StructuredWorkerStopOutcome> {
-  return closeStructuredAgentSessionChild(identity.sessionId, {
+  // The session doing the work: after `/clear` that is the successor, not the minted one.
+  return closeStructuredAgentSessionChild(structuredWorkerSessionId(identity), {
     ...(runtime ? { runtime } : {}),
     // Between the close and the proof, never after: an unsettled close returns early, and a
     // surviving hold keeps the provider child un-evictable for the life of the app.
@@ -132,7 +134,7 @@ export function readStructuredWorkerJournal(args: {
   cursor?: string | number
   limit?: number
 }): OrchestrationWorkerReadTranscriptResult {
-  const page = readStructuredJournalPage(args.identity.sessionId)
+  const page = readStructuredJournalPage(structuredWorkerSessionId(args.identity))
   if (!page) {
     throw new OrchestrationError(
       'transcript_required',
@@ -217,7 +219,7 @@ export function captureStructuredWorkerArchive(
   identity: StructuredWorkerIdentity,
   agent: AgentType
 ): WorkerStructuredJournalArchive {
-  const page = readStructuredJournalPage(identity.sessionId)
+  const page = readStructuredJournalPage(structuredWorkerSessionId(identity))
   if (page) {
     return buildStructuredJournalArchive({
       agent,

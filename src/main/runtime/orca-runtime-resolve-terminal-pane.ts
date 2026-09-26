@@ -7,6 +7,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { RuntimeProviderSnapshotReadOptions } from './runtime-terminal-contracts'
 import { parsePaneKey } from '../../shared/stable-pane-id'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/orca-session-address'
 import {
   buildVisibleSnapshotReadFallback,
   labelTerminalReadSource,
@@ -182,6 +183,10 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
     opts: { cursor?: number; limit?: number; screen?: boolean } = {},
     providerSnapshot: RuntimeProviderSnapshotReadOptions = {}
   ): Promise<RuntimeTerminalRead> {
+    if (handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
+      // A session is read off its record store, which the host opens lazily.
+      await this.ensureStructuredAgentSessionHost().catch(() => undefined)
+    }
     // Before the PTY lookup, because a structured worker has no PTY and no leaf: without this the
     // only peer read verb answers `terminal_handle_stale` for a perfectly live worker.
     const structured = readStructuredWorkerTerminal({

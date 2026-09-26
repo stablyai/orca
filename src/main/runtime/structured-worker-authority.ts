@@ -12,6 +12,7 @@ import type { OrcaSessionId } from '../../shared/orca-session-address'
 import type { RuntimeTerminalState } from '../../shared/runtime-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrchestrationDb } from './orchestration/db'
+import { executingSessionId } from './orchestration/structured-session-lineage'
 import {
   isStructuredWorkerHandle,
   structuredWorkerIdentities,
@@ -82,7 +83,22 @@ export function isRecordedStructuredWorkerSession(
   )
 }
 
-/** Identity plus a record that still proves this runtime owns the session. */
+/**
+ * The session running this worker now: the one minted for it, or that session's live `/clear`
+ * successor, which carries on as the worker the way a terminal keeps its handle. The minted id
+ * keys only the handle, pane and incarnation.
+ */
+export function structuredWorkerSessionId(
+  identity: Pick<StructuredWorkerIdentity, 'sessionId'>
+): string {
+  try {
+    return executingSessionId(identity.sessionId)
+  } catch {
+    return identity.sessionId
+  }
+}
+
+/** Identity plus the executing session's record, which still proves this runtime owns it. */
 export function resolveStructuredWorkerAuthority(
   handle: string,
   db: OrchestrationDb | null | undefined
@@ -91,7 +107,7 @@ export function resolveStructuredWorkerAuthority(
   if (!identity) {
     return null
   }
-  const record = readStructuredAgentSessionRecord(identity.sessionId)
+  const record = readStructuredAgentSessionRecord(structuredWorkerSessionId(identity))
   return record && structuredWorkerRecordIsCurrent(record) ? { identity, record } : null
 }
 
@@ -106,7 +122,9 @@ export function resolveStructuredWorkerAuthority(
  */
 export function structuredWorkerAgent(identity: StructuredWorkerIdentity): 'claude' | 'codex' {
   return (
-    identity.agent ?? readStructuredAgentSessionRecord(identity.sessionId)?.provider ?? 'claude'
+    identity.agent ??
+    readStructuredAgentSessionRecord(structuredWorkerSessionId(identity))?.provider ??
+    'claude'
   )
 }
 
@@ -127,15 +145,20 @@ export function structuredWorkerTerminalState(
   return liveness === 'exited' ? 'exited' : liveness === 'live' ? 'running' : 'unknown'
 }
 
-/**
- * Only the session id is needed: the durable agent-session record is the authority, and it
- * outlives both the in-memory identity registry and this process. Callers that hold nothing but a
- * process incarnation therefore do not have to resolve a registry entry first — after `forget`
- * there is none, and gating on one answers `unverifiable` forever.
- */
+/** A worker's liveness, observed on the session running it now (see `structuredWorkerSessionId`). */
 export function observeStructuredWorker(
   identity: Pick<StructuredWorkerIdentity, 'sessionId'>
 ): StructuredWorkerObservation {
+  return observeStructuredSession(structuredWorkerSessionId(identity))
+}
+
+/**
+ * One session's own liveness. Only the session id is needed: the durable agent-session record is
+ * the authority, and it outlives both the in-memory identity registry and this process. Callers
+ * that hold nothing but a process incarnation therefore do not have to resolve a registry entry
+ * first — after `forget` there is none, and gating on one answers `unverifiable` forever.
+ */
+export function observeStructuredSession(sessionId: string): StructuredWorkerObservation {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     // Reading the persisted record store here would force-install the host, which is itself a side
@@ -145,14 +168,14 @@ export function observeStructuredWorker(
       reason: 'The structured agent-session host is not installed in this runtime generation.'
     }
   }
-  const record = host.deps.store.getRecord(identity.sessionId)
+  const record = host.deps.store.getRecord(sessionId)
   if (!record) {
     return { status: 'unverifiable', reason: 'No durable record backs this structured session.' }
   }
   if (record.lease.claimStatus === 'released' && record.lease.deathEvidence) {
     return { status: 'exited' }
   }
-  if (host.hasSession(identity.sessionId) && record.lease.claimStatus === 'live') {
+  if (host.hasSession(sessionId) && record.lease.claimStatus === 'live') {
     return { status: 'live' }
   }
   return {
