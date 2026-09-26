@@ -55,6 +55,7 @@ export abstract class UsageProviderStoreLifecycle<
 > {
   protected state: State
   private scanPromise: Promise<void> | null = null
+  private rescanRequested = false
   private readonly writer: UsageCacheSnapshotWriter
 
   constructor(
@@ -85,7 +86,10 @@ export abstract class UsageProviderStoreLifecycle<
     return this.getScanState()
   }
 
-  async refresh(force = false): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
+  async refresh(
+    force = false,
+    options: { rerunIfScanning?: boolean } = {}
+  ): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
     if (!this.state.scanState.enabled) {
       return this.getScanState()
     }
@@ -96,7 +100,7 @@ export abstract class UsageProviderStoreLifecycle<
         return this.getScanState()
       }
     }
-    await this.runScan()
+    await this.runScan(options.rerunIfScanning === true)
     return this.getScanState()
   }
 
@@ -123,42 +127,51 @@ export abstract class UsageProviderStoreLifecycle<
     }
   }
 
-  private async runScan(): Promise<void> {
+  private async runScan(rerunIfScanning: boolean): Promise<void> {
     if (this.scanPromise) {
+      if (rerunIfScanning) {
+        this.rescanRequested = true
+      }
       await this.scanPromise
       return
     }
 
-    this.state.scanState.lastScanStartedAt = Date.now()
-    this.state.scanState.lastScanError = null
-
     // Assign before yielding so concurrent refreshes share one scan.
     this.scanPromise = (async () => {
-      try {
-        const repos = this.store.getRepos()
-        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-        const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
-        const result = await this.config.scan(
-          createWorktreeRefs(repos, worktreesByRepo),
-          this.state.worktreeFingerprint === worktreeFingerprint
-            ? this.state[this.config.sourceKey]
-            : this.config.createDefaultState()[this.config.sourceKey]
-        )
-        this.state[this.config.sourceKey] = result[this.config.sourceKey]
-        this.state.sessions = result.sessions
-        this.state.dailyAggregates = result.dailyAggregates
-        this.state.worktreeFingerprint = worktreeFingerprint
-        this.state.scanState.lastScanCompletedAt = Date.now()
+      do {
+        this.rescanRequested = false
+        this.state.scanState.lastScanStartedAt = Date.now()
         this.state.scanState.lastScanError = null
-        // Persistence failures do not turn a successful source scan into a scan failure.
-        await this.writeToDisk().catch(() => {})
-      } catch (error) {
-        this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        await this.writeToDisk().catch(() => {})
-      } finally {
-        this.scanPromise = null
+        try {
+          const repos = this.store.getRepos()
+          const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
+          const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
+          const result = await this.config.scan(
+            createWorktreeRefs(repos, worktreesByRepo),
+            this.state.worktreeFingerprint === worktreeFingerprint
+              ? this.state[this.config.sourceKey]
+              : this.config.createDefaultState()[this.config.sourceKey]
+          )
+          this.state[this.config.sourceKey] = result[this.config.sourceKey]
+          this.state.sessions = result.sessions
+          this.state.dailyAggregates = result.dailyAggregates
+          this.state.worktreeFingerprint = worktreeFingerprint
+          this.state.scanState.lastScanCompletedAt = Date.now()
+          this.state.scanState.lastScanError = null
+          // Persistence failures do not turn a successful source scan into a scan failure.
+          await this.writeToDisk().catch(() => {})
+        } catch (error) {
+          this.state.scanState.lastScanError =
+            error instanceof Error ? error.message : String(error)
+          await this.writeToDisk().catch(() => {})
+        }
+      } while (this.rescanRequested)
+    })().finally(async () => {
+      this.scanPromise = null
+      if (this.rescanRequested) {
+        await this.runScan(false)
       }
-    })()
+    })
 
     await this.scanPromise
   }

@@ -63,7 +63,12 @@ async function runScan(
   // provider's own record type, so nothing here needs a type assertion.
   switch (request.providerId) {
     case 'claude': {
-      const result = await scanClaudeUsageFiles(request.worktrees, request.previous, onFilesScanned)
+      const result = await scanClaudeUsageFiles(
+        request.worktrees,
+        request.previous,
+        request.target,
+        onFilesScanned
+      )
       return {
         providerId: 'claude',
         source: result.processedFiles,
