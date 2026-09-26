@@ -35,6 +35,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   aug: 'augment',
   cline: 'cline',
   codebuff: null,
+  // Why: the skills CLI has no Freebuff key; null drops it rather than guessing (same treatment as Codebuff).
+  freebuff: null,
   'command-code': 'command-code',
   continue: 'continue',
   cursor: 'cursor',

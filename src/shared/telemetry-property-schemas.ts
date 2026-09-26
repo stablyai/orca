@@ -30,6 +30,7 @@ export const AGENT_KIND_VALUES = [
   'aug',
   'cline',
   'codebuff',
+  'freebuff',
   'command-code',
   'continue',
   'cursor',

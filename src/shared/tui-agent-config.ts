@@ -239,6 +239,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'codebuff',
     promptInjectionMode: 'stdin-after-start'
   },
+  freebuff: {
+    detectCmd: 'freebuff',
+    promptInjectionMode: 'stdin-after-start'
+  },
   'command-code': {
     // Why: use the full name (not its `cmd` alias) so detection doesn't collide with Windows' built-in cmd.exe.
     detectCmd: 'command-code',
