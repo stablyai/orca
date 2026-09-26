@@ -1,5 +1,6 @@
 import { realpath } from 'node:fs/promises'
 import path from 'node:path'
+import type { z } from 'zod'
 import type {
   RecoveryImportBindingResult,
   RecoveryImportRequest,
@@ -10,6 +11,8 @@ import {
   findRecoveryRecord,
   worktreeHasSessionTabs
 } from '../../../shared/cross-machine-recovery-session-ops'
+import type { CrossMachineRecoveryImportParams } from '../../../shared/rpc-contract/cross-machine-recovery-params'
+import { OrcaRecoveryDescriptorV1Schema } from '../../../shared/rpc-contract/cross-machine-recovery-params'
 import { readRepoCommonDirFromGit } from '../../git/worktree-list-reader'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import {
@@ -230,10 +233,14 @@ export async function importRecoveryWorkspaceWithHost(
 
 export async function importRecoveryWorkspace(
   runtime: OrcaRuntimeService,
-  params: RecoveryImportRequest
+  params: z.infer<typeof CrossMachineRecoveryImportParams>
 ): Promise<RecoveryImportResult> {
+  const descriptor = OrcaRecoveryDescriptorV1Schema.safeParse(params.descriptor)
+  if (!descriptor.success) {
+    throw new Error('recovery_descriptor_invalid')
+  }
   return await importRecoveryWorkspaceWithHost(
     runtime.getCrossMachineRecoveryHost((repoPath) => runtime.addRepo(repoPath)),
-    params
+    { ...params, descriptor: descriptor.data }
   )
 }
