@@ -83,6 +83,12 @@ export const TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS = [
     name: 'terminal.unsubscribe',
     params: TerminalUnsubscribe,
     handler: async (params, { runtime, connectionId, subscriptionRegistrationVersion }) => {
+      if (params.requestId !== undefined) {
+        // Why: an unknown request already ended or never registered; falling back to the slot could end a newer stream.
+        runtime.releaseSubscriptionByRequest(connectionId, params.requestId)
+        return { unsubscribed: true }
+      }
+      // COMPAT(terminal request-addressed unsubscribe): slot path for phones that predate `requestId`.
       // Fence both socket replacement and a newer subscription on the same socket.
       let unsubscribed = runtime.cleanupSubscriptionIfOwnedByConnection(
         params.subscriptionId,
