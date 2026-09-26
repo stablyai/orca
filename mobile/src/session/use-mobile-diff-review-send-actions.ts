@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -6,11 +6,8 @@ import { useClipboardWriter } from '../platform/clipboard'
 import { triggerSuccess } from '../platform/haptics'
 import { formatDiffComments, formatMobileDiffReviewPrompt } from './mobile-diff-comments'
 import { clearSentMobileDiffComments, markMobileDiffCommentsSent } from './mobile-diff-comment-edit'
-import {
-  reviewTerminalCreateRun,
-  reviewTerminalListRead,
-  reviewTerminalSendRun
-} from './mobile-review-terminal-operations'
+import { reviewTerminalListRead, reviewTerminalSendRun } from './mobile-review-terminal-operations'
+import { launchAgentWithPrompt } from './pr-ai-triage-launch'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-screen-model'
@@ -18,6 +15,7 @@ import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-scr
 type SendActionsInput = {
   client: RpcClient | null
   connState: ConnectionState
+  hostCapabilities: readonly string[]
   worktreeId: string
   screenState: ReviewScreenState
   setActionError: Dispatch<SetStateAction<string | null>>
@@ -35,6 +33,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
   const {
     client,
     connState,
+    hostCapabilities,
     worktreeId,
     screenState,
     setActionError,
@@ -66,20 +65,27 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     await saveCommentsAndReviewState(nextComments, screenState.reviewState)
   }, [saveCommentsAndReviewState, screenState])
 
-  const markNotesSent = useCallback(
-    async (comments: readonly DiffComment[]) => {
-      if (screenState.kind !== 'ready') {
-        return
-      }
-      const next = markMobileDiffCommentsSent(
-        screenState.comments,
-        new Set(comments.map((comment) => comment.id)),
-        Date.now()
-      )
-      await saveCommentsAndReviewState(next, screenState.reviewState)
-    },
-    [saveCommentsAndReviewState, screenState]
-  )
+  // Read when a send settles, not when it was tapped: an agent launch can take a minute, and notes
+  // written meanwhile must survive the whole-list save below, and its rollback if that save fails.
+  const latestRef = useRef({ screenState, save: saveCommentsAndReviewState })
+  useEffect(() => {
+    latestRef.current = { screenState, save: saveCommentsAndReviewState }
+  }, [saveCommentsAndReviewState, screenState])
+  // One launch at a time: each tap is a new operation, so a second tap would start a second agent.
+  const agentLaunchInFlightRef = useRef(false)
+
+  const markNotesSent = useCallback(async (comments: readonly DiffComment[]) => {
+    const { screenState: current, save } = latestRef.current
+    if (current.kind !== 'ready') {
+      return
+    }
+    const next = markMobileDiffCommentsSent(
+      current.comments,
+      new Set(comments.map((comment) => comment.id)),
+      Date.now()
+    )
+    await save(next, current.reviewState)
+  }, [])
 
   const sendPromptToTerminal = useCallback(
     async (terminal: string, comments: readonly DiffComment[]) => {
@@ -114,23 +120,51 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
 
   const createTerminalAndSend = useCallback(
     async (comments: readonly DiffComment[]) => {
+      // Reported, not thrown: the sheet's caller drops the promise, so a throw would show nothing.
       if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
+        setSendSheet(null)
+        setActionError('Waiting for desktop...')
+        return
       }
-      const response = await reviewTerminalCreateRun.request(client, {
-        worktree: `id:${worktreeId}`,
-        activate: false,
-        select: true,
-        navigation: 'caller'
-      })
-      let created
-      created = interpretOrThrowRefusalMessage(
-        () => reviewTerminalCreateRun.interpret(response),
-        'Failed to create terminal'
-      )
-      await sendPromptToTerminal(created.terminal, comments)
+      if (agentLaunchInFlightRef.current) {
+        return
+      }
+      agentLaunchInFlightRef.current = true
+      // Closed up front so the wait (up to a minute for a terminal agent) shows its progress here.
+      setSendSheet(null)
+      setActionError('Starting an agent...')
+      let result
+      try {
+        // The desktop asks which agent to use; the review screen has no picker, so this takes the
+        // desktop's own default resolution with no saved recipe.
+        result = await launchAgentWithPrompt({
+          client,
+          hostCapabilities,
+          worktreeId,
+          prompt: formatMobileDiffReviewPrompt(comments),
+          actionId: null,
+          launchSource: 'notes_send'
+        })
+      } finally {
+        agentLaunchInFlightRef.current = false
+      }
+      if (result.kind === 'not-started' || result.kind === 'unconfirmed') {
+        setActionError(result.message)
+        return
+      }
+      if (result.kind === 'prompt-not-sent') {
+        // Notes stay unsent so Copy Notes and a later send still carry them.
+        setActionError(
+          "The agent started, but the notes weren't sent. Use Copy Notes to paste them."
+        )
+        return
+      }
+      await markNotesSent(comments)
+      triggerSuccess()
+      // The warning is a note on a launch that went ahead, so it follows the success, not replaces it.
+      setActionError(result.warning ? `Review notes sent. ${result.warning}` : 'Review notes sent')
     },
-    [client, connState, sendPromptToTerminal, worktreeId]
+    [client, connState, hostCapabilities, markNotesSent, setActionError, setSendSheet, worktreeId]
   )
 
   const openSendSheet = useCallback(async () => {

@@ -14,6 +14,7 @@ import {
   type MobilePrTitleAction
 } from '../session/use-mobile-pr-title-action'
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
+import { useHostProtocolGates } from './HostProtocolGate'
 import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
@@ -89,7 +90,15 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
-  const triage = useMobilePrAiTriage({ client, connState, worktreeId })
+  const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
+  const triage = useMobilePrAiTriage({
+    client,
+    connState,
+    worktreeId,
+    hostCapabilities,
+    hostStatusPending: statusPending,
+    hostStatusReadable: statusReadable
+  })
   // Keyed on the PR payload identity so overrides re-fetch with each PR refetch
   // instead of staying a stale one-shot snapshot for the whole session.
   const botAuthorOverrides = usePRBotAuthorOverrides(
@@ -271,7 +280,8 @@ function PrSidebarSections({
         })
       ),
     isBusy: triage.isBusy('fix-checks'),
-    error: triage.error
+    availability: triage.availability,
+    ...triage.noticeFor('fix-checks')
   }
   const conflictsTriage = {
     resolveConflicts: () =>
@@ -283,7 +293,8 @@ function PrSidebarSections({
         })
       ),
     isBusy: triage.isBusy('resolve-conflicts'),
-    error: triage.error
+    availability: triage.availability,
+    ...triage.noticeFor('resolve-conflicts')
   }
   // One card for identity + actions so the ready PR isn't a stack of thin
   // duplicate blocks (badge row, title, branches, then another action band).

@@ -171,12 +171,23 @@ export function githubPrMountAdapters(
     'session.pr-triage-launch': ({ client }) => {
       const launch = modules.load<typeof import('../../../session/pr-ai-triage-launch')>(
         'mobile/src/session/pr-ai-triage-launch.ts'
-      ).createTerminalAndSendPrompt
+      ).launchAgentWithPrompt
       let launched: unknown = 'unlaunched'
       return {
         action: (_name, args) =>
-          launch(client, WORKTREE, String(args.prompt ?? 'Fix the failing checks')).then(() => {
-            launched = 'sent'
+          launch({
+            client,
+            // A host older than the launch capabilities advertises neither.
+            hostCapabilities:
+              args.legacyHost === true
+                ? []
+                : ['agent.launch.v2', 'agent.launch.replay.v1', 'agent.launch.replay-required.v1'],
+            worktreeId: WORKTREE,
+            actionId: 'fixChecks',
+            prompt: String(args.prompt ?? 'Fix the failing checks'),
+            launchSource: 'task_page'
+          }).then((result) => {
+            launched = result
           }),
         state: () => ({ launched }),
         dispose: () => {}

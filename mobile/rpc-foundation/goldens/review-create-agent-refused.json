@@ -1,0 +1,249 @@
+{
+  "operation": "session.diff-review-actions",
+  "family": "session.diff-review-actions",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "5d697b25575bcc1597611aa5e6b50625fdb48e23",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "56419c5e22fb384e5d5b0475f28db6505ecefe12c38aafac9fd6d26c1a9f260a",
+  "scenarioSha256": "0816742351babdb260fcdba92d0020e0216c8ec0d106b560357f295671c83fe2",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1c2564f1daca": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "5ee9e7b49320": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"claude\",\"operationId\":\"1767225600000-00000000000040008000000000000001\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:workspace-1\"},\"prompt\":{\"text\":\"You are reviewing the current worktree. Address the following mobile review notes.\\n\\nFile: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\\n\\nAfter applying fixes:\\n1. Summarize changed files.\\n2. Run relevant tests.\\n3. Tell me if anything remains risky.\",\"delivery\":\"submit\"},\"launchSource\":\"notes_send\"}}"
+    },
+    "9239a4f232b8": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "id": "workspace-1"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "96a9a954e28f": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": {
+                "$rpc": "null"
+              },
+              "disabledTuiAgents": []
+            }
+          }
+        }
+      }
+    },
+    "bcb5111e6012": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "agent.launchReplay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "launchSource": "notes_send",
+            "operationId": "1767225600000-00000000000040008000000000000001",
+            "prompt": {
+              "delivery": "submit",
+              "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
+            },
+            "target": {
+              "kind": "existing",
+              "worktree": "id:workspace-1"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "selector_not_found",
+            "message": "Workspace not found"
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    },
+    "e0eef7c9fafe": {
+      "name": "repo.list#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f49d184679d1": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
+    },
+    "fc1691a7deca": {
+      "actionError": "Workspace not found",
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
+      }
+    },
+    "fc3974e714de": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": ["claude"]
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "review-create-agent-refused",
+    "checkpoints": [
+      {
+        "id": "refused",
+        "observation": {
+          "sender": ["9239a4f232b8", "96a9a954e28f", "fc3974e714de", "bcb5111e6012"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "5ee9e7b49320"],
+          "settlements": {
+            "create-and-send": "eb79a9b3682a"
+          },
+          "state": "fc1691a7deca",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

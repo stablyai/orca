@@ -1,0 +1,220 @@
+{
+  "operation": "session.pr-triage-launch",
+  "family": "session.pr-triage",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "5d697b25575bcc1597611aa5e6b50625fdb48e23",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "5f65c5b318f4764b0f58a5e7b593333759a9cfa799db45b11190ac26f4083335",
+  "scenarioSha256": "ca8e7ca631e72fbec9f3264a2ece10f171c258dc888922e4931ea481a70ecc62",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "02188f091419": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": []
+            }
+          }
+        }
+      }
+    },
+    "1c2564f1daca": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "28339abecf78": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"codex\",\"operationId\":\"1767225600000-00000000000040008000000000000001\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:repo-9::/w\"},\"prompt\":{\"text\":\"Fix the failing checks\",\"delivery\":\"submit\"},\"launchSource\":\"task_page\"}}"
+    },
+    "3e6a0417d2ee": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "id": "repo-9"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "9c16efc31903": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": ["codex"]
+        }
+      }
+    },
+    "c15f33d27bd2": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "agent.launchReplay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "launchSource": "task_page",
+            "operationId": "1767225600000-00000000000040008000000000000001",
+            "prompt": {
+              "delivery": "submit",
+              "text": "Fix the failing checks"
+            },
+            "target": {
+              "kind": "existing",
+              "worktree": "id:repo-9::/w"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "agent_session_operation_unknown",
+            "message": "agent_session_operation_unknown"
+          },
+          "id": "frame-4",
+          "ok": false
+        }
+      }
+    },
+    "e0eef7c9fafe": {
+      "name": "repo.list#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "eaa398d8c3aa": {
+      "launched": {
+        "kind": "unconfirmed",
+        "message": "Couldn't confirm the agent started. Check the workspace before trying again."
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f49d184679d1": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
+    }
+  },
+  "recording": {
+    "scenario": "pr-triage-launch-unconfirmed",
+    "checkpoints": [
+      {
+        "id": "unconfirmed",
+        "observation": {
+          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "c15f33d27bd2"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "settlements": {
+            "launch": "eb79a9b3682a"
+          },
+          "state": "eaa398d8c3aa",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -34,7 +34,7 @@ export const worktreeCreateReceiptSchema = z.looseObject({
  *
  * Nothing under the container is required, because readAgentLaunchCreateOutcome already guards
  * every member it reads — `'worktreeId' in result` and a `typeof`/`trim` pair
- * (agent-launch-worktree-create.ts:55-:64) — and answers `null` when either fails, which
+ * (agent-launch-request.ts, readAgentLaunchCreateOutcome) — and answers `null` when either fails, which
  * worktree-create-retry.ts:123 turns into "Failed to create workspace". That arm is preserved.
  *
  * What the container adds is the reply main could not name: a string, a number or `null` receipt

@@ -8,10 +8,8 @@ import {
   WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS,
   type WorktreeCreateIdempotencySupport
 } from './worktree-create-idempotency-policy'
-import {
-  createWorktreeWithNameRetry,
-  WORKTREE_CREATE_AMBIGUOUS_RECONNECT_WAIT_MS
-} from './worktree-create-retry'
+import { createWorktreeWithNameRetry } from './worktree-create-retry'
+import { AMBIGUOUS_RECONNECT_WAIT_MS } from './replay-on-ambiguous-delivery'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 
 type Attempt = { method: string; params: Record<string, unknown> }
@@ -840,6 +838,6 @@ describe('createWorktreeWithNameRetry', () => {
     expect(LEGACY_HOST_REPLAY_WINDOW_MS).toBeLessThan(WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS)
     // A reconnect wait is clamped when a short advertisement leaves less time.
     const shortReplayWindowMs = getWorktreeCreateReplayWindowMs({ dedupeTtlMs: 20_000 })
-    expect(Math.min(WORKTREE_CREATE_AMBIGUOUS_RECONNECT_WAIT_MS, shortReplayWindowMs)).toBe(10_000)
+    expect(Math.min(AMBIGUOUS_RECONNECT_WAIT_MS, shortReplayWindowMs)).toBe(10_000)
   })
 })

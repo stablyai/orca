@@ -1,4 +1,4 @@
-import { pickSourceControlLaunchAgent } from '@/lib/source-control-launch-agent-selection'
+import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control-launch-agent-selection'
 import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 

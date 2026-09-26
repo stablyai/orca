@@ -1,17 +1,13 @@
-import { getAgentCatalog } from '@/lib/agent-catalog'
-import { isCustomAgentId } from '../../../shared/commit-message-agent-spec'
+import { isCustomAgentId } from './commit-message-agent-spec'
 import {
   normalizeRepoSourceControlAiOverrides,
   resolveSourceControlActionRecipe
-} from '../../../shared/source-control-ai'
-import type {
-  SourceControlActionId,
-  SourceControlActionRecipe
-} from '../../../shared/source-control-ai-actions'
-import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Repo } from '../../../shared/repo-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+} from './source-control-ai'
+import type { SourceControlActionId, SourceControlActionRecipe } from './source-control-ai-actions'
+import { filterEnabledTuiAgents, TUI_AGENT_AUTO_PICK_ORDER } from './tui-agent-selection'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
+import type { TuiAgent } from './tui-agent'
 
 export function readSourceControlLaunchRecipeAgentId(
   recipe: Pick<SourceControlActionRecipe, 'agentId'> | null | undefined
@@ -37,7 +33,7 @@ export function pickSourceControlLaunchAgent(args: {
   ) {
     return args.defaultAgent
   }
-  return getAgentCatalog().find((entry) => enabledAgents.includes(entry.id))?.id ?? null
+  return TUI_AGENT_AUTO_PICK_ORDER.find((agent) => enabledAgents.includes(agent)) ?? null
 }
 
 export type SourceControlLaunchAgentScope = {

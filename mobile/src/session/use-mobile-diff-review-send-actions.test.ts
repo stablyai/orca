@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import {
   isMobileNativeChatInputStale,
@@ -10,6 +11,21 @@ import {
   resetMobileNativeChatStaleInputForTests
 } from './mobile-native-chat-stale-input'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
+
+// A connected client whose only behaviour is the scripted `sendRequest`.
+function requestPortRpcClient(sendRequest: RpcClient['sendRequest']): RpcClient {
+  return {
+    sendRequest,
+    subscribe: () => () => {},
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
+}
 
 type SendActions = ReturnType<typeof useMobileDiffReviewSendActions>
 
@@ -38,6 +54,46 @@ const COMMENT: DiffComment = {
   side: 'modified'
 }
 
+const LAUNCH_CAPABILITIES = [
+  'agent.launch.v2',
+  'agent.launch.replay.v1',
+  'agent.launch.replay-required.v1'
+]
+
+function rpcReply(result: unknown) {
+  return { id: 'rpc', ok: true as const, result, _meta: { runtimeId: 'r' } }
+}
+
+function launchedReply(promptOutcome: 'handed-to-terminal' | 'not-delivered', warning?: string) {
+  return rpcReply({
+    outcome: { kind: 'terminal', handle: 'term-1' },
+    worktreeId: 'wt-1',
+    receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'd' },
+    prompt: { delivery: 'submit', outcome: promptOutcome },
+    ...(warning ? { warning } : {})
+  })
+}
+
+// Answers the agent loader's reads and the launch, by method.
+function launchClient(
+  promptOutcome: 'handed-to-terminal' | 'not-delivered',
+  launchReply: () => Promise<RpcResponse> = async () => launchedReply(promptOutcome)
+) {
+  const sendRequest = vi.fn(async (method: string, _params?: unknown): Promise<RpcResponse> => {
+    if (method === 'repo.list') {
+      return rpcReply({ repos: [{ id: 'wt-1' }] })
+    }
+    if (method === 'settings.get') {
+      return rpcReply({ settings: { defaultTuiAgent: 'codex' } })
+    }
+    if (method === 'preflight.detectAgents') {
+      return rpcReply(['codex'])
+    }
+    return launchReply()
+  })
+  return { client: requestPortRpcClient(sendRequest), sendRequest }
+}
+
 const READY: ReviewScreenState = {
   kind: 'ready',
   status: { entries: [], conflictOperation: 'none' },
@@ -53,8 +109,10 @@ describe('useMobileDiffReviewSendActions', () => {
   let setActionError: ReturnType<typeof vi.fn>
   let setSendSheet: ReturnType<typeof vi.fn>
   let saveCommentsAndReviewState: ReturnType<typeof vi.fn>
+  let screenState: ReviewScreenState = READY
 
   beforeEach(() => {
+    screenState = READY
     clipboardMock.setStringAsync.mockReset().mockResolvedValue(true)
     resetMobileNativeChatStaleInputForTests()
     setActionError = vi.fn()
@@ -73,8 +131,9 @@ describe('useMobileDiffReviewSendActions', () => {
     actions = useMobileDiffReviewSendActions({
       client: mountedClient,
       connState: 'connected',
+      hostCapabilities: LAUNCH_CAPABILITIES,
       worktreeId: 'wt-1',
-      screenState: READY,
+      screenState,
       setActionError,
       setSendSheet,
       saveCommentsAndReviewState
@@ -238,5 +297,142 @@ describe('useMobileDiffReviewSendActions', () => {
 
     expect((error as Error).message).toBe('pane gone')
     expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
+  })
+
+  it('starts a new agent with the notes through the host and marks them sent', async () => {
+    const { client, sendRequest } = launchClient('handed-to-terminal')
+    await mount(client)
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    const launch = sendRequest.mock.calls.find(([method]) => method === 'agent.launchReplay')
+    expect(launch?.[1]).toMatchObject({
+      agent: 'codex',
+      target: { kind: 'existing', worktree: 'id:wt-1' },
+      prompt: { delivery: 'submit' },
+      launchSource: 'notes_send'
+    })
+    expect(sendRequest.mock.calls.some(([method]) => method === 'terminal.send')).toBe(false)
+    expect(saveCommentsAndReviewState).toHaveBeenCalledOnce()
+    expect(setActionError).toHaveBeenLastCalledWith('Review notes sent')
+  })
+
+  it('keeps saying the notes were sent when the host adds a warning', async () => {
+    await mount(
+      launchClient('handed-to-terminal', async () =>
+        launchedReply('handed-to-terminal', 'the requested arguments were ignored.')
+      ).client
+    )
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(saveCommentsAndReviewState).toHaveBeenCalledOnce()
+    expect(setActionError).toHaveBeenLastCalledWith(
+      'Review notes sent. the requested arguments were ignored.'
+    )
+  })
+
+  it('says it is waiting for the desktop instead of rejecting when there is no connection', async () => {
+    await mountWithoutClient()
+    await act(async () => {
+      await expect(actions?.createTerminalAndSend([COMMENT])).resolves.toBeUndefined()
+    })
+    expect(setSendSheet).toHaveBeenCalledWith(null)
+    expect(setActionError).toHaveBeenLastCalledWith('Waiting for desktop...')
+  })
+
+  it('keeps the notes unsent when the agent started without them', async () => {
+    await mount(launchClient('not-delivered').client)
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
+    expect(setActionError).toHaveBeenLastCalledWith(
+      "The agent started, but the notes weren't sent. Use Copy Notes to paste them."
+    )
+  })
+
+  it('shows a launch that did not start on the review screen instead of rejecting', async () => {
+    await mount(
+      launchClient('handed-to-terminal', async () => ({
+        id: 'rpc',
+        ok: false,
+        error: { code: 'selector_not_found', message: 'Workspace not found' },
+        _meta: { runtimeId: 'r' }
+      })).client
+    )
+    await act(async () => {
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(setSendSheet).toHaveBeenCalledWith(null)
+    expect(setActionError).toHaveBeenLastCalledWith('Workspace not found')
+    expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
+  })
+
+  it('starts one agent for a double tap and keeps notes written while it starts', async () => {
+    let answerLaunch: (reply: RpcResponse) => void = () => {}
+    const { client, sendRequest } = launchClient(
+      'handed-to-terminal',
+      () =>
+        new Promise<RpcResponse>((resolve) => {
+          answerLaunch = resolve
+        })
+    )
+    await mount(client)
+    let first: Promise<void> | undefined
+    await act(async () => {
+      first = actions?.createTerminalAndSend([COMMENT])
+      await actions?.createTerminalAndSend([COMMENT])
+    })
+    expect(setActionError).toHaveBeenLastCalledWith('Starting an agent...')
+    const written: DiffComment = { ...COMMENT, id: 'comment-2', body: 'written meanwhile' }
+    screenState = { ...READY, comments: [COMMENT, written] }
+    await act(async () => {
+      renderer?.update(createElement(Harness))
+    })
+    await act(async () => {
+      answerLaunch(launchedReply('handed-to-terminal'))
+      await first
+    })
+    expect(
+      sendRequest.mock.calls.filter(([method]) => method === 'agent.launchReplay')
+    ).toHaveLength(1)
+    expect(saveCommentsAndReviewState).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ id: 'comment-1', sentAt: expect.any(Number) }),
+        expect.not.objectContaining({ sentAt: expect.anything() })
+      ],
+      READY.reviewState
+    )
+    expect(saveCommentsAndReviewState.mock.calls[0]?.[0]?.[1]?.id).toBe('comment-2')
+    expect(setActionError).toHaveBeenLastCalledWith('Review notes sent')
+  })
+
+  // The save rolls back to the screen it was created with, so a stale one would drop newer notes.
+  it('marks the notes sent through the save of the latest render, not the one from the tap', async () => {
+    let answerLaunch: (reply: RpcResponse) => void = () => {}
+    const { client } = launchClient(
+      'handed-to-terminal',
+      () =>
+        new Promise<RpcResponse>((resolve) => {
+          answerLaunch = resolve
+        })
+    )
+    await mount(client)
+    let first: Promise<void> | undefined
+    await act(async () => {
+      first = actions?.createTerminalAndSend([COMMENT])
+    })
+    const tapTimeSave = saveCommentsAndReviewState
+    saveCommentsAndReviewState = vi.fn().mockResolvedValue(undefined)
+    await act(async () => {
+      renderer?.update(createElement(Harness))
+    })
+    await act(async () => {
+      answerLaunch(launchedReply('handed-to-terminal'))
+      await first
+    })
+    expect(tapTimeSave).not.toHaveBeenCalled()
+    expect(saveCommentsAndReviewState).toHaveBeenCalledOnce()
   })
 })

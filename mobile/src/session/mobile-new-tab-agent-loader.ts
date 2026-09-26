@@ -15,10 +15,18 @@ import {
   type MobileNewTabAgentSettings
 } from './mobile-new-tab-agent-options'
 
-export async function loadMobileNewTabAgentOptions(args: {
+/** What a launch in this workspace can choose from: the host's settings, the agents detected on
+ *  the workspace's execution host, and the workspace's repo (absent for the floating workspace). */
+export type MobileAgentLaunchContext = {
+  settings: unknown
+  detectedAgents: unknown[]
+  repo: MobileRuntimeRepoSummary | null
+}
+
+export async function loadMobileAgentLaunchContext(args: {
   client: RpcClient
   worktreeId: string
-}): Promise<MobileNewTabAgentOption[]> {
+}): Promise<MobileAgentLaunchContext> {
   const { client, worktreeId } = args
   // Started before the settings read, not inside the array: the detection request goes on the wire
   // first, and the recorded sender order is what says so.
@@ -31,10 +39,18 @@ export async function loadMobileNewTabAgentOptions(args: {
   // Interpreted after the group, not inside it: whichever peer failed first must not decide the
   // error the sheet shows, and main raised the detection refusal only once settings had settled.
   const detected = detectedAgents.interpret(detectedAgents.reply)
+  return { settings: readSettings(), detectedAgents: detected, repo: detectedAgents.repo }
+}
+
+export async function loadMobileNewTabAgentOptions(args: {
+  client: RpcClient
+  worktreeId: string
+}): Promise<MobileNewTabAgentOption[]> {
+  const context = await loadMobileAgentLaunchContext(args)
   return buildMobileNewTabAgentOptions(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-    readSettings() as MobileNewTabAgentSettings | undefined,
-    detected
+    context.settings as MobileNewTabAgentSettings | undefined,
+    context.detectedAgents
   )
 }
 
@@ -42,6 +58,7 @@ export async function loadMobileNewTabAgentOptions(args: {
 type DetectedAgentsReply = {
   reply: RpcResponse
   interpret: (reply: RpcResponse) => unknown[]
+  repo: MobileRuntimeRepoSummary | null
 }
 
 async function loadDetectedAgents(
@@ -52,7 +69,8 @@ async function loadDetectedAgents(
   if (isFloatingWorkspaceWorktreeId(worktreeId)) {
     return {
       reply: await preflightDetectAgentsRead.request(client),
-      interpret: preflightDetectAgentsRead.interpret
+      interpret: preflightDetectAgentsRead.interpret,
+      repo: null
     }
   }
   const repoResponse = await newTabRepoListRead.request(client)
@@ -67,10 +85,12 @@ async function loadDetectedAgents(
   return connectionId
     ? {
         reply: await preflightDetectRemoteAgentsRead.request(client, { connectionId }),
-        interpret: preflightDetectRemoteAgentsRead.interpret
+        interpret: preflightDetectRemoteAgentsRead.interpret,
+        repo
       }
     : {
         reply: await preflightDetectAgentsRead.request(client),
-        interpret: preflightDetectAgentsRead.interpret
+        interpret: preflightDetectAgentsRead.interpret,
+        repo
       }
 }

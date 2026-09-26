@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "baseline": "5d697b25575bcc1597611aa5e6b50625fdb48e23",
   "scenarios": [
     {
       "id": "b1",
@@ -5939,7 +5939,7 @@
       "family": "worktree.agent-launch-create",
       "sites": [
         "mobile/src/tasks/worktree-create-retry.ts",
-        "mobile/src/tasks/agent-launch-worktree-create.ts"
+        "mobile/src/tasks/agent-launch-request.ts"
       ],
       "schedules": [],
       "steps": [
@@ -9382,37 +9382,78 @@
           "checkpoint": "pending"
         },
         {
-          "complete": "session.tabs.createTerminal#1",
+          "complete": "repo.list#1",
           "params": {
-            "worktree": "id:repo-9::/w",
-            "activate": false,
-            "select": true,
-            "navigation": "caller"
+            "$undefined": true
           },
           "reply": {
             "ok": true,
             "result": {
-              "tab": {
-                "id": "tab-1",
-                "type": "terminal",
-                "terminal": "term-1",
-                "title": "Agent"
+              "repos": [
+                {
+                  "id": "repo-9"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": []
               }
             }
           }
         },
         {
-          "complete": "terminal.send#1",
+          "complete": "preflight.detectAgents#1",
           "params": {
-            "terminal": "term-1",
-            "text": "Fix the failing checks",
-            "enter": true
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex"]
+          }
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "codex",
+            "operationId": "1767225600000-00000000000040008000000000000001",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:repo-9::/w"
+            },
+            "prompt": {
+              "text": "Fix the failing checks",
+              "delivery": "submit"
+            },
+            "launchSource": "task_page"
           },
           "reply": {
             "ok": true,
             "result": {
-              "send": {
-                "accepted": true
+              "outcome": {
+                "kind": "terminal",
+                "handle": "term-1"
+              },
+              "worktreeId": "repo-9::/w",
+              "receipt": {
+                "mode": "terminal",
+                "preferred": "terminal",
+                "reason": "user_default",
+                "detail": "Started a terminal agent, the default for new agent tabs in your settings."
+              },
+              "prompt": {
+                "delivery": "submit",
+                "outcome": "handed-to-terminal"
               }
             }
           }
@@ -9423,7 +9464,7 @@
       ]
     },
     {
-      "id": "pr-triage-send-locked",
+      "id": "pr-triage-prompt-not-delivered",
       "operation": "session.pr-triage-launch",
       "version": 1,
       "family": "session.pr-triage",
@@ -9435,48 +9476,89 @@
           "id": "launch"
         },
         {
-          "complete": "session.tabs.createTerminal#1",
+          "complete": "repo.list#1",
           "params": {
-            "worktree": "id:repo-9::/w",
-            "activate": false,
-            "select": true,
-            "navigation": "caller"
+            "$undefined": true
           },
           "reply": {
             "ok": true,
             "result": {
-              "tab": {
-                "id": "tab-1",
-                "type": "terminal",
-                "terminal": "term-1",
-                "title": "Agent"
+              "repos": [
+                {
+                  "id": "repo-9"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": []
               }
             }
           }
         },
         {
-          "complete": "terminal.send#1",
+          "complete": "preflight.detectAgents#1",
           "params": {
-            "terminal": "term-1",
-            "text": "Fix the failing checks",
-            "enter": true
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex"]
+          }
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "codex",
+            "operationId": "1767225600000-00000000000040008000000000000001",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:repo-9::/w"
+            },
+            "prompt": {
+              "text": "Fix the failing checks",
+              "delivery": "submit"
+            },
+            "launchSource": "task_page"
           },
           "reply": {
             "ok": true,
             "result": {
-              "send": {
-                "accepted": false
+              "outcome": {
+                "kind": "terminal",
+                "handle": "term-1"
+              },
+              "worktreeId": "repo-9::/w",
+              "receipt": {
+                "mode": "terminal",
+                "preferred": "terminal",
+                "reason": "user_default",
+                "detail": "Started a terminal agent, the default for new agent tabs in your settings."
+              },
+              "prompt": {
+                "delivery": "submit",
+                "outcome": "not-delivered"
               }
             }
           }
         },
         {
-          "checkpoint": "locked"
+          "checkpoint": "prompt-not-sent"
         }
       ]
     },
     {
-      "id": "pr-triage-invalid-terminal",
+      "id": "pr-triage-launch-unconfirmed",
       "operation": "session.pr-triage-launch",
       "version": 1,
       "family": "session.pr-triage",
@@ -9488,24 +9570,91 @@
           "id": "launch"
         },
         {
-          "complete": "session.tabs.createTerminal#1",
+          "complete": "repo.list#1",
           "params": {
-            "worktree": "id:repo-9::/w",
-            "activate": false,
-            "select": true,
-            "navigation": "caller"
+            "$undefined": true
           },
           "reply": {
             "ok": true,
             "result": {
-              "tab": {
-                "id": "tab-1"
+              "repos": [
+                {
+                  "id": "repo-9"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": []
               }
             }
           }
         },
         {
-          "checkpoint": "invalid"
+          "complete": "preflight.detectAgents#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": ["codex"]
+          }
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "codex",
+            "operationId": "1767225600000-00000000000040008000000000000001",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:repo-9::/w"
+            },
+            "prompt": {
+              "text": "Fix the failing checks",
+              "delivery": "submit"
+            },
+            "launchSource": "task_page"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "agent_session_operation_unknown",
+              "message": "agent_session_operation_unknown"
+            }
+          }
+        },
+        {
+          "checkpoint": "unconfirmed"
+        }
+      ]
+    },
+    {
+      "id": "pr-triage-update-required",
+      "operation": "session.pr-triage-launch",
+      "version": 1,
+      "family": "session.pr-triage",
+      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "launch",
+          "id": "launch",
+          "args": {
+            "legacyHost": true
+          }
+        },
+        {
+          "checkpoint": "update-required"
         }
       ]
     },
@@ -18657,7 +18806,7 @@
       ]
     },
     {
-      "id": "review-create-terminal-refused",
+      "id": "review-create-agent-refused",
       "operation": "session.diff-review-actions",
       "version": 1,
       "family": "session.diff-review-actions",
@@ -18675,18 +18824,66 @@
           "id": "create-and-send"
         },
         {
-          "complete": "session.tabs.createTerminal#1",
+          "complete": "repo.list#1",
           "params": {
-            "activate": false,
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:workspace-1"
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "workspace-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": null,
+                "disabledTuiAgents": []
+              }
+            }
+          }
+        },
+        {
+          "complete": "preflight.detectAgents#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": ["claude"]
+          }
+        },
+        {
+          "complete": "agent.launchReplay#1",
+          "params": {
+            "agent": "claude",
+            "operationId": "1767225600000-00000000000040008000000000000001",
+            "target": {
+              "kind": "existing",
+              "worktree": "id:workspace-1"
+            },
+            "prompt": {
+              "delivery": "submit",
+              "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
+            },
+            "launchSource": "notes_send"
           },
           "reply": {
             "ok": false,
             "error": {
-              "code": "worktree_busy",
-              "message": "Workspace is busy"
+              "code": "selector_not_found",
+              "message": "Workspace not found"
             }
           }
         },

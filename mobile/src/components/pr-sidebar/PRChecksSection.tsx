@@ -22,12 +22,17 @@ import { PRSection } from './PRSection'
 import { PRCheckDetailView, type DetailEntry } from './PRCheckDetail'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 import { prAiTriageStyles as triageStyles } from './pr-ai-triage-styles'
+import { AgentLaunchNotice } from '../AgentLaunchNotice'
+import type { MobileAgentLaunchAvailability } from '../../session/mobile-agent-launch-availability'
 
 // Launches the "Fix checks with AI" agent. Absent for display-only usages.
 export type PrChecksTriage = {
   fixChecks: () => void
   isBusy: boolean
+  availability: MobileAgentLaunchAvailability
   error: string | null
+  warning: string | null
+  undeliveredPrompt: string | null
 }
 
 type Props = {
@@ -190,7 +195,7 @@ export function PRChecksSection({
           <Pressable
             style={({ pressed }) => [triageStyles.triageStripButton, pressed && { opacity: 0.7 }]}
             onPress={triage.fixChecks}
-            disabled={triage.isBusy}
+            disabled={triage.isBusy || triage.availability !== 'available'}
             accessibilityRole="button"
             accessibilityLabel="Fix failing checks with AI"
           >
@@ -203,7 +208,15 @@ export function PRChecksSection({
           </Pressable>
         </View>
       ) : null}
-      {triage?.error ? <Text style={triageStyles.triageError}>{triage.error}</Text> : null}
+      {triage ? (
+        <AgentLaunchNotice
+          availability={summary.failed > 0 ? triage.availability : 'available'}
+          error={triage.error}
+          warning={triage.warning}
+          undeliveredPrompt={triage.undeliveredPrompt}
+          errorStyle={triageStyles.triageError}
+        />
+      ) : null}
       {checksError ? <Text style={triageStyles.triageError}>{checksError}</Text> : null}
       {sorted.map((check) => {
         const key = prCheckKey(check)

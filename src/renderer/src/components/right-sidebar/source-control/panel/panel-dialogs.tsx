@@ -1,4 +1,4 @@
-import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control-launch-agent-selection'
 import { SourceControlDialogLayer } from './dialog-layer'
 import type { SourceControlPanelReadyProps } from './panel-props'
 

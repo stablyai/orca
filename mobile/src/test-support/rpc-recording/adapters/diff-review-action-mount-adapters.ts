@@ -82,6 +82,11 @@ export function diffReviewActionMountAdapters(
           mountFixture<Parameters<typeof useInteractions>[0]>({
             client,
             connState: 'connected',
+            hostCapabilities: [
+              'agent.launch.v2',
+              'agent.launch.replay.v1',
+              'agent.launch.replay-required.v1'
+            ],
             hostId: HOST,
             worktreeId: WORKSPACE,
             screenState,

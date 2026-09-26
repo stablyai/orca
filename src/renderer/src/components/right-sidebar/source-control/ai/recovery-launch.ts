@@ -7,7 +7,7 @@ import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
-} from '@/lib/source-control-launch-agent-selection'
+} from '../../../../../../shared/source-control-launch-agent-selection'
 import { isTuiAgentEnabled } from '../../../../../../shared/tui-agent-selection'
 import type {
   SourceControlActionRecipe,

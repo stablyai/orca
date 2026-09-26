@@ -3,7 +3,7 @@ import {
   agentLaunchCreateParams,
   isAgentLaunchUnsupportedRefusal,
   readAgentLaunchCreateOutcome
-} from './agent-launch-worktree-create'
+} from './agent-launch-request'
 
 describe('agentLaunchCreateParams', () => {
   it('carries the create payload verbatim minus the reserved agent fields', () => {

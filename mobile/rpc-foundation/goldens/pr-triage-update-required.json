@@ -1,0 +1,48 @@
+{
+  "operation": "session.pr-triage-launch",
+  "family": "session.pr-triage",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "5d697b25575bcc1597611aa5e6b50625fdb48e23",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "5f65c5b318f4764b0f58a5e7b593333759a9cfa799db45b11190ac26f4083335",
+  "scenarioSha256": "7fc74743e625d338b27a32280692132b5b085cfbb43ecfd0a1ac7caaddbcd459",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "c2a44248892e": {
+      "launched": {
+        "kind": "not-started",
+        "message": "Update Orca on your computer to start an agent from your phone."
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "pr-triage-update-required",
+    "checkpoints": [
+      {
+        "id": "update-required",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "launch": "eb79a9b3682a"
+          },
+          "state": "c2a44248892e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}
