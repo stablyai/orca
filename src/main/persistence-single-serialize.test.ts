@@ -1,10 +1,15 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson
+} from './persistence-test-harness'
 // Why this file exists: persistence.test.ts mocks safeStorage.encryptString
 // deterministically, which cannot catch the real-world hazard the single-
 // stringify save guard must survive — encrypt() uses a random IV, so identical
 // state produces different on-disk bytes each save. These tests mock a
 // nondeterministic cipher and pin the guard + payload invariants.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { readFileSync, rmSync, mkdtempSync, statSync } from 'node:fs'
+import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -63,7 +68,7 @@ async function createStore() {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 function dataFile(): string {
@@ -84,7 +89,8 @@ describe('persistence single-serialize save guard', () => {
     vi.useFakeTimers()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     vi.useRealTimers()
     rmSync(testState.dir, { recursive: true, force: true })
   })
@@ -100,7 +106,7 @@ describe('persistence single-serialize save guard', () => {
 
   it('skips the disk write when state is identical, even with secrets set (random-IV cipher)', async () => {
     const store = await seedStoreWithSecrets()
-    const inoBefore = statSync(dataFile()).ino
+    const stateBefore = readPersistedStateJson(dataFile())
 
     // Net no-op mutation burst: the encrypted payload bytes would differ
     // (random IV), but the normalized guard hash must not.
@@ -111,29 +117,29 @@ describe('persistence single-serialize save guard', () => {
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
 
-    expect(statSync(dataFile()).ino).toBe(inoBefore)
+    expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
   })
 
   it('still writes when state actually changes (including a secret change)', async () => {
     const store = await seedStoreWithSecrets()
-    const inoBefore = statSync(dataFile()).ino
+    const stateBefore = readPersistedStateJson(dataFile())
 
     store.updateSettings({ opencodeSessionCookie: 'rotated-cookie' })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
-    const inoAfter = statSync(dataFile()).ino
-    expect(inoAfter).not.toBe(inoBefore)
+    const stateAfter = readPersistedStateJson(dataFile())
+    expect(stateAfter).not.toBe(stateBefore)
 
     store.updateUI({ sidebarWidth: 777 })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
-    expect(statSync(dataFile()).ino).not.toBe(inoAfter)
+    expect(readPersistedStateJson(dataFile())).not.toBe(stateAfter)
   })
 
   it('writes encrypted secrets to disk and round-trips them through a reload', async () => {
     await seedStoreWithSecrets()
 
-    const raw = readFileSync(dataFile(), 'utf-8')
+    const raw = readPersistedStateJson(dataFile())
     const persisted = JSON.parse(raw) as {
       settings: { opencodeSessionCookie: string; httpProxyUrl: string }
       ui: { browserKagiSessionLink: string }
@@ -158,29 +164,30 @@ describe('persistence single-serialize save guard', () => {
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
 
-    const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as {
       settings: { opencodeSessionCookie: string; httpProxyUrl: string }
     }
     expect(persisted.settings.opencodeSessionCookie).toBe('')
     expect(persisted.settings.httpProxyUrl).toBe('')
 
-    const inoBefore = statSync(dataFile()).ino
+    const stateBefore = readPersistedStateJson(dataFile())
     store.updateSettings({ httpProxyUrl: SECRETS.httpProxyUrl })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
-    expect(statSync(dataFile()).ino).toBe(inoBefore)
+    expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
   })
 
   it('sync flush also skips on identical state with secrets set', async () => {
     const store = await seedStoreWithSecrets()
-    const inoBefore = statSync(dataFile()).ino
+    const stateBefore = readPersistedStateJson(dataFile())
 
     store.flushOrThrow()
 
-    expect(statSync(dataFile()).ino).toBe(inoBefore)
+    expect(readPersistedStateJson(dataFile())).toBe(stateBefore)
   })
 
-  it('performs exactly one full-state JSON.stringify per save (was two)', async () => {
+  it('does not serialize the complete profile for a UI domain save', async () => {
     const store = await seedStoreWithSecrets()
 
     // Count full-state serializations: only the durable-state payload is
@@ -188,17 +195,20 @@ describe('persistence single-serialize save guard', () => {
     // stay far below the threshold).
     const original = JSON.stringify.bind(JSON)
     let fullStateSerializations = 0
-    const spy = vi.spyOn(JSON, 'stringify').mockImplementation(((
-      value: unknown,
-      ...rest: unknown[]
-    ) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const out = original(value as any, ...(rest as [any?, any?]))
-      if (typeof out === 'string' && out.length > 1_000) {
+    const spy = vi.spyOn(JSON, 'stringify').mockImplementation((...args) => {
+      const [value] = args
+      const out = original(...args)
+      if (
+        value &&
+        typeof value === 'object' &&
+        'repos' in value &&
+        'settings' in value &&
+        'ui' in value
+      ) {
         fullStateSerializations++
       }
       return out
-    }) as typeof JSON.stringify)
+    })
     try {
       store.updateUI({ sidebarWidth: 640 })
       vi.advanceTimersByTime(2000)
@@ -207,7 +217,7 @@ describe('persistence single-serialize save guard', () => {
       spy.mockRestore()
     }
 
-    expect(fullStateSerializations).toBe(1)
+    expect(fullStateSerializations).toBe(0)
   })
 
   // Regression (adversarial review, gpt-5.6-sol round 1): the guard hash
@@ -227,11 +237,7 @@ describe('persistence single-serialize save guard', () => {
     store.updateSettings({ opencodeSessionCookie: P })
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
-    const C = (
-      JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
-        settings: { opencodeSessionCookie: string }
-      }
-    ).settings.opencodeSessionCookie
+    const C: string = JSON.parse(readPersistedStateJson(dataFile())).settings.opencodeSessionCookie
     expect(C).not.toBe(P) // C is ciphertext
 
     // State 1: the plaintext bypass-rules field literally holds ciphertext C;
@@ -239,13 +245,13 @@ describe('persistence single-serialize save guard', () => {
     store.updateSettings({ httpProxyBypassRules: C, opencodeSessionCookie: P })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
-    const inoState1 = statSync(dataFile()).ino
+    const inoState1 = readPersistedStateJson(dataFile())
 
     // State 2 (distinct): swap the two values. Must be written, not skipped.
     store.updateSettings({ httpProxyBypassRules: P, opencodeSessionCookie: C })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
-    expect(statSync(dataFile()).ino).not.toBe(inoState1)
+    expect(readPersistedStateJson(dataFile())).not.toBe(inoState1)
 
     // The swap round-trips through a reload — nothing was lost.
     const reloaded = await createStore()
@@ -268,11 +274,7 @@ describe('persistence single-serialize save guard', () => {
     store.updateUI({ browserKagiSessionLink: K })
     vi.advanceTimersByTime(1000)
     await store.waitForPendingWrite()
-    const C = (
-      JSON.parse(readFileSync(dataFile(), 'utf-8')) as {
-        ui: { browserKagiSessionLink: string }
-      }
-    ).ui.browserKagiSessionLink
+    const C: string = JSON.parse(readPersistedStateJson(dataFile())).ui.browserKagiSessionLink
     expect(C).not.toBe(K) // C is ciphertext
 
     // State 1: env var literally named after the secret field, value = C; the
@@ -281,14 +283,14 @@ describe('persistence single-serialize save guard', () => {
     store.updateUI({ browserKagiSessionLink: K })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
-    const inoState1 = statSync(dataFile()).ino
+    const inoState1 = readPersistedStateJson(dataFile())
 
     // State 2 (distinct): swap — env var value = K, ui secret = C. Must write.
     store.updateSettings({ agentDefaultEnv: { claude: { browserKagiSessionLink: K } } })
     store.updateUI({ browserKagiSessionLink: C })
     vi.advanceTimersByTime(2000)
     await store.waitForPendingWrite()
-    expect(statSync(dataFile()).ino).not.toBe(inoState1)
+    expect(readPersistedStateJson(dataFile())).not.toBe(inoState1)
 
     const reloaded = await createStore()
     expect(reloaded.getSettings().agentDefaultEnv?.claude?.browserKagiSessionLink).toBe(K)

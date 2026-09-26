@@ -1,10 +1,11 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { ActiveViewPreference, getActiveViewPreferenceFile } from '../../active-view-preference'
 import * as backupWorker from '../profile-state/profile-state-backup-worker'
 import { profileStateDatabaseBackups } from '../profile-state/profile-state-backup-path'
 import {
-  createJsonMaintenanceFixture,
+  createSqliteMaintenanceFixture,
   createWorkerMaintenanceFixture,
   maintenanceBarrier
 } from './profile-state-maintenance-fixture'
@@ -267,31 +268,34 @@ describe('profile maintenance admission', () => {
     await expect(store.beginProfileMaintenance()).rejects.toThrow('already stopped')
   })
 
-  it('pauses JSON and preference timers, then persists edits after unchanged-source resume', async () => {
-    const { store, dataFile } = createJsonMaintenanceFixture()
+  it('pauses SQLite and preference timers, then persists edits after unchanged-source resume', async () => {
+    const { store, dataFile, authority } = createSqliteMaintenanceFixture()
     const maintenance = await store.beginProfileMaintenance()
-    const before = readFileSync(dataFile)
+    const before = authority.readSerializedState()
     const preference = getActiveViewPreferenceFile(dataFile)
     const preferenceBefore = readFileSync(preference)
     vi.useFakeTimers()
     store.updateSettings({ theme: 'dark' })
     store.updateUI({ activeView: 'settings' })
     await vi.advanceTimersByTimeAsync(6_000)
-    expect(readFileSync(dataFile)).toEqual(before)
+    expect(authority.readSerializedState()).toEqual(before)
     expect(readFileSync(preference)).toEqual(preferenceBefore)
     vi.useRealTimers()
     await maintenance.resume()
     await store.flushPendingOrThrowAsync()
-    expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('dark')
+    expect(JSON.parse(authority.readSerializedState() ?? '{}').settings.theme).toBe('dark')
     expect(JSON.parse(readFileSync(preference, 'utf8')).activeView).toBe('settings')
   })
 
-  it('refuses legacy JSON resume if the source changed during maintenance', async () => {
-    const { store, dataFile } = createJsonMaintenanceFixture()
+  it('refuses synchronous SQL resume if the source changed during maintenance', async () => {
+    const { store, databaseFile, profileId } = createSqliteMaintenanceFixture()
     const maintenance = await store.beginProfileMaintenance()
-    writeFileSync(dataFile, '{"peer":true}')
-    await expect(maintenance.resume()).rejects.toThrow('Profile storage changed')
+    const peer = new ProfileStateSqliteAuthority(databaseFile, profileId)
+    peer.readSerializedState()
+    peer.writeSerializedDomains([{ domain: 'peer', payload: 'true' }])
+    peer.close()
+    await expect(maintenance.resume()).rejects.toThrow('Profile state revision changed')
     await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')
-    expect(readFileSync(dataFile, 'utf8')).toBe('{"peer":true}')
+    expect(JSON.parse(peer.readSerializedState() ?? '{}').peer).toBe(true)
   })
 })

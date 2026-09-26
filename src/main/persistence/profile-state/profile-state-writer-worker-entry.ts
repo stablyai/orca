@@ -1,6 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
-import { writeVersionedProfileStateExport } from './profile-state-versioned-export'
+import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
 import {
   encodeProfileStateWriterError,
   ProfileStateWriterError

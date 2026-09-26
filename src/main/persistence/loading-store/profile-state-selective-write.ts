@@ -4,7 +4,6 @@ import type {
   ProfileStateDomainReplacement,
   ProfileStatePersistenceAuthority
 } from './profile-state-authority'
-import { buildProfileStateDomainReplacements } from './profile-state-authority-writes'
 import type { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 import type { AutomationRun } from '../../../shared/automations-types'
 
@@ -89,9 +88,9 @@ export function prepareSelectiveProfileStateWrite(
   if (built === undefined) {
     return undefined
   }
-  const { payload, protectedSecretUpdates } = built
+  const { replacements, protectedSecretUpdates } = built
   return {
-    replacements: buildProfileStateDomainReplacements(payload, serializableDomains),
+    replacements,
     automationRuns: useAutomationDelta ? pendingAutomationRunsAfter : undefined,
     consumedAutomationRuns: pendingAutomationRunsAfter !== undefined,
     protectedSecretUpdates

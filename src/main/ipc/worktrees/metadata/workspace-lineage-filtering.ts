@@ -36,18 +36,20 @@ export function getFolderLineageCandidateRepos(
   )
   const group = context.groupsById.get(folder.projectGroupId)?.[0]
   const connectionId = folder.connectionId ?? group?.connectionId ?? null
-  return connectionId
-    ? [...grouped, ...pathRepos.filter((repo) => (repo.connectionId ?? null) === connectionId)]
-    : grouped.length > 0
-      ? [
-          ...grouped,
-          ...pathRepos.filter((repo) =>
-            new Set(grouped.map((candidate) => candidate.connectionId ?? null)).has(
-              repo.connectionId ?? null
-            )
-          )
-        ]
-      : pathRepos
+  if (connectionId) {
+    return [...grouped, ...pathRepos.filter((repo) => (repo.connectionId ?? null) === connectionId)]
+  }
+  if (grouped.length === 0) {
+    return pathRepos
+  }
+  if (pathRepos.length === 0) {
+    return grouped
+  }
+  const groupedConnectionIds = new Set(grouped.map((repo) => repo.connectionId ?? null))
+  return [
+    ...grouped,
+    ...pathRepos.filter((repo) => groupedConnectionIds.has(repo.connectionId ?? null))
+  ]
 }
 
 export function resolveFolderLineageOwner(
