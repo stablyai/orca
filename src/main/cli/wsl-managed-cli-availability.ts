@@ -5,6 +5,7 @@ import {
   buildWslExecArgs
 } from '../../shared/wsl-login-shell-command'
 import { getCanonicalUserDataPath } from '../persistence'
+import { ensureShellReadyWrappersAt } from '../providers/local-pty-shell-ready-wrapper-generation'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { getManagedWslCliDir, getWslCliCommandName } from './wsl-managed-cli'
@@ -47,6 +48,10 @@ async function probe(distro?: string): Promise<boolean> {
   env.ORCA_WSL_CLI_DIR = directory
   env.ORCA_CLI_COMMAND = getWslCliCommandName(app.isPackaged())
   addOrcaWslInteropEnv(env)
+  // Onboarding can run before the first terminal has generated these files.
+  if (!ensureShellReadyWrappersAt(env.ORCA_SHELL_READY_ROOT)) {
+    return false
+  }
   env.WSL_UTF8 = '1'
   const captured = buildWslCapturedLoginShellCommand(
     [

@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  wrappers: vi.fn(),
   run: vi.fn(),
   directory: vi.fn(),
   identity: vi.fn(),
   daemonOwns: vi.fn()
 }))
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: mocks.run }))
+vi.mock('../providers/local-pty-shell-ready-wrapper-generation', () => ({
+  ensureShellReadyWrappersAt: mocks.wrappers
+}))
 vi.mock('../persistence', () => ({ getCanonicalUserDataPath: () => 'C:\\Orca' }))
 vi.mock('./wsl-managed-cli', () => ({
   getManagedWslCliDir: mocks.directory,
@@ -34,6 +38,7 @@ function readyOutput(args: string[]): string {
 
 beforeEach(() => {
   vi.stubGlobal('process', { ...process, platform: 'win32' })
+  mocks.wrappers.mockReturnValue(true)
   mocks.daemonOwns.mockReturnValue(true)
   mocks.identity.mockReturnValue({ managedWslCli: true })
   mocks.directory.mockReturnValue('C:\\Orca\\managed')
@@ -74,6 +79,12 @@ describe('managed WSL CLI availability', () => {
     mocks.daemonOwns.mockReturnValue(false)
     mocks.identity.mockReturnValue(null)
     expect(await isManagedWslCliAvailable()).toBe(true)
+  })
+
+  it('keeps registration if shell wrapper provisioning fails before the first terminal', async () => {
+    mocks.wrappers.mockReturnValue(false)
+    expect(await isManagedWslCliAvailable()).toBe(false)
+    expect(mocks.run).not.toHaveBeenCalled()
   })
 
   it('keeps registration when provisioning, the shell, or bridge cannot be confirmed', async () => {
