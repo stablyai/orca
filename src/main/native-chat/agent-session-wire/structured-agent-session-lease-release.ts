@@ -12,6 +12,7 @@ import {
   releaseStoredAgentSessionOwnerAfterSurfaceClose
 } from '../../runtime/agent-session-surface-release-transition'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import { MAX_UNEXPECTED_EXIT_REASON_CHARS } from './structured-agent-session-dead-generation-settlement'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 
 export type StructuredAgentSessionLeaseStore = Pick<
@@ -55,7 +56,8 @@ export async function releaseStoredStructuredAgentSessionOwner(input: {
     sessionId: input.sessionId,
     expectedFence: input.expectedFence,
     now: input.now,
-    ...(input.reason ? { exitReason: input.reason } : {})
+    // The store refuses a longer detail on its next read, undoing this release.
+    ...(input.reason ? { exitReason: input.reason.slice(0, MAX_UNEXPECTED_EXIT_REASON_CHARS) } : {})
   })
 }
 

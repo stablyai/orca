@@ -312,7 +312,7 @@ describe('a start the child was seen to die in (C′ trigger 2)', () => {
   const TEXT = providerStartupFailureOutcome(EXIT)
 
   /** The first child dies starting, before any exit is published for it. */
-  async function diedStarting(): Promise<string> {
+  async function diedStarting(text = TEXT): Promise<string> {
     const settled = deferred<string>()
     adapterExtras = { awaitStarted: vi.fn(() => settled.promise) }
     await restartHost()
@@ -320,9 +320,26 @@ describe('a start the child was seen to die in (C′ trigger 2)', () => {
     const first = await accept('first')
     await eventually(() => expect(adapterExtras.awaitStarted).toHaveBeenCalled())
     ownerProbe = ALIVE
-    settled.resolve(TEXT)
+    settled.resolve(text)
     return first
   }
+
+  it('keeps a long start failure within what the record store accepts, so the release sticks', async () => {
+    const stderr = Array.from({ length: 40 }, (_, line) => `stderr line ${line}`).join('\n')
+    await diedStarting(providerStartupFailureOutcome(`claude exited (code 1): ${stderr}`))
+
+    await eventually(() => expect(lease()).toMatchObject({ claimStatus: 'released' }))
+    // Read back from disk: a detail past the store's bound is quarantined and the release undone.
+    const reopened = await AgentSessionRecordStore.open({
+      directory: join(root, 'store'),
+      hostId: 'local'
+    })
+    expect(reopened.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      ownerProcess: null,
+      deathEvidence: { kind: 'exit-observed' }
+    })
+  })
 
   it('ends the child when the death is seen, so a Retry at once starts a new child (W42)', async () => {
     const first = await diedStarting()
