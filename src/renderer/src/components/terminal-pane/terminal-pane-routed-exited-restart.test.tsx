@@ -71,7 +71,8 @@ describe('a restart main routes to an exited pane', () => {
     act(() => useAppStore.getState().requestExitedTerminalRestart(LEAF_ID))
 
     expect(handleRestartExitedPane).toHaveBeenCalledTimes(1)
-    expect(handleRestartExitedPane).toHaveBeenCalledWith(processExit)
+    // Why no focus: the request came from another device, and main focuses the pane when asked to.
+    expect(handleRestartExitedPane).toHaveBeenCalledWith(processExit, { focus: false })
     expect(useAppStore.getState().pendingExitedTerminalRestartLeafIds).toEqual({})
   })
 

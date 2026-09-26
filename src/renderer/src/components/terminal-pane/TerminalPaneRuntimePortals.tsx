@@ -62,16 +62,19 @@ export function TerminalPaneProcessExitPortals({
         if (!processExit) {
           return null
         }
-        const restart = (): void => handleRestartExitedPane(processExit)
         return (
           <Fragment key={`process-exit-${pane.id}`}>
-            {/* Why outside the isActive gate: a routed restart must run in a background tab too. */}
-            <RoutedExitedTerminalRestart leafId={pane.leafId} onRestart={restart} />
+            {/* Why outside the isActive gate: a routed restart must run in a background tab too.
+                Why no focus: it came from another device; main focuses the pane when asked to. */}
+            <RoutedExitedTerminalRestart
+              leafId={pane.leafId}
+              onRestart={() => handleRestartExitedPane(processExit, { focus: false })}
+            />
             {isActive
               ? createPortal(
                   <TerminalProcessExitOverlay
                     processExit={processExit}
-                    onRestart={restart}
+                    onRestart={() => handleRestartExitedPane(processExit)}
                     onClose={() => handleCloseExitedPane(pane.id)}
                   />,
                   pane.container,
