@@ -126,7 +126,7 @@ describe('deferFirstSubscribeUntilViewportMeasured', () => {
   })
 
   it('still subscribes, without dims, when the measure fails', async () => {
-    const args = gateArgs({ measure: vi.fn(async () => Promise.reject(new Error('gone'))) })
+    const args = gateArgs({ measure: vi.fn(() => Promise.reject(new Error('gone'))) })
     expect(deferFirstSubscribeUntilViewportMeasured(args)).toBe(true)
     await vi.waitFor(() => expect(args.subscribe).toHaveBeenCalledTimes(1))
   })
