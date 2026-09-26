@@ -113,20 +113,26 @@ describe('CodexUsageStore', () => {
       dailyAggregates: []
     })
     const cacheFile = join(storeEnv.tempUserData, 'orca-codex-usage.json')
-    const seeded = new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) })
+    const backingStore = {
+      getRepos: () => [],
+      getAllWorktreeMeta: () => ({}),
+      getFolderWorkspaces: () => [],
+      getProjectGroups: () => []
+    }
+    const seeded = new CodexUsageStore(backingStore)
     await seeded.setEnabled(true)
     await seeded.refresh(true)
     await seeded.flush()
     const current = readFileSync(cacheFile, 'utf-8')
 
     scanMock.mockClear()
-    await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(true)
+    await new CodexUsageStore(backingStore).refresh(true)
     // Control: a current-schema cache hands its processed files back for reuse.
     expect(scanMock).toHaveBeenLastCalledWith([], [processedFile])
 
     writeFileSync(cacheFile, JSON.stringify({ ...JSON.parse(current), schemaVersion: 5 }))
     scanMock.mockClear()
-    await new CodexUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }).refresh(false)
+    await new CodexUsageStore(backingStore).refresh(false)
     expect(scanMock).toHaveBeenLastCalledWith([], [])
   })
 })
