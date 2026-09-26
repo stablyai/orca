@@ -104,6 +104,7 @@ describe('undelivered SSH stops', () => {
       undefined,
       store as never
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registerPtyHandlers installs the runtime PTY controller, which implements these members.
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       kill: (ptyId: string) => boolean
       stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
