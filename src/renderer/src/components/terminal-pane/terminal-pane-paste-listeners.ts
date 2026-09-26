@@ -9,6 +9,7 @@ import {
 } from './terminal-clipboard-event-paste'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { pasteClipboardFilePathsToPane } from './terminal-clipboard-file-paste'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import {
   APP_MENU_SELECTION_ACTION_EVENT,
@@ -42,10 +43,13 @@ export function registerTerminalPanePasteListeners({
   shortcutPlatform: NodeJS.Platform
 }): () => void {
   const {
+    cwd,
     forceBracketedMultilineTextPaste,
     keybindings,
     managerRef,
+    paneTransportsRef,
     setTerminalError,
+    tabId,
     worktreeId
   } = controller
   const { executePanePasteText, pasteFromClipboard } = execution
@@ -186,6 +190,15 @@ export function registerTerminalPanePasteListeners({
     )
     void pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
+      readClipboardFilePaths: window.api.ui.readClipboardFilePaths,
+      pasteFilePaths: pasteClipboardFilePathsToPane({
+        manager,
+        paneTransports: paneTransportsRef.current,
+        worktreeId,
+        tabId,
+        cwd,
+        pane
+      }),
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
       runtimeEnvironmentId,
