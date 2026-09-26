@@ -8,6 +8,7 @@ import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
  * subtree requests may resolve inside. No grant, no bytes.
  */
 export type DocPreviewOwner =
+  | { kind: 'local' }
   | { kind: 'ssh'; connectionId: string }
   | {
       kind: 'runtime'
