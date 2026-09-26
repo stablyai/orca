@@ -110,9 +110,7 @@ export type TerminalActions = {
   setGeneratedTabTitleFromAgentPrompt: (
     paneKey: string,
     prompt: string,
-    options?: {
-      replaceExistingGeneratedTitle?: boolean
-    }
+    options?: GeneratedTabTitleUpdate['options']
   ) => void
   setGeneratedTabTitlesFromAgentPrompts: (updates: readonly GeneratedTabTitleUpdate[]) => void
   clearTabLaunchAgent: (tabId: string) => void
