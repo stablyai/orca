@@ -6,11 +6,12 @@ import { claudeTabAccountLabel } from '@/lib/claude-tab-account-label'
 import { findLaunchRepo } from '@/lib/claude-launch-account'
 import { fetchProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
 import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
+import { claudeAccountPinningUnsupportedReasonInState } from '@/components/settings/repository-claude-account'
 import { useAppStore } from '../../store'
 
 /**
  * The pinned Claude account's email for a terminal tab's tooltip, or null when the tab shows
- * no label (unpinned, sentinel, unknown id, or an SSH repo). The account roster is fetched lazily
+ * no label (unpinned, sentinel, unknown id, or an SSH or WSL repo). The account roster is fetched lazily
  * on the first tooltip hover, not on every render, since the tab strip re-renders often.
  */
 export function useClaudeTabAccountLabel(tab: TerminalTab): {
@@ -29,6 +30,9 @@ export function useClaudeTabAccountLabel(tab: TerminalTab): {
   )
   const repo = useAppStore((s) => findLaunchRepo(s, { worktreeId: tab.worktreeId }))
   const settings = useAppStore((s) => s.settings)
+  const pinningUnsupported = useAppStore((s) =>
+    repo ? claudeAccountPinningUnsupportedReasonInState(s, repo) !== null : false
+  )
 
   const [accounts, setAccounts] = useState<ClaudeManagedAccountSummary[]>([])
   const fetchedRef = useRef(false)
@@ -50,7 +54,7 @@ export function useClaudeTabAccountLabel(tab: TerminalTab): {
 
   return {
     label: claudeTabAccountLabel({ statusAccountId, launchConfig }, accounts, {
-      isSshRepo: Boolean(repo?.connectionId)
+      pinningUnsupported
     }),
     onTooltipOpenChange
   }

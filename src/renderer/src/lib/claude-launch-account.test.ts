@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { resolveLaunchClaudeAccountId, withClaudeLaunchAccount } from './claude-launch-account'
+import {
+  resolveLaunchClaudeAccountId,
+  stampClaudeLaunchAccount,
+  withClaudeLaunchAccount
+} from './claude-launch-account'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
+import { getRepoMainWorktreeId } from '../../../shared/worktree/id'
+import type { Repo } from '../../../shared/repo-types'
+import { useAppStore } from '@/store'
 
 describe('resolveLaunchClaudeAccountId', () => {
   const saved = {
@@ -28,5 +35,41 @@ describe('resolveLaunchClaudeAccountId', () => {
       claudeAccountId: 'acct-1'
     })
     expect(withClaudeLaunchAccount(base, undefined)).toBe(base)
+  })
+})
+
+describe('stampClaudeLaunchAccount', () => {
+  const base = { agentArgs: '', agentEnv: {} }
+  function stateWith(overrides: Partial<Repo>) {
+    const repo: Repo = {
+      id: 'repo-1',
+      path: '/repo',
+      displayName: 'Repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      agentAccounts: { claude: { mode: 'account', accountId: 'acct-1' } },
+      ...overrides
+    }
+    return { ...useAppStore.getInitialState(), repos: [repo] }
+  }
+  const worktreeId = getRepoMainWorktreeId({ id: 'repo-1', path: '/repo' })
+
+  it('records the saved account where it can be pinned', () => {
+    expect(stampClaudeLaunchAccount(stateWith({}), { agent: 'claude', worktreeId }, base)).toEqual({
+      ...base,
+      claudeAccountId: 'acct-1'
+    })
+  })
+
+  it('skips the saved account where pinning is unsupported, but keeps an explicit pick', () => {
+    const ssh = stateWith({ connectionId: 'ssh-1' })
+    expect(stampClaudeLaunchAccount(ssh, { agent: 'claude', worktreeId }, base)).toBe(base)
+    expect(
+      stampClaudeLaunchAccount(
+        ssh,
+        { agent: 'claude', worktreeId, claudeAccountId: 'acct-2' },
+        base
+      )
+    ).toEqual({ ...base, claudeAccountId: 'acct-2' })
   })
 })

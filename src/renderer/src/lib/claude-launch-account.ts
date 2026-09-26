@@ -4,6 +4,7 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { AppState } from '@/store/types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { getIndexedRepoMap, getIndexedWorktreeById } from '@/store/worktree-repo-index'
+import { claudeAccountPinningUnsupportedReasonInState } from '@/components/settings/repository-claude-account'
 
 export function resolveLaunchClaudeAccountId(
   repo: Pick<Repo, 'agentAccounts'> | undefined,
@@ -40,7 +41,7 @@ export function findLaunchRepo(
 
 /** The launch config a GUI launch carries: Claude's gets the pick, the sentinel or the saved account. */
 export function stampClaudeLaunchAccount(
-  state: Partial<Pick<AppState, 'repos' | 'worktreesByRepo'>>,
+  state: Parameters<typeof claudeAccountPinningUnsupportedReasonInState>[0],
   launch: { agent: TuiAgent; worktreeId: string; claudeAccountId?: string },
   config: SleepingAgentLaunchConfig
 ): SleepingAgentLaunchConfig {
@@ -48,5 +49,13 @@ export function stampClaudeLaunchAccount(
     return config
   }
   const repo = findLaunchRepo(state, { worktreeId: launch.worktreeId })
+  // Why: main never pins a saved default on SSH or WSL, so recording one would mislabel the tab.
+  if (
+    !launch.claudeAccountId &&
+    repo &&
+    claudeAccountPinningUnsupportedReasonInState(state, repo)
+  ) {
+    return config
+  }
   return withClaudeLaunchAccount(config, resolveLaunchClaudeAccountId(repo, launch.claudeAccountId))
 }

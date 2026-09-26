@@ -76,7 +76,7 @@ describe("main's pinned Claude account on the agent-status row", () => {
             lastAuthenticatedAt: 0
           }
         ],
-        { isSshRepo: false }
+        { pinningUnsupported: false }
       )
     ).toBe('b@example.com')
   })

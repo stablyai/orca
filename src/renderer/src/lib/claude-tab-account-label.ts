@@ -13,10 +13,10 @@ export type ClaudeTabAccountSource = {
 export function claudeTabAccountLabel(
   source: ClaudeTabAccountSource,
   accounts: ClaudeManagedAccountSummary[],
-  { isSshRepo }: { isSshRepo: boolean }
+  { pinningUnsupported }: { pinningUnsupported: boolean }
 ): string | null {
-  // Why: SSH launches carry claudeAccountId but never actually pin it.
-  if (isSshRepo) {
+  // Why: SSH and WSL launches may carry a claudeAccountId but never actually pin it.
+  if (pinningUnsupported) {
     return null
   }
   const accountId = source.statusAccountId ?? source.launchConfig?.claudeAccountId

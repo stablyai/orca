@@ -38,7 +38,7 @@ describe('claudeTabAccountLabel', () => {
     const accounts = [account({ id: 'acct-1', email: 'dev@example.com' })]
     expect(
       claudeTabAccountLabel(fromLaunch('acct-1'), accounts, {
-        isSshRepo: false
+        pinningUnsupported: false
       })
     ).toBe('dev@example.com')
   })
@@ -47,7 +47,7 @@ describe('claudeTabAccountLabel', () => {
     const accounts = [account({ id: 'acct-1', email: 'dev@example.com' })]
     expect(
       claudeTabAccountLabel({ statusAccountId: 'acct-1', launchConfig: undefined }, accounts, {
-        isSshRepo: false
+        pinningUnsupported: false
       })
     ).toBe('dev@example.com')
   })
@@ -61,7 +61,7 @@ describe('claudeTabAccountLabel', () => {
       claudeTabAccountLabel(
         { statusAccountId: 'acct-2', launchConfig: launchConfig('acct-1') },
         accounts,
-        { isSshRepo: false }
+        { pinningUnsupported: false }
       )
     ).toBe('other@example.com')
   })
@@ -70,7 +70,7 @@ describe('claudeTabAccountLabel', () => {
     const accounts = [account({ id: 'acct-1' })]
     expect(
       claudeTabAccountLabel(fromLaunch('acct-missing'), accounts, {
-        isSshRepo: false
+        pinningUnsupported: false
       })
     ).toBeNull()
   })
@@ -79,24 +79,24 @@ describe('claudeTabAccountLabel', () => {
     const accounts = [account({ id: 'acct-1' })]
     expect(
       claudeTabAccountLabel(fromLaunch(ACTIVE_CLAUDE_ACCOUNT), accounts, {
-        isSshRepo: false
+        pinningUnsupported: false
       })
     ).toBeNull()
     expect(
       claudeTabAccountLabel({ statusAccountId: undefined, launchConfig: undefined }, accounts, {
-        isSshRepo: false
+        pinningUnsupported: false
       })
     ).toBeNull()
   })
 
-  it('returns null for an SSH repo even with a pinned account id', () => {
+  it('returns null for an SSH or WSL repo even with a pinned account id', () => {
     const accounts = [account({ id: 'acct-1' })]
     expect(
       claudeTabAccountLabel(
         { statusAccountId: 'acct-1', launchConfig: launchConfig('acct-1') },
         accounts,
         {
-          isSshRepo: true
+          pinningUnsupported: true
         }
       )
     ).toBeNull()
