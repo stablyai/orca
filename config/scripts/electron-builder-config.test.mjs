@@ -56,7 +56,10 @@ describe('electron-builder config', () => {
       '.grok/skills/review-and-submit/review-and-submit/SKILL.md',
       '.claude/skills/review-and-submit/review-and-submit/SKILL.md',
       '.agents/skills/electron/SKILL.md',
-      '.codex/sessions/session.json'
+      '.codex/sessions/session.json',
+      'notes/build.log',
+      'notes/installed-orca-backup/Orca.exe',
+      'notes/orca-windows-setup.exe'
     ]) {
       expect(packs(toolingPath)).toBe(false)
     }
