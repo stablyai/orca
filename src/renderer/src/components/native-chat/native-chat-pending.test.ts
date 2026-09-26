@@ -300,6 +300,90 @@ describe('glued rapid sends', () => {
     expect(prunePendingSends(pending, advancedGlueTranscript('hi there'))).toEqual(pending)
   })
 
+  // A draft ending in `\` is a newline request to the agent TUI, not a submit:
+  // measured against Claude Code v2.1.234, `first\` + CR leaves the input open
+  // with the backslash dropped, so the next send lands in the SAME turn
+  // ("first\nsecond"). The echo keeps the backslash the transcript never has.
+  it('retires a pair whose first send ended in a continuation backslash', () => {
+    const pending = [gluePending('p1', 'tell me a joke\\'), gluePending('p2', 'continue')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('tell me a joke\ncontinue'))).toEqual(
+      []
+    )
+  })
+
+  it('hides a continuation-backslash pair as soon as its glued row lands', () => {
+    const pending = [gluePending('p1', 'tell me a joke\\'), gluePending('p2', 'continue')]
+
+    expect(pendingSendsAsMessages(pending, glueTranscript('tell me a joke\ncontinue'))).toEqual([])
+  })
+
+  // The observed report: the rest of the turn was finished somewhere this queue
+  // cannot see (another client, or typed into the pane), so the echo is alone.
+  it('retires a lone continuation echo absorbed into a longer turn', () => {
+    const pending = [gluePending('p1', 'tell me a joke\\')]
+
+    expect(
+      prunePendingSends(pending, advancedGlueTranscript('tell me a joke\nabout cats'))
+    ).toEqual([])
+  })
+
+  it('keeps a continuation echo when a later row only shares its prefix', () => {
+    const pending = [gluePending('p1', 'hi\\')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('history repeats'))).toEqual(pending)
+  })
+
+  it('retires a continuation echo the user then submitted on its own', () => {
+    // `\` + Enter, then Enter again on the empty line it opened.
+    const pending = [gluePending('p1', 'tell me a joke\\')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('tell me a joke'))).toEqual([])
+  })
+
+  it('retires a pair when only the last of several backslashes was eaten', () => {
+    const pending = [gluePending('p1', 'tell me a joke\\\\'), gluePending('p2', 'continue')]
+
+    expect(
+      prunePendingSends(pending, advancedGlueTranscript('tell me a joke\\\ncontinue'))
+    ).toEqual([])
+  })
+
+  it('retires a run of three sends chained by continuations', () => {
+    const pending = [
+      gluePending('p1', 'first\\'),
+      gluePending('p2', 'second\\'),
+      gluePending('p3', 'third')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('first\nsecond\nthird'))).toEqual([])
+  })
+
+  it('retires the reported prompt, whose text is not Latin', () => {
+    const pending = [
+      gluePending('p1', '사양을 올리는게 가능해? 이건 과금의 영역아니야?\\'),
+      gluePending('p2', '일단 퀵하게 되는 버전으로 반영되어야할거같아')
+    ]
+
+    expect(
+      prunePendingSends(
+        pending,
+        advancedGlueTranscript(
+          '사양을 올리는게 가능해? 이건 과금의 영역아니야?\n일단 퀵하게 되는 버전으로 반영되어야할거같아'
+        )
+      )
+    ).toEqual([])
+  })
+
+  it('keeps a continuation echo the row breaks mid-word', () => {
+    // The run must stop on the separator the TUI's newline normalizes to.
+    const pending = [gluePending('p1', 'tell me a jo\\')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('tell me a joke about cats'))).toEqual(
+      pending
+    )
+  })
+
   it('keeps a queued pair when an earlier turn splits across it (#14406 regression)', () => {
     // The row predates both sends: "run the tests"+"again" only looks glued.
     const pending = [pendingOf('p1', 'run the tests'), pendingOf('p2', 'again')]
