@@ -1,5 +1,5 @@
 import type React from 'react'
-import { Server, ServerOff } from 'lucide-react'
+import { Pin, PinOff, Server, ServerOff } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
 import { PaletteWorktreeStatusDot } from '@/components/cmd-j/palette-live-status'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
@@ -62,6 +62,21 @@ export function WorktreeJumpPaletteWorktreeRow({
     : null
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   const hostBadge = getPaletteHostBadge(repo, hostOptions, hostFilterActive)
+  const pinToggleLabel = worktree.isPinned
+    ? translate('worktreeJumpPalette.pin.unpinWorktree', 'Unpin worktree')
+    : translate('worktreeJumpPalette.pin.pinWorktree', 'Pin worktree')
+  const stopRowSelect = (event: React.SyntheticEvent): void => {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+  // Stop only the activation keys from reaching cmdk's root Enter handler (which
+  // would otherwise select this row regardless of DOM focus); arrow/Home/End keys
+  // must still bubble so palette keyboard navigation keeps working from this button.
+  const stopActivationKeyPropagation = (event: React.KeyboardEvent): void => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.stopPropagation()
+    }
+  }
 
   return (
     <CommandItem
@@ -157,6 +172,28 @@ export function WorktreeJumpPaletteWorktreeRow({
                 </span>
               </span>
             )}
+            <button
+              type="button"
+              data-palette-pin-toggle="true"
+              aria-label={pinToggleLabel}
+              aria-pressed={worktree.isPinned}
+              className={cn(
+                'flex size-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/70 opacity-0 outline-none transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 group-hover:opacity-100 group-focus-within:opacity-100',
+                worktree.isPinned && 'opacity-100 text-foreground'
+              )}
+              onPointerDown={stopRowSelect}
+              onKeyDown={stopActivationKeyPropagation}
+              onClick={(event) => {
+                stopRowSelect(event)
+                controller.handleToggleWorktreePinned(worktree.id, worktree.isPinned)
+              }}
+            >
+              {worktree.isPinned ? (
+                <PinOff className="size-3.5" aria-hidden="true" />
+              ) : (
+                <Pin className="size-3.5" aria-hidden="true" />
+              )}
+            </button>
           </div>
         </div>
       </div>

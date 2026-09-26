@@ -42,6 +42,8 @@ export type WorkspaceTabPaletteSearchResult = {
   worktreeId: string
   groupId: string
   contentType: WorkspaceTabContentType
+  /** Mirrors Tab.isPinned so palette rows can toggle pin without a tab lookup. */
+  isPinned: boolean
   occupantAgent: TuiAgent | null
   title: string
   secondaryText: string
@@ -126,6 +128,7 @@ function baseResult(
     worktreeId: entry.worktree.id,
     groupId: entry.tab.groupId,
     contentType: entry.tab.contentType,
+    isPinned: entry.tab.isPinned === true,
     occupantAgent: entry.occupantAgent,
     title: entry.title,
     secondaryText: entry.secondaryText,
