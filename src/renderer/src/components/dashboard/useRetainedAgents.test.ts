@@ -140,22 +140,32 @@ describe('collectRetainedAgentsOnDisappear', () => {
     expect(result.toRetain).toEqual([])
   })
 
-  it('does not retain a failed done row', () => {
-    const failed = makeAgentRow({
-      paneKey: 'tab-1:1',
-      state: 'done',
-      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 100 }
-    })
-    const result = collectRetainedAgentsOnDisappear({
-      previousAgents: new Map([['tab-1:1', { row: failed, worktreeId: 'wt-1' }]]),
-      currentAgents: new Map(),
-      retainedAgentsByPaneKey: {},
-      retentionSuppressedPaneKeys: {},
-      recentlyClosedAgentStatusTabIds: {},
-      recentlyRetiredAgentStatusPaneKeys: {}
-    })
+  it('retains a failed done row so the failure stays visible, but not a cancelled one', () => {
+    const retainedFor = (outcome: 'failure' | 'cancellation') =>
+      collectRetainedAgentsOnDisappear({
+        previousAgents: new Map([
+          [
+            'tab-1:1',
+            {
+              row: makeAgentRow({
+                paneKey: 'tab-1:1',
+                state: 'done',
+                mainAgent: { state: 'done', outcome, stateStartedAt: 100 }
+              }),
+              worktreeId: 'wt-1'
+            }
+          ]
+        ]),
+        currentAgents: new Map(),
+        retainedAgentsByPaneKey: {},
+        retentionSuppressedPaneKeys: {},
+        recentlyClosedAgentStatusTabIds: {},
+        recentlyRetiredAgentStatusPaneKeys: {}
+      }).toRetain
 
-    expect(result.toRetain).toEqual([])
+    expect(retainedFor('failure')).toHaveLength(1)
+    expect(retainedFor('failure')[0]?.entry.mainAgent?.outcome).toBe('failure')
+    expect(retainedFor('cancellation')).toEqual([])
   })
 
   it('refreshes the retained snapshot when a reused paneKey starts a newer run', () => {

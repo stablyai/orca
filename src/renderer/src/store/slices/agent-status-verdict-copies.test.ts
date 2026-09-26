@@ -109,22 +109,34 @@ describe('a failed done keeps its verdict in every copy', () => {
     expect(manualSleepCaptureEntry(failedDone(), 4_000).mainAgent).not.toHaveProperty('outcome')
   })
 
-  // The completion clock already moves for this change, so the store needs no verdict compare of its own.
-  it('re-retains a done whose verdict changed under an unchanged flag', () => {
-    const clean = failedDone({
-      mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 2_000 }
+  // A failure keeps its completion clock, so only a verdict compare sees success -> failure.
+  it('re-retains a done whose verdict changed under an unchanged flag and clock', () => {
+    const failed = failedDone()
+    const withVerdict = (outcome: 'success' | 'failure'): AgentStatusEntry => ({
+      ...failed,
+      mainAgent: { state: 'done', outcome, stateStartedAt: 2_000 }
     })
-    const facts = deriveAgentStatusLiveFacts({
-      state: STATE,
-      paneKey: PANE_KEY,
-      entry: failedDone(),
-      existing: clean,
-      launchConfigSource: undefined,
-      retainsResumableRecoveryIdentity: false,
-      commandCodeNewTurn: false,
-      updatedAt: 2_000
+    const facts = (existing: AgentStatusEntry, entry: AgentStatusEntry) =>
+      deriveAgentStatusLiveFacts({
+        state: STATE,
+        paneKey: PANE_KEY,
+        entry,
+        existing,
+        launchConfigSource: undefined,
+        retainsResumableRecoveryIdentity: false,
+        commandCodeNewTurn: false,
+        updatedAt: 2_000
+      })
+    expect(facts(withVerdict('success'), withVerdict('failure')).retentionRelevantChange).toBe(true)
+    expect(facts(withVerdict('failure'), withVerdict('failure')).retentionRelevantChange).toBe(
+      false
+    )
+    // A main agent failing while its subagents keep the row working is a verdict change too.
+    const held = (outcome: 'success' | 'failure'): AgentStatusEntry => ({
+      ...withVerdict(outcome),
+      state: 'working'
     })
-    expect(facts.retentionRelevantChange).toBe(true)
+    expect(facts(held('success'), held('failure')).retentionRelevantChange).toBe(true)
   })
 
   it('treats a verdict change as a different record even when interrupted did not move', () => {

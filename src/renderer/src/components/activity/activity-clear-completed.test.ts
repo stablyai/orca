@@ -142,6 +142,28 @@ describe('isClearableActivityThread', () => {
     expect(isClearableActivityThread(blockedThread)).toBe(false)
     expect(isClearableActivityThread(waitingThread)).toBe(false)
   })
+
+  it('reads a live thread whose main agent failed as failed, but keeps it while subagents run', () => {
+    const heldEntry = {
+      ...doneEvent(false).entry,
+      state: 'working' as const,
+      mainAgent: { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 5_000 }
+    }
+    const held = makeThread('t-held:1', {
+      currentAgentState: 'working',
+      currentAgentEntry: heldEntry
+    })
+    expect(activityThreadStatusId(held)).toBe('failed')
+    expect(isClearableActivityThread(held)).toBe(false)
+    const succeeded = makeThread('t-ok:1', {
+      currentAgentState: 'working',
+      currentAgentEntry: {
+        ...heldEntry,
+        mainAgent: { state: 'done', outcome: 'success', stateStartedAt: 5_000 }
+      }
+    })
+    expect(activityThreadStatusId(succeeded)).toBe('working')
+  })
 })
 
 describe('clearCompletedActivity', () => {

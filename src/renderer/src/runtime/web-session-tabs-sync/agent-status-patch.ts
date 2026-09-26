@@ -3,6 +3,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-title-owner'
 import { isWebTerminalSurfaceTabId, toWebTerminalSurfaceTabId } from '../web-runtime-session'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -221,6 +222,9 @@ export function buildMirroredAgentStatusPatch(
       entry.state === 'done' &&
       agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
     const workingModeChanged = existing?.workingMode !== entry.workingMode
+    // A verdict moves no clock, including a main agent failing while its subagents keep the row working.
+    const verdictChanged =
+      !!existing && agentMainAgentVerdict(existing) !== agentMainAgentVerdict(entry)
     const entrySortRelevantChange =
       !existing ||
       existing.state !== entry.state ||
@@ -230,7 +234,7 @@ export function buildMirroredAgentStatusPatch(
       doneAttentionChanged ||
       isMirroredCommandCodeTurnBump(existing, entry)
     aggregateRelevantChange =
-      aggregateRelevantChange || entrySortRelevantChange || workingModeChanged
+      aggregateRelevantChange || entrySortRelevantChange || workingModeChanged || verdictChanged
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 

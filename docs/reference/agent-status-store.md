@@ -106,8 +106,9 @@ ingests the summary into the hook server as a status row:
 | prompt, tool, last message, model, provider session | the summary's fields                                                                                                                                                          |
 
 Sessions with no request (`status === null`) produce no row. A request is a
-turn record, an assistant message, an accepted or unanswered send, or a send the
-agent or its start refused; a send that was withdrawn, or left undelivered by a
+turn record, an assistant message, a user message the provider journaled itself
+(history, an older host), an accepted or unanswered send, or a send the agent or
+its start refused; a send that was withdrawn, or left undelivered by a
 restart or a close, fails nobody and makes nothing listable.
 `summary.turnOutcome` is the latest request's verdict: its turn's outcome, or
 `failure` for a send the agent or its start refused (a send that joined a running
@@ -225,12 +226,29 @@ turn boundary remains a secondary source for builds that send it, and
 `StopFailure` maps to `failure`.
 
 Readers decode the verdict through one accessor, `agentMainAgentVerdict`, which
-reads `mainAgent.outcome`, then a top-level `outcome` (history entries and
-`worktree ps` rows), then the legacy `interrupted` flag as a cancellation, and
-answers only for a `done` row. A state-history entry copies the verdict as
-`outcome` beside `interrupted`, so a row's history agrees with the row. Policy
-that reads a clean finish (completion time, hibernation, sticky evidence)
-treats a failure like a cancellation.
+reads the main agent's own state, not the combined row's: `mainAgent.outcome`
+while `mainAgent.state` is `done`, then a top-level `outcome` (history entries,
+sleep records and `worktree ps` rows, whose writers record it only for a main
+agent that is itself done), then the legacy `interrupted` flag as a
+cancellation, which alone needs the combined `done`. So a main agent that
+failed while its subagents still run has a verdict on a `working` row, and
+`worktree ps` publishes it there. A state-history entry copies the verdict as
+`outcome` beside `interrupted`, so a row's history agrees with the row.
+
+Display reads the verdict through `agentVerdictDisplayMark`: a failure marks the
+agent failed whatever the combined state, because it is news the user must see
+even while subagents run; a stop marks it interrupted only on a `done` row, so
+a stopped or finished main agent with live child work still reads working.
+Each subagent keeps its own row and state. Container rollups (worktree card,
+terminal tab, Cmd+J) rank a pending question first, then a failure, then live
+work, then a stop, then done. Lifecycle waiters keep reading the combined
+`state`.
+
+Policy splits the verdict two ways. Clean-finish policy (hibernation, pane
+ownership, the star-nag value moment) treats a failure like a cancellation
+(`agentTurnEndedUncleanly`). Attention (completion time, Smart Sort, sticky
+retention, Cmd+J Recent) demotes only a turn the user stopped
+(`agentTurnStoppedByUser`); a failure ranks like a completion.
 
 Admission is one function, `normalizeAgentStatusPayload`, on the relay wire,
 IPC and disk. A malformed `mainAgent` drops the field and keeps the row. Old hosts
