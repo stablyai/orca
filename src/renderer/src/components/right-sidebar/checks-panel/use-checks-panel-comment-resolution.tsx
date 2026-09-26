@@ -148,10 +148,18 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
     ]
   )
 
-  const canTargetPRComments = Boolean(repo && prNumber && pr?.prRepo)
+  const canTargetPRComments =
+    activeReview?.provider === 'bitbucket'
+      ? Boolean(repo && activeReview.number)
+      : Boolean(repo && prNumber && pr?.prRepo)
   const commentsDisabledReason = canTargetPRComments
     ? undefined
-    : 'Commenting requires a GitHub PR repository target.'
+    : activeReview?.provider === 'bitbucket'
+      ? translate(
+          'auto.components.right.sidebar.ChecksPanel.bitbucketCommentsDisabled',
+          'Commenting requires a Bitbucket pull request.'
+        )
+      : 'Commenting requires a GitHub PR repository target.'
   const detectedAgentsForAI =
     typeof activeConnectionId === 'string' ? remoteDetectedAgentIds : detectedAgentIds
   const noEnabledAgentKnown =
@@ -195,7 +203,12 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
               ? 'Open a GitHub PR before resolving comments.'
               : activeReview.provider === 'gitlab' && !activeGitLabReview
                 ? 'Open a GitLab MR before resolving comments.'
-                : undefined
+                : activeReview.provider === 'bitbucket'
+                  ? translate(
+                      'auto.components.right.sidebar.ChecksPanel.bitbucketResolveUnsupported',
+                      'Resolving comments with AI is not supported for Bitbucket.'
+                    )
+                  : undefined
   return {
     handleResolve,
     canTargetPRComments,

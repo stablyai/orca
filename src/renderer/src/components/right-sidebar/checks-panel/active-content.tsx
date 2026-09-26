@@ -87,6 +87,7 @@ export function ChecksPanelActiveContent({
     isRefreshing,
     isResolvingConflictsWithAI,
     linkedGitLabMR,
+    linkedBitbucketPR,
     pendingCommentResolutionRef,
     pr,
     prRefreshState,
@@ -131,7 +132,15 @@ export function ChecksPanelActiveContent({
         <ReviewHeaderComponent
           review={activeReview}
           isRefreshing={isRefreshing}
-          canUnlinkReview={activeReview.provider === 'github' ? true : linkedGitLabMR !== null}
+          canUnlinkReview={
+            activeReview.provider === 'github'
+              ? true
+              : activeReview.provider === 'gitlab'
+                ? linkedGitLabMR !== null
+                : activeReview.provider === 'bitbucket'
+                  ? linkedBitbucketPR !== null
+                  : false
+          }
           modifierHintDestination={hostedReviewModifierHintDestination}
           onRefresh={() => void handleRefresh()}
           onOpenReview={handleOpenPR}
@@ -150,7 +159,13 @@ export function ChecksPanelActiveContent({
         ) : null}
 
         {/* Review title */}
-        {editingTitle ? (
+        {activeReview.provider === 'bitbucket' ? (
+          <div className="flex items-start gap-1.5 -mx-1 px-1 py-0.5">
+            <span className="text-[12px] text-foreground leading-snug flex-1">
+              {activeReview.title}
+            </span>
+          </div>
+        ) : editingTitle ? (
           <div className="flex items-center gap-1">
             <input
               ref={titleInputRef}
@@ -238,16 +253,17 @@ export function ChecksPanelActiveContent({
         </>
       )}
       {/* Why: with merge conflicts and no checks fetched, "No checks configured" is misleading — checks can't run until conflicts resolve. */}
-      {!(activeConflictReview && checks.length === 0 && !checksLoading) && (
-        <ChecksList
-          checks={checks}
-          checksLoading={checksLoading}
-          checkDetailsContextKey={stateRequestKey}
-          onLoadCheckDetails={handleLoadCheckDetails}
-          githubRepository={pr?.prRepo ?? null}
-          getGitLabProjectRef={getGitLabProjectRef}
-        />
-      )}
+      {!(activeConflictReview && checks.length === 0 && !checksLoading) &&
+        (activeReview.provider !== 'bitbucket' || checks.length > 0) && (
+          <ChecksList
+            checks={checks}
+            checksLoading={checksLoading}
+            checkDetailsContextKey={stateRequestKey}
+            onLoadCheckDetails={handleLoadCheckDetails}
+            githubRepository={pr?.prRepo ?? null}
+            getGitLabProjectRef={getGitLabProjectRef}
+          />
+        )}
       <PRCommentsList
         comments={comments}
         commentsLoading={commentsLoading}
@@ -258,11 +274,11 @@ export function ChecksPanelActiveContent({
         selectionClearRequest={commentsSelectionClearRequest}
         resolveCommentsWithAIDisabled={Boolean(resolveCommentsWithAIDisabledReason)}
         resolveCommentsWithAIDisabledReason={resolveCommentsWithAIDisabledReason}
-        onAddComment={pr ? handleAddPRComment : undefined}
+        onAddComment={pr || activeReview.provider === 'bitbucket' ? handleAddPRComment : undefined}
         onResolveSelectedCommentsWithAI={
           sourceControlAiActionsVisible ? handleResolveCommentsWithAI : undefined
         }
-        onReply={pr ? handleReplyToComment : undefined}
+        onReply={pr || activeReview.provider === 'bitbucket' ? handleReplyToComment : undefined}
         onResolve={pr || activeGitLabReview ? handleResolve : undefined}
         onEditComment={pr ? handleEditComment : undefined}
         onDeleteComment={pr ? handleDeleteComment : undefined}
