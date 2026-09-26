@@ -6616,6 +6616,8 @@
           "remoteServerFallback": "the remote server",
           "loadAccountsFailed": "Could not load provider accounts.",
           "remoteScopeAccounts": "Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.",
+          "askClaudeAccountPerProjectTitle": "Ask which Claude account to use for each project",
+          "askClaudeAccountPerProjectDescription": "When on, projects without a saved Claude account ask before starting Claude.",
           "accountScopePrefix": "Account scope",
           "accountScopeRemoteServerUnnamed": "Remote server",
           "remoteScopeLocalAccountsKept": "Accounts managed on this desktop are unchanged. Switch the default runtime back to Local desktop to view them.",
@@ -9066,7 +9068,13 @@
             "b2c4e7f1a8": "endpoint",
             "3a9b6d2c4e": "api key",
             "5d8f1a3b7c": "china",
-            "7e2a4b8c1d": "overseas"
+            "7e2a4b8c1d": "overseas",
+            "askPerProjectAccounts": "accounts",
+            "askPerProjectProject": "project",
+            "askPerProjectPerProject": "per project",
+            "askPerProjectAsk": "ask",
+            "askPerProjectAskWhich": "ask which",
+            "askPerProjectPrompt": "prompt"
           }
         },
         "advanced": {
@@ -10395,6 +10403,11 @@
             "ghAccount": "gh account",
             "login": "login",
             "token": "token",
+            "claudeAccount": "Claude Account",
+            "claudeAccountDescription": "Choose which Claude account starts in this project.",
+            "claudeAccountKeyword": "claude account",
+            "claudeAccountsKeyword": "claude accounts",
+            "accountsKeyword": "accounts",
             "externalWorktrees": "External worktrees",
             "externalWorktreesDescription": "Override whether worktrees created outside Orca appear for this project.",
             "waitForSetupBeforeAgent": "wait for setup before starting agent",
@@ -12002,6 +12015,18 @@
           "capabilityUnknownHint": "Could not determine GitHub CLI account-binding support on this runtime. Clear the binding or retry.",
           "notEnforced": "Saved, but not enforced by this runtime (mixed-version host).",
           "refreshAccounts": "Refresh GitHub accounts"
+        },
+        "RepositoryClaudeAccountSection": {
+          "title": "Claude Account",
+          "description": "Choose which Claude account starts in this project.",
+          "selectLabel": "Account",
+          "default": "Default",
+          "ask": "Ask every time",
+          "unsupported": "Per-project Claude accounts aren't supported for this project's host yet.",
+          "saveFailed": "Could not save the Claude account preference.",
+          "notEnforced": "Saved, but not enforced by this runtime (mixed-version host).",
+          "loadFailed": "Could not load Claude accounts.",
+          "removedAccountOption": "Removed account (unavailable)"
         },
         "shareSkills": {
           "title": "Share Skills",
