@@ -100,6 +100,15 @@ export function createRepoRemovalActions(
                   .flatMap((worktree) => (worktree.projectId ? [worktree.projectId] : []))
               ]
             : []
+        // Why: read tabs/PTYs before and after the await: that refetch purges them, and a PTY can attach meanwhile.
+        const readTabPtyIds = (): { tabId: string; ptyIds: string[] }[] =>
+          worktreeIds.flatMap((wId) =>
+            (get().tabsByWorktree[wId] ?? []).map((tab) => ({
+              tabId: tab.id,
+              ptyIds: get().ptyIdsByTabId[tab.id] ?? []
+            }))
+          )
+        const tabPtyIdsBeforeRemoval = readTabPtyIds()
         // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
         const target = getActiveRuntimeTarget(
           settingsForRepoOwner(get(), projectId, options?.hostId)
@@ -142,14 +151,13 @@ export function createRepoRemovalActions(
             )
           )
         }
-        for (const wId of worktreeIds) {
-          const tabs = get().tabsByWorktree[wId] ?? []
-          for (const tab of tabs) {
-            killedTabIds.add(tab.id)
-            for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
-              if (!ptyId.startsWith('remote:')) {
-                window.api.pty.kill(ptyId)
-              }
+        const killedPtyIds = new Set<string>()
+        for (const { tabId, ptyIds } of [...tabPtyIdsBeforeRemoval, ...readTabPtyIds()]) {
+          killedTabIds.add(tabId)
+          for (const ptyId of ptyIds) {
+            if (!ptyId.startsWith('remote:') && !killedPtyIds.has(ptyId)) {
+              killedPtyIds.add(ptyId)
+              window.api.pty.kill(ptyId)
             }
           }
         }

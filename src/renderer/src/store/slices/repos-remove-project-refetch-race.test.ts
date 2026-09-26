@@ -95,3 +95,55 @@ describe('removeProject when repos:changed refetches during repos.remove', () =>
     expect(s.ptyIdsByTabId).not.toHaveProperty('tab-detected')
   })
 })
+
+function killCount(ptyId: string): number {
+  return ptyKill.mock.calls.filter(([killed]) => killed === ptyId).length
+}
+
+describe('removeProject kills each PTY of the removed repo exactly once', () => {
+  it('kills a PTY that attached to a removed repo tab during repos.remove', async () => {
+    const store = seededStore()
+    store.setState({ ptyIdsByTabId: { 'tab-detected': ['pty-detected'] } })
+    reposRemove.mockImplementation(async () => {
+      store.setState((s) => ({ ptyIdsByTabId: { ...s.ptyIdsByTabId, 'tab-listed': ['pty-late'] } }))
+    })
+
+    await store.getState().removeProject(removedRepo.id)
+
+    expect(reposRemove).toHaveBeenCalledTimes(1)
+    expect(killCount('pty-late')).toBe(1)
+    expect(killCount('pty-detected')).toBe(1)
+    expect(store.getState().ptyIdsByTabId).not.toHaveProperty('tab-listed')
+  })
+
+  it('kills a PTY that existed before repos.remove only once', async () => {
+    const store = seededStore()
+    reposRemove.mockResolvedValue(undefined)
+
+    await store.getState().removeProject(removedRepo.id)
+
+    expect(killCount('pty-listed')).toBe(1)
+    expect(killCount('pty-detected')).toBe(1)
+    expect(ptyKill).toHaveBeenCalledTimes(2)
+  })
+
+  it('kills a pre-existing PTY only once when the mid-removal refetch purged it', async () => {
+    const store = seededStore()
+    reposList.mockImplementation(async () => [structuredClone(keptRepo)])
+    let ptyTabsAfterRefetch: string[] = []
+    reposRemove.mockImplementation(async () => {
+      await store.getState().fetchRepos()
+      ptyTabsAfterRefetch = Object.keys(store.getState().ptyIdsByTabId)
+    })
+
+    await store.getState().removeProject(removedRepo.id)
+
+    // Proves the refetch already purged the PTY ids removeProject has to kill.
+    expect(reposList).toHaveBeenCalledTimes(1)
+    expect(ptyTabsAfterRefetch).not.toContain('tab-listed')
+    expect(ptyTabsAfterRefetch).not.toContain('tab-detected')
+    expect(killCount('pty-listed')).toBe(1)
+    expect(killCount('pty-detected')).toBe(1)
+    expect(ptyKill).toHaveBeenCalledTimes(2)
+  })
+})

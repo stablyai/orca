@@ -8,12 +8,13 @@ import type { SshRepoReconciliation } from '../slices/superseded-ssh-repo-rows'
 import { reconcileReadoptedSshWorktreesByRepo } from '../slices/readopted-ssh-worktree-rows'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import type { getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { repoWithFetchedOwner } from './owner-routing'
 import { getRuntimeTargetHostId } from '../runtime-target-host'
 import { fetchProjectHostSetupCompatibility } from '../projects/project-host-routing'
 import { mergeFetchedReposForHost } from './repo-catalog-identity'
+import { worktreeMatchesHost } from '../slices/worktrees/listing/worktree-host-ownership'
 import {
   mergeProjectHostSetupCompatibility,
   projectCompatibilityFromRepos
@@ -120,29 +121,65 @@ export function reconcileReadoptedSshWorktreeState(
   }
 }
 
-// Why: a repo removed outside this window leaves only via refetch, and its rows would linger as "Unknown". Ids the store never had may still be hydrating.
+function splitRowsByHost<
+  T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
+>(rows: readonly T[], hostId: ExecutionHostId): { kept: T[]; droppedIds: string[] } {
+  const kept: T[] = []
+  const droppedIds: string[] = []
+  for (const row of rows) {
+    if (worktreeMatchesHost(row, hostId)) {
+      droppedIds.push(row.id)
+    } else {
+      kept.push(row)
+    }
+  }
+  return { kept, droppedIds }
+}
+
+// Why: a repo removed outside this window leaves only via refetch, and its rows would linger as "Unknown". Ids the store never had may still be hydrating; other hosts' rows (restored placeholders) stay.
 export function dropWorktreeRowsForRemovedRepos(
   state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>,
   previousRepos: readonly Repo[],
-  validRepoIds: ReadonlySet<string>
-): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'> {
-  const removedRepoIds = previousRepos
-    .map((repo) => repo.id)
-    .filter(
-      (id) =>
-        !validRepoIds.has(id) &&
-        (id in state.worktreesByRepo || id in state.detectedWorktreesByRepo)
-    )
-  if (removedRepoIds.length === 0) {
-    return state
-  }
+  validRepoIds: ReadonlySet<string>,
+  hostId: ExecutionHostId
+): {
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>
+  droppedWorktreeIds: string[]
+} {
   const worktreesByRepo = { ...state.worktreesByRepo }
   const detectedWorktreesByRepo = { ...state.detectedWorktreesByRepo }
-  for (const id of removedRepoIds) {
-    delete worktreesByRepo[id]
-    delete detectedWorktreesByRepo[id]
+  const droppedWorktreeIds = new Set<string>()
+  for (const id of new Set(previousRepos.map((repo) => repo.id))) {
+    if (validRepoIds.has(id)) {
+      continue
+    }
+    const listed = splitRowsByHost(worktreesByRepo[id] ?? [], hostId)
+    if (listed.droppedIds.length > 0) {
+      listed.droppedIds.forEach((worktreeId) => droppedWorktreeIds.add(worktreeId))
+      if (listed.kept.length > 0) {
+        worktreesByRepo[id] = listed.kept
+      } else {
+        delete worktreesByRepo[id]
+      }
+    }
+    const detected = detectedWorktreesByRepo[id]
+    const detectedRows = splitRowsByHost(detected?.worktrees ?? [], hostId)
+    if (detected && detectedRows.droppedIds.length > 0) {
+      detectedRows.droppedIds.forEach((worktreeId) => droppedWorktreeIds.add(worktreeId))
+      if (detectedRows.kept.length > 0) {
+        detectedWorktreesByRepo[id] = { ...detected, worktrees: detectedRows.kept }
+      } else {
+        delete detectedWorktreesByRepo[id]
+      }
+    }
   }
-  return { worktreesByRepo, detectedWorktreesByRepo, sortEpoch: state.sortEpoch + 1 }
+  if (droppedWorktreeIds.size === 0) {
+    return { state, droppedWorktreeIds: [] }
+  }
+  return {
+    state: { worktreesByRepo, detectedWorktreesByRepo, sortEpoch: state.sortEpoch + 1 },
+    droppedWorktreeIds: [...droppedWorktreeIds]
+  }
 }
 
 export function projectCompatibilityForReconciledRepos(
