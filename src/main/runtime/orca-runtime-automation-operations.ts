@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithPtyForegroundProcessReads } from './orca-runtime-pty-foreground-process-reads'
+import { reconcileUnsupervisedDispatchesOnRestart } from './orchestration/orchestration-unsupervised-dispatch-recovery'
 import type {
   AutomationOwnerFenceOperation,
   AutomationOwnerPrecondition,
@@ -184,7 +185,25 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
   async reconcileLegacyWorkerTerminals(
     options: { connectionId?: string; materializeRenderer?: boolean } = {}
   ): Promise<LegacyWorkerTerminalRecoveryResult> {
-    return this.legacyWorkerRecovery.reconcile(options)
+    const result = await this.legacyWorkerRecovery.reconcile(options)
+    // Why after the supervised sweep, unconditionally (residual M): an injected/context-only
+    // Dispatch (`orchestration dispatch --inject`) has no worker_dispatches row, so the sweep
+    // above never sees it. This is the one choke point every production caller of this method
+    // shares (orca serve, orcad, and the desktop renderer-startup IPC path), so wiring it here
+    // reaches all of them without a second call site to keep in sync. A failure here must not
+    // fail the supervised sweep's own result.
+    try {
+      await reconcileUnsupervisedDispatchesOnRestart(this, this.getOrchestrationDb())
+    } catch (error) {
+      console.warn('[orchestration] unsupervised dispatch recovery failed', error)
+      // Why: logging alone left callers unable to distinguish "sweep ran and found nothing" from
+      // "sweep failed" (O2).
+      return {
+        ...result,
+        unsupervisedRecoveryError: error instanceof Error ? error.message : String(error)
+      }
+    }
+    return result
   }
 
   protected updateLegacyWorkerTerminalRecoveryRetry(
