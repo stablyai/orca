@@ -105,12 +105,18 @@ const waitFor = async predicate => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-bun-job-control-'))
     try {
       writeFileSync(join(directory, 'producer.cjs'), 'setInterval(()=>console.log("flow-tick"),10)')
+      writeFileSync(
+        join(directory, 'sleeper.sh'),
+        'printf \'%s\' "$$" > sleeper-ready\nexec sleep 30\n'
+      )
       const entry = join(directory, 'job-control.cjs')
       writeFileSync(
         entry,
         `
 const {spawnBunPty} = require(${JSON.stringify(join(__dirname, 'bun-pty-process.ts'))})
 const {readPosixPtyProcessTable,forceKillPosixPtyProcessGroups} = require(${JSON.stringify(join(__dirname, '../../pty/posix-pty-process-groups.ts'))})
+const {existsSync,readFileSync} = require('node:fs')
+const ready = ${JSON.stringify(join(directory, 'sleeper-ready'))}
 const signals = []
 const proc = spawnBunPty({
   file:'/bin/bash', args:['--noprofile','--norc','-i'], cwd:${JSON.stringify(directory)},
@@ -143,8 +149,10 @@ const waitFor = async predicate => {
 }
 ;(async()=>{
   try {
-    proc.write('sleep 30\\r')
-    const sleeper = await waitFor(async () => (await rows()).find(row => row.pid !== proc.pid))
+    proc.write('/bin/bash sleeper.sh\\r')
+    // A forked PID can appear before Bash gives its group the foreground terminal.
+    const sleeperPid = await waitFor(() => existsSync(ready) && Number(readFileSync(ready, 'utf8')))
+    const sleeper = await waitFor(async () => (await rows()).find(row => row.pid === sleeperPid))
     proc.write('\\x1a')
     await waitFor(async () => (await rows()).some(row => row.pid === sleeper.pid && row.state.startsWith('T')))
     proc.write(${JSON.stringify('"$ORCA_TEST_RUNTIME" producer.cjs &\r')})
