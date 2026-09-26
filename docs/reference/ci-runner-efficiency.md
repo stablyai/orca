@@ -77,14 +77,15 @@ Its test step fell from 400.26 to 205.17 seconds, and the complete job fell from
 498 to 298 seconds (40% less runner time). Builder, haptics, and grant-census file
 times fell from 73.70/88.94/258.58 seconds to 29.24/32.98/22.58 seconds.
 
-Four workers are scoped to the four-core Linux unit step. No local, Windows,
-isolation, timeout, retry, or coverage settings change. With unchanged shard
-weights, the hosted trial reduced aggregate unit job time from 3,386 to 3,133
-seconds (7.5%). Seven shards passed; the sole failure was an outdated hook-order
-snapshot after main added three layout-persistence hooks. The snapshot was
-refreshed only after comparing the exact old and merged hook sequences. Final
-verification is linked from [PR #23053](https://github.com/stablyai/orca/pull/23053).
-Failed timing reports never replace the checked-in baseline.
+A four-worker experiment reduced aggregate unit job time from 3,386 to 3,133
+seconds (7.5%), but the repeat run exceeded the palette matcher's existing
+180ms performance budget at 235ms. The override was removed; retain Vitest's
+default worker count, isolation, timeouts, retries, and coverage. The first trial
+also found an outdated hook-order snapshot after main added three layout-persistence
+hooks. That snapshot was refreshed only after comparing the exact old and merged
+hook sequences. Final verification is linked from
+[PR #23053](https://github.com/stablyai/orca/pull/23053). Failed timing reports
+never replace the checked-in baseline.
 
 No account settings, paid services, or runner entitlements changed. Standard
 public-repository runners remain free. GitHub documents plan concurrency limits
