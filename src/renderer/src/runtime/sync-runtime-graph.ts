@@ -9,9 +9,10 @@ import {
   setTrailingGraphSyncScheduler
 } from './sync-runtime-graph/graph-publication'
 import {
+  addRegisteredTerminalTab,
   findRegisteredTerminalTab,
   graphState,
-  registeredTerminalTabKey,
+  removeRegisteredTerminalTab,
   RUNTIME_GRAPH_SYNC_COALESCE_MS
 } from './sync-runtime-graph/graph-state'
 import {
@@ -50,17 +51,14 @@ export function hasRegisteredRuntimeTerminalTab(tabId: string, worktreeId?: stri
 }
 
 export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => void {
-  const key = registeredTerminalTabKey(tab.worktreeId, tab.tabId)
-  graphState.registeredTabs.set(key, tab)
-  graphState.tabRegisteredAt.set(key, Date.now())
+  const key = addRegisteredTerminalTab(tab)
   scheduleRuntimeGraphSync()
   return () => {
     // React can mount a replacement before the old effect cleans up.
     if (graphState.registeredTabs.get(key) !== tab) {
       return
     }
-    graphState.registeredTabs.delete(key)
-    graphState.tabRegisteredAt.delete(key)
+    removeRegisteredTerminalTab(tab)
     scheduleRuntimeGraphSync()
   }
 }

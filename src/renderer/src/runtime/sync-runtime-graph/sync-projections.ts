@@ -5,7 +5,8 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   EMPTY_BROWSER_PAGES_BY_WORKSPACE,
   EMPTY_BROWSER_TABS_BY_WORKTREE,
-  graphState
+  graphState,
+  resetRuntimeGraphSliceScanCaches
 } from './graph-state'
 import type {
   BrowserPagesProjectionCacheEntry,
@@ -272,4 +273,5 @@ export function resetRuntimeMobileSyncProjectionCachesForTests(): void {
   graphState.cachedBrowserWorkspacesProjection = null
   graphState.cachedBrowserPagesProjection = null
   graphState.cachedEditorDraftHashes = null
+  resetRuntimeGraphSliceScanCaches()
 }
