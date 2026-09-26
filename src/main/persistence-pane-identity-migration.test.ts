@@ -59,7 +59,12 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Why: Store installs an alias-persistence listener on the module-singleton hook server and never
+    // removes it, so a listener left behind here makes the next test's load rebuild the entire
+    // persisted alias list once per registered alias.
+    const { agentHookServer } = await import('./agent-hooks/server')
+    agentHookServer.setPaneKeyAliasPersistenceListener(null)
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('hydrates split-pane legacy numeric agent status rows onto the matching remapped leaves', async () => {
