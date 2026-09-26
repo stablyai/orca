@@ -1,6 +1,8 @@
+import { toast } from 'sonner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { BrowserTab } from '../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { createUntitledMarkdownFileWithTemplateSelection } from './create-untitled-markdown'
 import { getConnectionId } from './connection-context'
 import { detectLanguage } from './language-detect'
@@ -8,6 +10,7 @@ import type { AppState } from '@/store/types'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { translate } from '@/i18n/i18n'
 import { assertClientCreationActionAvailable } from './client-creation-action-policy'
+import { launchAgentInNewTab } from './launch-agent-in-new-tab'
 
 type FloatingWorkspaceTerminalStore = Pick<AppState, 'activeGroupIdByWorktree' | 'createTab'>
 
@@ -29,6 +32,46 @@ export async function createFloatingWorkspaceTerminalTab(
   const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride)
   focusTerminalTabSurface(tab.id)
   return tab
+}
+
+/** Returns false when no launch command could be built. */
+export function createFloatingWorkspaceAgentTab(agent: TuiAgent): boolean {
+  // Floating resolves the terminal-backed lane: a chat view over a PTY when the chat default is
+  // on, never a structured session.
+  const result = launchAgentInNewTab({
+    agent,
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    launchSource: 'shortcut'
+  })
+  if (!result) {
+    return false
+  }
+  if (result.surface.kind === 'local-terminal') {
+    focusTerminalTabSurface(result.surface.tabId)
+  }
+  return true
+}
+
+/** Keyboard entry point: a shortcut has no UI of its own, so failures surface as toasts. */
+export function launchFloatingWorkspaceAgentShortcut(agent: TuiAgent | null): void {
+  if (!agent) {
+    toast.message(
+      translate(
+        'auto.components.Terminal.5b2c1a9e44',
+        'No agent CLI detected — install one or pick a default agent in Settings.'
+      )
+    )
+    return
+  }
+  if (!createFloatingWorkspaceAgentTab(agent)) {
+    toast.error(
+      translate(
+        'auto.components.Terminal.e57db40c11',
+        'Could not build launch command for {{value0}}.',
+        { value0: agent }
+      )
+    )
+  }
 }
 
 export async function createFloatingWorkspaceBrowserTab(

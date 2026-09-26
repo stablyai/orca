@@ -5,6 +5,7 @@ import { keybindingMatchesAction } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { useAppStore } from '../store'
 import {
+  launchFloatingWorkspaceAgentShortcut,
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab,
@@ -74,14 +75,18 @@ export function handleTerminalWorkspaceKeyDown(
 
   if (!event.repeat) {
     const agentShortcut = resolveTerminalAgentTabShortcut({
-      activeWorktreeId,
+      // Why: the floating panel is local, so its default agent comes from locally detected CLIs.
+      activeWorktreeId: floatingWorkspaceFocused ? FLOATING_TERMINAL_WORKTREE_ID : activeWorktreeId,
       keybindings,
       matchShortcut
     })
     if (agentShortcut.actionId) {
       event.preventDefault()
       notifyTerminalCapture(agentShortcut.actionId)
-      if (agentShortcut.agent) {
+      if (floatingWorkspaceFocused) {
+        // Why: this capture listener usually runs before the floating panel's own, so it routes there too.
+        launchFloatingWorkspaceAgentShortcut(agentShortcut.agent)
+      } else if (agentShortcut.agent) {
         handleNewAgentTab(agentShortcut.agent)
       } else {
         toast.message(

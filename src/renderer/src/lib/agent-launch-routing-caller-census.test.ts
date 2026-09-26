@@ -8,9 +8,6 @@ const CENSUS_FILE = 'src/renderer/src/lib/agent-launch-routing-caller-census.tes
 
 const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
   'src/renderer/src/components/dashboard/launch-dashboard-agent.ts',
-  // Joined the funnel rather than appearing beside it: this button used to hand-roll the helper's
-  // terminal arm against `queueTabStartupCommand`. A line going up here is a converged bypass.
-  'src/renderer/src/components/floating-terminal/FloatingTerminalWindowControls.tsx',
   'src/renderer/src/components/right-sidebar/runSourceControlAgentActionStart.ts',
   'src/renderer/src/components/right-sidebar/source-control/ai/recovery-launch.ts',
   'src/renderer/src/components/right-sidebar/source-control/sync/use-git-history-commit-actions.ts',
@@ -19,6 +16,9 @@ const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
   'src/renderer/src/components/terminal-pane/terminal-agent-session-fork.ts',
   'src/renderer/src/components/use-terminal-create-actions.ts',
   'src/renderer/src/lib/fix-checks-agent-launch.ts',
+  // Joined the funnel rather than appearing beside it: the floating agent button used to hand-roll
+  // the helper's terminal arm against `queueTabStartupCommand`. A line going up here is a converged bypass.
+  'src/renderer/src/lib/floating-workspace-tab-creation.ts',
   'src/renderer/src/lib/launch-agent-session-continuation.ts',
   'src/renderer/src/lib/run-quick-command-in-new-tab.ts'
 ]
@@ -77,7 +77,7 @@ describe('agent launch routing caller census', () => {
     for (const file of [
       'src/renderer/src/lib/launch-agent-background-session.ts',
       'src/renderer/src/lib/launch-ai-vault-session.ts',
-      'src/renderer/src/components/floating-terminal/FloatingTerminalWindowControls.tsx'
+      'src/renderer/src/lib/floating-workspace-tab-creation.ts'
     ]) {
       expect(readFileSync(join(REPO_ROOT, file), 'utf8')).not.toContain('resolveAgentLaunchRoute')
     }

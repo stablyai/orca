@@ -4,10 +4,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { createFloatingWorkspaceAgentTab } from '@/lib/floating-workspace-tab-creation'
 import { useAppStore } from '@/store'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   isTuiAgentEnabled
@@ -62,16 +60,7 @@ export function FloatingTerminalWindowControls({
     if (!defaultAgent) {
       return
     }
-    // Why: the shared launcher owns the startup plan, the route and the tab identity, so this
-    // button stays one more caller of it rather than a second copy of new-agent-tab startup.
-    // Floating resolves the terminal-backed lane: a chat view over a PTY when the chat default is
-    // on, never a structured session.
-    const result = launchAgentInNewTab({
-      agent: defaultAgent,
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      launchSource: 'shortcut'
-    })
-    if (!result) {
+    if (!createFloatingWorkspaceAgentTab(defaultAgent)) {
       toast.error(
         translate(
           'auto.components.floating.terminal.FloatingTerminalWindowControls.82da3701e7',
@@ -79,12 +68,7 @@ export function FloatingTerminalWindowControls({
           { value0: defaultAgentLabel ?? defaultAgent }
         )
       )
-      return
     }
-    if (result.surface.kind !== 'local-terminal') {
-      return
-    }
-    focusTerminalTabSurface(result.surface.tabId)
   }, [defaultAgent, defaultAgentLabel])
 
   return (

@@ -3,9 +3,11 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { getMaximizedFloatingTerminalBounds } from './floating-terminal-panel-bounds'
 import {
   makeTab,
+  setFloatingKeybindings,
   setFloatingTabs,
   storeBox,
   type FloatingPanelStoreState
@@ -120,6 +122,8 @@ vi.mock('@/lib/connection-context', async () => {
 vi.mock('@/lib/create-untitled-markdown', () => ({
   createUntitledMarkdownFileWithTemplateSelection: vi.fn()
 }))
+
+vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: vi.fn(() => null) }))
 
 vi.mock('@/lib/ipc-error', async () => {
   return (await import('./floating-terminal-panel-test-module-mocks')).createIpcErrorModule()
@@ -692,6 +696,28 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(altStopPropagation).not.toHaveBeenCalled()
     expect(altStopImmediatePropagation).not.toHaveBeenCalled()
     expect(mocks.activateTab).not.toHaveBeenCalled()
+  })
+
+  it('routes a bound agent shortcut to the floating workspace without an active worktree', async () => {
+    setFloatingKeybindings({ 'tab.newAgent.claude': ['Ctrl+Alt+M'] })
+    const element = await renderPanel(true)
+    const { keydownListener, panelElement } = bindFocusedFloatingPanelKeydown(element)
+    const preventDefault = vi.fn()
+
+    keydownListener(
+      makeFocusedPanelKeyEvent({
+        altKey: true,
+        ctrlKey: true,
+        key: 'm',
+        preventDefault,
+        target: panelElement
+      })
+    )
+
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'claude', worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    )
   })
 
   it('routes focused floating workspace maximize shortcuts like the titlebar control', async () => {
