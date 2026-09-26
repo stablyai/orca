@@ -306,7 +306,7 @@ export type AgentSkillCliPrerequisite = {
   ensureCli: () => Promise<void>
 }
 
-/** CLI setup an agent-skill install needs first; only WSL must register `orca-ide`. */
+/** Keeps the WSL registration fallback until managed CLI support can be confirmed. */
 export function getAgentSkillCliPrerequisite(
   runtime?: LocalAgentRuntime
 ): AgentSkillCliPrerequisite {

@@ -14,8 +14,7 @@ export const CLI_PREREQUISITE_REGISTRATION_TOAST = 'Orca needs to register its C
 export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
   'Approve the system prompt so skill setup can use the Orca CLI command.'
 
-// Why: Orca PTYs on macOS/Windows/Linux already put the bundled CLI on PATH
-// (prependOrcaCliDirToChildPath); a WSL guest reaches `orca-ide` only once it is registered.
+// WSL setup cannot yet confirm managed CLI support on the owning host or surviving daemon.
 export function isOrcaCliRegistrationRequired(
   agentRuntime: { runtime: 'host' | 'wsl' } | null | undefined
 ): boolean {
