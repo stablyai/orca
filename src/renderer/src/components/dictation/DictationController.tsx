@@ -385,6 +385,12 @@ export function DictationController() {
 
     const cleanupStopped = window.api.speech.onStopped((data) => {
       recordStoppedSession(data.sessionId, stoppedSessionIdsRef, stoppedResolversRef)
+      if (
+        dictationStateRef.current === 'stopping' &&
+        activeSessionIdRef.current === data.sessionId
+      ) {
+        activeSessionIdRef.current = null
+      }
     })
 
     const cleanupError = window.api.speech.onError((data) => {
@@ -394,7 +400,6 @@ export function DictationController() {
       const sessionId = data.sessionId
       erroredSessionIdsRef.current.add(sessionId)
       dictationRunRef.current += 1
-      activeSessionIdRef.current = null
       toast.error(
         translate(
           'auto.components.dictation.DictationController.de136f1199',
@@ -405,7 +410,11 @@ export function DictationController() {
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
       stopCapture()
-      discardBufferedAudio()
+      // Queue overload stops capture but keeps accepted audio eligible for final delivery.
+      if (!data.recoverable) {
+        activeSessionIdRef.current = null
+        discardBufferedAudio()
+      }
       void (async () => {
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
         await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)

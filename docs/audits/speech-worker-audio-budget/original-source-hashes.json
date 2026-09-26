@@ -1,0 +1,8 @@
+{
+  "src/main/speech/stt-session-state.ts": "77adc85a68bc66d03b48ddf52f497e292c6e584282686b8db857562cc5d7d603",
+  "src/main/speech/stt-service.ts": "464c6ca825277a6c834816ae4cd014c52f3a96d620f3146e65a6a7ed383c52ce",
+  "src/main/speech/stt-worker-startup.ts": "519496e70e6652cbfe7b2030c8c6c5d16fa099203de117a883f6fe7fb7bec77a",
+  "src/main/speech/stt-session-start.ts": "1d4f0905b9d969c78fd96874b3a1e25c67698848d856391f12f6cef5b36795d2",
+  "src/main/speech/stt-session-stop.ts": "08d5db6147a929241e5fed3aa37bcf9597deca662e806ad9264349626ea9ea03",
+  "src/main/speech/stt-worker.ts": "4c94a138ed89373f5f8ed0da0375f3d5758aa24a58a0e1e52ae53d74cd7fe373"
+}
