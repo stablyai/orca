@@ -13,9 +13,14 @@ import type {
   OpenCodeUsagePersistedDatabase,
   OpenCodeUsageSession
 } from '../opencode-usage/types'
+import type {
+  MuseUsageDailyAggregate,
+  MuseUsagePersistedFile,
+  MuseUsageSession
+} from '../muse-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 
-// Why (#20940): the three first-party usage scans walk whole rollout/transcript
+// Why (#20940): the first-party usage scans walk whole rollout/transcript
 // corpora and read SQLite synchronously, all on the Electron main process. They
 // share one worker thread, so this protocol is the only shape that crosses the
 // boundary. It must stay electron-free — worker threads cannot require electron
@@ -26,7 +31,7 @@ import type { UsageScanWorktreeRef } from './usage-provider-contract'
  * than `UsageProviderId`: a `plugin:` provider supplies its own scan function,
  * which is not in this bundle and cannot be named on the wire.
  */
-export type UsageScanWorkerProviderId = 'claude' | 'codex' | 'opencode'
+export type UsageScanWorkerProviderId = 'claude' | 'codex' | 'opencode' | 'muse'
 
 /** Request body per provider; `previous` is that provider's own per-source cache. */
 export type UsageScanWorkerRequestBody =
@@ -41,6 +46,7 @@ export type UsageScanWorkerRequestBody =
       worktrees: UsageScanWorktreeRef[]
       previous: OpenCodeUsagePersistedDatabase[]
     }
+  | { providerId: 'muse'; worktrees: UsageScanWorktreeRef[]; previous: MuseUsagePersistedFile[] }
 
 export type UsageScanWorkerRequest = UsageScanWorkerRequestBody & { id: number }
 
@@ -67,6 +73,12 @@ export type UsageScanWorkerValue =
       source: OpenCodeUsagePersistedDatabase[]
       sessions: OpenCodeUsageSession[]
       dailyAggregates: OpenCodeUsageDailyAggregate[]
+    }
+  | {
+      providerId: 'muse'
+      source: MuseUsagePersistedFile[]
+      sessions: MuseUsageSession[]
+      dailyAggregates: MuseUsageDailyAggregate[]
     }
 
 export type UsageScanWorkerResponse =

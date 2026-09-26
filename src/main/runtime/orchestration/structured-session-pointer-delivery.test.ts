@@ -1,28 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionPtyWriteRefusal } from '../../../shared/agent-session-pty-write-admission'
 import {
-  decideStructuredPointerDelivery,
-  isSettledNativeOwner,
+  decideStructuredSessionPointerDelivery,
   retainReasonForDispatch,
-  retainWaitsForJournalEdge,
   structuredDispatchDelivered,
   structuredSessionGateFacts
 } from './structured-session-pointer-delivery'
-
-function refusal(
-  overrides: Partial<AgentSessionPtyWriteRefusal> = {}
-): AgentSessionPtyWriteRefusal {
-  return {
-    code: 'agent_session_conflict',
-    sessionId: 'session-1',
-    ownerRuntimeKind: 'native',
-    handoffStage: null,
-    ownerPid: 4242,
-    runtimeFence: 7,
-    ...overrides
-  }
-}
 
 function statusItem(
   turnLifecycle: { turnId: string; state: 'running' } | undefined
@@ -56,24 +39,6 @@ function pendingApproval(): AgentJournalRenderItem {
 }
 
 const IDLE = { turnRunning: false, awaitingHuman: false }
-
-describe('structured pointer owner admission', () => {
-  it('accepts only a settled native owner', () => {
-    expect(isSettledNativeOwner(refusal())).toBe(true)
-  })
-
-  it('refuses a tui owner', () => {
-    expect(isSettledNativeOwner(refusal({ ownerRuntimeKind: 'tui' }))).toBe(false)
-  })
-
-  it('refuses a native owner that is mid-handoff, so a to-tui takeover is not raced', () => {
-    expect(isSettledNativeOwner(refusal({ handoffStage: 'recovering' }))).toBe(false)
-  })
-
-  it('refuses a reconciling refusal even though it names a native owner', () => {
-    expect(isSettledNativeOwner(refusal({ code: 'execution_owner_reconciling' }))).toBe(false)
-  })
-})
 
 describe('structured session gate facts', () => {
   it('reads an empty journal as idle', () => {
@@ -115,15 +80,15 @@ describe('structured session gate facts', () => {
   })
 })
 
-describe('decideStructuredPointerDelivery', () => {
-  it('delivers to a settled, attached, idle session', () => {
-    expect(decideStructuredPointerDelivery({ refusal: refusal(), session: IDLE })).toEqual({
+describe('decideStructuredSessionPointerDelivery', () => {
+  it('delivers to an attached, idle session', () => {
+    expect(decideStructuredSessionPointerDelivery({ session: IDLE })).toEqual({
       deliver: true
     })
   })
 
   it('retains when the session is not attached on this host', () => {
-    expect(decideStructuredPointerDelivery({ refusal: refusal(), session: null })).toEqual({
+    expect(decideStructuredSessionPointerDelivery({ session: null })).toEqual({
       deliver: false,
       retain: 'session-not-attached'
     })
@@ -131,8 +96,7 @@ describe('decideStructuredPointerDelivery', () => {
 
   it('retains mid-turn rather than delegating the race to the provider', () => {
     expect(
-      decideStructuredPointerDelivery({
-        refusal: refusal(),
+      decideStructuredSessionPointerDelivery({
         session: { turnRunning: true, awaitingHuman: false }
       })
     ).toEqual({ deliver: false, retain: 'turn-unsettled' })
@@ -140,20 +104,10 @@ describe('decideStructuredPointerDelivery', () => {
 
   it('names the human prompt ahead of the turn, so the retain reason is the actionable one', () => {
     expect(
-      decideStructuredPointerDelivery({
-        refusal: refusal(),
+      decideStructuredSessionPointerDelivery({
         session: { turnRunning: true, awaitingHuman: true }
       })
     ).toEqual({ deliver: false, retain: 'awaiting-human' })
-  })
-
-  it('retains when the owner is not a settled native session', () => {
-    expect(
-      decideStructuredPointerDelivery({
-        refusal: refusal({ handoffStage: 'preparing' }),
-        session: IDLE
-      })
-    ).toEqual({ deliver: false, retain: 'owner-not-settled-native' })
   })
 })
 
@@ -170,25 +124,5 @@ describe('dispatch outcome classification', () => {
   it('names the retain reason for each non-accepted dispatch', () => {
     expect(retainReasonForDispatch('rejected')).toBe('dispatch-rejected')
     expect(retainReasonForDispatch('unknown')).toBe('dispatch-unknown')
-  })
-})
-
-describe('retry pacing', () => {
-  it('parks a nudge that may already be queued until the journal moves again', () => {
-    expect(retainWaitsForJournalEdge('dispatch-unknown')).toBe(true)
-    expect(retainWaitsForJournalEdge('turn-unsettled')).toBe(true)
-    expect(retainWaitsForJournalEdge('awaiting-human')).toBe(true)
-  })
-
-  it('parks a detached session, because the re-attach edge is the only thing that will notice', () => {
-    expect(retainWaitsForJournalEdge('session-not-attached')).toBe(true)
-  })
-
-  it('parks a rejected dispatch, because nothing else retries and no mail was consumed', () => {
-    expect(retainWaitsForJournalEdge('dispatch-rejected')).toBe(true)
-  })
-
-  it('allows a plain retry only for an owner the resolver would not have named', () => {
-    expect(retainWaitsForJournalEdge('owner-not-settled-native')).toBe(false)
   })
 })

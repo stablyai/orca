@@ -14,6 +14,7 @@
 // newer build must not be misread as malformed (see journal-row-schema.ts).
 
 import { z } from 'zod'
+import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
@@ -146,6 +147,15 @@ const Question = z
 const Resolution = z.object({
   state: z.string().min(1),
   selectedOptionId: z.string().nullable(),
+  answers: z
+    .array(
+      z.object({
+        questionId: z.string(),
+        optionIds: z.array(z.string()),
+        other: z.string().optional()
+      })
+    )
+    .optional(),
   resolvedBy: z.string().nullable(),
   resolvedAt: z.number().nullable()
 })
@@ -165,8 +175,29 @@ const ApprovalSubject = z.object({
 const MessageBody = z.object({
   kind: z.literal('message'),
   role: z.string().min(1),
-  blocks: z.array(Block)
+  blocks: z.array(Block),
+  // Open like roles: a send mode a newer build writes must not turn the row malformed.
+  sentAs: z.string().min(1).optional()
 })
+
+const ThreadGoal = z.object({
+  objective: z.string(),
+  status: z.string().min(1),
+  tokenBudget: z.number().finite().nullable(),
+  tokensUsed: z.number().finite(),
+  timeUsedSeconds: z.number().finite(),
+  createdAt: z.number().finite(),
+  updatedAt: z.number().finite()
+})
+
+/** Like blocks: an unknown `state` stays admissible, a known one with a broken payload does not. */
+const ThreadGoalState = z.union([
+  z.discriminatedUnion('state', [
+    z.object({ state: z.literal('set'), goal: ThreadGoal }),
+    z.object({ state: z.literal('cleared') })
+  ]),
+  z.object({ state: z.string() }).refine((value) => !['set', 'cleared'].includes(value.state))
+])
 
 export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
   MessageBody,
@@ -219,7 +250,8 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
         durationMs: z.number().finite().nonnegative().optional()
       })
       .optional(),
-    providerFrame: ProviderFrame.optional()
+    providerFrame: ProviderFrame.optional(),
+    threadGoal: ThreadGoalState.optional()
   }),
   z.object({
     kind: z.literal('turn'),
@@ -233,7 +265,8 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     startedAt: z.number().finite().positive().optional(),
     requestedAt: z.number().finite().positive().optional(),
     completedAt: z.number().finite().positive().optional(),
-    durationMs: z.number().finite().nonnegative().optional()
+    durationMs: z.number().finite().nonnegative().optional(),
+    contextUsage: AgentSessionContextUsageSchema.optional()
   })
 ])
 
@@ -258,6 +291,7 @@ export const AgentJournalRenderItemSchema = z.object({
   sequence: z.number().int(),
   observedAt: z.number(),
   recovered: z.literal(true).optional(),
+  recoveredAt: z.number().optional(),
   ...AgentJournalProducerLinkageFields
 })
 

@@ -8,7 +8,6 @@
 
 import {
   adjudicateAgentSessionRestart,
-  agentSessionRestartEvictionSettlementId,
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
 } from '../../shared/agent-session-lease-adjudication'
@@ -16,17 +15,16 @@ import {
   appendAgentSessionProviderHandleLink,
   type AgentSessionProviderHandleLink
 } from '../../shared/agent-session-provider-handle'
+import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import type {
+  AgentSessionDeathEvidence,
   AgentSessionJournalCheckpoint,
-  AgentSessionHandoffStage,
   AgentSessionLease,
-  AgentSessionOwnerRuntimeKind,
   AgentSessionProcessIdentity,
   AgentSessionRecord
 } from '../../shared/agent-session-record'
 
 export type AgentSessionReservation = {
-  runtimeKind: AgentSessionOwnerRuntimeKind
   spawnToken: string
   claimKeyId: string
   handoffOperationId: string | null
@@ -77,21 +75,18 @@ export function reserveAgentSessionOwner(args: {
     disposition: 'reserved',
     record: withLease(record, {
       ...record.lease,
-      runtimeKind: reservation.runtimeKind,
+      runtimeKind: 'native',
       runtimeFence: decision.nextFence,
       // Why: a reserved owner is not yet a writer; it may only talk to the provider to prove resume.
       handoffStage: 'new-owner-proving',
       provenHandleLinkId: null,
       ownerProcess: null,
       reservedSpawnToken: reservation.spawnToken,
-      processlessAt: null,
       leaseDeadlineAt: reservation.now + reservation.leaseTtlMs,
       lastRenewedAt: reservation.now,
       handoffOperationId: reservation.handoffOperationId,
       claimKeyId: reservation.claimKeyId,
       claimStatus: 'reserved',
-      settlementRetryRequired: undefined,
-      settlementRetryId: undefined,
       deathEvidence: null
     })
   }
@@ -120,7 +115,6 @@ export function commitAgentSessionProcessIdentity(
   return withLease(record, {
     ...record.lease,
     ownerProcess: args.process,
-    processlessAt: null,
     lastRenewedAt: args.now
   })
 }
@@ -208,13 +202,9 @@ export function evictAgentSessionOwner(args: {
   expectedFence: number
   probe: AgentSessionOwnerProbe
   now: number
-  journalSettlement: 'required' | 'not-required'
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
-  if (record.lease.settlementRetryRequired) {
-    throw new Error('agent_session_ownership_unknown')
-  }
   const adjudication = adjudicateAgentSessionRestart({
     lease: record.lease,
     probe: args.probe,
@@ -227,53 +217,50 @@ export function evictAgentSessionOwner(args: {
       ...record.lease,
       handoffStage: null,
       handoffOperationId: null,
-      processlessAt: null,
       lastRenewedAt: args.now
     })
   }
   if (adjudication.disposition !== 'evicted') {
     throw new Error('agent_session_ownership_unknown')
   }
-  const settlementRequired = args.journalSettlement === 'required'
-  return withLease(record, {
-    ...record.lease,
-    runtimeFence: adjudication.nextFence,
-    handoffStage: null,
-    ownerProcess: null,
-    reservedSpawnToken: null,
-    processlessAt: null,
-    claimStatus: 'released',
-    lastRenewedAt: args.now,
-    handoffOperationId: null,
-    deathEvidence: adjudication.evidence,
-    settlementRetryRequired: settlementRequired ? true : undefined,
-    settlementRetryId: settlementRequired
-      ? agentSessionRestartEvictionSettlementId(record.lease, adjudication)
-      : undefined
-  })
+  return releasedAgentSessionLease(record, adjudication.nextFence, adjudication.evidence, args.now)
 }
 
-export function setAgentSessionHandoffStage(args: {
+/**
+ * Recovery's conclusion when proof never came: a recorded owner whose identity cannot be verified,
+ * or that survived the stop ladder. Its transport died with the runtime that held it, so nothing
+ * can drive it, and a verdict that never arrives must not hold the conversation. Nothing proved it
+ * gone, so no death evidence is written.
+ */
+export function releaseUnprovenAgentSessionOwner(args: {
   record: AgentSessionRecord
-  fence: number
-  stage: AgentSessionHandoffStage | null
-  handoffOperationId: string | null
+  expectedFence: number
   now: number
 }): AgentSessionRecord {
   const { record } = args
-  assertFence(record.lease, args.fence)
-  if (
-    record.lease.handoffOperationId !== null &&
-    args.handoffOperationId !== null &&
-    args.handoffOperationId !== record.lease.handoffOperationId
-  ) {
-    throw new Error('agent_session_operation_conflict')
+  assertFence(record.lease, args.expectedFence)
+  if (record.lease.handoffStage !== 'recovering') {
+    throw new Error('agent_session_ownership_unknown')
   }
+  return releasedAgentSessionLease(record, nextAgentSessionFence(record.lease), null, args.now)
+}
+
+function releasedAgentSessionLease(
+  record: AgentSessionRecord,
+  runtimeFence: number,
+  deathEvidence: AgentSessionDeathEvidence | null,
+  now: number
+): AgentSessionRecord {
   return withLease(record, {
     ...record.lease,
-    handoffStage: args.stage,
-    handoffOperationId: args.handoffOperationId,
-    lastRenewedAt: args.now
+    runtimeFence,
+    handoffStage: null,
+    ownerProcess: null,
+    reservedSpawnToken: null,
+    claimStatus: 'released',
+    lastRenewedAt: now,
+    handoffOperationId: null,
+    deathEvidence
   })
 }
 

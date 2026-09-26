@@ -508,10 +508,12 @@ describe('remote runtime request connection integration', () => {
         activeTabType: null,
         tabs: []
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries only the surface the shared-control and status paths under test read.
       const runtime = {
         configureNotificationDismissalStore: () => {},
         getRuntimeId: () => 'shared-runtime-test',
         getStartedAt: () => 1,
+        machineNameReady: async () => undefined,
         getStatus: () => ({
           runtimeId: 'shared-runtime-test',
           startedAt: 1,

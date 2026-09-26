@@ -382,3 +382,82 @@ describe('optional tool annotations', () => {
     ).toBe(false)
   })
 })
+
+describe('thread goal fields', () => {
+  const GOAL = {
+    objective: 'Ship the parser',
+    status: 'active',
+    tokenBudget: null,
+    tokensUsed: 0,
+    timeUsedSeconds: 0,
+    createdAt: 1_000,
+    updatedAt: 1_000
+  } as const
+
+  it('admits a user message sent as a goal and a typed goal transition', () => {
+    const bodies: AgentJournalItemBody[] = [
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Ship the parser' }],
+        sentAs: 'goal'
+      },
+      {
+        kind: 'status',
+        text: 'Goal set: Ship the parser',
+        threadGoal: { state: 'set', goal: GOAL }
+      },
+      { kind: 'status', text: 'Goal cleared', threadGoal: { state: 'cleared' } }
+    ]
+    for (const body of bodies) {
+      expect(isAdmissibleAgentJournalItemBody(body)).toBe(true)
+    }
+    expect(isAdmissibleAgentJournalMessageBody(bodies[0])).toBe(true)
+  })
+
+  it('keeps a send mode or goal state a newer build writes admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'user',
+        blocks: [],
+        sentAs: 'scheduled'
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Goal archived',
+        threadGoal: { state: 'archived' }
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, status: 'snoozed' } }
+      })
+    ).toBe(true)
+  })
+
+  it('rejects a malformed send mode or goal snapshot', () => {
+    for (const body of [
+      { kind: 'message', role: 'user', blocks: [], sentAs: 5 },
+      { kind: 'message', role: 'user', blocks: [], sentAs: '' },
+      { kind: 'status', text: 'Goal set', threadGoal: { state: 'set' } },
+      {
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, objective: null } }
+      },
+      {
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, timeUsedSeconds: 'soon' } }
+      },
+      { kind: 'status', text: 'Goal set', threadGoal: 'set' }
+    ]) {
+      expect(isAdmissibleAgentJournalItemBody(body)).toBe(false)
+    }
+  })
+})

@@ -268,6 +268,21 @@ describe('OpenCode 2 session_v2 usage', () => {
     })
   })
 
+  it('keeps a session that only session_v2 has when a legacy twin is absent', () => {
+    const path = createFixture({
+      generation: 'migrated',
+      legacySessions: [{ id: 'ses_shared', directory: WORKTREE, tokensInput: 5 }],
+      v2Sessions: [
+        { id: 'ses_shared', directory: WORKTREE, tokensInput: 5 },
+        { id: 'ses_v2_only', directory: WORKTREE, cost: 3.25, tokensInput: 70 }
+      ]
+    })
+
+    const events = readEvents(path)
+    const v2Only = events.find((event) => event.sessionId === 'ses_v2_only')
+    expect(v2Only).toMatchObject({ inputTokens: 70, estimatedCostUsd: 3.25, cwd: WORKTREE })
+  })
+
   it('falls back to the project worktree when the session has no directory', async () => {
     const path = createFixture({
       generation: 'v2-only',
@@ -280,5 +295,165 @@ describe('OpenCode 2 session_v2 usage', () => {
       sessionId: 'ses_no_dir',
       primaryWorktreeId: 'repo-1::/workspace/repo'
     })
+  })
+})
+
+// Why: a migrated session has two rows for one session, and neither is complete.
+// `session_v2` is the row OpenCode still writes, so it says what the session is;
+// each usage column is a lossy re-derivation, so each column takes the larger of
+// the two. Ranking whole rows by one number let that number decide cost,
+// directory and model too.
+describe('OpenCode 2 migrated session column merge', () => {
+  const SHARED = 'ses_shared'
+
+  it('keeps a recorded cost the recomputed session_v2 row lost', () => {
+    const path = createFixture({
+      generation: 'migrated',
+      legacySessions: [{ id: SHARED, directory: WORKTREE, tokensInput: 100, cost: 12.5 }],
+      v2Sessions: [{ id: SHARED, directory: WORKTREE, tokensInput: 200, cost: 0 }]
+    })
+
+    const events = readEvents(path)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.inputTokens).toBe(200)
+    expect(events[0]?.estimatedCostUsd).toBe(12.5)
+  })
+
+  it('attributes usage to the directory session_v2 records now', () => {
+    const path = createFixture({
+      generation: 'migrated',
+      legacySessions: [
+        { id: SHARED, directory: '/old/pre-migration-path', title: 'Old title', tokensInput: 900 }
+      ],
+      v2Sessions: [
+        { id: SHARED, directory: '/new/current-path', title: 'New title', tokensInput: 120 }
+      ]
+    })
+
+    const events = readEvents(path)
+    expect(events).toHaveLength(1)
+    // The legacy row still wins the token column; it must not drag metadata with it.
+    expect(events[0]?.inputTokens).toBe(900)
+    expect(events[0]?.cwd).toBe('/new/current-path')
+  })
+
+  it('keeps the model session_v2 derived when the legacy row has none', () => {
+    const path = createFixture({
+      generation: 'migrated',
+      // The import fills session_v2.model from the last user message when the v1
+      // row had none: 23 of 234 shared ids on a real migrated database.
+      legacySessions: [{ id: SHARED, directory: WORKTREE, model: null, tokensInput: 900 }],
+      v2Sessions: [
+        {
+          id: SHARED,
+          directory: WORKTREE,
+          model: '{"providerID":"anthropic","modelID":"claude-opus-4-1"}',
+          tokensInput: 120
+        }
+      ]
+    })
+
+    const events = readEvents(path)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.inputTokens).toBe(900)
+    expect(events[0]?.model).toBe('anthropic/claude-opus-4-1')
+  })
+
+  it('takes each usage column from whichever generation recorded more', () => {
+    const path = createFixture({
+      generation: 'migrated',
+      legacySessions: [
+        { id: SHARED, directory: WORKTREE, tokensInput: 1000, tokensCacheRead: 0, cost: 1 }
+      ],
+      v2Sessions: [
+        { id: SHARED, directory: WORKTREE, tokensInput: 0, tokensCacheRead: 1200, cost: 2 }
+      ]
+    })
+
+    const events = readEvents(path)
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
+      inputTokens: 1000,
+      cachedInputTokens: 1200,
+      estimatedCostUsd: 2,
+      totalTokens: 2200
+    })
+  })
+
+  it('resolves a faithful migrated copy exactly as the v2 row alone', () => {
+    const session = {
+      id: SHARED,
+      directory: WORKTREE,
+      cost: 0.75,
+      tokensInput: 100,
+      tokensOutput: 20,
+      tokensReasoning: 5,
+      tokensCacheRead: 900,
+      tokensCacheWrite: 300
+    }
+    const migrated = readEvents(
+      createFixture({
+        generation: 'migrated',
+        legacySessions: [session],
+        v2Sessions: [session]
+      })
+    )
+
+    expect(migrated).toEqual(
+      readEvents(createFixture({ generation: 'v2-only', v2Sessions: [session] }))
+    )
+  })
+
+  it('leaves an OpenCode 1-only database untouched by the merge', () => {
+    const path = createFixture({
+      generation: 'v1',
+      legacySessions: [
+        {
+          id: 'ses_v1',
+          directory: WORKTREE,
+          cost: 1.25,
+          tokensInput: 11,
+          tokensOutput: 3,
+          tokensCacheRead: 7,
+          tokensCacheWrite: 2
+        }
+      ]
+    })
+
+    expect(readEvents(path)).toEqual([
+      expect.objectContaining({
+        sessionId: 'ses_v1',
+        cwd: WORKTREE,
+        model: 'anthropic/claude-sonnet-4-5',
+        estimatedCostUsd: 1.25,
+        inputTokens: 11,
+        outputTokens: 3,
+        cachedInputTokens: 7,
+        totalTokens: 23
+      })
+    ])
+  })
+
+  it('emits exactly one row per session id across both generations', () => {
+    const path = createFixture({
+      generation: 'migrated',
+      legacySessions: [
+        { id: SHARED, directory: WORKTREE, tokensInput: 900 },
+        { id: 'ses_legacy_only', directory: WORKTREE, tokensInput: 42 }
+      ],
+      v2Sessions: [
+        { id: SHARED, directory: WORKTREE, tokensInput: 120 },
+        { id: 'ses_v2_only', directory: WORKTREE, tokensInput: 7 }
+      ]
+    })
+
+    const db = new Database(path, { readonly: true, fileMustExist: true })
+    try {
+      const ids = selectUsageRows(db).map((row) => row.id)
+      expect(ids).toHaveLength(3)
+      expect(new Set(ids).size).toBe(3)
+    } finally {
+      db.close()
+    }
   })
 })

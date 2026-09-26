@@ -1,7 +1,6 @@
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import { orderNativeChatMessages } from './native-chat-message-grouping'
-import { stripNoiseMessages } from './native-chat-noise'
-import { foldToolMessages } from './native-chat-tool-fold'
+import { projectNativeChatTranscriptMessages } from '../../../../shared/native-chat-transcript-projection'
+import { compareMessages } from './native-chat-session-assembler'
 
 function sameMessage(left: NativeChatMessage, right: NativeChatMessage): boolean {
   // Folding only clones the assistant rows that absorb a tool run; every other row
@@ -26,7 +25,7 @@ export function createNativeChatMessageListProjection(): (
   let previous: NativeChatMessage[] = []
   let byId = new Map<string, NativeChatMessage>()
   return (messages) => {
-    const folded = stripNoiseMessages(foldToolMessages(orderNativeChatMessages(messages)))
+    const folded = projectNativeChatTranscriptMessages(messages, compareMessages)
     const next = folded.map((message) => {
       const prior = byId.get(message.id)
       // Folding clones historical tool runs even when every contributing block is unchanged.

@@ -61,6 +61,16 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:activateView', listener)
     return () => ipcRenderer.removeListener('browser:activateView', listener)
   },
+  onCapturePaintHold: (
+    callback: (data: { browserPageId: string; held: boolean }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { browserPageId: string; held: boolean }
+    ) => callback(data)
+    ipcRenderer.on('browser:capturePaintHold', listener)
+    return () => ipcRenderer.removeListener('browser:capturePaintHold', listener)
+  },
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ): (() => void) => {

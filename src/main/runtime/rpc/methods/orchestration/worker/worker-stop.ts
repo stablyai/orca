@@ -141,7 +141,6 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
           })
         }
         const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
-        const liveHandle = observation.terminalHandle ?? handle
         // The host exit can settle this stop while terminal inspection is awaiting inventory.
         if (db.getWorkerDispatch(params.dispatch)?.state === 'stopped') {
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
@@ -202,7 +201,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
           }
         }
         const closed = await runtime
-          .closeTerminal(liveHandle)
+          .closeTerminal(handle)
           .then((close) => ({ close }) as const)
           .catch(
             (error: unknown) =>

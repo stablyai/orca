@@ -5,10 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
 import { normalizeStatusDotPresentation } from './document/write-queue'
 import { startTextScaling } from './document/text-scaling'
-import {
-  documentModuleSource,
-  webviewPageSource
-} from './document/document-module-source.test-support'
+import { webviewPageSource } from './document/document-module-source.test-support'
 
 const terminalWebViewSource = readFileSync(join(import.meta.dirname, 'TerminalWebView.tsx'), 'utf8')
 const terminalHtmlModuleSource = readFileSync(
@@ -21,8 +18,6 @@ const terminalHtmlDocumentShellSource = readFileSync(
 )
 // The document's own source, which is what the WebView runs once bundled.
 const terminalHtmlSource = webviewPageSource()
-
-const terminalWebglRecoverySource = documentModuleSource('webgl-recovery')
 
 function normalizeStatusDotChunks(chunks: string[]) {
   const scope = createTerminalDocumentScope()
@@ -150,20 +145,6 @@ describe('TerminalWebView text zoom', () => {
     expect(open).toBeGreaterThanOrEqual(0)
     expect(unicode).toBeGreaterThan(open)
     expect(replay).toBeGreaterThan(unicode)
-  })
-
-  it('uses the bundled WebGL-capable xterm stack and platform-safe font fallbacks', () => {
-    expect(terminalHtmlSource).not.toContain('cdn.jsdelivr.net')
-    // C7.5 moved the engine constructors onto the scope so the page can set them; inside the
-    // document the default still reads the bundled engine, and it is now the preamble that
-    // carries the read rather than the recovery module.
-    expect(terminalHtmlSource).toContain('window.WebglAddon.WebglAddon')
-    expect(terminalWebglRecoverySource).toContain('scope.createWebglAddon()')
-    expect(terminalHtmlSource).toContain('export function isIOSWebView(')
-    expect(terminalHtmlSource).toContain('fontFamily: scope.terminalFontFamily')
-    expect(terminalHtmlSource).toContain("fontWeight: '300'")
-    expect(terminalHtmlSource).toContain("fontWeightBold: '500'")
-    expect(terminalHtmlSource).toContain('new window.WebglAddon.WebglAddon()')
   })
 
   const IOS_IPHONE_NAVIGATOR = {

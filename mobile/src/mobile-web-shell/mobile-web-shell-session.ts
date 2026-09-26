@@ -42,6 +42,7 @@ export function createMobileWebShellSession(routePathname: string): MobileWebShe
     pageReportsPaint: false,
     pagePainted: false,
     pageBackClaimed: false,
+    pageOwnsSafeArea: false,
     gates: null,
     cached: null,
     updateNotice: null,

@@ -21,8 +21,10 @@ import type {
   MobileWebShellSessionEffect,
   MobileWebShellSessionEvent,
   MobileWebShellSessionState,
-  MobileWebShellUpdateNotice
+  MobileWebShellUpdateNotice,
+  PageReadyDeclaration
 } from './mobile-web-shell-session-contract'
+import { shellPageOwnsSafeArea } from './page-document-state'
 
 export type MobileWebShellSessionView = {
   readonly state: MobileWebShellSessionState
@@ -42,7 +44,7 @@ export type MobileWebShellSessionView = {
   readonly reportDocumentLoaded: () => void
   /** The page spoke over the bridge; ends that wait, whichever of the two arrived first. Carries
    *  what that `ready` declared it reports, which is what says whether a paint is coming. */
-  readonly reportPageReady: (reports: readonly string[]) => void
+  readonly reportPageReady: (ready: PageReadyDeclaration) => void
   /** The page has a frame on screen. Ignored for a page that never said it would report one. */
   readonly reportPagePainted: () => void
   /** The page took the device Back key, or let it go. */
@@ -60,6 +62,9 @@ export type MobileWebShellSessionView = {
   /** Whether the shell should take Back off the navigator. Projected for the same reason as
    *  `pageReady`: a claim moves nothing else, so no other value would re-render to carry it. */
   readonly backClaimed: boolean
+  /** Whether the document on screen pads for the system bars itself. Projected for the same
+   *  reason as `backClaimed`. */
+  readonly pageOwnsSafeArea: boolean
 }
 
 /**
@@ -90,6 +95,9 @@ export function useMobileWebShellSession(args: {
   const [pageReady, setPageReady] = useState(sessionRef.current.pageReady)
   const [pageFrame, setPageFrame] = useState(() => shellPageFrame(sessionRef.current))
   const [backClaimed, setBackClaimed] = useState(() => shellPageBackClaimed(sessionRef.current))
+  const [pageOwnsSafeArea, setPageOwnsSafeArea] = useState(() =>
+    shellPageOwnsSafeArea(sessionRef.current)
+  )
   const hostKey = useMemo(() => deriveHostCacheKey(hostId), [hostId])
   const startedAtRef = useRef(runtime.now())
   // Bumped by anything that invalidates work in flight; every dispatch out of an effect checks it.
@@ -113,6 +121,7 @@ export function useMobileWebShellSession(args: {
     setPageReady(stepped.session.pageReady)
     setPageFrame(shellPageFrame(stepped.session))
     setBackClaimed(shellPageBackClaimed(stepped.session))
+    setPageOwnsSafeArea(shellPageOwnsSafeArea(stepped.session))
     for (const effect of stepped.effects) {
       // Every effect of a step belongs to the flow that step produced, and its result carries that
       // number back, so a flow the session has since restarted reports into nothing.
@@ -273,8 +282,8 @@ export function useMobileWebShellSession(args: {
   }, [dispatch])
 
   const reportPageReady = useCallback(
-    (reports: readonly string[]) => {
-      dispatch(epochRef.current, { type: 'page-ready', reports })
+    (ready: PageReadyDeclaration) => {
+      dispatch(epochRef.current, { type: 'page-ready', ...ready })
     },
     [dispatch]
   )
@@ -305,6 +314,7 @@ export function useMobileWebShellSession(args: {
     reportPageReady,
     reportPagePainted,
     reportPageBackClaim,
-    backClaimed
+    backClaimed,
+    pageOwnsSafeArea
   }
 }

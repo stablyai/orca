@@ -126,7 +126,7 @@ export function launchSleepingAgentSession(
   })
   state.clearSleepingAgentSession(record.paneKey)
   if (!options?.suppressNavigation) {
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', record.worktreeId)
   }
   appendTabToWorktreeOrder(record.worktreeId, tab.id)
   options?.onSessionLaunched?.(tab.id)

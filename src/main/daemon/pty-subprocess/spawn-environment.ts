@@ -2,6 +2,7 @@ import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../fish-history-session'
 import { removeAppImageRuntimeEnv } from '../../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../../pty/build-mode-env'
+import { stripPiProcessOwnerEnv } from '../../pty/pi-process-owner-env'
 import { dropIncoherentCondaActivationEnv } from '../../pty/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/legacy-terminal-shim-dir'
 import { removeInheritedNoColor } from '../../pty/terminal-color-env'
@@ -125,6 +126,7 @@ function promoteAgentTeamsShimPath(
   env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
+/** A dev receiver without an endpoint file must not fall back to another runtime's file. */
 function removeInheritedDevAgentHookEndpoint(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
@@ -135,6 +137,7 @@ function removeInheritedDevAgentHookEndpoint(
   }
 }
 
+/** A persistent daemon's inherited environment cannot supply ownership for a new pane. */
 export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<string, string> {
   const env: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
@@ -152,6 +155,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     env.TERM = opts.env.TERM
   }
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
+  stripPiProcessOwnerEnv(env)
   if (opts.env?.fish_history === undefined) {
     dropInheritedOrcaFishHistory(env)
   }
@@ -169,6 +173,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   return env
 }
 
+/** Platform launch preparation must not undo the caller's explicit environment deletions. */
 export function rescrubDaemonPtyEnvironment(
   env: Record<string, string>,
   opts: PtySubprocessOptions
@@ -179,6 +184,7 @@ export function rescrubDaemonPtyEnvironment(
   }
 }
 
+/** Shell preparation can restore ambient state, so pane isolation is enforced again here. */
 export function finalizeDaemonPtyEnvironment(
   env: Record<string, string>,
   requestedEnv: Record<string, string> | undefined
@@ -191,4 +197,5 @@ export function finalizeDaemonPtyEnvironment(
   promoteAgentTeamsShimPath(env, requestedPath)
   stripLegacyTerminalShimEnv(env, process.platform)
   dropIncoherentCondaActivationEnv(env, process.platform)
+  stripPiProcessOwnerEnv(env)
 }

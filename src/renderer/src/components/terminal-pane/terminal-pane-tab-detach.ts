@@ -167,7 +167,7 @@ export function detachTerminalPaneToTab(args: {
     targetTabId: tab.id
   })
   afterCreateStore.setActiveTab(tab.id)
-  afterCreateStore.setActiveTabType('terminal')
+  afterCreateStore.setActiveTabType('terminal', args.worktreeId)
 
   return { tab, leafId: sourceLeafId, ptyId }
 }

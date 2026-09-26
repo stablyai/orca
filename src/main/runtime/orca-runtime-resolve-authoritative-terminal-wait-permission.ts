@@ -9,7 +9,6 @@ import type { AgentStatusEntry } from '../../shared/agent-status-types'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from './runtime-mobile-agent-status-projection'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
-import type { AgentSessionPtyWriteAdmittance } from './agent-session-pty-write-gate'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
@@ -70,10 +69,9 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
   protected writeTerminalInputChunks(
     ptyId: string,
     text: string,
-    options: RuntimeTerminalWriteOptions = {},
-    admitted?: AgentSessionPtyWriteAdmittance
+    options: RuntimeTerminalWriteOptions = {}
   ): Promise<void> {
-    return this.terminalWriter.writeChunks(ptyId, text, options, admitted)
+    return this.terminalWriter.writeChunks(ptyId, text, options)
   }
 
   /** Platform of the host whose pty transport ingests our writes -- deliberately NOT the OS

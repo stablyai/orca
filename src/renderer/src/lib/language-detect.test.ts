@@ -38,6 +38,25 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\rtl\\TOP.SV')).toBe('systemverilog')
   })
 
+  it.each([
+    'report.abap',
+    'src/zcor0260.prog.abap',
+    'src/zcl_demo.clas.abap',
+    'src/zif_demo.intf.abap',
+    'C:\\repo\\src\\ZCL_DEMO.CLAS.ABAP',
+    '\\\\server\\share\\src\\ZREPORT.PROG.ABAP',
+    '/home/user/folder workspace/src/Report.AbAp'
+  ])('maps ABAP source %s to the Monaco built-in abap language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('abap')
+  })
+
+  it.each(['src.abap/README', 'src\\abap.abap\\README', 'report.abap.bak', 'report.abapx'])(
+    'keeps non-ABAP file %s on plaintext',
+    (filePath) => {
+      expect(detectLanguage(filePath)).toBe('plaintext')
+    }
+  )
+
   it('maps .proto files to the Monaco built-in proto language id, not the alias', () => {
     expect(detectLanguage('api/v1/service.proto')).toBe('proto')
   })
@@ -77,9 +96,47 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\theme\\snippets\\CART.LIQUID')).toBe('liquid')
   })
 
+  it('maps Salesforce Apex sources to the apex language id (case-insensitive)', () => {
+    expect(detectLanguage('force-app/main/default/classes/AccountService.cls')).toBe('apex')
+    expect(detectLanguage('force-app/main/default/triggers/AccountTrigger.trigger')).toBe('apex')
+    expect(detectLanguage('scripts/apex/seed.apex')).toBe('apex')
+    expect(detectLanguage('C:\\repo\\force-app\\classes\\ACCOUNTSERVICE.CLS')).toBe('apex')
+  })
+
   it('keeps .json/.jsonc on the built-in json language and unknown on plaintext', () => {
     expect(detectLanguage('config/settings.json')).toBe('json')
     expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')
     expect(detectLanguage('notes/scratch.unknownext')).toBe('plaintext')
+  })
+  it.each([
+    ['.env', 'ini'],
+    ['.env.local', 'ini'],
+    ['.env.development', 'ini'],
+    ['.env.production', 'ini'],
+    ['.env.functions.local', 'ini'],
+    ['.env.staging', 'ini'],
+    ['.env.test.example', 'ini'],
+    ['config/.env.development.local', 'ini'],
+    ['.ENV', 'ini'],
+    ['.ENV.STAGING', 'ini'],
+    ['C:\\repo\\.EnV.FUNCTIONS.LOCAL', 'ini'],
+    ['\\\\server\\share\\.env.test.example', 'ini'],
+    ['.env.sh', 'shell'],
+    ['.ENV.SH', 'shell'],
+    ['.env.json', 'json'],
+    ['.env.local.ts', 'typescript'],
+    ['.env/CMakeLists.txt', 'cmake'],
+    ['C:\\repo\\.env.local\\Dockerfile', 'dockerfile'],
+    ['.envrc', 'plaintext'],
+    ['.environment', 'plaintext'],
+    ['env.staging', 'plaintext'],
+    ['dev.env', 'plaintext'],
+    ['other.env.local', 'plaintext'],
+    ['..env.local', 'plaintext'],
+    ['.env.staging/readme', 'plaintext'],
+    ['C:\\repo\\.env.local\\notes', 'plaintext'],
+    ['', 'plaintext']
+  ])('detects dotenv names without overriding specific mappings: %s', (filePath, expected) => {
+    expect(detectLanguage(filePath)).toBe(expected)
   })
 })

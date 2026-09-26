@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as RelayRipgrepInstallModule from './ssh-relay-ripgrep-install'
 
 vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
@@ -48,6 +49,15 @@ vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
+// Why: the post-launch ripgrep install is fire-and-forget and would drain the queued exec mocks.
+// Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
+vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
+vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
+  ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
+  ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),
+  recordRemoteRipgrepReference: vi.fn().mockResolvedValue(true)
+}))
+
 vi.mock('./ssh-relay-versioned-install', () => ({
   readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+abcdef012345'),
   computeRemoteRelayDir: (home: string, v: string) => `${home}/.orca-remote/relay-${v}`,
@@ -79,6 +89,8 @@ import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
+import { ensureRemoteBundledRipgrep } from './ssh-relay-ripgrep-install'
+import { RELAY_UPLOAD_STAGE_POOL_NAME } from './ssh-relay-upload-stage-contract'
 import {
   RELAY_DEPLOY_TEARDOWN_TIMEOUT_MS,
   RELAY_DEPLOY_TIMEOUT_MS
@@ -562,5 +574,32 @@ describe('deployAndLaunchRelay staged uploads', () => {
 
     await deployAndLaunchRelay(conn)
     expect(conn.uploadDirectory).toHaveBeenCalledTimes(2)
+  })
+  // Why: a cold host's rg upload is a multi-MB transfer. While the cleanup sweep was chained
+  // behind it, stale upload stages and superseded version dirs sat on the remote for that whole
+  // duration. A never-settling install stands in for that transfer.
+  it('sweeps stale upload stages without waiting for the ripgrep upload', async () => {
+    const conn = makeMockConnection()
+    vi.mocked(ensureRemoteBundledRipgrep).mockReturnValueOnce(new Promise(() => {}))
+    let socketProbe = 0
+    vi.mocked(execCommand).mockImplementation((_conn, command) => {
+      if (command.includes('uname')) {
+        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      }
+      if (command === 'echo $HOME') {
+        return Promise.resolve('/home/user')
+      }
+      if (command.includes('test -S')) {
+        return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
+      }
+      return Promise.resolve('')
+    })
+
+    await deployAndLaunchRelay(conn)
+
+    await vi.waitFor(() => {
+      const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
+      expect(commands.some((command) => command.includes(RELAY_UPLOAD_STAGE_POOL_NAME))).toBe(true)
+    })
   })
 })

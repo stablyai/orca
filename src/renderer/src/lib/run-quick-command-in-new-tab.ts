@@ -114,7 +114,7 @@ export function runQuickCommandInNewTab({
   // Why: match `+` button's createNewTerminalTab — without this, a worktree
   // currently showing an editor file keeps rendering the editor and the new
   // terminal tab stays invisible.
-  store.setActiveTabType('terminal')
+  store.setActiveTabType('terminal', worktreeId)
 
   // Why: persist tab-bar order with the new terminal appended. Without this,
   // reconcileTabOrder falls back to terminals-first when the stored order is

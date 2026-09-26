@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
+import { agentSessionPromptQuestions } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -23,10 +23,9 @@ import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-a
 import { NativeChatLaunchRetry } from './NativeChatLaunchRetry'
 import { useNativeChatProvisionalLaunch } from './use-native-chat-provisional-launch'
 import { NativeChatDeliveryRetry } from './NativeChatDeliveryRetry'
-
-function encodeQuestionAnswer(questionId: string, answer: string): string {
-  return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
-}
+import { useStructuredAgentSessionHostExecutionPhase } from './StructuredAgentSessionStatusBridge'
+import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
 
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
@@ -36,9 +35,14 @@ export function NativeChatStructuredSession(
     fileLinkContext?.worktreeId,
     props.sessionId
   )
+  const { sendThroughRelaunch } = provisionalLaunch
+  // The host's own word on whether the provider child has answered startup yet.
+  const startupPhase = useStructuredAgentSessionHostExecutionPhase(props.sessionId, props.target)
   const controller = useStructuredAgentSession({
     ...props,
-    transportEnabled: provisionalLaunch.transportEnabled
+    providerStarting: startupPhase === 'starting',
+    transportEnabled: provisionalLaunch.transportEnabled,
+    ...(provisionalLaunch.launch ? { launch: provisionalLaunch.launch } : {})
   })
   const launchDraftSignal = useNativeChatLaunchDraftSignal({
     terminalTabId: props.tabId,
@@ -85,7 +89,8 @@ export function NativeChatStructuredSession(
       ...(controller.error ? { error: controller.error } : {}),
       hasMore: controller.hasOlder,
       loadingEarlier: controller.loadingOlder,
-      loadEarlier: () => void controller.loadOlder(),
+      olderHistoryGeneration: controller.olderHistoryGeneration,
+      loadEarlier: controller.loadOlder,
       readPhase:
         controller.status === 'loading'
           ? 'loading'
@@ -137,30 +142,22 @@ export function NativeChatStructuredSession(
     composerReady: prompt === null
   })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
-  const questions =
-    questionBody?.questions ??
-    (questionBody
-      ? [
-          {
-            id: questionBody.freeTextQuestionId ?? 'q1',
-            question: questionBody.question,
-            options: questionBody.options,
-            multiSelect: false,
-            ...(questionBody.freeTextQuestionId
-              ? { freeTextQuestionId: questionBody.freeTextQuestionId }
-              : {})
-          }
-        ]
-      : [])
-  const structuredTransport = useMemo(
-    () => ({
+  const questions = questionBody ? agentSessionPromptQuestions(questionBody) : []
+  const structuredTransport = useMemo(() => {
+    const threadGoal = controller.threadGoal
+    const setThreadGoalObjective = threadGoal
+      ? (objective: string) => threadGoal.change({ kind: 'set', objective })
+      : null
+    return {
       send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>
-        controller.send(
-          text,
-          attachments.map((attachment) => ({
-            path: attachment.path,
-            previewUri: attachment.path
-          }))
+        sendThroughRelaunch(() =>
+          controller.send(
+            text,
+            attachments.map((attachment) => ({
+              path: attachment.path,
+              previewUri: attachment.path
+            }))
+          )
         ),
       dispatchCommand: (text: string) =>
         dispatchStructuredAgentSessionComposerCommand(text, {
@@ -172,29 +169,32 @@ export function NativeChatStructuredSession(
           },
           setOption: controller.setStructuredOption,
           conversationCommands: controller.conversationCommands,
-          runConversationCommand: controller.runConversationCommand
+          runConversationCommand: controller.runConversationCommand,
+          ...(setThreadGoalObjective ? { setThreadGoalObjective } : {})
         }),
+      ...(setThreadGoalObjective ? { threadGoal: { setObjective: setThreadGoalObjective } } : {}),
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
       optionSnapshot: controller.optionSnapshot,
       optionPickerRequest,
       sessionCommands: controller.sessionCommands,
+      contextUsage: controller.contextUsage,
       worktreeId: fileLinkContext?.worktreeId,
       onError: setComposerError,
       runtime: (props.target.kind === 'local' ? 'local' : 'remote') as 'local' | 'remote',
       sessionId: props.sessionId,
       runtimeEnvironmentId:
         props.target.kind === 'local' ? null : (props.target.environmentId ?? null)
-    }),
-    [
-      controller,
-      fileLinkContext?.worktreeId,
-      optionPickerRequest,
-      props.agent,
-      props.sessionId,
-      props.target
-    ]
-  )
+    }
+  }, [
+    controller,
+    fileLinkContext?.worktreeId,
+    optionPickerRequest,
+    props.agent,
+    props.sessionId,
+    props.target,
+    sendThroughRelaunch
+  ])
 
   return (
     <div
@@ -224,6 +224,7 @@ export function NativeChatStructuredSession(
           <NativeChatMessageList
             session={session}
             journalItems={controller.journalItems}
+            railOutline={controller.railOutline}
             isVisible={props.isVisible}
             isWorking={controller.isWorking}
             expandSignal={false}
@@ -239,11 +240,44 @@ export function NativeChatStructuredSession(
           />
         )}
       </div>
+      <NativeChatDeliveryRetry
+        outbox={controller.outbox}
+        blockedClientMessageId={controller.blockedClientMessageId}
+        retry={controller.retry}
+      />
+      <NativeChatLaunchRetry
+        lifecycle={provisionalLaunch.lifecycle}
+        failureReason={provisionalLaunch.failureReason}
+        onRetry={provisionalLaunch.retry}
+      />
+      <NativeChatStructuredSessionStatus
+        sessionId={props.sessionId}
+        agentLabel={structuredAgentLabel(props.agent === 'codex' ? 'codex' : 'claude')}
+        startupPhase={startupPhase}
+        error={controller.error}
+        composerError={composerError}
+        isVisible={props.isVisible}
+        backgroundTasks={controller.backgroundTasks}
+        stopBackgroundTask={controller.stopBackgroundTask}
+      />
+      {!prompt && controller.threadGoal?.goal ? (
+        <NativeChatThreadGoalBanner
+          key={props.sessionId}
+          goal={controller.threadGoal.goal}
+          pending={controller.threadGoal.pending}
+          isVisible={props.isVisible}
+          runningTurn={
+            controller.turnId === null ? null : { startedAt: controller.workingStartedAt ?? null }
+          }
+          onChange={(change) => void controller.threadGoal?.change(change)}
+        />
+      ) : null}
+      {/* Prompt cards take the composer's slot, below the background-task dock. */}
       {prompt && approval ? (
         <NativeChatApprovalCard
           key={`${prompt.itemId}:${prompt.revision}`}
           approval={approval}
-          onChoose={(optionId) => void controller.respond(prompt, optionId)}
+          onChoose={(optionId) => void controller.respond(prompt, { kind: 'option', optionId })}
           onCancel={cancelPrompt}
           shouldFocus={props.isVisible && props.isFocusedGroup}
           onLinkClick={onLinkClick}
@@ -266,57 +300,22 @@ export function NativeChatStructuredSession(
           }}
           allowOther={questions.map((question) => Boolean(question.freeTextQuestionId))}
           onAnswer={(answers) => {
-            if (questionBody.questions) {
-              const grouped = questions.map((question, questionIndex) => {
-                const answer = answers[questionIndex]
-                const other = answer?.other?.trim()
-                const optionIds = (answer?.indices ?? []).flatMap((optionIndex) => {
-                  const optionId = question.options[optionIndex]?.id
-                  return optionId ? [optionId] : []
-                })
-                return {
-                  questionId: question.id,
-                  optionIds: question.multiSelect || !other ? optionIds : [],
-                  ...(other ? { other } : {})
-                }
+            const chosen = questions.map((question, questionIndex) => {
+              const answer = answers[questionIndex]
+              const other = answer?.other?.trim()
+              const optionIds = (answer?.indices ?? []).flatMap((optionIndex) => {
+                const optionId = question.options[optionIndex]?.id
+                return optionId ? [optionId] : []
               })
-              if (grouped.every((answer) => answer.optionIds.length > 0 || answer.other)) {
-                void controller.respond(prompt, encodeAgentSessionQuestionAnswers(grouped))
-              }
-              return
-            }
-            const index = answers[0]?.indices[0]
-            const other = answers[0]?.other?.trim()
-            const optionId =
-              typeof index === 'number'
-                ? questionBody.options[index]?.id
-                : questionBody.freeTextQuestionId && other
-                  ? encodeQuestionAnswer(questionBody.freeTextQuestionId, other)
-                  : undefined
-            if (optionId) {
-              void controller.respond(prompt, optionId)
+              return { questionId: question.id, optionIds, ...(other ? { other } : {}) }
+            })
+            if (chosen.every((answer) => answer.optionIds.length > 0 || answer.other)) {
+              void controller.respond(prompt, { kind: 'answers', answers: chosen })
             }
           }}
           onCancel={cancelPrompt}
         />
       ) : null}
-      <NativeChatDeliveryRetry
-        outbox={controller.outbox}
-        blockedClientMessageId={controller.blockedClientMessageId}
-        retry={controller.retry}
-      />
-      <NativeChatLaunchRetry
-        lifecycle={provisionalLaunch.lifecycle}
-        onRetry={provisionalLaunch.retry}
-      />
-      <NativeChatStructuredSessionStatus
-        sessionId={props.sessionId}
-        error={controller.error}
-        composerError={composerError}
-        isVisible={props.isVisible}
-        backgroundTasks={controller.backgroundTasks}
-        stopBackgroundTask={controller.stopBackgroundTask}
-      />
       {prompt ? null : (
         <NativeChatComposer
           ref={composerRef}

@@ -109,6 +109,7 @@ export type RuntimeStore = {
     mobileAutoRestoreFitMs?: number | null
     mobileEmulatorEnabled?: boolean
     mobileEmulatorDefaultDeviceUdid?: string | null
+    machineName?: GlobalSettings['machineName']
     voice?: VoiceSettings
     claudeAgentTeamsMode?: GlobalSettings['claudeAgentTeamsMode']
     // Why: Phase-5 query responder kill switches — read per chunk in
@@ -120,6 +121,8 @@ export type RuntimeStore = {
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
     nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
+    nativeChatInheritShellEnvironment?: GlobalSettings['nativeChatInheritShellEnvironment']
+    nativeChatShellEnvironmentVariables?: GlobalSettings['nativeChatShellEnvironmentVariables']
     aiVaultSearch?: GlobalSettings['aiVaultSearch']
   }
   // Why: narrow to `unknown` return so test mocks can return void without

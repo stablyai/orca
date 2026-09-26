@@ -23,6 +23,8 @@ export type StructuredAgentSessionCreateParams = {
   worktree: string
   agent: AgentSessionHandleProvider
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
+  tabId?: string
 }
 
 /** Provider-prefixed so a session id names its lane on sight, and underscore-only
@@ -32,6 +34,14 @@ export function createStructuredAgentSessionId(
   randomUuid: () => string
 ): string {
   return `${agent}_${randomUuid().replaceAll('-', '_')}`
+}
+
+/** Whether a caller-minted id keeps the shape `createStructuredAgentSessionId` gives every id:
+ *  named for its agent, then one token. The token alone is checked, so a hyphenated agent name
+ *  is not refused at the wire. */
+export function isStructuredAgentSessionIdFor(agent: string, sessionId: string): boolean {
+  const prefix = `${agent}_`
+  return sessionId.startsWith(prefix) && /^[A-Za-z0-9_]+$/.test(sessionId.slice(prefix.length))
 }
 
 /**
@@ -44,13 +54,15 @@ export function structuredAgentSessionCreateParams(args: {
   worktree: string
   agent: AgentSessionHandleProvider
   resumeFrom?: StructuredAgentSessionResumeSource
+  tabId?: string
   randomUuid: () => string
   now?: number
 }): StructuredAgentSessionCreateParams {
   const fields = {
     worktree: args.worktree,
     agent: args.agent,
-    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.tabId ? { tabId: args.tabId } : {})
   }
   return {
     envelope: {

@@ -25,8 +25,10 @@ import {
   type DetectedWorktreeScanResult
 } from './detected-worktree-scan-cache'
 import {
+  getLocalWorktreeCatalogVersion,
   getLocalWorktreeScanGeneration,
-  isLocalWorktreeScanGenerationCurrent
+  isLocalWorktreeScanGenerationCurrent,
+  localWorktreeCatalogVersionAt
 } from '../../../local-worktree-scan-generation'
 import type { SshGitProvider } from '../../../providers/ssh-git-provider'
 import {
@@ -50,7 +52,8 @@ async function listSshWorktreesWithMutationWitness(
   return {
     gitWorktrees,
     fresh: true,
-    superseded: !isLocalWorktreeScanGenerationCurrent(repo.id, generation)
+    superseded: !isLocalWorktreeScanGenerationCurrent(repo.id, generation),
+    generation
   }
 }
 
@@ -87,13 +90,15 @@ export async function listDetectedWorktreesForCapturedRepo(
           repoId: repo.id,
           authoritative: false,
           source: 'metadata-fallback',
-          worktrees: []
+          worktrees: [],
+          catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
         }
       }
       return {
         repoId: repo.id,
         authoritative: true,
         source: 'git',
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
         worktrees: projectResolvedWorktreeLineage(
           buildFolderDetectedWorktrees(store, repo),
           store.getAllWorktreeLineage?.() ?? {}
@@ -113,7 +118,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         repoId: repo.id,
         authoritative: false,
         source: 'metadata-fallback',
-        worktrees: buildDisconnectedDetectedWorktrees(store, repo, worktrees)
+        worktrees: buildDisconnectedDetectedWorktrees(store, repo, worktrees),
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
       }
     }
     const scan = await scanUntilNotOvertaken(
@@ -145,7 +151,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         repoId: repo.id,
         authoritative: false,
         source: 'metadata-fallback',
-        worktrees: []
+        worktrees: [],
+        catalogVersion: localWorktreeCatalogVersionAt(scan.generation)
       }
     }
     if (freshScan) {
@@ -164,10 +171,13 @@ export async function listDetectedWorktreesForCapturedRepo(
       }
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
+    // Why the scan's generation, not the current one: the rows describe the catalog as of when the
+    // scan began. A client orders this against the create and remove replies it has applied.
     return {
       repoId: repo.id,
       authoritative: true,
       source: 'git',
+      catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
       worktrees: buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta)
     }
   } catch (err) {
@@ -195,7 +205,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         source: 'metadata-fallback',
         worktrees: buildDisconnectedDetectedWorktrees(store, repo, worktrees),
         unavailableReason,
-        failureKind
+        failureKind,
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
       }
     }
     return {
@@ -204,7 +215,8 @@ export async function listDetectedWorktreesForCapturedRepo(
       source: 'metadata-fallback',
       worktrees: [],
       unavailableReason,
-      failureKind
+      failureKind,
+      catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
     }
   }
 }

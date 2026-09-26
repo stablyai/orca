@@ -1,10 +1,10 @@
-import { rewindRefusal } from './structured-rewind-refusal'
-// Everything a client can ask an ALREADY-ATTACHED session to do: send a turn, cancel one, answer a
-// prompt, change an option, read the options back.
+// Everything a client can ask an ATTACHED session to do: send a turn, cancel one, answer a prompt,
+// change an option, read the options back.
 //
 // They share one shape — admit the envelope against the lease, run a plan, publish the journal — so
 // they share one path here rather than five copies in the host. The host keeps attach, holds and
-// teardown; this is the surface that assumes those already happened.
+// teardown. A send is the one mutation that may need those first: it makes sure the session has
+// an owner as a step of its own serialized admission, see `structured-agent-session-send-preparation`.
 
 import type {
   AgentJournalItemIdentity,
@@ -17,9 +17,21 @@ import type {
   AgentSessionOptionResult,
   AgentSessionOptionsResult,
   AgentSessionPromptResult,
-  AgentSessionSendResult
+  AgentSessionSendResult,
+  AgentSessionThreadGoalChange,
+  AgentSessionThreadGoalResult
 } from '../../../shared/agent-session-wire'
-import { admitAndRunAgentSessionMutation } from './structured-agent-session-mutation-admission'
+import type { StructuredAgentSessionHolds } from './structured-agent-session-holds'
+import type { AgentSessionPromptRequest } from './structured-agent-session-turns-prompt'
+import { threadGoalPlan } from './structured-agent-session-thread-goal'
+import {
+  admitAndRunAgentSessionMutation,
+  type AgentSessionMutationRequest
+} from './structured-agent-session-mutation-admission'
+import {
+  prepareStructuredAgentSessionSend,
+  structuredAgentSessionSendBlock
+} from './structured-agent-session-send-preparation'
 import {
   cancelPlan,
   promptPlan,
@@ -38,9 +50,13 @@ export type StructuredAgentSessionMutationContext = {
   sessions: Map<string, StructuredAgentSessionHostSession>
   publish: (sessionId: string, journal: StructuredAgentSessionHostSession['journal']) => void
   flushStreamedEvents: (sessionId: string) => Promise<void>
-  hasPendingStreamedEvents?: (sessionId: string) => boolean
   requireSession: (sessionId: string) => StructuredAgentSessionHostSession
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
+  /** A send that finds the owner gone brings it back through here, inside its own serialize. */
+  holds: Pick<StructuredAgentSessionHolds, 'ensureProviderChild'>
+  /** Makes a closed session's journal readable again, inside the caller's serialize, for a send
+   *  the ledger answers without an owner. */
+  restoreReadable: (sessionId: string) => Promise<boolean>
   now: () => number
 }
 
@@ -48,7 +64,8 @@ function mutate<TValue>(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   envelope: AgentSessionMutationEnvelope,
-  plan: MutationPlan<TValue>
+  plan: MutationPlan<TValue>,
+  prepareSession?: AgentSessionMutationRequest<TValue>['prepareSession']
 ): Promise<AgentSessionMutationResult<TValue>> {
   return context.serialize(envelope.sessionId, () =>
     admitAndRunAgentSessionMutation({
@@ -57,10 +74,11 @@ function mutate<TValue>(
       callerKey: caller.callerKey,
       envelope,
       plan,
-      journal: context.sessions.get(envelope.sessionId)?.journal,
+      journal: () => context.sessions.get(envelope.sessionId)?.journal,
+      prepareSession,
       publish: (journal) => context.publish(envelope.sessionId, journal),
       flushStreamedEvents: context.flushStreamedEvents,
-      hasPendingStreamedEvents: context.hasPendingStreamedEvents,
+      providerChildPhase: () => context.sessions.get(envelope.sessionId)?.providerChildPhase,
       now: () => context.now()
     })
   )
@@ -77,32 +95,19 @@ export function sendStructuredAgentSessionTurn(
   }
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const plan = sendPlan(params)
-  return mutate(context, caller, params.envelope, {
-    ...plan,
-    run: (ctx) => {
-      const rewind = context.deps.store.getRecord(ctx.sessionId)?.rewind
-      if (rewind?.phase === 'prepared' || rewind?.phase === 'provider-succeeded') {
-        return Promise.resolve(rewindRefusal('outcome-unknown'))
+  return mutate(
+    context,
+    caller,
+    params.envelope,
+    {
+      ...plan,
+      run: (ctx) => {
+        const blocked = structuredAgentSessionSendBlock(context.deps.store.getRecord(ctx.sessionId))
+        return blocked ? Promise.resolve(blocked) : plan.run(ctx)
       }
-      const command = context.deps.store.getRecord(ctx.sessionId)?.conversationCommand
-      if (
-        command &&
-        ((command.state === 'unknown' && command.phase === 'prepared') ||
-          (command.command === 'clear' && command.replacementSessionId))
-      ) {
-        return Promise.resolve({
-          ok: false,
-          refusal: {
-            code: 'agent_session_operation_invalid',
-            message: command.replacementSessionId
-              ? 'This conversation has been cleared. Use the current conversation.'
-              : 'The conversation operation is unconfirmed.'
-          }
-        })
-      }
-      return plan.run(ctx)
-    }
-  })
+    },
+    (ledger, record) => prepareStructuredAgentSessionSend(context, params.envelope, ledger, record)
+  )
 }
 
 export function cancelStructuredAgentSessionTurn(
@@ -132,23 +137,27 @@ export function cancelStructuredAgentSessionTurn(
 export function respondToStructuredAgentSessionPrompt(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: {
-    envelope: AgentSessionMutationEnvelope
-    kind: 'approval' | 'question'
-    itemId: string
-    expectedRevision: number
-    optionId: string
-  }
+  params: AgentSessionPromptRequest & { envelope: AgentSessionMutationEnvelope }
 ): Promise<AgentSessionMutationResult<AgentSessionPromptResult>> {
   return mutate(context, caller, params.envelope, promptPlan(params))
 }
 
-export function setStructuredAgentSessionOption(
+export async function setStructuredAgentSessionOption(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   params: { envelope: AgentSessionMutationEnvelope; key: string; value: string }
 ): Promise<AgentSessionMutationResult<AgentSessionOptionResult>> {
+  // Outside the queue: a pick made while the provider starts then queues behind what its start persists.
+  await context.deps.adapter.awaitOptionWritable?.(params.envelope.sessionId)
   return mutate(context, caller, params.envelope, setOptionPlan(params))
+}
+
+export function changeStructuredAgentSessionThreadGoal(
+  context: StructuredAgentSessionMutationContext,
+  caller: StructuredAgentSessionCaller,
+  params: { envelope: AgentSessionMutationEnvelope; change: AgentSessionThreadGoalChange }
+): Promise<AgentSessionMutationResult<AgentSessionThreadGoalResult>> {
+  return mutate(context, caller, params.envelope, threadGoalPlan(params))
 }
 
 export function readStructuredAgentSessionOptions(
@@ -171,7 +180,13 @@ export function readStructuredAgentSessionOptions(
               supported: false,
               reason: 'unsupported'
             }),
-      conversationCommands: context.deps.adapter.compact ? ['clear', 'compact'] : ['clear']
+      conversationCommands: context.deps.adapter.compact ? ['clear', 'compact'] : ['clear'],
+      ...(context.deps.adapter.supportsThreadGoal?.(sessionId)
+        ? { threadGoal: { current: session.journal.threadGoal() } }
+        : {}),
+      ...(context.deps.adapter.recordsContextUsage?.(sessionId)
+        ? { contextUsage: { current: session.journal.contextUsage() } }
+        : {})
     }
   })
 }
@@ -204,7 +219,6 @@ export async function settleStructuredAgentSessionLateDispatch(
           fence: session.fence
         }
   )
-  context.publish(input.sessionId, session.journal)
 }
 
 /**
@@ -220,7 +234,7 @@ export async function settleStructuredAgentSessionLateDispatch(
  * it never makes a send re-deliverable, because the provider may well have run it.
  */
 export async function releaseStructuredAgentSessionUnansweredDispatches(
-  context: Pick<StructuredAgentSessionMutationContext, 'sessions' | 'publish'>,
+  context: Pick<StructuredAgentSessionMutationContext, 'sessions'>,
   input: { sessionId: string; reason: string }
 ): Promise<void> {
   const session = context.sessions.get(input.sessionId)
@@ -243,7 +257,6 @@ export async function releaseStructuredAgentSessionUnansweredDispatches(
       recovered: true
     })
   }
-  context.publish(input.sessionId, session.journal)
 }
 
 /** The host's thin mutation surface. Each call re-reads the context, so a session
@@ -264,6 +277,10 @@ export function structuredAgentSessionMutationDelegates(
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof setStructuredAgentSessionOption>[2]
     ) => setStructuredAgentSessionOption(context(), caller, params),
+    changeThreadGoal: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof changeStructuredAgentSessionThreadGoal>[2]
+    ) => changeStructuredAgentSessionThreadGoal(context(), caller, params),
     readOptions: (sessionId: string) => readStructuredAgentSessionOptions(context(), sessionId)
   }
 }

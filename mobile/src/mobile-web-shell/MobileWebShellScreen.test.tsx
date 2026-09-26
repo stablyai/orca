@@ -2,182 +2,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const harness = await vi.hoisted(async () => await import('./mobile-web-shell-screen-test-harness'))
 const dependencies = vi.hoisted(() => harness.createScreenDependencies())
-const SNAPSHOT = harness.SCREEN_SNAPSHOT
 
-vi.mock('react-native', () => ({
-  ActivityIndicator: 'ActivityIndicator',
-  Easing: { in: (fn: unknown) => fn, quad: 'quad' },
-  // Enough of it for the cover to mount, fade and unmount. What the fade looks like is not this
-  // test's business; that the cover is up until the page paints is, and that is the `visible` prop.
-  Animated: {
-    View: 'Animated.View',
-    Value: class {
-      setValue(): void {}
-    },
-    timing: () => ({
-      start: (done?: (result: { finished: boolean }) => void) => done?.({ finished: true }),
-      stop: () => {}
-    })
-  },
-  BackHandler: {
-    addEventListener: (name: string, listener: () => boolean) => {
-      dependencies.backHandlers.set(name, listener)
-      return { remove: () => dependencies.backHandlers.delete(name) }
-    }
-  },
-  Keyboard: {
-    addListener: (
-      name: string,
-      listener: (event: { endCoordinates: { height: number } }) => void
-    ) => {
-      dependencies.keyboardListeners.set(name, listener)
-      return { remove: () => dependencies.keyboardListeners.delete(name) }
-    }
-  },
-  Linking: { openURL: dependencies.openUrl },
-  Platform: { OS: 'ios' },
-  Pressable: 'Pressable',
-  StyleSheet: {
-    create: (styles: unknown) => styles,
-    // The real values, so a case that reads them off the cover reads something.
-    absoluteFillObject: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
-  },
-  Text: 'Text',
-  View: 'View'
-}))
-// Reaching the real one imports the Expo runtime this test does not have. The screen only passes
-// the handler through; what it does with a verb is `native-clipboard.test.ts`.
-vi.mock('expo-clipboard', () => ({
-  setStringAsync: () => Promise.resolve(true),
-  getStringAsync: () => Promise.resolve('')
-}))
-// Same reason, and the screen only hands `playPageHaptic` over: which expo member each kind
-// reaches is `page-haptics.test.ts`. `Platform.OS` above is pinned to `ios`, so the Android
-// members are never evaluated and are not listed.
-vi.mock('expo-haptics', () => ({
-  impactAsync: () => Promise.resolve(),
-  notificationAsync: () => Promise.resolve(),
-  selectionAsync: () => Promise.resolve(),
-  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
-  NotificationFeedbackType: { Error: 'error', Success: 'success' }
-}))
-vi.mock('expo-document-picker', () => ({ getDocumentAsync: () => Promise.resolve(null) }))
-vi.mock('@orca/expo-two-way-audio', () => ({
-  addExpoTwoWayAudioEventListener: () => ({ remove: () => {} }),
-  initialize: () => Promise.resolve(true),
-  requestMicrophonePermissionsAsync: () =>
-    Promise.resolve({ granted: true, canAskAgain: true, status: 'granted', expires: 'never' }),
-  tearDown: () => {},
-  toggleRecording: () => true
-}))
-vi.mock('expo-keep-awake', () => ({
-  activateKeepAwakeAsync: () => Promise.resolve(),
-  deactivateKeepAwake: () => Promise.resolve()
-}))
-vi.mock('expo-image-picker', () => ({
-  launchImageLibraryAsync: () => Promise.resolve({ canceled: true }),
-  requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: false })
-}))
-vi.mock('expo-file-system', () => ({
-  File: class {
-    readonly size = 0
-    delete(): void {}
-  },
-  Paths: { cache: 'file:///cache' }
-}))
-vi.mock('lucide-react-native', () => ({ X: 'Icon' }))
-vi.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ bottom: 8, left: 0, right: 0, top: 44 })
-}))
-vi.mock('expo-router', () => ({
-  router: { replace: vi.fn() },
-  useRouter: () => ({
-    push: dependencies.push,
-    back: dependencies.back,
-    canGoBack: () => dependencies.canGoBack
-  }),
-  // Read by the pop latch, which clears on the route this shell is mounted at changing.
-  usePathname: () => dependencies.pathname,
-  // The screen's own place on the stack, which is where the iOS swipe-back is taken away.
-  useNavigation: () => ({ setOptions: dependencies.setScreenOptions })
-}))
-// A component rather than a host string: the React key is what makes a retry a rebuilt WebView,
-// and a mount/unmount log is the only thing that can tell a remount from a prop update.
-vi.mock('../../modules/orca-mobile-web-shell/src', async () => {
-  const React = await import('react')
-  const loadState = await import('../../modules/orca-mobile-web-shell/src/load-state')
-  return {
-    OrcaMobileWebShellView: (props: {
-      sessionId: string
-      ref?: (handle: { postBridgeMessage: (json: string) => Promise<void> } | null) => void
-    }) => {
-      dependencies.viewRenders += 1
-      React.useEffect(() => {
-        dependencies.lifecycle.push(`mount:${props.sessionId}`)
-        return () => {
-          dependencies.lifecycle.push(`unmount:${props.sessionId}`)
-        }
-      }, [props.sessionId])
-      // The handle the real view exposes, which nothing here used to attach: without it every
-      // post rejected as a view that is gone, so no case could see a frame reach the page.
-      const attach = props.ref
-      React.useLayoutEffect(() => {
-        attach?.({
-          postBridgeMessage: (json: string) => {
-            dependencies.posted.push(json)
-            return dependencies.postFails
-              ? Promise.reject(new Error('the view would not take it'))
-              : Promise.resolve()
-          }
-        })
-        return () => {
-          attach?.(null)
-        }
-      }, [attach])
-      return React.createElement('ShellViewProbe', props)
-    },
-    parseMobileWebShellLoadState: loadState.parseMobileWebShellLoadState
-  }
-})
-// The real bridge hook runs, so the props it owns are the ones the view is handed here; only the
-// client lookup is stubbed, because reaching it imports the Expo runtime this test does not have.
-vi.mock('../transport/client-context', () => ({
-  useHostClient: () => ({ client: dependencies.client })
-}))
-// Reaching the real one imports the host store and expo-secure-store, whose module touches an Expo
-// global this test does not have. What it answers is the screen's input, not its behaviour.
-vi.mock('./use-page-host-snapshot', () => ({
-  usePageHostSnapshot: () => ({
-    // One object for the life of the file, as the real hook's `useState` gives. A fresh literal per
-    // render changes the identity the host effect is keyed on, so the bridge host was being torn
-    // down and rebuilt on every render of this screen — and every pending request settled with it.
-    snapshot: SNAPSHOT,
-    unreadable: dependencies.snapshotUnreadable,
-    readStorage: () => ({ storage: {}, storageOversize: [] }),
-    refreshStorage: () => {
-      dependencies.storageRefreshes += 1
-    },
-    writeStorage: () => {}
-  })
-}))
-vi.mock('./use-mobile-web-shell-session', () => ({
-  useMobileWebShellSession: () => ({
-    state: dependencies.state,
-    pageRoutes: dependencies.pageRoutes,
-    routeGrants: dependencies.routeGrants,
-    updateNotice: dependencies.updateNotice,
-    retry: dependencies.retry,
-    reportShellFailure: dependencies.reportShellFailure,
-    reportDocumentStarted: dependencies.reportDocumentStarted,
-    reportDocumentLoaded: dependencies.reportDocumentLoaded,
-    reportPageReady: dependencies.reportPageReady,
-    reportPagePainted: dependencies.reportPagePainted,
-    reportPageBackClaim: dependencies.reportPageBackClaim,
-    pageReady: dependencies.pageReady,
-    pageFrame: dependencies.pageFrame,
-    backClaimed: dependencies.backClaimed
-  })
-}))
+const { screenModuleMocks } = await vi.hoisted(
+  async () => await import('./mobile-web-shell-screen-test-mocks')
+)
+const mocks = vi.hoisted(() => screenModuleMocks(dependencies))
+vi.mock('react-native', mocks['react-native'])
+vi.mock('expo-clipboard', mocks['expo-clipboard'])
+vi.mock('expo-haptics', mocks['expo-haptics'])
+vi.mock('expo-document-picker', mocks['expo-document-picker'])
+vi.mock('@orca/expo-two-way-audio', mocks['@orca/expo-two-way-audio'])
+vi.mock('expo-keep-awake', mocks['expo-keep-awake'])
+vi.mock('expo-image-picker', mocks['expo-image-picker'])
+vi.mock('expo-file-system', mocks['expo-file-system'])
+vi.mock('lucide-react-native', mocks['lucide-react-native'])
+vi.mock('react-native-safe-area-context', mocks['react-native-safe-area-context'])
+vi.mock('expo-router', mocks['expo-router'])
+vi.mock('../../modules/orca-mobile-web-shell/src', mocks['../../modules/orca-mobile-web-shell/src'])
+vi.mock('../transport/client-context', mocks['../transport/client-context'])
+vi.mock('./use-page-host-snapshot', mocks['./use-page-host-snapshot'])
+vi.mock('./use-mobile-web-shell-session', mocks['./use-mobile-web-shell-session'])
 
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
@@ -818,10 +662,10 @@ describe('what one case mutates does not reach the next', () => {
     })
   })
 
-  it('shortens the view by the keyboard, which is the only side that can see one', async () => {
-    // Edge-to-edge makes the manifest's `adjustResize` inert, so the window never shrinks and the
-    // page's `visualViewport` reads full height with the IME up: it lays its live input row out
-    // under the keys. The shell owns the window, so it takes the strip off the view instead.
+  it('keeps both bar strips off the view for a page that does not pad for them', async () => {
+    // A page served from an older desktop has no reader for the insets, so the shell reserves
+    // the strips itself. Edge-to-edge makes the manifest's `adjustResize` inert, so the keyboard
+    // strip comes off the view too: the page's `visualViewport` reads full height with the IME up.
     const tree = await renderScreen(readyState('session-keyboard'))
     const root = tree.root.find((node) => node.props.testID === 'mobile-web-shell-ready')
     expect(root.props.style[1]).toEqual({ paddingTop: 44, paddingBottom: 8 })
@@ -909,7 +753,10 @@ describe('the frame under a page that has not painted', () => {
         nativeEvent: { json: clientFrame({ type: 'ready', reports: [BRIDGE_PAGE_PAINTED] }) }
       })
     })
-    expect(dependencies.reportPageReady).toHaveBeenCalledWith([BRIDGE_PAGE_PAINTED])
+    expect(dependencies.reportPageReady).toHaveBeenCalledWith({
+      reports: [BRIDGE_PAGE_PAINTED],
+      accepts: []
+    })
     await act(async () => {
       probe.props.onBridgeMessage({
         nativeEvent: { json: clientFrame({ type: 'notify', name: BRIDGE_PAGE_PAINTED }) }

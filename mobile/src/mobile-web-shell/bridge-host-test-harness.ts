@@ -146,7 +146,7 @@ export function harness(
     readStorage:
       options.readStorage ?? (() => ({ storage: options.storage ?? {}, storageOversize: [] })),
     onStorageWrite: (key, value) => storageWrites.push({ key, value }),
-    onPageReady: (reports) => {
+    onPageReady: ({ reports }) => {
       pageReadies += 1
       pageReports.push(reports)
     },

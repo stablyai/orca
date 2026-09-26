@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab'
 
 const launchAgentInNewTab = vi.hoisted(() => vi.fn<(args: LaunchAgentInNewTabArgs) => unknown>())
+const writeClipboardText = vi.hoisted(() => vi.fn(async () => undefined))
 const connectionId = vi.hoisted(() => ({ value: null as string | null }))
 const runtimeEnvironmentId = vi.hoisted(() => ({ value: null as string | null }))
-const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }))
 const store = vi.hoisted(() => ({
   settings: { disabledTuiAgents: [] as string[] },
   ensureDetectedAgents: vi.fn(async () => ['claude', 'codex']),
@@ -45,8 +46,12 @@ describe('launchAgentSessionContinuation', () => {
       surface: { kind: 'local-terminal', tabId: 'tab-new' },
       promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
     })
+    writeClipboardText.mockClear()
     vi.stubGlobal('window', {
-      api: { agentTrust: { markTrusted: vi.fn(async () => undefined) } }
+      api: {
+        agentTrust: { markTrusted: vi.fn(async () => undefined) },
+        ui: { writeClipboardText }
+      }
     })
   })
 
@@ -225,8 +230,69 @@ describe('launchAgentSessionContinuation', () => {
     expect(toast.success).not.toHaveBeenCalled()
     await vi.waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(
-        'The new Codex session started, but its context could not be sent.'
+        'The new Codex session started, but its context could not be sent.',
+        expect.objectContaining({ action: expect.objectContaining({ label: 'Copy prompt' }) })
       )
     )
+  })
+
+  it.each(['claude', 'codex'] as const)(
+    'does not claim success when the %s paste went out unconfirmed',
+    async (agent) => {
+      // Regression (#22479): on Windows the composer-ready signal can never fire, so the paste
+      // is written blind. Reporting that as a delivered handoff hid a prompt that never arrived.
+      launchAgentInNewTab.mockImplementation(
+        (args: {
+          onPromptDelivered?: () => void
+          onPromptDeliveryUnconfirmed?: () => void
+        }): unknown => {
+          args.onPromptDeliveryUnconfirmed?.()
+          args.onPromptDelivered?.()
+          return {
+            surface: { kind: 'local-terminal', tabId: 'tab-new' },
+            promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+          }
+        }
+      )
+      const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+
+      await launchAgentSessionContinuation({
+        agent,
+        prompt: 'continue the unfinished task',
+        worktreeId: 'wt-1',
+        workspacePath: '/repo/worktree',
+        launchSource: 'sidebar'
+      })
+
+      expect(toast.success).not.toHaveBeenCalled()
+      expect(toast.warning).toHaveBeenCalledWith(
+        `Orca could not confirm ${agent === 'claude' ? 'Claude' : 'Codex'} received the session context. Check the new session, and paste it yourself if its input is empty.`,
+        expect.objectContaining({ action: expect.objectContaining({ label: 'Copy prompt' }) })
+      )
+      toast.warning.mock.calls[0][1].action.onClick()
+      expect(writeClipboardText).toHaveBeenCalledWith('continue the unfinished task')
+    }
+  )
+
+  it('still reports a confirmed delivery as a success', async () => {
+    launchAgentInNewTab.mockImplementation((args: { onPromptDelivered?: () => void }): unknown => {
+      args.onPromptDelivered?.()
+      return {
+        surface: { kind: 'local-terminal', tabId: 'tab-new' },
+        promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+      }
+    })
+    const { launchAgentSessionContinuation } = await import('./launch-agent-session-continuation')
+
+    await launchAgentSessionContinuation({
+      agent: 'codex',
+      prompt: 'continue',
+      worktreeId: 'wt-1',
+      workspacePath: '/repo/worktree',
+      launchSource: 'sidebar'
+    })
+
+    expect(toast.success).toHaveBeenCalledWith('Session context sent to Codex in a new session.')
+    expect(toast.warning).not.toHaveBeenCalled()
   })
 })

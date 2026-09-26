@@ -17,3 +17,16 @@ export function parseFileLinkLocation(value: string): ParsedFileLinkLocation | n
   }
   return { pathText, line, column }
 }
+
+/** Inverse of `parseFileLinkLocation`: `path`, `path:line`, or `path:line:column`. */
+export function formatFileLinkLocation(location: {
+  pathText: string
+  line: number | null
+  column?: number | null
+}): string {
+  if (location.line === null) {
+    return location.pathText
+  }
+  const column = location.column == null ? '' : `:${location.column}`
+  return `${location.pathText}:${location.line}${column}`
+}

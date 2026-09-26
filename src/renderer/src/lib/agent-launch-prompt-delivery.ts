@@ -33,8 +33,11 @@ export function deliverLaunchPromptToAgentTab(args: {
   forcePaste: boolean
   timeoutMs?: number
   onTimeout?: () => void
+  /** The paste was written without ever observing the agent's composer. */
+  onUnconfirmedDelivery?: () => void
 }): Promise<boolean> {
-  const { tabId, agent, content, submit, forcePaste, timeoutMs, onTimeout } = args
+  const { tabId, agent, content, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
+    args
   const shouldSeed =
     submit === true && content.trim().length > 0 && isNativeChatSupportedAgent(agent)
 
@@ -63,7 +66,8 @@ export function deliverLaunchPromptToAgentTab(args: {
     submit,
     forcePaste,
     timeoutMs,
-    onTimeout
+    onTimeout,
+    onUnconfirmedDelivery
   }).then(
     (delivered) => {
       if (shouldSeed && !delivered && !deliversViaNativePrefill) {

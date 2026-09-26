@@ -41,6 +41,12 @@ export type AgentLaunchFingerprintInput = {
   /** In: it decides both where the agent runs and, through `tui_launch_command`, which surface it
    *  gets. Two launches differing only in `cwd` are genuinely two operations. */
   cwd?: string
+  /** In: it is baked into the pane's PTY env and names the tab the caller placed, so a retry that
+   *  reserved another pane must conflict rather than replay a key its placement cannot find. */
+  paneKey?: string
+  /** In: a retry that minted another session is a different request, since replaying would answer
+   *  with a conversation this caller did not mint. */
+  sessionId?: string
   /**
    * `launchSource` is deliberately absent, and this is the reasoned exclusion rather than an
    * oversight: it is telemetry, so two launches differing only in which button produced them do the
@@ -62,7 +68,10 @@ export function computeAgentLaunchFingerprint(input: AgentLaunchFingerprintInput
     sessionOptions: input.sessionOptions,
     reuseTerminal: input.reuseTerminal,
     agentArgs: input.agentArgs,
-    cwd: input.cwd
+    cwd: input.cwd,
+    // Absent keys are dropped by the canonical form, so every digest without one is unchanged.
+    paneKey: input.paneKey,
+    sessionId: input.sessionId
   })
 }
 
