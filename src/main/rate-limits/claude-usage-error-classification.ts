@@ -41,11 +41,15 @@ export function classifyClaudeOAuthUsageError(error: unknown): ClaudeUsageErrorC
 
 export function classifyClaudeCredentialAbsence(input: {
   hasRefreshableCredentials: boolean
+  hasEmptyStoredEntry?: boolean
   keychainUnavailable?: boolean
   managedRefreshDeferredByLivePty?: boolean
 }): ClaudeUsageErrorClassification {
   if (input.managedRefreshDeferredByLivePty) {
     return terminal('deferred-by-live-session')
+  }
+  if (input.hasEmptyStoredEntry) {
+    return terminal('signed-out')
   }
   if (input.keychainUnavailable) {
     return fallbackOnly('keychain-unavailable')

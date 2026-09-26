@@ -19,6 +19,9 @@ export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
 
 export type UsageRateLimitFailureKind =
   | 'missing-credentials'
+  // Why: a stored-but-empty credential entry proves the CLI was set up and
+  // lost its tokens (signed out), unlike never-configured (hide the bar).
+  | 'signed-out'
   | 'stale-token'
   | 'refreshable-credentials-without-token'
   | 'delegated-refresh-required'
