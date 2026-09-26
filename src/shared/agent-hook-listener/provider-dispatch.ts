@@ -21,6 +21,7 @@ import { normalizeGrokEvent } from './providers/grok-events'
 import { normalizeCopilotEvent } from './providers/copilot-events'
 import { normalizeHermesEvent } from './providers/hermes-events'
 import { normalizeDevinEvent } from './providers/devin-events'
+import { normalizeBobEvent } from './providers/bob-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
 import { normalizeMuseEvent } from './providers/muse-events'
 import { normalizeZCodeEvent } from './providers/zcode-events'
@@ -156,6 +157,9 @@ export function normalizeProviderEvent(input: {
       break
     case 'zcode':
       payload = normalizeZCodeEvent(state, eventName, promptText, paneKey, hookPayload)
+      break
+    case 'bob':
+      payload = normalizeBobEvent(state, eventName, promptText, paneKey, hookPayload)
       break
   }
 

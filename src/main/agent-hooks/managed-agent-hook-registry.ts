@@ -2,6 +2,7 @@ import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import type { HookInstallAgent } from '../../shared/telemetry-events'
 import { ampHookService } from '../amp/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
+import { bobHookService } from '../bob/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
@@ -54,7 +55,8 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['devin', () => devinHookService.install()],
   ['kimi', () => kimiHookService.install()],
   ['muse', () => museHookService.install()],
-  ['zcode', () => zcodeHookService.install()]
+  ['zcode', () => zcodeHookService.install()],
+  ['bob', () => bobHookService.install()]
 ]
 
 // Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a
@@ -77,7 +79,8 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['devin', () => devinHookService.refreshManagedScripts()],
   ['kimi', () => kimiHookService.refreshManagedScripts()],
   ['muse', () => museHookService.refreshManagedScripts()],
-  ['zcode', () => zcodeHookService.refreshManagedScripts()]
+  ['zcode', () => zcodeHookService.refreshManagedScripts()],
+  ['bob', () => bobHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -96,7 +99,8 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['devin', () => devinHookService.remove()],
   ['kimi', () => kimiHookService.remove()],
   ['muse', () => museHookService.remove()],
-  ['zcode', () => zcodeHookService.remove()]
+  ['zcode', () => zcodeHookService.remove()],
+  ['bob', () => bobHookService.remove()]
 ]
 
 export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
@@ -119,5 +123,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['devin', () => devinHookService.getStatus()],
   ['kimi', () => kimiHookService.getStatus()],
   ['muse', () => museHookService.getStatus()],
-  ['zcode', () => zcodeHookService.getStatus()]
+  ['zcode', () => zcodeHookService.getStatus()],
+  ['bob', () => bobHookService.getStatus()]
 ]

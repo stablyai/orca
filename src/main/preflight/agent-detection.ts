@@ -20,7 +20,10 @@ import {
   detectWslCommandsOnPath,
   type WslPreflightTarget
 } from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import { resolveCommandsInInstallDirs } from '../ipc/local-agent-install-dir-detection'
+import { excludeMisidentifiedAgents } from '../../shared/tui-agent-identity-exclusion'
+import { buildIdentityProbe, clearIdentityProbeCache } from './preflight-identity-probe'
+import { isGhAuthenticated, isGlabAuthenticated } from './preflight-cli-auth'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
@@ -30,9 +33,9 @@ export type { PreflightRuntimeContext }
 import { hydrateShellPathForAgentDetection } from '../ipc/agent-detection-shell-path'
 import {
   execCommandInWslOrThrow,
-  execLocalPreflightCommandOrThrow,
   isCommandAvailable,
-  isCommandOnPath,
+  resolveLocalCommandPath,
+  runLocalPreflightProgramOrThrow,
   shellQuote
 } from '../ipc/preflight-command-exec'
 import {
@@ -114,6 +117,7 @@ function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
+  clearIdentityProbeCache()
   cachedByWslDistro.clear()
   preflightInFlight.clear()
   latestPreflightRun.clear()
@@ -145,11 +149,19 @@ async function detectCommandRuntime(
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
-    const foundCommands = await detectWslCommandsOnPath(
+    const foundPaths = await detectWslCommandsOnPath(
       wslTarget,
       getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
     )
-    return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
+    const foundCommands = new Set(foundPaths.keys())
+    return excludeMisidentifiedAgents(
+      KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+      resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl'),
+      foundCommands,
+      buildIdentityProbe(foundPaths, preflightCacheKey(wslTarget), (program, args) =>
+        execCommandInWslOrThrow(wslTarget, [program, ...args].map(shellQuote).join(' '))
+      )
+    )
   }
 
   const probeCommands = getTuiAgentDetectionProbeCommands(
@@ -157,24 +169,25 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
     process.platform
   )
   const pathChecks = await Promise.all(
-    probeCommands.map(async (cmd) => ({
-      cmd,
-      installedOnPath: await isCommandOnPath(cmd)
-    }))
+    probeCommands.map(async (cmd) => ({ cmd, resolvedPath: await resolveLocalCommandPath(cmd) }))
   )
-  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
+  const missedCommands = pathChecks.filter((check) => !check.resolvedPath).map(({ cmd }) => cmd)
   // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
   // computes user install dirs once instead of blocking once per missed CLI.
-  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
-  const foundCommands = new Set(
-    pathChecks
-      .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
-      .map(({ cmd }) => cmd)
-  )
-  return resolveDetectedTuiAgentIds(
+  const installDirPaths = resolveCommandsInInstallDirs(missedCommands)
+  const foundPaths = new Map<string, string>()
+  for (const { cmd, resolvedPath } of pathChecks) {
+    const program = resolvedPath ?? installDirPaths.get(cmd)
+    if (program) {
+      foundPaths.set(cmd, program)
+    }
+  }
+  const foundCommands = new Set(foundPaths.keys())
+  return excludeMisidentifiedAgents(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+    resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, process.platform),
     foundCommands,
-    process.platform
+    buildIdentityProbe(foundPaths, LOCAL_PREFLIGHT_CACHE_KEY, runLocalPreflightProgramOrThrow)
   )
 }
 
@@ -218,6 +231,7 @@ export async function refreshShellPathAndDetectAgents(
     // keep reporting a just-installed CLI as absent -- the exact case this
     // function exists to handle.
     invalidateWslGuestEnvironment(wslTarget.distro)
+    clearIdentityProbeCache()
     const agents = await detectInstalledAgents(context)
     return {
       agents,
@@ -230,6 +244,7 @@ export async function refreshShellPathAndDetectAgents(
 
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
+  clearIdentityProbeCache()
   const agents = await detectInstalledAgents(context)
   return {
     agents,
@@ -251,41 +266,6 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
     commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
   })) as { agents: string[] }
   return uniqueAgentIds(result.agents)
-}
-
-async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
-  try {
-    await (wslTarget
-      ? execCommandInWslOrThrow(wslTarget, `${shellQuote('gh')} auth status`)
-      : execLocalPreflightCommandOrThrow('gh', ['auth', 'status']))
-    // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
-    // authentication issues for the checked hosts/accounts.
-    return true
-  } catch (error) {
-    // Why: some environments may surface partial command output on the thrown
-    // error object. Keep a compatibility fallback so we avoid a false auth
-    // warning if success markers are present despite a non-zero result.
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in') || output.includes('Active account: true')
-  }
-}
-
-// Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
-// status to stderr in some versions and stdout in others; check both.
-async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
-  try {
-    await (wslTarget
-      ? execCommandInWslOrThrow(wslTarget, `${shellQuote('glab')} auth status`)
-      : execLocalPreflightCommandOrThrow('glab', ['auth', 'status']))
-    return true
-  } catch (error) {
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in')
-  }
 }
 
 export async function runPreflightCheck(

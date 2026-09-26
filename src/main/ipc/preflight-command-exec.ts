@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
-import { isCommandOnLocalPath } from './command-path-resolver'
+import { runProcess } from '../../shared/child-process/run-process'
+import { isCommandOnLocalPath, resolveCommandOnLocalPath } from './command-path-resolver'
 import { buildLocalPreflightEnv } from './preflight-local-env'
 import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
@@ -60,6 +61,37 @@ export async function execLocalPreflightCommandOrThrow(
   }) as Promise<PreflightCommandResult>
 
   return withPreflightTimeout(command, commandPromise)
+}
+
+/** Absolute path of `command` on the preflight PATH, or null when absent. */
+export async function resolveLocalCommandPath(command: string): Promise<string | null> {
+  return resolveCommandOnLocalPath(command, { env: buildLocalPreflightEnv() })
+}
+
+/**
+ * Runs an already-resolved executable with the same rejection contract as
+ * `execLocalPreflightCommandOrThrow`. Why runProcess: an absolute `.cmd` shim
+ * cannot be started by execFile without a shell, so npm-installed CLIs on
+ * Windows would otherwise always read as "could not run".
+ */
+export async function runLocalPreflightProgramOrThrow(
+  program: string,
+  args: readonly string[]
+): Promise<PreflightCommandResult> {
+  const env = buildLocalPreflightEnv()
+  const result = await runProcess({
+    program,
+    args,
+    timeoutMs: PREFLIGHT_COMMAND_TIMEOUT_MS,
+    ...(env ? { env } : {})
+  })
+  if (result.timedOut) {
+    throw new Error(`${program} timed out after ${PREFLIGHT_COMMAND_TIMEOUT_MS}ms`)
+  }
+  if (result.code !== 0) {
+    throw new Error(`${program} exited with ${result.code ?? result.signal ?? 'unknown'}`)
+  }
+  return { stdout: result.stdout, stderr: result.stderr }
 }
 
 // Throws on any failure — a distro that is booting/unreachable throws the
