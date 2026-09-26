@@ -147,7 +147,11 @@ export function notifyUIChanged(owner: ProfilePreferences): void {
   }
   const ui = owner.getUI()
   for (const listener of owner[profilePreferencesContext].runtime.uiChangeListeners) {
-    listener(ui)
+    try {
+      listener(ui)
+    } catch (error) {
+      console.error('[preferences] Failed to notify UI change listener:', error)
+    }
   }
 }
 

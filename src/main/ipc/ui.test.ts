@@ -326,4 +326,58 @@ describe('UI IPC', () => {
     expect(paste).not.toHaveBeenCalled()
     expect(pasteAndMatchStyle).not.toHaveBeenCalled()
   })
+
+  it('broadcasts UI state changes only to live windows and webContents', () => {
+    const liveSend = vi.fn()
+    const destroyedWindowSend = vi.fn()
+    const destroyedWebContentsSend = vi.fn()
+    const throwingSend = vi.fn(() => {
+      throw new Error('IPC failed')
+    })
+
+    getAllWindowsMock.mockReturnValue([
+      {
+        isDestroyed: () => false,
+        webContents: { isDestroyed: () => false, send: liveSend }
+      },
+      {
+        isDestroyed: () => true,
+        webContents: { isDestroyed: () => false, send: destroyedWindowSend }
+      },
+      {
+        isDestroyed: () => false,
+        webContents: { isDestroyed: () => true, send: destroyedWebContentsSend }
+      },
+      {
+        isDestroyed: () => false,
+        webContents: { isDestroyed: () => false, send: throwingSend }
+      }
+    ] as never)
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    let uiListener: ((ui: unknown) => void) | undefined
+    const store = {
+      ...makeStore(),
+      onUIChanged: vi.fn((listener) => {
+        uiListener = listener
+        return () => {}
+      })
+    }
+
+    registerUIHandlers(store as never)
+    expect(store.onUIChanged).toHaveBeenCalledTimes(1)
+
+    const uiState = { activeView: 'settings' }
+    expect(() => uiListener?.(uiState)).not.toThrow()
+
+    expect(liveSend).toHaveBeenCalledWith('ui:stateChanged', uiState)
+    expect(destroyedWindowSend).not.toHaveBeenCalled()
+    expect(destroyedWebContentsSend).not.toHaveBeenCalled()
+    expect(throwingSend).toHaveBeenCalledWith('ui:stateChanged', uiState)
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[ui] Failed to send ui:stateChanged:',
+      expect.any(Error)
+    )
+  })
 })
