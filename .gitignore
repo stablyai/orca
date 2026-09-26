@@ -146,6 +146,10 @@ docs/**
 !docs/reference/worktree-scan-fingerprint.md
 !docs/reference/wsl-command-execution.md
 !docs/reference/wsl-probe-failure-semantics.md
+!docs/plans/
+!docs/plans/**
+!docs/plans/macos-tcc-explicit-recovery-design.md
+!docs/plans/macos-tcc-durable-relocation-design.md
 !docs/reference/xterm-patch-regeneration.md
 
 # Stably CLI (only docs/ are tracked)
