@@ -82,6 +82,16 @@ export function PullRequestPageTabs({
     reviewRequests: GitHubAssignableUser[]
   ) => void
 }): React.JSX.Element {
+  // Jump-to-file: switching from Conversation tab to Files and scrolling to the section.
+  const [pendingJumpPath, setPendingJumpPath] = React.useState<string | null>(null)
+  const handleJumpToFile = React.useCallback(
+    (path: string) => {
+      onTabChange('files')
+      setPendingJumpPath(path)
+    },
+    [onTabChange]
+  )
+
   return (
     <Tabs
       value={tab}
@@ -147,6 +157,7 @@ export function PullRequestPageTabs({
                 patchCachedWorkItemBody(detailsCacheKey, nextBody)
               }
             }}
+            onJumpToFile={handleJumpToFile}
             onCommentAdded={appendOptimisticComment}
             onReviewersRequested={(nextReviewRequests) => {
               if (detailsCacheKey) {
@@ -214,6 +225,8 @@ export function PullRequestPageTabs({
               headSha={details?.headSha}
               baseSha={details?.baseSha}
               pendingViewedPaths={pendingViewedPaths}
+              pendingJumpPath={pendingJumpPath}
+              onJumpHandled={() => setPendingJumpPath(null)}
               onCommentAdded={appendOptimisticComment}
               onViewedChange={handlePRFileViewedChange}
             />

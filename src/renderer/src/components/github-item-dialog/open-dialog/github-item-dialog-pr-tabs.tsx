@@ -77,6 +77,17 @@ export function GitHubItemDialogPRTabs({
   const canUseFilesRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
   const checks = details?.checks ?? []
 
+  // Jump-to-file: when the user clicks a file label in the Conversation tab,
+  // switch to Files and scroll to that section.
+  const [pendingJumpPath, setPendingJumpPath] = React.useState<string | null>(null)
+  const handleJumpToFile = React.useCallback(
+    (path: string) => {
+      setTab('files')
+      setPendingJumpPath(path)
+    },
+    [setTab]
+  )
+
   return (
     <Tabs
       value={tab}
@@ -141,6 +152,7 @@ export function GitHubItemDialogPRTabs({
                 patchCachedWorkItemBody(detailsCacheKey, nextBody)
               }
             }}
+            onJumpToFile={handleJumpToFile}
             onCommentAdded={onCommentAdded}
             onReviewersRequested={(nextReviewRequests) => {
               if (detailsCacheKey) {
@@ -218,6 +230,8 @@ export function GitHubItemDialogPRTabs({
                   headSha={details?.headSha}
                   baseSha={details?.baseSha}
                   pendingViewedPaths={pendingViewedPaths}
+                  pendingJumpPath={pendingJumpPath}
+                  onJumpHandled={() => setPendingJumpPath(null)}
                   onCommentAdded={onCommentAdded}
                   onViewedChange={onViewedChange}
                 />
