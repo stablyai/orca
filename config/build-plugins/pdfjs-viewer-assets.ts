@@ -76,6 +76,9 @@ export function createPdfjsViewerAssetsPlugin(root = pdfjsRoot()): Plugin {
           next()
           return
         }
+        if (response.destroyed) {
+          return
+        }
         response.statusCode = 200
         response.setHeader('Content-Length', size)
         response.setHeader(
@@ -84,9 +87,6 @@ export function createPdfjsViewerAssetsPlugin(root = pdfjsRoot()): Plugin {
         )
         if (request.method === 'HEAD') {
           response.end()
-          return
-        }
-        if (response.destroyed) {
           return
         }
         const stream = createReadStream(filePath)

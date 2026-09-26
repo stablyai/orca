@@ -69,17 +69,21 @@ function request(method = 'GET', url = '/wasm/fixture.wasm') {
     setHeader: vi.fn(),
     statusCode: 0
   })
+  const foreign = { close: vi.fn(), error: vi.fn() }
+  response.on('close', foreign.close)
+  response.on('error', foreign.error)
   const next = vi.fn()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The middleware reads only method/url and uses the implemented writable response and header fields.
   middleware({ method, url } as IncomingMessage, response as unknown as ServerResponse, next)
-  return { response, next, source: observed.streams.at(-1) }
+  return { response, next, source: observed.streams.at(-1), foreign }
 }
 
 it('releases file handles after repeated abandoned responses with backpressure', async () => {
-  const responses: PassThrough[] = []
+  const responses: ReturnType<typeof request>[] = []
   for (let index = 0; index < 25; index += 1) {
-    const { response, source } = request()
-    responses.push(response)
+    const current = request()
+    const { response, source } = current
+    responses.push(current)
     if (!source) {
       throw new Error('Missing source')
     }
@@ -90,12 +94,14 @@ it('releases file handles after repeated abandoned responses with backpressure',
   }
   await expect.poll(() => observed.streams.filter((stream) => !stream.closed).length).toBe(0)
   expect(observed.streams.every((stream) => stream.fd === null)).toBe(true)
-  expect(responses.map((response) => response.listenerCount('close'))).toEqual(Array(25).fill(0))
-  expect(responses.map((response) => response.listenerCount('error'))).toEqual(Array(25).fill(0))
+  for (const { response, foreign } of responses) {
+    expect(response.listeners('close')).toEqual([foreign.close])
+    expect(response.listeners('error')).toEqual([foreign.error])
+  }
 })
 
 it('preserves successful GET bytes and removes response cleanup listeners', async () => {
-  const { response, source, next } = request('GET', '/cmaps/fixture.bcmap')
+  const { response, source, next, foreign } = request('GET', '/cmaps/fixture.bcmap')
   const chunks: Buffer[] = []
   response.on('data', (chunk: Buffer) => chunks.push(chunk))
   await once(response, 'end')
@@ -106,8 +112,8 @@ it('preserves successful GET bytes and removes response cleanup listeners', asyn
     ['Content-Length', 9],
     ['Content-Type', 'application/octet-stream']
   ])
-  expect(response.listenerCount('close')).toBe(0)
-  expect(response.listenerCount('error')).toBe(0)
+  expect(response.listeners('close')).toEqual([foreign.close])
+  expect(response.listeners('error')).toEqual([foreign.error])
   expect(next).not.toHaveBeenCalled()
 })
 
@@ -124,7 +130,7 @@ it('answers HEAD without opening a file stream', () => {
 })
 
 it('closes the response on source failure without leaving listeners', async () => {
-  const { response, source } = request()
+  const { response, source, foreign } = request()
   if (!source) {
     throw new Error('Missing source')
   }
@@ -133,12 +139,12 @@ it('closes the response on source failure without leaving listeners', async () =
   await closed
   await expect.poll(() => source.closed).toBe(true)
   expect(response.destroyed).toBe(true)
-  expect(response.listenerCount('close')).toBe(0)
-  expect(response.listenerCount('error')).toBe(0)
+  expect(response.listeners('close')).toEqual([foreign.close])
+  expect(response.listeners('error')).toEqual([foreign.error])
 })
 
 it('closes a source when the response fails', async () => {
-  const { response, source } = request()
+  const { response, source, foreign } = request()
   if (!source) {
     throw new Error('Missing source')
   }
@@ -146,8 +152,8 @@ it('closes a source when the response fails', async () => {
   response.destroy(new Error('fixture downstream failed'))
   await expect.poll(() => source.closed).toBe(true)
   expect(source.fd).toBe(null)
-  expect(response.listenerCount('close')).toBe(0)
-  expect(response.listenerCount('error')).toBe(0)
+  expect(response.listeners('close')).toEqual([foreign.close])
+  expect(response.listeners('error')).toEqual([foreign.error])
 })
 
 it.each([
@@ -163,7 +169,12 @@ it.each([
 })
 
 it('does not open a stream when earlier middleware resumes after response close', async () => {
-  const response = Object.assign(new PassThrough(), { setHeader: vi.fn(), statusCode: 0 })
+  const response = Object.assign(new PassThrough(), {
+    setHeader: vi.fn(() => {
+      throw new Error('ERR_HTTP_HEADERS_SENT')
+    }),
+    statusCode: 0
+  })
   const closed = once(response, 'close')
   response.destroy()
   await closed
@@ -175,4 +186,5 @@ it('does not open a stream when earlier middleware resumes after response close'
     vi.fn()
   )
   expect(observed.streams).toHaveLength(0)
+  expect(response.setHeader).not.toHaveBeenCalled()
 })
