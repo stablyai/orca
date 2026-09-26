@@ -335,6 +335,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // window never settles; its composer box corner is the real "input is live" signal.
     draftPasteReadySignal: 'zcode-composer-prompt'
   },
+  reasonix: {
+    // Why: DeepSeek-native agent; bare `reasonix` launches its interactive `code`
+    // TUI and `-p`/`run` are headless one-shots, so the prompt must ride the live PTY.
+    detectCmd: 'reasonix',
+    promptInjectionMode: 'stdin-after-start'
+  },
   devin: {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
