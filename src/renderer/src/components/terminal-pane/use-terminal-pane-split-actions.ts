@@ -6,18 +6,20 @@ import {
   REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
   type RequestActiveTerminalPaneSplitDetail
 } from '@/constants/terminal'
-import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import {
+  completeCreatedTerminalPaneSplit,
+  type TerminalPaneSplitCompletion
+} from './terminal-pane-split-completion'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 
-export function recordContextMenuCreatedTerminalPaneSplit(
+export function completeContextMenuCreatedTerminalPaneSplit(
   createdPane: unknown,
-  args: {
+  args: Omit<TerminalPaneSplitCompletion, 'source'> & {
     source: 'contextual_tour' | 'context_menu'
-    direction: 'vertical' | 'horizontal'
   }
 ): boolean {
-  return recordCreatedTerminalPaneSplit(createdPane, args)
+  return completeCreatedTerminalPaneSplit(createdPane, args)
 }
 
 type UseTerminalPaneSplitActionsDeps = {

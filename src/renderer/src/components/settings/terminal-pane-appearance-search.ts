@@ -30,6 +30,25 @@ export const getTerminalPaneAppearanceSearchEntries = createLocalizedCatalog(() 
       ...translateSearchKeyword('auto.components.settings.terminal.search.781f49d942', 'divider'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.f637a7dee9', 'thickness')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.equalizePanesOnSplit.title',
+      'Equalize Panes After Split'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.equalizePanesOnSplit.description',
+      'Give every pane in the tab an equal share after a split, instead of halving only the active pane. Sizes you drag afterwards are kept.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.846a7a1204', 'pane'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.split', 'split'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.equalize', 'equalize'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.even', 'even'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.balance', 'balance'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.resize', 'resize'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.layout', 'layout')
+    ]
   }
 ])
 
