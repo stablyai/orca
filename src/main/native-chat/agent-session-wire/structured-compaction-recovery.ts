@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
@@ -30,7 +31,7 @@ export async function settleInterruptedCompaction(
   await journal.appendItem(
     { provider: 'orca', clientMessageId: `compact:${command.operationId}` },
     { kind: 'status', text: error },
-    { fence }
+    { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   const recovered = { ...command, phase: 'committed' as const, state: 'unknown' as const, error }
   await store.setConversationCommand(sessionId, fence, recovered)

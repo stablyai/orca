@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import {
   AgentSessionRecoveryCapsule,
@@ -272,7 +273,8 @@ it('serializes teardown publication behind an explicit dismissal', async () => {
   }
   events.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'working', ordinal: 1 },
-    { kind: 'turn', turnId: 'working', state: 'running' }
+    { kind: 'turn', turnId: 'working', state: 'running' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await host.flushStreamedEvents(SESSION)
   host.restartResume.beginTeardown('quit')
@@ -433,7 +435,8 @@ it('logs teardown capsule publication failure and still releases the provider', 
   }
   events.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'working', ordinal: 1 },
-    { kind: 'turn', turnId: 'working', state: 'running' }
+    { kind: 'turn', turnId: 'working', state: 'running' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await previous.host.flushStreamedEvents(SESSION)
   const capsulePath = join(previous.root, AGENT_SESSION_RECOVERY_CAPSULE_FILE)

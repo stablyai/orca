@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -152,7 +153,7 @@ describe('a request that failed reads as failed through the feed, the ingest and
         outcome: 'cancellation',
         completedAt: 5
       },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     const { status, ps } = ingest(publishedSummary(journal))

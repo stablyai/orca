@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -70,30 +71,34 @@ async function seedGroupedQuestion(): Promise<{ itemId: string; revision: number
   if (!events) {
     throw new Error('seedGroupedQuestion requires an acquired session')
   }
-  events.appendItem(identity, {
-    kind: 'question',
-    question: '2 grouped questions from Claude',
-    options: [],
-    questions: [
-      {
-        id: 'q1',
-        question: 'Targets',
-        multiSelect: true,
-        options: [
-          { id: 'target-web', label: 'Web' },
-          { id: 'target-mobile', label: 'Mobile' }
-        ]
-      },
-      {
-        id: 'q2',
-        question: 'Host',
-        multiSelect: false,
-        options: [],
-        freeTextQuestionId: 'q2'
-      }
-    ],
-    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-  })
+  events.appendItem(
+    identity,
+    {
+      kind: 'question',
+      question: '2 grouped questions from Claude',
+      options: [],
+      questions: [
+        {
+          id: 'q1',
+          question: 'Targets',
+          multiSelect: true,
+          options: [
+            { id: 'target-web', label: 'Web' },
+            { id: 'target-mobile', label: 'Mobile' }
+          ]
+        },
+        {
+          id: 'q2',
+          question: 'Host',
+          multiSelect: false,
+          options: [],
+          freeTextQuestionId: 'q2'
+        }
+      ],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
   await host.flushStreamedEvents(SESSION)
   const itemId = agentJournalItemKey(identity)
   const page = await host.history({ sessionId: SESSION, direction: 'tail' })

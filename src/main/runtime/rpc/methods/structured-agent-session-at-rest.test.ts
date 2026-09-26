@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session-journal-types'
 // A chat at rest, through the RPC surface a client actually calls: opening it starts nothing, what
 // it can answer without an agent it answers, and the first send is what starts one.
 
@@ -141,7 +142,8 @@ describe('the accessor', () => {
       .at(-1)?.[0]
       .events?.appendItem(
         { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'turn-1', ordinal: 1 },
-        hostTestMessage('from the provider')
+        hostTestMessage('from the provider'),
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
     await rig.host.flushStreamedEvents(SESSION)
     await rig.restart()

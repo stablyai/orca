@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A chat interrupted mid-turn by a restart, rebuilt on a fresh host over the same store, for the
 // restart-resume ownership and failure tests.
 
@@ -55,7 +56,8 @@ export async function interruptedRestart(
     // An earlier exchange had finished; the user's next send had not opened a turn yet.
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'earlier-turn', ordinal: 1 },
-      { kind: 'turn', turnId: 'earlier-turn', state: 'completed' }
+      { kind: 'turn', turnId: 'earlier-turn', state: 'completed' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await previous.host.flushStreamedEvents(SESSION)
   }
@@ -68,7 +70,8 @@ export async function interruptedRestart(
   } else if (work === 'children') {
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'settled-turn', ordinal: 1 },
-      { kind: 'turn', turnId: 'settled-turn', state: 'completed' }
+      { kind: 'turn', turnId: 'settled-turn', state: 'completed' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const group = {
       provider: 'codex',
@@ -87,20 +90,21 @@ export async function interruptedRestart(
         }
       ]
     })
-    events.appendItem(group, roster('working'))
+    events.appendItem(group, roster('working'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     previous.host.deps.adapter.backgroundTaskState = () => ({
       state: 'monitoring',
       tasks: [{ id: 'child-1', kind: 'agent', description: 'Review loop 4', state: 'working' }]
     })
     // As the real adapters do: the child's own close settles the children it can no longer hear.
     previous.host.deps.adapter.closeSession = async () => {
-      events.appendItem(group, roster('unverifiable'))
+      events.appendItem(group, roster('unverifiable'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
       return true
     }
   } else {
     events.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'interrupted-turn', ordinal: 1 },
-      { kind: 'turn', turnId: 'interrupted-turn', state: 'running' }
+      { kind: 'turn', turnId: 'interrupted-turn', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
   await previous.host.flushStreamedEvents(SESSION)

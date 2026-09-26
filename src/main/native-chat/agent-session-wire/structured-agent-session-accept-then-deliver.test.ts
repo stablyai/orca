@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A send is accepted, then delivered: the host answers once the message is recorded, and the
 // session's delivery loop starts a provider child for it and hands it over. Against the real host,
 // store and journal; each assertion reads what an open chat or the journal's next reader sees.
@@ -452,7 +453,12 @@ describe('what an earlier host process left behind', () => {
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({ ...earlierSubmission('legacy', 'l'), fence })
       await journal.appendSubmission({ ...earlierSubmission('handed', 'h', true), fence })
-      await journal.resolveDispatch({ clientMessageId: 'handed', state: 'pending', fence })
+      await journal.resolveDispatch({
+        clientMessageId: 'handed',
+        state: 'pending',
+        fence,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     })
     await host.flushAllStreamedEvents()
     await startHost()

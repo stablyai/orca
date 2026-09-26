@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -76,7 +77,10 @@ describe('sequences', () => {
     const journal = await open()
     const results = await Promise.all(
       Array.from({ length: 25 }, (_unused, index) =>
-        journal.appendItem(item(index), body(`m${index}`), { fence: 1 })
+        journal.appendItem(item(index), body(`m${index}`), {
+          fence: 1,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
       )
     )
     const sequences = results.map((result) => result.cursor.sequence)
@@ -89,9 +93,9 @@ describe('sequences', () => {
   it('serializes revisions of one item so the last write wins deterministically', async () => {
     const journal = await open()
     const results = await Promise.all([
-      journal.appendItem(item(0), body('a'), { fence: 1 }),
-      journal.appendItem(item(0), body('b'), { fence: 1 }),
-      journal.appendItem(item(0), body('c'), { fence: 1 })
+      journal.appendItem(item(0), body('a'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
+      journal.appendItem(item(0), body('b'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
+      journal.appendItem(item(0), body('c'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     ])
     expect(results.map((result) => result.revision)).toEqual([1, 2, 3])
     expect(journal.snapshot().items).toHaveLength(1)
@@ -100,9 +104,18 @@ describe('sequences', () => {
 
   it('visits reduced items at their creation sequence without promoting an older revision', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('first'), { fence: 1 })
-    const latest = await journal.appendItem(item(1), body('second'), { fence: 1 })
-    await journal.appendItem(item(0), body('first revised'), { fence: 1 })
+    await journal.appendItem(item(0), body('first'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    const latest = await journal.appendItem(item(1), body('second'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(item(0), body('first revised'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const visited: { itemId: string; sequence: number }[] = []
 
     journal.visitItems((itemId, sequence) => visited.push({ itemId, sequence }))
@@ -131,23 +144,26 @@ describe('sequences', () => {
     await journal.appendItem(
       turnItem('turn-1'),
       { kind: 'turn', turnId: 'turn-1', state: 'running' },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
-    await journal.appendItem(item(0), body('work'), { fence: 1 })
+    await journal.appendItem(item(0), body('work'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await bothAgreeOn('turn-1')
 
     // The completion is a revision, so it keeps the row's creation sequence rather than moving it.
     await journal.appendItem(
       turnItem('turn-1'),
       { kind: 'turn', turnId: 'turn-1', state: 'completed' },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await bothAgreeOn(null)
 
     await journal.appendItem(
       turnItem('turn-2'),
       { kind: 'turn', turnId: 'turn-2', state: 'running' },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await bothAgreeOn('turn-2')
   })
@@ -165,8 +181,14 @@ describe('sequences', () => {
     const mimicIdentity = identityFor(digestFormMimic)
     const journal = await open()
 
-    const oversized = await journal.appendItem(oversizedIdentity, body('oversized'), { fence: 1 })
-    const mimic = await journal.appendItem(mimicIdentity, body('mimic'), { fence: 1 })
+    const oversized = await journal.appendItem(oversizedIdentity, body('oversized'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    const mimic = await journal.appendItem(mimicIdentity, body('mimic'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     expect(oversized.itemId).not.toBe(mimic.itemId)
     expect([oversized.revision, mimic.revision]).toEqual([1, 1])
 
@@ -187,17 +209,28 @@ describe('sequences', () => {
 describe('fences', () => {
   it('rejects an append from a writer behind the journal', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 7 })
-    await expect(journal.appendItem(item(1), body('b'), { fence: 6 })).rejects.toBeInstanceOf(
-      AgentSessionJournalError
-    )
+    await journal.appendItem(item(0), body('a'), {
+      fence: 7,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await expect(
+      journal.appendItem(item(1), body('b'), { fence: 6, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    ).rejects.toBeInstanceOf(AgentSessionJournalError)
   })
 
   it('keeps accepting appends after a rejected one', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 7 })
-    await journal.appendItem(item(1), body('b'), { fence: 6 }).catch(() => undefined)
-    await journal.appendItem(item(2), body('c'), { fence: 7 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 7,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal
+      .appendItem(item(1), body('b'), { fence: 6, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+      .catch(() => undefined)
+    await journal.appendItem(item(2), body('c'), {
+      fence: 7,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     expect(journal.snapshot().items.map((entry) => entry.body)).toEqual([body('a'), body('c')])
   })
 })
@@ -205,7 +238,10 @@ describe('fences', () => {
 describe('replay', () => {
   it('adopts a caller-provided load without replaying the rows again', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const loaded = await loadJournal(root, IDENTITY.sessionId)
     expect(loaded).not.toBeNull()
     await journal.close()
@@ -216,9 +252,18 @@ describe('replay', () => {
 
   it('reopens to the same render model the live writer held', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
-    await journal.appendItem(item(1), body('b'), { fence: 1 })
-    await journal.appendItem(item(0), body('a2'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(item(1), body('b'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(item(0), body('a2'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.appendTombstone(item(1), { fence: 1 })
     const live = journal.snapshot()
 
@@ -228,9 +273,15 @@ describe('replay', () => {
 
   it('serves a resume from a cursor and refuses one from a stale epoch', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const cursor = journal.cursor()
-    await journal.appendItem(item(1), body('b'), { fence: 1 })
+    await journal.appendItem(item(1), body('b'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     const resumed = journal.readSince(cursor)
     expect(resumed.ok && resumed.rows).toHaveLength(1)
@@ -241,7 +292,10 @@ describe('replay', () => {
 
   it('rebuilds from a clean epoch after a rollover', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.rollEpoch('unreconcilable_prefix', 2)
     expect(journal.snapshot().items).toHaveLength(0)
 
@@ -253,7 +307,10 @@ describe('replay', () => {
   it('keeps the intact prefix and drops the rejected suffix', async () => {
     const journal = await open()
     for (let index = 0; index < 4; index += 1) {
-      await journal.appendItem(item(index), body(`m${index}`), { fence: 1 })
+      await journal.appendItem(item(index), body(`m${index}`), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
     const before = journal.epoch
     await journal.close()
@@ -306,7 +363,14 @@ describe('lifecycle batches', () => {
     const input = {
       settlementId: 'concurrent-settlement',
       fence: 1,
-      mutations: [{ kind: 'item' as const, identity: item(1), body: body('settled') }]
+      mutations: [
+        {
+          kind: 'item' as const,
+          identity: item(1),
+          body: body('settled'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      ]
     }
 
     const [first, replay] = await Promise.all([
@@ -325,17 +389,27 @@ describe('lifecycle batches', () => {
       sessionId: 'session-1',
       recordId: 'turn-lifecycle:turn-1'
     }
-    await journal.appendItem(turn, { kind: 'status', text: 'working' }, { fence: 1 })
+    await journal.appendItem(
+      turn,
+      { kind: 'status', text: 'working' },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
 
     const settled = await journal.appendLifecycleBatch({
       settlementId: 'exit:turn-1',
       fence: 1,
       mutations: [
-        { kind: 'item', identity: item(1), body: body('tool settled') },
+        {
+          kind: 'item',
+          identity: item(1),
+          body: body('tool settled'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        },
         {
           kind: 'item',
           identity: { provider: 'orca', clientMessageId: 'exit-status' },
-          body: { kind: 'status', text: 'Provider exited' }
+          body: { kind: 'status', text: 'Provider exited' },
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
         },
         { kind: 'tombstone', identity: turn }
       ]
@@ -356,7 +430,14 @@ describe('lifecycle batches', () => {
     const replay = await reopened.appendLifecycleBatch({
       settlementId: 'exit:turn-1',
       fence: 1,
-      mutations: [{ kind: 'item', identity: item(9), body: body('must not appear') }]
+      mutations: [
+        {
+          kind: 'item',
+          identity: item(9),
+          body: body('must not appear'),
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      ]
     })
     expect(replay).toEqual(beforeReplay)
     expect(
@@ -397,7 +478,10 @@ describe('journal location', () => {
 describe('on-disk layout', () => {
   it('keeps the session database and its projection in one directory', async () => {
     const journal: AgentSessionJournal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     expect(await readdir(root)).toContain('journal.db')
     await journal.close()
     await withJournalDatabase(root, (db) => {
@@ -436,7 +520,10 @@ describe('what a handle found on disk when it opened', () => {
 
   it('names rows an earlier handle wrote, and never a row of a later epoch', async () => {
     const earlier = await open()
-    await earlier.appendItem(item(1), body('one'), { fence: 1 })
+    await earlier.appendItem(item(1), body('one'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await earlier.appendSubmission(submission('earlier'))
     await earlier.close()
 

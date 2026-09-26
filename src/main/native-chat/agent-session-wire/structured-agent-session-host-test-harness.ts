@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -98,13 +99,17 @@ async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revis
   if (!events) {
     throw new Error('seedApproval requires an acquired session')
   }
-  events.appendItem(identity, {
-    kind: 'approval',
-    title: 'Run the command?',
-    detail: null,
-    options: [{ id: optionId, label: 'Allow' }],
-    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-  })
+  events.appendItem(
+    identity,
+    {
+      kind: 'approval',
+      title: 'Run the command?',
+      detail: null,
+      options: [{ id: optionId, label: 'Allow' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
   await host.flushStreamedEvents(SESSION)
   const itemId = agentJournalItemKey(identity)
   const page = await host.history({ sessionId: SESSION, direction: 'tail' })

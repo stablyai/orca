@@ -27,6 +27,9 @@ export type CodexJournalTranslatorDeps = {
   /** Submission origin for one exact client message still awaiting its echo. */
   dispatchRequestOrigin?: (clientMessageId: string) => CodexDispatchRequestOrigin | null
   subagentExecutions?: CodexSubagentExecutions
+  /** Asked when a primary turn starts: the command turn's journal key when a pending conversation
+   *  command owns it. Idempotent per provider turn, so a refused frame's retry gets the same. */
+  claimCommandTurn?: (threadId: string, turnId: string) => string | null
   coalesceMs?: number
   maxRetainedBytes?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']

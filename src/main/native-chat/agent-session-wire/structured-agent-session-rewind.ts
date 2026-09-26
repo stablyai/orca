@@ -1,4 +1,5 @@
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey,
@@ -120,10 +121,12 @@ export async function rewindStructuredAgentSession(
           }
           const retained = snapshot.items
             .slice(0, boundary)
-            .map(({ itemId, body, observedAt }) => ({
+            .map(({ itemId, body, observedAt, turnScope, ...linkage }) => ({
               itemId: providerKey(itemId),
               body,
-              observedAt
+              observedAt,
+              ...(turnScope ? { turnScope } : {}),
+              ...agentJournalLinkageFields(linkage)
             }))
           if (
             retained.length > 10_000 ||

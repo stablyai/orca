@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A subagent's work must not re-date the session that spawned it.
 //
 // The status row takes its completion stamp and acknowledgement clock from the summary's
@@ -86,7 +87,7 @@ async function openSession() {
     journal.appendItem(
       { provider: 'orca', clientMessageId },
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   const latestStatus = () => {
     const event = events.findLast((candidate) => candidate.type === 'status')

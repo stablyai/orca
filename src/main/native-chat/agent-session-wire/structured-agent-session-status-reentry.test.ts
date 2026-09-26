@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,7 +40,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
   await journal.appendItem(
     { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 1 },
     { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   return journal
 }

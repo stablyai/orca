@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Every path that can open a SQLite connection releases it.
 //
 // Asserting that the happy path closes cleanly proves nothing: these sites are
@@ -73,7 +74,11 @@ afterEach(async () => {
 describe('the standalone probe owns its own connection', () => {
   it('leaves no handle behind after fifty repeated loads', async () => {
     const journal = await journals.open({ identity: IDENTITY, journalDir: root })
-    await journal.appendItem(item(1), { kind: 'message', role: 'user', blocks: [] }, { fence: 1 })
+    await journal.appendItem(
+      item(1),
+      { kind: 'message', role: 'user', blocks: [] },
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
     await journal.close()
 
     for (let attempt = 0; attempt < 50; attempt += 1) {
@@ -141,7 +146,10 @@ describe('failure paths inside the open call', () => {
   // connection exists, which is what lets the factory need no `finally`.
   it('leaves nothing open when a post-connection step of open() throws', async () => {
     const journal = await journals.open({ identity: IDENTITY, journalDir: root })
-    await journal.appendItem(item(1), runningTool(), { fence: 1 })
+    await journal.appendItem(item(1), runningTool(), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.close()
 
     // Replay runs after the connection is open, so a read it cannot serve

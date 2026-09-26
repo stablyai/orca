@@ -69,9 +69,8 @@ export async function performPrompt(
         committed.item = await ctx.journal.appendItem(
           identity,
           { ...prompt, resolution },
-          {
-            fence: ctx.fence
-          }
+          // A revision: the prompt keeps the turn it was raised in.
+          { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
         )
       }
     })
@@ -90,7 +89,7 @@ export async function performPrompt(
           error instanceof Error ? error.message : String(error)
         }`
       },
-      { fence: ctx.fence }
+      { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
     )
   }
   const appended = committed.item

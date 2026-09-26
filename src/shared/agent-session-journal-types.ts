@@ -100,6 +100,9 @@ export type AgentJournalMessageItem = {
   /** Absent ⇒ an ordinary turn input. `goal` ⇒ the text was set as the thread
    *  goal's objective, and the provider pursues it without a turn of its own. */
   sentAs?: AgentJournalMessageSendMode
+  /** Present on a conversation command the user sent, such as `/compact`. The text is what the
+   *  user typed; this names the command so no reader parses it. Open like `sentAs`. */
+  command?: { name: string }
 }
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
@@ -222,6 +225,9 @@ export type AgentJournalTurnLifecycle = {
   /** What the provider said about its context window during or after this turn.
    *  Usually written by a later revision, since the provider answers after the end. */
   contextUsage?: AgentSessionContextUsage
+  /** On a turn a conversation command opened: the provider turn that carried out the command,
+   *  once the provider opened one. Nothing else re-derives it after the command settles. */
+  providerTurnId?: string
 }
 
 /** Provider thread-goal lifecycle. Open like other persisted vocabularies: a
@@ -323,6 +329,18 @@ export type AgentJournalProducerLinkage = {
   attempt?: number
 }
 
+/** Which turn a row belongs to, stated by the write that created it. `turn` names the turn
+ *  record's journal key; `thread` is a row that belongs to no turn — a notice about the
+ *  conversation, or a message not yet delivered into one. Turn records themselves are `thread`. */
+export type AgentJournalTurnScope = { kind: 'turn'; turnItemId: string } | { kind: 'thread' }
+
+export const AGENT_JOURNAL_THREAD_SCOPE: AgentJournalTurnScope = { kind: 'thread' }
+
+/** Who produced a row and which turn it belongs to: what every item write states. */
+export type AgentJournalRowAttribution = AgentJournalProducerLinkage & {
+  turnScope: AgentJournalTurnScope
+}
+
 /** One reduced timeline entry. `sequence` orders the list; `observedAt` is the
  *  provider's own clock and may sort earlier than a later sequence when the row
  *  was recovered after a crash. */
@@ -336,6 +354,8 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   recovered?: true
   /** When crash reconciliation wrote this revision; present exactly when `recovered` is. */
   recoveredAt?: number
+  /** Absent only from a host that predates it. */
+  turnScope?: AgentJournalTurnScope
 }
 
 // ─── Submissions ────────────────────────────────────────────────────────────

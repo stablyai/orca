@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Removing a session from the host's map and removing its status row are ONE operation.
 //
 // The store keeps a row until told to drop it, and `structuredHostOwned` bypasses the staleness
@@ -110,12 +111,12 @@ async function workingSession(): Promise<{
   await journal.appendItem(
     PROMPT,
     { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'ship it' }] },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await journal.appendItem(
     TURN,
     { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   const sessions = new Map<string, StructuredAgentSessionHostSession>([
     [

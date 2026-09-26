@@ -5,9 +5,10 @@
 // running on a cold acquire — is `unverifiable` and carries no end at all.
 
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalTurnLifecycle
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem,
+  type AgentJournalTurnLifecycle
 } from '../../../shared/agent-session-journal-types'
 import {
   agentJournalTurnBody,
@@ -53,7 +54,8 @@ export function runningTurnLifecycleRevisions(
     revisions.push({
       kind: 'item',
       identity,
-      body: agentJournalTurnBody(settledLifecycle(turn, verdict))
+      body: agentJournalTurnBody(settledLifecycle(turn, verdict)),
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
   }
   return revisions
@@ -74,7 +76,12 @@ function staleSessionLifecycleRevisions(
         ? cancelledJournalPromptBody(item.body)
         : null
     if (cancelled) {
-      revisions.push({ kind: 'item', identity, body: cancelled })
+      revisions.push({
+        kind: 'item',
+        identity,
+        body: cancelled,
+        turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
   }
   revisions.push(...runningTurnLifecycleRevisions(items, UNVERIFIABLE_TURN_VERDICT))

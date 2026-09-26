@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -43,7 +44,7 @@ describe('performCancel', () => {
         text: 'Agent is working…',
         turnLifecycle: { turnId: 'turn-1', state: 'running' }
       },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const cancelTurn = vi.fn(async () => ({ cancelled: true }))
     const ctx: AgentSessionTurnContext = {
@@ -91,7 +92,7 @@ describe('performCancel', () => {
         text: 'Agent is working…',
         turnLifecycle: { turnId: 'turn-1', state: 'running' }
       },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     let resolveLiveTurnId: (() => string | null) | undefined
     const cancelTurn = vi.fn(
@@ -123,7 +124,7 @@ describe('performCancel', () => {
         text: 'Done.',
         turnLifecycle: { turnId: 'turn-1', state: 'completed' }
       },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     expect(resolveLiveTurnId?.()).toBeNull()
   })
@@ -143,7 +144,7 @@ describe('performCancel', () => {
         text: 'Agent is working…',
         turnLifecycle: { turnId: 'turn-1', state: 'running' }
       },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const ctx: AgentSessionTurnContext = {
       sessionId: 'session-1',

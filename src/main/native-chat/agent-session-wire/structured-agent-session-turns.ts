@@ -8,7 +8,8 @@
 
 import type {
   AgentJournalMessageItem,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionCancelResult,
@@ -85,12 +86,13 @@ async function dispatchSafely(
 async function appendStatus(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
-  text: string
+  text: string,
+  turnScope: AgentJournalTurnScope
 ): Promise<void> {
   await ctx.journal.appendItem(
     { provider: 'orca', clientMessageId },
     { kind: 'status', text },
-    { fence: ctx.fence }
+    { fence: ctx.fence, turnScope }
   )
 }
 
@@ -162,7 +164,13 @@ export async function handOverSubmission(
     })
     return
   }
-  await ctx.journal.resolveDispatch({ clientMessageId, state: 'pending', fence: ctx.fence })
+  // The message joins the turn running at handover, a steer, or opens its own.
+  await ctx.journal.resolveDispatch({
+    clientMessageId,
+    state: 'pending',
+    fence: ctx.fence,
+    turnScope: ctx.journal.liveTurnScope()
+  })
   // The row written at acceptance is the send's instant on the host clock; the turn this
   // dispatch opens records it so the live counter never re-anchors at turn-open.
   const outcome = await dispatchSafely(ctx, clientMessageId, body, submission.submittedAt)
@@ -229,6 +237,8 @@ export async function performCancel(
   }
   let cancelled = false
   let note = 'Cancellation requested.'
+  // The turn the Stop named, read before the cancel settles it: the note reports on that turn.
+  const turnScope = ctx.journal.liveTurnScope()
   try {
     const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
     cancelled = input.scope
@@ -268,6 +278,6 @@ export async function performCancel(
     return { ok: true, value: { turnId: input.turnId, cancelled } }
   }
   // Keyed by the operation id so a replayed cancel upserts one item, not two.
-  await appendStatus(ctx, input.clientOperationId, note)
+  await appendStatus(ctx, input.clientOperationId, note, turnScope)
   return { ok: true, value: { turnId: input.turnId, cancelled } }
 }

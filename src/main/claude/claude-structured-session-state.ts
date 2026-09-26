@@ -9,7 +9,7 @@ import type {
   openClaudeStreamJsonConnection
 } from './claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
-import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { ClaudeJournalTranslator } from './claude-structured-journal-contracts'
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import { randomUUID } from 'node:crypto'

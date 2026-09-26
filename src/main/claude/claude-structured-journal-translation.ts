@@ -1,10 +1,4 @@
-import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import type { AgentSessionContextReport } from '../../shared/agent-session-context-usage'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   claudeStreamingMessageBody,
   type ClaudeToolUse
@@ -32,54 +26,15 @@ import {
 } from './claude-turn-opening'
 import { claudeTurnEndForResult } from './claude-turn-lifecycle-item'
 import { ClaudeOpenTurn } from './claude-open-turn'
-import {
-  ClaudeContextFacts,
-  type ClaudeContextReportPart,
-  type ClaudeContextReportTarget
-} from './claude-context-facts'
+import { ClaudeContextFacts } from './claude-context-facts'
 import { claudeSessionStateEndsTurn } from './claude-session-state-turn-over'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import { journalClaudeMessage, type ClaudeMessageJournalContext } from './claude-message-journaling'
 
-export type ClaudeJournalTranslatorDeps = {
-  sink: StructuredAgentSessionEventSink
-  bindPromptItemId?: (journalItemId: string, promptKey: string, questionId?: string) => void
-  coalesceMs?: number
-  schedule?: AgentSessionDeltaCoalescerDeps['schedule']
-  fallbackIdPrefix?: string
-  onBackgroundTaskJournalFailure?: (error: Error) => void
-}
-
-export type ClaudeJournalTranslator = {
-  handle: (event: ClaudeStructuredSessionEvent) => void
-  journalPrompts: Pick<ClaudeJournalPrompts, 'cancel' | 'resolve'>
-  /** The open turn's provider id — the same id its journal row carries, and the one
-   *  a client's Stop names. Sole owner: no reader keeps a copy to disagree with. */
-  readonly currentTurnId: string | null
-  flush: () => void
-  retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission
-  /** Streamed blocks still awaiting a final frame. A settled turn leaves none. */
-  readonly pendingStreamedBlocks: number
-  /** Moves with the main conversation and each accepted send; a context report
-   *  asked for before it moved may no longer describe the context. */
-  readonly contextActivity: number
-  markContextActivity: () => void
-  /** Fires with the turn a fresh `/context` breakdown should be recorded on. */
-  subscribeContextUsageRequests: (
-    listener: (target: ClaudeContextReportTarget) => void
-  ) => () => void
-  /** Record a requested breakdown, or only its window, on the turn its request named. */
-  recordContextReport: (
-    target: ClaudeContextReportTarget,
-    report: AgentSessionContextReport,
-    part: ClaudeContextReportPart
-  ) => void
-  /** After a write that can change the model or its window; the ring waits for the new window. */
-  modelMayHaveChanged: () => void
-  /** After a model write the child applied; its name sizes estimates until a window is measured. */
-  modelWritten: (model: string) => void
-  dispose: () => void
-}
+import type {
+  ClaudeJournalTranslator,
+  ClaudeJournalTranslatorDeps
+} from './claude-structured-journal-contracts'
 
 export function createClaudeSessionJournalTranslator(
   sink: StructuredAgentSessionEventSink | undefined,
@@ -102,7 +57,9 @@ export function createClaudeJournalTranslator(
   deps: ClaudeJournalTranslatorDeps
 ): ClaudeJournalTranslator {
   const tools = new Map<string, ClaudeToolUse>()
-  const prompts = new ClaudeJournalPrompts(deps)
+  // Every row joins the root turn open when it is written, whoever produced it.
+  const turnScope = () => turn.turnScope
+  const prompts = new ClaudeJournalPrompts({ ...deps, turnScope })
   const streamedBlocks = createClaudeStreamedBlockRegistry()
   const turn = new ClaudeOpenTurn({
     sink: deps.sink,
@@ -110,14 +67,13 @@ export function createClaudeJournalTranslator(
     onOpen: () => context.markActivity()
   })
   const context = new ClaudeContextFacts(turn, deps.sink)
-  const providerFallback = createClaudeProviderFrameFallback(
-    deps.sink,
-    deps.fallbackIdPrefix ?? 'acquisition'
-  )
+  const fallbackId = deps.fallbackIdPrefix ?? 'acquisition'
+  const providerFallback = createClaudeProviderFrameFallback(deps.sink, fallbackId, turnScope)
   const toolOrigins = new ClaudeToolOriginRegistry()
   const subagents = new ClaudeSubagentRoster({
     sink: deps.sink,
     currentGroupKey: () => turn.groupKey,
+    currentTurnScope: turnScope,
     isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
     childOwnerRefOf: (toolUseId) => toolOrigins.childOwnerRef(toolUseId),
     // A settled group can receive no further announcement, so a correction
@@ -126,6 +82,7 @@ export function createClaudeJournalTranslator(
   })
   const corrections = new ClaudeProvisionalRowCorrections({
     ...subagents.linkage,
+    turnScope,
     rewrite: (identity, body, options) => {
       // The admission-returning path, so a correction the sink refuses under
       // backpressure stays owed instead of vanishing. Sinks without it accept
@@ -146,6 +103,7 @@ export function createClaudeJournalTranslator(
     // turn, or the session shows the row while reading idle.
     openOutputTurn: (frame, observedAt) =>
       turn.ensureOpen(frame, claudeStreamTurnSource(frame), observedAt),
+    turnScope,
     ...(deps.onBackgroundTaskJournalFailure
       ? { onPersistenceFailure: deps.onBackgroundTaskJournalFailure }
       : {})
@@ -155,7 +113,8 @@ export function createClaudeJournalTranslator(
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
     persist: (identity, text, options) => {
-      deps.sink.appendItem(identity, claudeStreamingMessageBody(text), options)
+      const body = claudeStreamingMessageBody(text)
+      deps.sink.appendItem(identity, body, { ...options, turnScope: turnScope() })
       deps.sink.publish()
     }
   })
@@ -244,6 +203,8 @@ export function createClaudeJournalTranslator(
         // diagnostic below still runs: a child's failure is reportable even when
         // it ends no turn.
         const settlesTurn = isRootClaudeFrame(event.message)
+        // Read before the settle below closes it: the result reports that turn's end.
+        const endedTurnScope = turn.turnScope
         if (settlesTurn) {
           prompts.retryPendingCancellations()
           turn.suppressReopenOnFailure(event.message.is_error === true)
@@ -271,7 +232,9 @@ export function createClaudeJournalTranslator(
             undefined,
             // A result that settles no turn is a CHILD's result: this
             // translator only ever opens root turns.
-            settlesTurn ? undefined : corrections.stampFor(claudeFrameParentRef(event.message))
+            settlesTurn
+              ? () => ({ turnScope: endedTurnScope })
+              : corrections.stampFor(claudeFrameParentRef(event.message))
           )
         }
       } else if (event.type === 'message') {

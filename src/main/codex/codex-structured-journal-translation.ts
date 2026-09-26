@@ -38,8 +38,9 @@ export function createCodexJournalTranslator(
 ): CodexJournalTranslator {
   const {
     activeTurns,
+    turnScopes,
     subagents,
-    linkageFor,
+    attributionFor,
     genericFrames,
     items,
     compactions,
@@ -65,7 +66,9 @@ export function createCodexJournalTranslator(
     ...(deps.clearPromptTurn ? { clearPromptTurn: deps.clearPromptTurn } : {}),
     flushSuppression: () => genericFrames.flush(),
     resetActivity,
-    linkageFor,
+    attributionFor,
+    turnScopes,
+    ...(deps.claimCommandTurn ? { claimCommandTurn: deps.claimCommandTurn } : {}),
     ...(deps.now ? { now: deps.now } : {})
   })
   let primaryThreadStoppedRunning = false
@@ -160,11 +163,13 @@ export function createCodexJournalTranslator(
           // The host saw the child go, not what Codex made of the turn, so the row
           // carries no outcome: the end is observed, the verdict is unknown.
           settledTurnLifecycle: (threadId, turnId) =>
-            turnBoundaries.settled(threadId, turnId, {
-              state: 'interrupted',
-              completedAt: event.observedAt ?? deps.now?.() ?? Date.now()
-            }),
-          linkageFor
+            turnBoundaries.ownsRecord(threadId, turnId)
+              ? turnBoundaries.settled(threadId, turnId, {
+                  state: 'interrupted',
+                  completedAt: event.observedAt ?? deps.now?.() ?? Date.now()
+                })
+              : null,
+          attributionFor
         })
         if (!admission.accepted) {
           return admission

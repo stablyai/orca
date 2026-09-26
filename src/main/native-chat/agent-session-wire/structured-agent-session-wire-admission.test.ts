@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,7 +40,10 @@ beforeEach(async () => {
     journalDir: root
   })
   for (let ordinal = 1; ordinal <= 20; ordinal += 1) {
-    await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), { fence: 1 })
+    await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
   }
 })
 

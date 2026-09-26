@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { AgentJournalItemBodySchema } from './agent-session-journal-schemas'
+import {
+  AgentJournalItemBodySchema,
+  AgentJournalProducerLinkageFields,
+  AgentJournalTurnScopeSchema
+} from './agent-session-journal-schemas'
 import { parseAgentJournalItemKey } from './agent-session-journal-item-key'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 
@@ -42,7 +46,10 @@ export const AgentSessionRewindRecordSchema = z.object({
       z.object({
         itemId: Key.refine((key) => parseAgentJournalItemKey(key) !== null),
         body: AgentJournalItemBodySchema,
-        observedAt: z.number().finite()
+        observedAt: z.number().finite(),
+        // Absent on records written before rows stated them: the rebuild then places the row by position.
+        turnScope: AgentJournalTurnScopeSchema.optional(),
+        ...AgentJournalProducerLinkageFields
       })
     )
     .max(10_000)

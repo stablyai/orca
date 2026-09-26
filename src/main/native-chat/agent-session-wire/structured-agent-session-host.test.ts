@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
@@ -180,7 +181,8 @@ describe('attach', () => {
     })
     events?.appendItem(
       { provider: 'orca', clientMessageId: 'old-journal-write' },
-      { kind: 'status', text: 'old journal write' }
+      { kind: 'status', text: 'old journal write' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await vi.waitFor(() => expect(append).toHaveBeenCalledOnce())
     const released = await store.evictProvenDeadOwner({
@@ -383,7 +385,7 @@ describe('respondToPrompt', () => {
         options: [{ id: 'allow', label: 'Allow' }],
         resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
       },
-      child
+      { ...child, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await host.flushStreamedEvents(SESSION)
     const itemId = agentJournalItemKey(identity)

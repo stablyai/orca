@@ -1,9 +1,10 @@
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalTurnItem,
-  AgentJournalTurnLifecycle,
-  AgentJournalTurnLifecycleState,
-  AgentJournalTurnOutcome
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemIdentity,
+  type AgentJournalTurnItem,
+  type AgentJournalTurnLifecycle,
+  type AgentJournalTurnLifecycleState,
+  type AgentJournalTurnOutcome
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
@@ -109,6 +110,7 @@ export function publishCodexTurnLifecycle(input: {
   // The running row's `ts` is the host's turn-start receipt so clients can anchor a live counter.
   const appendOptions = {
     lifecycle: true,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE,
     ...(input.state === 'running' && input.startedAt !== undefined
       ? { observedAt: input.startedAt }
       : {})

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // The lifetime of a provider child, against the real host rather than a double.
 //
 // Two leaks meet here: a chat that closes without stopping its app-server, and a launch that
@@ -115,7 +116,8 @@ function envelope(method: string, fields: Record<string, unknown>): AgentSession
 function emitTurnLifecycle(state: 'running' | 'completed', ordinal: number): void {
   sink?.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal },
-    { kind: 'status', text: state, turnLifecycle: { turnId: 'turn-1', state } }
+    { kind: 'status', text: state, turnLifecycle: { turnId: 'turn-1', state } },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 }
 
@@ -151,7 +153,8 @@ async function failJournalSinkUntilReleased(): Promise<void> {
   vi.spyOn(session!.journal, 'appendItem').mockRejectedValueOnce(new Error('disk unavailable'))
   sink?.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 },
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'lost write' }] }
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'lost write' }] },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await vi.waitFor(() => {
     expect(closeSession).toHaveBeenCalledWith(SESSION)
@@ -462,7 +465,8 @@ describe('a session closed and started again', () => {
     })
     sink?.appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'turn-2', ordinal: 1 },
-      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'back again' }] }
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'back again' }] },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     sink?.publish()
     await host.flushStreamedEvents(SESSION)

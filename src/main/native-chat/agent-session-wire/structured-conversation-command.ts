@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { createHash } from 'node:crypto'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { parseAgentSessionOperationTimestamp } from '../../../shared/agent-session-host-authority'
@@ -177,7 +178,7 @@ export function runStructuredConversationCommand(
                 text: 'Compacting conversation…',
                 turnLifecycle: { turnId: `compact:${clientOperationId}`, state: 'running' }
               },
-              { fence: ctx.fence }
+              { fence: ctx.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
             )
             try {
               error = (
@@ -197,7 +198,7 @@ export function runStructuredConversationCommand(
                       await ctx.journal.appendItem(
                         identity,
                         { kind: 'status', text: result.error ?? 'Conversation compacted.' },
-                        { fence: ctx.fence }
+                        { fence: ctx.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
                       )
                       await store.setConversationCommand(sessionId, ctx.fence, {
                         ...prepared,
@@ -222,14 +223,14 @@ export function runStructuredConversationCommand(
               await ctx.journal.appendItem(
                 identity,
                 { kind: 'status', text: 'Compaction completion is unconfirmed.' },
-                { fence: ctx.fence }
+                { fence: ctx.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
               )
               throw cause
             }
             await ctx.journal.appendItem(
               identity,
               { kind: 'status', text: error ?? 'Conversation compacted.' },
-              { fence: ctx.fence }
+              { fence: ctx.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
             )
           }
           const completed = {

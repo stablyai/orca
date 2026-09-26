@@ -1,4 +1,7 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalTurnScope
+} from '../../shared/agent-session-journal-types'
 import type { NativeChatSubagentEntry } from '../../shared/native-chat-types'
 import type { ClaudeSubagentTaskFrame } from './claude-subagent-task-frames'
 
@@ -22,6 +25,8 @@ export type TrackedEntry = {
 export type RosterGroup = {
   groupId: string
   identity: AgentJournalItemIdentity
+  /** The spawning turn's scope: the row reports its children beside that turn's work. */
+  turnScope: AgentJournalTurnScope
   /** Insertion order is the display order; the map holds the state. */
   entries: Map<string, TrackedEntry>
   /** Lifetime admissions bound retained labels even when entries are removed. */

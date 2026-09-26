@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,12 +40,12 @@ describe('journal row schema versions', () => {
     await journal.appendItem(
       identity,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       { provider: 'legacy', agent: 'codex', sessionId: 'session-1', recordId: 'turn-lifecycle:t1' },
       agentJournalTurnBody({ turnId: 't1', state: 'running', startedAt: 1_000 }),
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.close()
     const opened = openJournalDatabase(journalDatabaseFile(join(root, 'session-1')))

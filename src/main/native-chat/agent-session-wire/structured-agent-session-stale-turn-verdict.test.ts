@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -107,7 +108,8 @@ describe('running turn lifecycle revisions', () => {
             state: 'interrupted',
             startedAt: 30,
             completedAt: 40
-          }
+          },
+          turnScope: { kind: 'thread' }
         }
       ]
     )
@@ -169,7 +171,8 @@ describe('running turn lifecycle revisions', () => {
       {
         kind: 'item',
         identity: RUNNING_IDENTITY,
-        body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }
+        body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 },
+        turnScope: { kind: 'thread' }
       }
     ])
   })
@@ -214,7 +217,8 @@ describe('stale session state on a cold acquire', () => {
         {
           kind: 'item',
           identity: RUNNING_IDENTITY,
-          body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }
+          body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 },
+          turnScope: { kind: 'thread' }
         }
       ]
     })
@@ -255,7 +259,8 @@ describe('stale session state on a cold acquire', () => {
               resolvedBy: null,
               resolvedAt: null
             }
-          }
+          },
+          turnScope: { kind: 'thread' }
         }
       ]
     })
@@ -285,8 +290,15 @@ describe('stale session state on a cold acquire', () => {
         turnId: 'turn-1',
         ordinal: 1
       })
-      await journal.appendItem(prompt('thread-child'), body, { fence: 1, ...child })
-      await journal.appendItem(prompt(THREAD), body, { fence: 1 })
+      await journal.appendItem(prompt('thread-child'), body, {
+        fence: 1,
+        ...child,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+      await journal.appendItem(prompt(THREAD), body, {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
 
       await settleStaleSessionStateOnAcquire({
         journal,

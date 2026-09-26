@@ -12,7 +12,7 @@ import {
   AgentSessionPreSpawnError
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
-import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
+import type { ClaudeJournalTranslator } from './claude-structured-journal-contracts'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'

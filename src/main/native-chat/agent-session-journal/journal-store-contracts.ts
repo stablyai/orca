@@ -3,8 +3,9 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
-  AgentJournalProducerLinkage,
   AgentJournalResetReason,
+  AgentJournalRowAttribution,
+  AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { JournalLoad } from './journal-open'
@@ -28,11 +29,15 @@ export type ResolveDispatchInput = {
   clientMessageId: string
   fence: number
   recovered?: true
-} & (
-  | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
-  | { state: 'pending' }
-  | { state: 'rejected' | 'unknown'; reason?: string | null }
-)
+} &
+  /** A null identity: the provider took the message without echoing an item of its own, as a
+   *  conversation command it carries out in place. */
+  (
+    | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity | null }
+    /** The turn the message is handed into — the live root turn, or `thread` when none runs. */
+    | { state: 'pending'; turnScope: AgentJournalTurnScope }
+    | { state: 'rejected' | 'unknown'; reason?: string | null }
+  )
 
 export type JournalAppendResult = {
   cursor: AgentJournalCursor
@@ -40,7 +45,7 @@ export type JournalAppendResult = {
   revision: number
 }
 
-export type JournalItemAppendOptions = AgentJournalProducerLinkage & {
+export type JournalItemAppendOptions = AgentJournalRowAttribution & {
   fence: number
   observedAt?: number
   recovered?: true

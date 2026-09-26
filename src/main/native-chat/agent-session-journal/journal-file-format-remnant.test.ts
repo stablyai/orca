@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // An empty chat beside a pre-SQLite journal explains itself.
 //
 // The SQLite move shipped no importer, so a session whose history is a
@@ -142,7 +143,7 @@ describe('a chat whose history is still in the pre-SQLite format', () => {
     await journal.appendItem(
       { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'history' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.close()
     // Deleting the anchor leaves every row unanchored: replay keeps nothing, so

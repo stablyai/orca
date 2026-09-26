@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
@@ -43,6 +44,7 @@ function harness(groupKey: string | null = TURN_1) {
   const roster = new ClaudeSubagentRoster({
     sink,
     currentGroupKey: () => key,
+    currentTurnScope: () => AGENT_JOURNAL_THREAD_SCOPE,
     now: () => (clock += 1)
   })
   const roles = (): NativeChatSubagentEntry[] => agentsOf(items.at(-1)?.body)
@@ -464,7 +466,11 @@ describe('ClaudeSubagentRoster — through the real sink queue', () => {
         published += 1
       }
     })
-    const roster = new ClaudeSubagentRoster({ sink: deferred.sink, currentGroupKey: () => TURN_1 })
+    const roster = new ClaudeSubagentRoster({
+      sink: deferred.sink,
+      currentGroupKey: () => TURN_1,
+      currentTurnScope: () => AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     // The first append is in flight while the rest are submitted, so a publish
     // sharing the row's coalescing key would evict them.

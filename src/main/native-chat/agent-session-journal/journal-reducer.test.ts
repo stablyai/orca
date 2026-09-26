@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import {
   agentJournalItemKey,
@@ -624,7 +625,15 @@ describe('re-adding a tombstoned row', () => {
     const state = createJournalReducerState('session-1', EPOCH)
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('first'), seq: 1, fence: 1, ts: 1_001 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('first'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
     expect(renderJournalState(state).items).toEqual([])
@@ -633,7 +642,15 @@ describe('re-adding a tombstoned row', () => {
     // `items` would restart at 1 and lose to the tombstone forever.
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('second'), seq: 3, fence: 1, ts: 1_003 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('second'),
+        seq: 3,
+        fence: 1,
+        ts: 1_003,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     expect(renderJournalState(state).items.map((item) => item.body)).toEqual([text('second')])
   })
@@ -649,12 +666,28 @@ describe('re-adding a tombstoned row', () => {
     const state = createJournalReducerState('session-1', EPOCH)
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('first'), seq: 1, fence: 1, ts: 1_001 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('first'),
+        seq: 1,
+        fence: 1,
+        ts: 1_001,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('second'), seq: 3, fence: 1, ts: 1_003 })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('second'),
+        seq: 3,
+        fence: 1,
+        ts: 1_003,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     expect(state.tombstones.get(itemId)).toBeUndefined()
 
@@ -688,7 +721,8 @@ describe('producer linkage round-trips through the reducer', () => {
         seq: 1,
         fence: 1,
         ts: 1_001,
-        linkage
+        linkage,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     )
     expect(renderJournalState(state).items[0]).toMatchObject(linkage)
@@ -717,11 +751,18 @@ describe('producer linkage round-trips through the reducer', () => {
         () => state,
         'settle-mixed',
         [
-          { kind: 'item', identity, body: text('child'), linkage },
+          {
+            kind: 'item',
+            identity,
+            body: text('child'),
+            linkage,
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE
+          },
           {
             kind: 'item',
             identity: { provider: 'claude', sessionId: 'claude-session', uuid: 'own-1' },
-            body: text('own')
+            body: text('own'),
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE
           }
         ],
         { fence: 1 }
@@ -751,7 +792,8 @@ describe('producer linkage round-trips through the reducer', () => {
         seq: 1,
         fence: 1,
         ts: 1_001,
-        linkage: provisional
+        linkage: provisional,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     )
     applyJournalRow(
@@ -763,7 +805,8 @@ describe('producer linkage round-trips through the reducer', () => {
         seq: 9,
         fence: 1,
         ts: 9_999,
-        linkage
+        linkage,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     )
 
@@ -780,7 +823,16 @@ describe('producer linkage round-trips through the reducer', () => {
     const state = createJournalReducerState('session-1', EPOCH)
     applyJournalRow(
       state,
-      buildJournalItemRow({ state, identity, body: text('a'), seq: 1, fence: 1, ts: 1, linkage })
+      buildJournalItemRow({
+        state,
+        identity,
+        body: text('a'),
+        seq: 1,
+        fence: 1,
+        ts: 1,
+        linkage,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     )
     applyJournalRow(
       state,
@@ -791,7 +843,8 @@ describe('producer linkage round-trips through the reducer', () => {
         seq: 2,
         fence: 1,
         ts: 2,
-        linkage
+        linkage,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
       })
     )
     const items = renderJournalState(state).items
@@ -808,7 +861,16 @@ describe('producer linkage round-trips through the reducer', () => {
     ] as const) {
       applyJournalRow(
         state,
-        buildJournalItemRow({ state, identity, body, seq, fence: 1, ts: 1_000 + seq, linkage })
+        buildJournalItemRow({
+          state,
+          identity,
+          body,
+          seq,
+          fence: 1,
+          ts: 1_000 + seq,
+          linkage,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
       )
     }
     const items = renderJournalState(state).items

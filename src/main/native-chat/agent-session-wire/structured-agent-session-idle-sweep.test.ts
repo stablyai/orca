@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // The idle sweep on a real host: what puts an agent to rest, what keeps it running, and what a
 // reader and the session lists see when it does.
 
@@ -127,7 +128,8 @@ describe('the idle sweep', () => {
     await foundRestTestChat(rig)
     providerEvents().appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'working', ordinal: 50 },
-      { kind: 'turn', turnId: 'working', state: 'running' }
+      { kind: 'turn', turnId: 'working', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await rig.host.flushStreamedEvents(SESSION)
     rig.clock.now += IDLE_MS + 1
@@ -152,7 +154,8 @@ describe('the idle sweep', () => {
     // Activity at 29 minutes: a provider row reaching the journal.
     providerEvents().appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 60 },
-      { kind: 'status', text: 'still thinking' }
+      { kind: 'status', text: 'still thinking' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await rig.host.flushStreamedEvents(SESSION)
     rig.clock.now += 60_001
@@ -188,7 +191,8 @@ describe('the idle sweep', () => {
         detail: null,
         options: [{ id: 'allow', label: 'Allow' }],
         resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-      }
+      },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await rig.host.flushStreamedEvents(SESSION)
     rig.clock.now += IDLE_MS + 1

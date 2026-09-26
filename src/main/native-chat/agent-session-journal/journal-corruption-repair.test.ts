@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A repair drops what it cannot replay, and says so.
 //
 // Two things make a suffix unreplayable: a row this build cannot parse, and a
@@ -102,9 +103,18 @@ afterEach(async () => {
 describe('a malformed row', () => {
   it('keeps the readable prefix live and drops the rest of the epoch', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('readable'), { fence: 1 })
-    await journal.appendItem(item(1), body('unreadable'), { fence: 1 })
-    await journal.appendItem(item(2), body('after the fault'), { fence: 1 })
+    await journal.appendItem(item(0), body('readable'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(item(1), body('unreadable'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(item(2), body('after the fault'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.close()
     await withJournalDatabase((db) => {
       db.prepare('UPDATE journal_rows SET row_json = ? WHERE seq = ?').run('{"not":"a row"}', 3)
@@ -118,8 +128,14 @@ describe('a malformed row', () => {
 
   it('discloses the line it could not read', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('readable'), { fence: 1 })
-    await journal.appendItem(item(1), body('later'), { fence: 1 })
+    await journal.appendItem(item(0), body('readable'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    await journal.appendItem(item(1), body('later'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.close()
     await withJournalDatabase((db) => {
       db.prepare('UPDATE journal_rows SET row_json = ? WHERE seq = ?').run('}{', 2)
@@ -141,7 +157,10 @@ describe('a sequence gap', () => {
   it('drops every row after the hole and reports the epoch corrupt', async () => {
     const journal = await open()
     for (let ordinal = 0; ordinal < 5; ordinal += 1) {
-      await journal.appendItem(item(ordinal), body(`m${ordinal}`), { fence: 1 })
+      await journal.appendItem(item(ordinal), body(`m${ordinal}`), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
     await journal.close()
     // Sequence 1 is the epoch row, so the items occupy 2..6. Removing 4 leaves
@@ -163,7 +182,10 @@ describe('a sequence gap', () => {
   it('still reports corrupt on the next probe, with the deleted suffix unrebuilt', async () => {
     const journal = await open()
     for (let ordinal = 0; ordinal < 5; ordinal += 1) {
-      await journal.appendItem(item(ordinal), body(`m${ordinal}`), { fence: 1 })
+      await journal.appendItem(item(ordinal), body(`m${ordinal}`), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
     await journal.close()
     await withJournalDatabase((db) => {
@@ -177,7 +199,10 @@ describe('a sequence gap', () => {
     // Same policy the emptied-epoch repair takes: a session that writes into the
     // epoch owns it, and a later import must not replace rows the user has seen.
     const writable = await open()
-    await writable.appendItem(item(9), body('typed after the repair'), { fence: 1 })
+    await writable.appendItem(item(9), body('typed after the repair'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await writable.close()
     expect(loadJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: false })
   })
@@ -187,7 +212,10 @@ describe('a sequence gap', () => {
   it('is not settled by the repair disclosure it appends for a malformed row', async () => {
     const journal = await open()
     for (let ordinal = 0; ordinal < 3; ordinal += 1) {
-      await journal.appendItem(item(ordinal), body(`m${ordinal}`), { fence: 1 })
+      await journal.appendItem(item(ordinal), body(`m${ordinal}`), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
     await journal.close()
     await withJournalDatabase((db) => {
@@ -207,7 +235,10 @@ describe('a missing epoch row', () => {
   // renders a repaired journal as a clean timeline.
   it('rejects the whole surviving range rather than declaring it contiguous', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('anchor'), { fence: 1 })
+    await journal.appendItem(item(0), body('anchor'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.appendSubmission({
       clientMessageId: 'client-message-1',
       payloadFingerprint: 'fingerprint-1',
@@ -245,7 +276,10 @@ describe('a missing epoch row', () => {
   // consulted again and the dropped rows never come back.
   it('keeps asking for provider history until the epoch has content of its own', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('anchor'), { fence: 1 })
+    await journal.appendItem(item(0), body('anchor'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.close()
     await withJournalDatabase((db) => {
       db.prepare('DELETE FROM journal_rows WHERE seq = ?').run(1)
@@ -258,7 +292,10 @@ describe('a missing epoch row', () => {
     // A session that writes into the epoch owns it: its own rows are not a
     // repair placeholder, and a later import must not replace them.
     const writable = await open()
-    await writable.appendItem(item(1), body('typed after the repair'), { fence: 1 })
+    await writable.appendItem(item(1), body('typed after the repair'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await writable.close()
     expect(loadJournal(root, IDENTITY.sessionId)).toMatchObject({ corrupt: false })
   })

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { boundJournalStatusText } from '../agent-session-journal/journal-prompt-body-bounds'
@@ -16,7 +17,9 @@ export function structuredAgentSessionStartFailureRow(
   return {
     kind: 'item',
     identity: { provider: 'orca', clientMessageId: `start-failure:${startKey}` },
-    body: { kind: 'status', text: boundJournalStatusText(text), tone: 'error' }
+    body: { kind: 'status', text: boundJournalStatusText(text), tone: 'error' },
+    // A start that failed opened no turn.
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
   }
 }
 
