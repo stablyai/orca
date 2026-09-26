@@ -200,6 +200,15 @@ describe('tab create entry classification', () => {
     })
   })
 
+  it('keeps multi-term file matches in the tab entry list without creating a spaced filename', () => {
+    const files = readyFiles(['apps/web/.env', 'apps/api/.env', 'packages/shared/.env'])
+
+    expect(getTabEntryOptions('.env api', files).map((option) => option.classification)).toEqual([
+      { kind: 'search', engine: 'google', query: '.env api' },
+      { kind: 'existing-file', matchKind: 'fuzzy', relativePath: 'apps/api/.env' }
+    ])
+  })
+
   it('returns duplicate basename matches as separate open-file options', () => {
     expect(
       getTabEntryOptions('index.ts', readyFiles(['src/index.ts', 'docs/index.ts'])).map(
@@ -242,7 +251,7 @@ describe('tab create entry classification', () => {
       getTabEntryOptions('type script', readyFiles(['docs/typescript-guide.md'])).map(
         (option) => option.classification.kind
       )
-    ).toEqual(['search'])
+    ).toEqual(['search', 'existing-file'])
   })
 
   it('never offers to create a file from a spaced phrase without path syntax', () => {
@@ -466,6 +475,30 @@ describe('tab create entry classification', () => {
     })
   })
 
+  it('blocks excessive multi-term queries before reading listed files', () => {
+    const query = Array.from({ length: 33 }, (_, index) => `term-${index}`).join(' ')
+    const fileList = {
+      get files(): string[] {
+        throw new Error('excessive term queries must not read file lists')
+      },
+      loading: false,
+      loadError: null
+    }
+
+    expect(classifyTabEntryQuery(query, fileList)).toEqual({
+      kind: 'blocked',
+      message: 'Search text is too large.'
+    })
+  })
+
+  it('blocks excessive multi-term queries that exactly match a listed path', () => {
+    const query = Array.from({ length: 33 }, (_, index) => `term-${index}`).join(' ')
+
+    expect(
+      getTabEntryOptions(query, readyFiles([query])).map((option) => option.classification)
+    ).toEqual([{ kind: 'blocked', message: 'Search text is too large.' }])
+  })
+
   it('offers both exact file and URL actions for host-like filenames', () => {
     expect(
       getTabEntryOptions('example.com', readyFiles(['example.com'])).map(
@@ -490,6 +523,25 @@ describe('tab create entry classification', () => {
         localPlatform: 'posix'
       })
     ).toMatchObject({ kind: 'blocked', message: 'Enter an absolute path for this computer.' })
+  })
+
+  it('allows absolute paths containing more than 32 space-separated words', () => {
+    const words = Array.from({ length: 33 }, (_, index) => `folder-${index}`).join(' ')
+    const posixPath = `/tmp/${words}/notes.md`
+    const windowsPath = `C:\\tmp\\${words}\\notes.md`
+
+    expect(
+      classifyTabEntryQuery(posixPath, readyFiles([]), {
+        allowAbsolutePaths: true,
+        localPlatform: 'posix'
+      })
+    ).toEqual({ kind: 'absolute-file', filePath: posixPath })
+    expect(
+      classifyTabEntryQuery(windowsPath, readyFiles([]), {
+        allowAbsolutePaths: true,
+        localPlatform: 'windows'
+      })
+    ).toEqual({ kind: 'absolute-file', filePath: windowsPath.replace(/\\/g, '/') })
   })
 
   it('classifies drive and UNC paths only for Windows clients', () => {
