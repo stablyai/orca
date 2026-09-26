@@ -164,7 +164,7 @@ describe('createBrowserSlice annotations', () => {
     })
   })
 
-  it('clears page annotations when the browser page URL changes', () => {
+  it('keeps page annotations when the browser page URL changes', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
@@ -177,7 +177,9 @@ describe('createBrowserSlice annotations', () => {
 
     store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
 
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+    const annotations = store.getState().browserAnnotationsByPageId[pageId]
+    expect(annotations).toHaveLength(1)
+    expect(annotations?.[0]?.payload.page.sanitizedUrl).toBe('https://example.com')
   })
 
   it('can commit a navigation URL without hiding an active recovery error', () => {

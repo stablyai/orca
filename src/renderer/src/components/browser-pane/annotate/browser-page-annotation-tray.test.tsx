@@ -69,7 +69,7 @@ function makeAnnotation(): BrowserPageAnnotation {
   }
 }
 
-function renderTray(): {
+function renderTray(currentUrl?: string): {
   handleDeleteBrowserAnnotation: ReturnType<typeof vi.fn>
   handleUpdateBrowserAnnotation: ReturnType<typeof vi.fn>
 } {
@@ -80,6 +80,7 @@ function renderTray(): {
     <TooltipProvider>
       <BrowserPageAnnotationTray
         browserAnnotations={[makeAnnotation()]}
+        currentUrl={currentUrl}
         annotationTraySendOpen={false}
         handleAnnotationTraySendOpenChange={vi.fn()}
         worktreeId="wt-1"
@@ -153,4 +154,14 @@ describe('BrowserPageAnnotationTray edit mode', () => {
     expect(screen.getByText('Fix this button')).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Annotation comment' })).not.toBeInTheDocument()
   })
+})
+
+it('identifies feedback captured on a different page', () => {
+  renderTray('https://example.com/next')
+  expect(screen.getByTitle('https://example.com')).toHaveTextContent('· from')
+})
+
+it('does not label feedback from the current page as another page', () => {
+  renderTray('https://example.com')
+  expect(screen.queryByTitle('https://example.com')).not.toBeInTheDocument()
 })

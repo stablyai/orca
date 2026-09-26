@@ -75,6 +75,7 @@ export function BrowserPageViewportOverlays({
   return (
     <>
       <BrowserGuestAnnotateOverlays
+        currentUrl={browserTab.url}
         markup={markup}
         grab={grab}
         annotationSend={annotationSend}

@@ -140,8 +140,6 @@ export function useBrowserPageWebviewLifecycle({
     (s) => s.browserAnnotationsByPageId[browserTabId] ?? EMPTY_BROWSER_ANNOTATIONS
   )
   const browserAnnotationsRef = useRef(browserAnnotations)
-  const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
-  const clearBrowserPageAnnotationsRef = useRef(clearBrowserPageAnnotations)
 
   useLayoutEffect(() => {
     browserTabLoadingRef.current = browserTabLoading
@@ -150,12 +148,10 @@ export function useBrowserPageWebviewLifecycle({
     isActiveRef.current = isActive
     pendingAnnotationPayloadRef.current = pendingAnnotationPayload
     browserAnnotationsRef.current = browserAnnotations
-    clearBrowserPageAnnotationsRef.current = clearBrowserPageAnnotations
     isPaintableRef.current = isPaintable
   }, [
     browserAnnotations,
     browserTabLoading,
-    clearBrowserPageAnnotations,
     inputLocked,
     isActive,
     isPaintable,
@@ -214,11 +210,12 @@ export function useBrowserPageWebviewLifecycle({
     syncGuestAnnotationViewportBridge({
       toolTargetId: browserTabId,
       annotations: browserAnnotationsRef.current,
+      currentUrl: browserTabUrlRef.current,
       pendingPayload: pendingAnnotationPayloadRef.current,
       surfaceActive: isActiveRef.current,
       token: annotationViewportBridgeTokenRef.current
     })
-  }, [browserTabId])
+  }, [browserTabId, browserTabUrlRef])
 
   // Why: browserTab.url excluded from deps (changes every navigation → would destroy/recreate the webview); URL logic reads browserTabUrlRef.
   useEffect(() => {
@@ -255,7 +252,6 @@ export function useBrowserPageWebviewLifecycle({
       addressBarInputRef,
       lastKnownWebviewUrlRef,
       trackNextLoadingEventRef,
-      clearBrowserPageAnnotationsRef,
       onSetUrlRef,
       setPendingAnnotationPayload,
       setBrowserOverlayViewport,
@@ -297,6 +293,7 @@ export function useBrowserPageWebviewLifecycle({
   }, [
     browserAnnotationsLength,
     browserTabId,
+    browserTabUrl,
     isActive,
     pendingAnnotationPayload,
     syncBrowserAnnotationViewportBridge

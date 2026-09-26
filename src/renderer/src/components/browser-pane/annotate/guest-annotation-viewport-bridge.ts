@@ -3,32 +3,37 @@ import type {
   BrowserPageAnnotation
 } from '../../../../../shared/browser-grab-types'
 
-/**
- * Push the current annotation set into the guest, where badges render in-page so they track scroll
- * without a message per frame. Shared by every surface that annotates a guest — the payload is
- * derived only from the annotations themselves, so the two surfaces cannot disagree about it.
- */
+// Guest-rendered badges track scrolling without a renderer message per frame.
 export function syncGuestAnnotationViewportBridge({
   toolTargetId,
   annotations,
+  currentUrl,
   pendingPayload,
   surfaceActive,
   token
 }: {
   toolTargetId: string
   annotations: BrowserPageAnnotation[]
+  currentUrl?: string
   pendingPayload: BrowserGrabPayload | null
   surfaceActive: boolean
   token: string
 }): void {
   // Why: existing badges render in-guest for smooth scroll; only the pending dialog needs viewport messages.
-  const markers = annotations.map((annotation, index) => ({
-    id: annotation.id,
-    index,
-    isFixed: annotation.payload.target.isFixed === true,
-    rectPage: annotation.payload.target.rectPage,
-    rectViewport: annotation.payload.target.rectViewport
-  }))
+  // Keep the full-list index so badges still match the tray after filtering other pages.
+  const markers = annotations.flatMap((annotation, index) =>
+    currentUrl !== undefined && annotation.payload.page.sanitizedUrl !== currentUrl
+      ? []
+      : [
+          {
+            id: annotation.id,
+            index,
+            isFixed: annotation.payload.target.isFixed === true,
+            rectPage: annotation.payload.target.rectPage,
+            rectViewport: annotation.payload.target.rectViewport
+          }
+        ]
+  )
   void window.api.browser
     .setAnnotationViewportBridge({
       browserPageId: toolTargetId,

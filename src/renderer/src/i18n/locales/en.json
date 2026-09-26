@@ -15964,6 +15964,7 @@
             "756bfc25c9": "Open",
             "09a9489aa5": "Show",
             "2a4c4b8e1f": "Copy",
+            "annotationFromOtherPage": "· from {{title}}",
             "fileUrlUnsupported": "This browser tab cannot open local files. Use \"Open Preview to the Side\" on the file instead."
           },
           "BrowserToolbarMenu": {

@@ -52,7 +52,6 @@ export type AttachBrowserPageWebviewArgs = {
   addressBarInputRef: RefObject<HTMLInputElement | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
   trackNextLoadingEventRef: MutableRefObject<boolean>
-  clearBrowserPageAnnotationsRef: MutableRefObject<(pageId: string) => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>

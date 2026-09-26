@@ -35,7 +35,6 @@ export type BrowserPageWebviewLoadingHandlersArgs = {
   trackNextLoadingEventRef: MutableRefObject<boolean>
   keepAddressBarFocusRef: MutableRefObject<boolean>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
-  clearBrowserPageAnnotationsRef: MutableRefObject<(pageId: string) => void>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
@@ -62,7 +61,6 @@ export function createBrowserPageWebviewLoadingHandlers({
   trackNextLoadingEventRef,
   keepAddressBarFocusRef,
   recoveryNavigationValidationRef,
-  clearBrowserPageAnnotationsRef,
   onUpdatePageStateRef,
   onSetUrlRef,
   setPendingAnnotationPayload,
@@ -71,8 +69,7 @@ export function createBrowserPageWebviewLoadingHandlers({
   focusAddressBarNow
 }: BrowserPageWebviewLoadingHandlersArgs): BrowserPageWebviewLoadingHandlers {
   const handleDidStartLoading = (): void => {
-    // Why: a reload replaces the document without changing the URL, invalidating captured element rects like a navigation does.
-    clearBrowserPageAnnotationsRef.current(browserTabId)
+    // A reload invalidates the pending draft, but saved feedback must survive.
     setPendingAnnotationPayload(null)
     setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
     if (!trackNextLoadingEventRef.current) {

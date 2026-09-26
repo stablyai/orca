@@ -53,7 +53,6 @@ function createHarness(startUrl: string) {
     trackNextLoadingEventRef: ref(true),
     keepAddressBarFocusRef: ref(false),
     recoveryNavigationValidationRef: ref(null),
-    clearBrowserPageAnnotationsRef: ref(vi.fn()),
     onUpdatePageStateRef,
     onSetUrlRef: ref(vi.fn()),
     setPendingAnnotationPayload: vi.fn(),

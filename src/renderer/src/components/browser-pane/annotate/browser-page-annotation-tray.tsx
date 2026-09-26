@@ -21,6 +21,7 @@ import { preventAgentSendTargetOutsideDismiss } from './prevent-agent-send-targe
 
 export function BrowserPageAnnotationTray({
   browserAnnotations,
+  currentUrl,
   annotationTraySendOpen,
   handleAnnotationTraySendOpenChange,
   worktreeId,
@@ -34,6 +35,7 @@ export function BrowserPageAnnotationTray({
   handleUpdateBrowserAnnotation
 }: {
   browserAnnotations: BrowserPageAnnotation[]
+  currentUrl?: string
   annotationTraySendOpen: boolean
   handleAnnotationTraySendOpenChange: (open: boolean) => void
   worktreeId: string
@@ -269,8 +271,22 @@ export function BrowserPageAnnotationTray({
                     <div className="mt-0.5 line-clamp-2 text-muted-foreground">
                       {annotation.comment}
                     </div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">
+                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                       <span>{annotation.intent}</span>
+                      {currentUrl !== undefined &&
+                      annotation.payload.page.sanitizedUrl !== currentUrl ? (
+                        <span className="truncate" title={annotation.payload.page.sanitizedUrl}>
+                          {translate(
+                            'auto.components.browser.pane.BrowserPane.annotationFromOtherPage',
+                            '· from {{title}}',
+                            {
+                              title:
+                                annotation.payload.page.title ||
+                                annotation.payload.page.sanitizedUrl
+                            }
+                          )}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-start gap-0.5">

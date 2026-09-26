@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { syncGuestAnnotationViewportBridge } from './guest-annotation-viewport-bridge'
 import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
 import {
   BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH,
@@ -7,6 +8,7 @@ import {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 function makeAnnotation(overrides?: Partial<BrowserPageAnnotation>): BrowserPageAnnotation {
@@ -227,5 +229,77 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     expect(selectedLine).not.toContain('😀')
     expect(selectedLine).not.toContain('tail')
     expect(selectedLine).not.toContain('\ufffd')
+  })
+})
+
+describe('annotations across navigation', () => {
+  it('keeps page and tab context for every item in a multi-page batch', () => {
+    const first = makeAnnotation()
+    const second = makeAnnotation({ id: 'annotation-2', comment: 'Second page feedback' })
+    second.payload.page.sanitizedUrl = 'https://example.com/contact'
+    second.payload.page.viewportWidth = 800
+    const markdown = formatBrowserAnnotationsAsMarkdown([first, second])
+    expect(markdown).toContain('2 items across multiple pages')
+    expect(markdown).toContain('**Page:** https://example.com/pricing')
+    expect(markdown).toContain('**Page:** https://example.com/contact')
+    expect(markdown).toContain('**Viewport:** 800x720')
+    expect(markdown.match(/\*\*Browser tab id:\*\* page-1/g)).toHaveLength(2)
+    expect(markdown).toContain('Second page feedback')
+  })
+
+  it('filters badges by current URL without changing their tray numbers', () => {
+    const first = makeAnnotation()
+    const second = makeAnnotation({ id: 'annotation-2' })
+    second.payload.page.sanitizedUrl = 'https://example.com/contact'
+    const setAnnotationViewportBridge = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { browser: { setAnnotationViewportBridge } } })
+    const sync = (currentUrl: string) =>
+      syncGuestAnnotationViewportBridge({
+        toolTargetId: 'page-1',
+        annotations: [first, second],
+        currentUrl,
+        pendingPayload: null,
+        surfaceActive: true,
+        token: 'token'
+      })
+    sync('https://example.com/contact')
+    expect(setAnnotationViewportBridge).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        markers: [expect.objectContaining({ id: 'annotation-2', index: 1 })]
+      })
+    )
+    sync('https://example.com/other')
+    expect(setAnnotationViewportBridge).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        enabled: false,
+        markers: []
+      })
+    )
+    sync('https://example.com/pricing')
+    expect(setAnnotationViewportBridge).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        markers: [expect.objectContaining({ id: 'annotation-1', index: 0 })]
+      })
+    )
+  })
+
+  it('keeps document preview badges when the surface has no navigation URL', () => {
+    const setAnnotationViewportBridge = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { browser: { setAnnotationViewportBridge } } })
+    syncGuestAnnotationViewportBridge({
+      toolTargetId: 'preview-1',
+      annotations: [makeAnnotation()],
+      pendingPayload: null,
+      surfaceActive: true,
+      token: 'token'
+    })
+    expect(setAnnotationViewportBridge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        markers: [expect.objectContaining({ id: 'annotation-1', index: 0 })]
+      })
+    )
   })
 })
