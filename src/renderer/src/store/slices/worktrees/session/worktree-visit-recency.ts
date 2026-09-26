@@ -1,7 +1,7 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getWorktreeIdFromVisitKey,
@@ -70,11 +70,27 @@ export function createPruneLastVisitedTimestamps(
           result.worktrees.forEach(addValidWorktree)
         }
       }
+      const hasLoadedRepos = (s.repos && s.repos.length > 0) || (s.reposFetchGeneration ?? 0) > 0
+      const isKnownWorkspaceOwner = (repoId: string, id: string): boolean => {
+        const scope = parseWorkspaceKey(id)
+        if (scope?.type === 'folder') {
+          // Defer pruning for folder workspaces until folder catalogs are populated.
+          return !s.folderWorkspaces || s.folderWorkspaces.length === 0
+            ? true
+            : s.folderWorkspaces.some((f) => f.id === scope.folderWorkspaceId)
+        }
+        // Repos missing from a loaded catalog are confirmed removed; unhydrated catalogs defer.
+        return !hasLoadedRepos || (s.repos?.some((r) => r.id === repoId) ?? true)
+      }
       let changed = false
       const next: Record<string, number> = {}
       for (const [key, ts] of Object.entries(s.lastVisitedAtByWorktreeId)) {
         const id = getWorktreeIdFromVisitKey(key)
         const repoId = getRepoIdFromWorktreeId(id)
+        if (!isKnownWorkspaceOwner(repoId, id)) {
+          changed = true
+          continue
+        }
         const repoIds = validIdsByRepo.get(repoId)
         if (!repoIds) {
           // Repo not yet hydrated (e.g. SSH not connected). Keep the entry.
@@ -108,8 +124,12 @@ export function createPruneLastVisitedTimestamps(
       // the repo is unhydrated, mirroring the timestamp rule above).
       const activeId = s.activeWorktreeId
       if (activeId) {
-        const activeRepoWorktreeIds = validIdsByRepo.get(getRepoIdFromWorktreeId(activeId))
-        if (activeRepoWorktreeIds && !activeRepoWorktreeIds.has(activeId)) {
+        const activeRepoId = getRepoIdFromWorktreeId(activeId)
+        const activeRepoWorktreeIds = validIdsByRepo.get(activeRepoId)
+        const isStaleActive =
+          !isKnownWorkspaceOwner(activeRepoId, activeId) ||
+          (activeRepoWorktreeIds && !activeRepoWorktreeIds.has(activeId))
+        if (isStaleActive) {
           patch.activeWorktreeId = null
           // Leaving the derived workspace key behind would keep the phantom workspace selected.
           // Only the stale worktree's own key is dropped (same equality check as the rename path),
