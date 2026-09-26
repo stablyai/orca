@@ -28,6 +28,8 @@ function pairedRuntime() {
   })
   const caller: RuntimeMobileSessionTabsResult[] = []
   runtime.onMobileSessionTabsChanged((snapshot) => caller.push(snapshot), 'device-caller')
+  // A subscribed second device: selection that fans out to live clients would move it too.
+  runtime.onMobileSessionTabsChanged(() => {}, 'device-bystander')
   return { runtime, spawn, caller }
 }
 
@@ -53,7 +55,7 @@ it('selects a launched terminal for the caller only, without spawning again', as
     launched.id
   )
   expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(first.id)
-  expect((await runtime.listMobileSessionTabs(`id:${WT}`, 'device-other')).activeTabId).toBe(
+  expect((await runtime.listMobileSessionTabs(`id:${WT}`, 'device-bystander')).activeTabId).toBe(
     first.id
   )
   expect(spawn).toHaveBeenCalledTimes(2)
@@ -75,6 +77,9 @@ it('selects a launched chat by its session for the caller only', async () => {
 
   expect(caller.at(-1)?.activeTabId).toBe('agent-session:sess-1')
   expect((await runtime.listMobileSessionTabs(`id:${WT}`)).activeTabId).toBe(first.id)
+  expect((await runtime.listMobileSessionTabs(`id:${WT}`, 'device-bystander')).activeTabId).toBe(
+    first.id
+  )
 })
 
 it('reports a tab that is not published instead of selecting something else', async () => {
@@ -101,5 +106,9 @@ it('never materializes a pane that is not ready, as a tap would', async () => {
     )
   ).toBe(true)
 
+  const selected = await runtime.listMobileSessionTabs(`id:${WT}`, 'device-caller')
+  expect(selected.activeTabId).toBe(`host-tab::${HEADLESS_LEAF_ID}`)
+  // Why wait: a tap's respawn lands several awaits later, so an immediate check cannot see one.
+  await new Promise((resolve) => setTimeout(resolve, 200))
   expect(spawn).not.toHaveBeenCalled()
 })
