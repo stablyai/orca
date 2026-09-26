@@ -1,8 +1,10 @@
+// @vitest-environment happy-dom
 import { Terminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
 import { documentModuleSource } from './document/document-module-source.test-support'
 import { emitKeyboardAvoidanceMetrics } from './document/keyboard-avoidance-metrics'
+import { commitFitScale } from './document/fit-scale'
 import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
 // The scope object plus the metrics block, exactly as the document carries them.
@@ -13,11 +15,12 @@ import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contra
  * it is handed, so a case builds one with its own terminal double and reads the notifications back
  * out of the seam it passed in.
  */
-function runMetricsOver(term: unknown): Record<string, unknown>[] {
+function runMetricsOver(term: unknown, fitScale = 1): Record<string, unknown>[] {
   const notifications: Record<string, unknown>[] = []
   const scope = createTerminalDocumentScope({
     postToHost: (message) => notifications.push(message)
   })
+  scope.currentScale = fitScale
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each case's double implements the buffer members the scan reads, which is what the assertions check.
   scope.term = term as typeof scope.term
   emitKeyboardAvoidanceMetrics(scope)
@@ -194,24 +197,67 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     // Four places change the buffer's geometry, and each owes a fresh emit after it: a stale
     // content-bottom row is what lifts the keyboard over the wrong line. Read from each module's
     // own source, so a fifth site added in a new module is not silently uncovered.
+    // A text-scale resize reports through the fit it schedules, whose commit emits (pinned below).
+    const directEmit = 'emitKeyboardAvoidanceMetrics(scope)'
     const blocks = [
-      ['terminal-init', 'export function resize('],
-      ['reflow', 'export function reflow('],
-      ['host-message-router', "} else if (msg.type === 'clear') {"],
-      ['text-scaling', 'export function applyTextScale(']
+      ['terminal-init', 'export function resize(', directEmit],
+      ['reflow', 'export function reflow(', directEmit],
+      ['host-message-router', "} else if (msg.type === 'clear') {", directEmit],
+      ['text-scaling', 'export function applyTextScale(', 'applyFitScale(scope']
     ] as const
 
-    for (const [module, opener] of blocks) {
+    for (const [module, opener, emit] of blocks) {
       const source = documentModuleSource(module)
       const start = source.indexOf(opener)
       expect(start, `${module} no longer carries ${opener}`).toBeGreaterThanOrEqual(0)
       const block = source.slice(start, source.indexOf('\n}', start))
-      const emitAt = block.indexOf('emitKeyboardAvoidanceMetrics(scope)')
+      const emitAt = block.indexOf(emit)
       const geometryAt = block.includes('.resize(')
         ? block.indexOf('.resize(')
         : block.indexOf('.reset(')
       expect(emitAt, `${module} does not emit metrics`).toBeGreaterThanOrEqual(0)
       expect(emitAt, `${module} emits before it resizes`).toBeGreaterThan(geometryAt)
     }
+  })
+
+  it('reports the row pitch as drawn, fit scale included, and none before a cell is measured', () => {
+    // Desktop display mode keeps the desktop's rows and the fit shrinks the grid by width.
+    const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }
+    const measuredTerm = {
+      buffer: { active: buffer },
+      cols: 10,
+      rows: 47,
+      _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } }
+    }
+    const phone = runMetricsOver(measuredTerm)[0]
+    const desktop = runMetricsOver(measuredTerm, 0.5)[0]
+    const unmeasured = runMetricsOver({ buffer: { active: buffer }, cols: 10, rows: 47 })[0]
+    expect({
+      phone: phone?.rowPitch,
+      desktop: desktop?.rowPitch,
+      unmeasured: unmeasured?.rowPitch
+    }).toEqual({ phone: 15, desktop: 7.5, unmeasured: 0 })
+  })
+
+  it('reports again when a fit commits a new scale, carrying the new pitch', () => {
+    const notifications: Record<string, unknown>[] = []
+    const scope = createTerminalDocumentScope({
+      postToHost: (message) => notifications.push(message),
+      // Half the width 80 columns of 8 px need, so the fit commits a scale of 0.5.
+      viewportRect: () => ({ left: 0, top: 0, width: 320, height: 700 })
+    })
+    const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements every member the fit and the metrics read, which the assertion checks.
+    scope.term = {
+      buffer: { active: buffer },
+      cols: 80,
+      rows: 40,
+      element: { scrollWidth: 640 },
+      _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } }
+    } as unknown as typeof scope.term
+    scope.surface = document.createElement('div')
+    commitFitScale(scope, 'test', 0, 'test')
+    const metrics = notifications.filter((message) => message.type === 'keyboard-avoidance-metrics')
+    expect(metrics.at(-1)?.rowPitch).toBe(7.5)
   })
 })
