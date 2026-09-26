@@ -76,12 +76,16 @@ function fruitTurn(): AgentJournalRenderItem[] {
   ]
 }
 
-function renderJournal(
+function journalList(
   items: AgentJournalRenderItem[],
   submissions: AgentJournalSubmission[] = [],
-  isWorking = false
-): void {
-  render(
+  {
+    isWorking = false,
+    workingStartedAt = null,
+    hostTiming = true
+  }: { isWorking?: boolean; workingStartedAt?: number | null; hostTiming?: boolean } = {}
+): React.JSX.Element {
+  return (
     <NativeChatMessageList
       session={{
         messages: projectStructuredAgentSessionMessages(items, [], submissions),
@@ -96,12 +100,21 @@ function renderJournal(
       }}
       journalItems={items}
       journalSubmissions={submissions}
-      settledTurns={selectStructuredAgentSettledTurns(items, submissions)}
+      settledTurns={hostTiming ? selectStructuredAgentSettledTurns(items, submissions) : undefined}
       isWorking={isWorking}
+      workingStartedAt={workingStartedAt}
       expandSignal={false}
       fontScale={1}
     />
   )
+}
+
+function renderJournal(
+  items: AgentJournalRenderItem[],
+  submissions: AgentJournalSubmission[] = [],
+  isWorking = false
+): void {
+  render(journalList(items, submissions, { isWorking }))
 }
 
 function follows(later: HTMLElement, earlier: HTMLElement): boolean {
@@ -216,5 +229,34 @@ describe('NativeChatMessageList turns from the turn record', () => {
 
     expect(screen.getByText('Worked for 4s')).toBeInTheDocument()
     expect(screen.getByText('Checking the background build.')).toBeInTheDocument()
+  })
+
+  it('clocks a turn the provider opened under its own key, not the user turn before it', () => {
+    const wake = 'wake'
+    const ask = say('u1', 'user', 'List three fruits')
+    const answer = (state: 'running' | 'completed') => [
+      ask,
+      item('t1', { kind: 'turn', turnId: 't1', state, userItemId: 'u1' }),
+      say('t1-answer', 'assistant', 'Apple, banana, cherry.', inTurn('t1'))
+    ]
+    // No host durations: this client's own clock is all the rows have.
+    const local = { hostTiming: false }
+    const { rerender } = render(
+      journalList(answer('running'), [], {
+        ...local,
+        isWorking: true,
+        workingStartedAt: Date.now() - 7_000
+      })
+    )
+    rerender(journalList(answer('completed'), [], local))
+    expect(screen.getByText('Worked for 7s')).toBeInTheDocument()
+
+    const woken = [
+      ...answer('completed'),
+      item(wake, { kind: 'turn', turnId: wake, state: 'running', userItemId: 'claude:wake' }),
+      say('wake-answer', 'assistant', 'Checking the background build.', inTurn(wake))
+    ]
+    rerender(journalList(woken, [], { ...local, isWorking: true, workingStartedAt: Date.now() }))
+    expect(screen.getByText('Worked for 7s')).toBeInTheDocument()
   })
 })
