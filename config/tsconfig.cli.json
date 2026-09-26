@@ -18,6 +18,7 @@
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
     "../src/main/agent-hooks/managed-agent-hook-registry.ts",
     "../src/main/agent-hooks/managed-hook-script-refresh.ts",
+    "../src/main/agent-hooks/pi-status-owner-hook-guard.ts",
     "../src/main/agent-hooks/posix-hook-command.ts",
     "../src/main/agent-hooks/runtime-home-hook-command.ts",
     "../src/main/orca-profiles/profile-storage-paths.ts",
