@@ -30,6 +30,16 @@ export function normalizeWorkspace(input: unknown): LinearWorkspace | null {
     organizationName: record.organizationName,
     organizationUrlKey:
       typeof record.organizationUrlKey === 'string' ? record.organizationUrlKey : undefined,
+    viewerId:
+      typeof record.viewerId === 'string' && record.viewerId.trim() ? record.viewerId : undefined,
+    credentialOwnerProfileId:
+      typeof record.credentialOwnerProfileId === 'string' && record.credentialOwnerProfileId.trim()
+        ? record.credentialOwnerProfileId
+        : undefined,
+    credentialEpoch:
+      typeof record.credentialEpoch === 'string' && record.credentialEpoch.trim()
+        ? record.credentialEpoch
+        : undefined,
     displayName: record.displayName,
     email: typeof record.email === 'string' ? record.email : null,
     credentialRevision:
@@ -49,11 +59,12 @@ export function emptyWorkspaceFile(): LinearWorkspaceFile {
 }
 
 export function workspaceFromLinearData(
-  me: { displayName: string; email?: string | null },
+  me: { id: string; displayName: string; email?: string | null },
   org: { id: string; name: string; urlKey?: string | null }
 ): LinearWorkspace {
   return {
     id: org.id,
+    viewerId: me.id,
     organizationId: org.id,
     organizationName: org.name,
     organizationUrlKey: org.urlKey ?? undefined,

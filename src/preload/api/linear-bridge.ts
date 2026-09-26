@@ -1,8 +1,12 @@
 import { ipcRenderer } from 'electron'
 import type { LinearProjectDetail } from '../../shared/linear/project-types'
 import type { PreloadApi } from '../api-types'
+import type { LinearAttentionRequest } from '../../shared/linear/attention-types'
 
 export const linearApi = {
+  personalInbox: (args: LinearAttentionRequest) => ipcRenderer.invoke('linear:personalInbox', args),
+  triagePage: (args: LinearAttentionRequest & { teamId: string }) =>
+    ipcRenderer.invoke('linear:triagePage', args),
   connect: (args: { apiKey: string }) => ipcRenderer.invoke('linear:connect', args),
 
   disconnect: (args?: { workspaceId?: string }): Promise<void> =>

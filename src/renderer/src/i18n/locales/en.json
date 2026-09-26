@@ -18423,5 +18423,40 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "linear": {
+    "attention": {
+      "back": "Back to issues",
+      "show": "Inbox and Triage",
+      "readOnly": "Read-only. Manage notifications and triage decisions in Linear.",
+      "refresh": "Refresh",
+      "loading": "Loading from Linear…",
+      "empty": "No items in this list.",
+      "read": "Read",
+      "unread": "Unread",
+      "snoozed": "Snoozed until {{date}}",
+      "open": "Open in Linear",
+      "more": "Load more",
+      "limit": "Showing up to 500 items. Continue in Linear for older items.",
+      "remote": "This view requires a Linear connection on this desktop. Switch Tasks to a local source; remote credentials stay on their host.",
+      "workspace": "Select one connected Linear workspace above.",
+      "reconnect": "Reconnect Linear in this Orca profile to confirm your personal Inbox identity.",
+      "team": "Select one team above to read its Triage queue.",
+      "label": "Linear attention",
+      "inbox": "Personal Inbox",
+      "triage": "Team Triage",
+      "connect": "Connect Linear",
+      "kind": {
+        "issue": "Issue",
+        "project": "Project",
+        "document": "Document",
+        "initiative": "Initiative",
+        "review": "Code review",
+        "customer": "Customer",
+        "notification": "Notification"
+      },
+      "openIssue": "Open issue",
+      "executionUnavailable": "Execution association is not available in this view."
+    }
   }
 }
