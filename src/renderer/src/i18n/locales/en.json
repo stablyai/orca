@@ -18146,7 +18146,8 @@
         "empty": "No work from other computers yet.",
         "unreachable": "{{hostName}} (unreachable)",
         "cancel": "Cancel",
-        "recover": "Recover"
+        "recover": "Recover",
+        "refused": "{{count}} sessions were left on the other computer: {{reasons}}"
       },
       "row": {
         "ageUnknown": "unknown time",
@@ -18157,7 +18158,8 @@
         "collision": "Already running on this computer",
         "resumeAge": "Resume · last used {{age}}",
         "dormantAge": "Restore without starting · last used {{age}}",
-        "collisionTooltip": "This session is live here; resuming it again would fork the conversation."
+        "collisionTooltip": "This session is live here; resuming it again would fork the conversation.",
+        "codeDeferred": "Code capture deferred · code from {{codeAge}}"
       },
       "status": {
         "countOne": "1 recoverable workspace",
@@ -18193,6 +18195,12 @@
       },
       "web": {
         "unsupported": "Cross-machine recovery runs in the desktop app only."
+      },
+      "divergence": {
+        "message": "This computer has a newer local copy of session {{sessionId}}. Choose how to recover it.",
+        "keepLocal": "Keep local",
+        "replace": "Replace local",
+        "fork": "Fork as new session"
       }
     }
   },

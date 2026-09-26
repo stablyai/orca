@@ -2,13 +2,13 @@ import type { AppState } from '../types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import {
   getAgentResumeArgv,
+  isDormantRecoveryRecord,
   isResumableTuiAgent,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
-import { isCrossMachineRecoveryRecord } from '../../../../shared/cross-machine-recovery-session-ops'
 
 export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
   return {
@@ -99,7 +99,7 @@ export function isDurableSleepingCapture(record: SleepingAgentSessionRecord): bo
   return (
     record.origin === 'worktree-sleep' ||
     record.origin === 'quit' ||
-    isCrossMachineRecoveryRecord(record)
+    isDormantRecoveryRecord(record)
   )
 }
 

@@ -11,6 +11,10 @@ import type {
   RecoveryLaunchPreferences,
   RecoveryProviderSession
 } from '../../../shared/cross-machine-recovery-descriptor'
+import {
+  recoveryBindingKeyOf,
+  recoveryBindingKeyString
+} from '../../../shared/cross-machine-recovery-binding-key'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 
 export type StructuredRecoveryRecord = { record: AgentSessionRecord; tabId: string }
@@ -159,7 +163,7 @@ function prefers(candidate: RecoveryAgentBinding, current: RecoveryAgentBinding)
   return rank !== 0 ? rank > 0 : candidate.updatedAt > current.updatedAt
 }
 
-/** Live, dormant and structured bindings for one worktree, one per provider session; live wins. */
+/** Live, dormant and structured bindings for one worktree, one per binding key; live wins. */
 export function collectRecoveryBindings(sources: RecoveryBindingSources): RecoveryAgentBinding[] {
   const localRows = sources.liveStatuses.filter(
     (row) => row.worktreeId === sources.worktreeId && row.connectionId === null
@@ -178,15 +182,16 @@ export function collectRecoveryBindings(sources: RecoveryBindingSources): Recove
       structuredBinding(record, structuredLiveRows, sources.now)
     )
   ]
-  const byProviderSession = new Map<string, RecoveryAgentBinding>()
+  const byBindingKey = new Map<string, RecoveryAgentBinding>()
   for (const binding of candidates) {
     if (!binding) {
       continue
     }
-    const current = byProviderSession.get(binding.providerSession.id)
+    const key = recoveryBindingKeyString(recoveryBindingKeyOf(binding))
+    const current = byBindingKey.get(key)
     if (!current || prefers(binding, current)) {
-      byProviderSession.set(binding.providerSession.id, binding)
+      byBindingKey.set(key, binding)
     }
   }
-  return [...byProviderSession.values()]
+  return [...byBindingKey.values()]
 }

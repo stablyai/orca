@@ -5,6 +5,11 @@ import type {
   RuntimeEnsureAgentSessionResult
 } from '../../../shared/agent-session-host-authority'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
+import { agentProviderSessionIdentity } from '../../../shared/agent-session-resume'
+import {
+  recoveryBindingKeyString,
+  type RecoveryBindingKey
+} from '../../../shared/cross-machine-recovery-binding-key'
 import type { RecoveryProvenance } from '../../../shared/cross-machine-recovery-descriptor'
 import {
   applyCrossMachineRecoveryOp,
@@ -40,7 +45,8 @@ export type CrossMachineRecoveryHost = {
   ensureAgentSession(
     request: RuntimeEnsureAgentSessionRequest
   ): Promise<RuntimeEnsureAgentSessionResult>
-  isProviderSessionLive(providerSessionId: string): boolean
+  /** Only local execution counts: an SSH pane showing the session runs it on another machine. */
+  isProviderSessionLive(binding: RecoveryBindingKey): boolean
   activateWorktree(worktreeId: string): Promise<void>
 }
 
@@ -91,7 +97,10 @@ async function applyThroughRuntimeWriter(
   store: RuntimeStore,
   op: CrossMachineRecoveryApplyOp
 ): Promise<CrossMachineRecoveryApplyOutcome> {
-  const { getWorkspaceSession, setWorkspaceSession, runDurableMutation } = store
+  // Why bind: these are Store methods; the durable writer reads its own private fields.
+  const getWorkspaceSession = store.getWorkspaceSession?.bind(store)
+  const setWorkspaceSession = store.setWorkspaceSession?.bind(store)
+  const runDurableMutation = store.runDurableMutation?.bind(store)
   if (!getWorkspaceSession || !setWorkspaceSession || !runDurableMutation) {
     throw new Error('workspace_session_unavailable')
   }
@@ -151,7 +160,17 @@ export function createCrossMachineRecoveryHost(
         ? await applyThroughRenderer(win, op)
         : await applyThroughRuntimeWriter(requireStore(), op)
     },
-    isProviderSessionLive: (providerSessionId) =>
-      deps.getAgentStatusSnapshot().some((row) => row.providerSession?.id === providerSessionId)
+    isProviderSessionLive: (binding) => {
+      const wanted = recoveryBindingKeyString(binding)
+      return deps
+        .getAgentStatusSnapshot()
+        .some(
+          (row) =>
+            row.connectionId === null &&
+            row.agentType === binding.agent &&
+            row.providerSession !== undefined &&
+            agentProviderSessionIdentity(binding.agent, row.providerSession) === wanted
+        )
+    }
   }
 }

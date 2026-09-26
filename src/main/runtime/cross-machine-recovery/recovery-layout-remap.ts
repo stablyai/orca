@@ -122,8 +122,11 @@ export function remapRecoveryLayout(
   for (const source of layout.terminalTabs) {
     const id = ctx.mintId()
     idMap.tabs[source.id] = id
-    const { startupCwd: _sourceCwd, ...rest } = source
+    // Why: a dormant binding launches only through Resume; a kept launchAgent would let tab
+    // activation (desktop or mobile) start a fresh agent without the recovered session.
+    const { startupCwd: _sourceCwd, launchAgent: _launchAgent, ...rest } = source
     void _sourceCwd
+    void _launchAgent
     const relativeCwd = layout.startupCwdRelative[source.id]
     const startupCwd =
       relativeCwd === undefined

@@ -64,7 +64,7 @@ function publishParams(
     clientRevision: 1,
     workspaces: [
       {
-        workspace: { kind: 'worktree', worktreeId: 'repo-1::/work/repo' },
+        workspace: { kind: 'worktree', worktreeId: 'repo-1::/work/repo', instanceId: 'inst-1' },
         view: {
           tabs: [],
           groups: [],
@@ -111,10 +111,7 @@ describe('crossMachineRecovery local-only gate', () => {
       'crossMachineRecovery.import',
       { descriptor: {}, checkoutPath: '/work/repo', checkpointId: 'checkpoint-1' }
     ],
-    [
-      'crossMachineRecovery.resume',
-      { worktree: 'id:repo-1::/work/repo', providerSessionId: 'sess-1' }
-    ]
+    ['crossMachineRecovery.resume', { worktree: 'id:repo-1::/work/repo', binding: 'sess-1' }]
   ]
   const remoteCallers: Omit<RpcContext, 'runtime'>[] = [
     { clientKind: 'mobile' },
@@ -177,7 +174,7 @@ describe('crossMachineRecovery.presentation.publish', () => {
 
     expect(spoof).toEqual({ ok: true, acknowledgedRevision: 1, hostReceivedAt: expect.any(Number) })
     const { views } = await getCrossMachineRecoveryPresentationStore().listForWorkspace(
-      { kind: 'worktree', worktreeId: 'repo-1::/work/repo', instanceId: null },
+      { kind: 'worktree', worktreeId: 'repo-1::/work/repo', instanceId: 'inst-1' },
       Date.now()
     )
     expect(

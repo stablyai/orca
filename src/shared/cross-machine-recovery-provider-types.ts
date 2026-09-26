@@ -29,6 +29,8 @@ export const CC_SYNC_PAUSE_REASONS = [
 export const CC_SYNC_ERROR_CODES = [
   'not-ready',
   'live-local-collision',
+  'divergent-local-copy',
+  'incompatible',
   'orca-not-local',
   'orca-unavailable',
   'checkout-conflict',
@@ -125,7 +127,8 @@ const ItemSchema = z.object({
     missing: z.array(z.string()),
     transcript: lenientEnum(['complete', 'partial', 'missing']),
     code: lenientEnum(['complete', 'deferred', 'missing', 'none']),
-    layout: lenientEnum(['client-view', 'host-only', 'none'])
+    layout: lenientEnum(['client-view', 'host-only', 'none']),
+    code_captured_at: Timestamp.nullable().optional()
   }),
   pause: PauseSchema.nullable(),
   local_checkout: z.object({ path: z.string(), reusable: z.boolean() }).nullable()
@@ -164,7 +167,8 @@ const PickupSchema = z.object({
   sessions: z.array(
     z.object({
       session_id: z.string(),
-      status: lenientEnum(['resumed', 'dormant', 'restored'])
+      status: lenientEnum(['resumed', 'dormant', 'restored', 'refused']),
+      reason: z.string().optional()
     })
   ),
   orca: z
@@ -177,10 +181,21 @@ const PickupSchema = z.object({
     .nullable()
 })
 
+const DivergenceDetailsSchema = z.object({
+  session_id: z.string(),
+  local_last_activity_at: Timestamp.nullable(),
+  picked_captured_at: Timestamp
+})
+
 const FailureSchema = z.object({
   version: z.literal(1),
   ok: z.literal(false),
-  error: z.object({ code: lenientEnum(CC_SYNC_ERROR_CODES), message: z.string() })
+  error: z.object({
+    code: lenientEnum(CC_SYNC_ERROR_CODES),
+    message: z.string(),
+    // Why catch: only divergent-local-copy defines details; another shape must not void the failure.
+    details: DivergenceDetailsSchema.optional().catch(undefined)
+  })
 })
 
 const ProgressSchema = z.object({

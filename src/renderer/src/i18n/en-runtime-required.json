@@ -2653,6 +2653,13 @@
     }
   },
   "components": {
+    "cross-machine-recovery": {
+      "divergence": {
+        "fork": "Fork as new session",
+        "keepLocal": "Keep local",
+        "replace": "Replace local"
+      }
+    },
     "native-chat": {
       "ask": {
         "asked": "Asked:",

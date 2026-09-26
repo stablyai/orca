@@ -18,7 +18,10 @@ import {
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { translate } from '@/i18n/i18n'
+import { toast } from 'sonner'
+import type { CrossMachineRecoveryDivergence } from '../../../../shared/cross-machine-recovery-provider-ipc'
 import type { CcSyncProgress } from '../../../../shared/cross-machine-recovery-provider-types'
+import { CrossMachineRecoveryDivergencePrompt } from './CrossMachineRecoveryDivergencePrompt'
 import {
   consumeCrossMachineRecoveryDialogRequest,
   getCrossMachineRecoveryDialogRequest,
@@ -53,6 +56,7 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
   const [pickup, setPickup] = useState<RecoveryPickupHandle | null>(null)
   const [progress, setProgress] = useState<CcSyncProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [divergence, setDivergence] = useState<{ sessionId: string | null } | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -96,36 +100,58 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
     setSelector(null)
     setOverrides(new Map())
     setError(null)
+    setDivergence(null)
   }, [])
 
   const toggleResume = useCallback((sessionId: string, checked: boolean) => {
     setOverrides((current) => new Map(current).set(sessionId, checked))
   }, [])
 
-  const recover = useCallback(async () => {
-    if (!selected) {
-      return
-    }
-    setError(null)
-    const handle = startRecoveryPickup({
-      selector: selected.selector,
-      resume,
-      onProgress: setProgress
-    })
-    setPickup(handle)
-    const result = await handle.result
-    setPickup(null)
-    setProgress(null)
-    if (!result.ok) {
-      setError(providerErrorMessage(result.error))
-      return
-    }
-    if (result.value.orca) {
-      await revealRecoveredWorktree(result.value.orca.worktree_id)
-    }
-    close()
-    void refreshCrossMachineRecovery()
-  }, [selected, resume, close])
+  const recover = useCallback(
+    async (onDivergence?: CrossMachineRecoveryDivergence) => {
+      if (!selected) {
+        return
+      }
+      setError(null)
+      setDivergence(null)
+      const handle = startRecoveryPickup({
+        selector: selected.selector,
+        resume,
+        ...(onDivergence ? { onDivergence } : {}),
+        onProgress: setProgress
+      })
+      setPickup(handle)
+      const result = await handle.result
+      setPickup(null)
+      setProgress(null)
+      if (!result.ok) {
+        setError(providerErrorMessage(result.error))
+        if (result.error.code === 'divergent-local-copy') {
+          setDivergence({ sessionId: result.error.details?.session_id ?? null })
+        }
+        return
+      }
+      const refused = result.value.sessions.filter((session) => session.status === 'refused')
+      if (refused.length > 0) {
+        toast.warning(
+          translate(
+            'components.cross-machine-recovery.dialog.refused',
+            '{{count}} sessions were left on the other computer: {{reasons}}',
+            {
+              count: refused.length,
+              reasons: refused.map((s) => `${s.session_id} (${s.reason ?? 'refused'})`).join(', ')
+            }
+          )
+        )
+      }
+      if (result.value.orca) {
+        await revealRecoveredWorktree(result.value.orca.worktree_id)
+      }
+      close()
+      void refreshCrossMachineRecovery()
+    },
+    [selected, resume, close]
+  )
 
   return (
     <Dialog
@@ -227,6 +253,13 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
               ))}
             </ScrollArea>
           </div>
+        ) : null}
+        {divergence ? (
+          <CrossMachineRecoveryDivergencePrompt
+            sessionId={divergence.sessionId}
+            disabled={pickup !== null}
+            onChoose={(choice) => void recover(choice)}
+          />
         ) : null}
         {error || progress ? (
           <p className="text-xs text-muted-foreground" role={error ? 'alert' : 'status'}>

@@ -1,25 +1,21 @@
 import { ipcMain } from 'electron'
+import { z } from 'zod'
 import type { RecoveryResumeResult } from '../../shared/cross-machine-recovery-descriptor'
 import {
   CROSS_MACHINE_RECOVERY_RESUME_LOCAL_CHANNEL,
   type CrossMachineRecoveryResumeLocalArgs
 } from '../../shared/cross-machine-recovery-session-ops'
+import { RecoveryBindingKeySchema } from '../../shared/rpc-contract/cross-machine-recovery-params'
 import { resumeRecoveryBinding } from '../runtime/cross-machine-recovery/recovery-resume'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isTrustedUIRenderer } from './ui'
 
-function isResumeLocalArgs(value: unknown): value is CrossMachineRecoveryResumeLocalArgs {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'worktreeId' in value &&
-    typeof value.worktreeId === 'string' &&
-    value.worktreeId.length > 0 &&
-    'providerSessionId' in value &&
-    typeof value.providerSessionId === 'string' &&
-    value.providerSessionId.length > 0
-  )
-}
+const ResumeLocalArgs: z.ZodType<CrossMachineRecoveryResumeLocalArgs> = z
+  .object({
+    worktreeId: z.string().min(1),
+    binding: RecoveryBindingKeySchema
+  })
+  .strict()
 
 /** Desktop-only channel for the pane's Resume action; it always targets the local runtime. */
 export function registerCrossMachineRecoveryLocalHandlers(runtime: OrcaRuntimeService): void {
@@ -30,12 +26,13 @@ export function registerCrossMachineRecoveryLocalHandlers(runtime: OrcaRuntimeSe
       if (!isTrustedUIRenderer(event.sender)) {
         throw new Error('recovery_local_only')
       }
-      if (!isResumeLocalArgs(args)) {
+      const parsed = ResumeLocalArgs.safeParse(args)
+      if (!parsed.success) {
         throw new Error('invalid_arguments')
       }
       return await resumeRecoveryBinding(runtime, {
-        worktree: `id:${args.worktreeId}`,
-        providerSessionId: args.providerSessionId,
+        worktree: `id:${parsed.data.worktreeId}`,
+        binding: parsed.data.binding,
         presentation: 'focused'
       })
     }

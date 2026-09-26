@@ -3,6 +3,7 @@ import type {
   RecoveryPresentationWorkspaceRef,
   RecoveryWorkspaceActivity
 } from '../../../shared/cross-machine-recovery-presentation-types'
+import { recoveryWorkspaceInstanceId } from '../../../shared/cross-machine-recovery-presentation-types'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import {
   newestStamp,
@@ -47,7 +48,10 @@ export async function readRecoveryActivity(
         : {
             kind: 'worktree',
             worktreeId,
-            instanceId: store.getWorktreeMeta(worktreeId)?.instanceId ?? null
+            instanceId: recoveryWorkspaceInstanceId({
+              id: worktreeId,
+              instanceId: store.getWorktreeMeta(worktreeId)?.instanceId
+            })
           }
     if (
       !parsed ||

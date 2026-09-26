@@ -6,6 +6,7 @@ import type {
   RecoveryTerminalLayout
 } from '../../../shared/cross-machine-recovery-descriptor'
 import {
+  recoveryWorkspaceInstanceId,
   MAX_RECOVERY_PRESENTATION_PUBLISH_BYTES,
   MAX_RECOVERY_PRESENTATION_WORKSPACES,
   MAX_RECOVERY_PRESENTATION_WORKSPACE_VIEW_BYTES,
@@ -82,10 +83,14 @@ function workspaceRef(
     return { kind: 'folder', folderWorkspaceId: scope.folderWorkspaceId }
   }
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : key
-  const instanceId = catalog.instanceIdFor(worktreeId)
-  return instanceId
-    ? { kind: 'worktree', worktreeId, instanceId }
-    : { kind: 'worktree', worktreeId }
+  return {
+    kind: 'worktree',
+    worktreeId,
+    instanceId: recoveryWorkspaceInstanceId({
+      id: worktreeId,
+      instanceId: catalog.instanceIdFor(worktreeId) ?? undefined
+    })
+  }
 }
 
 function presentationSessionKeys(session: WorkspaceSessionState): string[] {

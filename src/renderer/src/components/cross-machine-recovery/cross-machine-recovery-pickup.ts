@@ -5,7 +5,10 @@ import type {
   CcSyncPickup,
   CcSyncProgress
 } from '../../../../shared/cross-machine-recovery-provider-types'
-import type { CrossMachineRecoveryProviderResult } from '../../../../shared/cross-machine-recovery-provider-ipc'
+import type {
+  CrossMachineRecoveryDivergence,
+  CrossMachineRecoveryProviderResult
+} from '../../../../shared/cross-machine-recovery-provider-ipc'
 
 export type RecoveryPickupHandle = {
   cancel: () => Promise<void>
@@ -17,6 +20,7 @@ export type RecoveryPickupHandle = {
 export function startRecoveryPickup(args: {
   selector: string
   resume: string[]
+  onDivergence?: CrossMachineRecoveryDivergence
   onProgress: (progress: CcSyncProgress) => void
 }): RecoveryPickupHandle {
   const api = window.api.crossMachineRecovery
@@ -27,7 +31,12 @@ export function startRecoveryPickup(args: {
     }
   })
   const result = api
-    .pickup({ operationId, selector: args.selector, resume: args.resume })
+    .pickup({
+      operationId,
+      selector: args.selector,
+      resume: args.resume,
+      ...(args.onDivergence ? { onDivergence: args.onDivergence } : {})
+    })
     .finally(unsubscribe)
   return { cancel: () => api.cancel(operationId), result }
 }

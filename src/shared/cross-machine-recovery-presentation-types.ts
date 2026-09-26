@@ -12,8 +12,13 @@ export function pairedDevicePresentationClientKey(pairedDeviceId: string): strin
   return `device:${pairedDeviceId}`
 }
 
+/** Why the id fallback: legacy rows predate instance ids, and the worktree id is stable per path. */
+export function recoveryWorkspaceInstanceId(worktree: { id: string; instanceId?: string }): string {
+  return worktree.instanceId ?? worktree.id
+}
+
 export type RecoveryPresentationWorkspaceRef =
-  | { kind: 'worktree'; worktreeId: string; instanceId?: string }
+  | { kind: 'worktree'; worktreeId: string; instanceId: string }
   | { kind: 'folder'; folderWorkspaceId: string }
 
 /** Ages relative to the publish, so the host can stamp absolute times on its own clock. */

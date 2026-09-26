@@ -4,7 +4,10 @@ import {
 } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { useAppStore } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  isDormantRecoveryRecord,
+  type SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import {
@@ -12,7 +15,6 @@ import {
   isPassiveCompletedHibernationEvidence,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
-import { isCrossMachineRecoveryRecord } from '../../../shared/cross-machine-recovery-session-ops'
 
 type BackgroundSleepingAgentWakeDispatcherOptions = {
   isWorkspaceSessionReady?: () => boolean
@@ -169,7 +171,7 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   const worktreeRecords = Object.values(
     useAppStore.getState().sleepingAgentSessionsByPaneKey
     // Why: imported cross-machine sessions launch only through the explicit Resume affordance.
-  ).filter((record) => record.worktreeId === worktreeId && !isCrossMachineRecoveryRecord(record))
+  ).filter((record) => record.worktreeId === worktreeId && !isDormantRecoveryRecord(record))
   // Why: nothing is slept here, so there is no wake work. Skipping is what keeps
   // a phone browsing many worktrees from permanently background-mounting each one
   // (and reattaching its PTYs) on the desktop host it is paired to.

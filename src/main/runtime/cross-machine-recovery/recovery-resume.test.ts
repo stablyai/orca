@@ -20,14 +20,14 @@ describe('resumeRecoveryBindingWithHost', () => {
     await expect(
       resumeRecoveryBindingWithHost(f.host, {
         worktree: `id:${f.worktreeId}`,
-        providerSessionId: SESSION_ID
+        binding: SESSION_ID
       })
     ).rejects.toThrow('spawn_failed')
     expect(Object.values(f.getSession().sleepingAgentSessionsByPaneKey ?? {})).toHaveLength(1)
     await expect(
       resumeRecoveryBindingWithHost(f.host, {
         worktree: `id:${f.worktreeId}`,
-        providerSessionId: 'missing'
+        binding: 'missing'
       })
     ).rejects.toThrow('recovery_binding_not_found')
   })
@@ -72,7 +72,7 @@ describe('headless runtime writer', () => {
     const claimed = await host.applyOp({
       kind: 'claim-record',
       worktreeId: 'w',
-      providerSessionId: SESSION_ID
+      binding: { agent: record.agent, ...record.providerSession }
     })
     expect(claimed).toEqual({ ok: true, claimed: record })
     expect(stored.sleepingAgentSessionsByPaneKey).toEqual({})

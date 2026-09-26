@@ -134,6 +134,7 @@ export function descriptor(): OrcaRecoveryDescriptorV1 {
     },
     layout,
     presentation: { views: [], preferredClientKey: null, freshness: 'host-only' },
+    omittedBindings: [],
     bindings: [binding()]
   }
 }

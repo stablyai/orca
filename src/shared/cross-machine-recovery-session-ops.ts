@@ -1,4 +1,9 @@
-import type { SleepingAgentSessionRecord } from './agent-session-resume'
+import { isDormantRecoveryRecord, type SleepingAgentSessionRecord } from './agent-session-resume'
+import {
+  recoveryBindingKeyOf,
+  recoveryBindingKeyString,
+  type RecoveryBindingKey
+} from './cross-machine-recovery-binding-key'
 import type { BrowserPage, BrowserWorkspace } from './browser-workspace-types'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
@@ -8,7 +13,10 @@ export const CROSS_MACHINE_RECOVERY_APPLY_CHANNEL = 'crossMachineRecovery:apply'
 export const CROSS_MACHINE_RECOVERY_APPLY_REPLY_CHANNEL = 'crossMachineRecovery:applyReply'
 export const CROSS_MACHINE_RECOVERY_RESUME_LOCAL_CHANNEL = 'crossMachineRecovery:resumeLocal'
 
-export type CrossMachineRecoveryResumeLocalArgs = { worktreeId: string; providerSessionId: string }
+export type CrossMachineRecoveryResumeLocalArgs = {
+  worktreeId: string
+  binding: RecoveryBindingKey
+}
 
 /** One recovered workspace's session slices, already re-keyed to local ids and paths. */
 export type RecoveryWorkspaceFragment = {
@@ -31,7 +39,7 @@ export type RecoveryWorkspaceFragment = {
 export type CrossMachineRecoveryApplyOp =
   | { kind: 'import'; fragment: RecoveryWorkspaceFragment; records: SleepingAgentSessionRecord[] }
   | { kind: 'merge-records'; records: SleepingAgentSessionRecord[] }
-  | { kind: 'claim-record'; worktreeId: string; providerSessionId: string }
+  | { kind: 'claim-record'; worktreeId: string; binding: RecoveryBindingKey }
   | { kind: 'restore-record'; record: SleepingAgentSessionRecord }
 
 export type CrossMachineRecoveryApplyOutcome =
@@ -47,10 +55,6 @@ export type CrossMachineRecoveryApplyReply =
   | { requestId: string; outcome: CrossMachineRecoveryApplyOutcome }
   | { requestId: string; error: string }
 
-export function isCrossMachineRecoveryRecord(record: Pick<SleepingAgentSessionRecord, 'origin'>) {
-  return record.origin === 'recovery'
-}
-
 export function worktreeHasSessionTabs(session: WorkspaceSessionState, worktreeId: string) {
   return (
     (session.tabsByWorktree[worktreeId]?.length ?? 0) > 0 ||
@@ -60,21 +64,27 @@ export function worktreeHasSessionTabs(session: WorkspaceSessionState, worktreeI
   )
 }
 
+/** Dormant imported bindings of one worktree, awaiting an explicit Resume. */
+export function listRecoveryRecords(
+  records: Readonly<Record<string, SleepingAgentSessionRecord>> | undefined,
+  worktreeId: string
+): SleepingAgentSessionRecord[] {
+  return Object.values(records ?? {}).filter(
+    (record) => isDormantRecoveryRecord(record) && record.worktreeId === worktreeId
+  )
+}
+
 export function findRecoveryRecord(
   records: Readonly<Record<string, SleepingAgentSessionRecord>> | undefined,
   worktreeId: string,
-  providerSessionId: string
+  binding: RecoveryBindingKey
 ): SleepingAgentSessionRecord | null {
-  for (const record of Object.values(records ?? {})) {
-    if (
-      isCrossMachineRecoveryRecord(record) &&
-      record.worktreeId === worktreeId &&
-      record.providerSession.id === providerSessionId
-    ) {
-      return record
-    }
-  }
-  return null
+  const wanted = recoveryBindingKeyString(binding)
+  return (
+    listRecoveryRecords(records, worktreeId).find(
+      (record) => recoveryBindingKeyString(recoveryBindingKeyOf(record)) === wanted
+    ) ?? null
+  )
 }
 
 function withRecords(
@@ -153,14 +163,19 @@ export function applyCrossMachineRecoveryOp(
       }
     case 'merge-records': {
       const existing = session.sleepingAgentSessionsByPaneKey ?? {}
-      const fresh = op.records.filter((record) => existing[record.paneKey] === undefined)
+      // Why: concurrent replays mint different pane keys for one session; identity is the binding key.
+      const fresh = op.records.filter(
+        (record) =>
+          existing[record.paneKey] === undefined &&
+          !findRecoveryRecord(existing, record.worktreeId, recoveryBindingKeyOf(record))
+      )
       return { session: withRecords(session, fresh), outcome: { ok: true, claimed: null } }
     }
     case 'claim-record': {
       const claimed = findRecoveryRecord(
         session.sleepingAgentSessionsByPaneKey,
         op.worktreeId,
-        op.providerSessionId
+        op.binding
       )
       if (!claimed) {
         return { session, outcome: { ok: true, claimed: null } }

@@ -140,7 +140,11 @@ describe('readRecoveryActivity', () => {
   })
 
   it('keeps null stamps when no client saw a human', async () => {
-    const ref = { kind: 'worktree', worktreeId: 'repo::/src/repo' } as const
+    const ref = {
+      kind: 'worktree',
+      worktreeId: 'repo::/src/repo',
+      instanceId: 'repo::/src/repo'
+    } as const
     await publish('local-renderer', NOW, [workspace(ref, null, null)])
 
     expect(await readRecoveryActivity(runtimeWith(localRepos, {}), NOW)).toEqual({
@@ -174,17 +178,45 @@ describe('readRecoveryActivity', () => {
 
   it('drops SSH, unregistered, superseded-instance and expired workspaces', async () => {
     await publish('device:old', NOW - RECOVERY_PRESENTATION_RETENTION_MS - 1, [
-      workspace({ kind: 'worktree', worktreeId: 'repo::/src/repo/expired' }, 0, 0)
+      workspace(
+        {
+          kind: 'worktree',
+          worktreeId: 'repo::/src/repo/expired',
+          instanceId: 'repo::/src/repo/expired'
+        },
+        0,
+        0
+      )
     ])
     await publish('local-renderer', NOW, [
-      workspace({ kind: 'worktree', worktreeId: 'ssh-repo::/home/me/repo' }, 0, 0),
-      workspace({ kind: 'worktree', worktreeId: 'gone-repo::/src/gone' }, 0, 0),
+      workspace(
+        {
+          kind: 'worktree',
+          worktreeId: 'ssh-repo::/home/me/repo',
+          instanceId: 'ssh-repo::/home/me/repo'
+        },
+        0,
+        0
+      ),
+      workspace(
+        {
+          kind: 'worktree',
+          worktreeId: 'gone-repo::/src/gone',
+          instanceId: 'gone-repo::/src/gone'
+        },
+        0,
+        0
+      ),
       workspace(
         { kind: 'worktree', worktreeId: 'repo::/src/repo/reused', instanceId: 'old-instance' },
         0,
         0
       ),
-      workspace({ kind: 'worktree', worktreeId: 'not-a-worktree-id' }, 0, 0)
+      workspace(
+        { kind: 'worktree', worktreeId: 'not-a-worktree-id', instanceId: 'not-a-worktree-id' },
+        0,
+        0
+      )
     ])
 
     const result = await readRecoveryActivity(

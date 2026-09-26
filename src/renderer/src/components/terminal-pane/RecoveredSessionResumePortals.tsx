@@ -1,27 +1,31 @@
 import { useState } from 'react'
+import {
+  recoveryBindingKeyOf,
+  type RecoveryBindingKey
+} from '../../../../shared/cross-machine-recovery-binding-key'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
-import { isCrossMachineRecoveryRecord } from '../../../../shared/cross-machine-recovery-session-ops'
+import { isDormantRecoveryRecord } from '../../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 type RecoveredSessionResumeButtonProps = {
   worktreeId: string
-  providerSessionId: string
+  binding: RecoveryBindingKey
 }
 
 export function RecoveredSessionResumeButton({
   worktreeId,
-  providerSessionId
+  binding
 }: RecoveredSessionResumeButtonProps): React.JSX.Element {
   const [pending, setPending] = useState(false)
   const resume = (): void => {
     setPending(true)
     window.api.crossMachineRecovery
-      .resumeLocal({ worktreeId, providerSessionId })
+      .resumeLocal({ worktreeId, binding })
       .catch(() => {
         toast.error(
           translate('crossMachineRecovery.resumeFailed', "Couldn't resume the recovered session")
@@ -60,13 +64,13 @@ export function RecoveredSessionResumePortals({
     <>
       {panes.map((pane) => {
         const record = records[makePaneKey(tabId, pane.leafId)]
-        if (!record || !isCrossMachineRecoveryRecord(record)) {
+        if (!record || !isDormantRecoveryRecord(record)) {
           return null
         }
         return createPortal(
           <RecoveredSessionResumeButton
             worktreeId={worktreeId}
-            providerSessionId={record.providerSession.id}
+            binding={recoveryBindingKeyOf(record)}
           />,
           pane.container,
           `recovered-session-resume-${pane.id}`

@@ -192,6 +192,25 @@ describe('CrossMachineRecoveryPresentationStore', () => {
     ).toEqual([])
   })
 
+  it('drops a stored instance-less worktree row instead of matching a later incarnation', async () => {
+    await store.record('device:a', 'paired-device', publish(1), 1_000)
+    const filePath = join(directory, CROSS_MACHINE_RECOVERY_PRESENTATION_FILE)
+    const stored = JSON.parse(await readFile(filePath, 'utf8'))
+    const [kept] = stored.clients[0].workspaces
+    stored.clients[0].workspaces = [
+      { ...kept, workspace: { kind: 'worktree', worktreeId: 'repo::/src/wt' } },
+      kept
+    ]
+    await writeFile(filePath, JSON.stringify(stored))
+
+    expect((await store.listForWorkspace({ ...KEY, instanceId: 'inst-2' }, 2_000)).views).toEqual(
+      []
+    )
+    expect((await store.listForWorkspace(KEY, 2_000)).views).toEqual([
+      expect.objectContaining({ clientKey: 'device:a', clientInstanceId: 'client-1' })
+    ])
+  })
+
   it('treats a corrupt store as empty and rewrites it on the next publish', async () => {
     const filePath = join(directory, CROSS_MACHINE_RECOVERY_PRESENTATION_FILE)
     await writeFile(filePath, '{not json')

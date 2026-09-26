@@ -5,6 +5,7 @@ import { parseLegacyNumericPaneKey } from '../../../../../shared/stable-pane-id'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import {
   agentProviderSessionsEqual,
+  isDormantRecoveryRecord,
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session-resume'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
@@ -18,7 +19,6 @@ import {
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 import { installCommandInferredPaneAgent } from './command-inferred-pane-agent'
-import { isCrossMachineRecoveryRecord } from '../../../../../shared/cross-machine-recovery-session-ops'
 
 export function installSleepingRecordAccess(session: ConnectPanePtySession): void {
   session.getSleepingRecordForPane = (
@@ -27,7 +27,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     const stableRecord = state.sleepingAgentSessionsByPaneKey[session.cacheKey]
     if (stableRecord) {
       // Why: pane cold restore must not consume an imported session; the pane offers Resume instead.
-      return isCrossMachineRecoveryRecord(stableRecord)
+      return isDormantRecoveryRecord(stableRecord)
         ? null
         : { paneKey: session.cacheKey, record: stableRecord }
     }
@@ -36,7 +36,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
         const legacy = parseLegacyNumericPaneKey(paneKey)
         return (
           legacy?.tabId === session.deps.tabId &&
-          !isCrossMachineRecoveryRecord(record) &&
+          !isDormantRecoveryRecord(record) &&
           record.worktreeId === session.deps.worktreeId &&
           (!record.tabId || record.tabId === session.deps.tabId)
         )
@@ -75,6 +75,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
       if (
         paneKey !== consumed.paneKey &&
+        !isDormantRecoveryRecord(record) &&
         record.worktreeId === consumed.record.worktreeId &&
         record.agent === consumed.record.agent &&
         agentProviderSessionsEqual(

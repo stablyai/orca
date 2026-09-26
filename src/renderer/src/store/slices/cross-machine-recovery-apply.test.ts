@@ -181,7 +181,7 @@ describe('cross-machine recovery renderer apply', () => {
     const claim: CrossMachineRecoveryApplyOp = {
       kind: 'claim-record',
       worktreeId: WT,
-      providerSessionId: 'session-1'
+      binding: { agent: record.agent, ...record.providerSession }
     }
 
     expect(await apply(claim)).toEqual({ requestId: 'r1', outcome: { ok: true, claimed: record } })

@@ -1,6 +1,12 @@
 import { z } from 'zod'
 import { AGENT_STATUS_STATES } from '../agent-status-types'
 import { RESUMABLE_TUI_AGENTS, hasUnsafeProviderSessionIdChars } from '../agent-session-resume'
+import {
+  recoveryBindingKeyOf,
+  recoveryBindingKeyString,
+  type RecoveryBindingKey,
+  type RecoveryOmittedBinding
+} from '../cross-machine-recovery-binding-key'
 import type {
   OrcaRecoveryDescriptorV1,
   RecoveryAgentBinding,
@@ -93,6 +99,21 @@ const RecoveryAgentBindingSchema: z.ZodType<RecoveryAgentBinding> = z
   })
   .strict()
 
+export const RecoveryBindingKeySchema: z.ZodType<RecoveryBindingKey> = z
+  .object({ agent: z.enum(RESUMABLE_TUI_AGENTS), ...ProviderSession.shape })
+  .strict()
+
+const RecoveryBindingSelectorSchema = z.union([ProviderSession.shape.id, RecoveryBindingKeySchema])
+
+const RecoveryOmittedBindingSchema: z.ZodType<RecoveryOmittedBinding> = z
+  .object({
+    agent: z.enum(RESUMABLE_TUI_AGENTS),
+    key: ProviderSession.shape.key,
+    id: ProviderSession.shape.id,
+    reason: z.literal('agent-not-supported-v1')
+  })
+  .strict()
+
 export const RecoveryPresentationFocusSchema: z.ZodType<RecoveryPresentationFocus> = z
   .object({
     isActiveWorkspace: z.boolean(),
@@ -178,11 +199,19 @@ export const OrcaRecoveryDescriptorV1Schema: z.ZodType<OrcaRecoveryDescriptorV1>
         freshness: z.enum(['client-view', 'host-only', 'host-bindings-only'])
       })
       .strict(),
-    bindings: z.array(RecoveryAgentBindingSchema).max(MAX_RECOVERY_BINDINGS)
+    bindings: z
+      .array(RecoveryAgentBindingSchema)
+      .max(MAX_RECOVERY_BINDINGS)
+      .refine(
+        (bindings) =>
+          new Set(
+            bindings.map((binding) => recoveryBindingKeyString(recoveryBindingKeyOf(binding)))
+          ).size === bindings.length,
+        'Duplicate recovery binding key'
+      ),
+    omittedBindings: z.array(RecoveryOmittedBindingSchema).max(MAX_RECOVERY_BINDINGS)
   })
   .strict()
-
-const ProviderSessionId = ProviderSession.shape.id
 
 export const CrossMachineRecoveryDescribeParams = z.object({}).strict().optional().default({})
 
@@ -197,7 +226,11 @@ export const CrossMachineRecoveryImportParams = z
       .array(z.object({ from: PathId, to: PathId }).strict())
       .max(MAX_RECOVERY_PATH_MAPPINGS)
       .optional(),
-    resume: z.array(ProviderSessionId).max(MAX_RECOVERY_BINDINGS).optional(),
+    sessionIdMap: z
+      .array(z.object({ from: ProviderSession.shape.id, to: ProviderSession.shape.id }).strict())
+      .max(MAX_RECOVERY_BINDINGS)
+      .optional(),
+    resume: z.array(RecoveryBindingSelectorSchema).max(MAX_RECOVERY_BINDINGS).optional(),
     preferClientInstanceId: Id.optional(),
     activate: z.boolean().optional(),
     registerRepo: z.boolean().optional(),
@@ -208,7 +241,7 @@ export const CrossMachineRecoveryImportParams = z
 export const CrossMachineRecoveryResumeParams = z
   .object({
     worktree: WorktreeSelector,
-    providerSessionId: ProviderSessionId,
+    binding: RecoveryBindingSelectorSchema,
     presentation: Presentation.optional()
   })
   .strict()
@@ -223,9 +256,7 @@ const MsAge = z.number().finite().nonnegative()
 
 export const RecoveryPresentationWorkspaceRefSchema: z.ZodType<RecoveryPresentationWorkspaceRef> =
   z.discriminatedUnion('kind', [
-    z
-      .object({ kind: z.literal('worktree'), worktreeId: PathId, instanceId: Id.optional() })
-      .strict(),
+    z.object({ kind: z.literal('worktree'), worktreeId: PathId, instanceId: Id }).strict(),
     z.object({ kind: z.literal('folder'), folderWorkspaceId: PathId }).strict()
   ])
 

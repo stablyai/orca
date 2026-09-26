@@ -214,4 +214,53 @@ describe('cc-sync provider parsers', () => {
     expect(parseCcSyncProgressLine('{"phase":"warp"}')).toEqual({ phase: 'unknown' })
     expect(parseCcSyncProgressLine('warning: slow network')).toBeNull()
   })
+
+  it('keeps divergence details and the refused session status', () => {
+    const failure = parseCcSyncPickup({
+      version: 1,
+      ok: false,
+      error: {
+        code: 'divergent-local-copy',
+        message: 'diverged',
+        details: {
+          session_id: 's1',
+          local_last_activity_at: '2026-09-26T10:00:00Z',
+          picked_captured_at: '2026-09-26T09:00:00Z'
+        }
+      }
+    })
+    expect(failure).toEqual({
+      kind: 'failure',
+      error: {
+        code: 'divergent-local-copy',
+        message: 'diverged',
+        details: {
+          session_id: 's1',
+          local_last_activity_at: '2026-09-26T10:00:00Z',
+          picked_captured_at: '2026-09-26T09:00:00Z'
+        }
+      }
+    })
+    const odd = parseCcSyncPickup({
+      version: 1,
+      ok: false,
+      error: { code: 'incompatible', message: 'no --resume', details: { flag: 'resume' } }
+    })
+    expect(odd).toEqual({
+      kind: 'failure',
+      error: { code: 'incompatible', message: 'no --resume', details: undefined }
+    })
+    const ok = parseCcSyncPickup({
+      version: 1,
+      ok: true,
+      checkout: { path: '/c', branch: null, reused: false },
+      sessions: [{ session_id: 's2', status: 'refused', reason: 'live-local-collision' }],
+      orca: null
+    })
+    expect(ok.kind === 'success' && ok.value.sessions[0]).toEqual({
+      session_id: 's2',
+      status: 'refused',
+      reason: 'live-local-collision'
+    })
+  })
 })

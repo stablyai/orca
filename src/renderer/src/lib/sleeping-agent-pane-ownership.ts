@@ -1,5 +1,9 @@
 import type { useAppStore } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  agentProviderSessionIdentity,
+  isDormantRecoveryRecord,
+  type SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -7,15 +11,11 @@ import type {
 } from '../../../shared/terminal-tab-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import { isCrossMachineRecoveryRecord } from '../../../shared/cross-machine-recovery-session-ops'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
-  const base = `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
-  return record.agent === 'pi' || record.agent === 'prime-agent'
-    ? `${base}\0${record.providerSession.transcriptPath ?? ''}`
-    : base
+  return `${record.worktreeId}\0${agentProviderSessionIdentity(record.agent, record.providerSession)}`
 }
 
 // Why quit is excluded: it is an explicit request to keep resumable work. A
@@ -24,7 +24,7 @@ export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): 
 export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {
   return (
     record.origin !== 'quit' &&
-    !isCrossMachineRecoveryRecord(record) &&
+    !isDormantRecoveryRecord(record) &&
     !(record.origin === 'live' && record.interrupted === true) &&
     record.state === 'done'
   )

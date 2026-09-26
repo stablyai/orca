@@ -18,7 +18,7 @@ type Call = { hostId: ExecutionHostId; params: RecoveryPresentationPublishParams
 
 function workspace(worktreeId: string): RecoveryPresentationWorkspace {
   return {
-    workspace: { kind: 'worktree', worktreeId },
+    workspace: { kind: 'worktree', worktreeId, instanceId: 'inst-1' },
     view: {
       tabs: [],
       groups: [],
@@ -175,7 +175,8 @@ describe('createCrossMachineRecoveryPresentationPublisher', () => {
     expect(calls).toHaveLength(2)
     expect(calls[1].params.workspaces[0].workspace).toEqual({
       kind: 'worktree',
-      worktreeId: 'local-v4'
+      worktreeId: 'local-v4',
+      instanceId: expect.any(String)
     })
     expect(calls[1].params.clientRevision).toBe(2)
   })

@@ -72,6 +72,8 @@ export function providerErrorMessage(error: CrossMachineRecoveryProviderError): 
     case 'provider-failed':
     case 'not-ready':
     case 'live-local-collision':
+    case 'divergent-local-copy':
+    case 'incompatible':
     case 'orca-not-local':
     case 'orca-unavailable':
     case 'checkout-conflict':

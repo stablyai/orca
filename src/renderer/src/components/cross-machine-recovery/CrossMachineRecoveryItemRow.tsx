@@ -66,6 +66,25 @@ export function CrossMachineRecoveryItemRow({
           })}{' '}
           · {ageLabel(row.newestHumanActivityAt ?? row.checkpointCapturedAt, now)}
         </span>
+        {row.completeness.code === 'deferred' ? (
+          <span
+            className="block truncate text-xs text-muted-foreground"
+            data-testid="cross-machine-recovery-code-age"
+          >
+            {translate(
+              'components.cross-machine-recovery.row.codeDeferred',
+              'Code capture deferred · code from {{codeAge}}',
+              {
+                codeAge: ageLabel(
+                  row.completeness.code_captured_at
+                    ? Date.parse(row.completeness.code_captured_at)
+                    : null,
+                  now
+                )
+              }
+            )}
+          </span>
+        ) : null}
         {reason ? (
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <AlertCircle className="size-3" />

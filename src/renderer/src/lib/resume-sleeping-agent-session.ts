@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import {
   agentProviderSessionsEqual,
+  isDormantRecoveryRecord,
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
@@ -24,7 +25,6 @@ import { parkUntilHostMirrorHandleLands } from './host-mirror-handle-gap-wait'
 import { sleepingRecordNamesAnotherExecutionHost } from './sleeping-record-execution-host-scope'
 import { resolveWorkspaceTerminalHostAuthority } from './workspace-terminal-host-authority'
 import { parkUntilHostSessionMirrorHydrates } from '@/runtime/host-session-mirror-hydration'
-import { isCrossMachineRecoveryRecord } from '../../../shared/cross-machine-recovery-session-ops'
 
 export type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
 
@@ -236,7 +236,7 @@ export function resumeSleepingAgentSessionsForWorktree(
   }
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
     // Why: activation never auto-launches an imported cross-machine session; Resume is explicit.
-    .filter((record) => record.worktreeId === worktreeId && !isCrossMachineRecoveryRecord(record))
+    .filter((record) => record.worktreeId === worktreeId && !isDormantRecoveryRecord(record))
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
   const validWorktreeRecords = worktreeRecords.filter(
     (record) => !isInvalidWorktreeActivationRecord(record)

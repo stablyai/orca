@@ -1,24 +1,31 @@
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  recoveryBindingKeyOf,
+  selectRecoveryBinding,
+  type RecoveryBindingKey,
+  type RecoveryBindingSelector
+} from '../../../shared/cross-machine-recovery-binding-key'
 import type {
   RecoveryLaunchPreferences,
   RecoveryResumeResult
 } from '../../../shared/cross-machine-recovery-descriptor'
+import { listRecoveryRecords } from '../../../shared/cross-machine-recovery-session-ops'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { CrossMachineRecoveryHost } from './recovery-runtime-host'
 
 export type RecoveryResumeParams = {
   worktree: string
-  providerSessionId: string
+  binding: RecoveryBindingSelector
   presentation?: 'focused' | 'background'
 }
 
 async function claimRecoveryRecord(
   host: CrossMachineRecoveryHost,
   worktreeId: string,
-  providerSessionId: string
+  binding: RecoveryBindingKey
 ): Promise<SleepingAgentSessionRecord> {
-  const outcome = await host.applyOp({ kind: 'claim-record', worktreeId, providerSessionId })
+  const outcome = await host.applyOp({ kind: 'claim-record', worktreeId, binding })
   if (!outcome.ok || !outcome.claimed) {
     throw new Error('recovery_binding_not_found')
   }
@@ -29,15 +36,15 @@ async function claimRecoveryRecord(
 export async function resumeClaimedRecoveryBinding(
   host: CrossMachineRecoveryHost,
   worktreeId: string,
-  providerSessionId: string,
+  binding: RecoveryBindingKey,
   options: {
     presentation?: 'focused' | 'background'
     launchPreferences?: RecoveryLaunchPreferences
   } = {}
 ): Promise<RecoveryResumeResult> {
-  const record = await claimRecoveryRecord(host, worktreeId, providerSessionId)
+  const record = await claimRecoveryRecord(host, worktreeId, binding)
   const restore = (): Promise<unknown> => host.applyOp({ kind: 'restore-record', record })
-  if (host.isProviderSessionLive(providerSessionId)) {
+  if (host.isProviderSessionLive(recoveryBindingKeyOf(record))) {
     await restore()
     throw new Error('recovery_session_live_locally')
   }
@@ -69,9 +76,20 @@ export async function resumeRecoveryBindingWithHost(
   params: RecoveryResumeParams
 ): Promise<RecoveryResumeResult> {
   const worktree = await host.resolveWorktree(params.worktree)
-  return await resumeClaimedRecoveryBinding(host, worktree.id, params.providerSessionId, {
-    presentation: params.presentation
-  })
+  const records = listRecoveryRecords(
+    host.getLocalSession().sleepingAgentSessionsByPaneKey,
+    worktree.id
+  )
+  const selection = selectRecoveryBinding(records, params.binding)
+  if (!selection.ok) {
+    throw new Error(selection.code)
+  }
+  return await resumeClaimedRecoveryBinding(
+    host,
+    worktree.id,
+    recoveryBindingKeyOf(selection.binding),
+    { presentation: params.presentation }
+  )
 }
 
 export async function resumeRecoveryBinding(

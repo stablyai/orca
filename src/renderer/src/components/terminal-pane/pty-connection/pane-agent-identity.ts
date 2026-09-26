@@ -17,6 +17,7 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
+import { isDormantRecoveryRecord } from '../../../../../shared/agent-session-resume'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -172,9 +173,10 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     onConfirmedShellForeground: (reason) => {
       // Why: a confirmed local shell proves any hibernation record for this pane is stale;
       // otherwise the tab resolver can repaint the exited agent from sleeping occupancy.
+      // Imported recovery bindings sit over a plain shell by design; only explicit Resume consumes them.
       const state = useAppStore.getState()
       const sleepingRecord = session.getSleepingRecordForPane(state)
-      if (sleepingRecord) {
+      if (sleepingRecord && !isDormantRecoveryRecord(sleepingRecord.record)) {
         session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
       }
       session.clearStaleAgentTabTitleOnConfirmedShell()

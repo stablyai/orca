@@ -51,7 +51,11 @@ describe('importRecoveryWorkspaceWithHost', () => {
       recovery: { importKey: result.importKey, sourcePaneKey: `${SOURCE_TAB}:${SOURCE_LEAF}` }
     })
     expect(result.bindings).toEqual([
-      expect.objectContaining({ status: 'dormant', providerSessionId: SESSION_ID })
+      expect.objectContaining({
+        status: 'dormant',
+        binding: expect.objectContaining({ agent: 'claude', id: SESSION_ID }),
+        sourceProviderSessionId: SESSION_ID
+      })
     ])
   })
 
@@ -135,5 +139,40 @@ describe('importRecoveryWorkspaceWithHost', () => {
         f.readCommonDir
       )
     ).rejects.toThrow('recovery_destination_not_empty')
+  })
+
+  it('re-keys forked sessions through sessionIdMap and resumes by local id', async () => {
+    const f = fixture()
+    const result = await importRecoveryWorkspaceWithHost(
+      f.host,
+      {
+        descriptor: descriptor(),
+        checkoutPath: f.checkout,
+        checkpointId: 'cp-1',
+        sessionIdMap: [{ from: SESSION_ID, to: 'local-fork' }],
+        dryRun: true
+      },
+      f.readCommonDir
+    )
+    expect(result.bindings).toEqual([
+      expect.objectContaining({
+        binding: expect.objectContaining({ id: 'local-fork' }),
+        sourceProviderSessionId: SESSION_ID
+      })
+    ])
+    await expect(
+      importRecoveryWorkspaceWithHost(
+        f.host,
+        {
+          descriptor: descriptor(),
+          checkoutPath: f.checkout,
+          checkpointId: 'cp-1',
+          sessionIdMap: [{ from: SESSION_ID, to: 'local-fork' }],
+          resume: [SESSION_ID],
+          dryRun: true
+        },
+        f.readCommonDir
+      )
+    ).rejects.toThrow('recovery_binding_not_found')
   })
 })

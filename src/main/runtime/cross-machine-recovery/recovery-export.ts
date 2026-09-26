@@ -1,4 +1,6 @@
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
+import { projectV1RecoveryBindings } from '../../../shared/cross-machine-recovery-binding-key'
+import { recoveryWorkspaceInstanceId } from '../../../shared/cross-machine-recovery-presentation-types'
 import {
   CROSS_MACHINE_RECOVERY_DESCRIPTOR_VERSION,
   MAX_RECOVERY_DESCRIPTOR_BYTES,
@@ -62,11 +64,6 @@ function workspaceMeta(worktree: Worktree): RecoveryWorkspaceMeta {
   }
 }
 
-/** Why the id fallback: legacy rows predate instance ids, and the worktree id is stable per path. */
-export function recoveryWorkspaceInstanceId(worktree: Worktree): string {
-  return worktree.instanceId ?? worktree.id
-}
-
 export function buildRecoveryDescriptor(sources: RecoveryExportSources): OrcaRecoveryDescriptorV1 {
   const { repo, worktree, session } = sources
   // Why: SSH workspaces publish no client views, so only host bindings describe them.
@@ -101,13 +98,15 @@ export function buildRecoveryDescriptor(sources: RecoveryExportSources): OrcaRec
           ? 'client-view'
           : 'host-only'
     },
-    bindings: collectRecoveryBindings({
-      worktreeId: worktree.id,
-      now: sources.now,
-      liveStatuses: sources.liveStatuses,
-      sleepingRecords: Object.values(session.sleepingAgentSessionsByPaneKey ?? {}),
-      structuredRecords: sources.structuredRecords
-    })
+    ...projectV1RecoveryBindings(
+      collectRecoveryBindings({
+        worktreeId: worktree.id,
+        now: sources.now,
+        liveStatuses: sources.liveStatuses,
+        sleepingRecords: Object.values(session.sleepingAgentSessionsByPaneKey ?? {}),
+        structuredRecords: sources.structuredRecords
+      })
+    )
   }
 }
 
@@ -192,7 +191,11 @@ export async function exportRecoveryWorkspace(
   const presentation = await getCrossMachineRecoveryPresentationStore().listForWorkspace(
     repo.kind === 'folder'
       ? { kind: 'folder', folderWorkspaceId: worktree.id }
-      : { kind: 'worktree', worktreeId: worktree.id, instanceId: worktree.instanceId ?? null },
+      : {
+          kind: 'worktree',
+          worktreeId: worktree.id,
+          instanceId: recoveryWorkspaceInstanceId(worktree)
+        },
     now
   )
   const descriptor = buildRecoveryDescriptor({

@@ -109,6 +109,8 @@ function listArgv(args: CrossMachineRecoveryListArgs): string[] {
   ]
 }
 
+const MAX_PROGRESS_LINE_CHARS = 4096
+
 function pickupArgv(args: CrossMachineRecoveryPickupArgs): string[] {
   return [
     'pickup',
@@ -163,6 +165,7 @@ export function createCrossMachineRecoveryProvider(getProviderPath: () => string
     const stdout = createOutputSink(MAX_PROVIDER_OUTPUT_BYTES)
     const stderr = createOutputSink(MAX_PROVIDER_OUTPUT_BYTES)
     let pendingLine = ''
+    let discardingLine = false
     const forwardProgress = (line: string): void => {
       const progress = parseCcSyncProgressLine(line)
       if (progress && !sender.isDestroyed()) {
@@ -182,6 +185,15 @@ export function createCrossMachineRecoveryProvider(getProviderPath: () => string
       stderr.write(chunk)
       const lines = (pendingLine + chunk.toString()).split('\n')
       pendingLine = lines.pop() ?? ''
+      if (discardingLine && lines.length > 0) {
+        lines.shift()
+        discardingLine = false
+      }
+      // Why: the unterminated tail lives outside the capped sink, so it needs its own bound.
+      if (pendingLine.length > MAX_PROGRESS_LINE_CHARS) {
+        pendingLine = ''
+        discardingLine = true
+      }
       lines.forEach(forwardProgress)
     })
     return new Promise((resolve) => {

@@ -3,6 +3,7 @@ import {
   getAgentResumeArgv,
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
+import type { RecoveryBindingKey } from '../../../shared/cross-machine-recovery-binding-key'
 import type {
   OrcaRecoveryDescriptorV1,
   RecoveryAgentBinding,
@@ -10,7 +11,8 @@ import type {
   RecoveryImportIdMap,
   RecoveryLayout,
   RecoveryPathMapping,
-  RecoveryPresentationSource
+  RecoveryPresentationSource,
+  RecoveryProviderSession
 } from '../../../shared/cross-machine-recovery-descriptor'
 import type { RecoveryWorkspaceFragment } from '../../../shared/cross-machine-recovery-session-ops'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -40,6 +42,8 @@ export type RecoveryImportPlan = {
 export type RecoveryPlanContext = RecoveryRemapContext & {
   importKey: string
   pathMap: readonly RecoveryPathMapping[]
+  /** Local provider session id → the source id it had before sessionIdMap. */
+  sourceProviderSessionIds: ReadonlyMap<string, string>
 }
 
 const SLEEPING_STATES = new Set(['working', 'blocked', 'waiting', 'done'])
@@ -79,7 +83,21 @@ export function withHostBindingTabs(
   let next = view
   for (const binding of bindings) {
     const hostTab = host.terminalTabs.find((tab) => tab.id === binding.sourceTabId)
-    if (!hostTab || present.has(hostTab.id)) {
+    if (!hostTab) {
+      continue
+    }
+    if (present.has(hostTab.id)) {
+      const leafId = binding.sourceLeafId
+      const hostLayout = host.terminalLayouts[hostTab.id]
+      // Why: a stale view that lost the bound leaf would strand its binding; the host's panes win.
+      if (
+        leafId &&
+        hostLayout &&
+        !leafBelongsToTab(next.terminalLayouts, hostTab.id, leafId) &&
+        leafBelongsToTab(host.terminalLayouts, hostTab.id, leafId)
+      ) {
+        next = { ...next, terminalLayouts: { ...next.terminalLayouts, [hostTab.id]: hostLayout } }
+      }
       continue
     }
     present.add(hostTab.id)
@@ -114,7 +132,7 @@ export function withHostBindingTabs(
 }
 
 function leafBelongsToTab(
-  layouts: Record<string, TerminalLayoutSnapshot>,
+  layouts: Readonly<Record<string, { root: TerminalPaneLayoutNode | null }>>,
   tabId: string,
   leafId: string
 ): boolean {
@@ -129,6 +147,35 @@ function leafBelongsToTab(
     }
   }
   return false
+}
+
+export function localRecoveryProviderSession(
+  binding: RecoveryAgentBinding,
+  pathMap: readonly RecoveryPathMapping[]
+): RecoveryProviderSession {
+  const transcriptPath = binding.providerSession.transcriptPath
+    ? remapRecoveryPath(binding.providerSession.transcriptPath, pathMap)
+    : undefined
+  return {
+    key: binding.providerSession.key,
+    id: binding.providerSession.id,
+    ...(transcriptPath ? { transcriptPath } : {})
+  }
+}
+
+/** The binding's identity on this host: its local session id and remapped transcript path. */
+export function localRecoveryBindingKey(
+  binding: RecoveryAgentBinding,
+  pathMap: readonly RecoveryPathMapping[]
+): RecoveryBindingKey {
+  return { agent: binding.agent, ...localRecoveryProviderSession(binding, pathMap) }
+}
+
+export function sourceProviderSessionId(
+  binding: RecoveryAgentBinding,
+  ctx: Pick<RecoveryPlanContext, 'sourceProviderSessionIds'>
+): string {
+  return ctx.sourceProviderSessionIds.get(binding.providerSession.id) ?? binding.providerSession.id
 }
 
 /** One dormant origin-'recovery' record per resumable binding, placed on its remapped pane. */
@@ -153,18 +200,12 @@ export function planRecoveryBindings(
     const tabId = placed ? mappedTabId : ctx.mintId()
     const leafId = placed ? mappedLeafId : ctx.mintId()
     const localPaneKey = makePaneKey(tabId, leafId)
-    const transcriptPath = binding.providerSession.transcriptPath
-      ? remapRecoveryPath(binding.providerSession.transcriptPath, ctx.pathMap)
-      : undefined
-    const providerSession = {
-      key: binding.providerSession.key,
-      id: binding.providerSession.id,
-      ...(transcriptPath ? { transcriptPath } : {})
-    }
+    const providerSession = localRecoveryProviderSession(binding, ctx.pathMap)
     const base = {
       sourcePaneKey: binding.sourcePaneKey,
       localPaneKey,
-      providerSessionId: binding.providerSession.id
+      binding: { agent: binding.agent, ...providerSession },
+      sourceProviderSessionId: sourceProviderSessionId(binding, ctx)
     }
     if (getAgentResumeArgv(binding.agent, providerSession) === null) {
       return {

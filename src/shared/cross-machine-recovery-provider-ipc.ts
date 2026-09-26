@@ -1,5 +1,6 @@
 import type {
   CcSyncErrorCode,
+  CcSyncFailure,
   CcSyncInspect,
   CcSyncList,
   CcSyncPickup,
@@ -18,6 +19,7 @@ export type CrossMachineRecoveryBridgeErrorCode =
 export type CrossMachineRecoveryProviderError = {
   code: CcSyncErrorCode | CrossMachineRecoveryBridgeErrorCode
   message: string
+  details?: CcSyncFailure['error']['details']
 }
 
 export type CrossMachineRecoveryProviderResult<T> =

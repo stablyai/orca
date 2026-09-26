@@ -70,12 +70,24 @@ async function readDescriptor(source: string, cwd: string): Promise<unknown> {
   }
 }
 
-function parsePathMapping(entry: string): RecoveryPathMapping {
+function parseMapping(flag: string, entry: string): RecoveryPathMapping {
   const separator = entry.indexOf('=')
   if (separator <= 0 || separator === entry.length - 1) {
-    throw new RuntimeClientError('invalid_argument', `--path-map expects <from>=<to>, got ${entry}`)
+    throw new RuntimeClientError('invalid_argument', `--${flag} expects <from>=<to>, got ${entry}`)
   }
   return { from: entry.slice(0, separator), to: entry.slice(separator + 1) }
+}
+
+// Why unknown: the host validates the key strictly; the CLI only has to carry the JSON.
+function parseBindingKey(entry: string): unknown {
+  try {
+    return JSON.parse(entry)
+  } catch {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--resume-key expects binding key JSON, got ${entry}`
+    )
+  }
 }
 
 export const CROSS_MACHINE_RECOVERY_HANDLERS: Record<string, CommandHandler> = {
@@ -90,14 +102,23 @@ export const CROSS_MACHINE_RECOVERY_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatRecoveryJson)
   },
   'recovery import': async ({ client, flags, cwd, json }) => {
-    const pathMap = getRepeatedStringFlag(flags, 'path-map').map(parsePathMapping)
-    const resume = getRepeatedStringFlag(flags, 'resume')
+    const pathMap = getRepeatedStringFlag(flags, 'path-map').map((entry) =>
+      parseMapping('path-map', entry)
+    )
+    const sessionIdMap = getRepeatedStringFlag(flags, 'session-map').map((entry) =>
+      parseMapping('session-map', entry)
+    )
+    const resume = [
+      ...getRepeatedStringFlag(flags, 'resume'),
+      ...getRepeatedStringFlag(flags, 'resume-key').map(parseBindingKey)
+    ]
     const preferClientInstanceId = getOptionalStringFlag(flags, 'prefer-client')
     const result = await client.call<RecoveryImportResult>('crossMachineRecovery.import', {
       descriptor: await readDescriptor(getRequiredStringFlag(flags, 'descriptor'), cwd),
       checkoutPath: resolve(cwd, getRequiredStringFlag(flags, 'checkout')),
       checkpointId: getRequiredStringFlag(flags, 'checkpoint'),
       ...(pathMap.length > 0 ? { pathMap } : {}),
+      ...(sessionIdMap.length > 0 ? { sessionIdMap } : {}),
       ...(resume.length > 0 ? { resume } : {}),
       ...(preferClientInstanceId ? { preferClientInstanceId } : {}),
       ...(flags.get('activate') === true ? { activate: true } : {}),
@@ -107,9 +128,17 @@ export const CROSS_MACHINE_RECOVERY_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatRecoveryJson)
   },
   'recovery resume': async ({ client, flags, json }) => {
+    const session = getOptionalStringFlag(flags, 'session')
+    const key = getOptionalStringFlag(flags, 'resume-key')
+    if ((session === undefined) === (key === undefined)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Pass exactly one of --session or --resume-key.'
+      )
+    }
     const result = await client.call<RecoveryResumeResult>('crossMachineRecovery.resume', {
       worktree: getRequiredStringFlag(flags, 'worktree'),
-      providerSessionId: getRequiredStringFlag(flags, 'session'),
+      binding: key === undefined ? session : parseBindingKey(key),
       presentation: flags.get('focus') === true ? 'focused' : 'background'
     })
     printResult(result, json, formatRecoveryJson)

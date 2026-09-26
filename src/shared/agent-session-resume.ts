@@ -81,6 +81,13 @@ export type SleepingAgentRecoveryBinding = {
   sourcePaneKey: string
 }
 
+// Why: imported bindings resume only when the user selects them, so every automatic sweep skips them.
+export function isDormantRecoveryRecord(
+  record: Pick<SleepingAgentSessionRecord, 'origin'>
+): boolean {
+  return record.origin === 'recovery'
+}
+
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
 const PROVIDER_SESSION_ID_MAX_LENGTH = 512
 
@@ -174,6 +181,17 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
 
 /** Compare the provider-owned values that identify the CLI resume target.
  *  Pi-family transcript resumes use file identity; other agents use provider ids. */
+export function agentProviderSessionIdentity(
+  agent: ResumableTuiAgent,
+  session: AgentProviderSessionMetadata
+): string {
+  const base = `${agent}\0${session.key}\0${session.id}`
+  // Why: pi and prime-agent resume by session file, so two transcripts can share an id.
+  return agent === 'pi' || agent === 'prime-agent'
+    ? `${base}\0${session.transcriptPath ?? ''}`
+    : base
+}
+
 export function agentProviderSessionsEqual(
   agent: string | undefined,
   left: AgentProviderSessionMetadata | undefined,

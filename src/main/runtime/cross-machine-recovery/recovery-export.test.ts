@@ -410,8 +410,11 @@ describe('buildRecoveryDescriptor', () => {
     }
   })
 
-  it('dedupes live and sleeping bindings by provider session with live winning', () => {
-    const { bindings } = buildRecoveryDescriptor(sources())
+  it('dedupes by binding key with live winning and lists agents v1 does not export', () => {
+    const { bindings, omittedBindings } = buildRecoveryDescriptor(sources())
+    expect(omittedBindings).toEqual([
+      { agent: 'codex', key: 'session_id', id: 'sess-sleep', reason: 'agent-not-supported-v1' }
+    ])
 
     expect(bindings).toEqual([
       {
@@ -427,25 +430,6 @@ describe('buildRecoveryDescriptor', () => {
         prompt: 'live prompt',
         capturedAt: 10_000,
         updatedAt: 5_000,
-        lastHumanInputAt: null
-      },
-      {
-        sourcePaneKey: `${T1}:${L2}`,
-        sourceTabId: T1,
-        sourceLeafId: L2,
-        surface: 'terminal',
-        agent: 'codex',
-        providerSession: { key: 'session_id', id: 'sess-sleep' },
-        liveness: 'sleeping',
-        state: 'waiting',
-        launch: {
-          sourceAgentArgs: '--full-auto',
-          sourceEnvKeys: ['CODEX_HOME', 'FOO'],
-          accountHomeVariable: 'CODEX_HOME'
-        },
-        prompt: 'sleeping prompt',
-        capturedAt: 200,
-        updatedAt: 300,
         lastHumanInputAt: null
       }
     ])
@@ -529,5 +513,21 @@ describe('fitRecoveryDescriptor', () => {
     }
 
     expect(() => fitRecoveryDescriptor(oversized)).toThrow('recovery_descriptor_too_large')
+  })
+
+  it('keeps distinct agents that share a bare provider session id', () => {
+    const base = sources()
+    const records = base.session.sleepingAgentSessionsByPaneKey ?? {}
+    const codex = Object.values(records).find((record) => record.agent === 'codex')
+    expect(codex).toBeDefined()
+    const twin = { ...codex!, agent: 'claude' as const }
+    const { bindings, omittedBindings } = buildRecoveryDescriptor({
+      ...base,
+      session: { ...base.session, sleepingAgentSessionsByPaneKey: { ...records, twin } }
+    })
+    expect(
+      bindings.filter((b) => b.providerSession.id === 'sess-sleep').map((b) => b.agent)
+    ).toEqual(['claude'])
+    expect(omittedBindings.map((b) => `${b.agent}:${b.id}`)).toEqual(['codex:sess-sleep'])
   })
 })
