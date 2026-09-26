@@ -16,11 +16,14 @@ import type { WorktreeListVirtualizer } from './use-virtualizer'
 import type { VirtualizedWorktreeViewportProps } from './viewport-props'
 import type { WorktreeVirtualRowContext } from '../rows/virtual-row-dispatch'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
+import { createLineageScrollAdjustment } from './lineage-scroll-adjustment'
 
 type BuildArgs = {
   props: VirtualizedWorktreeViewportProps
   projectGroups: readonly ProjectGroup[]
   renderRows: RenderRow[]
+  scrollRef: React.RefObject<HTMLDivElement | null>
+  lineageMeasuredHeights: Map<string, number>
   firstHeaderIndex: number
   virtualization: WorktreeListVirtualizer
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
@@ -53,6 +56,11 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
   const { props, runtime, session, statusDrag, headerDrag, primaryActive, reveal } = args
   return {
     renderRows: args.renderRows,
+    scrollRef: args.scrollRef,
+    lineageMeasuredHeights: args.lineageMeasuredHeights,
+    shouldAdjustLineageScroll: createLineageScrollAdjustment(args.virtualization.virtualizer),
+    pendingRevealWorktree: props.pendingRevealWorktree,
+    pendingRevealSidebarRow: props.pendingRevealSidebarRow,
     firstHeaderIndex: args.firstHeaderIndex,
     activeStickyHeaderIndexRef: args.virtualization.activeStickyHeaderIndexRef,
     activeStickyHostIndexRef: args.virtualization.activeStickyHostIndexRef,

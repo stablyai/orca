@@ -52,6 +52,19 @@ export function useVirtualRowMeasurementSync(args: {
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
   const issueCacheLen = useAppStore((s) => countRecordKeysByReference(s.issueCache))
   const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
+  const rowOrderSignal = useMemo(
+    () =>
+      renderRows.some((row) => row.type === 'lineage-group')
+        ? JSON.stringify(
+            renderRows.map((row) =>
+              row.type === 'lineage-group'
+                ? [getRenderRowKey(row), ...row.rows.map((member) => member.rowKey)]
+                : getRenderRowKey(row)
+            )
+          )
+        : undefined,
+    [renderRows]
+  )
   const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
@@ -104,6 +117,8 @@ export function useVirtualRowMeasurementSync(args: {
     getRowKey: getRenderRowKey,
     itemElementSelector: '[data-worktree-virtual-row]',
     rekeyedRowKeys: lineageRowRekeys,
+    // Measurement corrections belong to the virtualizers, including descendants inside a lineage.
+    restoreSignal: rowOrderSignal,
     rows: renderRows,
     scrollElementRef: scrollRef,
     scrollOffsetRef,

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
@@ -53,6 +53,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     scrollAnchorRef
   } = props
   const scrollRef = useRef<HTMLDivElement>(null)
+  const lineageMeasuredHeights = useRef(new Map<string, number>())
   // Why: callback-ref only mutates scrollRef; state re-runs the scroll-to-top listener attach.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
@@ -65,6 +66,14 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const { markDirectScrollInput, markScrollMovement } = scrollSuppression
 
   const renderRows = useMemo(() => buildRenderableRows(rows), [rows])
+  useLayoutEffect(() => {
+    const rowKeys = new Set(rows.flatMap((row) => (row.type === 'item' ? [row.rowKey] : [])))
+    for (const key of lineageMeasuredHeights.current.keys()) {
+      if (!rowKeys.has(key)) {
+        lineageMeasuredHeights.current.delete(key)
+      }
+    }
+  }, [rows])
   const firstHeaderIndex = useMemo(
     () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
     [renderRows]
@@ -295,6 +304,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const rowContext = buildWorktreeVirtualRowContext({
     props,
+    scrollRef,
+    lineageMeasuredHeights: lineageMeasuredHeights.current,
     renderRows,
     firstHeaderIndex,
     virtualization,
