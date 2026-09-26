@@ -1,5 +1,6 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-overlay-focus'
+import { markTerminalFollowOutput } from '@/lib/pane-manager/terminal-scroll-intent'
 
 export function fitPanes(manager: PaneManager): void {
   manager.fitAllPanes()
@@ -19,6 +20,10 @@ export function focusActivePane(manager: PaneManager): void {
   const activePane = manager.getActivePane() ?? panes[0]
   if (activePane) {
     focusPanePreservingOverlays(activePane)
+    if (typeof activePane.terminal?.scrollToBottom === 'function') {
+      activePane.terminal.scrollToBottom()
+      markTerminalFollowOutput(activePane.terminal)
+    }
   }
 }
 

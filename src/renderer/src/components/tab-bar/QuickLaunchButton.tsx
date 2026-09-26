@@ -1,9 +1,10 @@
 import React, { useCallback } from 'react'
-import { Loader2, Settings as SettingsIcon } from 'lucide-react'
+import { ListTodo, Loader2, Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
+import { useBacklogStore } from '@/store/backlog-store'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -231,6 +232,15 @@ function QuickLaunchAgentMenuItemsInner({
           </DropdownMenuItem>
         )
       })}
+      <DropdownMenuItem
+        onSelect={() => useBacklogStore.getState().setBacklogOpen(true)}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+        title="開啟工作階段 Backlog 總覽與 Agent 進度核選清單"
+      >
+        <ListTodo className="size-3.5 text-primary" />
+        <span className="flex-1 font-semibold">Backlog Agent</span>
+        <DropdownMenuShortcut>⌘⌥B</DropdownMenuShortcut>
+      </DropdownMenuItem>
       <DropdownMenuItem
         onSelect={openAgentSettings}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium text-muted-foreground"

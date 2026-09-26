@@ -23,6 +23,7 @@ import {
   TerminalPaneSshReconnectPortals
 } from './TerminalPaneRuntimePortals'
 import type { TerminalPaneController } from './use-terminal-pane-controller'
+import { markTerminalFollowOutput } from '../../lib/pane-manager/terminal-scroll-intent'
 
 export function TerminalPaneSurface({
   controller
@@ -127,6 +128,24 @@ export function TerminalPaneSurface({
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
+        onClickCapture={(event) => {
+          if (event.button === 0) {
+            const selection = window.getSelection()?.toString()
+            if (!selection) {
+              const manager = managerRef.current
+              if (manager) {
+                const targetPane =
+                  manager.getPanes().find((p) => p.container?.contains(event.target as Node)) ??
+                  manager.getActivePane() ??
+                  manager.getPanes()[0]
+                if (targetPane?.terminal) {
+                  targetPane.terminal.scrollToBottom()
+                  markTerminalFollowOutput(targetPane.terminal)
+                }
+              }
+            }
+          }
+        }}
         onDragOver={(event) => {
           if (
             event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
