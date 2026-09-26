@@ -26,6 +26,12 @@ function decodePowerShellCommand(result: ReturnType<typeof resolveWindowsShellLa
   return Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
 }
 
+const OSC133_COMMAND_START_MARK = ']133;C$($Global:__OrcaOsc133State.Bel)'
+
+function countOsc133CommandStartMarks(command: string): number {
+  return command.split(OSC133_COMMAND_START_MARK).length - 1
+}
+
 function expectedPowerShellRestoreCwdCommand(cwdLiteral: string): string {
   return `try { Set-Location -LiteralPath ${cwdLiteral} -ErrorAction Stop } catch { Write-Warning "Failed to restore working directory: $_" }`
 }
@@ -201,6 +207,37 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).toContain('function Global:prompt')
     expect(command).toContain(expectedPowerShellRestoreCwdCommand("'C:\\Users\\alice'"))
     expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
+  })
+
+  it('marks an embedded PowerShell startup command as a command boundary', () => {
+    // Why: the prompt wrapper withholds 133;D until it has printed once, so a
+    // startup-launched agent would exit with no command-finished boundary and
+    // its pane row would never retire.
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      "& 'claude'"
+    )
+
+    const command = decodePowerShellCommand(result)
+    // One mark belongs to the readline hook; the second is this command's.
+    expect(countOsc133CommandStartMarks(command)).toBe(2)
+    const startupMarkIndex = command.lastIndexOf(OSC133_COMMAND_START_MARK)
+    const startupCommandIndex = command.indexOf("& 'claude'")
+    expect(startupMarkIndex).toBeLessThan(startupCommandIndex)
+    expect(command.slice(startupMarkIndex, startupCommandIndex)).toContain(
+      '$Global:__OrcaOsc133State.HasSeenPrompt = $true'
+    )
+  })
+
+  it('leaves a PowerShell shell with no startup command unmarked', () => {
+    const command = decodePowerShellCommand(
+      resolveWindowsShellLaunchArgs('powershell.exe', 'C:\\Users\\alice', 'C:\\Users\\alice')
+    )
+
+    expect(countOsc133CommandStartMarks(command)).toBe(1)
   })
 
   it('preserves complex PowerShell startup command text through EncodedCommand', () => {
