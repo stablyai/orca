@@ -152,6 +152,25 @@ describe('a create refused before it commits', () => {
     expect(attach).not.toHaveBeenCalled()
   })
 
+  it("refuses a chat for an agent the user turned off, with the user's reason", async () => {
+    const resolveIntent = vi.fn()
+    const response = await create({
+      getClientSettings: () => ({
+        experimentalStructuredNativeChat: true,
+        disabledTuiAgents: ['codex']
+      }),
+      resolveStructuredAgentSessionCreateIntent: resolveIntent
+    })
+
+    const refusal = refusalOf(response)
+    expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
+    expect(refusal?.message).toBe('Agent codex is disabled. Choose an enabled agent.')
+    expect(resolveIntent).not.toHaveBeenCalled()
+    expect(attach).not.toHaveBeenCalled()
+    // A policy answer, not a defect worth a warning.
+    expect(console.warn).not.toHaveBeenCalled()
+  })
+
   it('answers a host that will not install as a definitive envelope', async () => {
     setStructuredAgentSessionHost(null)
 

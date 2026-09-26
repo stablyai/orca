@@ -10,6 +10,7 @@
 // that will not install — that no per-site list catches, and it is exactly the class that reaches
 // the user as nothing at all.
 
+import { AgentDisabledLaunchError } from '../../../../shared/agent-disabled-launch-refusal'
 import {
   AGENT_SESSION_WIRE_REFUSAL_CODES,
   type AgentSessionWireRefusal,
@@ -41,6 +42,10 @@ function wireRefusalCode(error: unknown): AgentSessionWireRefusalCode | null {
 }
 
 function precommitRefusal(error: unknown): AgentSessionWireRefusal {
+  if (error instanceof AgentDisabledLaunchError) {
+    // A policy answer, not a defect: the user's own reason, under the code that says nothing was made.
+    return { code: UNCODED_PRECOMMIT_REFUSAL_CODE, message: error.message }
+  }
   const code = wireRefusalCode(error)
   if (code) {
     return { code, message: 'Orca cannot open a structured agent chat for this workspace.' }
