@@ -17,6 +17,7 @@ import {
 } from '../../shared/automation-list-scope'
 import { OrchestrationDb } from './orchestration/db'
 import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from './runtime-legacy-worker-terminal-recovery-types'
@@ -151,12 +152,22 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
   // to inject an in-memory DB without touching the filesystem.
   getOrchestrationDb(): OrchestrationDb {
     if (!this._orchestrationDb) {
-      const dbPath = join(getAppEnvironment().getPath('userData'), 'orchestration.db')
-      this._orchestrationDb = new OrchestrationDb(dbPath)
+      this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
     }
     return this._orchestrationDb
+  }
+
+  /** The database, opened only if it already exists: a profile without one has no mail to redrive. */
+  getExistingOrchestrationDb(): OrchestrationDb | null {
+    return this._orchestrationDb || existsSync(this.orchestrationDbPath())
+      ? this.getOrchestrationDb()
+      : null
+  }
+
+  private orchestrationDbPath(): string {
+    return join(getAppEnvironment().getPath('userData'), 'orchestration.db')
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {

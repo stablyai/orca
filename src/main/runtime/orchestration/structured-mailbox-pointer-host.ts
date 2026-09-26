@@ -8,7 +8,10 @@
 
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
-import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-delivery'
+import type {
+  StructuredMailboxPointerHost,
+  StructuredPointerSettlement
+} from './structured-mailbox-pointer-delivery'
 import {
   structuredSessionGateFacts,
   type StructuredSessionGateFacts
@@ -56,8 +59,32 @@ export function readStructuredSessionGateFacts(
   }
 }
 
+let wakeHolds = 0
+
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
   return {
+    // Mail is what wakes a session nobody is looking at: the host evicts an unheld chat after its
+    // last turn, and without this its coordinator mail would wait forever for a re-attach.
+    async wake(sessionId) {
+      const host = getStructuredAgentSessionHost()
+      if (!host) {
+        return null
+      }
+      const holderId = `orchestration:mail:${++wakeHolds}`
+      try {
+        await host.hold(sessionId, holderId)
+      } catch (error) {
+        // A lease another owner holds, or a resume the provider refused; delivery retains. Logged:
+        // a coordinator that never wakes is otherwise indistinguishable from one with no mail.
+        console.warn('[orchestration] could not wake a structured session for its mail', {
+          sessionId,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        return null
+      }
+      return () => host.release(sessionId, holderId)
+    },
+
     readGateFacts(sessionId) {
       return readStructuredSessionGateFacts(sessionId)
     },
@@ -94,12 +121,26 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           ? { kind: 'unattached' }
           : { kind: 'sent', state: 'rejected' }
       }
-      // `pending` is not yet an acknowledgement; only `accepted` may consume mail.
+      // `pending` is admitted and awaiting its echo; its settlement says whether a turn ran.
       const state = result.value.submission.dispatchState
-      return {
-        kind: 'sent',
-        state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'
+      if (state === 'pending') {
+        return {
+          kind: 'sent',
+          state,
+          settlement: host
+            .waitForSendSettlement(input.sessionId, result.value.clientMessageId)
+            .then(
+              (settled) => pointerSettlement(settled?.value.submission.dispatchState),
+              () => 'unknown' as const
+            )
+        }
       }
+      return { kind: 'sent', state: pointerSettlement(state) }
     }
   }
+}
+
+/** No verdict — the wait gave up, or the generation closed with the turn unechoed — is unknown. */
+function pointerSettlement(state: string | undefined): StructuredPointerSettlement {
+  return state === 'accepted' || state === 'rejected' ? state : 'unknown'
 }

@@ -15,6 +15,7 @@
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
+import type { OrchestrationCliCommand } from './cli-command'
 import {
   selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
@@ -44,8 +45,12 @@ type ParkedPointerDelivery = {
   reservedTypes: ReadonlySet<string> | undefined
 }
 
+/** How an admitted pointer finally settled; `unknown` when no turn is known to have run. */
+export type StructuredPointerSettlement = Exclude<StructuredDispatchState, 'pending'>
+
 export type StructuredPointerSendOutcome =
-  | { kind: 'sent'; state: StructuredDispatchState }
+  | { kind: 'sent'; state: StructuredPointerSettlement }
+  | { kind: 'sent'; state: 'pending'; settlement: Promise<StructuredPointerSettlement> }
   | { kind: 'unattached' }
 
 export type StructuredMailboxPointerHost = {
@@ -61,6 +66,11 @@ export type StructuredMailboxPointerHost = {
   }) => Promise<StructuredPointerSendOutcome>
   /** Current lease fence; `null` when no record backs the session any more. */
   currentFence: (sessionId: string) => number | null
+  /**
+   * Holds the session for one attempt, resuming its provider child if the host evicted it; the
+   * returned release hands it back to the host's release clock. Null when it cannot be resumed.
+   */
+  wake?: (sessionId: string) => Promise<(() => void) | null>
 }
 
 type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageWaiter> = {
@@ -73,6 +83,8 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
    * agents mail each other outside a dispatch, and no other lane can serve it.
    */
   resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
+  /** The CLI name the PTY lane types for a local agent, so both lanes send the same pointer. */
+  getCliCommand: () => OrchestrationCliCommand
   host: StructuredMailboxPointerHost
   onRetain?: (input: {
     mailboxHandle: string
@@ -151,20 +163,16 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (!db || this.inFlight.has(mailboxHandle)) {
       return
     }
-    // Don't re-nudge a mailbox whose consumer still holds an unacknowledged batch. The lookup is
-    // keyed on the exact handle being nudged, so a coordinator's own `run:` delivery is invisible
-    // to a worker's `dispatch:` gate and cannot suppress the nudges a coordinator sends its
-    // workers. Worth more here than in the PTY lane: a structured nudge costs a whole provider
-    // turn, not a line of text into a composer.
-    if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
-      return
-    }
+    // Eligibility is "not yet pointed" (`delivered_at`), never "has the consumer acked": a chat that
+    // reads a batch and ends its turn without acking must still be pointed at the NEXT result. The
+    // batch it holds is excluded; its own `check` replays that batch and names its ack.
+    const outstanding = db.getOutstandingMailboxDelivery?.(mailboxHandle)
     const unread = selectOrchestrationPointerBatch({
       db,
       mailboxHandle,
       waiters: this.deps.getMessageWaiters(mailboxHandle),
       reservedTypes
-    })
+    }).filter((message) => !outstanding?.messageIds.has(message.id))
     if (unread.length === 0) {
       return
     }
@@ -177,6 +185,21 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   }
 
   private async attempt(
+    db: OrchestrationDb,
+    mailboxHandle: string,
+    target: StructuredPointerTarget,
+    unread: readonly { id: string; type: string; sequence: number }[],
+    reservedTypes: ReadonlySet<string> | undefined
+  ): Promise<void> {
+    const release = await this.deps.host.wake?.(target.sessionId)
+    try {
+      await this.attemptAwake(db, mailboxHandle, target, unread, reservedTypes)
+    } finally {
+      release?.()
+    }
+  }
+
+  private async attemptAwake(
     db: OrchestrationDb,
     mailboxHandle: string,
     target: StructuredPointerTarget,
@@ -198,7 +221,12 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     const body: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
-      blocks: [{ type: 'text', text: formatMessagePointer(unread.length, mailboxHandle).trim() }]
+      blocks: [
+        {
+          type: 'text',
+          text: formatMessagePointer(unread.length, mailboxHandle, this.deps.getCliCommand()).trim()
+        }
+      ]
     }
     const staged = unread.map((message) => message.id)
     const operation = resolveStructuredPointerOperation({
@@ -224,22 +252,56 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       if (outcome.state === 'rejected') {
         db.deleteStructuredPointerOperation(mailboxHandle)
       }
-      this.retain(
-        mailboxHandle,
-        sessionId,
-        retainReasonForDispatch(outcome.state as Exclude<StructuredDispatchState, 'accepted'>),
-        reservedTypes
-      )
+      this.retain(mailboxHandle, sessionId, retainReasonForDispatch(outcome.state), reservedTypes)
       return
     }
     db.markAsDelivered(staged)
+    if (outcome.state === 'pending') {
+      // Admitted is a claim, not a turn: it is consumed with the echo or given back, never kept.
+      const operationId = operation.operationId
+      void outcome.settlement
+        .then((settled) =>
+          this.settlePendingPointer(mailboxHandle, sessionId, staged, operationId, settled)
+        )
+        .catch((error: unknown) => {
+          console.warn('[orchestration] could not settle a pending pointer', {
+            mailboxHandle,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        })
+      return
+    }
     // The nudge landed as its own turn, so the next settle edge is the natural retry point for
     // anything that arrives while it runs.
     db.deleteStructuredPointerOperation(mailboxHandle)
   }
 
+  private settlePendingPointer(
+    mailboxHandle: string,
+    sessionId: string,
+    staged: readonly string[],
+    operationId: string,
+    settled: StructuredPointerSettlement
+  ): void {
+    const db = this.deps.getDb()
+    if (!db) {
+      return
+    }
+    // Only this send's row: a newer batch may have minted its own since.
+    if (db.getStructuredPointerOperation(mailboxHandle)?.operation_id === operationId) {
+      db.deleteStructuredPointerOperation(mailboxHandle)
+    }
+    if (settled === 'accepted') {
+      return
+    }
+    // The row is dropped above because a recorded send replays its verdict and never reaches the
+    // provider twice: re-pointing under this id would replay `unknown` instead of landing a turn.
+    db.markAsUndelivered([...staged])
+    this.retain(mailboxHandle, sessionId, retainReasonForDispatch(settled), undefined)
+  }
+
   /**
-   * No `markAsUndelivered` is owed: rows are marked delivered only after an accepted dispatch.
+   * Nothing is owed back here: rows are stamped only once the host admitted the turn.
    *
    * Every reason parks for the session's next journal edge. `unknown` may mean the nudge already
    * sits in the provider's input queue, so an immediate retry can stack duplicate nudges;

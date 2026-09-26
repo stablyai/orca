@@ -16,9 +16,9 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtim
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import {
   resolveTerminalOrchestrationCliCommand,
+  runtimeOrchestrationCliCommand,
   type OrchestrationCliCommand
 } from './orchestration/cli-command'
-import { getAppEnvironment } from '../../shared/app-environment'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { readOrchestrationFleetAgentStatusSnapshot } from './orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
@@ -263,8 +263,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       connectionId: pty.connectionId,
       isWsl: pty.isWsl,
       worktreeId: pty.worktreeId,
-      // Dev builds run the CLI as `orca-dev`; a packaged app must not advertise it.
-      runtimeCliCommand: getAppEnvironment().isPackaged() ? undefined : 'orca-dev',
+      runtimeCliCommand: runtimeOrchestrationCliCommand(),
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined

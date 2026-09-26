@@ -16,6 +16,7 @@ import {
 } from '../../../orchestration-mutation-executor'
 import { replayMutationNudge } from './mutation-replay-nudge'
 import { sendRemoteMessage } from './send-remote'
+import { mayNameSession } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
@@ -131,6 +132,10 @@ export const ORCHESTRATION_SEND_METHODS = [
       const sendWarnings: SendRecipientWarning[] = []
       let messageRunId = routing.run?.id
       if (!isGroupAddress(to) && !to.startsWith('run:') && !to.startsWith('dispatch:')) {
+        if (mayNameSession(to)) {
+          // Recipient routing reads the session record store, which the host opens lazily.
+          await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+        }
         const recipient = resolveBareOrchestrationRecipient({
           runtime,
           db,

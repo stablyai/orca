@@ -29,7 +29,7 @@ export type StructuredPointerDecision =
   | { deliver: false; retain: StructuredPointerRetainReason }
 
 /** The dispatch states both provider adapters converge on. */
-export type StructuredDispatchState = 'accepted' | 'rejected' | 'unknown'
+export type StructuredDispatchState = 'accepted' | 'pending' | 'rejected' | 'unknown'
 
 /**
  * What the delivery gate needs to know about a session, read once per attempt.
@@ -92,18 +92,21 @@ export function decideStructuredSessionPointerDelivery(input: {
 }
 
 /**
- * Only an accepted dispatch may mark mail delivered.
+ * Whether the pointer has been POINTED: the provider took the turn. `accepted` is echoed and
+ * `pending` is admitted and awaiting its echo; both mean the turn exists, so marking the rows
+ * delivered stops them being pointed again. Neither consumes mail: `read` is only set by `check`.
  *
- * `unknown` covers a dead provider child and a slow acknowledgement alike — the
- * adapters cannot tell them apart — so it must retain. Treating it as delivered
- * would drop mail whenever a child died mid-send.
+ * `unknown` covers a dead provider child and a failed call alike — the adapters cannot tell them
+ * apart — so it must retain. Treating it as delivered would drop mail whenever a child died mid-send.
  */
-export function structuredDispatchDelivered(state: StructuredDispatchState): boolean {
-  return state === 'accepted'
+export function structuredDispatchDelivered(
+  state: StructuredDispatchState
+): state is 'accepted' | 'pending' {
+  return state === 'accepted' || state === 'pending'
 }
 
 export function retainReasonForDispatch(
-  state: Exclude<StructuredDispatchState, 'accepted'>
+  state: Exclude<StructuredDispatchState, 'accepted' | 'pending'>
 ): StructuredPointerRetainReason {
   return state === 'rejected' ? 'dispatch-rejected' : 'dispatch-unknown'
 }

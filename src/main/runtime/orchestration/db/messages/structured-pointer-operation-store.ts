@@ -49,7 +49,34 @@ export function deleteStructuredPointerOperation(
     .run(mailboxHandle)
 }
 
+export function listStructuredPointerOperations(
+  this: OrchestrationDb
+): StructuredPointerOperationRow[] {
+  const rows = this.db.prepare('SELECT * FROM structured_pointer_operations').all()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
+  return rows as StructuredPointerOperationRow[]
+}
+
+/** Unread rows a pointer was sent for, in the order a pointer batch lists them. */
+export function getPointedUnreadMessages(
+  this: OrchestrationDb,
+  mailboxHandle: string
+): { id: string; delivered_at: string }[] {
+  const rows = this.db
+    .prepare(
+      `SELECT id, delivered_at FROM messages
+       WHERE to_handle = ? AND read = 0 AND delivered_at IS NOT NULL
+         AND delivery_contract = 'current_delivery'
+       ORDER BY sequence`
+    )
+    .all(mailboxHandle)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both columns are TEXT and the WHERE clause excludes a NULL `delivered_at`.
+  return rows as { id: string; delivered_at: string }[]
+}
+
 export type StructuredPointerOperationStoreMethods = {
+  listStructuredPointerOperations: typeof listStructuredPointerOperations
+  getPointedUnreadMessages: typeof getPointedUnreadMessages
   getStructuredPointerOperation: typeof getStructuredPointerOperation
   putStructuredPointerOperation: typeof putStructuredPointerOperation
   deleteStructuredPointerOperation: typeof deleteStructuredPointerOperation
@@ -57,6 +84,8 @@ export type StructuredPointerOperationStoreMethods = {
 
 export function attachStructuredPointerOperationStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
+    listStructuredPointerOperations,
+    getPointedUnreadMessages,
     getStructuredPointerOperation,
     putStructuredPointerOperation,
     deleteStructuredPointerOperation

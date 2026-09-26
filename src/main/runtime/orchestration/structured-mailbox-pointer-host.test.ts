@@ -80,9 +80,7 @@ describe('structured mailbox pointer host', () => {
   it.each([
     ['accepted', 'accepted'],
     ['rejected', 'rejected'],
-    // Neither is an acknowledgement, and only `accepted` may consume mail: both have to reach the
-    // caller as `unknown` so the pointer is retained for the next journal edge.
-    ['pending', 'unknown'],
+    // A failed or unanswered call: the lane retains for the next journal edge.
     ['unknown', 'unknown']
   ])('maps a %s submission to %s', async (dispatchState, expected) => {
     const send = vi.fn(
@@ -105,6 +103,51 @@ describe('structured mailbox pointer host', () => {
     // Per-dispatch, so one worker's nudges cannot exhaust the shared operation-ledger budget.
     expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
     expect(send.mock.calls[0]![1]!.retryUnknown).toBeUndefined()
+  })
+
+  it.each([
+    [
+      'an echoed turn',
+      async () => ({ value: { submission: { dispatchState: 'accepted' } } }),
+      'accepted'
+    ],
+    [
+      'a provider that died first',
+      async () => ({ value: { submission: { dispatchState: 'unknown' } } }),
+      'unknown'
+    ],
+    ['a wait that gave up', async () => undefined, 'unknown'],
+    [
+      'a send that disappeared',
+      async () => {
+        throw new Error('gone')
+      },
+      'unknown'
+    ]
+  ] as const)('settles an admitted pointer from %s', async (_label, wait, expected) => {
+    // Admitted is only a claim: the lane consumes the rows on `accepted` and gives them back on
+    // anything else, so every way the wait can end must reach it as a verdict.
+    const waitForSendSettlement = vi.fn(wait)
+    hostRef.current = {
+      send: async () => ({
+        ok: true,
+        value: { clientMessageId: 'op1', submission: { dispatchState: 'pending' } }
+      }),
+      waitForSendSettlement
+    }
+    const outcome = await createStructuredMailboxPointerHost().send({
+      sessionId: 's1',
+      dispatchId: 'd1',
+      operationId: 'op1',
+      expectedRuntimeFence: 1,
+      payloadFingerprint: 'fp',
+      body: { kind: 'message', role: 'user', blocks: [] }
+    })
+    expect(outcome).toMatchObject({ kind: 'sent', state: 'pending' })
+    await expect(
+      outcome.kind === 'sent' && outcome.state === 'pending' ? outcome.settlement : null
+    ).resolves.toBe(expected)
+    expect(waitForSendSettlement).toHaveBeenCalledWith('s1', 'op1')
   })
 
   it('scopes direct peer mail to the session when there is no dispatch to scope to', async () => {

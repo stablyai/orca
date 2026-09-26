@@ -19,7 +19,6 @@ import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lea
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { isOrcaSessionId, parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
 import { OrchestrationError } from '../orchestration/orchestration-error'
@@ -30,6 +29,8 @@ import {
   resolveOrcaSessionParty,
   resolveOrchestrationParty
 } from '../orchestration/orchestration-party'
+import { lookupOrcaAgentSession } from '../orchestration/structured-session-mail-address'
+import { readAgentSessionRecordStore } from '../orchestration/structured-session-lineage'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { RpcRequest } from './core'
 
@@ -149,10 +150,10 @@ async function readSessionRecord(
   runtime: OrcaRuntimeService,
   sessionId: string
 ): Promise<AgentSessionRecord> {
-  let store: ReturnType<typeof sessionRecordStore>
+  let store: ReturnType<typeof readAgentSessionRecordStore>
   try {
     await runtime.ensureStructuredAgentSessionHost()
-    store = sessionRecordStore()
+    store = readAgentSessionRecordStore()
   } catch {
     store = null
   }
@@ -163,35 +164,21 @@ async function readSessionRecord(
       NO_EFFECTS
     )
   }
-  const record = store.getRecord(sessionId)
-  if (record) {
-    return record
+  const found = lookupOrcaAgentSession(store, sessionId)
+  if (found.kind === 'found') {
+    return found.record
   }
-  const owner = store.listRecords().find((candidate) => namesProviderSession(candidate, sessionId))
-  if (owner) {
+  if (found.kind === 'provider-id') {
     throw new OrchestrationError(
       CODES.providerId,
-      `${sessionId} is the provider's own session id, which changes on /clear. This session's Orca id is ${owner.sessionId}; use that instead. No effects were applied.`,
-      { ...NO_EFFECTS, orcaSessionId: owner.sessionId }
+      `${sessionId} is the provider's own session id, which changes on /clear. This session's Orca id is ${found.orcaSessionId}; use that instead. No effects were applied.`,
+      { ...NO_EFFECTS, orcaSessionId: found.orcaSessionId }
     )
   }
   throw new OrchestrationError(
     CODES.unknown,
     `No Orca agent session ${sessionId} exists on this host. No effects were applied.`,
     NO_EFFECTS
-  )
-}
-
-function sessionRecordStore(): {
-  getRecord: (sessionId: string) => AgentSessionRecord | null
-  listRecords: () => AgentSessionRecord[]
-} | null {
-  return getStructuredAgentSessionHost()?.deps.store ?? null
-}
-
-function namesProviderSession(record: AgentSessionRecord, id: string): boolean {
-  return record.providerHandleChain.some(({ handle }) =>
-    handle.provider === 'claude' ? handle.sessionId === id : handle.threadId === id
   )
 }
 

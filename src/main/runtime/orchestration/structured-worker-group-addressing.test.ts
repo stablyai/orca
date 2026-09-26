@@ -55,6 +55,8 @@ function installHost(options: {
   hostRef.current = {
     deps: {
       store: {
+        // No committed /clear: each session is its own lineage's root.
+        listRecords: () => [],
         getRecord: (sessionId: string) =>
           ({
             sessionId,
