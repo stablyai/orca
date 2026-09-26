@@ -18,7 +18,7 @@ const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
 export type EditorPanelDiffContentLoader = (
   file: OpenFile | null,
   options?: EditorPanelContentLoadOptions
-) => Promise<void>
+) => Promise<boolean>
 
 type UseEditorPanelDiffContentLoaderParams = {
   diffReadGenerationCounterRef: MutableRefObject<number>
@@ -50,9 +50,9 @@ export function useEditorPanelDiffContentLoader({
   setDiffContents
 }: UseEditorPanelDiffContentLoaderParams): EditorPanelDiffContentLoader {
   return useCallback(
-    async (file: OpenFile | null, options?: EditorPanelContentLoadOptions): Promise<void> => {
+    async (file: OpenFile | null, options?: EditorPanelContentLoadOptions): Promise<boolean> => {
       if (!file || (file.mode === 'edit' && !canUseChangesModeForFile(file))) {
-        return
+        return false
       }
       const generation = diffReadGenerationCounterRef.current + 1
       diffReadGenerationCounterRef.current = generation
@@ -153,12 +153,13 @@ export function useEditorPanelDiffContentLoader({
         }
         const result = await pending.promise
         if (diffReadGenerationRef.current[file.id] !== generation) {
-          return
+          return false
         }
         setDiffContents((prev) => ({ ...prev, [file.id]: result }))
+        return true
       } catch (err) {
         if (diffReadGenerationRef.current[file.id] !== generation) {
-          return
+          return false
         }
         setDiffContents((prev) => ({
           ...prev,
@@ -170,6 +171,7 @@ export function useEditorPanelDiffContentLoader({
             modifiedIsBinary: false
           }
         }))
+        return true
       } finally {
         if (outstandingDiffReadsRef.current[file.id] === generation) {
           delete outstandingDiffReadsRef.current[file.id]
