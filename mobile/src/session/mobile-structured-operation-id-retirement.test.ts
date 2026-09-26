@@ -131,3 +131,33 @@ describe('structured Stop after an unknown outcome', () => {
     expect(operationIds.size).toBe(1)
   })
 })
+
+describe('what a structured refusal says on the phone', () => {
+  it("replaces the host's diagnostic with words a person can act on", async () => {
+    const result = await requestStructuredAgentSessionMutation({
+      client: fakeClient(async () => ({
+        ok: true,
+        result: {
+          ok: false,
+          refusal: {
+            code: 'agent_session_checkpoint_stale',
+            message: 'Expected runtime fence 1; the session is at 3.'
+          }
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      })),
+      method: 'agentSession.send',
+      fingerprintMethod: 'agentSession.send',
+      sessionId: 'session-1',
+      expectedRuntimeFence: 1,
+      fields: { body: 'hello' },
+      clientOperationId: `1900000000000-${'c'.repeat(32)}`
+    })
+
+    expect(result).toEqual({
+      status: 'refused',
+      code: 'agent_session_checkpoint_stale',
+      message: 'The agent was restarting. Your message was not sent. Retry to send it again.'
+    })
+  })
+})

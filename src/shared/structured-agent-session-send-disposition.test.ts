@@ -46,14 +46,17 @@ function rejectedWith(reason: string | null): AgentSessionMutationResult<AgentSe
   } as AgentSessionMutationResult<AgentSessionSendResult>
 }
 
-function notice(reason: string | null): string | null {
-  return disposeStructuredAgentSessionSendResult({
+function notice(reason: string | null): string | undefined {
+  const disposition = disposeStructuredAgentSessionSendResult({
     entries: [entry],
     entry,
     blockedClientMessageId: null,
     result: rejectedWith(reason),
     createOperationId: () => 'unused'
-  }).error
+  })
+  // The reason travels with the message it explains, never as a separate error.
+  expect(disposition.error).toBeNull()
+  return disposition.entries[0]?.notice
 }
 
 describe('what a rejection shows the user', () => {
@@ -101,6 +104,53 @@ describe('what a rejection shows the user', () => {
     const shown = notice(DISPATCH_REJECTED_QUEUE_FULL)
     expect(shown).not.toContain('queue is full')
     expect(shown).toBe('Orca could not send your message — Retry to send it again.')
+  })
+})
+
+describe('what a refusal shows the user', () => {
+  it('words a refused send for people and keeps the message with its reason', () => {
+    const disposition = disposeStructuredAgentSessionSendResult({
+      entries: [entry],
+      entry,
+      blockedClientMessageId: null,
+      result: {
+        ok: false,
+        refusal: {
+          code: 'agent_session_checkpoint_stale',
+          message: 'Expected runtime fence 1; the session is at 3.'
+        }
+      },
+      createOperationId: () => 'unused'
+    })
+
+    expect(disposition.error).toBeNull()
+    expect(disposition.blockedClientMessageId).toBe(entry.clientMessageId)
+    expect(disposition.entries).toMatchObject([
+      {
+        clientMessageId: entry.clientMessageId,
+        state: 'queued',
+        notice: 'The agent was restarting. Your message was not sent. Retry to send it again.'
+      }
+    ])
+  })
+
+  it('drops the reason once the same message is accepted', () => {
+    const refused = { ...entry, notice: 'The agent was restarting.' }
+    const result = rejectedWith(null)
+    if (!result.ok) {
+      throw new Error('expected a send result')
+    }
+    result.value.submission = { ...result.value.submission, dispatchState: 'accepted' }
+    const disposition = disposeStructuredAgentSessionSendResult({
+      entries: [refused],
+      entry: refused,
+      blockedClientMessageId: null,
+      result,
+      createOperationId: () => 'unused'
+    })
+
+    expect(disposition.entries).toEqual([])
+    expect(disposition.error).toBeNull()
   })
 })
 

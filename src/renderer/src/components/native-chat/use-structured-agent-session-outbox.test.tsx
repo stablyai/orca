@@ -323,7 +323,9 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
     const id = result.current.outbox[0]!.clientMessageId
     await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
-    expect(result.current.error).toBe('Message delivery is unconfirmed')
+    // The Retry row already says delivery is unconfirmed; nothing repeats it.
+    expect(result.current.error).toBeNull()
+    expect(result.current.outbox[0]?.notice).toBeUndefined()
 
     rerender({
       submissions: [
@@ -546,7 +548,8 @@ describe('useStructuredAgentSessionOutbox', () => {
     )
 
     act(() => expect(result.current.send('hello')).toBe(true))
-    await waitFor(() => expect(result.current.error).toBe(message))
+    await waitFor(() => expect(result.current.outbox[0]?.notice).toBe(message))
+    expect(result.current.error).toBeNull()
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
 
     expect(mocks.call).toHaveBeenCalledOnce()
@@ -769,7 +772,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     // rather than under the "delivery is unconfirmed" banner. The durable reason
     // stays `provider_write_failed: …`; it must not reach the screen.
     await waitFor(() =>
-      expect(result.current.error).toBe(
+      expect(result.current.outbox[0]?.notice).toBe(
         "Couldn't reach the agent. Your message was not sent — Retry to send it again."
       )
     )
@@ -842,7 +845,12 @@ describe('useStructuredAgentSessionOutbox', () => {
     )
 
     act(() => expect(result.current.send('hello')).toBe(true))
-    await waitFor(() => expect(result.current.error).toBe('agent_session_checkpoint_stale'))
+    await waitFor(() =>
+      expect(result.current.outbox[0]?.notice).toBe(
+        'The agent was restarting. Your message was not sent. Retry to send it again.'
+      )
+    )
+    expect(result.current.error).toBeNull()
 
     rerender({ sessionId: 'session-2' })
     expect(result.current.error).toBeNull()

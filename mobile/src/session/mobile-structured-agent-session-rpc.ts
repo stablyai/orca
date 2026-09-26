@@ -8,6 +8,10 @@ import type {
   AgentSessionWireRefusalCode
 } from '../../../src/shared/agent-session-wire'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
+import {
+  agentSessionRefusalNotice,
+  agentSessionWriteKindForMethod
+} from '../../../src/shared/agent-session-refusal-notice'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
@@ -163,7 +167,14 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     }
     return result.ok
       ? { status: 'accepted', value: result.value }
-      : { status: 'refused', code: result.refusal.code, message: result.refusal.message }
+      : {
+          status: 'refused',
+          code: result.refusal.code,
+          message: agentSessionRefusalNotice(
+            result.refusal,
+            agentSessionWriteKindForMethod(fingerprintMethod)
+          )
+        }
   } catch (error) {
     if (error instanceof AgentSessionRpcResponseError && PRE_HANDLER_RPC_REFUSALS.has(error.code)) {
       return { status: 'failed', message: error.message }

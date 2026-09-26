@@ -30,10 +30,11 @@ export function NativeChatDeliveryRetry({
               'auto.components.native.chat.NativeChatStructuredSession.1f772bb5d0',
               'Message delivery is unconfirmed.'
             )
-          : translate(
+          : (retryable.notice ??
+            translate(
               'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
               'Message was not sent.'
-            )}
+            ))}
       </span>
       <Button
         type="button"

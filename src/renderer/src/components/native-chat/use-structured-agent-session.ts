@@ -53,21 +53,13 @@ export function useStructuredAgentSession(args: {
     target,
     transportEnabled = true
   } = args
-  const {
-    state,
-    loadingOlder,
-    olderHistoryGeneration,
-    loadOlder,
-    mutate,
-    writeError,
-    reportWriteError,
-    providerVisible
-  } = useStructuredAgentSessionTransport({
-    sessionId,
-    target,
-    isVisible,
-    enabled: transportEnabled
-  })
+  const { state, loadingOlder, olderHistoryGeneration, loadOlder, mutate, write, providerVisible } =
+    useStructuredAgentSessionTransport({
+      sessionId,
+      target,
+      isVisible,
+      enabled: transportEnabled
+    })
   const commandPending = useRef(false)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
   const {
@@ -89,7 +81,6 @@ export function useStructuredAgentSession(args: {
     turnId: transportState.turnId,
     unloadedTurnRevisions: state.unloadedTurnRevisions,
     mutate,
-    reportWriteError,
     ...(launch ? { launch } : {})
   })
   const outboxController = useStructuredAgentSessionOutbox({
@@ -136,7 +127,7 @@ export function useStructuredAgentSession(args: {
           outbox.length
         ),
         send: (command) =>
-          mutate<AgentSessionConversationCommandResult>(
+          write<AgentSessionConversationCommandResult>(
             'agentSession.conversationCommand',
             'agentSession.conversationCommand',
             { command }
@@ -145,9 +136,7 @@ export function useStructuredAgentSession(args: {
     journalItems: transportState.journalItems,
     messages,
     status: transportEnabled ? state.status : 'ready',
-    error: transportEnabled
-      ? (state.error ?? writeError ?? outboxController.error)
-      : outboxController.error,
+    error: transportEnabled ? (state.error ?? outboxController.error) : outboxController.error,
     hasOlder: transportEnabled && state.hasOlder,
     railOutline: transportEnabled ? railOutline : null,
     loadingOlder: transportEnabled && loadingOlder,

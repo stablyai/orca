@@ -20,6 +20,10 @@ import {
   subscribeStructuredAgentLaunchStatus,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
+import {
+  agentSessionRefusalNotice,
+  agentSessionWriteFailureNotice
+} from '../../../shared/agent-session-refusal-notice'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
@@ -100,9 +104,9 @@ async function setLaunchOption(
     })
     return result.ok
       ? { kind: 'accepted', options: result.value.options ?? { [key]: value } }
-      : { kind: 'refused', message: result.refusal.message }
-  } catch (error) {
-    return { kind: 'refused', message: error instanceof Error ? error.message : String(error) }
+      : { kind: 'refused', message: agentSessionRefusalNotice(result.refusal, 'option') }
+  } catch {
+    return { kind: 'refused', message: agentSessionWriteFailureNotice('option') }
   }
 }
 

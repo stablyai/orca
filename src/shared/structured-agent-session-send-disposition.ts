@@ -9,6 +9,10 @@
 
 import type { AgentSessionMutationResult, AgentSessionSendResult } from './agent-session-wire'
 import {
+  agentSessionRefusalNotice,
+  agentSessionWriteFailureNotice
+} from './agent-session-refusal-notice'
+import {
   dispatchRejectionReasonIsInternal,
   dispatchRejectionWasTransportWriteFailure
 } from './structured-agent-session-dispatch-rejection'
@@ -20,6 +24,7 @@ import {
 
 export type StructuredAgentSessionSendDisposition = {
   entries: StructuredAgentSessionOutboxEntry[]
+  /** Only for an outcome with no entry left to carry it; a kept entry holds its own `notice`. */
   error: string | null
   /** The entry the queue is stuck on, or null when nothing blocks it. Always the
    *  next value, never "unchanged": the caller assigns it verbatim. */
@@ -36,11 +41,22 @@ type SendDispositionInput = {
 
 function replaceEntryState(
   input: SendDispositionInput,
-  state: StructuredAgentSessionOutboxEntry['state']
+  state: StructuredAgentSessionOutboxEntry['state'],
+  notice?: string
 ): StructuredAgentSessionOutboxEntry[] {
   return input.entries.map((candidate) =>
-    candidate.clientMessageId === input.entry.clientMessageId ? { ...candidate, state } : candidate
+    candidate.clientMessageId === input.entry.clientMessageId
+      ? withNotice({ ...candidate, state }, notice)
+      : candidate
   )
+}
+
+function withNotice(
+  entry: StructuredAgentSessionOutboxEntry,
+  notice: string | undefined
+): StructuredAgentSessionOutboxEntry {
+  const { notice: _previous, ...rest } = entry
+  return notice === undefined ? rest : { ...rest, notice }
 }
 
 function dropEntry(input: SendDispositionInput): StructuredAgentSessionOutboxEntry[] {
@@ -116,17 +132,20 @@ export function disposeStructuredAgentSessionSendResult(
     )
     const entries = input.entries.map((candidate) =>
       candidate.clientMessageId === input.entry.clientMessageId
-        ? requeueStructuredAgentSessionSendRefusal(
-            candidate,
-            result.refusal.code,
-            input.createOperationId,
-            input.entry.lastAttemptAt !== null
+        ? withNotice(
+            requeueStructuredAgentSessionSendRefusal(
+              candidate,
+              result.refusal.code,
+              input.createOperationId,
+              input.entry.lastAttemptAt !== null
+            ),
+            agentSessionRefusalNotice(result.refusal, 'send')
           )
         : candidate
     )
     return {
       entries,
-      error: result.refusal.message,
+      error: null,
       // Read back by index rather than from the input: a refusal can rotate the id, and the
       // refused entry is not always the head now that an admitted one no longer holds the queue.
       blockedClientMessageId: entries[refusedIndex]?.clientMessageId ?? null,
@@ -152,8 +171,12 @@ export function disposeStructuredAgentSessionSendResult(
   }
   if (submission.dispatchState === 'rejected') {
     return {
-      entries: replaceEntryState(input, 'queued'),
-      error: structuredAgentSessionRejectionNotice(submission.reason),
+      entries: replaceEntryState(
+        input,
+        'queued',
+        structuredAgentSessionRejectionNotice(submission.reason)
+      ),
+      error: null,
       blockedClientMessageId: input.entry.clientMessageId,
       retryWithFreshClientMessageId: input.entry.clientMessageId
     }
@@ -196,8 +219,11 @@ export function disposeStructuredAgentSessionSendFailure(
   const failure = classifyStructuredAgentSessionSendFailure(input.cause, input.isDeliveryUnknown)
   const deliveryUnknown = failure === 'delivery-unknown'
   return {
-    entries: replaceEntryState(input, deliveryUnknown ? 'unconfirmed' : 'queued'),
-    error: deliveryUnknown ? 'Message delivery is unconfirmed' : String(input.cause),
+    // An unconfirmed entry's Retry row already says delivery is unconfirmed.
+    entries: deliveryUnknown
+      ? replaceEntryState(input, 'unconfirmed')
+      : replaceEntryState(input, 'queued', agentSessionWriteFailureNotice('send')),
+    error: null,
     blockedClientMessageId: deliveryUnknown
       ? input.blockedClientMessageId
       : input.entry.clientMessageId,

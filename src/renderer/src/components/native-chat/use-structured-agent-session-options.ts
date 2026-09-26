@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { useCallback, useMemo } from 'react'
 import type {
   AgentSessionOptionResult,
@@ -44,7 +45,6 @@ export function useStructuredAgentSessionOptions(args: {
   turnId: string | null
   unloadedTurnRevisions: number | undefined
   mutate: StructuredAgentSessionMutate
-  reportWriteError: (message: string) => void
   launch?: StructuredAgentSessionLaunchView
 }) {
   const {
@@ -53,7 +53,6 @@ export function useStructuredAgentSessionOptions(args: {
     launch,
     mutate,
     providerVisible,
-    reportWriteError,
     sessionId,
     target,
     transportEnabled,
@@ -187,7 +186,7 @@ export function useStructuredAgentSessionOptions(args: {
   const settleLaunchOptionPick = useCallback(
     (outcome: StructuredLaunchOptionOutcome) => {
       if (outcome.kind === 'refused') {
-        reportWriteError(outcome.message)
+        toast.error(outcome.message)
       } else if (outcome.kind === 'accepted') {
         rememberOptionPicks(
           structuredAgentSessionOptionView(
@@ -199,7 +198,7 @@ export function useStructuredAgentSessionOptions(args: {
         )
       }
     },
-    [launchSeedOptions, optionStateRef, rememberOptionPicks, reportWriteError]
+    [launchSeedOptions, optionStateRef, rememberOptionPicks]
   )
   const optionSnapshot = useMemo(() => {
     const snapshot = structuredAgentSessionOptionSnapshot(

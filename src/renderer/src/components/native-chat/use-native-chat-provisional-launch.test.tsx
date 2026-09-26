@@ -7,13 +7,14 @@ import type * as LaunchIntentModule from '@/lib/launch-structured-agent-session'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn<(target: unknown, method: string, params?: unknown) => Promise<unknown>>(),
-  launch: vi.fn<(intent: { sessionId: string }) => Promise<{ sessionId: string; fence: number }>>()
+  launch: vi.fn<(intent: { sessionId: string }) => Promise<{ sessionId: string; fence: number }>>(),
+  toastError: vi.fn()
 }))
 
 let readState: StructuredAgentSessionState
 let publishedTabs: unknown[] = []
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
@@ -169,7 +170,9 @@ describe('a chat pane over its own launch', () => {
       await launch.launchResult
     })
     rerender()
-    await waitFor(() => expect(result.current.error).toBe('GPT-5.6 Luna is not available'))
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith("The setting wasn't changed. Choose it again.")
+    )
     // Reverted to what the chat runs; the refusal never kept the launch from publishing.
     expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5')
   })

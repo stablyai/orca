@@ -6,8 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
   operationId: vi.fn(),
-  enqueueSettingsWrite: vi.fn()
+  enqueueSettingsWrite: vi.fn(),
+  toastError: vi.fn()
 }))
+
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
 let fence = 3
 let sessionCommands: { name: string; kind: 'command' | 'skill' }[] | undefined
 let items: AgentJournalRenderItem[] = []
@@ -255,7 +258,9 @@ describe('useStructuredAgentSession options', () => {
       expect(await result.current.setStructuredOption('model', 'gpt-fast')).toBe(false)
     })
 
-    expect(result.current.error).toBe('provider rejected option')
+    // Said once, in words a person can act on; nothing stays behind under the composer.
+    expect(mocks.toastError).toHaveBeenCalledWith("Orca couldn't reach the agent. Choose it again.")
+    expect(result.current.error).toBeNull()
     expect(result.current.optionSnapshot.find((entry) => entry.id === 'model')).toMatchObject({
       settable: true
     })
@@ -411,6 +416,7 @@ describe('useStructuredAgentSession options', () => {
     })
 
     expect(result.current.error).toBeNull()
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('includes one background task id in the cancel fingerprint and payload', async () => {

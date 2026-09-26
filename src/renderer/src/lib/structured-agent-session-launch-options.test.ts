@@ -246,9 +246,10 @@ describe('picks made while a chat launches', () => {
       refusal: { code: 'agent_session_option_invalid', message: 'Model gpt-missing is unavailable' }
     })
 
+    // The host's diagnostic stays out of the picker's words.
     await expect(pick).resolves.toEqual({
       kind: 'refused',
-      message: 'Model gpt-missing is unavailable'
+      message: "The setting wasn't changed. Choose it again."
     })
     await expect(launch.promptDeliveryResult).resolves.toEqual({
       delivered: true,

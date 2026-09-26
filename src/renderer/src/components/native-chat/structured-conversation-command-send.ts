@@ -3,6 +3,7 @@ import type {
   AgentSessionConversationCommandResult
 } from '../../../../shared/agent-session-conversation-command'
 import { translate } from '@/i18n/i18n'
+import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
 
 export async function sendStructuredConversationCommand(input: {
   command: AgentSessionConversationCommand
@@ -10,7 +11,7 @@ export async function sendStructuredConversationCommand(input: {
   blocked: boolean
   send: (
     command: AgentSessionConversationCommand
-  ) => Promise<AgentSessionConversationCommandResult | null>
+  ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>>
 }): Promise<{ accepted: boolean; error: string | null }> {
   if (input.pending.current || input.blocked) {
     return {
@@ -23,7 +24,11 @@ export async function sendStructuredConversationCommand(input: {
   }
   input.pending.current = true
   try {
-    const result = await input.send(input.command)
+    const outcome = await input.send(input.command)
+    if (outcome.kind === 'not-done') {
+      return { accepted: false, error: outcome.notice }
+    }
+    const result = outcome.kind === 'done' ? outcome.value : null
     return {
       accepted: result?.state === 'completed' && !result.error,
       error:

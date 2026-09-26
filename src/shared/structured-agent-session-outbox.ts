@@ -19,6 +19,9 @@ export type StructuredAgentSessionOutboxEntry = {
   lastAttemptAt: number | null
   retryAfterUnknownSubmittedAt: number | null
   source?: 'launch'
+  /** Why the last attempt did not go through. Lives on the message so it goes when the message
+   *  is sent again or delivered, instead of outliving it as a separate error. */
+  notice?: string
 }
 
 export type StructuredAgentSessionAttachment = {
@@ -192,7 +195,8 @@ export function parseStructuredAgentSessionOutboxEntry(
       typeof entry.retryAfterUnknownSubmittedAt === 'number'
         ? entry.retryAfterUnknownSubmittedAt
         : null,
-    ...(entry.source === 'launch' ? { source: 'launch' as const } : {})
+    ...(entry.source === 'launch' ? { source: 'launch' as const } : {}),
+    ...(typeof entry.notice === 'string' ? { notice: entry.notice } : {})
   }
 }
 
