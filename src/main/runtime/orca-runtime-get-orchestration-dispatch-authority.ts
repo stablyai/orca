@@ -265,6 +265,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       worktreeId: pty.worktreeId,
       // Dev builds run the CLI as `orca-dev`; a packaged app must not advertise it.
       runtimeCliCommand: getAppEnvironment().isPackaged() ? undefined : 'orca-dev',
+      hostPlatform: process.platform,
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined
