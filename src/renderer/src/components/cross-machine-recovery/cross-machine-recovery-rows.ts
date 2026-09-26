@@ -20,7 +20,9 @@ export type RecoveryWorkspaceRow = {
   checkpointCapturedAt: number | null
   completeness: CcSyncItem['completeness']
   pause: CcSyncPause | null
+  newerPartial: { sessionActivityAt: number | null; codeCapturedAt: number | null } | null
   sessions: RecoverySessionRow[]
+  notRestorable: CcSyncItem['not_restorable']
   newestHumanActivityAt: number | null
   defaultResumeSessionId: string | null
 }
@@ -87,7 +89,14 @@ function toWorkspaceRow(item: CcSyncItem): RecoveryWorkspaceRow {
     checkpointCapturedAt: parseTimestamp(item.checkpoint.captured_at),
     completeness: item.completeness,
     pause: item.pause,
+    newerPartial: item.newer_partial
+      ? {
+          sessionActivityAt: parseTimestamp(item.newer_partial.session_activity_at),
+          codeCapturedAt: parseTimestamp(item.newer_partial.code_captured_at)
+        }
+      : null,
     sessions,
+    notRestorable: item.not_restorable,
     newestHumanActivityAt: maxTimestamp(sessions.map((session) => session.lastHumanActivityAt)),
     defaultResumeSessionId: defaultResumeSessionId(sessions)
   }

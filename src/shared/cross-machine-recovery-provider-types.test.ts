@@ -51,13 +51,49 @@ function item(overrides: Record<string, unknown> = {}): Record<string, unknown> 
       code: 'deferred',
       layout: 'client-view'
     },
+    newer_partial: null,
+    not_restorable: [],
     pause: null,
     local_checkout: null,
     ...overrides
   }
 }
 
+const newerPartial = {
+  id: 'cp-9',
+  captured_at: '2026-09-26T19:50:00Z',
+  session_activity_at: '2026-09-26T19:49:00Z',
+  code_captured_at: '2026-09-26T19:10:00Z'
+}
+const notRestorable = [
+  { agent: 'codex', key: 'session_id', id: 'codex-1', reason: 'agent-not-supported-v1' }
+]
+const inspectExtras = { version: 1, ok: true, checkpoints: [], delivery: [] }
+
 describe('cc-sync provider parsers', () => {
+  it('keeps a newer partial checkpoint and non-restorable sessions on list and inspect items', () => {
+    const raw = item({ newer_partial: newerPartial, not_restorable: notRestorable })
+    const list = parseCcSyncList({
+      version: 1,
+      ok: true,
+      generated_at: '2026-09-26T20:00:00Z',
+      local: { host_id: 'host-b', host_name: 'Desk' },
+      items: [raw]
+    })
+    const inspect = parseCcSyncInspect({ ...raw, ...inspectExtras })
+    for (const parsed of [
+      list.kind === 'success' ? list.value.items[0] : list,
+      inspect.kind === 'success' ? inspect.value : inspect
+    ]) {
+      expect(parsed).toMatchObject({ newer_partial: newerPartial, not_restorable: notRestorable })
+    }
+  })
+
+  it.each(['newer_partial', 'not_restorable'])('rejects an item without %s', (field) => {
+    const { [field]: _omitted, ...raw } = item()
+    expect(parseCcSyncInspect({ ...raw, ...inspectExtras })).toMatchObject({ kind: 'invalid' })
+  })
+
   it('parses a status payload', () => {
     const result = parseCcSyncStatus({
       version: 1,

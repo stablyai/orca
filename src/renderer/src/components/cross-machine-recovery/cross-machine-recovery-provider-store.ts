@@ -34,7 +34,7 @@ export function getCrossMachineRecoverySnapshot(): CrossMachineRecoverySnapshot 
   return snapshot
 }
 
-// Why: the bridge rejects only when its client-id channel is missing; that is a failed read, not an answer.
+// Why: an IPC rejection (no handler, a throwing handler) is a failed read, not an answer.
 async function settleRead<T>(
   read: () => Promise<CrossMachineRecoveryProviderResult<T>>
 ): Promise<CrossMachineRecoveryProviderResult<T>> {

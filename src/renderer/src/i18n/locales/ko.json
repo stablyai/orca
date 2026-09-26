@@ -18040,7 +18040,9 @@
         "resumeAge": "재개 · 마지막 사용 {{age}}",
         "dormantAge": "시작하지 않고 복원 · 마지막 사용 {{age}}",
         "collisionTooltip": "이 세션은 여기에서 실행 중입니다. 다시 재개하면 대화가 분기됩니다.",
-        "codeDeferred": "코드 캡처 연기됨 · {{codeAge}} 시점 코드"
+        "codeDeferred": "코드 캡처 연기됨 · {{codeAge}} 시점 코드",
+        "newerPartial": "더 최신 부분 체크포인트는 복구되지 않음 · 세션 {{sessionAge}} · 코드 {{codeAge}}",
+        "notRestorable": "여기에서 복구할 수 없음: {{sessions}}"
       },
       "status": {
         "countOne": "복구 가능한 워크스페이스 1개",
@@ -18072,6 +18074,9 @@
           "orcaImport": "워크스페이스 레이아웃 복원 중…",
           "orcaResume": "세션 재개 중…",
           "unknown": "복구 중…"
+        },
+        "notRestorable": {
+          "agentNotSupported": "아직 지원되지 않는 에이전트"
         }
       },
       "web": {

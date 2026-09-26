@@ -18040,7 +18040,9 @@
         "resumeAge": "再開 · 最終使用 {{age}}",
         "dormantAge": "起動せずに復元 · 最終使用 {{age}}",
         "collisionTooltip": "このセッションはここで稼働中です。もう一度再開すると会話が分岐します。",
-        "codeDeferred": "コードの取得は延期 · コードは {{codeAge}} 時点"
+        "codeDeferred": "コードの取得は延期 · コードは {{codeAge}} 時点",
+        "newerPartial": "新しい部分チェックポイントは復元されません · セッションは {{sessionAge}} 時点 · コードは {{codeAge}} 時点",
+        "notRestorable": "ここでは復元できません: {{sessions}}"
       },
       "status": {
         "countOne": "復元できるワークスペース 1 件",
@@ -18072,6 +18074,9 @@
           "orcaImport": "ワークスペースのレイアウトを復元中…",
           "orcaResume": "セッションを再開中…",
           "unknown": "復元中…"
+        },
+        "notRestorable": {
+          "agentNotSupported": "エージェントはまだサポートされていません"
         }
       },
       "web": {

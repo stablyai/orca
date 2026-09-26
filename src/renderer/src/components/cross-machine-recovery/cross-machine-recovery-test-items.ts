@@ -9,6 +9,8 @@ export function recoveryTestItem(input: {
   ready?: boolean
   missing?: string[]
   sessions: SessionInput[]
+  newerPartial?: CcSyncItem['newer_partial']
+  notRestorable?: CcSyncItem['not_restorable']
 }): CcSyncItem {
   return {
     selector: `${input.host}/${input.workspace}`,
@@ -35,6 +37,7 @@ export function recoveryTestItem(input: {
       bound_in_orca: true,
       live_local_collision: session.collision ?? false
     })),
+    not_restorable: input.notRestorable ?? [],
     checkpoint: {
       id: 'c',
       tier: 'latest',
@@ -49,6 +52,7 @@ export function recoveryTestItem(input: {
       code: 'complete',
       layout: 'client-view'
     },
+    newer_partial: input.newerPartial ?? null,
     pause: null,
     local_checkout: null
   }

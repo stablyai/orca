@@ -45,12 +45,8 @@ export type CrossMachineRecoveryPickupProgressEvent = {
   progress: CcSyncProgress
 }
 
-/** Every provider call carries the desktop's stable client id so the provider can prefer its view. */
-export type WithClientInstanceId<T> = T & { clientInstanceId: string }
-
 export type CrossMachineRecoveryProviderApi = {
   isSupported: boolean
-  getClientInstanceId: () => Promise<string>
   status: () => Promise<CrossMachineRecoveryProviderResult<CcSyncStatus>>
   list: (
     args?: CrossMachineRecoveryListArgs
