@@ -103,6 +103,52 @@ describe('WorkerThreadRequestQueue', () => {
     vi.useRealTimers()
   })
 
+  it('cancels queued requests without retiring active work and retires active cancellation', async () => {
+    const workers: FakeWorker[] = []
+    const queue = makeQueue(workers)
+    const active = new AbortController()
+    const queued = new AbortController()
+    const first = settle(
+      queue.dispatch((id) => ({ id, label: 'active' }), TIMEOUT_MS, active.signal)
+    )
+    const second = settle(
+      queue.dispatch((id) => ({ id, label: 'queued' }), TIMEOUT_MS, queued.signal)
+    )
+    const third = send(queue, 'survivor')
+    queued.abort(new Error('queued cancelled'))
+    await expect(second).resolves.toMatchObject({ message: 'queued cancelled' })
+    expect(workers[0].terminated).toBe(false)
+    active.abort(new Error('active cancelled'))
+    await expect(first).resolves.toMatchObject({ message: 'active cancelled' })
+    expect(workers[0].terminated).toBe(true)
+    expect(workers).toHaveLength(2)
+    expect(labels(workers[1])).toEqual(['survivor'])
+    workers[0].respond()
+    workers[1].respond()
+    await expect(third).resolves.toMatchObject({ label: 'survivor' })
+    queue.dispose()
+  })
+
+  it('never starts an already aborted request and rejects all work on disposal', async () => {
+    const workers: FakeWorker[] = []
+    const queue = makeQueue(workers)
+    await expect(
+      queue.dispatch(
+        (id) => ({ id, label: 'aborted' }),
+        TIMEOUT_MS,
+        AbortSignal.abort(new Error('cancelled'))
+      )
+    ).rejects.toThrow('cancelled')
+    expect(workers).toHaveLength(0)
+    const active = settle(send(queue, 'active'))
+    const queued = settle(send(queue, 'queued'))
+    queue.dispose()
+    await expect(active).resolves.toMatchObject({ message: 'Worker request queue disposed' })
+    await expect(queued).resolves.toMatchObject({ message: 'Worker request queue disposed' })
+    await expect(send(queue, 'later')).rejects.toThrow('disposed')
+    expect(workers[0].terminated).toBe(true)
+  })
+
   it('posts one request at a time and in the order it was dispatched', async () => {
     const workers: FakeWorker[] = []
     const queue = makeQueue(workers)

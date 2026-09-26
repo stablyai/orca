@@ -62,6 +62,9 @@ vi.mock('../ripgrep/bundled-ripgrep-path', () => ({
 // Why: the fire-and-forget ripgrep install would drain the queued exec mocks.
 // Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
 vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue(true)
+}))
 vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
   ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),
@@ -97,6 +100,7 @@ vi.mock('./ssh-connection-utils', () => ({
 }))
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import { ensureRemoteOpenCodeRuntime } from './ssh-relay-opencode-runtime'
 import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import { isRelayAlreadyInstalled, gcOldRelayVersions } from './ssh-relay-versioned-install'
@@ -544,10 +548,32 @@ describe('deployAndLaunchRelay', () => {
       await new Promise<void>((resolve) => setImmediate(resolve))
       expect(execCommand).toHaveBeenCalledTimes(execCount)
       expect(gcOldRelayVersions).not.toHaveBeenCalled()
+      expect(ensureRemoteOpenCodeRuntime).not.toHaveBeenCalled()
       finishUpload()
       await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
     }
   )
+
+  it('waits for SQLite runtime setup before cleanup on single-exec transports', async () => {
+    const conn = makeMockConnection()
+    vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(false)
+    queueFreshLinuxDeploy()
+    let finishSetup!: () => void
+    vi.mocked(ensureRemoteOpenCodeRuntime).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishSetup = () => resolve(false)
+        })
+    )
+    await deployAndLaunchRelay(conn)
+    await vi.waitFor(() => expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledOnce())
+    const execCount = vi.mocked(execCommand).mock.calls.length
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(execCommand).toHaveBeenCalledTimes(execCount)
+    expect(gcOldRelayVersions).not.toHaveBeenCalled()
+    finishSetup()
+    await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
+  })
 
   it('does not launch or upload an unprotected binary when recording its reference fails', async () => {
     const conn = makeMockConnection()

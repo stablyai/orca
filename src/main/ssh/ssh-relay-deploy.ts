@@ -1,7 +1,7 @@
-import { join } from 'node:path'
 /* eslint-disable max-lines -- Why: one cohesive contract (version detect, install-locked deploy, native-deps probe, launch, GC); splitting risks install/GC drift. */
 import { existsSync } from 'node:fs'
 import { app } from 'electron'
+import { relayBundleCandidates } from './relay-bundle-paths'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR, type RelayPlatform } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
@@ -30,6 +30,7 @@ import {
   recordRemoteRipgrepReference
 } from './ssh-relay-ripgrep-install'
 import { gcRemoteRipgrepCache } from './ssh-relay-ripgrep-cache-gc'
+import { ensureRemoteOpenCodeRuntime } from './ssh-relay-opencode-runtime'
 import {
   readLocalFullVersion,
   computeRemoteRelayDir,
@@ -624,7 +625,16 @@ async function deployAndLaunchRelayAttempt(
       ? ensureRemoteBundledRipgrep(conn, hostPlatform, remoteHome, { signal: deploySignal })
       : Promise.resolve()
   ).catch(() => {})
-  const cleanupReady = conn.canRunConcurrentExecCommands() ? Promise.resolve() : ripgrepInstall
+  const runtimeInstall = (conn.canRunConcurrentExecCommands() ? Promise.resolve() : ripgrepInstall)
+    .then(() =>
+      ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
+        nodePath: launched.nodePath,
+        relayDir: remoteRelayDir,
+        signal: deploySignal
+      })
+    )
+    .catch(() => {})
+  const cleanupReady = conn.canRunConcurrentExecCommands() ? Promise.resolve() : runtimeInstall
 
   void cleanupReady
     .then(() =>
@@ -1685,24 +1695,7 @@ function getLocalRelayPath(platform: RelayPlatform): string | null {
 }
 
 export function getLocalRelayCandidates(platform: RelayPlatform): string[] {
-  const candidates: string[] = []
-  if (process.env.ORCA_RELAY_PATH) {
-    candidates.push(join(process.env.ORCA_RELAY_PATH, platform))
-  }
-
-  // Why: electron-builder copies extraResources next to the app bundle, but app.getAppPath() points at app.asar in packaged builds.
-  if (process.resourcesPath) {
-    candidates.push(join(process.resourcesPath, 'relay', platform))
-    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', platform))
-  }
-
-  const appPath = app.getAppPath()
-  candidates.push(
-    join(appPath, 'resources', 'relay', platform),
-    join(appPath, 'out', 'relay', platform)
-  )
-
-  return [...new Set(candidates)]
+  return relayBundleCandidates(platform, app.getAppPath())
 }
 
 async function launchRelay(

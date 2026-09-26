@@ -7,9 +7,11 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/exec
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
-import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
+import { parseOpenCodeSqliteSessionViaWorker, parseOpenCode2SqliteSessionViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import type { FileWithMtime } from './session-scanner-types'
+import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
+import { configureOpenCodeWslReaders } from './session-scanner-opencode-wsl-client'
 
 export type ReadAiVaultFirstUserPromptArgs = {
   agent: AiVaultAgent
@@ -17,6 +19,7 @@ export type ReadAiVaultFirstUserPromptArgs = {
   sessionId?: string
   executionHostId?: ExecutionHostId
   codexHome?: string | null
+  wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
 }
 
 export type ReadAiVaultFirstUserPromptResult = AiVaultFirstUserPromptResult
@@ -38,6 +41,9 @@ export async function readAiVaultFirstUserPrompt(
   const executionHostId = args.executionHostId ?? LOCAL_EXECUTION_HOST_ID
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
     return { prompt: null }
+  }
+  if (args.wslOpenCodeReaders) {
+    configureOpenCodeWslReaders(args.wslOpenCodeReaders)
   }
 
   // Why: partial/corrupt transcripts make parsers throw. Resolve null like every
@@ -66,20 +72,21 @@ async function parseSessionForFullFirstUserPrompt(args: {
   sessionId?: string
   codexHome: string | null
 }): Promise<AiVaultSession | null> {
-  // Why: OpenCode SQLite sessions store filePath as the db path (not db#id).
-  // Re-parse in-process under full capture so ALS applies and we can read the
-  // earliest user row (worker list-scan path only joins newest messages).
-  if (args.agent === 'opencode') {
+  // Full capture belongs inside the reader, including the guest reader for WSL.
+  if (args.agent === 'opencode' || args.agent === 'opencode2') {
+    const parse = args.agent === 'opencode2' ? parseOpenCode2SqliteSessionViaWorker : parseOpenCodeSqliteSessionViaWorker
     const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath)
     if (fromSynthetic) {
-      return parseOpenCodeSqliteSession({
+      return parse({
+        fullFirstUserPrompt: true,
         dbPath: fromSynthetic.dbPath,
         sessionId: fromSynthetic.sessionId,
         platform: process.platform
       })
     }
     if (args.sessionId) {
-      return parseOpenCodeSqliteSession({
+      return parse({
+        fullFirstUserPrompt: true,
         dbPath: args.filePath,
         sessionId: args.sessionId,
         platform: process.platform

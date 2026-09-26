@@ -43,6 +43,7 @@ type PendingCall<TRequest, TResponse> = {
   resolve: (value: TResponse) => void
   reject: (error: Error) => void
   timer: NodeJS.Timeout | null
+  cleanupAbort: () => void
 }
 
 export class WorkerThreadRequestQueue<
@@ -53,6 +54,7 @@ export class WorkerThreadRequestQueue<
   private queue: PendingCall<TRequest, TResponse>[] = []
   private consecutiveDeaths = 0
   private nextId = 1
+  private disposed = false
   private readonly host: LazyWorkerThreadHost<TResponse>
 
   constructor(private readonly options: WorkerThreadRequestQueueOptions<TRequest>) {
@@ -73,8 +75,20 @@ export class WorkerThreadRequestQueue<
    * @param timeoutMs - Deadline measured from dispatch, not from enqueue.
    * @returns The worker's response; rejects on timeout, crash, or an unspawnable worker.
    */
-  dispatch(buildRequest: (id: number) => TRequest, timeoutMs: number): Promise<TResponse> {
+  dispatch(
+    buildRequest: (id: number) => TRequest,
+    timeoutMs: number,
+    signal?: AbortSignal
+  ): Promise<TResponse> {
     return new Promise((resolve, reject) => {
+      if (this.disposed) {
+        reject(new Error('Worker request queue disposed'))
+        return
+      }
+      if (signal?.aborted) {
+        reject(signal.reason ?? new Error('Worker request aborted'))
+        return
+      }
       // Built before the cap check so a rejection can name the dropped work;
       // the id it burns is only a correlation token, so a gap costs nothing.
       const request = buildRequest(this.nextId++)
@@ -88,15 +102,37 @@ export class WorkerThreadRequestQueue<
       if (!this.active && this.queue.length === 0) {
         this.consecutiveDeaths = 0
       }
-      this.queue.push({
+      const call: PendingCall<TRequest, TResponse> = {
         request,
         timeoutMs,
         resolve,
         reject,
-        timer: null
-      })
+        timer: null,
+        cleanupAbort: () => signal?.removeEventListener('abort', abort)
+      }
+      const abort = (): void => {
+        if (this.active === call) {
+          this.host.destroy()
+        } else {
+          this.queue = this.queue.filter((queued) => queued !== call)
+        }
+        this.settle(call, () => reject(signal?.reason ?? new Error('Worker request aborted')))
+        this.afterSettle()
+      }
+      signal?.addEventListener('abort', abort, { once: true })
+      this.queue.push(call)
       this.pump()
     })
+  }
+
+  dispose(): void {
+    this.disposed = true
+    this.host.destroy()
+    const pending = this.active ? [this.active, ...this.queue] : this.queue
+    this.queue = []
+    for (const call of pending) {
+      this.settle(call, () => call.reject(new Error('Worker request queue disposed')))
+    }
   }
 
   private pump(): void {
@@ -115,7 +151,11 @@ export class WorkerThreadRequestQueue<
     this.active = call
     this.host.clearIdleTimer()
     this.armDeadline(call)
-    worker.postMessage(call.request)
+    try {
+      worker.postMessage(call.request)
+    } catch (error) {
+      this.onWorkerFault(error instanceof Error ? error : new Error(String(error)))
+    }
   }
 
   /**
@@ -199,6 +239,7 @@ export class WorkerThreadRequestQueue<
   }
 
   private settle(call: PendingCall<TRequest, TResponse>, run: () => void): void {
+    call.cleanupAbort()
     if (call.timer) {
       clearTimeout(call.timer)
       call.timer = null

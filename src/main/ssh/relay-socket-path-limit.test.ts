@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue(true)
+}))
 vi.mock('./ssh-relay-ripgrep-install', () => ({
   remoteRipgrepLayout: vi.fn().mockReturnValue(null),
   recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),
