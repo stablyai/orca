@@ -2,6 +2,7 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { buildAiVaultResumeCommand } from '../../shared/ai-vault-resume-command'
 import { generatedSessionTitle } from './session-scanner-accumulator'
 import { readCursorChatMeta, wasCursorChatMetaRefused } from './session-scanner-cursor-chat-meta'
+import { resolveCursorTranscriptCwd } from './session-scanner-cursor-project-cwd'
 import { devinSessionsIndexForSidecar } from './session-scanner-devin-db'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 import type { SessionFileCandidate } from './session-scanner-types'
@@ -41,14 +42,51 @@ export async function enrichSessionFromSidecar(
   }
   const meta = await readCursorChatMeta(candidate.file.path)
   if (!meta) {
-    return {
-      session: foldSession,
-      refused: wasCursorChatMetaRefused(candidate.file.path)
+    const refused = wasCursorChatMetaRefused(candidate.file.path)
+    if (refused) {
+      return { session: foldSession, refused: true }
+    }
+    // Attribute legacy transcripts without a chats meta.json to their project cwd
+    const legacyCwd = await resolveCursorTranscriptCwd(candidate.file.path)
+    if (legacyCwd && !foldSession.cwd) {
+      return {
+        session: applyCursorLegacyCwd(foldSession, legacyCwd, platform),
+        refused: false
+      }
+    }
+    return { session: foldSession, refused: false }
+  }
+  const enriched = mergeCursorChatMeta(foldSession, meta, platform)
+  if (!enriched.cwd) {
+    const legacyCwd = await resolveCursorTranscriptCwd(candidate.file.path)
+    if (legacyCwd) {
+      return {
+        session: applyCursorLegacyCwd(enriched, legacyCwd, platform),
+        refused: false
+      }
     }
   }
   return {
-    session: mergeCursorChatMeta(foldSession, meta, platform),
+    session: enriched,
     refused: false
+  }
+}
+
+function applyCursorLegacyCwd(
+  session: AiVaultSession,
+  cwd: string,
+  platform: NodeJS.Platform
+): AiVaultSession {
+  return {
+    ...session,
+    cwd,
+    resumeCommand: buildAiVaultResumeCommand({
+      agent: session.agent,
+      sessionId: session.sessionId,
+      resumeFilePath: session.filePath,
+      cwd,
+      platform
+    })
   }
 }
 
