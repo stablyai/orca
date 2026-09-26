@@ -7,6 +7,7 @@ import {
 } from './codex-app-server-connection'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
+import { readCodexTurnId } from './codex-structured-thread-facts'
 import { DISPATCH_REJECTED_CODEX_QUEUE_FULL } from '../../shared/structured-agent-session-dispatch-rejection'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
@@ -41,6 +42,7 @@ export type CodexTurnHost = {
   reportedOptions?: { model?: string }
   fastModeTierByModel: ReadonlyMap<string, string>
   dispatchEchoes: CodexDispatchEchoes
+  startedTurnId?: string
 }
 
 function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] {
@@ -102,7 +104,7 @@ export async function startCodexTurn(
   if (!host.dispatchEchoes.arm(input.clientMessageId, input.requestedAt)) {
     return false
   }
-  await host.connection.request(
+  const response = await host.connection.request(
     'turn/start',
     {
       threadId: host.threadId,
@@ -112,6 +114,7 @@ export async function startCodexTurn(
     },
     { timeoutMs: input.timeoutMs }
   )
+  host.startedTurnId = readCodexTurnId(response) ?? host.startedTurnId
   return true
 }
 

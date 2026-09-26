@@ -227,10 +227,11 @@ export type StructuredAgentSessionAdapter = {
     onLateResult?: (result: { error?: string }) => Promise<void>
   }): Promise<{ error?: string }>
   /** Cancels one turn, not the session: a session-wide interrupt would also kill
-   *  a turn the client never asked to stop. */
+   *  a turn the client never asked to stop. With no `turnId` the conversation asked to stop
+   *  everything it has in flight — a running turn, or a dispatch whose turn has not opened yet. */
   cancelTurn(input: {
     sessionId: string
-    turnId: string
+    turnId?: string
     fence: number
     prompt?: { itemId: string }
     /** Latest journal submission for this fence, when the host has one. */

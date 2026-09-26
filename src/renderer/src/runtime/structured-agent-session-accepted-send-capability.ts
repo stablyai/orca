@@ -1,15 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useLayoutEffect, useRef, type RefObject } from 'react'
 import { AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeClientTarget } from './runtime-client-target'
 import {
-  ensureLocalRuntimeCapabilities,
-  readLocalRuntimeCapabilitiesOrUnknown
-} from './local-runtime-capabilities'
-import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
-
-function targetKey(target: RuntimeClientTarget): string {
-  return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
-}
+  structuredAgentSessionHostKey,
+  useStructuredAgentSessionHostCapability
+} from './structured-agent-session-host-capability'
 
 /**
  * Whether the host answers a send at acceptance and never refuses one because its agent could not
@@ -17,43 +12,10 @@ function targetKey(target: RuntimeClientTarget): string {
  * calls for a resend. False until the host has said so: an older host is handled as it always was.
  */
 export function useStructuredAgentSessionHostAcceptsSend(target: RuntimeClientTarget): boolean {
-  const key = targetKey(target)
-  const [answer, setAnswer] = useState<{ key: string; accepts: boolean }>(() => ({
-    key,
-    accepts:
-      target.kind === 'local' &&
-      (readLocalRuntimeCapabilitiesOrUnknown()?.includes(
-        AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
-      ) ??
-        false)
-  }))
-  const environmentId = target.kind === 'environment' ? target.environmentId : null
-  useEffect(() => {
-    let cancelled = false
-    const probe =
-      environmentId === null
-        ? ensureLocalRuntimeCapabilities().then(
-            (capabilities) =>
-              capabilities?.includes(AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY) ?? false
-          )
-        : runtimeEnvironmentSupportsCapability(
-            environmentId,
-            AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
-          )
-    void probe
-      .catch(() => false)
-      .then((accepts) => {
-        if (!cancelled) {
-          setAnswer((current) =>
-            current.key === key && current.accepts === accepts ? current : { key, accepts }
-          )
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [environmentId, key])
-  return answer.key === key && answer.accepts
+  return useStructuredAgentSessionHostCapability(
+    target,
+    AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
+  )
 }
 
 /**
@@ -82,6 +44,6 @@ export function useStructuredAgentSessionOutboxOwnerChange(
     ownerChange: acceptsSend ? null : fence,
     attached: fence !== null,
     fenceRef,
-    targetKey: targetKey(target)
+    targetKey: structuredAgentSessionHostKey(target)
   }
 }

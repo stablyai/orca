@@ -10,6 +10,37 @@ import type { CodexStructuredTurnCancellation } from './codex-structured-turn-ca
 type CancelInput = Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]
 type AnswerInput = Parameters<StructuredAgentSessionAdapter['answerPrompt']>[0]
 
+/**
+ * A Stop that names no turn: interrupt the turn the journal shows, or else the one the latest
+ * `turn/start` answered with — the gap before `turn/started` lands, which no client can name. A
+ * `turn/start` still unanswered is never seen here: its handover holds the session's queue, which
+ * Stop waits in. One that failed left no turn id, so nothing is interrupted.
+ */
+function cancelCodexConversation(
+  input: Parameters<typeof cancelCodexStructuredTurn>[0],
+  session: CodexSession
+): Promise<{ cancelled: boolean }> {
+  const { request, sessions, compactions, cancellation } = input
+  const liveTurnId = request.resolveLiveTurnId?.() ?? null
+  const turnId =
+    (liveTurnId === null ? null : compactions.providerTurnId(request.sessionId, liveTurnId)) ??
+    session.startedTurnId
+  if (!turnId) {
+    return Promise.resolve({ cancelled: false })
+  }
+  const acquisitionGeneration = session.acquisitionGeneration
+  return cancellation.cancel(
+    session,
+    session.threadId,
+    turnId,
+    () =>
+      sessions.get(request.sessionId) === session &&
+      !session.ended &&
+      session.fence === request.fence &&
+      session.acquisitionGeneration === acquisitionGeneration
+  )
+}
+
 export async function cancelCodexStructuredTurn(input: {
   request: CancelInput
   sessions: Map<string, CodexSession>
@@ -18,11 +49,15 @@ export async function cancelCodexStructuredTurn(input: {
 }): Promise<{ cancelled: boolean }> {
   const { request, sessions, compactions, cancellation } = input
   const session = requireLiveCodexSession(sessions, request.sessionId)
-  const turnId = compactions.providerTurnId(request.sessionId, request.turnId)
+  const prompt = request.prompt
+  const requestedTurnId = request.turnId
+  if (requestedTurnId === undefined) {
+    return prompt ? { cancelled: false } : cancelCodexConversation(input, session)
+  }
+  const turnId = compactions.providerTurnId(request.sessionId, requestedTurnId)
   if (!turnId) {
     return { cancelled: false }
   }
-  const prompt = request.prompt
   if (!prompt) {
     return cancellation.cancel(session, session.threadId, turnId)
   }
@@ -43,7 +78,7 @@ export async function cancelCodexStructuredTurn(input: {
     !session.ended &&
     session.fence === request.fence &&
     session.acquisitionGeneration === acquisitionGeneration &&
-    compactions.providerTurnId(request.sessionId, request.turnId) === turnId &&
+    compactions.providerTurnId(request.sessionId, requestedTurnId) === turnId &&
     session.prompts.ownsBoundClaim(claim, prompt.itemId, claim.prompt.threadId, promptTurnId)
   let interruptConfirmed = false
   try {

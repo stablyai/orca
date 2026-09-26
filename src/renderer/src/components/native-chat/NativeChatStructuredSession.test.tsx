@@ -366,6 +366,16 @@ describe('NativeChatStructuredSession', () => {
     expect(screen.getByRole('list', { name: 'Agents' })).toBeTruthy()
   })
 
+  it('offers Stop before any turn opens when the controller can stop, and stops through it', () => {
+    mocks.canStop = true
+    render(claudeSessionView('structured-tab-pre-turn', 'session-pre-turn'))
+
+    expect(mocks.composerProps?.isWorking).toBe(true)
+    act(() => mocks.composerProps?.onStop?.())
+    expect(mocks.stop).toHaveBeenCalledOnce()
+    expect(mocks.cancel).not.toHaveBeenCalled()
+  })
+
   it('keeps the strip mounted through a running turn, with the turn owning the voice', () => {
     // The strip stands for work that OUTLIVES a turn, so `show` is true while
     // `isMonitoring` is false: mounted, but not speaking as the live indicator.

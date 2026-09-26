@@ -215,7 +215,8 @@ export async function performCancel(
   ctx: AgentSessionTurnContext,
   input: {
     clientOperationId: string
-    turnId: string
+    /** Absent: whatever the conversation has in flight; present: only while that turn is current. */
+    turnId?: string
     scope?: 'background-tasks'
     taskId?: string
     prompt?: { itemId: string; expectedRevision: number }
@@ -242,7 +243,7 @@ export async function performCancel(
       : (
           await ctx.adapter.cancelTurn({
             sessionId: ctx.sessionId,
-            turnId: input.turnId,
+            ...(input.turnId !== undefined ? { turnId: input.turnId } : {}),
             fence: ctx.fence,
             // The journal is what the client read to name a turn, so it is what judges the request.
             resolveLiveTurnId: () => ctx.journal.activeTurnId(),
@@ -264,10 +265,11 @@ export async function performCancel(
   if (cancelled && input.prompt) {
     await ctx.flushStreamedEvents()
   }
+  const value = { ...(input.turnId !== undefined ? { turnId: input.turnId } : {}), cancelled }
   if (input.scope) {
-    return { ok: true, value: { turnId: input.turnId, cancelled } }
+    return { ok: true, value }
   }
   // Keyed by the operation id so a replayed cancel upserts one item, not two.
   await appendStatus(ctx, input.clientOperationId, note)
-  return { ok: true, value: { turnId: input.turnId, cancelled } }
+  return { ok: true, value }
 }

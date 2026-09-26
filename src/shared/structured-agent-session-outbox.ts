@@ -144,6 +144,26 @@ export function reconcileStructuredAgentSessionOutbox(
   })
 }
 
+/**
+ * What a Stop leaves in the outbox: nothing the journal does not already hold may go out after it,
+ * so every such entry goes, as a message the host withdraws leaves the chat. A send still on its way
+ * reaches the host ahead of the Stop, which withdraws it there. A rejected entry stays for its Retry.
+ */
+export function withdrawUnsentStructuredAgentSessionOutboxEntries(
+  entries: readonly StructuredAgentSessionOutboxEntry[],
+  submissions: readonly AgentJournalSubmission[]
+): StructuredAgentSessionOutboxEntry[] {
+  const held = new Set(submissions.map((submission) => submission.clientMessageId))
+  return entries.filter((entry) => entry.state === 'rejected' || held.has(entry.clientMessageId))
+}
+
+/** Whether a message this client sent may still run: one Stop has something to withdraw. */
+export function hasUnsettledStructuredAgentSessionOutboxEntry(
+  entries: readonly StructuredAgentSessionOutboxEntry[]
+): boolean {
+  return entries.some((entry) => entry.state !== 'rejected')
+}
+
 export type StructuredAgentSessionOutboxAdmission =
   | { state: 'dispatch'; entry: StructuredAgentSessionOutboxEntry }
   | { state: 'blocked'; entry: StructuredAgentSessionOutboxEntry }

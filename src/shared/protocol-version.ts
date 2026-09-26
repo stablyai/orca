@@ -170,6 +170,11 @@ export const AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY =
 // message is handed over or rejected.
 export const AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY =
   'agent-session.accepted-send.v1' as const
+// Why: `agentSession.cancel` params are strict and older hosts require `turnId`. A host advertising
+// this takes a cancel naming no turn as "stop what the conversation has in flight", which is the
+// only Stop a client can send before the provider has opened a turn.
+export const AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY =
+  'agent-session.conversation-stop.v1' as const
 // Why: paired clients advertise Claude-structured support so the host can gate its agent-specific
 // journal and lifecycle surfaces independently from Codex support.
 export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
@@ -377,6 +382,7 @@ export const RUNTIME_CAPABILITIES = [
   // The host side: it accepts a send before any agent has it, and a Stop with no writer before a
   // turn starts, so a client may gate on either.
   AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,

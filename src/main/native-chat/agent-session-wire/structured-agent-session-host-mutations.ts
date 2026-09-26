@@ -22,6 +22,7 @@ import type {
   AgentSessionThreadGoalResult
 } from '../../../shared/agent-session-wire'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
 import { threadGoalPlan } from './structured-agent-session-thread-goal'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import {
@@ -123,7 +124,7 @@ export function cancelStructuredAgentSessionTurn(
   caller: StructuredAgentSessionCaller,
   params: {
     envelope: AgentSessionMutationEnvelope
-    turnId: string
+    turnId?: string
     scope?: 'background-tasks'
     taskId?: string
     prompt?: { itemId: string; expectedRevision: number }
@@ -155,15 +156,22 @@ export function cancelStructuredAgentSessionTurn(
           ctx.fence,
           DISPATCH_REJECTED_CANCELLED
         )
+        const named = params.turnId !== undefined ? { turnId: params.turnId } : {}
         const child = context.sessions.get(ctx.sessionId)?.child
         if (child?.phase === 'starting') {
           // A start that may never land is the one thing here Stop has to end; the chat stays.
           await context.stopAgent(ctx.sessionId)
-          return { ok: true, value: { turnId: params.turnId, cancelled: true } }
+          return { ok: true, value: { ...named, cancelled: true } }
         }
-        return child
+        // A Stop naming no turn ends nothing more unless the journal still reads working, as the
+        // client's own working state does: a turn, or a handed-over message still unanswered.
+        const inFlight =
+          params.turnId !== undefined ||
+          ctx.journal.activeTurnId() !== null ||
+          hasUnansweredStructuredAgentSessionDispatch(ctx.journal.submissions(), ctx.fence)
+        return child && inFlight
           ? plan.run(ctx)
-          : { ok: true, value: { turnId: params.turnId, cancelled: withdrawn.length > 0 } }
+          : { ok: true, value: { ...named, cancelled: withdrawn.length > 0 } }
       }
     },
     () => openConversationForWrite(context.openConversation, params.envelope)

@@ -305,3 +305,67 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
     expect(events).toContainEqual(expect.objectContaining({ method: 'turn/completed' }))
   })
 })
+
+describe('Codex Stop that names no turn', () => {
+  it('interrupts the turn turn/start answered with, before turn/started lands', async () => {
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = () => ({ turn: { id: 'turn-started' } })
+    const adapter = await acquired(codex)
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+
+    await expect(adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
+      cancelled: true
+    })
+    expect(codex.connections[0].calls.at(-1)).toEqual({
+      method: 'turn/interrupt',
+      params: { threadId: THREAD_ID, turnId: 'turn-started' }
+    })
+  })
+
+  it('interrupts the turn the journal shows over an older answer', async () => {
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = () => ({ turn: { id: 'turn-started' } })
+    const adapter = await acquired(codex)
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+
+    await adapter.cancelTurn({
+      sessionId: 'session-1',
+      fence: 7,
+      resolveLiveTurnId: () => 'turn-journal'
+    })
+    expect(codex.connections[0].calls.at(-1)).toEqual({
+      method: 'turn/interrupt',
+      params: { threadId: THREAD_ID, turnId: 'turn-journal' }
+    })
+  })
+
+  it('interrupts nothing before any turn started, or for another fence', async () => {
+    const codex = fakeCodex()
+    codex.routes['turn/start'] = () => ({ turn: { id: 'turn-started' } })
+    const adapter = await acquired(codex)
+
+    await expect(adapter.cancelTurn({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
+      cancelled: false
+    })
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    await expect(adapter.cancelTurn({ sessionId: 'session-1', fence: 6 })).resolves.toEqual({
+      cancelled: false
+    })
+    expect(codex.connections[0].calls.some((call) => call.method === 'turn/interrupt')).toBe(false)
+  })
+})

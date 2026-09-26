@@ -177,7 +177,8 @@ export const SendParams = z
 export const CancelParams = z
   .object({
     envelope: MutationEnvelope,
-    turnId: Identifier('Invalid turn id'),
+    // Absent: stop whatever the conversation has in flight. Present: only if that turn is current.
+    turnId: Identifier('Invalid turn id').optional(),
     scope: z.literal('background-tasks').optional(),
     taskId: Identifier('Invalid task id').optional(),
     prompt: z
@@ -195,6 +196,9 @@ export const CancelParams = z
     }
     if (value.prompt !== undefined && value.scope === 'background-tasks') {
       ctx.addIssue({ code: 'custom', message: 'A prompt cannot use background-task scope' })
+    }
+    if (value.turnId === undefined && (value.prompt !== undefined || value.scope !== undefined)) {
+      ctx.addIssue({ code: 'custom', message: 'A prompt or background-task cancel names its turn' })
     }
   })
 
