@@ -452,7 +452,7 @@ describe('connectPanePty', () => {
     // Released (via the guard's fallback or parse completion): input flows again.
     deps.replayingPanesRef.current.delete(pane.id)
     sendTerminalInputThroughPane(pane, 'echo hi\r')
-    expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r')
+    expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r', 'query-reply')
   })
 
   it('preserves classified user input during replay while suppressing synthetic replies', async () => {
@@ -495,9 +495,7 @@ describe('connectPanePty', () => {
     for (const forward of deferred.splice(0)) {
       forward()
     }
-    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', {
-      userInput: true
-    })
+    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', 'driving')
 
     // A wheel over a replayed alt-screen frame becomes cursor keys; the fresh shell must not recall history from them.
     pane.terminal.buffer.active.type = 'alternate'
@@ -508,9 +506,7 @@ describe('connectPanePty', () => {
     for (const forward of deferred.splice(0)) {
       forward()
     }
-    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', {
-      userInput: true
-    })
+    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r', 'driving')
 
     // The same bytes on the normal buffer can only be a keyboard arrow, which survives replay.
     pane.terminal.buffer.active.type = 'normal'
@@ -522,7 +518,7 @@ describe('connectPanePty', () => {
       forward()
     }
     expect(transport.sendInput).toHaveBeenCalledTimes(2)
-    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B', { userInput: true })
+    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B', 'driving')
 
     // Once the guard releases, the same mouse report is ordinary input again.
     deps.replayingPanesRef.current.delete(pane.id)
@@ -533,7 +529,7 @@ describe('connectPanePty', () => {
     for (const forward of deferred.splice(0)) {
       forward()
     }
-    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M', { userInput: true })
+    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M', 'driving')
   })
 
   it('settles a queued startup only after the pane binds its spawned PTY', async () => {

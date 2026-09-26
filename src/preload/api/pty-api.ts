@@ -3,6 +3,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
@@ -75,9 +76,8 @@ export type PtyApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }>
-  /** `userInput` marks bytes a person produced, so main can record the run's first input. */
-  write: (id: string, data: string, options?: { userInput?: true }) => void
-  writeAccepted: (id: string, data: string, options?: { userInput?: true }) => Promise<boolean>
+  write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  writeAccepted: (id: string, data: string, inputKind: TerminalInputKind) => Promise<boolean>
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void

@@ -83,7 +83,7 @@ describe('OrcaRuntimeService', () => {
       })
     )
     await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r')
+      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r', 'launch')
     })
   })
 
@@ -526,7 +526,11 @@ describe('OrcaRuntimeService', () => {
 
     runtime.onPtyData('pty-explicit-draft', '\x1b[?2004h›', Date.now())
     await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-explicit-draft', `\x1b[200~${draftUrl}\x1b[201~`)
+      expect(write).toHaveBeenCalledWith(
+        'pty-explicit-draft',
+        `\x1b[200~${draftUrl}\x1b[201~`,
+        'launch'
+      )
     })
   })
 

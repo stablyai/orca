@@ -196,7 +196,7 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
         const execution = await executeTerminalPastePlan(plan, {
           pasteText: (pasteText, pasteOptions) =>
             pasteTerminalText(clickedPane.terminal, pasteText, pasteOptions),
-          writePty: (data) => writeTerminalPastePtyInput(transport, data, { userInput: true }),
+          writePty: (data) => writeTerminalPastePtyInput(transport, data, 'driving'),
           isTargetCurrent: targetStillMounted,
           canContinue: targetStillMounted
         })

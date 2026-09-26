@@ -195,7 +195,8 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendRuntimePtyInput).toHaveBeenCalledWith(
       { terminalTabId: 'tab-1' },
       'pty-1',
-      '\x1b'
+      '\x1b',
+      'driving'
     )
   })
 

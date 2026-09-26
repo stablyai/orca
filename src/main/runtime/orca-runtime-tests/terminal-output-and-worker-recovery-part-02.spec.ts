@@ -53,7 +53,7 @@ describe('OrcaRuntimeService', () => {
       tail: ['after restart']
     })
     await expect(
-      runtime.sendTerminal('term_exported', { text: 'still writable' })
+      runtime.sendTerminal('term_exported', { text: 'still writable' }, { inputKind: 'driving' })
     ).resolves.toMatchObject({
       handle: 'term_exported',
       accepted: true
@@ -176,7 +176,7 @@ describe('OrcaRuntimeService', () => {
     ])
     expect(getSession().terminalTopologyRevisionByRepoId?.[TEST_REPO_ID]).toBe(1)
 
-    await runtime.sendTerminal('term_agent', { text: 'input' })
+    await runtime.sendTerminal('term_agent', { text: 'input' }, { inputKind: 'driving' })
     await runtime.updateRemoteDesktopViewer('pty-agent', 'viewer', 'client', 132, 41)
     expect(writes).toEqual([['pty-agent', 'input']])
     expect(resize).toHaveBeenCalledWith('pty-agent', 132, 41)

@@ -45,7 +45,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
           // pending and flushes at the ready marker or the 15s
           // SHELL_READY_TIMEOUT_MS bound (session.ts) — a spawn-time query
           // reply is delayed at most that bound, not lost.
-          this.ptyController?.write(ptyId, reply)
+          this.ptyController?.write(ptyId, reply, 'query-reply')
         }
       }
     })

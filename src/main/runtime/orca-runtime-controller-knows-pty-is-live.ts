@@ -3,7 +3,7 @@ import { OrcaRuntimeWithResolveTerminalPane } from './orca-runtime-resolve-termi
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './orca-runtime-core'
 import { pruneExpiredProvenAbsentLeafPtyVerdicts } from './proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../shared/runtime-types'
-import { isUntypedTerminalInput } from './terminal-run-facts'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { RuntimeAgentPromptWriteOptions } from './runtime-terminal-contracts'
 import {
   assertTerminalInputWithinLimitWithYield,
@@ -104,9 +104,8 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
-      /** A client's automatic answer to a terminal query, which no person typed. */
-      inputKind?: 'query-reply'
-    } = {}
+      inputKind: TerminalInputKind
+    }
   ): Promise<RuntimeTerminalSend> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -118,12 +117,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
-      await this.writeTerminalAction(
-        pty.pty.ptyId,
-        action,
-        payload,
-        this.withUserInputTag(payload, options)
-      )
+      await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
       return {
         handle,
         accepted: true,
@@ -148,12 +142,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       throw new Error('terminal_not_writable')
     }
 
-    await this.writeTerminalAction(
-      leaf.ptyId,
-      action,
-      payload,
-      this.withUserInputTag(payload, options)
-    )
+    await this.writeTerminalAction(leaf.ptyId, action, payload, options)
 
     return {
       handle,
@@ -162,27 +151,10 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     }
   }
 
-  // Why at reserveWrite: it runs after every guard and just before each write, and input such as
-  // `exit` can end the process before the write returns.
-  private withUserInputTag<
-    T extends { reserveWrite?: (ptyId: string) => void; inputKind?: string }
-  >(payload: string, options: T): T {
-    if (options.inputKind === 'query-reply' || isUntypedTerminalInput(payload)) {
-      return options
-    }
-    return {
-      ...options,
-      reserveWrite: (ptyId: string) => {
-        options.reserveWrite?.(ptyId)
-        this.terminalRunFacts.recordUserInput(ptyId)
-      }
-    }
-  }
-
   async sendTerminalAgentPrompt(
     handle: string,
     prompt: string,
-    options: RuntimeAgentPromptWriteOptions = {}
+    options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend> {
     // Why the consuming agent: the foreground process reads the bytes; launchAgent covers startup.
     const payloadFor = (ptyId: string): string => {

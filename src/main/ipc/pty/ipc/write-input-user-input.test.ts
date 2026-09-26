@@ -29,9 +29,9 @@ afterEach(() => {
   ptyOwnership.delete(PTY_ID)
 })
 
-describe('renderer PTY writes: user input', () => {
+describe('renderer PTY writes: input kind', () => {
   it.each(['writePtyInput', 'writePtyInputAccepted'] as const)(
-    '%s records tagged input before the provider write',
+    '%s records driving input before the provider write',
     async (writer) => {
       const facts = new TerminalRunFactsRegister()
       facts.recordSpawnCommit({ id: PTY_ID, incarnationId: 'inc-1' })
@@ -40,17 +40,22 @@ describe('renderer PTY writes: user input', () => {
         recordedAtWrite.push(facts.read(PTY_ID, 'inc-1').firstUserInputAt)
       })
 
-      await createWriteInput(facts)[writer]({ id: PTY_ID, data: 'exit\r', userInput: true })
+      await createWriteInput(facts)[writer]({ id: PTY_ID, data: 'exit\r', inputKind: 'driving' })
 
       expect(recordedAtWrite).toEqual([expect.any(Number)])
     }
   )
 
-  it('records nothing for an untagged write', async () => {
+  it.each([
+    ['a launch write', 'launch', 'echo startup\r'],
+    ['a query reply', 'query-reply', '\x1b[3;4R'],
+    ['a driving write that is only a reply', 'driving', '\x1b[3;4R'],
+    ['a driving write that is only focus reports', 'driving', '\x1b[I\x1b[O']
+  ] as const)('records nothing for %s', async (_label, inputKind, data) => {
     const facts = new TerminalRunFactsRegister()
     facts.recordSpawnCommit({ id: PTY_ID, incarnationId: 'inc-1' })
 
-    await createWriteInput(facts).writePtyInput({ id: PTY_ID, data: 'echo startup\r' })
+    await createWriteInput(facts).writePtyInput({ id: PTY_ID, data, inputKind })
 
     expect(provider.write).toHaveBeenCalledOnce()
     expect(facts.read(PTY_ID, 'inc-1').firstUserInputAt).toBeNull()

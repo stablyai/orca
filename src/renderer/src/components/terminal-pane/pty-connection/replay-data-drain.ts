@@ -63,7 +63,7 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
       if (!session.shouldSendFocusedAgentReattachFocusIn() || !sendFocusMode) {
         return
       }
-      session.transport.sendInput(TERMINAL_FOCUS_IN_SEQUENCE)
+      session.transport.sendInput(TERMINAL_FOCUS_IN_SEQUENCE, 'query-reply')
     })
   }
 

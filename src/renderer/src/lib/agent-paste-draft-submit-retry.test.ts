@@ -105,7 +105,12 @@ describe('post-paste submit retry Enter', () => {
 
     await expect(promise).resolves.toBe(true)
     expect(enterWrites()).toHaveLength(2)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith({}, 'pty-1', '\r')
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
+      {},
+      'pty-1',
+      '\r',
+      'launch'
+    )
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -143,7 +148,8 @@ describe('post-paste submit retry Enter', () => {
     const competing = sendAgentDraftPasteContent(
       {},
       'pty-1',
-      'y'.repeat(AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + 1)
+      'y'.repeat(AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + 1),
+      'driving'
     )
     await flushMicrotasks(10)
     expect(writes).toEqual([PASTED_ISSUE_URL, '\r'])

@@ -525,7 +525,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
 
       expect(pane.terminal.paste).toHaveBeenCalledWith(command)
-      expect(transport.sendInput).toHaveBeenCalledWith('\r')
+      expect(transport.sendInput).toHaveBeenCalledWith('\r', 'launch')
       expect(transport.sendInput).not.toHaveBeenCalledWith(`${command}\r`)
     } finally {
       globalThis.setTimeout = originalSetTimeout

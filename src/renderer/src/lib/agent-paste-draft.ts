@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { useAppStore } from '@/store'
@@ -136,7 +137,9 @@ export async function pasteDraftWhenAgentReady(args: {
     ptyId,
     content,
     submit: submit === true,
-    agent
+    agent,
+    // Why launch: this delivers the prompt or draft an agent is started with.
+    inputKind: 'launch'
   })
 }
 
@@ -188,7 +191,9 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
     ptyId,
     content,
     submit: submit === true,
-    agent
+    agent,
+    // Why launch: this delivers the prompt or draft an agent is started with.
+    inputKind: 'launch'
   })
 }
 
@@ -201,7 +206,8 @@ export async function submitPromptToAgentPty(args: {
     settings: getSettingsForAgentTabRuntimeOwner(args.tabId),
     ptyId: args.ptyId,
     content: args.content,
-    submit: true
+    submit: true,
+    inputKind: 'driving'
   })
 }
 
@@ -209,7 +215,7 @@ export async function sendBracketedPasteToRunningAgent(args: {
   ptyId: string
   content: string
 }): Promise<boolean> {
-  return await sendBracketedPasteToAgent({ ptyId: args.ptyId, content: args.content, submit: true })
+  return await sendBracketedPasteToAgent({ ...args, submit: true, inputKind: 'driving' })
 }
 
 async function sendBracketedPasteToAgent(args: {
@@ -218,14 +224,16 @@ async function sendBracketedPasteToAgent(args: {
   content: string
   submit: boolean
   agent?: TuiAgent
+  inputKind: TerminalInputKind
 }): Promise<boolean> {
   const { settings = useAppStore.getState().settings, ptyId, content, submit, agent } = args
+  const { inputKind } = args
   const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
   try {
     // Why: paste + Enter (+ retry Enter) must be one transaction, or a concurrent
     // paste on this PTY can slip between them and submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
-      const pasted = await sendAgentDraftPasteContentNow(settings, ptyId, content)
+      const pasted = await sendAgentDraftPasteContentNow(settings, ptyId, content, inputKind)
       if (!pasted || !submit) {
         return pasted
       }
@@ -234,14 +242,14 @@ async function sendBracketedPasteToAgent(args: {
       // Enter arrive in the same PTY write. Split the submit into the next turn so
       // the TUI processes bracketed-paste termination before handling Enter.
       await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
-      const submitted = await sendRuntimePtyInputVerified(settings, ptyId, '\r')
+      const submitted = await sendRuntimePtyInputVerified(settings, ptyId, '\r', inputKind)
 
       if (submitRetryDelayMs !== undefined) {
         // Why: agents that render their composer before Enter is live silently eat
         // the first Enter; the retry is best-effort and never downgrades `submitted`.
         await new Promise<void>((resolve) => window.setTimeout(resolve, submitRetryDelayMs))
         try {
-          await sendRuntimePtyInputVerified(settings, ptyId, '\r')
+          await sendRuntimePtyInputVerified(settings, ptyId, '\r', inputKind)
         } catch {
           // Why: a rejected retry leaves the first Enter's verdict untouched.
         }

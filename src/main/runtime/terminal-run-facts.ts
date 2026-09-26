@@ -3,11 +3,12 @@ import {
   type PtySpawnCommitOrigin
 } from '../persistence/loading-store/pty-binding-span'
 import { isTerminalQueryReply } from '../../shared/terminal-query-reply'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
 export type TerminalRunFacts = {
   /** This process was started for its pane, not reattached, adopted or cold-restored. */
   freshSpawn: boolean
-  /** When any client first sent this process input a person produced; null if none has. */
+  /** When input first drove this process, from any client or driver; null if none has. */
   firstUserInputAt: number | null
 }
 
@@ -17,7 +18,7 @@ export type TerminalRunFacts = {
 const TERMINAL_FOCUS_REPORTS_ONLY_RE = new RegExp('^(?:\\u001b\\[[IO])+$')
 
 /** Input with no provenance that no person typed: a whole terminal reply or only focus reports. */
-export function isUntypedTerminalInput(payload: string): boolean {
+function isUntypedTerminalInput(payload: string): boolean {
   return isTerminalQueryReply(payload) || TERMINAL_FOCUS_REPORTS_ONLY_RE.test(payload)
 }
 
@@ -58,9 +59,15 @@ export class TerminalRunFactsRegister {
     })
   }
 
-  recordUserInput(ptyId: string, now: number = Date.now()): void {
+  /** The one record point both write funnels call just before the provider write, because input
+   *  such as `exit` can end the process before the write returns. The payload check backs up a
+   *  writer that labels a reply or focus report as driving. */
+  recordInput(ptyId: string, inputKind: TerminalInputKind, data: string, now = Date.now()): void {
+    if (inputKind !== 'driving') {
+      return
+    }
     const run = this.runsByPtyId.get(ptyId)
-    if (run && run.firstUserInputAt === null) {
+    if (run && run.firstUserInputAt === null && !isUntypedTerminalInput(data)) {
       run.firstUserInputAt = now
     }
   }

@@ -138,7 +138,12 @@ describe('sendNativeChatMessage', () => {
     ])
 
     await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_DELAY_MS)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
+      SETTINGS,
+      PTY,
+      NATIVE_CHAT_SUBMIT,
+      'driving'
+    )
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(6)
   })
 
@@ -194,13 +199,19 @@ describe('sendNativeChatMessageVerified', () => {
     expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(
       SETTINGS,
       PTY,
-      buildNativeChatPasteBytes('/model sonnet')
+      buildNativeChatPasteBytes('/model sonnet'),
+      'driving'
     )
 
     await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_DELAY_MS)
 
     expect(await result).toBe(true)
-    expect(sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+    expect(sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
+      SETTINGS,
+      PTY,
+      NATIVE_CHAT_SUBMIT,
+      'driving'
+    )
     expect(
       sendRuntimePtyInputVerified.mock.calls.some(
         (call) => call[2] === NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT
@@ -234,7 +245,12 @@ describe('sendNativeChatMessageVerified', () => {
     const submits = sendRuntimePtyInput.mock.calls.filter((call) => call[2] === NATIVE_CHAT_SUBMIT)
     // Only the verified path's Enter — chat's delayed Enter was cancelled.
     expect(submits).toHaveLength(0)
-    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      SETTINGS,
+      PTY,
+      NATIVE_CHAT_SUBMIT,
+      'driving'
+    )
   })
 
   it('returns false when the delayed Enter wait is aborted', async () => {
@@ -347,9 +363,14 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
       '\x1b[200~@"C:\\Images\\screen shot.png"\x1b[201~ '
     ])
     vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, 'describe')
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, 'describe', 'driving')
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
+      SETTINGS,
+      PTY,
+      NATIVE_CHAT_SUBMIT,
+      'driving'
+    )
   })
 
   it('clears the line, then bracket-pastes image paths before prompt text', () => {
@@ -372,10 +393,20 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
     ])
 
     vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, 'what do you see?')
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
+      SETTINGS,
+      PTY,
+      'what do you see?',
+      'driving'
+    )
 
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
+      SETTINGS,
+      PTY,
+      NATIVE_CHAT_SUBMIT,
+      'driving'
+    )
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(4)
   })
 
@@ -396,7 +427,12 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
 
     vi.advanceTimersByTime(1)
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(3)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
+      SETTINGS,
+      PTY,
+      NATIVE_CHAT_SUBMIT,
+      'driving'
+    )
   })
 
   it('treats whitespace-only prompt input as attachment-only', () => {
@@ -450,7 +486,7 @@ describe('empty prompt submit', () => {
   it('submits an empty prompt with a bare Enter', () => {
     submitNativeChatPrompt(SETTINGS, PTY)
     expect(sendRuntimePtyInput).toHaveBeenCalledOnce()
-    expect(sendRuntimePtyInput).toHaveBeenCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+    expect(sendRuntimePtyInput).toHaveBeenCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT, 'driving')
   })
 })
 
@@ -483,16 +519,17 @@ describe('sendNativeChatAskAnswer', () => {
     )
 
     vi.advanceTimersByTime(0)
-    expect(sendRuntimePtyInput).toHaveBeenCalledWith(SETTINGS, PTY, '1')
+    expect(sendRuntimePtyInput).toHaveBeenCalledWith(SETTINGS, PTY, '1', 'driving')
 
     vi.advanceTimersByTime(NATIVE_CHAT_QUESTION_STEP_MS)
-    expect(sendRuntimePtyInput).toHaveBeenCalledWith(SETTINGS, PTY, '2')
+    expect(sendRuntimePtyInput).toHaveBeenCalledWith(SETTINGS, PTY, '2', 'driving')
 
     vi.advanceTimersByTime(NATIVE_CHAT_QUESTION_STEP_MS)
     expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
       SETTINGS,
       PTY,
-      buildNativeChatPasteBytes('custom answer')
+      buildNativeChatPasteBytes('custom answer'),
+      'driving'
     )
   })
 
@@ -533,7 +570,7 @@ describe('sendNativeChatAskAnswer', () => {
     const handle = sendNativeChatAskAnswer(SETTINGS, PTY, [{ raw: '2' }], onSettled)
     await vi.advanceTimersByTimeAsync(handle.settleAfterMs)
 
-    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(SETTINGS, PTY, '2')
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(SETTINGS, PTY, '2', 'driving')
     expect(onSettled).not.toHaveBeenCalled()
 
     resolveAccepted(true)

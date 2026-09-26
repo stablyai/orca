@@ -48,7 +48,7 @@ describe('terminal drop path writer', () => {
       failureReason: 'write-rejected'
     })
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
-    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', { userInput: true })
+    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ', 'driving')
     expect(sendInput).not.toHaveBeenCalled()
   })
 
@@ -71,7 +71,7 @@ describe('terminal drop path writer', () => {
     // of the literal path — no shell-escaping, no trailing space.
     expect(sendInputAccepted).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/repo/My Screenshot.png'),
-      { userInput: true }
+      'driving'
     )
   })
 
@@ -89,11 +89,11 @@ describe('terminal drop path writer', () => {
       targetShell: 'posix'
     })
 
-    expect(sendInputAccepted).toHaveBeenNthCalledWith(1, '/repo/a.ts ', { userInput: true })
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(1, '/repo/a.ts ', 'driving')
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
       wrapTerminalBracketedPasteText('/repo/shot.png'),
-      { userInput: true }
+      'driving'
     )
   })
 
@@ -116,9 +116,9 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       `${wrapTerminalBracketedPasteText('/repo/shot.png')} `,
-      { userInput: true }
+      'driving'
     )
-    expect(sendInputAccepted).toHaveBeenNthCalledWith(2, '/repo/a.ts ', { userInput: true })
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(2, '/repo/a.ts ', 'driving')
   })
 
   it('does not insert a separator between back-to-back image pastes', async () => {
@@ -140,12 +140,12 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       wrapTerminalBracketedPasteText('/repo/one.png'),
-      { userInput: true }
+      'driving'
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
       wrapTerminalBracketedPasteText('/repo/two.png'),
-      { userInput: true }
+      'driving'
     )
   })
 
@@ -163,9 +163,10 @@ describe('terminal drop path writer', () => {
       targetShell: 'posix'
     })
 
-    expect(sendInputAccepted).toHaveBeenCalledWith("'/repo/a.png; touch /tmp/pwned #.png' ", {
-      userInput: true
-    })
+    expect(sendInputAccepted).toHaveBeenCalledWith(
+      "'/repo/a.png; touch /tmp/pwned #.png' ",
+      'driving'
+    )
   })
 
   it('falls back to shell escaping for image paths with Windows shell metacharacters', async () => {
@@ -182,9 +183,7 @@ describe('terminal drop path writer', () => {
       targetShell: 'windows'
     })
 
-    expect(sendInputAccepted).toHaveBeenCalledWith('"C:\\Users\\me\\Pictures\\a&b.png" ', {
-      userInput: true
-    })
+    expect(sendInputAccepted).toHaveBeenCalledWith('"C:\\Users\\me\\Pictures\\a&b.png" ', 'driving')
   })
 
   it('separates an image paste from a following image path that must be shell escaped', async () => {
@@ -204,11 +203,13 @@ describe('terminal drop path writer', () => {
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       `${wrapTerminalBracketedPasteText('/repo/shot.png')} `,
-      { userInput: true }
+      'driving'
     )
-    expect(sendInputAccepted).toHaveBeenNthCalledWith(2, "'/repo/a.png; touch /tmp/pwned #.png' ", {
-      userInput: true
-    })
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(
+      2,
+      "'/repo/a.png; touch /tmp/pwned #.png' ",
+      'driving'
+    )
   })
 
   it('times out dropped path writes that never receive PTY acknowledgement', async () => {

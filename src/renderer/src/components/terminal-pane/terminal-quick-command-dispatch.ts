@@ -36,7 +36,7 @@ export function sendTerminalQuickCommandToPane({
 
   const sent = transport.sendInput(
     buildTerminalQuickCommandInput(flattenTerminalQuickCommand(command)),
-    { userInput: true }
+    'driving'
   )
   if (sent) {
     recordTerminalUserInputForLeaf(tabId, pane.leafId)

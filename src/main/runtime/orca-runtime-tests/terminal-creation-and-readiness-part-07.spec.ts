@@ -467,7 +467,7 @@ describe('OrcaRuntimeService', () => {
     })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
-    await runtime.sendTerminal(handle, { text: 'continue', enter: true })
+    await runtime.sendTerminal(handle, { text: 'continue', enter: true }, { inputKind: 'driving' })
 
     expect(writes).toEqual(['continue', '\r'])
   })
@@ -490,7 +490,7 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
       const prompt = 'line one\nline two\x1b[201~'
 
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt, { inputKind: 'driving' })
       await vi.runAllTimersAsync()
       const result = await sendPromise
 
@@ -535,6 +535,7 @@ describe('OrcaRuntimeService', () => {
       )
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'the brief', {
+        inputKind: 'driving',
         leadLine: ORCA_DISPATCH_PROMPT_LEAD_LINE
       })
       await vi.runAllTimersAsync()
@@ -601,6 +602,7 @@ describe('OrcaRuntimeService', () => {
         const assertAuthority = vi.fn()
 
         const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+          inputKind: 'driving',
           beforeWrite: assertAuthority
         })
         await vi.advanceTimersByTimeAsync(500)
@@ -659,7 +661,9 @@ describe('OrcaRuntimeService', () => {
         'review this change',
         agent
       )
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
+        inputKind: 'driving'
+      })
       if (agent === 'omp') {
         await sendPromise
         expect(writes).toEqual([`${buildAgentPromptPasteBytes('review this change')}\r`])

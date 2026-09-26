@@ -93,7 +93,7 @@ export function createTerminalPanePasteExecution(
     const execution = await executeTerminalPastePlan(plan, {
       pasteText: (pasteText, pasteOptions) =>
         pasteTerminalText(pane.terminal, pasteText, pasteOptions),
-      writePty: (data) => writeTerminalPastePtyInput(transport, data, { userInput: true }),
+      writePty: (data) => writeTerminalPastePtyInput(transport, data, 'driving'),
       isTargetCurrent: () => {
         if (!isPanePasteTargetMounted(pane, transport, ptyId)) {
           return false

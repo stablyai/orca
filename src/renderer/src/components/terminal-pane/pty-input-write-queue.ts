@@ -12,7 +12,7 @@ import {
   type PtyInputWriteQueue,
   type PtyInputWriteQueueDeps
 } from './pty-input-write-queue-contract'
-import type { PtyInputOptions } from './pty-transport-types'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import {
   createHeadQueue,
   peekHeadQueue,
@@ -123,7 +123,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     try {
       return await Promise.race([
         cancelled,
-        Promise.resolve(deps.writeAccepted?.(item.id, data, item.options) ?? false).catch(
+        Promise.resolve(deps.writeAccepted?.(item.id, data, item.inputKind) ?? false).catch(
           () => false
         )
       ])
@@ -176,7 +176,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
               peek.tooLarge !== false ||
               peek.chunks !== undefined ||
               !isCoalesciblePtyInput(peek) ||
-              peek.options?.userInput !== next.options?.userInput ||
+              peek.inputKind !== next.inputKind ||
               payload.length + peek.text.length > TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS
             ) {
               break
@@ -184,7 +184,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
             payload += peek.text
             removePending(peek)
           }
-          deps.write(next.id, payload, next.options)
+          deps.write(next.id, payload, next.inputKind)
           if (firstPending()) {
             await yieldBetweenWrites()
           }
@@ -201,7 +201,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
         const writeGeneration = generation
         const accepted = next.resolveAccepted
           ? await writeAcceptedChunk(next, chunk.value)
-          : (deps.write(next.id, chunk.value, next.options), true)
+          : (deps.write(next.id, chunk.value, next.inputKind), true)
         if (generation !== writeGeneration || firstPending() !== next) {
           continue
         }
@@ -255,7 +255,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     id: string,
     text: string,
     queryReply: boolean,
-    options: PtyInputOptions | undefined,
+    inputKind: TerminalInputKind,
     resolveAccepted?: PendingPtyInputWrite['resolveAccepted']
   ): boolean {
     try {
@@ -278,7 +278,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
         id,
         text,
         replyOnly,
-        options,
+        inputKind,
         tooLarge,
         resolveAccepted
       }
@@ -299,17 +299,17 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   }
 
   return {
-    enqueue(id: string, data: string, options?: PtyInputOptions): boolean {
-      return enqueueInput(id, data, false, options)
+    enqueue(id: string, data: string, inputKind: TerminalInputKind): boolean {
+      return enqueueInput(id, data, false, inputKind)
     },
 
     enqueueQueryReply(id: string, data: string): boolean {
-      return enqueueInput(id, data, true, undefined)
+      return enqueueInput(id, data, true, 'query-reply')
     },
 
-    enqueueAccepted: (id, data, options) =>
+    enqueueAccepted: (id, data, inputKind) =>
       new Promise((resolve) => {
-        enqueueInput(id, data, false, options, resolve)
+        enqueueInput(id, data, false, inputKind, resolve)
       }),
 
     async waitForDrain(): Promise<void> {

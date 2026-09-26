@@ -27,7 +27,7 @@ describe('sendCapturedTerminalInput', () => {
           data: '\r'
         })
       ).toBe(true)
-      expect(transport.sendInput).toHaveBeenCalledWith('\r', { userInput: true })
+      expect(transport.sendInput).toHaveBeenCalledWith('\r', 'driving')
     }
   )
 

@@ -226,7 +226,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     if (!sendInputAccepted) {
       throw new Error('Expected acknowledged remote terminal input')
     }
-    const pendingSend = sendInputAccepted('sent-before-rebind')
+    const pendingSend = sendInputAccepted('sent-before-rebind', 'driving')
     await vi.waitFor(() =>
       expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.send' }))
     )
@@ -293,7 +293,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     if (!sendInputAccepted) {
       throw new Error('Expected acknowledged remote terminal input')
     }
-    const pendingSend = sendInputAccepted('sent-before-close')
+    const pendingSend = sendInputAccepted('sent-before-close', 'driving')
     await vi.waitFor(() =>
       expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.send' }))
     )
@@ -390,7 +390,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       if (!sendInputAccepted) {
         throw new Error('Expected acknowledged remote terminal input')
       }
-      const pendingSend = sendInputAccepted('sent-before-stream-end')
+      const pendingSend = sendInputAccepted('sent-before-stream-end', 'driving')
       await vi.waitFor(() =>
         expect(runtimeCall).toHaveBeenCalledWith(
           expect.objectContaining({ method: 'terminal.send' })

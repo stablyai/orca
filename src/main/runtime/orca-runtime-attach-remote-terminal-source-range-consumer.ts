@@ -12,7 +12,6 @@ import { notifyRuntimeListeners } from './runtime-async-boundaries'
 import type { RuntimeTerminalBufferSnapshot } from './runtime-terminal-state-records'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './orca-runtime-postlude'
 import { assertTerminalInputWithinLimitWithYield } from './terminal-send-payload'
-import { isUntypedTerminalInput } from './terminal-run-facts'
 
 export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends OrcaRuntimeWithRecordAgentPromptLifecycleState {
   attachRemoteTerminalSourceRangeConsumer(
@@ -180,18 +179,14 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
     if (data.length === 0 || this.getDriver(ptyId).kind === 'mobile') {
       return false
     }
-    const typed = !isUntypedTerminalInput(data)
     try {
       await assertTerminalInputWithinLimitWithYield(data)
       await this.writeTerminalInputChunks(ptyId, data, {
+        inputKind: 'driving',
         // Why: a phone can claim the floor while a paste yields between chunks.
         beforeWrite: () => {
           if (this.getDriver(ptyId).kind === 'mobile') {
             throw new Error('terminal_mobile_driver_active')
-          }
-          // Why before the write: input such as `exit` can end the process before the write returns.
-          if (typed) {
-            this.terminalRunFacts.recordUserInput(ptyId)
           }
         }
       })

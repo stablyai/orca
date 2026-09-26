@@ -1,4 +1,4 @@
-import type { PtyInputOptions } from './pty-transport-types'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
 export const TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS = 4096
 export const PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES = 64
@@ -10,7 +10,7 @@ export type PendingPtyInputWrite = {
   id: string
   text: string
   replyOnly: boolean
-  options: PtyInputOptions | undefined
+  inputKind: TerminalInputKind
   resolveAccepted: ((accepted: boolean) => void) | undefined
   tooLarge: boolean | Promise<boolean>
   chunks?: Iterator<string>
@@ -18,17 +18,17 @@ export type PendingPtyInputWrite = {
 }
 
 export type PtyInputWriteQueue = {
-  enqueue: (id: string, data: string, options?: PtyInputOptions) => boolean
+  enqueue: (id: string, data: string, inputKind: TerminalInputKind) => boolean
   enqueueQueryReply: (id: string, data: string) => boolean
-  enqueueAccepted: (id: string, data: string, options?: PtyInputOptions) => Promise<boolean>
+  enqueueAccepted: (id: string, data: string, inputKind: TerminalInputKind) => Promise<boolean>
   waitForDrain: () => Promise<void>
   clear: () => void
 }
 
 export type PtyInputWriteQueueDeps = {
   isWritable: (id: string) => boolean
-  write: (id: string, data: string, options?: PtyInputOptions) => void
-  writeAccepted?: (id: string, data: string, options?: PtyInputOptions) => Promise<boolean>
+  write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  writeAccepted?: (id: string, data: string, inputKind: TerminalInputKind) => Promise<boolean>
   yieldBetweenWrites?: () => Promise<void>
   onDrainFailure?: (id: string) => void
 }

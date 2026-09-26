@@ -1,8 +1,10 @@
 import { resolveAgentPromptSubmitDelayForAgent } from '../../shared/agent-prompt-injection'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 
 export type RuntimeTerminalWriteOptions = {
+  inputKind: TerminalInputKind
   signal?: AbortSignal
   beforeWrite?: (ptyId: string) => void | Promise<void>
   reserveWrite?: (ptyId: string) => void
@@ -12,7 +14,7 @@ export type RuntimeTerminalWriteOptions = {
 
 export class RuntimeTerminalWriter {
   constructor(
-    private readonly write: (ptyId: string, data: string) => boolean,
+    private readonly write: (ptyId: string, data: string, inputKind: TerminalInputKind) => boolean,
     private readonly getWriteHostPlatform: (ptyId: string) => NodeJS.Platform = () =>
       process.platform,
     private readonly getAgent: (ptyId: string) => TuiAgent | null = () => null
@@ -22,7 +24,7 @@ export class RuntimeTerminalWriter {
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     payload: string,
-    options: RuntimeTerminalWriteOptions = {}
+    options: RuntimeTerminalWriteOptions
   ): Promise<void> {
     // Why: direct terminal.send can carry paste-sized text from RPC/mobile
     // clients; chunk text before PTY/ConPTY while preserving suffix separation.
@@ -54,7 +56,7 @@ export class RuntimeTerminalWriter {
         throw error
       }
       options.reserveWrite?.(ptyId)
-      if (!this.write(ptyId, suffix)) {
+      if (!this.write(ptyId, suffix, options.inputKind)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
       await options.afterWrite?.(ptyId)
@@ -65,7 +67,7 @@ export class RuntimeTerminalWriter {
     }
     await options.beforeWrite?.(ptyId)
     options.reserveWrite?.(ptyId)
-    if (!this.write(ptyId, payload)) {
+    if (!this.write(ptyId, payload, options.inputKind)) {
       throw new Error('terminal_not_writable')
     }
     await options.afterWrite?.(ptyId)
@@ -74,14 +76,14 @@ export class RuntimeTerminalWriter {
   async writeChunks(
     ptyId: string,
     text: string,
-    options: RuntimeTerminalWriteOptions = {}
+    options: RuntimeTerminalWriteOptions
   ): Promise<void> {
     const chunks = iterateTerminalInputChunks(text)
     let chunk = chunks.next()
     while (!chunk.done) {
       await options.beforeWrite?.(ptyId)
       options.reserveWrite?.(ptyId)
-      if (!this.write(ptyId, chunk.value)) {
+      if (!this.write(ptyId, chunk.value, options.inputKind)) {
         throw new Error('terminal_not_writable')
       }
       await options.afterWrite?.(ptyId)

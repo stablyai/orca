@@ -4,6 +4,7 @@ import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-sca
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
@@ -19,7 +20,7 @@ export type WorktreeStartupReadinessHost = {
   hasChildProcesses?: (ptyId: string) => Promise<boolean>
   subscribeToData: (ptyId: string, listener: (data: string) => void) => () => void
   readRecentOutput: (ptyId: string) => string | undefined
-  write: (ptyId: string, data: string) => void
+  write: (ptyId: string, data: string, inputKind: TerminalInputKind) => void
 }
 
 export function pasteWorktreeStartupDraftWhenReady(
@@ -33,7 +34,7 @@ export function pasteWorktreeStartupDraftWhenReady(
         console.warn('[worktree-create] agent did not become ready for draft paste')
         return
       }
-      host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`)
+      host.write(ptyId, `${BRACKETED_PASTE_BEGIN}${draft.content}${BRACKETED_PASTE_END}`, 'launch')
     })
     .catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))
 }
@@ -49,7 +50,7 @@ export function sendWorktreeStartupFollowupWhenReady(
         console.warn('[worktree-create] agent did not become ready for follow-up prompt')
         return
       }
-      host.write(ptyId, `${followup.prompt}\r`)
+      host.write(ptyId, `${followup.prompt}\r`, 'launch')
     })
     .catch((error) =>
       console.warn('[worktree-create] failed to send startup follow-up prompt:', error)

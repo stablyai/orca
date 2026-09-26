@@ -222,7 +222,10 @@ describe('connectPanePty', () => {
 
     expect(createdTransportOptions[0]?.commandDelivery).toBe('provider')
     expect(transport.sendInput).not.toHaveBeenCalledWith('droid\r')
-    expect(transport.sendInputAccepted).toHaveBeenCalledWith(`\x1b[200~${prompt}\x1b[201~`)
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith(
+      `\x1b[200~${prompt}\x1b[201~`,
+      'launch'
+    )
   })
 
   it('waits past 8s for a cold Codex composer and preserves input ordering', async () => {
@@ -279,7 +282,8 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(transport.sendInputAccepted).toHaveBeenCalledWith(
-      '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
+      '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~',
+      'launch'
     )
     expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual([
       '\x1b[I',
@@ -354,7 +358,8 @@ describe('connectPanePty', () => {
 
     expect(transport.sendInputAccepted).toHaveBeenCalledTimes(1)
     expect(transport.sendInputAccepted).toHaveBeenCalledWith(
-      '\x1b[200~Linked Linear issue: STA-905\x1b[201~'
+      '\x1b[200~Linked Linear issue: STA-905\x1b[201~',
+      'launch'
     )
   })
 

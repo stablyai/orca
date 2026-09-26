@@ -178,7 +178,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "claude '--dangerously-skip-permissions' 'run the automation'\r"
+        "claude '--dangerously-skip-permissions' 'run the automation'\r",
+        'launch'
       )
     } finally {
       vi.useRealTimers()
@@ -214,7 +215,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r",
+        'launch'
       )
     } finally {
       vi.useRealTimers()
@@ -241,7 +243,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox'\r"
+        "codex '--dangerously-bypass-approvals-and-sandbox'\r",
+        'launch'
       )
     } finally {
       vi.useRealTimers()
@@ -262,7 +265,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox'\r"
+        "codex '--dangerously-bypass-approvals-and-sandbox'\r",
+        'launch'
       )
     } finally {
       vi.useRealTimers()
@@ -288,7 +292,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r",
+        'launch'
       )
     } finally {
       vi.useRealTimers()
@@ -312,7 +317,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r",
+        'launch'
       )
     } finally {
       vi.useRealTimers()
@@ -353,7 +359,8 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'\r"
+        "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'\r",
+        'launch'
       )
     } finally {
       vi.useRealTimers()

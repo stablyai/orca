@@ -150,7 +150,7 @@ describe('intentional stops keep the pane through the exit', () => {
       id: PTY_ID,
       incarnationId: INCARNATION_ID
     })
-    harness.runtime.terminalRunFacts.recordUserInput(PTY_ID)
+    harness.runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'ls\r')
 
     await stopReplacedPanePty(harness.deps, PTY_ID)
     expect(harness.boundPtyId()).toBe(PTY_ID)

@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -71,11 +72,11 @@ export const ptySessionControlApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }> => ipcRenderer.invoke('pty:spawn', opts),
-  write: (id: string, data: string, options?: { userInput?: true }): void => {
-    ipcRenderer.send('pty:write', { id, data, ...options })
+  write: (id: string, data: string, inputKind: TerminalInputKind): void => {
+    ipcRenderer.send('pty:write', { id, data, inputKind })
   },
-  writeAccepted: (id: string, data: string, options?: { userInput?: true }): Promise<boolean> =>
-    ipcRenderer.invoke('pty:writeAccepted', { id, data, ...options }),
+  writeAccepted: (id: string, data: string, inputKind: TerminalInputKind): Promise<boolean> =>
+    ipcRenderer.invoke('pty:writeAccepted', { id, data, inputKind }),
   onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
       callback(payload)

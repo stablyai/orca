@@ -210,6 +210,7 @@ export const TERMINAL_SEND_METHODS = [
       try {
         result = useSettledAgentPrompt
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
+              inputKind: 'driving',
               beforeWrite,
               signal,
               ...(orchestrationMutation
@@ -234,7 +235,8 @@ export const TERMINAL_SEND_METHODS = [
               {
                 beforeWrite,
                 signal,
-                ...(params.inputKind ? { inputKind: params.inputKind } : {}),
+                // Why: a wire write carries no provenance beyond a client's own query reply.
+                inputKind: params.inputKind === 'query-reply' ? 'query-reply' : 'driving',
                 ...(reserveWrite ? { reserveWrite } : {}),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }

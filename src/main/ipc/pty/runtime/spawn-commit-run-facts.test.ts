@@ -76,7 +76,7 @@ describe('runtime spawn commit: run facts', () => {
   it('keeps a process run facts when the same incarnation commits again', async () => {
     const facts = new TerminalRunFactsRegister()
     await commit({}, facts)
-    facts.recordUserInput(PTY_ID, 100)
+    facts.recordInput(PTY_ID, 'driving', 'ls\r', 100)
 
     expect(await commit({ isReattach: true }, facts)).toEqual({
       freshSpawn: true,

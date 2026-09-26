@@ -64,7 +64,7 @@ describe('OrcaRuntimeService', () => {
     const afterRestart = await restarted.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     const listed = await restarted.listTerminals(`id:${TEST_WORKTREE_ID}`)
     restarted.onPtyData('persisted-pty', 'after restart\n', 1)
-    await restarted.sendTerminal('term_current', { text: 'input' })
+    await restarted.sendTerminal('term_current', { text: 'input' }, { inputKind: 'driving' })
     await restarted.updateRemoteDesktopViewer('persisted-pty', 'viewer', 'client', 132, 41)
 
     expect(beforeRestart.tabs[0]).toMatchObject({
@@ -178,7 +178,9 @@ describe('OrcaRuntimeService', () => {
 
     const shown = await runtime.showTerminal(entry!.handle)
     expect(shown.writable).toBe(true)
-    await expect(runtime.sendTerminal(entry!.handle, { text: 'hi' })).resolves.toMatchObject({
+    await expect(
+      runtime.sendTerminal(entry!.handle, { text: 'hi' }, { inputKind: 'driving' })
+    ).resolves.toMatchObject({
       accepted: true
     })
     expect(writes).toEqual([['pty-orphan', 'hi']])

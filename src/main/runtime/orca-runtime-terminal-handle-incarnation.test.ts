@@ -159,12 +159,16 @@ describe('runtime terminal handle incarnation fencing', () => {
     })
     expect(replacement?.handle).not.toBe(staleHandle)
     await expect(runtime.readTerminal(staleHandle)).rejects.toThrow('terminal_handle_stale')
-    await expect(runtime.sendTerminal(staleHandle, { text: 'stale input' })).rejects.toThrow(
-      'terminal_handle_stale'
-    )
+    await expect(
+      runtime.sendTerminal(staleHandle, { text: 'stale input' }, { inputKind: 'driving' })
+    ).rejects.toThrow('terminal_handle_stale')
 
     await expect(
-      runtime.sendTerminal(replacement!.handle, { text: 'replacement input' })
+      runtime.sendTerminal(
+        replacement!.handle,
+        { text: 'replacement input' },
+        { inputKind: 'driving' }
+      )
     ).resolves.toMatchObject({
       accepted: true,
       handle: replacement!.handle

@@ -400,7 +400,7 @@ describe('connectPanePty', () => {
         POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
         expect.any(Function)
       )
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
       return connection
     })
     disposable.dispose()

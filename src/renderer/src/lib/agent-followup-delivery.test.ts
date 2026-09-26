@@ -49,7 +49,7 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
       })
 
       expect(delivered).toBe(true)
-      expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(null, 'pty-1', 'ship it\r')
+      expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(null, 'pty-1', 'ship it\r', 'launch')
     })
 
     it(`still refuses to type into a bare ${agent} shell foreground`, async () => {
@@ -105,6 +105,6 @@ describe('sendFollowupPromptWhenAgentReady — interpreter-wrapped agents', () =
     })
 
     expect(delivered).toBe(true)
-    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(null, 'pty-1', 'ship it\r')
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(null, 'pty-1', 'ship it\r', 'launch')
   })
 })

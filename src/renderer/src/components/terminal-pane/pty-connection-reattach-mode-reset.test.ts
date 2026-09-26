@@ -275,8 +275,8 @@ describe('connectPanePty', () => {
     transport.sendInputImmediate.mockClear()
     sendTerminalInputThroughPane(pane, 'yes')
     sendTerminalInputThroughPane(pane, '\x1b[A') // arrow-key auto-repeat stays batched
-    expect(transport.sendInput).toHaveBeenCalledWith('yes')
-    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A')
+    expect(transport.sendInput).toHaveBeenCalledWith('yes', 'query-reply')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A', 'query-reply')
     expect(transport.sendInputImmediate).not.toHaveBeenCalled()
 
     // terminal-query-reply.test proves real xterm emits this as one framed onData reply; this pins it to the immediate path.
@@ -291,7 +291,7 @@ describe('connectPanePty', () => {
     const printableInputs = [']10;hello', '>|xterm.js(6.1.0-beta.287)', ']|literal-text']
     for (const data of printableInputs) {
       sendTerminalInputThroughPane(pane, data)
-      expect(transport.sendInput).toHaveBeenCalledWith(data)
+      expect(transport.sendInput).toHaveBeenCalledWith(data, 'query-reply')
     }
     expect(transport.sendInputImmediate).not.toHaveBeenCalled()
   })
@@ -368,7 +368,7 @@ describe('connectPanePty', () => {
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(20)
 
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I', 'query-reply')
       // Snapshot ends with ?25l (Cursor Agent parks/hides the cursor); the reset must preserve it, not force ?25h, or a stray block paints.
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,

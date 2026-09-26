@@ -24,7 +24,8 @@ export function writeOrchestrationPointerWithSettlement(
     return writeRefused('provider_cannot_settle')
   }
   try {
-    return settledWrite.call(args.controller, args.ptyId, args.data)
+    // Why driving: a pointer is input that tells a running agent to read its mail.
+    return settledWrite.call(args.controller, args.ptyId, args.data, 'driving')
   } catch {
     // A partial write that then threw cannot prove the transport took nothing.
     return writeUnverifiable('provider_threw_after_handoff', true)

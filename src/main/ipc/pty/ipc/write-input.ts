@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/terminal-input'
 import { ptyOwnership } from '../provider/ownership-state'
 import { tryGetProviderForPty } from '../provider/registry'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 import { interactiveOutputCharsByPty, lastInputAtByPty } from '../delivery/visibility-state'
 
 export function isMainWindowPtyIpcEvent(
@@ -22,8 +23,7 @@ export function isMainWindowPtyIpcEvent(
   )
 }
 
-/** `userInput` marks bytes a person produced, as opposed to replies and programmatic writes. */
-export type PtyWritePayload = { id: string; data: string; userInput?: true }
+export type PtyWritePayload = { id: string; data: string; inputKind: TerminalInputKind }
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
 export function createPtyWriteInput(deps: {
@@ -153,10 +153,7 @@ export function createPtyWriteInput(deps: {
   const noteRendererPtyInput = (args: PtyWritePayload): void => {
     lastInputAtByPty.set(args.id, performance.now())
     interactiveOutputCharsByPty.set(args.id, 0)
-    // Why before the write: input such as `exit` can end the process before the write returns.
-    if (args.userInput === true) {
-      runtime?.terminalRunFacts?.recordUserInput(args.id)
-    }
+    runtime?.terminalRunFacts?.recordInput(args.id, args.inputKind, args.data)
   }
 
   const writePtyInput = (args: PtyWritePayload): boolean | Promise<boolean> => {

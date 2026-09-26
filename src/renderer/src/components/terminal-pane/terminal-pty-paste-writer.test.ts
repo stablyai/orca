@@ -8,21 +8,21 @@ describe('terminal PTY paste writer', () => {
     const sendInputAccepted = vi.fn().mockResolvedValue(true)
 
     await expect(
-      writeTerminalPastePtyInput({ sendInput, sendInputAccepted }, 'payload', { userInput: true })
+      writeTerminalPastePtyInput({ sendInput, sendInputAccepted }, 'payload', 'driving')
     ).resolves.toBe(true)
 
-    expect(sendInputAccepted).toHaveBeenCalledWith('payload', { userInput: true })
+    expect(sendInputAccepted).toHaveBeenCalledWith('payload', 'driving')
     expect(sendInput).not.toHaveBeenCalled()
   })
 
   it('falls back to queued PTY writes when acknowledged writes are unavailable', () => {
     const sendInput = vi.fn().mockReturnValue(true)
 
-    expect(writeTerminalPastePtyInput({ sendInput }, 'payload', { userInput: true })).toBe(true)
-    expect(sendInput).toHaveBeenCalledWith('payload', { userInput: true })
+    expect(writeTerminalPastePtyInput({ sendInput }, 'payload', 'driving')).toBe(true)
+    expect(sendInput).toHaveBeenCalledWith('payload', 'driving')
   })
 
   it('rejects writes without a transport', () => {
-    expect(writeTerminalPastePtyInput(undefined, 'payload')).toBe(false)
+    expect(writeTerminalPastePtyInput(undefined, 'payload', 'driving')).toBe(false)
   })
 })

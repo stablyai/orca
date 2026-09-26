@@ -4,7 +4,8 @@ import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import { createPtyOutputProcessor } from './pty-output-processor'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
-import type { IpcPtyTransportOptions, PtyInputOptions, PtyTransport } from './pty-transport-types'
+import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
+import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
 
 export {
   ensurePtyDispatcher,
@@ -57,12 +58,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => !destroyed && connected && ptyId === id,
-    write: (id, data, options) =>
-      options ? window.api.pty.write(id, data, options) : window.api.pty.write(id, data),
-    writeAccepted: (id, data, options) =>
-      options
-        ? window.api.pty.writeAccepted(id, data, options)
-        : window.api.pty.writeAccepted(id, data),
+    write: (id, data, inputKind) => window.api.pty.write(id, data, inputKind),
+    writeAccepted: (id, data, inputKind) => window.api.pty.writeAccepted(id, data, inputKind),
     onDrainFailure: (id) => {
       if (ptyId === id) {
         storedCallbacks.onWriteUnavailable?.()
@@ -119,13 +116,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     }
     await preconnectInputBuffer.flush({
       isCurrent: () => !destroyed && connected && ptyId === id,
-      sendInput: (data, options) => inputWriteQueue.enqueue(id, data, options),
+      sendInput: (data, inputKind) => inputWriteQueue.enqueue(id, data, inputKind),
       sendInputImmediate: (data) => inputWriteQueue.enqueueQueryReply(id, data),
       ...(connectionId
         ? {}
         : {
-            sendInputAccepted: (data: string, options?: PtyInputOptions) =>
-              inputWriteQueue.enqueueAccepted(id, data, options)
+            sendInputAccepted: (data: string, inputKind: TerminalInputKind) =>
+              inputWriteQueue.enqueueAccepted(id, data, inputKind)
           })
     })
   }
@@ -218,18 +215,23 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       storedCallbacks = {}
     },
 
-    sendInput(data, options) {
+    sendInput(data, inputKind) {
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-        return preconnectInputBuffer.enqueue(data, 'ordinary', opts.onPreconnectInput, options)
+        return preconnectInputBuffer.enqueue(data, 'ordinary', inputKind, opts.onPreconnectInput)
       }
       return !destroyed && connected && ptyId
-        ? inputWriteQueue.enqueue(ptyId, data, options)
+        ? inputWriteQueue.enqueue(ptyId, data, inputKind)
         : false
     },
 
     sendInputImmediate(data) {
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-        return preconnectInputBuffer.enqueue(data, 'immediate', opts.onPreconnectInput)
+        return preconnectInputBuffer.enqueue(
+          data,
+          'immediate',
+          'query-reply',
+          opts.onPreconnectInput
+        )
       }
       return !destroyed && connected && ptyId
         ? inputWriteQueue.enqueueQueryReply(ptyId, data)
@@ -239,14 +241,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     ...(connectionId
       ? {}
       : {
-          async sendInputAccepted(data: string, options?: PtyInputOptions): Promise<boolean> {
+          async sendInputAccepted(data: string, inputKind: TerminalInputKind): Promise<boolean> {
             if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-              return preconnectInputBuffer.enqueueAccepted(data, opts.onPreconnectInput, options)
+              return preconnectInputBuffer.enqueueAccepted(data, inputKind, opts.onPreconnectInput)
             }
             if (destroyed || !connected || !ptyId) {
               return false
             }
-            return inputWriteQueue.enqueueAccepted(ptyId, data, options)
+            return inputWriteQueue.enqueueAccepted(ptyId, data, inputKind)
           }
         }),
 
