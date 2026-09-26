@@ -78,7 +78,7 @@
     "acorn": "8.18.0",
     "esbuild": "0.25.4",
     "expo-module-scripts": "^55.0.2",
-    "happy-dom": "^20.14.5",
+    "happy-dom": "^20.11.8",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
     "react-test-renderer": "19.2.8",
