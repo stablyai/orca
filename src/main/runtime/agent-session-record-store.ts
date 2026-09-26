@@ -1,3 +1,4 @@
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { setVisibleSessionId } from './agent-session-visible-tab-index'
 import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
@@ -346,11 +347,9 @@ export class AgentSessionRecordStore {
     return this.transact(() => {
       const record = this.state.records.get(sessionId)
       if (!record) {
-        throw new Error(
-          this.isSessionUnreadable(sessionId)
-            ? 'execution_owner_reconciling'
-            : 'agent_session_identity_required'
-        )
+        throw this.isSessionUnreadable(sessionId)
+          ? agentSessionRefusalError('execution_owner_reconciling', 'recordUnreadable')
+          : agentSessionRefusalError('agent_session_identity_required', 'recordMissing')
       }
       const next = apply(record)
       this.state.records.set(sessionId, next)

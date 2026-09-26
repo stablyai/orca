@@ -15,6 +15,10 @@ import {
   nestedWorkerDepthExceededMessage
 } from '../../../shared/nested-worker-depth'
 import { OrchestrationError } from '../orchestration/orchestration-error'
+import {
+  AgentSessionRefusalError,
+  agentSessionRefusalError
+} from '../../../shared/agent-session-wire-refusals'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -295,5 +299,47 @@ describe('structured worker dispatch preamble errors', () => {
         message: 'The dispatch preamble was not delivered: provider_write_failed: broken pipe.'
       }
     })
+  })
+})
+
+describe('thrown agent-session refusals', () => {
+  const meta = { runtimeId: 'runtime-1' }
+
+  // Released clients classify a thrown refusal by its wire code and message; both must read
+  // exactly as the bare `Error(code)` this replaced.
+  it.each([
+    ['agent_session_ownership_unknown', 'agent_session_ownership_unknown'],
+    ['structured_agent_session_unsupported', 'runtime_error'],
+    ['agent_session_journal_unreadable', 'runtime_error']
+  ] as const)('keeps %s on the wire as it was, and adds its cause in data', (code, wire) => {
+    const before = mapRuntimeError('req_1', meta, new Error(code))
+    const after = mapRuntimeError('req_1', meta, agentSessionRefusalError(code, 'hostDisabled'))
+    expect(after.error.code).toBe(before.error.code)
+    expect(after.error.code).toBe(wire)
+    expect(after.error.message).toBe(before.error.message)
+    expect(after.error.message).toBe(code)
+    expect(after.error.data).toEqual({ refusal: { code, cause: 'hostDisabled' } })
+  })
+
+  it('carries no cause in data when the refusal named none', () => {
+    const response = mapRuntimeError(
+      'req_1',
+      meta,
+      new AgentSessionRefusalError({
+        code: 'agent_session_conflict',
+        message: 'Another process claims this session.'
+      })
+    )
+    expect(response.error).toEqual({
+      code: 'agent_session_conflict',
+      message: 'agent_session_conflict',
+      data: { refusal: { code: 'agent_session_conflict' } }
+    })
+  })
+
+  it('exposes no code property another passthrough could claim', () => {
+    expect('code' in agentSessionRefusalError('agent_session_conflict', 'claimConflicted')).toBe(
+      false
+    )
   })
 })

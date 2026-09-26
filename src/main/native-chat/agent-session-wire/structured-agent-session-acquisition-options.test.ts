@@ -430,7 +430,11 @@ describe('structured session acquisition options', () => {
       })
     ).resolves.toEqual({
       ok: false,
-      refusal: { code: 'agent_session_operation_invalid', message: 'model list unavailable' }
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        cause: 'providerStartFailed',
+        message: 'model list unavailable'
+      }
     })
     expect(releaseAcquisition).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease.ownerProcess).toBeNull()
@@ -526,7 +530,11 @@ describe('structured session acquisition options', () => {
       await (exitProven && failurePoint !== 'journal'
         ? expect(failed).resolves.toEqual({
             ok: false,
-            refusal: { code: 'agent_session_operation_invalid', message: injected.message }
+            refusal: {
+              code: 'agent_session_operation_invalid',
+              cause: 'providerStartFailed',
+              message: injected.message
+            }
           })
         : expect(failed).rejects.toThrow(
             exitProven ? injected.message : 'agent_session_acquisition_exit_unproven'

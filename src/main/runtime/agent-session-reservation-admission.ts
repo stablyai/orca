@@ -9,6 +9,7 @@
  * inside a transaction, which is what makes the record and its operation row land together.
  */
 
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
   agentSessionOperationKey,
   evaluateAgentSessionOperation,
@@ -110,7 +111,7 @@ export function requireAgentSessionRecordForReplay(
   if (!record) {
     // Why: the recorded effect is no longer reconstructable, and re-running it would be a second
     // spawn rather than a replay.
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', 'recordMissing')
   }
   return record
 }
@@ -126,11 +127,11 @@ export function admitPendingAgentSessionReservationReplay(
     probe: request.probe
   })
   if (decision.decision === 'refused') {
-    throw new Error(decision.code)
+    throw agentSessionRefusalError(decision.code, decision.cause)
   }
   if (decision.decision !== 'retry-reservation') {
     // A replay may continue only its still-present reservation; recovery requires a fresh intent.
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', 'replaySuperseded')
   }
   return record
 }
@@ -168,10 +169,10 @@ export function applyAgentSessionReservation(
   const existing = state.records.get(request.sessionId)
   if (!existing) {
     if (state.unreadableRecords.has(request.sessionId)) {
-      throw new Error('execution_owner_reconciling')
+      throw agentSessionRefusalError('execution_owner_reconciling', 'recordUnreadable')
     }
     if (request.expectedFence !== null) {
-      throw new Error('agent_session_checkpoint_stale')
+      throw agentSessionRefusalError('agent_session_checkpoint_stale', 'recordMissing')
     }
     assertSurfaceTabIdUnheld(state, request)
     return { record: createAgentSessionRecord(request, reservation), disposition: 'created' }
@@ -183,7 +184,7 @@ export function applyAgentSessionReservation(
     existing.accountHome.path !== request.accountHome.path
   ) {
     // Why: location, provider, and account are the session identity; changing one is a fork.
-    throw new Error('agent_session_conflict')
+    throw agentSessionRefusalError('agent_session_conflict', 'identityMismatch')
   }
   // A create may take over only a record that never bound a conversation and whose last
   // attempt is proven gone: that is the same as creating it fresh, under a fresh provider id.
@@ -192,7 +193,7 @@ export function applyAgentSessionReservation(
     !request.adoptedHandleLink &&
     agentSessionLeaseOwnerVerdict(existing.lease) === 'exited'
   if (request.expectedFence === null && !recreatable) {
-    throw new Error('agent_session_conflict')
+    throw agentSessionRefusalError('agent_session_conflict', 'sessionExists')
   }
   const pinned = {
     ...existing,
@@ -237,7 +238,7 @@ function assertAdoptedConversationUnowned(
       (link) => agentSessionProviderHandleRoot(link.handle) === root
     )
     if (holdsSameConversation) {
-      throw new Error('agent_session_conflict')
+      throw agentSessionRefusalError('agent_session_conflict', 'conversationHeldElsewhere')
     }
   }
 }
@@ -252,11 +253,11 @@ function assertSurfaceTabIdUnheld(
     return
   }
   if (!isAgentSessionSurfaceTabId(request.surfaceTabId)) {
-    throw new Error('agent_session_operation_invalid')
+    throw agentSessionRefusalError('agent_session_operation_invalid', 'requestMalformed')
   }
   for (const record of state.records.values()) {
     if (record.sessionId !== request.sessionId && record.surfaceTabId === request.surfaceTabId) {
-      throw new Error('agent_session_conflict')
+      throw agentSessionRefusalError('agent_session_conflict', 'tabIdTaken')
     }
   }
 }
@@ -311,7 +312,7 @@ export function commitAgentSessionReservation(
 ): AgentSessionReserveResult {
   const decision = evaluateAgentSessionReserveOperation(state, request)
   if (decision.decision === 'refused') {
-    throw new Error(decision.code)
+    throw agentSessionRefusalError(decision.code, decision.cause)
   }
   if (decision.decision === 'replay') {
     let record = requireAgentSessionRecordForReplay(state, decision.row, request.sessionId)

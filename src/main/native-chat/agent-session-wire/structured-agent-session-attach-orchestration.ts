@@ -1,3 +1,4 @@
+import { refuse } from '../../../shared/agent-session-wire-refusals'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
 import { recoverInterruptedCompaction } from './structured-compaction-recovery'
@@ -133,10 +134,13 @@ async function runAttach(
     })
   )
   if (!settled) {
-    return refuseAgentSessionMutation({
-      code: 'agent_session_ownership_unknown',
-      message: 'The provider-exit terminal journal settlement is still pending; retry attach.'
-    })
+    return refuseAgentSessionMutation(
+      refuse(
+        'agent_session_ownership_unknown',
+        'settlementPending',
+        'The provider-exit terminal journal settlement is still pending; retry attach.'
+      )
+    )
   }
   const probe = await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
     context.runtimeState.probeOwner(sessionId)

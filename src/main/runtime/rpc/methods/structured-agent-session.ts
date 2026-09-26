@@ -5,6 +5,7 @@
 // not exist rather than receiving the journal or mutation surface. Session-tab
 // inventory may expose only a metadata placeholder for an incapable mobile client.
 
+import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
 import { agentSessionFingerprintConflict } from '../../../../shared/agent-session-mutation-envelope'
 import type { z } from 'zod'
 import {
@@ -74,7 +75,7 @@ async function resolveClientSuppliedAttach(params: z.infer<typeof AttachParams>,
   await ensureHostInstalled(ctx)
   const host = requireHost(ctx)
   if (!host.supportsCreate(params.location, params.agent)) {
-    throw new Error('structured_agent_session_unsupported')
+    throw agentSessionRefusalError('structured_agent_session_unsupported', 'hostUnsupported')
   }
   const { agent: _attachAgent, provider: _attachProvider, ...attachWithoutAgent } = params
   const attachParams = {
@@ -129,7 +130,10 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: CreateSupportParams,
     handler: async (params, ctx) => {
       if (!supportsStructuredSessions(ctx)) {
-        throw new Error('structured_agent_session_unsupported')
+        throw agentSessionRefusalError(
+          'structured_agent_session_unsupported',
+          'clientCapabilityMissing'
+        )
       }
       return ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
     }
@@ -140,7 +144,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
       if (params.envelope.expectedRuntimeFence !== null) {
-        throw new Error('agent_session_operation_invalid')
+        throw agentSessionRefusalError('agent_session_operation_invalid', 'requestMalformed')
       }
       // Everything up to `attach` is pre-commit, and answers with a refusal rather than a throw so
       // a client can tell "nothing was created" from "the outcome is unknown".

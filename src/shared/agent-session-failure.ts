@@ -49,8 +49,9 @@ export type ProviderDiagnostic = {
   audience: ProviderDiagnosticAudience
 }
 
-/** Stderr can be a whole dump; the row keeps enough to act on. */
-export const MAX_PROVIDER_DIAGNOSTIC_CHARS = 2000
+/** Stderr can be a whole dump; the row keeps enough to act on. The same cap as the exit reason a
+ *  lease record keeps, so a diagnostic never outgrows what the record may store. */
+export const MAX_PROVIDER_DIAGNOSTIC_CHARS = 512
 
 export type AgentSessionFailureFact = {
   kind: AgentSessionFailureKind
@@ -73,9 +74,13 @@ export function agentSessionFailureFact(
   kind: AgentSessionFailureKind,
   extra: { detail?: ProviderDiagnostic; refusal?: AgentSessionRefusalReference } = {}
 ): AgentSessionFailureFact {
+  // Re-bounded here, so no writer can store more than the cap however it built the detail.
+  const detail = extra.detail
+    ? providerDiagnostic(extra.detail.text, extra.detail.audience)
+    : undefined
   return {
     kind,
-    ...(extra.detail ? { detail: extra.detail } : {}),
+    ...(detail ? { detail } : {}),
     ...(extra.refusal ? { refusal: extra.refusal } : {})
   }
 }

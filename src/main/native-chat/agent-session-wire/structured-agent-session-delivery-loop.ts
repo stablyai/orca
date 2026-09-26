@@ -17,9 +17,9 @@ import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire
 import { DISPATCH_REJECTION_HOST_RESTARTED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
-  restartFailureFact,
-  startupFailureFromExit,
-  type AgentSessionFailureTextContext
+  structuredAgentSessionStartFailure,
+  type AgentSessionFailureTextContext,
+  type StructuredAgentSessionStartFailureCause
 } from './structured-agent-session-failure-text'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-hold-resume'
 import type {
@@ -29,8 +29,7 @@ import type {
 } from './structured-agent-session-host-types'
 import {
   oldestQueuedSubmission,
-  recordStructuredAgentSessionStartFailure,
-  type StructuredAgentSessionStartFailure
+  recordStructuredAgentSessionStartFailure
 } from './structured-agent-session-start-failure-row'
 import { handOverSubmission } from './structured-agent-session-turns'
 
@@ -56,7 +55,8 @@ type Prepared =
   | { ok: false; refusal: AgentSessionWireRefusal }
   | { ok: true; awaited: StructuredAgentSessionProviderChildIdentity | null }
 
-type StartFailure = Omit<StructuredAgentSessionStartFailure, 'context'>
+/** A failed start before it is worded; `fail` words it once, through the one wording point. */
+type StartFailure = { startKey: string | null; cause: StructuredAgentSessionStartFailureCause }
 
 export class StructuredAgentSessionDeliveryLoop {
   private readonly running = new Set<string>()
@@ -93,9 +93,9 @@ export class StructuredAgentSessionDeliveryLoop {
           return
         }
         if (!prepared.ok) {
-          const failure = restartFailureFact(prepared.refusal)
+          const cause = { refusal: prepared.refusal }
           await this.deps.serialize(sessionId, () =>
-            this.fail(sessionId, { startKey: null, failure })
+            this.fail(sessionId, { startKey: null, cause })
           )
           return
         }
@@ -112,9 +112,9 @@ export class StructuredAgentSessionDeliveryLoop {
     } catch (error) {
       // The error is Orca's own and goes to the log; the chat says only that Orca failed.
       this.deps.onError(sessionId, error)
-      const failure = agentSessionFailureFact('hostFault')
+      const cause = { hostFault: true } as const
       await this.deps
-        .serialize(sessionId, () => this.fail(sessionId, { startKey: null, failure }))
+        .serialize(sessionId, () => this.fail(sessionId, { startKey: null, cause }))
         .catch((failure: unknown) => {
           // Rows left queued are rejected by the next open, or by the next loop an accept wakes.
           this.running.delete(sessionId)
@@ -183,9 +183,9 @@ export class StructuredAgentSessionDeliveryLoop {
       }
       return this.fail(sessionId, {
         startKey: awaited?.generation ?? null,
-        failure: ended
+        cause: ended
           ? endedChildFailure(ended)
-          : (startFailure ?? agentSessionFailureFact('providerStartFailed'))
+          : { failure: startFailure ?? agentSessionFailureFact('providerStartFailed') }
       })
     }
     const next = oldestQueuedSubmission(session)
@@ -210,7 +210,13 @@ export class StructuredAgentSessionDeliveryLoop {
     if (session) {
       await recordStructuredAgentSessionStartFailure(
         { journal: session.journal, fence: this.deps.conversationFence(sessionId) },
-        { ...failure, context: this.deps.failureTextContext(sessionId) }
+        {
+          startKey: failure.startKey,
+          ...structuredAgentSessionStartFailure(
+            failure.cause,
+            this.deps.failureTextContext(sessionId)
+          )
+        }
       )
     }
     return this.stop(sessionId)
@@ -240,17 +246,19 @@ function startThatFailedWhileQueued(
   ) {
     return null
   }
-  return { startKey: ended.generation, failure: endedChildFailure(ended) }
+  return { startKey: ended.generation, cause: endedChildFailure(ended) }
 }
 
 /** Why a queued message the child never took is rejected. The host stopping the child is Orca's
  *  cause, never the provider's. */
-function endedChildFailure(ended: StructuredAgentSessionEndedChild): AgentSessionFailureFact {
+function endedChildFailure(
+  ended: StructuredAgentSessionEndedChild
+): StructuredAgentSessionStartFailureCause {
   if (ended.cause === 'host-stop') {
-    return agentSessionFailureFact('hostFault')
+    return { hostFault: true }
   }
   if (ended.duringStartup) {
-    return startupFailureFromExit(ended.failure)
+    return { exit: ended.failure }
   }
-  return ended.failure ?? agentSessionFailureFact('providerExited')
+  return { failure: ended.failure ?? agentSessionFailureFact('providerExited') }
 }

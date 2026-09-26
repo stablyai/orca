@@ -5,9 +5,10 @@
 // or a journal that cannot be opened.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionWireRefusal
+import {
+  refuse,
+  type AgentSessionMutationEnvelope,
+  type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
 import type { AgentSessionFailureTextContext } from './structured-agent-session-failure-text'
@@ -34,12 +35,17 @@ export function structuredAgentSessionSendBlock(
   ) {
     return {
       ok: false,
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        message: command.replacementSessionId
-          ? 'This conversation has been cleared. Use the current conversation.'
-          : 'The conversation operation is unconfirmed.'
-      }
+      refusal: command.replacementSessionId
+        ? refuse(
+            'agent_session_operation_invalid',
+            'conversationCleared',
+            'This conversation has been cleared. Use the current conversation.'
+          )
+        : refuse(
+            'agent_session_operation_invalid',
+            'conversationCommandUnconfirmed',
+            'The conversation operation is unconfirmed.'
+          )
     }
   }
   return null
@@ -58,12 +64,13 @@ export async function openConversationForWrite(
   } catch (error) {
     return {
       ok: false,
-      refusal: {
-        code: 'agent_session_journal_unreadable',
-        message: `The conversation could not be opened: ${
+      refusal: refuse(
+        'agent_session_journal_unreadable',
+        'journalUnreadable',
+        `The conversation could not be opened: ${
           error instanceof Error ? error.message : String(error)
         }`
-      }
+      )
     }
   }
 }

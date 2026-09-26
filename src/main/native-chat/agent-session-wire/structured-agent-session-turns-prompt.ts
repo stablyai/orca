@@ -6,14 +6,18 @@ import {
   isValidAgentSessionQuestionAnswers
 } from '../../../shared/agent-session-question-answer'
 import type { AgentJournalResolution } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResult } from '../../../shared/agent-session-wire'
+import {
+  refuse,
+  type AgentSessionPromptResult,
+  type AgentSessionRefusalCause
+} from '../../../shared/agent-session-wire'
 import { decodeCodexQuestionOptionId } from '../../codex/codex-structured-prompt-replies'
 import { AgentSessionPromptUnavailableError } from './structured-agent-session-adapter'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
-function invalid(message: string): TurnOutcome<never> {
-  return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+function invalid(cause: AgentSessionRefusalCause, message: string): TurnOutcome<never> {
+  return { ok: false, refusal: refuse('agent_session_operation_invalid', cause, message) }
 }
 
 export async function performPrompt(
@@ -46,11 +50,14 @@ export async function performPrompt(
     !acceptsGrouped &&
     !prompt.options.some((option) => option.id === input.optionId)
   ) {
-    return invalid(`Option ${input.optionId} is not offered by item ${input.itemId}.`)
+    return invalid(
+      'optionRejected',
+      `Option ${input.optionId} is not offered by item ${input.itemId}.`
+    )
   }
   const identity = parseAgentJournalItemKey(input.itemId)
   if (!identity) {
-    return invalid(`Item id ${input.itemId} is not a well-formed item key.`)
+    return invalid('requestMalformed', `Item id ${input.itemId} is not a well-formed item key.`)
   }
 
   const resolution: AgentJournalResolution = {
@@ -79,7 +86,7 @@ export async function performPrompt(
     })
   } catch (error) {
     if (!committed.item && error instanceof AgentSessionPromptUnavailableError) {
-      return invalid(error.message)
+      return invalid('promptGone', error.message)
     }
     if (!committed.item) {
       throw error

@@ -13,6 +13,7 @@
 // that are not about work at all: the record still exists and this build supports it, and the
 // lease is free.
 
+import type { AgentSessionRefusalCause } from '../../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentSessionProviderHandleChainHead,
@@ -57,6 +58,8 @@ export type StructuredAgentSessionResumeFailure = StructuredAgentSessionResumeCa
   outcome: AgentSessionResumeFailureOutcome
   /** The host's or provider's refusal code, verbatim, so it can be quoted in a report. */
   reason: string
+  /** The refusal's situation, when the host named one; absent on older records. */
+  cause?: AgentSessionRefusalCause
   /** Whether naming it in an action would run it again: whether it is still an offer. A
    *  continuation the chat already holds, or the user having moved on, makes a retry a no-op no
    *  matter what the reason says. */

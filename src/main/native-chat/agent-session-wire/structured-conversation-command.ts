@@ -119,10 +119,7 @@ export function runStructuredConversationCommand(
               ? null
               : conversationCommandBlocked(ctx, record)
           if (blocked) {
-            return {
-              ok: false,
-              refusal: { code: 'agent_session_operation_invalid', message: blocked }
-            }
+            return { ok: false, refusal: blocked }
           }
           const replacementSessionId =
             command === 'clear'

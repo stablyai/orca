@@ -498,7 +498,7 @@ describe('a send with no live owner', () => {
       reason: "Codex couldn't restart. Start a new chat to continue.",
       rejection: {
         kind: 'restartFailed',
-        refusal: { code: 'structured_agent_session_unsupported' }
+        refusal: { code: 'structured_agent_session_unsupported', cause: 'hostUnsupported' }
       }
     })
   })

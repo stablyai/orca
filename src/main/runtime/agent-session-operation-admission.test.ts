@@ -48,6 +48,10 @@ describe('global agent-session operation admission', () => {
         fingerprint: 'different-send',
         now: NOW + 1
       }).decision
-    ).toEqual({ decision: 'refused', code: 'agent_session_operation_conflict' })
+    ).toEqual({
+      decision: 'refused',
+      code: 'agent_session_operation_conflict',
+      cause: 'operationIdReused'
+    })
   })
 })

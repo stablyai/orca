@@ -2,6 +2,11 @@
 // runtime/browser error allowlists define the contract the CLI relies on to
 // format human-facing messages. Centralizing this mapping keeps the allowlist
 // auditable in one place instead of spread across per-method branches.
+import {
+  agentSessionRefusalReference,
+  isAgentSessionRefusalError,
+  type AgentSessionRefusalError
+} from '../../../shared/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
@@ -158,6 +163,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
+  if (isAgentSessionRefusalError(error)) {
+    return agentSessionRefusalErrorResponse(id, meta, error)
+  }
   if (
     error instanceof Error &&
     'code' in error &&
@@ -226,6 +234,27 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     return errorResponse(id, meta, 'invalid_argument', 'Missing terminal send payload')
   }
   return errorResponse(id, meta, 'runtime_error', message)
+}
+
+/**
+ * A thrown agent-session refusal, mapped before any `'code' in error` passthrough so no other
+ * subsystem's code set can claim it. Wire code and message are exactly what the bare `Error(code)`
+ * it replaced produced — released clients classify both — and the refusal's cause rides only in
+ * `data`, which they ignore.
+ */
+function agentSessionRefusalErrorResponse(
+  id: string,
+  meta: RpcEnvelopeMeta,
+  error: AgentSessionRefusalError
+): RpcFailure {
+  const { code } = error.refusal
+  return errorResponse(
+    id,
+    meta,
+    RUNTIME_PASSTHROUGH_CODES.has(code) ? code : 'runtime_error',
+    code,
+    { refusal: agentSessionRefusalReference(error.refusal) }
+  )
 }
 
 export const computerErrorData = computerUseErrorRecoveryData

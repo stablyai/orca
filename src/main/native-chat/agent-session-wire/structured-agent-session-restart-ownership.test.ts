@@ -713,3 +713,21 @@ it('logs teardown capsule publication failure and still releases the provider', 
   warning.mockRestore()
   await rm(capsulePath, { recursive: true })
 })
+
+// The resume ledger's reason stays the refusal code, which is what every renderer's guidance keys
+// on; the cause is filed beside it, never in its place.
+it('files a restart refused by a conflicted claim under its code, with its cause beside it', async () => {
+  const { host, store } = await interruptedRestart()
+  await store.transitionHandoff(SESSION, (record) => ({
+    ...record,
+    lease: { ...record.lease, claimStatus: 'conflicted' }
+  }))
+
+  await host.restartResume.continueAfterRestart([SESSION], 'modal')
+
+  await vi.waitFor(async () =>
+    expect(await host.restartResume.listFailures()).toMatchObject([
+      { reason: 'agent_session_conflict', cause: 'claimConflicted' }
+    ])
+  )
+})

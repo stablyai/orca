@@ -7,12 +7,17 @@
 // on. A write-capable hold must fail when acquisition is refused so the surface never mistakes a
 // readable journal for a live provider child.
 
+import {
+  isAgentSessionRefusalCause,
+  isAgentSessionWireRefusalCode,
+  refuse,
+  type AgentSessionRefusalCause
+} from '../../../shared/agent-session-wire-refusals'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
-import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import {
   attachStructuredAgentSessionUnderSerialize,
@@ -49,11 +54,16 @@ export async function resumeHeldStructuredAgentSession(input: {
   await context.runtimeState.resolveRecovery(sessionId)
   const record = context.deps.store.getRecord(sessionId)
   if (!record) {
-    return refuse('agent_session_identity_required', 'No structured session exists by that id.')
+    return refuseResume(
+      'agent_session_identity_required',
+      'recordMissing',
+      'No structured session exists by that id.'
+    )
   }
   if (!adapterSupportsRecord(context.deps.adapter, record)) {
-    return refuse(
+    return refuseResume(
       'structured_agent_session_unsupported',
+      'hostUnsupported',
       'This execution host cannot resume the requested structured agent session.'
     )
   }
@@ -63,14 +73,20 @@ export async function resumeHeldStructuredAgentSession(input: {
   )
   if (!params) {
     return record.lease.unreconciled
-      ? refuse(
+      ? refuseResume(
           'execution_owner_reconciling',
+          'hostReconciling',
           'This host has not yet adjudicated the session lease.'
         )
       : record.lease.claimStatus === 'conflicted'
-        ? refuse('agent_session_conflict', 'Another process claims this session.')
-        : refuse(
+        ? refuseResume(
+            'agent_session_conflict',
+            'claimConflicted',
+            'Another process claims this session.'
+          )
+        : refuseResume(
             'agent_session_ownership_unknown',
+            'notResumable',
             'The session lease is not one this host may resume.'
           )
   }
@@ -115,6 +131,7 @@ function settledResumeRefusal(
   return failedCreateRefusal(
     {
       code: outcome.code,
+      ...(isAgentSessionRefusalCause(outcome.cause) ? { cause: outcome.cause } : {}),
       message: outcome.message ?? (error instanceof Error ? error.message : String(error))
     },
     outcome.status,
@@ -122,9 +139,10 @@ function settledResumeRefusal(
   )
 }
 
-function refuse(
+function refuseResume(
   code: AgentSessionWireRefusal['code'],
+  cause: AgentSessionRefusalCause,
   message: string
 ): StructuredAgentSessionResumeOutcome {
-  return { ok: false, refusal: { code, message } }
+  return { ok: false, refusal: refuse(code, cause, message) }
 }

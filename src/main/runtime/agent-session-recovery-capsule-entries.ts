@@ -4,6 +4,10 @@
 // — can be read on its own. Every value parsed here re-enters from a file this process did not
 // necessarily write, including one written by an older or newer build.
 
+import {
+  isAgentSessionRefusalCause,
+  type AgentSessionRefusalCause
+} from '../../shared/agent-session-wire-refusals'
 import { z } from 'zod'
 import {
   AGENT_SESSION_RESUME_FAILURE_OUTCOMES,
@@ -28,6 +32,7 @@ const failureSchema = z.object({
   failedAt: z.number().int().nonnegative(),
   outcome: z.enum(AGENT_SESSION_RESUME_FAILURE_OUTCOMES),
   reason: z.string().max(MAX_FAILURE_FIELD_LENGTH),
+  cause: z.string().min(1).optional(),
   latestPrompt: z.string().max(MAX_FAILURE_FIELD_LENGTH),
   latestUserItemId: z.string().max(MAX_FAILURE_FIELD_LENGTH).nullable()
 })
@@ -47,7 +52,10 @@ export type AgentSessionResumeFailureRecord = {
   marker: AgentSessionResumeMarker
   failedAt: number
   outcome: AgentSessionResumeFailureOutcome
+  /** The refusal code, as it always was; the renderer's guidance keys on it. */
   reason: string
+  /** The refusal's situation beside the code; absent on older records and non-refusals. */
+  cause?: AgentSessionRefusalCause
   /** The prompt the offer quoted, snapshotted because the session may no longer be readable. */
   latestPrompt: string
   /** The chat's newest user message when this was filed, as the marker records it at teardown. A
@@ -109,7 +117,11 @@ function parseFailures(value: unknown): AgentSessionResumeFailureRecord[] {
   return (Array.isArray(value) ? value : []).flatMap((failure: unknown) => {
     const parsed = failureSchema.safeParse(failure)
     const marker = parsed.success ? parseAgentSessionResumeMarker(parsed.data.marker) : null
-    return parsed.success && marker ? [{ ...parsed.data, marker }] : []
+    if (!parsed.success || !marker) {
+      return []
+    }
+    const { cause, ...rest } = parsed.data
+    return [{ ...rest, marker, ...(isAgentSessionRefusalCause(cause) ? { cause } : {}) }]
   })
 }
 

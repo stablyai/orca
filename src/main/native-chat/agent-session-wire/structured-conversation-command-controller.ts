@@ -1,3 +1,4 @@
+import { refuse } from '../../../shared/agent-session-wire-refusals'
 import { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
 import {
   runStructuredConversationCommand,
@@ -20,10 +21,11 @@ export class StructuredConversationCommandController {
     this.pending.has(params.envelope.sessionId)
       ? Promise.resolve({
           ok: false,
-          refusal: {
-            code: 'agent_session_operation_invalid',
-            message: 'Wait for the conversation operation to finish.'
-          }
+          refusal: refuse(
+            'agent_session_operation_invalid',
+            'conversationCommandInFlight',
+            'Wait for the conversation operation to finish.'
+          )
         })
       : sendStructuredAgentSessionTurn(this.context(), caller, params)
 
@@ -33,10 +35,11 @@ export class StructuredConversationCommandController {
     if (pending && pending.key !== key) {
       return Promise.resolve({
         ok: false as const,
-        refusal: {
-          code: 'agent_session_operation_invalid' as const,
-          message: 'Wait for the conversation operation to finish.'
-        }
+        refusal: refuse(
+          'agent_session_operation_invalid',
+          'conversationCommandInFlight',
+          'Wait for the conversation operation to finish.'
+        )
       })
     }
     const entry = pending ?? { key, count: 0 }

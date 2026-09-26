@@ -91,7 +91,11 @@ describe('acquisition compare-and-swap', () => {
         handoffOperationId: null,
         probe: MATCHED
       })
-    ).toEqual({ decision: 'refused', code: 'agent_session_checkpoint_stale' })
+    ).toEqual({
+      decision: 'refused',
+      code: 'agent_session_checkpoint_stale',
+      cause: 'fenceStale'
+    })
     expect(acquire(held, MATCHED)).toEqual({ decision: 'granted', nextFence: 8 })
   })
 
@@ -108,7 +112,11 @@ describe('acquisition compare-and-swap', () => {
         handoffOperationId: null,
         probe: MATCHED
       })
-    ).toEqual({ decision: 'refused', code: 'agent_session_checkpoint_stale' })
+    ).toEqual({
+      decision: 'refused',
+      code: 'agent_session_checkpoint_stale',
+      cause: 'fenceStale'
+    })
   })
 
   it('never grants a second owner on expiry alone', () => {
@@ -116,11 +124,13 @@ describe('acquisition compare-and-swap', () => {
     const expired = lease({ leaseDeadlineAt: 1, lastRenewedAt: 1 })
     expect(acquire(expired, INDETERMINATE)).toEqual({
       decision: 'refused',
-      code: 'agent_session_ownership_unknown'
+      code: 'agent_session_ownership_unknown',
+      cause: 'ownerUnproven'
     })
     expect(acquire(expired, MATCHED)).toEqual({
       decision: 'refused',
-      code: 'agent_session_conflict'
+      code: 'agent_session_conflict',
+      cause: 'ownerAlive'
     })
     expect(acquire(expired, { outcome: 'pid-absent' })).toEqual({
       decision: 'granted',
@@ -131,14 +141,16 @@ describe('acquisition compare-and-swap', () => {
   it('refuses while unreconciled even with proof the owner is dead', () => {
     expect(acquire(lease({ unreconciled: true }), { outcome: 'pid-absent' })).toEqual({
       decision: 'refused',
-      code: 'execution_owner_reconciling'
+      code: 'execution_owner_reconciling',
+      cause: 'hostReconciling'
     })
   })
 
   it('keeps a conflicted claim conflicted regardless of proof', () => {
     expect(acquire(lease({ claimStatus: 'conflicted' }), { outcome: 'exit-observed' })).toEqual({
       decision: 'refused',
-      code: 'agent_session_conflict'
+      code: 'agent_session_conflict',
+      cause: 'claimConflicted'
     })
   })
 
@@ -148,7 +160,8 @@ describe('acquisition compare-and-swap', () => {
   ] as const)('refuses acquisition in stage %s', (handoffStage, code) => {
     expect(acquire(lease({ handoffStage }), { outcome: 'pid-absent' })).toEqual({
       decision: 'refused',
-      code
+      code,
+      cause: 'ownerUnproven'
     })
   })
 
@@ -161,7 +174,8 @@ describe('acquisition compare-and-swap', () => {
     })
     expect(acquire(mid, { outcome: 'reservation-unused' }, 'op-2')).toEqual({
       decision: 'refused',
-      code: 'agent_session_operation_conflict'
+      code: 'agent_session_operation_conflict',
+      cause: 'handoffInFlight'
     })
     expect(acquire(mid, { outcome: 'reservation-unused' }, 'op-1')).toEqual({
       decision: 'retry-reservation',
@@ -173,7 +187,8 @@ describe('acquisition compare-and-swap', () => {
     const reserved = lease({ ownerProcess: null, claimStatus: 'reserved', handoffStage: null })
     expect(acquire(reserved, INDETERMINATE)).toEqual({
       decision: 'refused',
-      code: 'agent_session_ownership_unknown'
+      code: 'agent_session_ownership_unknown',
+      cause: 'ownerUnproven'
     })
     expect(acquire(reserved, { outcome: 'reservation-unused' })).toEqual({
       decision: 'granted',

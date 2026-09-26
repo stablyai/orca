@@ -125,7 +125,11 @@ describe('performThreadGoalChange', () => {
 
     expect(result).toEqual({
       ok: false,
-      refusal: { code: 'agent_session_operation_invalid', message: 'goals feature is disabled' }
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        cause: 'providerRejected',
+        message: 'goals feature is disabled'
+      }
     })
     expect(journal.snapshot().items).toEqual([])
   })

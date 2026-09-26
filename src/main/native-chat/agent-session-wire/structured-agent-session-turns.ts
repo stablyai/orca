@@ -14,10 +14,12 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionCancelResult,
-  AgentSessionSendResult,
-  AgentSessionWireRefusal
+import {
+  refuse,
+  type AgentSessionCancelResult,
+  type AgentSessionRefusalCause,
+  type AgentSessionSendResult,
+  type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -30,7 +32,7 @@ import type {
 import {
   agentSessionFailureRejection,
   agentSessionFailureText,
-  providerStartupFailureFact
+  structuredAgentSessionStartFailure
 } from './structured-agent-session-failure-text'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
@@ -60,8 +62,11 @@ export type TurnOutcome<TValue> =
   | { ok: true; value: TValue }
   | { ok: false; refusal: AgentSessionWireRefusal }
 
-function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal } {
-  return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+function invalid(
+  cause: AgentSessionRefusalCause,
+  message: string
+): { ok: false; refusal: AgentSessionWireRefusal } {
+  return { ok: false, refusal: refuse('agent_session_operation_invalid', cause, message) }
 }
 
 /** A thrown adapter error is indistinguishable from a lost reply, so it settles as `unknown`
@@ -84,10 +89,8 @@ async function dispatchSafely(
     })
   } catch (error) {
     if (ctx.providerChildPhase?.() === 'starting') {
-      return {
-        state: 'rejected',
-        ...agentSessionFailureRejection(providerStartupFailureFact(error))
-      }
+      const words = structuredAgentSessionStartFailure({ error })
+      return { state: 'rejected', reason: words.text, rejection: words.failure }
     }
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
   }
@@ -128,7 +131,10 @@ export async function performSend(
     .submissions()
     .find((entry) => entry.clientMessageId === input.clientMessageId)
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
-    return invalid(`Message id ${input.clientMessageId} was already used for another send.`)
+    return invalid(
+      'messageIdReused',
+      `Message id ${input.clientMessageId} was already used for another send.`
+    )
   }
   if (existing) {
     return {
@@ -139,7 +145,7 @@ export async function performSend(
   try {
     await ctx.journal.appendSubmission({ ...input, fence: ctx.fence, handoverRecorded: true })
   } catch {
-    return invalid('The message could not be recorded and was not sent.')
+    return invalid('journalWriteFailed', 'The message could not be recorded and was not sent.')
   }
   return {
     ok: true,

@@ -12,6 +12,7 @@
  * in. Both callers run the same two halves, so orchestration gets that guarantee too.
  */
 
+import { refuse } from '../../../../shared/agent-session-wire-refusals'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import type {
   AgentSessionAttachResult,
@@ -142,10 +143,11 @@ export async function commitStructuredAgentSessionCreate(args: {
     console.warn('[agent-session] create committed before tab publication failed', error)
     return {
       ok: false,
-      refusal: {
-        code: 'agent_session_operation_unknown',
-        message: 'The chat may have been created, but its tab could not be confirmed.'
-      }
+      refusal: refuse(
+        'agent_session_operation_unknown',
+        'tabUnconfirmed',
+        'The chat may have been created, but its tab could not be confirmed.'
+      )
     }
   }
   return result

@@ -1,19 +1,12 @@
-import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { boundJournalStatusText } from '../agent-session-journal/journal-prompt-body-bounds'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import {
-  agentSessionFailureRejection,
-  agentSessionFailureText,
-  type AgentSessionFailureTextContext
-} from './structured-agent-session-failure-text'
+import type { StructuredAgentSessionStartFailureWords } from './structured-agent-session-failure-text'
 
-/** A start that failed: keyed like its row, with what failed and whose words to use. */
-export type StructuredAgentSessionStartFailure = {
+/** A start that failed, keyed like its row, in the words `structuredAgentSessionStartFailure` gave. */
+export type StructuredAgentSessionStartFailure = StructuredAgentSessionStartFailureWords & {
   startKey: string | null
-  failure: AgentSessionFailureFact
-  context?: AgentSessionFailureTextContext
 }
 
 /**
@@ -24,17 +17,16 @@ export type StructuredAgentSessionStartFailure = {
  */
 export function structuredAgentSessionStartFailureRow(
   startKey: string,
-  failure: AgentSessionFailureFact,
-  context: AgentSessionFailureTextContext = {}
+  words: StructuredAgentSessionStartFailureWords
 ): JournalLifecycleMutationInput {
   return {
     kind: 'item',
     identity: { provider: 'orca', clientMessageId: `start-failure:${startKey}` },
     body: {
       kind: 'status',
-      text: boundJournalStatusText(agentSessionFailureText(failure, context)),
+      text: boundJournalStatusText(words.text),
       tone: 'error',
-      failure
+      failure: words.failure
     }
   }
 }
@@ -57,12 +49,12 @@ export async function recordStructuredAgentSessionStartFailure(
     settlementId: `start-failure:${startKey}`,
     fence: session.fence,
     recovered: true,
-    mutations: [structuredAgentSessionStartFailureRow(startKey, failure.failure, failure.context)]
+    mutations: [structuredAgentSessionStartFailureRow(startKey, failure)]
   })
-  await session.journal.rejectQueuedSubmissions(
-    session.fence,
-    agentSessionFailureRejection(failure.failure, failure.context)
-  )
+  await session.journal.rejectQueuedSubmissions(session.fence, {
+    reason: failure.text,
+    rejection: failure.failure
+  })
 }
 
 export function oldestQueuedSubmission(

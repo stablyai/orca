@@ -1,3 +1,4 @@
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type {
   AgentSessionOptionsReplacement,
   AgentSessionRecord
@@ -8,7 +9,7 @@ export function replaceAgentSessionRecordOptions(
   replacement: AgentSessionOptionsReplacement
 ): AgentSessionRecord {
   if (record.lease.runtimeFence !== replacement.fence || record.lease.claimStatus !== 'live') {
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', 'leaseMoved')
   }
   return { ...record, options: { ...replacement.options }, updatedAt: replacement.now }
 }

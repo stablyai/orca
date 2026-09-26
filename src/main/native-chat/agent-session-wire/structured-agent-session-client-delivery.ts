@@ -1,3 +1,4 @@
+import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import type {
@@ -85,7 +86,7 @@ export class StructuredAgentSessionClientDelivery {
   private requireJournal(sessionId: string): AgentSessionJournal {
     const journal = this.sessions.get(sessionId)?.journal
     if (!journal) {
-      throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
+      throw new AgentSessionRefusalError(AGENT_SESSION_NOT_ATTACHED)
     }
     return journal
   }

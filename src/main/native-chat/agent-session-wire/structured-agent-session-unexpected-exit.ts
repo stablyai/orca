@@ -1,3 +1,5 @@
+import type { AgentSessionFailureTextContext } from './structured-agent-session-failure-text'
+import { structuredAgentSessionFailureTextContext } from './structured-agent-session-send-preparation'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
@@ -116,6 +118,7 @@ export async function settleUnexpectedStructuredAgentSessionExit<
         stableSettlementId,
         verdict: { state: 'interrupted', completedAt: observedAt },
         exitedDuringStartup,
+        failureTextContext: structuredAgentSessionFailureTextContext(record),
         // A failed start always says why: no response was running to carry the reason.
         showUnexpectedExitOutcome:
           exitedDuringStartup ||
@@ -204,6 +207,7 @@ async function retryUnexpectedExitSettlement(input: {
   stableSettlementId: string
   verdict: StructuredAgentSessionTurnVerdict
   exitedDuringStartup: boolean
+  failureTextContext: AgentSessionFailureTextContext
   showUnexpectedExitOutcome?: boolean
 }): Promise<boolean> {
   return settleStructuredAgentSessionDeadGeneration({
@@ -215,6 +219,7 @@ async function retryUnexpectedExitSettlement(input: {
     pendingSubmissionReason: 'provider_exited_before_acknowledgement',
     showUnexpectedExitOutcome: input.showUnexpectedExitOutcome,
     ...(input.event.failure ? { exitFailure: input.event.failure } : {}),
+    failureTextContext: input.failureTextContext,
     ...(input.exitedDuringStartup
       ? { exitedDuringStartup: { generation: input.event.acquisitionGeneration } }
       : {}),

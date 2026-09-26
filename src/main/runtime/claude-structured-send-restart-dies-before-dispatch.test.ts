@@ -11,11 +11,15 @@ import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire
 import { hostTestMessage } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
-import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+import {
+  createScriptedClaudeRuntime,
+  scriptedClaudeExitError
+} from './structured-claude-scripted-runtime-test-support'
 
 const SESSION = 'claude-send-restart-dies-first'
 const CALLER = { callerKey: 'client-1' }
 const DIAGNOSTIC = 'claude stream-json exited (code 1): claude: not signed in (rig)'
+const STARTUP_TEXT = 'The provider stopped before it finished starting.'
 
 /** Delivery runs on its own serialized steps; under a loaded runner they take more than a second. */
 function eventually(assertion: () => void): Promise<void> {
@@ -91,7 +95,7 @@ function submission(host: StructuredAgentSessionHost, clientMessageId: string) {
 
 async function failLatestStart(host: StructuredAgentSessionHost, count: number): Promise<void> {
   await eventually(() => expect(claude.children(SESSION)).toHaveLength(count))
-  claude.child(SESSION).exit(new Error(DIAGNOSTIC))
+  claude.child(SESSION).exit(scriptedClaudeExitError(DIAGNOSTIC))
   await waitForStructuredAgentSessionRecovery()
   await eventually(() =>
     expect(host.deps.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
@@ -143,13 +147,11 @@ describe('a send whose restarted Claude child dies before it proves its start', 
       expect(submission(host, sent)).toMatchObject({
         dispatchState: 'rejected',
         // Worded for the user: the red line under the composer shows it as it stands.
-        reason: `The provider stopped before it finished starting: ${DIAGNOSTIC}.`
+        reason: STARTUP_TEXT,
+        rejection: { kind: 'providerStartFailed' }
       })
     )
-    expect(statusRows(host)).toEqual([
-      expect.stringContaining('not signed in'),
-      expect.stringMatching(/stopped before it finished starting: .*not signed in \(rig\)/)
-    ])
+    expect(statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
     expect(fence(host)).toBe(releasedFence + 2)
     expect(claude.children(SESSION)).toHaveLength(2)
     expect(claude.child(SESSION).calls).not.toContain('send')
@@ -180,15 +182,13 @@ describe('a send whose restarted Claude child dies before it proves its start', 
       await eventually(() =>
         expect(submission(host, sent)).toMatchObject({
           dispatchState: 'rejected',
-          reason: `The provider stopped before it finished starting: ${DIAGNOSTIC}.`
+          reason: STARTUP_TEXT,
+          rejection: { kind: 'providerStartFailed' }
         })
       )
       await waitForStructuredAgentSessionRecovery()
 
-      expect(statusRows(host)).toEqual([
-        `The provider stopped before it finished starting: ${DIAGNOSTIC}.`,
-        `The provider stopped before it finished starting: ${DIAGNOSTIC}.`
-      ])
+      expect(statusRows(host)).toEqual([STARTUP_TEXT, STARTUP_TEXT])
     }
   )
 
@@ -214,9 +214,7 @@ describe('a send whose restarted Claude child dies before it proves its start', 
       await eventually(() => {
         const seen = received(events)
         expect(seen.submissions.get(sent)).toBe('rejected')
-        expect(seen.statusTexts).toContainEqual(
-          expect.stringMatching(/stopped before it finished starting: .*not signed in \(rig\)/)
-        )
+        expect(seen.statusTexts).toContainEqual(STARTUP_TEXT)
         // The subscriber ended up on the fence the exit published, not the one the restart did.
         expect(seen.fences.at(-1)).toBe(fence(host))
       })
@@ -227,8 +225,8 @@ describe('a send whose restarted Claude child dies before it proves its start', 
 })
 
 describe('a chat whose Claude CLI keeps failing to start, seen by a subscriber open throughout', () => {
-  const STARTUP_FAILURE =
-    'The provider stopped before it finished starting: claude stream-json exited (code 1): claude: not signed in (rig).'
+  // The stderr rides beside the sentence as a log detail; the sentence is the same every time.
+  const STARTUP_FAILURE = STARTUP_TEXT
 
   /** Status rows a subscriber has been shown, one per row whatever frame carried it. */
   function shownRows(events: AgentSessionSubscribeEvent[]): Map<string, string> {

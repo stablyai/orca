@@ -16,6 +16,7 @@
 // for one session would race against the same released fence, and the loser's stale fence refused
 // it — a hold that lost dropped its holder, a send that lost was refused.
 
+import { AgentSessionRefusalError, refuse } from '../../../shared/agent-session-wire-refusals'
 import {
   StructuredAgentSessionReleaseClock,
   type StructuredAgentSessionReleaseClockDeps
@@ -84,8 +85,8 @@ export class StructuredAgentSessionHolds {
     }
     if (!resumed.ok) {
       this.releaseFailedHold(sessionId, holderId, alreadyHeld, incarnation)
-      // The RPC surface raises a refusal as its code.
-      throw new Error(resumed.refusal.code)
+      // The RPC surface raises a refusal as its code; the refusal itself rides along for its cause.
+      throw new AgentSessionRefusalError(resumed.refusal)
     }
   }
 
@@ -126,10 +127,11 @@ export class StructuredAgentSessionHolds {
     if (!this.deps.hasProviderChild(sessionId)) {
       return {
         ok: false,
-        refusal: {
-          code: 'agent_session_ownership_unknown',
-          message: 'The session attached without a provider child to write to.'
-        }
+        refusal: refuse(
+          'agent_session_ownership_unknown',
+          'noProviderChild',
+          'The session attached without a provider child to write to.'
+        )
       }
     }
     // The last surface can disconnect before acquisition makes a child available to release.
