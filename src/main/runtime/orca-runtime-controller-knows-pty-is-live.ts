@@ -14,6 +14,11 @@ import {
   buildAgentPromptPasteBytes
 } from '../../shared/agent-prompt-injection'
 
+// Why: a paired client's xterm answers focus changes (CSI I / CSI O) through stream input, which
+// carries no provenance; the desktop renderer already excludes them via xterm's user-input signal.
+// oxlint-disable-next-line no-control-regex -- focus reports are ESC-framed sequences by definition.
+const TERMINAL_FOCUS_REPORTS_ONLY_RE = new RegExp('^(?:\\u001b\\[[IO])+$')
+
 export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   private lastProvenAbsentLeafPtyVerdictPruneAt: number | undefined
 
@@ -167,7 +172,11 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
   private withUserInputTag<
     T extends { reserveWrite?: (ptyId: string) => void; inputKind?: string }
   >(payload: string, options: T): T {
-    if (options.inputKind === 'query-reply' || isTerminalQueryReply(payload)) {
+    if (
+      options.inputKind === 'query-reply' ||
+      isTerminalQueryReply(payload) ||
+      TERMINAL_FOCUS_REPORTS_ONLY_RE.test(payload)
+    ) {
       return options
     }
     return {

@@ -94,4 +94,19 @@ describe('terminal intentional stops', () => {
 
     expect(stops.claimExit('pty-1', 'inc-1')).toEqual(['reversible'])
   })
+
+  it('lets a new process on the id supersede a landed stop no exit pinned', () => {
+    const stops = new TerminalIntentionalStops()
+    stops.mark('pty-unpinned', 'reversible', null)(true)
+    stops.mark('pty-pinned', 'reversible', 'inc-1')(true)
+    stops.mark('pty-in-flight', 'replaced', null)
+
+    for (const ptyId of ['pty-unpinned', 'pty-pinned', 'pty-in-flight']) {
+      stops.noteSpawnCommit(ptyId)
+    }
+
+    expect(stops.claimExit('pty-unpinned', null)).toEqual([])
+    expect(stops.claimExit('pty-pinned', 'inc-1')).toEqual(['reversible'])
+    expect(stops.claimExit('pty-in-flight', null)).toEqual(['replaced'])
+  })
 })

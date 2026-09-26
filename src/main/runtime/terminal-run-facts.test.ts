@@ -38,4 +38,14 @@ describe('terminal run facts', () => {
 
     expect(facts.read('pty-1', 'inc-1').freshSpawn).toBe(false)
   })
+
+  it('starts clean when a commit carries no incarnation to tell it from a new process', () => {
+    const facts = new TerminalRunFactsRegister()
+    facts.recordSpawnCommit({ id: 'pty-1' })
+    facts.recordUserInput('pty-1', 100)
+
+    facts.recordSpawnCommit({ id: 'pty-1', isReattach: true })
+
+    expect(facts.read('pty-1', null)).toEqual({ freshSpawn: false, firstUserInputAt: null })
+  })
 })

@@ -46,7 +46,7 @@ import { RuntimeTerminalWaiterRegistry } from './runtime-terminal-waiter-registr
 import { RuntimeTerminalWriter } from './runtime-terminal-writer'
 import { RuntimeTerminalIdlePolls } from './runtime-terminal-idle-polls'
 import { TerminalIntentionalStops } from './terminal-intentional-stops'
-import { TerminalRunFactsRegister } from './terminal-run-facts'
+import { TerminalRunFactsRegister, type TerminalSpawnCommit } from './terminal-run-facts'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
@@ -238,6 +238,12 @@ export class OrcaRuntimeWithRuntimeId {
   readonly intentionalPtyStops = new TerminalIntentionalStops()
 
   readonly terminalRunFacts = new TerminalRunFactsRegister()
+
+  /** Both spawn-commit funnels report each committed process here, once. */
+  noteTerminalSpawnCommit(commit: TerminalSpawnCommit, expectedSourceBinding?: unknown): void {
+    this.terminalRunFacts.recordSpawnCommit(commit, expectedSourceBinding)
+    this.intentionalPtyStops.noteSpawnCommit(commit.id)
+  }
 
   // Why: coalesces title/status-driven session.tabs emits so spinner churn
   // doesn't fan out (and per-client JSON.stringify) a snapshot several times a

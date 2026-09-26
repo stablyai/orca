@@ -19,6 +19,10 @@ type IntentionalStop = {
 
 const NO_INTENTIONAL_STOP: readonly TerminalIntentionalStopKind[] = []
 
+function hasInFlightOwners(stop: IntentionalStop): boolean {
+  return [...stop.ownersByKind.values()].some((owners) => owners.inFlight > 0)
+}
+
 /** The one register of PTY stops main made on purpose, read by every exit path. */
 export class TerminalIntentionalStops {
   private readonly stopsByPtyId = new Map<string, IntentionalStop>()
@@ -79,18 +83,27 @@ export class TerminalIntentionalStops {
     return (this.stopsByPtyId.get(ptyId)?.ownersByKind.get('reversible')?.inFlight ?? 0) > 0
   }
 
+  /** A process committed on this id. A landed stop's process is dead, so an entry no exit ever
+   *  pinned could otherwise claim the new process's exit as the stop. */
+  noteSpawnCommit(ptyId: string): void {
+    const stop = this.stopsByPtyId.get(ptyId)
+    if (stop && stop.incarnationId === null && !hasInFlightOwners(stop)) {
+      clearTimeout(stop.expiryTimer)
+      this.stopsByPtyId.delete(ptyId)
+    }
+  }
+
   // Why: a settled entry joins only its own known process, so an id reused by a process whose
   // incarnation is not yet known never inherits the old stop.
   private joins(stop: IntentionalStop, incarnationId: string | null): boolean {
     if (stop.incarnationId !== null && stop.incarnationId === incarnationId) {
       return true
     }
-    const inFlight = [...stop.ownersByKind.values()].some((owners) => owners.inFlight > 0)
-    return inFlight && (stop.incarnationId === null || incarnationId === null)
+    return hasInFlightOwners(stop) && (stop.incarnationId === null || incarnationId === null)
   }
 
   private settleIfIdle(ptyId: string, stop: IntentionalStop): void {
-    if ([...stop.ownersByKind.values()].some((owners) => owners.inFlight > 0)) {
+    if (hasInFlightOwners(stop)) {
       return
     }
     if (stop.ownersByKind.size === 0) {

@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { OrcaRuntimeWithRuntimeId } from '../../../runtime/orca-runtime-runtime-id'
+import { TerminalIntentionalStops } from '../../../runtime/terminal-intentional-stops'
 import { TerminalRunFactsRegister } from '../../../runtime/terminal-run-facts'
 import { ptySizes } from '../delivery/visibility-state'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
@@ -20,9 +22,16 @@ const ADOPTED = {
   }
 }
 
-async function commit(result: Record<string, unknown>, facts = new TerminalRunFactsRegister()) {
+async function commit(
+  result: Record<string, unknown>,
+  facts = new TerminalRunFactsRegister(),
+  intentionalPtyStops = new TerminalIntentionalStops()
+) {
   const runtime = {
     terminalRunFacts: facts,
+    intentionalPtyStops,
+    // Why the real method: the case under test is what the runtime does with each commit.
+    noteTerminalSpawnCommit: OrcaRuntimeWithRuntimeId.prototype.noteTerminalSpawnCommit,
     registerPreAllocatedHandleForPty: vi.fn(),
     registerPty: vi.fn(),
     cancelPendingPtyRegistration: vi.fn(),
@@ -73,5 +82,14 @@ describe('runtime spawn commit: run facts', () => {
       freshSpawn: true,
       firstUserInputAt: 100
     })
+  })
+
+  it('lets the new process supersede a landed stop that no exit pinned', async () => {
+    const stops = new TerminalIntentionalStops()
+    stops.mark(PTY_ID, 'reversible', null)(true)
+
+    await commit({}, new TerminalRunFactsRegister(), stops)
+
+    expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual([])
   })
 })

@@ -10,6 +10,12 @@ export type TerminalRunFacts = {
   firstUserInputAt: number | null
 }
 
+export type TerminalSpawnCommit = Parameters<typeof spawnCommitBindingOrigin>[0] & {
+  id: string
+  incarnationId?: string
+  coldRestore?: object
+}
+
 /** A cold restore starts a new process for a pane that had one, so it is never fresh. */
 type TerminalRunSpawnOrigin = PtySpawnCommitOrigin | 'cold-restore'
 
@@ -23,17 +29,14 @@ type TerminalRunRecord = {
 export class TerminalRunFactsRegister {
   private readonly runsByPtyId = new Map<string, TerminalRunRecord>()
 
-  /** Once per process: a re-registration of the same incarnation keeps its facts. */
-  recordSpawnCommit(
-    commit: Parameters<typeof spawnCommitBindingOrigin>[0] & {
-      id: string
-      incarnationId?: string
-      coldRestore?: object
-    },
-    expectedSourceBinding?: unknown
-  ): void {
+  /** Once per process: a re-registration of the same incarnation keeps its facts. Without an
+   *  incarnation a commit cannot be told from a new process, so it starts clean. */
+  recordSpawnCommit(commit: TerminalSpawnCommit, expectedSourceBinding?: unknown): void {
     const incarnationId = commit.incarnationId ?? null
-    if (this.runsByPtyId.get(commit.id)?.incarnationId === incarnationId) {
+    if (
+      incarnationId !== null &&
+      this.runsByPtyId.get(commit.id)?.incarnationId === incarnationId
+    ) {
       return
     }
     const origin = spawnCommitBindingOrigin(commit, expectedSourceBinding)

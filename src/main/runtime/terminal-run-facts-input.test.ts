@@ -99,6 +99,19 @@ describe('run facts: input from clients other than the local renderer', () => {
     expect(run.firstUserInputAt()).toBeNull()
   })
 
+  it('records nothing for stream input that is only focus reports', async () => {
+    const run = await createFreshRun()
+
+    await sendTerminalStreamInput(run.runtime, {
+      terminal: run.handle,
+      text: '\x1b[I\x1b[O',
+      client: undefined,
+      isMobile: false
+    })
+
+    expect(run.firstUserInputAt()).toBeNull()
+  })
+
   it('records a reply mixed with a keystroke', async () => {
     const run = await createFreshRun()
 

@@ -2,9 +2,8 @@
 // IME and Hangul commits bypass xterm's key path and enter through `terminal.input`. Main records
 // a run's first user input from xterm's user-input signal, so every commit route must carry it.
 import { Terminal } from '@xterm/xterm'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { IDisposable } from '@xterm/xterm'
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import {
   installTerminalImeCompositionRoute,
@@ -32,10 +31,8 @@ function openPane(): {
   const terminal = new Terminal({ cols: 40, rows: 8 })
   disposables.push(terminal)
   terminal.open(container)
-  const pane = { id: 1, terminal }
   installTerminalPaneInputHandling({
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: input handling reads only the pane id and its terminal.
-    pane: pane as unknown as ManagedPane,
+    pane: { id: 1, terminal },
     managerRef: { current: null },
     paneKittyKeyboardModesRef: { current: new Map() },
     settingsRef: { current: {} },
@@ -75,16 +72,17 @@ function insertText(textarea: HTMLTextAreaElement, inputType: string, data: stri
 describe('IME and Hangul commits reach the PTY as user input', () => {
   let originalUserAgent: PropertyDescriptor | undefined
   let originalMaxTouchPoints: PropertyDescriptor | undefined
+  let originalGetContext: PropertyDescriptor | undefined
 
   beforeEach(() => {
     originalUserAgent = Object.getOwnPropertyDescriptor(navigator, 'userAgent')
     originalMaxTouchPoints = Object.getOwnPropertyDescriptor(navigator, 'maxTouchPoints')
     // happy-dom has no 2d context, which the DOM renderer's WidthCache requires.
-    const measuringContext = { measureText: () => ({ width: 10 }) }
-    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the DOM renderer's WidthCache calls only measureText.
-      measuringContext as unknown as CanvasRenderingContext2D
-    )
+    originalGetContext = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'getContext')
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: () => ({ measureText: () => ({ width: 10 }) })
+    })
   })
 
   afterEach(() => {
@@ -99,7 +97,9 @@ describe('IME and Hangul commits reach the PTY as user input', () => {
         Object.defineProperty(navigator, property, descriptor)
       }
     }
-    vi.restoreAllMocks()
+    if (originalGetContext) {
+      Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', originalGetContext)
+    }
     document.body.replaceChildren()
   })
 
@@ -150,10 +150,8 @@ describe('IME and Hangul commits reach the PTY as user input', () => {
       installTerminalImeCompositionRoute({
         terminalElement: terminal.element!,
         terminal,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the route reads only getPtyId.
-        capturedTransport: transport as PtyTransport,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: compared by identity only.
-        getCurrentTransport: () => transport as PtyTransport
+        capturedTransport: transport,
+        getCurrentTransport: () => transport
       })
     )
     const session = (type: string, data?: string): CustomEvent =>
