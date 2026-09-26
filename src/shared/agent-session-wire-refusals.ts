@@ -189,10 +189,3 @@ export function agentSessionRefusalError(
 export function isAgentSessionRefusalError(error: unknown): error is AgentSessionRefusalError {
   return error instanceof AgentSessionRefusalError
 }
-
-/** The situation a thrown refusal named, whatever wrapped it. */
-export function thrownAgentSessionRefusalCause(
-  error: unknown
-): AgentSessionRefusalCause | undefined {
-  return error instanceof AgentSessionRefusalError ? error.refusal.cause : undefined
-}
