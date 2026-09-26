@@ -31,7 +31,12 @@ export function launchAiVaultSessionInNewTab(args: {
   splitDirection?: TabSplitDirection
 }): LaunchAiVaultSessionInNewTabResult {
   const store = useAppStore.getState()
-  let targetGroupId = args.targetGroupId
+  // Why: split before choosing a launch path; a paired runtime lands its mirrored tab in whatever group it is given.
+  const splitGroupId =
+    args.splitDirection && args.targetGroupId
+      ? store.createEmptySplitGroup(args.worktreeId, args.targetGroupId, args.splitDirection)
+      : null
+  const targetGroupId = splitGroupId ?? args.targetGroupId
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     const runtimeLaunch = createWebRuntimeSessionTerminal({
@@ -49,23 +54,24 @@ export function launchAiVaultSessionInNewTab(args: {
       ...(args.launchConfig ? { agentArgs: args.launchConfig.agentArgs } : {}),
       activate: true
     })
-    const observedRuntimeLaunch = runtimeLaunch.then((outcome) => {
-      if (outcome.status === 'created') {
-        useAppStore.getState().setActiveTabType('terminal', args.worktreeId)
-      }
-      return outcome
-    })
+    const observedRuntimeLaunch = runtimeLaunch
+      .then((outcome) => {
+        if (outcome.status === 'created') {
+          useAppStore.getState().setActiveTabType('terminal', args.worktreeId)
+        }
+        return outcome
+      })
+      .finally(() => {
+        if (splitGroupId) {
+          // Why: nothing lands in the split once the launch settles, so a still-empty one is an orphan.
+          useAppStore.getState().closeEmptyGroup(args.worktreeId, splitGroupId)
+        }
+      })
     return {
       tabId: null,
       ...(targetGroupId ? { groupId: targetGroupId } : {}),
       runtimeLaunch: observedRuntimeLaunch
     }
-  }
-
-  if (args.splitDirection && targetGroupId) {
-    targetGroupId =
-      store.createEmptySplitGroup(args.worktreeId, targetGroupId, args.splitDirection) ??
-      targetGroupId
   }
 
   const tab = args.cwd
