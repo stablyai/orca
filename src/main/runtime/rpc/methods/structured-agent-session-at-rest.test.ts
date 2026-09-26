@@ -122,6 +122,16 @@ describe('opening a chat at rest (P2-01)', () => {
     expect(held).toMatchObject({ ok: true, result: { held: true } })
   })
 
+  // Worktree activation asks this for every chat tab in the worktree.
+  it('answers the owner check from the record without opening the chat', async () => {
+    await restingChat()
+
+    const [status] = await call('agentSession.handoffStatus', { sessionId: SESSION })
+
+    expect(status).toMatchObject({ ok: true, result: { owner: expect.any(String) } })
+    expect(rig.host.hasSession(SESSION)).toBe(false)
+  })
+
   it('starts the agent on the first send (P2-01)', async () => {
     await restingChat()
     const fence = rig.store.getRecord(SESSION)!.lease.runtimeFence

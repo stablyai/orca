@@ -294,17 +294,19 @@ export class StructuredAgentSessionHost {
     commands: this.deps.adapter.readCommands?.(sessionId)
   })
 
-  async handoffStatus(sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> {
-    await this.lifetime.conversation(sessionId)
-    // Queued behind an in-flight attach, so a starting chat answers with its settled owner.
-    return this.serialize(sessionId, async () => {
+  /** Answered from the record alone, so worktree activation asking for every chat tab opens no
+   *  journal. Queued behind an in-flight attach, so a starting chat answers with its settled owner. */
+  handoffStatus = (sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> =>
+    this.serialize(sessionId, async () => {
       const record = this.deps.store.getRecord(sessionId)
       if (!record) {
         throw new Error('agent_session_identity_required')
       }
+      if (!providerSupport.adapterSupportsRecord(this.deps.adapter, record)) {
+        throw new Error('structured_agent_session_unsupported')
+      }
       return structuredAgentSessionOwnerStatus(record)
     })
-  }
 
   history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request) =>
     this.backgroundTasks.history(request)
