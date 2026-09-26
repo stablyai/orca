@@ -170,6 +170,102 @@ describe('fetchGrokRateLimits', () => {
     expect(netFetchMock).toHaveBeenCalledTimes(2)
   })
 
+  // Why: #20524 — a SuperGrok plan with NO on-demand budget emits the whole
+  // on-demand block as structural zeros, in the same payload shape that later
+  // carries `creditUsagePercent: 1.0`. Those zeros are not a reading, so they
+  // must not veto the confirmed-weekly fallback the way #15740's provisioned
+  // `onDemandCap: 100` does.
+  it('maps an omitted percentage as zero when the on-demand block is an unprovisioned 0/0', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-09-10T15:34:18.418525+00:00',
+            end: '2026-09-17T15:34:18.418525+00:00'
+          },
+          onDemandCap: { val: 0 },
+          onDemandUsed: { val: 0 },
+          prepaidBalance: { val: 0 },
+          isUnifiedBillingUser: true,
+          billingPeriodStart: '2026-09-10T15:34:18.418525+00:00',
+          billingPeriodEnd: '2026-09-17T15:34:18.418525+00:00',
+          historyLen: 0
+        }
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(0)
+    expect(result.weekly?.windowMinutes).toBe(10_080)
+    expect(result.weekly?.resetsAt).toBe(Date.parse('2026-09-17T15:34:18.418525+00:00'))
+    expect(result.monthly).toBeUndefined()
+    // The second request exists to find a monthly budget; a confirmed weekly
+    // window at 0% needs none.
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: the same account once it HAS been used. The zeros are unchanged, which
+  // is the evidence that they never spoke for the credit meter at all.
+  it('reports the real percentage on that same unprovisioned payload once it is non-zero', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        config: {
+          currentPeriod: {
+            type: 'USAGE_PERIOD_TYPE_WEEKLY',
+            start: '2026-09-10T15:34:18.418525+00:00',
+            end: '2026-09-17T15:34:18.418525+00:00'
+          },
+          creditUsagePercent: 1,
+          onDemandCap: { val: 0 },
+          onDemandUsed: { val: 0 },
+          prepaidBalance: { val: 0 },
+          isUnifiedBillingUser: true,
+          billingPeriodStart: '2026-09-10T15:34:18.418525+00:00',
+          billingPeriodEnd: '2026-09-17T15:34:18.418525+00:00'
+        }
+      })
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.weekly?.usedPercent).toBe(1)
+  })
+
+  // Why: an unprovisioned on-demand block must not also silence the monthly
+  // budget pair — that pair is a different meter and still speaks.
+  it('keeps an explicit zero monthly limit meaningful under an unprovisioned on-demand block', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          config: {
+            currentPeriod: {
+              type: 'USAGE_PERIOD_TYPE_WEEKLY',
+              start: '2026-09-10T15:34:18.418525+00:00',
+              end: '2026-09-17T15:34:18.418525+00:00'
+            },
+            onDemandCap: { val: 0 },
+            onDemandUsed: { val: 0 },
+            prepaidBalance: { val: 0 },
+            monthlyLimit: { val: 0 },
+            isUnifiedBillingUser: true,
+            billingPeriodStart: '2026-09-10T15:34:18.418525+00:00',
+            billingPeriodEnd: '2026-09-17T15:34:18.418525+00:00'
+          }
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ config: { used: { val: 37.5 } } }))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(result.weekly).toBeNull()
+    expect(result.error).toMatch(/did not report a usage percentage/i)
+  })
+
   // Why: the monthly budget pair is a monthly window wherever it arrives — the
   // credits view must not relabel it 'Weekly credits'.
   it('publishes a credits-view monthly budget pair as a monthly window without a second request', async () => {
