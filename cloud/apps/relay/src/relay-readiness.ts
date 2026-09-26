@@ -137,6 +137,7 @@ export function createRelayReadiness(
   const probeJwks = async (): Promise<RelayReadinessFailure | undefined> => {
     try {
       const response = await fetchImpl(jwksUrl, { signal: AbortSignal.timeout(timeoutMs) })
+      await response.body?.cancel().catch(() => undefined)
       return response.ok ? undefined : 'jwks_http_failed'
     } catch (error) {
       return fetchFailure(error)
