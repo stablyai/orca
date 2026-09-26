@@ -10,6 +10,7 @@ const MAIN_WINDOW_SERVICE_REQUIREMENTS = [
   ['codexUsage', 'Codex usage store must be initialized before opening the main window'],
   ['openCodeUsage', 'OpenCode usage store must be initialized before opening the main window'],
   ['museUsage', 'Muse usage store must be initialized before opening the main window'],
+  ['kimiUsage', 'Kimi usage store must be initialized before opening the main window'],
   ['rateLimits', 'Rate limit service must be initialized before opening the main window'],
   ['automations', 'Automation service must be initialized before opening the main window'],
   ['codexAccounts', 'Codex account service must be initialized before opening the main window'],

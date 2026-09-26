@@ -22,15 +22,18 @@ describe('usage provider IPC handlers', () => {
     const codexUsage = createUsage()
     const openCodeUsage = createUsage()
     const museUsage = createUsage()
+    const kimiUsage = createUsage()
     registerUsageProviderHandlers({
       claudeUsage: claudeUsage as never,
       codexUsage: codexUsage as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every method the registrar calls on a usage store.
       museUsage: museUsage as never,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mock implements every method the registrar calls on a usage store.
+      kimiUsage: kimiUsage as never,
       openCodeUsage: openCodeUsage as never
     })
 
-    const prefixes = ['claudeUsage', 'codexUsage', 'openCodeUsage', 'museUsage']
+    const prefixes = ['claudeUsage', 'codexUsage', 'openCodeUsage', 'museUsage', 'kimiUsage']
     const suffixes = Object.keys(claudeUsage)
     expect(handle.mock.calls.map(([channel]) => channel)).toEqual(
       prefixes.flatMap((prefix) => suffixes.map((suffix) => `${prefix}:${suffix}`))
@@ -46,6 +49,7 @@ describe('usage provider IPC handlers', () => {
     call('codexUsage', 'getScanState')
     call('openCodeUsage', 'getScanState')
     call('museUsage', 'getScanState')
+    call('kimiUsage', 'getScanState')
     call('claudeUsage', 'setEnabled', { enabled: true })
     call('claudeUsage', 'refresh')
     call('claudeUsage', 'refresh', { force: true })
@@ -59,6 +63,7 @@ describe('usage provider IPC handlers', () => {
     expect(codexUsage.getScanState).toHaveBeenCalledWith()
     expect(openCodeUsage.getScanState).toHaveBeenCalledWith()
     expect(museUsage.getScanState).toHaveBeenCalledWith()
+    expect(kimiUsage.getScanState).toHaveBeenCalledWith()
     expect(claudeUsage.setEnabled).toHaveBeenCalledWith(true)
     expect(claudeUsage.refresh.mock.calls).toEqual([[false], [true]])
     expect(claudeUsage.getSnapshot).toHaveBeenCalledWith('orca', '30d', 7)

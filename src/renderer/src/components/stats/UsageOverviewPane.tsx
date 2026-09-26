@@ -39,18 +39,24 @@ export function UsageOverviewPane(): React.JSX.Element {
   const museScanState = useAppStore((state) => state.museUsageScanState)
   const museSummary = useAppStore((state) => state.museUsageSummary)
   const museDaily = useAppStore((state) => state.museUsageDaily)
+  const kimiScanState = useAppStore((state) => state.kimiUsageScanState)
+  const kimiSummary = useAppStore((state) => state.kimiUsageSummary)
+  const kimiDaily = useAppStore((state) => state.kimiUsageDaily)
   const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
   const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
   const fetchMuseUsage = useAppStore((state) => state.fetchMuseUsage)
+  const fetchKimiUsage = useAppStore((state) => state.fetchKimiUsage)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
   const refreshMuseUsage = useAppStore((state) => state.refreshMuseUsage)
+  const refreshKimiUsage = useAppStore((state) => state.refreshKimiUsage)
   const enableClaudeUsage = useAppStore((state) => state.enableClaudeUsage)
   const enableCodexUsage = useAppStore((state) => state.enableCodexUsage)
   const enableOpenCodeUsage = useAppStore((state) => state.enableOpenCodeUsage)
   const enableMuseUsage = useAppStore((state) => state.enableMuseUsage)
+  const enableKimiUsage = useAppStore((state) => state.enableKimiUsage)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
@@ -58,7 +64,8 @@ export function UsageOverviewPane(): React.JSX.Element {
     void fetchCodexUsage()
     void fetchOpenCodeUsage()
     void fetchMuseUsage()
-  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchMuseUsage])
+    void fetchKimiUsage()
+  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchMuseUsage, fetchKimiUsage])
 
   const overview = useMemo(
     () =>
@@ -82,6 +89,11 @@ export function UsageOverviewPane(): React.JSX.Element {
           scanState: museScanState,
           summary: museSummary,
           daily: museDaily
+        },
+        kimi: {
+          scanState: kimiScanState,
+          summary: kimiSummary,
+          daily: kimiDaily
         }
       }),
     [
@@ -94,6 +106,9 @@ export function UsageOverviewPane(): React.JSX.Element {
       museDaily,
       museScanState,
       museSummary,
+      kimiDaily,
+      kimiScanState,
+      kimiSummary,
       openCodeDaily,
       openCodeScanState,
       openCodeSummary
@@ -110,7 +125,8 @@ export function UsageOverviewPane(): React.JSX.Element {
       claudeScanState?.enabled ? refreshClaudeUsage() : Promise.resolve(),
       codexScanState?.enabled ? refreshCodexUsage() : Promise.resolve(),
       openCodeScanState?.enabled ? refreshOpenCodeUsage() : Promise.resolve(),
-      museScanState?.enabled ? refreshMuseUsage() : Promise.resolve()
+      museScanState?.enabled ? refreshMuseUsage() : Promise.resolve(),
+      kimiScanState?.enabled ? refreshKimiUsage() : Promise.resolve()
     ])
   }
 
@@ -213,6 +229,16 @@ export function UsageOverviewPane(): React.JSX.Element {
                 >
                   {translate('auto.components.stats.UsageOverviewPane.enableMuse', 'Enable Muse')}
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    recordFeatureInteraction('usage-tracking')
+                    void enableKimiUsage()
+                  }}
+                >
+                  {translate('auto.components.stats.UsageOverviewPane.enableKimi', 'Enable Kimi')}
+                </Button>
               </div>
             </div>
           </div>
@@ -254,7 +280,7 @@ export function UsageOverviewPane(): React.JSX.Element {
               <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
                 {translate(
                   'auto.components.stats.UsageOverviewPane.noLocalUsageYet',
-                  'No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.'
+                  'No local Claude, Codex, OpenCode, Muse, or Kimi Code usage found yet. The overview will populate after the next agent session writes token logs.'
                 )}
               </div>
             ) : (
@@ -300,8 +326,10 @@ export function UsageOverviewPane(): React.JSX.Element {
                   void enableCodexUsage()
                 } else if (provider.id === 'opencode') {
                   void enableOpenCodeUsage()
-                } else {
+                } else if (provider.id === 'muse') {
                   void enableMuseUsage()
+                } else {
+                  void enableKimiUsage()
                 }
               }}
             />
