@@ -311,6 +311,8 @@ export const electronViteConfig: UserConfig = {
       }
     },
     plugins: [react(), tailwindcss(), createPdfjsViewerAssetsPlugin()],
+    // Why: dev twin of armMainDocumentCallStackPolicy, so hang crumbs carry JS stacks in dev too.
+    server: { headers: { 'Document-Policy': 'include-js-call-stacks-in-crash-reports' } },
     worker: {
       format: 'es'
     },
