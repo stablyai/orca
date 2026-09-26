@@ -1504,6 +1504,11 @@ export class SshConnection {
         }
       })
 
+      config.algorithms = {
+        ...config.algorithms,
+        compress: ['zlib@openssh.com', 'none']
+      }
+
       if (serverHostKeyOrder) {
         config.algorithms = {
           ...config.algorithms,
