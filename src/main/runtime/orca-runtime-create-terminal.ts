@@ -5,6 +5,7 @@ import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
 import { buildRuntimeAgentTeamsLaunchPlan } from './orca-runtime-agent-teams-launch-plan'
 import { createPtySpawnCommitReporter } from './orca-runtime-report-pty-spawn-commit'
 import { recordPtySurface, spawnSurfaceClaimSequence } from './pty-recorded-surface-topology'
+import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 
 export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   async createTerminal(
@@ -78,6 +79,12 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           ...launchOpts.env,
           ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
         }
+        // Why: teammate panes launch on the local host, so the local Windows shell preference decides their grammar.
+        const claudeAgentTeamsPaneShell = resolveLocalWindowsAgentStartupShell({
+          platform: process.platform,
+          isRemote: false,
+          terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null
+        })
         let agentTeamsPlan: Awaited<ReturnType<typeof dependencies.buildClaudeAgentTeamsLaunchPlan>>
         let sequencedStartupCommand: string | undefined
         let effectiveLaunchConfig = launchOpts.launchConfig
@@ -89,12 +96,14 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
             baseEnv: { ...process.env, ...baseEnv },
             adoptedBeforeLaunch,
+            paneShell: claudeAgentTeamsPaneShell,
             createTeamEnv: (shimDir, shimBin) =>
               this.claudeAgentTeams.createLaunchEnv({
                 leaderHandle: preAllocatedHandle,
                 baseEnv: { ...process.env, ...baseEnv },
                 shimDir,
-                shimBin
+                shimBin,
+                paneShell: claudeAgentTeamsPaneShell
               }).env
           })
           agentTeamsPlan = agentTeams.plan
