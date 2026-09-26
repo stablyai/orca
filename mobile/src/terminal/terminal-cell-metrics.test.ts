@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createTerminalCellMetricsStore, readTerminalCellMetrics } from './terminal-cell-metrics'
+import {
+  createTerminalCellMetricsStore,
+  fitDimensionsFromCell,
+  readTerminalCellMetrics
+} from './terminal-cell-metrics'
 
 // 23 and 51 device px at DPR 3: the WebGL renderer's 13px cell on the emulator.
 const CELL_1X = { fontScale: 1, cellWidth: 23 / 3, cellHeight: 17 }
@@ -83,6 +87,22 @@ describe('createTerminalCellMetricsStore', () => {
     expect(store.acceptLaidOut({ type: 'cell-metrics' })).toBeNull()
   })
 
+  it('corrects a guess once; later col-dependent boxes update the fit without another correction', () => {
+    const store = createTerminalCellMetricsStore()
+    store.acceptWebReady(webReady())
+    const laidOut = (cellWidth: number) =>
+      store.acceptLaidOut({
+        type: 'cell-metrics',
+        cellMetrics: [{ fontScale: 1, cellWidth, cellHeight: 17 }]
+      })
+    expect(laidOut(7.8)).not.toBeNull()
+    // The DOM renderer re-derives the width from the new column count after each re-init.
+    expect(laidOut(8.4)).toBeNull()
+    expect(store.fit(1, 751)).toEqual({ cols: 50, rows: 44 })
+    expect(laidOut(8.3)).toBeNull()
+    expect(store.fit(1, 751)).toEqual({ cols: 51, rows: 44 })
+  })
+
   it('does not call a first box a correction when there was no guess', () => {
     const store = createTerminalCellMetricsStore()
     store.acceptWebReady({ type: 'web-ready' })
@@ -94,5 +114,13 @@ describe('createTerminalCellMetricsStore', () => {
     store.acceptWebReady(webReady())
     store.clear()
     expect(store.fit(1, 751)).toBeUndefined()
+  })
+})
+
+describe('fitDimensionsFromCell', () => {
+  it('does not lose a column or row to floating-point error at an exact boundary', () => {
+    // 0.1 + 0.2 is 0.30000000000000004, so 6 / it is 19.999999999999996.
+    const cell = { cellWidth: 0.1 + 0.2, cellHeight: 0.1 + 0.2 }
+    expect(fitDimensionsFromCell(cell, 6, 3)).toEqual({ cols: 20, rows: 10 })
   })
 })

@@ -42,17 +42,24 @@ export function readTerminalCellMetrics(msg: Record<string, unknown>): TerminalC
   return entries
 }
 
+/**
+ * Absorbs floating-point error at an exact column or row boundary: CSS boxes come in device-pixel
+ * steps, so a real quotient is an integer or at least ~1e-2 away from one, never within 1e-6.
+ */
+const FIT_BOUNDARY_EPSILON = 1e-6
+
 /** The document's own measure, from numbers instead of a live terminal. */
 export function fitDimensionsFromCell(
   cell: Pick<TerminalCellMetrics, 'cellWidth' | 'cellHeight'>,
   width: number,
   height: number
 ): TerminalFitDimensions | null {
-  const cols = Math.floor(width / cell.cellWidth)
+  const cols = Math.floor(width / cell.cellWidth + FIT_BOUNDARY_EPSILON)
   if (cols < MIN_FIT_COLS) {
     return null
   }
-  return { cols, rows: Math.max(MIN_FIT_ROWS, Math.floor(height / cell.cellHeight)) }
+  const rows = Math.floor(height / cell.cellHeight + FIT_BOUNDARY_EPSILON)
+  return { cols, rows: Math.max(MIN_FIT_ROWS, rows) }
 }
 
 type Box = { width: number; height: number }
@@ -69,6 +76,9 @@ function sameCell(a: TerminalCellMetrics | undefined, b: TerminalCellMetrics) {
 
 export function createTerminalCellMetricsStore() {
   const cells = new Map<number, TerminalCellMetrics>()
+  // Why: only the probe's guess is corrected; a DOM renderer re-derives its width from cols after
+  // every re-init, and treating each of those as a correction can flip the fit between two sizes.
+  const guessedScales = new Set<number>()
   // Why: RN reports the view's layout once per mount; a reloaded document must not replace it.
   let layoutBox: Box | null = null
   // The document's own viewport, which on the page arrives at web-ready before any RN layout.
@@ -78,21 +88,25 @@ export function createTerminalCellMetricsStore() {
     /** A new document: its probe table and viewport replace the last document's. */
     acceptWebReady(msg: Record<string, unknown>) {
       cells.clear()
+      guessedScales.clear()
       for (const entry of readTerminalCellMetrics(msg)) {
         cells.set(entry.fontScale, entry)
+        guessedScales.add(entry.fontScale)
       }
       documentBox = readBox(msg.viewportWidth, msg.viewportHeight)
     },
     /**
-     * The box xterm laid out, which replaces the probe's guess. Returns it when it corrected a
-     * different guess, else null.
+     * The box xterm laid out, which always updates the fit. Returns it only when it is the first
+     * box for a guessed scale and differs from the guess: at most one correction per guess.
      */
     acceptLaidOut(msg: Record<string, unknown>): TerminalCellMetrics | null {
       const [actual] = readTerminalCellMetrics(msg)
       if (!actual) {
         return null
       }
-      const guessed = cells.get(actual.fontScale)
+      const guessed = guessedScales.delete(actual.fontScale)
+        ? cells.get(actual.fontScale)
+        : undefined
       cells.set(actual.fontScale, actual)
       // Why: with no guess the first subscribe went without dims, and the fit pass owns that case.
       return guessed === undefined || sameCell(guessed, actual) ? null : actual
@@ -116,6 +130,7 @@ export function createTerminalCellMetricsStore() {
     /** The document is gone; the view, and so its layout, is not. */
     clear() {
       cells.clear()
+      guessedScales.clear()
       documentBox = null
     }
   }

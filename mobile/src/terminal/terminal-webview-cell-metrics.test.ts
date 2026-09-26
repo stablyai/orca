@@ -121,6 +121,24 @@ describe('terminal fit from the reported cell box', () => {
     expect(onCellBoxChange).toHaveBeenCalledTimes(1)
   })
 
+  it('corrects the guess once per document; later boxes only update the fit', () => {
+    const { handle, notify, onCellBoxChange } = mount()
+    notify(WEB_READY)
+    const box = (cellWidth: number, cols: number) =>
+      notify({
+        type: 'cell-metrics',
+        cellMetrics: [{ fontScale: 1, cellWidth, cellHeight: 17 }],
+        cols,
+        rows: 44
+      })
+    box(7.8, 55)
+    // Each re-init at new cols gives the DOM renderer a new width.
+    box(8.4, 54)
+    box(8.3, 50)
+    expect(onCellBoxChange).toHaveBeenCalledExactlyOnceWith({ cols: 55, rows: 44 })
+    expect(handle().fitDimensions(751)).toEqual({ cols: 51, rows: 44 })
+  })
+
   it('says nothing when the laid-out box matches the guess or is for another text size', () => {
     const { notify, onCellBoxChange } = mount()
     notify(WEB_READY)

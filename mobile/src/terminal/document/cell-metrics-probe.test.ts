@@ -6,6 +6,9 @@ import { createTerminalDocumentScope } from './document-scope'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import type { TerminalDocumentHost } from './document-host-seams'
 import { fontPxForScale } from './text-scaling'
+import { terminalDocumentDouble } from './document-terminal-double.test-support'
+import { handleMsg } from './host-message-router'
+import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html/document-markup'
 
 const DPR = 3
 
@@ -158,6 +161,75 @@ describe('web-ready', () => {
           viewportHeight: 800
         }
       ])
+    } finally {
+      stopTerminalDocument(scope)
+    }
+  })
+})
+
+describe('the laid-out box, from a started document', () => {
+  /** A document over a 55x47 grid whose renderer the case controls, and every notify it posts. */
+  function startedOverRenderer() {
+    document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
+    const cell = { width: 23 / 3, height: 15 }
+    const renderListeners: (() => void)[] = []
+    const terminal = Object.assign(terminalDocumentDouble().terminal, {
+      cols: 55,
+      rows: 47,
+      _core: {
+        _renderService: {
+          get dimensions() {
+            return { css: { cell: { ...cell } } }
+          }
+        }
+      },
+      onRender: (listener: () => void) => {
+        renderListeners.push(listener)
+        return { dispose() {} }
+      }
+    })
+    const posted: Record<string, unknown>[] = []
+    const scope = probeScope({
+      installHostTransport: () => () => {},
+      hasEngine: () => true,
+      createTerminal: () => terminal,
+      postToHost: (message) => posted.push(message)
+    })
+    startTerminalDocument(scope)
+    handleMsg(scope, { type: 'init', cols: 55, rows: 47, initialData: '', preserveScroll: false })
+    const render = () => renderListeners.forEach((listener) => listener())
+    return { scope, cell, posted, render }
+  }
+
+  const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  async function untilReady(posted: Record<string, unknown>[]) {
+    for (let frame = 0; frame < 30 && !posted.some((m) => m.type === 'ready'); frame++) {
+      await nextFrame()
+    }
+  }
+  const boxes = (posted: Record<string, unknown>[]) =>
+    posted.filter((m) => m.type === 'cell-metrics').map((m) => m.cellMetrics)
+
+  it('reports a paused renderer at ready, before ready itself', async () => {
+    const { scope, posted } = startedOverRenderer()
+    try {
+      await untilReady(posted)
+      const types = posted.map((m) => m.type)
+      expect(types.indexOf('cell-metrics')).toBeGreaterThan(-1)
+      expect(types.indexOf('cell-metrics')).toBeLessThan(types.indexOf('ready'))
+      expect(boxes(posted)).toEqual([[{ fontScale: 1, cellWidth: 23 / 3, cellHeight: 15 }]])
+    } finally {
+      stopTerminalDocument(scope)
+    }
+  })
+
+  it('reports a renderer swap after context loss on the next render', async () => {
+    const { scope, cell, posted, render } = startedOverRenderer()
+    try {
+      await untilReady(posted)
+      cell.width = 7.8
+      render()
+      expect(boxes(posted).at(-1)).toEqual([{ fontScale: 1, cellWidth: 7.8, cellHeight: 15 }])
     } finally {
       stopTerminalDocument(scope)
     }
