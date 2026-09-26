@@ -22,6 +22,7 @@ import {
 } from './app-shell/app-window-chrome'
 import { useAppChromeLayout } from './app-shell/use-app-chrome-layout'
 import { useAppSessionPersistence } from './app-shell/use-app-session-persistence'
+import { useCrossMachineRecoveryPresentationPublication } from './app-shell/use-cross-machine-recovery-presentation-publication'
 import { useAppShellServices } from './app-shell/use-app-shell-services'
 import { useAppStartupHydration } from './app-shell/use-app-startup-hydration'
 import { useDocumentAppearance } from './app-shell/use-document-appearance'
@@ -45,6 +46,7 @@ function App(): React.JSX.Element {
   })
   useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
   useAppSessionPersistence()
+  useCrossMachineRecoveryPresentationPublication()
   useRuntimeGraphSync()
   usePersistedUIWriter()
   useDocumentAppearance()
