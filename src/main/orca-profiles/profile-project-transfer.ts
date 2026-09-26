@@ -3,7 +3,13 @@ import type {
   TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
 import { getOrcaProfileListState } from './profile-index-store'
-import { readProfileState, writeProfileState } from './profile-project-state-file'
+import { writeSerializedProfileState } from './profile-project-state-file'
+import {
+  readProfileProjectTransferState,
+  writeProfileProjectDomainChanges
+} from './profile-project-domain-state'
+import { prepareProfileProjectDomainChanges } from './profile-project-domain-changes'
+import { createProfileProjectDomainMoveIntent } from './profile-project-domain-move-intent'
 import { removeSourceRepo } from './profile-project-source-removal'
 import {
   applyPayloadToTarget,
@@ -11,6 +17,13 @@ import {
   createTransferPayload
 } from './profile-project-transfer-payload'
 import { repoPhysicalKey } from './profile-project-worktree-identity'
+import { migrateProfileProjectTransferParticipant } from './profile-project-transfer-migration'
+import {
+  persistProfileProjectMoveIntent,
+  recoverPendingProfileProjectMoves,
+  removeProfileProjectMoveIntent,
+  type ProfileProjectMoveIntent
+} from './profile-project-move-intent'
 
 function assertKnownProfiles(args: TransferOrcaProfileProjectArgs, userDataPath: string): void {
   const profiles = getOrcaProfileListState(userDataPath).profiles
@@ -30,14 +43,15 @@ export function transferOrcaProfileProject(
   args: TransferOrcaProfileProjectArgs,
   userDataPath: string
 ): TransferOrcaProfileProjectResult {
+  recoverPendingProfileProjectMoves(userDataPath)
   assertKnownProfiles(args, userDataPath)
-  const sourceState = readProfileState(args.sourceProfileId, userDataPath)
-  const targetState = readProfileState(args.targetProfileId, userDataPath)
-  const sourceRepo = sourceState.repos.find((repo) => repo.id === args.repoId)
+  let sourceSnapshot = readProfileProjectTransferState(args.sourceProfileId, userDataPath)
+  let targetSnapshot = readProfileProjectTransferState(args.targetProfileId, userDataPath)
+  const sourceRepo = sourceSnapshot.state.repos.find((repo) => repo.id === args.repoId)
   if (!sourceRepo) {
     throw new Error('unknown_source_repo')
   }
-  const duplicate = targetState.repos.find(
+  const duplicate = targetSnapshot.state.repos.find(
     (repo) => repoPhysicalKey(repo) === repoPhysicalKey(sourceRepo)
   )
   if (duplicate) {
@@ -50,6 +64,27 @@ export function transferOrcaProfileProject(
     }
   }
 
+  let moveIntent: ProfileProjectMoveIntent | undefined
+  if (sourceSnapshot.revision !== undefined && targetSnapshot.revision === undefined) {
+    targetSnapshot = migrateProfileProjectTransferParticipant(
+      args.targetProfileId,
+      userDataPath,
+      targetSnapshot
+    )
+  } else if (
+    args.mode === 'move' &&
+    sourceSnapshot.revision === undefined &&
+    targetSnapshot.revision !== undefined
+  ) {
+    sourceSnapshot = migrateProfileProjectTransferParticipant(
+      args.sourceProfileId,
+      userDataPath,
+      sourceSnapshot
+    )
+  }
+
+  const sourceState = sourceSnapshot.state
+  const targetState = targetSnapshot.state
   const targetRepo = createTargetRepo(sourceRepo, targetState, args.mode === 'copy')
   const payload = createTransferPayload({
     sourceState,
@@ -57,13 +92,61 @@ export function transferOrcaProfileProject(
     targetRepo,
     includeSessions: args.mode === 'move'
   })
-  writeProfileState(args.targetProfileId, userDataPath, applyPayloadToTarget(targetState, payload))
-  if (args.mode === 'move') {
-    writeProfileState(
-      args.sourceProfileId,
+  const targetAfterState = applyPayloadToTarget(targetState, payload)
+  const sourceAfterState =
+    args.mode === 'move' ? removeSourceRepo(sourceState, sourceRepo.id) : undefined
+  const targetChanges =
+    targetSnapshot.documents !== undefined && targetSnapshot.revision !== undefined
+      ? prepareProfileProjectDomainChanges(
+          targetSnapshot.revision,
+          targetSnapshot.documents,
+          targetAfterState
+        )
+      : undefined
+  const sourceChanges =
+    sourceAfterState !== undefined &&
+    sourceSnapshot.documents !== undefined &&
+    sourceSnapshot.revision !== undefined
+      ? prepareProfileProjectDomainChanges(
+          sourceSnapshot.revision,
+          sourceSnapshot.documents,
+          sourceAfterState
+        )
+      : undefined
+  if (sourceChanges !== undefined) {
+    if (targetChanges === undefined) {
+      throw new Error('SQLite profile move requires two SQLite participants')
+    }
+    moveIntent = createProfileProjectDomainMoveIntent({
+      sourceProfileId: args.sourceProfileId,
+      targetProfileId: args.targetProfileId,
+      source: sourceChanges,
+      target: targetChanges
+    })
+    persistProfileProjectMoveIntent(userDataPath, moveIntent)
+  }
+  if (targetChanges !== undefined) {
+    writeProfileProjectDomainChanges(args.targetProfileId, userDataPath, targetChanges)
+  } else {
+    writeSerializedProfileState(
+      args.targetProfileId,
       userDataPath,
-      removeSourceRepo(sourceState, sourceRepo.id)
+      JSON.stringify(targetAfterState)
     )
+  }
+  if (sourceAfterState !== undefined) {
+    if (sourceChanges !== undefined) {
+      writeProfileProjectDomainChanges(args.sourceProfileId, userDataPath, sourceChanges)
+    } else {
+      writeSerializedProfileState(
+        args.sourceProfileId,
+        userDataPath,
+        JSON.stringify(sourceAfterState)
+      )
+    }
+    if (moveIntent) {
+      removeProfileProjectMoveIntent(userDataPath, moveIntent.id)
+    }
   }
   return {
     status: 'transferred',

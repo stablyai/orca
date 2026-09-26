@@ -1,3 +1,4 @@
+import { extractLeadingEnvAssignments } from './command-environment'
 // Why: keeping the base prompt and assembly here (in shared) lets both the
 // renderer (preview/tests) and main (actual generation) reach the exact same
 // string without duplicating the wording.
@@ -265,7 +266,13 @@ export function tokenizeCustomCommandTemplate(
 }
 
 export type CustomCommandPlan =
-  | { ok: true; binary: string; args: string[]; stdinPayload: string | null }
+  | {
+      ok: true
+      binary: string
+      args: string[]
+      stdinPayload: string | null
+      env?: Record<string, string>
+    }
   | { ok: false; error: string }
 
 /**
@@ -289,7 +296,8 @@ export function planCustomCommand(
   if (tokenized.tokens.length === 0) {
     return { ok: false, error: 'Custom command is empty.' }
   }
-  const [binary, ...rest] = tokenized.tokens
+  const { env, rest: commandTokens } = extractLeadingEnvAssignments(tokenized.tokens)
+  const [binary, ...rest] = commandTokens
   if (!binary) {
     return { ok: false, error: 'Custom command must start with a binary name.' }
   }
@@ -298,14 +306,15 @@ export function planCustomCommand(
     token.includes(CUSTOM_PROMPT_PLACEHOLDER)
       ? token.split(CUSTOM_PROMPT_PLACEHOLDER).join(prompt)
       : token
-  const usesPlaceholder = tokenized.tokens.some((t) => t.includes(CUSTOM_PROMPT_PLACEHOLDER))
+  const usesPlaceholder = commandTokens.some((t) => t.includes(CUSTOM_PROMPT_PLACEHOLDER))
   if (usesPlaceholder) {
     return {
       ok: true,
       binary: substitute(binary),
       args: rest.map(substitute),
-      stdinPayload: null
+      stdinPayload: null,
+      ...(env ? { env } : {})
     }
   }
-  return { ok: true, binary, args: rest, stdinPayload: prompt }
+  return { ok: true, binary, args: rest, stdinPayload: prompt, ...(env ? { env } : {}) }
 }

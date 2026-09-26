@@ -129,6 +129,18 @@ the renderer retries.
 The SSH e2e lane must be green and triggering on **source** changes before any of this is attempted.
 It was skipping for 15 specs; four regressions reached a user during that window.
 
+## Resolved: a disposed pane killed its successor's new shell
+
+A pane rebuilt during its first spawn uses the same reservation key, so main can return the
+same PTY to both transports (#19386, #22578). The disposed transport must keep that shell
+while its tab and layout leaf remain and its execution host's workspace is not being deleted.
+A live transport refusing the id still retires it (#11003). This applies to local, WSL and SSH
+IPC terminals; the remote-runtime transport has no corresponding kill.
+
+The remount trigger in the Scan-22 user report remains unknown. A retained shell can outlive
+its tab if the tab closes before a successor binds it; keeping potentially owned work follows
+the SSH execution boundary.
+
 ## Open: the pane behind a preserved tab does not always rebind
 
 The merge now keeps a local tab the host has never been told about, so the tab and its title survive

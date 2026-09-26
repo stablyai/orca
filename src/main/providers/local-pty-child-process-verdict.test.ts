@@ -99,7 +99,7 @@ describe('confirmLocalPtyShellForeground', () => {
 const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
 
 describe('inspectLocalPtyChildProcesses', () => {
-  it('reports unverifiable when the pty fd cannot be read', () => {
+  it('reports unverifiable when the pty fd cannot be read', async () => {
     registerPane(
       'pty-closed',
       () => {
@@ -107,24 +107,24 @@ describe('inspectLocalPtyChildProcesses', () => {
       },
       '/bin/zsh'
     )
-    expect(inspectLocalPtyChildProcesses('pty-closed')).toBe('unverifiable')
+    expect(await inspectLocalPtyChildProcesses('pty-closed')).toBe('unverifiable')
   })
 
-  it('still answers no-children when the shell itself is in the foreground', () => {
+  it('still answers no-children when the shell itself is in the foreground', async () => {
     registerPane('pty-idle', 'zsh', '/bin/zsh')
-    expect(inspectLocalPtyChildProcesses('pty-idle')).toBe('no-children')
+    expect(await inspectLocalPtyChildProcesses('pty-idle')).toBe('no-children')
   })
 
-  it('answers children when something else is in the foreground', () => {
+  it('answers children when something else is in the foreground', async () => {
     registerPane('pty-busy', 'vim', '/bin/zsh')
-    expect(inspectLocalPtyChildProcesses('pty-busy')).toBe('children')
+    expect(await inspectLocalPtyChildProcesses('pty-busy')).toBe('children')
   })
 
-  it('treats a pane this provider does not hold as a real negative', () => {
-    expect(inspectLocalPtyChildProcesses('pty-absent')).toBe('no-children')
+  it('treats a pane this provider does not hold as a real negative', async () => {
+    expect(await inspectLocalPtyChildProcesses('pty-absent')).toBe('no-children')
   })
 
-  it('collapses uncertainty to false only in the boolean adapter', async () => {
+  it('preserves uncertainty conservatively in the boolean adapter', async () => {
     let reads = 0
     registerPane(
       'pty-closed',
@@ -134,8 +134,8 @@ describe('inspectLocalPtyChildProcesses', () => {
       },
       '/bin/zsh'
     )
-    await expect(hasLocalPtyChildProcesses('pty-closed')).resolves.toBe(false)
-    // The `false` has to come from the failed read, not from an earlier short-circuit.
+    await expect(hasLocalPtyChildProcesses('pty-closed')).resolves.toBe(true)
+    // The result must come from the failed read, not from an earlier short-circuit.
     expect(reads).toBe(1)
   })
 })
@@ -147,14 +147,14 @@ describeOnPosix('inspectLocalPtyChildProcesses on a retired master', () => {
     // The mechanism is silent: this is the same string an idle pane reports.
     expect(term.process).toBe(POSIX_SHELL)
     // Not `no-children`: the close guard reads that as "nothing is running here" and kills the pane.
-    expect(inspectLocalPtyChildProcesses('pty-retired')).toBe('unverifiable')
+    expect(await inspectLocalPtyChildProcesses('pty-retired')).toBe('unverifiable')
   }, 15000)
 
-  it('collapses uncertainty to false only in the boolean adapter', async () => {
+  it('preserves uncertainty conservatively in the boolean adapter', async () => {
     await registerRetiredPane('pty-retired')
 
     // The adapter exists for `IPtyProvider.hasChildProcesses`, which has no third slot.
-    await expect(hasLocalPtyChildProcesses('pty-retired')).resolves.toBe(false)
+    await expect(hasLocalPtyChildProcesses('pty-retired')).resolves.toBe(true)
   }, 15000)
 })
 
@@ -176,7 +176,7 @@ describe('inspectPtyProviderProcess child-process evidence', () => {
     )
     await expect(inspectPtyProviderProcess(provider, 'pty-closing')).resolves.toEqual({
       foregroundProcess: '/bin/zsh',
-      hasChildProcesses: false,
+      hasChildProcesses: true,
       childProcessEvidence: 'unverifiable'
     })
   })
@@ -216,7 +216,7 @@ describe('inspectPtyProviderProcess child-process evidence', () => {
 
     await expect(inspectPtyProviderProcess(provider, 'pty-swapped')).resolves.toEqual({
       foregroundProcess: null,
-      hasChildProcesses: false,
+      hasChildProcesses: true,
       childProcessEvidence: 'unverifiable'
     })
   })
@@ -229,7 +229,7 @@ describeOnPosix('inspectPtyProviderProcess on a retired master', () => {
     await registerRetiredPane('pty-retired')
 
     const inspection = await inspectPtyProviderProcess(provider, 'pty-retired')
-    expect(inspection.hasChildProcesses).toBe(false)
+    expect(inspection.hasChildProcesses).toBe(true)
     expect(inspection.childProcessEvidence).toBe('unverifiable')
   }, 15000)
 })

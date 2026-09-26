@@ -39,15 +39,23 @@ function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS
 export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
   const spawnEnv = input.env ?? process.env
   if (process.platform === 'win32' && input.wslDistro) {
-    // Same contract as spawnProcess: stdout/stderr are piped; stdin matches stdinMode.
-    return wslAwareSpawn(input.binary, input.args, {
-      cwd: input.cwd,
-      env: buildWslLauncherEnv(input.env),
-      stdio: [input.stdinMode, 'pipe', 'pipe'],
-      windowsHide: true,
-      wslDistro: input.wslDistro,
-      useWslLoginShell: true
-    }) as SpawnedSourceControlAgentProcess
+    // Apply assignments in the guest after its login shell, not to the Windows launcher.
+    const assignments = Object.entries(input.commandEnv ?? {}).map(
+      ([key, value]) => `${key}=${value}`
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: WSL spawn pipes both output streams and supplies the configured stdin stream.
+    return wslAwareSpawn(
+      assignments.length ? '/usr/bin/env' : input.binary,
+      assignments.length ? [...assignments, input.binary, ...input.args] : input.args,
+      {
+        cwd: input.cwd,
+        env: buildWslLauncherEnv(input.env),
+        stdio: [input.stdinMode, 'pipe', 'pipe'],
+        windowsHide: true,
+        wslDistro: input.wslDistro,
+        useWslLoginShell: true
+      }
+    ) as SpawnedSourceControlAgentProcess
   }
   const resolvedBinary =
     process.platform === 'win32'

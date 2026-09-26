@@ -35,6 +35,7 @@ export function createRemotePaneLayoutPusher(): RemotePaneLayoutPusher {
         tabId,
         root: layout.root,
         expandedLeafId: layout.expandedLeafId,
+        chatLeafId: layout.chatLeafId ?? null,
         ...(layout.titlesByLeafId ? { titlesByLeafId: layout.titlesByLeafId } : {})
       }).then((updated) => {
         // Why: a disconnected or timed-out push carried no information, so the next persist must retry it.

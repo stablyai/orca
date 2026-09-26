@@ -1,9 +1,28 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
 import type { PersistedState } from '../../shared/persisted-state-types'
+import {
+  getOrcaProfileDataFile,
+  getOrcaProfileStateDatabaseFile
+} from '../../main/orca-profiles/profile-storage-paths'
+import { openProfileStateDatabase } from '../../main/persistence/profile-state/profile-state-database'
+import {
+  exportProfileStateJson,
+  hashProfileStateJson,
+  importProfileStateJson
+} from '../../main/persistence/profile-state/profile-state-documents'
+import { ProfileStateSqliteAuthority } from '../../main/persistence/profile-state/profile-state-sqlite-authority'
+import {
+  acquireProfileStateMaintenance,
+  acquireProfileStateRuntimeAdmission,
+  type ProfileStateRuntimeAdmission
+} from '../../main/persistence/profile-state/profile-state-access'
+
+vi.mock('node:fs', async (original) => ({ ...(await original<typeof fs>()) }))
 
 const {
   applyAgentStatusHooksEnabledMock,
@@ -74,6 +93,14 @@ function writeDataFile(userDataPath: string, state: PersistedState): void {
   writeFileSync(join(userDataPath, 'orca-data.json'), JSON.stringify(state, null, 2), 'utf-8')
 }
 
+function writeActiveProfileIndex(userDataPath: string, profileId: string): void {
+  writeFileSync(
+    join(userDataPath, 'orca-profile-index.json'),
+    JSON.stringify({ activeProfileId: profileId, profiles: [{ id: profileId }] }),
+    'utf-8'
+  )
+}
+
 async function runAgentHooksOff(userDataPath: string): Promise<void> {
   getDefaultUserDataPathMock.mockReturnValue(userDataPath)
   await main(['agent', 'hooks', 'off', '--json'], userDataPath)
@@ -84,7 +111,7 @@ describe('agent hooks CLI handler', () => {
 
   beforeEach(() => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-cli-'))
-    applyAgentStatusHooksEnabledMock.mockReturnValue([])
+    applyAgentStatusHooksEnabledMock.mockReset().mockReturnValue([])
     callMock.mockReset()
     getCliStatusMock.mockClear()
     getManagedAgentHookStatusesMock.mockReturnValue([])
@@ -109,6 +136,98 @@ describe('agent hooks CLI handler', () => {
     expect(persisted.settings.agentStatusHooksEnabled).toBe(false)
   })
 
+  it.each(['root-json', 'profile-json', 'sqlite'] as const)(
+    'refuses offline %s mutation when startup wins after the stopped-status response',
+    async (backend) => {
+      const profileId = 'startup-race'
+      const directory =
+        backend === 'root-json' ? userDataPath : join(userDataPath, 'profiles', profileId)
+      mkdirSync(directory, { recursive: true })
+      const dataFile = join(directory, 'orca-data.json')
+      const raw = JSON.stringify({
+        settings: { agentStatusHooksEnabled: true },
+        unknown: { retained: null }
+      })
+      writeFileSync(dataFile, raw)
+      if (backend !== 'root-json') {
+        writeActiveProfileIndex(userDataPath, profileId)
+      }
+      const databaseFile = join(directory, 'profile-state.db')
+      if (backend === 'sqlite') {
+        const opened = openProfileStateDatabase(databaseFile, profileId)
+        try {
+          importProfileStateJson(opened.db, raw, {
+            acceptedLegacyJsonHash: hashProfileStateJson(raw)
+          })
+        } finally {
+          opened.db.close()
+        }
+      }
+      const stopped = await getCliStatusMock()
+      let runtime: ProfileStateRuntimeAdmission | undefined
+      getCliStatusMock.mockImplementationOnce(async () => {
+        runtime = acquireProfileStateRuntimeAdmission(userDataPath)
+        return stopped
+      })
+      try {
+        await runAgentHooksOff(userDataPath)
+        expect(process.exitCode).toBe(1)
+        expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
+        expect(readFileSync(dataFile, 'utf8')).toBe(raw)
+        if (backend === 'sqlite') {
+          const opened = openProfileStateDatabase(databaseFile, profileId)
+          try {
+            expect(JSON.parse(exportProfileStateJson(opened.db))).toEqual(JSON.parse(raw))
+          } finally {
+            opened.db.close()
+          }
+        }
+      } finally {
+        runtime?.release()
+      }
+      process.exitCode = undefined
+      await runAgentHooksOff(userDataPath)
+      expect(process.exitCode).not.toBe(1)
+      expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledOnce()
+    }
+  )
+
+  it.each(['root-json', 'profile-json'] as const)(
+    'excludes startup and other offline writers through %s publication',
+    async (backend) => {
+      const profileId = 'offline-first'
+      const directory =
+        backend === 'root-json' ? userDataPath : join(userDataPath, 'profiles', profileId)
+      mkdirSync(directory, { recursive: true })
+      if (backend === 'profile-json') {
+        writeActiveProfileIndex(userDataPath, profileId)
+      }
+      const dataFile = join(directory, 'orca-data.json')
+      writeFileSync(dataFile, JSON.stringify({ settings: { agentStatusHooksEnabled: true } }))
+      const rename = fs.renameSync
+      let checkedPublication = false
+      vi.spyOn(fs, 'renameSync').mockImplementation((source, target) => {
+        if (target === dataFile) {
+          checkedPublication = true
+          expect(() => acquireProfileStateRuntimeAdmission(userDataPath)).toThrow()
+          expect(() => acquireProfileStateMaintenance(userDataPath)).toThrow()
+        }
+        return rename(source, target)
+      })
+      await runAgentHooksOff(userDataPath)
+      expect(checkedPublication).toBe(true)
+      expect(process.exitCode).not.toBe(1)
+      const runtime = acquireProfileStateRuntimeAdmission(userDataPath)
+      try {
+        expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.agentStatusHooksEnabled).toBe(
+          false
+        )
+      } finally {
+        runtime.release()
+      }
+    }
+  )
+
   it('keeps missing new card style off when updating offline settings', async () => {
     const existing = getDefaultPersistedState(userDataPath)
     delete existing.settings.experimentalNewWorktreeCardStyle
@@ -128,6 +247,31 @@ describe('agent hooks CLI handler', () => {
 
     expect(readDataFile(userDataPath).settings.experimentalNewWorktreeCardStyle).toBe(true)
   })
+
+  it.each(['on', 'off', 'status', 'prepare-codex'])(
+    'refuses explicit remote selection before local hook command %s',
+    async (command) => {
+      const state = getDefaultPersistedState(userDataPath)
+      writeDataFile(userDataPath, state)
+      const before = readFileSync(join(userDataPath, 'orca-data.json'), 'utf8')
+      getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+
+      for (const selector of ['environment', 'pairing-code']) {
+        process.exitCode = undefined
+        await main(
+          ['agent', 'hooks', command, `--${selector}`, 'unreachable-host', '--json'],
+          userDataPath
+        )
+
+        expect(process.exitCode).toBe(1)
+        expect(getCliStatusMock).not.toHaveBeenCalled()
+        expect(callMock).not.toHaveBeenCalled()
+        expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
+        expect(prepareManagedCodexHomeBeforeShellLaunchMock).not.toHaveBeenCalled()
+        expect(readFileSync(join(userDataPath, 'orca-data.json'), 'utf8')).toBe(before)
+      }
+    }
+  )
 
   it('prepares managed Codex trust with the current hooks setting', async () => {
     const state = getDefaultPersistedState(userDataPath)
@@ -230,5 +374,147 @@ describe('agent hooks CLI handler', () => {
     expect(callMock).toHaveBeenCalledExactlyOnceWith('settings.get', undefined, {
       timeoutMs: 1_000
     })
+  })
+
+  it('updates an established SQLite profile without rewriting its JSON export', async () => {
+    const profileId = 'work-profile'
+    const profileDirectory = join(userDataPath, 'profiles', profileId)
+    const dataFile = getOrcaProfileDataFile(profileId, userDataPath)
+    const databaseFile = getOrcaProfileStateDatabaseFile(profileId, userDataPath)
+    const raw = JSON.stringify({
+      settings: {
+        agentStatusHooksEnabled: true,
+        disabledTuiAgents: ['codex'],
+        opencodeSessionCookie: 'encrypted-ciphertext'
+      },
+      unknownDomain: { preserved: true }
+    })
+    mkdirSync(profileDirectory, { recursive: true })
+    writeFileSync(dataFile, raw, 'utf-8')
+    writeActiveProfileIndex(userDataPath, profileId)
+    const opened = openProfileStateDatabase(databaseFile, profileId)
+    try {
+      importProfileStateJson(opened.db, raw, {
+        acceptedLegacyJsonHash: hashProfileStateJson(raw)
+      })
+    } finally {
+      opened.db.close()
+    }
+
+    await runAgentHooksOff(userDataPath)
+
+    expect(readFileSync(dataFile, 'utf-8')).toBe(raw)
+    const readBack = openProfileStateDatabase(databaseFile, profileId)
+    try {
+      expect(JSON.parse(exportProfileStateJson(readBack.db))).toMatchObject({
+        settings: {
+          agentStatusHooksEnabled: false,
+          opencodeSessionCookie: 'encrypted-ciphertext',
+          disabledTuiAgents: ['codex']
+        },
+        unknownDomain: { preserved: true }
+      })
+    } finally {
+      readBack.db.close()
+    }
+  })
+
+  it.each(['update-failed', 'unreachable', 'status-failed'] as const)(
+    'preserves a live SQLite writer when runtime contact is %s',
+    async (failure) => {
+      const profileId = 'live-profile'
+      const profileDirectory = join(userDataPath, 'profiles', profileId)
+      mkdirSync(profileDirectory, { recursive: true })
+      writeActiveProfileIndex(userDataPath, profileId)
+      const authority = new ProfileStateSqliteAuthority(
+        getOrcaProfileStateDatabaseFile(profileId, userDataPath),
+        profileId
+      )
+      authority.writeSerializedState(
+        Buffer.from(JSON.stringify({ settings: { agentStatusHooksEnabled: true } }))
+      )
+      if (failure === 'status-failed') {
+        getCliStatusMock.mockRejectedValueOnce(new Error('status transport unavailable'))
+      } else {
+        getCliStatusMock.mockResolvedValueOnce({
+          id: 'test-status',
+          ok: true,
+          result: {
+            app: { running: true, pid: null },
+            runtime: {
+              state: failure === 'unreachable' ? 'starting' : 'ready',
+              reachable: failure !== 'unreachable',
+              runtimeId: null
+            },
+            graph: { state: 'ready' }
+          },
+          _meta: { runtimeId: 'test' }
+        })
+        callMock.mockRejectedValueOnce(new Error('settings request timed out'))
+      }
+      try {
+        await runAgentHooksOff(userDataPath)
+
+        expect(process.exitCode).toBe(1)
+        expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
+        expect(() =>
+          authority.writeSerializedDomains([
+            { domain: 'ui', payload: '{"marker":"still-writable"}' }
+          ])
+        ).not.toThrow()
+        const persisted = JSON.parse(authority.readSerializedState() ?? '{}')
+        expect(persisted).toMatchObject({
+          settings: { agentStatusHooksEnabled: true },
+          ui: { marker: 'still-writable' }
+        })
+      } finally {
+        authority.close()
+      }
+    }
+  )
+
+  it('keeps a JSON-only active profile on the legacy path without creating SQLite', async () => {
+    const profileId = 'json-profile'
+    const profileDirectory = join(userDataPath, 'profiles', profileId)
+    mkdirSync(profileDirectory, { recursive: true })
+    writeDataFile(profileDirectory, getDefaultPersistedState(userDataPath))
+    writeActiveProfileIndex(userDataPath, profileId)
+
+    await runAgentHooksOff(userDataPath)
+
+    expect(existsSync(getOrcaProfileStateDatabaseFile(profileId, userDataPath))).toBe(false)
+    expect(
+      JSON.parse(readFileSync(getOrcaProfileDataFile(profileId, userDataPath), 'utf-8')).settings
+        .agentStatusHooksEnabled
+    ).toBe(false)
+  })
+
+  it('fails closed when a profile has corrupt SQLite alongside legacy JSON', async () => {
+    const profileId = 'corrupt-profile'
+    const profileDirectory = join(userDataPath, 'profiles', profileId)
+    mkdirSync(profileDirectory, { recursive: true })
+    const state = getDefaultPersistedState(userDataPath)
+    writeDataFile(profileDirectory, state)
+    writeActiveProfileIndex(userDataPath, profileId)
+    const databaseFile = getOrcaProfileStateDatabaseFile(profileId, userDataPath)
+    writeFileSync(databaseFile, 'not sqlite', 'utf-8')
+    const before = readFileSync(getOrcaProfileDataFile(profileId, userDataPath), 'utf-8')
+
+    await runAgentHooksOff(userDataPath)
+
+    expect(process.exitCode).toBe(1)
+    expect(readFileSync(getOrcaProfileDataFile(profileId, userDataPath), 'utf-8')).toBe(before)
+  })
+
+  it('fails closed when a profile index is present but unreadable', async () => {
+    const legacy = getDefaultPersistedState(userDataPath)
+    writeDataFile(userDataPath, legacy)
+    writeFileSync(join(userDataPath, 'orca-profile-index.json'), '{ torn', 'utf-8')
+    const before = readFileSync(join(userDataPath, 'orca-data.json'), 'utf-8')
+
+    await runAgentHooksOff(userDataPath)
+
+    expect(process.exitCode).toBe(1)
+    expect(readFileSync(join(userDataPath, 'orca-data.json'), 'utf-8')).toBe(before)
   })
 })

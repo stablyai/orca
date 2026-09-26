@@ -130,7 +130,6 @@ src/main/providers/process-cwd.ts
 src/main/providers/windows-console-attached-processes.ts
 src/main/pty-descendant-termination.ts
 src/main/pty/posix-pty-foreground-group.ts
-src/main/pty/posix-pty-process-groups.ts
 src/main/pty/windows-environment-path.ts
 src/main/rate-limits/codex-fetcher.ts
 src/main/rate-limits/gemini-cli-oauth-extractor.ts
