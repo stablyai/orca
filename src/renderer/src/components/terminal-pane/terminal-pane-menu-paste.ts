@@ -20,6 +20,7 @@ import { useAppStore } from '@/store'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { reclaimTerminalPaneFocus } from './terminal-pane-menu-focus'
 
 export type TerminalPaneMenuPasteContext = {
   managerRef: React.RefObject<PaneManager | null>
@@ -147,6 +148,7 @@ export const pasteTerminalPaneMenuClipboard = async (
     }
   })
   if (result.status !== 'pasted') {
+    reclaimTerminalPaneFocus(pane)
     return
   }
   // Why: Radix returns focus to the menu trigger (the pane container) on

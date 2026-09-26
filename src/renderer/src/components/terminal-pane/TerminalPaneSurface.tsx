@@ -225,6 +225,7 @@ export function TerminalPaneSurface({
       <TerminalContextMenu
         open={contextMenu.open}
         onOpenChange={contextMenu.setOpen}
+        onMenuClosed={contextMenu.onMenuClosed}
         menuPoint={contextMenu.point}
         menuOpenedAtRef={contextMenu.menuOpenedAtRef}
         canClosePane={contextMenu.paneCount > 1}
