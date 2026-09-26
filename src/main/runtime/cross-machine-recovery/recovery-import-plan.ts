@@ -13,7 +13,8 @@ import type {
   RecoveryLayout,
   RecoveryPathMapping,
   RecoveryPresentationSource,
-  RecoveryProviderSession
+  RecoveryProviderSession,
+  RecoveryTabGroup
 } from '../../../shared/cross-machine-recovery-descriptor'
 import type { RecoveryWorkspaceFragment } from '../../../shared/cross-machine-recovery-session-ops'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -85,7 +86,9 @@ export function withHostBindingTabs(
     return view
   }
   const present = new Set(view.terminalTabs.map((tab) => tab.id))
-  const targetGroupId = view.activeGroupId ?? view.groups[0]?.id ?? null
+  let targetGroupId = view.groups.some((group) => group.id === view.activeGroupId)
+    ? view.activeGroupId
+    : (view.groups[0]?.id ?? null)
   let next = view
   for (const binding of bindings) {
     const hostTab = host.terminalTabs.find((tab) => tab.id === binding.sourceTabId)
@@ -110,6 +113,14 @@ export function withHostBindingTabs(
     const hostUnified = host.tabs.find(
       (tab) => tab.contentType === 'terminal' && tab.entityId === hostTab.id
     )
+    if (hostUnified && !targetGroupId) {
+      targetGroupId = hostUnified.groupId
+      next = withDestinationGroup(next, {
+        id: targetGroupId,
+        activeTabId: host.groups.find((group) => group.id === targetGroupId)?.activeTabId ?? null,
+        tabOrder: []
+      })
+    }
     const hostLayout = host.terminalLayouts[hostTab.id]
     const hostCwd = host.startupCwdRelative[hostTab.id]
     next = {
@@ -135,6 +146,16 @@ export function withHostBindingTabs(
     }
   }
   return next
+}
+
+// Why: a view with no groups would strand host tabs, since every unified tab needs a group slot.
+function withDestinationGroup(layout: RecoveryLayout, group: RecoveryTabGroup): RecoveryLayout {
+  return {
+    ...layout,
+    groups: [...layout.groups, group],
+    groupLayout: { type: 'leaf', groupId: group.id },
+    activeGroupId: group.id
+  }
 }
 
 function leafBelongsToTab(

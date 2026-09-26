@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   OrcaRecoveryDescriptorV1,
   RecoveryAgentBinding,
+  RecoveryLayout,
   RecoveryTab
 } from '../../../shared/cross-machine-recovery-descriptor'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
@@ -162,6 +163,69 @@ describe('structured session placeholders', () => {
       leafId: pane.leafId
     })
     expect(plan.fragment.tabGroups[0]?.tabOrder).toContain(pane.tabId)
+  })
+
+  it('gives every host binding a visible tab when the chosen client view has no groups', () => {
+    const d = withActiveAgentSessionTab(descriptor())
+    const emptyView: RecoveryLayout = {
+      tabs: [],
+      groups: [],
+      groupLayout: null,
+      activeGroupId: null,
+      terminalTabs: [],
+      terminalLayouts: {},
+      startupCwdRelative: {},
+      editors: [],
+      activeEditorRelativePath: null,
+      browsers: [],
+      activeBrowserId: null,
+      activeTabType: null,
+      activeTabId: null
+    }
+    d.presentation = {
+      views: [
+        {
+          clientKey: 'local-renderer',
+          clientInstanceId: 'client-1',
+          clientName: 'desk',
+          clientKind: 'local-renderer',
+          hostReceivedAt: 1,
+          lastHumanInputAt: 1,
+          lastHumanFocusAt: 1,
+          focus: {
+            isActiveWorkspace: true,
+            focusedTabId: null,
+            focusedLeafId: null,
+            focusedPaneKey: null,
+            windowFocused: true
+          },
+          view: emptyView
+        }
+      ],
+      preferredClientKey: 'local-renderer',
+      freshness: 'client-view'
+    }
+
+    const plan = planRecoveryImport(d, undefined, planContext('/dst/wt'))
+
+    expect(plan.presentationSource).toEqual({ kind: 'client-view', clientKey: 'local-renderer' })
+    const group = plan.fragment.tabGroups[0]!
+    expect(plan.fragment.tabGroups).toHaveLength(1)
+    expect(plan.fragment.tabGroupLayout).toEqual({ type: 'leaf', groupId: group.id })
+    expect(plan.fragment.activeGroupId).toBe(group.id)
+    const paneTabIds = plan.bindings.map((planned) => {
+      const pane = parsePaneKey(planned.result.localPaneKey)!
+      expect(plan.fragment.terminalLayoutsByTabId[pane.tabId]?.root).toEqual({
+        type: 'leaf',
+        leafId: pane.leafId
+      })
+      return pane.tabId
+    })
+    expect(plan.fragment.unifiedTabs.map((tab) => [tab.id, tab.entityId, tab.groupId])).toEqual(
+      paneTabIds.map((tabId) => [tabId, tabId, group.id])
+    )
+    expect(group.tabOrder).toEqual(paneTabIds)
+    expect(group.activeTabId).toBe(plan.idMap.tabs[AGENT_TAB])
   })
 })
 
