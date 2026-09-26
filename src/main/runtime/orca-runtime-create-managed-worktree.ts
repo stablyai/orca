@@ -157,30 +157,37 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
           ? {
               lineage: recordedLineage.lineage,
               workspaceLineage: recordedLineage.workspaceLineage,
-              warnings: recordedLineage.warnings
+              warnings: [...(result.warnings ?? []), ...recordedLineage.warnings]
             }
           : {})
       }
     }
-    const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
-      await createRuntimeLocalManagedWorktree({
-        request: args,
-        repo,
-        store: this.requireStore(),
-        createdWithAgent: effectiveCreatedWithAgent,
-        hostedReviewExecutionContext: this.getHostedReviewExecutionOptions(repo),
-        resolveRemoteTrackingBase: (path, base, ...options) =>
-          this.resolveRemoteTrackingBase(path, base, ...options),
-        hasRemoteTrackingRef: (path, base, ...options) =>
-          this.hasRemoteTrackingRef(path, base, ...options),
-        refreshRemoteTrackingBase: (path, base, ...options) =>
-          this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
-        fetchRemote: (path, remote, ...options) =>
-          this.fetchRemoteWithCache(path, remote, ...options),
-        onWorktreeMetadataPersisted: (persistedWorktree) =>
-          this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution),
-        rearm
-      })
+    const {
+      worktree,
+      worktreePath,
+      includeCopyWarning,
+      skipWarnings = [],
+      created,
+      addResult,
+      metadataResult
+    } = await createRuntimeLocalManagedWorktree({
+      request: args,
+      repo,
+      store: this.requireStore(),
+      createdWithAgent: effectiveCreatedWithAgent,
+      hostedReviewExecutionContext: this.getHostedReviewExecutionOptions(repo),
+      resolveRemoteTrackingBase: (path, base, ...options) =>
+        this.resolveRemoteTrackingBase(path, base, ...options),
+      hasRemoteTrackingRef: (path, base, ...options) =>
+        this.hasRemoteTrackingRef(path, base, ...options),
+      refreshRemoteTrackingBase: (path, base, ...options) =>
+        this.getOrStartRemoteTrackingBaseRefresh(path, base, ...options),
+      fetchRemote: (path, remote, ...options) =>
+        this.fetchRemoteWithCache(path, remote, ...options),
+      onWorktreeMetadataPersisted: (persistedWorktree) =>
+        this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution),
+      rearm
+    })
     const settings = createSettings
     const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
 
@@ -270,7 +277,11 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         workspaceLineage,
         git: created
       },
-      ...(lineageInput ? { lineage, workspaceLineage, warnings: lineageWarnings } : {}),
+      ...(lineageInput
+        ? { lineage, workspaceLineage, warnings: [...lineageWarnings, ...skipWarnings] }
+        : skipWarnings.length > 0
+          ? { warnings: skipWarnings }
+          : {}),
       ...(returnedSetup ? { setup: returnedSetup } : {}),
       ...(args.awaitTerminalProvisioning
         ? {

@@ -116,6 +116,39 @@ describe('createManagedWorktree execution-host routing', () => {
     )
   })
 
+  it('preserves remote skip warnings when recording lineage', async () => {
+    const { runtime, createRemote } = makeRuntime({
+      id: 'repo-remote',
+      path: REMOTE_PATH,
+      kind: 'git',
+      connectionId: TARGET_ID
+    })
+    const remoteWarning = {
+      code: 'WORKTREE_SHARE_SKIPPED',
+      message: 'shared path skipped'
+    }
+    const lineageWarning = {
+      code: 'WORKTREE_LINEAGE_SKIPPED',
+      message: 'lineage path skipped'
+    }
+    createRemote.mockResolvedValue({
+      worktree: { id: 'wt-1', path: '/srv/app-feature', branch: 'feature' },
+      warnings: [remoteWarning]
+    })
+    vi.spyOn(
+      runtime as unknown as RuntimeInternals,
+      'recordCreatedWorktreeLineage'
+    ).mockReturnValue({ lineage: null, workspaceLineage: null, warnings: [lineageWarning] })
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'repo-remote',
+      name: 'feature',
+      comment: 'child'
+    } as never)
+
+    expect(result.warnings).toEqual([remoteWarning, lineageWarning])
+  })
+
   it('marks a folder workspace trusted on its SSH host, not on the client', async () => {
     const { runtime } = makeRuntime({
       id: 'repo-folder',
