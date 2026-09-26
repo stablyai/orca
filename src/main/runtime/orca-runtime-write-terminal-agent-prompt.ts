@@ -138,7 +138,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
         prompt: inputAccepted
       }
-      // Checkpoint before the retry wait so an abort in that window keeps the accepted receipt.
+      // The prompt is in the pane now, so record its receipt without waiting out the retry delay.
       options.onInputAccepted?.(checkpoint)
       if (settlementAgent) {
         this.registerAgentPromptRequest(
