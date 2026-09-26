@@ -13,6 +13,7 @@ const {
   getPathMock,
   connectRuntimeOwnedSshTargetMock,
   disconnectRuntimeOwnedSshTargetMock,
+  ensureRuntimeOwnedSshConnectionMock,
   removeRuntimeOwnedSshTargetMock,
   invalidateRuntimeEnvironmentTransportMock
 } = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ const {
   getPathMock: vi.fn(),
   connectRuntimeOwnedSshTargetMock: vi.fn(),
   disconnectRuntimeOwnedSshTargetMock: vi.fn(),
+  ensureRuntimeOwnedSshConnectionMock: vi.fn(),
   removeRuntimeOwnedSshTargetMock: vi.fn(),
   invalidateRuntimeEnvironmentTransportMock: vi.fn()
 }))
@@ -38,6 +40,7 @@ vi.mock('electron', () => ({
 vi.mock('../ephemeral-vm-runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: connectRuntimeOwnedSshTargetMock,
   disconnectRuntimeOwnedSshTarget: disconnectRuntimeOwnedSshTargetMock,
+  ensureRuntimeOwnedSshConnection: ensureRuntimeOwnedSshConnectionMock,
   removeRuntimeOwnedSshTarget: removeRuntimeOwnedSshTargetMock
 }))
 
@@ -113,6 +116,8 @@ describe('registerEphemeralVmHandlers', () => {
     getPathMock.mockReset()
     connectRuntimeOwnedSshTargetMock.mockReset()
     disconnectRuntimeOwnedSshTargetMock.mockReset()
+    ensureRuntimeOwnedSshConnectionMock.mockReset()
+    ensureRuntimeOwnedSshConnectionMock.mockResolvedValue('runtime-ssh-orca-instance-1')
     removeRuntimeOwnedSshTargetMock.mockReset()
     invalidateRuntimeEnvironmentTransportMock.mockReset()
     connectRuntimeOwnedSshTargetMock.mockResolvedValue({
