@@ -135,6 +135,7 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'cursor') {
     return settings.cursorAuthConfigured === true
+  }
   if (providerId === 'glm') {
     return hasGlmUsageConfigured(settings.glmCodingPlanUsage)
   }
@@ -148,7 +149,6 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     weekly: null,
     ...(providerId === 'opencode-go' ? { monthly: null } : {}),
     ...(providerId === 'gemini' || providerId === 'cursor' ? { buckets: [] } : {}),
-    ...(providerId === 'gemini' ? { buckets: [] } : {}),
     ...(providerId === 'glm' ? { monthly: null } : {}),
     updatedAt: 0,
     error: null,

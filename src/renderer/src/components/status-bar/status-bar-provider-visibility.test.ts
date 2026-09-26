@@ -426,7 +426,7 @@ describe('isUsageEmptyState', () => {
   })
 
   it('waits for provider snapshots before showing the setup CTA', () => {
-    expect(isUsageEmptyState(createEmptyRateLimitState(), usageSettings())).toBe(false)
+    expect(
       isUsageEmptyState(
         {
           claude: null,
@@ -437,6 +437,7 @@ describe('isUsageEmptyState', () => {
           antigravity: null,
           minimax: null,
           grok: null,
+          cursor: undefined,
           glm: null
         },
         usageSettings()
@@ -528,6 +529,7 @@ describe('isUsageEmptyState', () => {
           antigravity: null,
           minimax: null,
           grok: null,
+          cursor: null,
           glm: null
         },
         null
