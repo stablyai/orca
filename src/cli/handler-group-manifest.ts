@@ -189,6 +189,18 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/profile-state.js')).PROFILE_STATE_HANDLERS
   },
   {
+    name: 'cross-machine-recovery',
+    keys: [
+      'recovery describe',
+      'recovery export',
+      'recovery import',
+      'recovery resume',
+      'recovery list'
+    ],
+    load: async () =>
+      (await import('./handlers/cross-machine-recovery.js')).CROSS_MACHINE_RECOVERY_HANDLERS
+  },
+  {
     name: 'diagnostics',
     keys: ['diagnostics memory'],
     load: async () => (await import('./handlers/diagnostics.js')).DIAGNOSTICS_HANDLERS
