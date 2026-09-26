@@ -7,6 +7,7 @@ import {
   keybindingFromInputForAction,
   keybindingMatchesAction,
   normalizeKeybinding,
+  normalizeKeybindingWithOptions,
   normalizeKeybindingListForAction,
   normalizeKeybindingList
 } from './keybindings'
@@ -43,6 +44,26 @@ describe('keybindings', () => {
     expect(normalizeKeybindingListForAction('fileExplorer.delete', 'x')).toMatchObject({
       ok: false
     })
+  })
+
+  it('allows Shift-only navigation keys for scoped bare-key opt-ins', () => {
+    const navigationKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown']
+
+    for (const key of navigationKeys) {
+      expect(normalizeKeybindingWithOptions(`Shift+${key}`)).toMatchObject({ ok: false })
+      expect(
+        normalizeKeybindingWithOptions(`Shift+${key}`, { allowBareKeybindings: true })
+      ).toEqual({ ok: true, value: `Shift+${key}` })
+      expect(normalizeKeybindingListForAction('editor.previousChange', `Shift+${key}`)).toEqual([
+        `Shift+${key}`
+      ])
+    }
+
+    for (const key of ['Backspace', 'Delete', 'Enter', 'Escape', 'Tab', 'A', '1', 'Slash']) {
+      expect(
+        normalizeKeybindingWithOptions(`Shift+${key}`, { allowBareKeybindings: true })
+      ).toMatchObject({ ok: false })
+    }
   })
 
   it('allows Shift-only chords only for native input-source switching', () => {
