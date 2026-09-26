@@ -25,6 +25,7 @@ import {
 import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment'
 import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-env'
 import { gitSpawn } from './git-spawn'
+import { noteHostProcessSpawnFailure } from '../../crash-reporting/host-process-spawn-refusal'
 import { acquireGitAdmission } from './git-subprocess-admission'
 import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
 
@@ -219,6 +220,11 @@ export async function gitStreamStdout(
           stderr += stderrDecoder.write(chunk)
         }
         function onError(error: Error): void {
+          if (!child.pid) {
+            // Streaming has no admission wrapper to record for it, so a refused spawn is
+            // only visible in a crash report if it is noted here.
+            noteHostProcessSpawnFailure(child.spawnfile, error)
+          }
           finish(error)
         }
         function onClose(code: number | null): void {

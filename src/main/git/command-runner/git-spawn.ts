@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
+import { noteHostProcessSpawnFailure } from '../../crash-reporting/host-process-spawn-refusal'
 import { startGitSpan } from '../../observability/instrumentation'
 import { createAbortError } from './abort-error'
 import { resolveGitCommand } from './git-command-resolution'
@@ -78,6 +79,8 @@ export async function withGitAdmission(
     }
     const handleError = (error: Error): void => {
       if (!child.pid) {
+        // spawnfile, not 'git': the refused binary may be wsl.exe or a configured git path.
+        noteHostProcessSpawnFailure(child.spawnfile, error)
         finalize(error)
       } else {
         liveError = error
@@ -109,12 +112,21 @@ export function gitSpawn(args: string[], options: GitSpawnOptions): ChildProcess
     ...(spawnOptions.env ? { env: spawnOptions.env } : {})
   })
   const spawnStartedAt = performance.now()
-  const child = spawn(resolved.binary, resolved.args, {
-    ...spawnOptions,
-    env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
-    windowsHide: true,
-    cwd: resolved.cwd
-  })
+  let child: ChildProcess
+  try {
+    child = spawn(resolved.binary, resolved.args, {
+      ...spawnOptions,
+      env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env),
+      windowsHide: true,
+      cwd: resolved.cwd
+    })
+  } catch (error) {
+    // Node only emits 'error' for EACCES/EAGAIN/EMFILE/ENFILE/ENOENT and throws the rest, so a
+    // Windows commit-limit refusal (UNKNOWN, ENOMEM) has no child to listen on - and its syscall
+    // is a bare `spawn`, leaving the resolved binary the only thing that can still name it.
+    noteHostProcessSpawnFailure(resolved.binary, error)
+    throw error
+  }
   recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)
   return child
 }

@@ -6,8 +6,9 @@ import {
 } from '../../shared/crash-reporting'
 
 const MAX_BREADCRUMBS = 30
-// Two threshold ladders, two marks each, across both renderer surfaces.
-const MAX_RETAINED_BREADCRUMBS = 8
+// Two threshold ladders, two marks each, across both renderer surfaces, plus the
+// single slot the host-refusal family below collapses into.
+const MAX_RETAINED_BREADCRUMBS = 9
 // Why: coalesceKey embeds an open-string agentType (length-trimmed only, never
 // enum-checked), so the key space is unbounded over a long multi-agent/SSH session.
 // Bound the coalesce map the same way ProcessGoneDedupe bounds its key map.
@@ -37,7 +38,19 @@ let breadcrumbs: CrashReportBreadcrumb[] = []
 let retainedBreadcrumbs = new Map<string, CrashReportBreadcrumb>()
 let coalescedBreadcrumbs = new Map<string, CoalescedBreadcrumbState>()
 
+/** Held here because retention policy lives here; the producer imports it so
+ *  the name cannot drift out from under the rule below. */
+export const HOST_PROCESS_SPAWN_REFUSED_BREADCRUMB = 'host_process_spawn_refused'
+
 function retainedBreadcrumbKey(breadcrumb: CrashReportBreadcrumb): string | null {
+  if (breadcrumb.name === HOST_PROCESS_SPAWN_REFUSED_BREADCRUMB) {
+    // Why one slot for every program and marker: a host that refuses to create
+    // processes refuses for minutes, and coalescing caps the rate, not the total
+    // — 30 windows of it would own the entire ring and evict the pre-crash trail
+    // the crumb exists to sit beside. The newest refusal is the one worth a slot;
+    // the hostProcessSpawnRefused* details carry the totals and every marker seen.
+    return `${breadcrumb.name}:${breadcrumb.origin ?? 'global'}`
+  }
   if (breadcrumb.name !== 'renderer_memory_highwater') {
     return null
   }

@@ -2,6 +2,7 @@ import type { CrashReportDetailValue } from '../../shared/crash-reporting'
 import { readSwapVolumeFreeSpace } from './swap-volume-free-space'
 import {
   getSystemMemoryDetails,
+  PRESSURE_SIGNAL_LABEL_KEYS,
   SYSTEM_MEMORY_KEY_PREFIX,
   withSwapVolumeFreeSpace
 } from './system-memory-details'
@@ -32,8 +33,6 @@ let swapVolumeReadInFlight = false
 let samplingGeneration = 0
 let sampleTick = 0
 
-const PRESSURE_SIGNAL_KEY = `${SYSTEM_MEMORY_KEY_PREFIX}PressureSignal`
-
 /**
  * Carries the last volume reading onto the sample that replaces its own.
  *
@@ -63,8 +62,8 @@ function commitHostMemorySample(nowMs: number): boolean {
   try {
     const details = getSystemMemoryDetails()
     // Why not `length === 0`: the signal label is appended unconditionally, so a
-    // reading that resolved no memory field at all still arrives with one key.
-    if (!Object.keys(details).some((key) => key !== PRESSURE_SIGNAL_KEY)) {
+    // reading that resolved no memory field at all still arrives with its keys.
+    if (!Object.keys(details).some((key) => !PRESSURE_SIGNAL_LABEL_KEYS.includes(key))) {
       return false
     }
     preGoneSample = withCarriedSwapVolume({ details, sampledAtMs: nowMs })

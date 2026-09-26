@@ -3,6 +3,7 @@ import {
   sanitizeCrashReportDetails,
   type CrashReportDetailValue
 } from '../../shared/crash-reporting'
+import { hostProcessSpawnRefusalDetails } from './host-process-spawn-refusal'
 import { getSystemMemoryDetails, memoryKBFieldMB } from './system-memory-details'
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
@@ -300,6 +301,9 @@ export function buildProcessGoneCrashDetails(
     crashDetails.processMetricsCrashedProcessAbsent = true
   }
   const nowMs = Date.now()
+  // Why here: a host that refused to create a process is host state like the
+  // readings above, and it reached no report while it lived on a git span.
+  Object.assign(crashDetails, hostProcessSpawnRefusalDetails(nowMs))
   if (preGoneSample) {
     Object.assign(crashDetails, preGoneSampleDetails(preGoneSample, nowMs))
   }

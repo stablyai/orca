@@ -9,9 +9,10 @@ import { vi } from 'vitest'
  * and waits for `close`, so a bare EventEmitter is not enough — a test child
  * has to carry stdio and report an exit or the promise never settles.
  */
-export function createFakeSpawnedChild(pid = 4321): ChildProcess {
+export function createFakeSpawnedChild(pid = 4321, spawnfile = 'git'): ChildProcess {
   const child = new EventEmitter() as EventEmitter & Record<string, unknown>
   child.pid = pid
+  child.spawnfile = spawnfile
   child.kill = vi.fn(() => true)
   child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
   child.stdout = new EventEmitter()

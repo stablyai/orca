@@ -1,5 +1,6 @@
 import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
+import { noteHostProcessSpawnFailure } from '../../crash-reporting/host-process-spawn-refusal'
 import { endSubprocessStdin } from '../../../shared/subprocess-stdin-write'
 import { runProcess } from '../../../shared/child-process/run-process'
 import type { WslProcessGroupTermination } from '../wsl-process-group-termination'
@@ -44,7 +45,11 @@ export async function execFileCaptureToTermination(
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
   recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
-  const result = await pending
+  // Recording only; a host that refused the spawn is invisible in a crash report otherwise.
+  const result = await pending.catch((error: unknown) => {
+    noteHostProcessSpawnFailure(command, error)
+    throw error
+  })
   const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
   const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr
   const stderr = options.encoding === 'buffer' ? Buffer.from(cleanStderr) : cleanStderr
@@ -141,6 +146,7 @@ export function execFileCapture(
       settled = true
       cleanup()
       if (error) {
+        noteHostProcessSpawnFailure(command, error)
         const enriched = error as Error & { stdout?: string | Buffer; stderr?: string | Buffer }
         enriched.stdout ??= stdout
         enriched.stderr ??= stderr

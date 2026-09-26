@@ -1,6 +1,7 @@
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { spawnRefusalReason } from './child-process/spawn-refusal-codes'
 
 const RIPGREP_CWD_CHECK_TIMEOUT_MS = 1000
 const RIPGREP_FAILURE_PROBE_TIMEOUT_MS = 5000
@@ -21,17 +22,8 @@ export class RipgrepLaunchFailureError extends Error {
 }
 
 // Why: fork/exec pressure (out of processes, fds, or memory) is not evidence that ripgrep is missing.
-const TRANSIENT_SPAWN_ERROR_CODES: ReadonlySet<string> = new Set([
-  'EAGAIN',
-  'EMFILE',
-  'ENFILE',
-  'ENOMEM',
-  'ETXTBSY'
-])
-
 export function isTransientRipgrepSpawnError(error: unknown): boolean {
-  const code = (error as { code?: unknown } | null | undefined)?.code
-  return typeof code === 'string' && TRANSIENT_SPAWN_ERROR_CODES.has(code)
+  return spawnRefusalReason(error) !== undefined
 }
 
 function ignoreRipgrepSpawnError(): void {}

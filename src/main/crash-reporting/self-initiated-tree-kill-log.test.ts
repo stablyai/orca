@@ -105,16 +105,22 @@ describe('self-initiated tree kill breadcrumb', () => {
     )
     expect(selfKilled.selfInitiatedTreeKillCount).toBe(1)
     expect(externallyKilled.selfInitiatedKills).toBeUndefined()
-    expect(externallyKilled.selfInitiatedTreeKillCount).toBeUndefined()
-    // Every other recorded field is identical — that is why the breadcrumb exists.
-    expect({
-      ...selfKilled,
+    expect(externallyKilled.selfInitiatedTreeKillCount).toBe(0)
+    // Every other recorded field is identical — that is why the breadcrumb
+    // exists. Breadcrumb provenance is derived from the ring, which arm A also
+    // wrote the kill into, so it is part of the same one signal.
+    const discriminating = {
       selfInitiatedKills: null,
-      selfInitiatedTreeKillCount: null
-    }).toEqual({
+      selfInitiatedTreeKillCount: null,
+      breadcrumbCount: null,
+      breadcrumbNewestAgeMs: null,
+      breadcrumbNewestName: null,
+      breadcrumbsInCausalWindowCount: null,
+      breadcrumbCausalWindowMs: null
+    }
+    expect({ ...selfKilled, ...discriminating }).toEqual({
       ...externallyKilled,
-      selfInitiatedKills: null,
-      selfInitiatedTreeKillCount: null
+      ...discriminating
     })
   })
 
@@ -220,8 +226,8 @@ describe('self-initiated tree kill breadcrumb', () => {
     const details = selfInitiatedTreeKillDetails(goneAt)
 
     // A killpg on a PTY's own groups cannot reach a renderer, so it must not
-    // read as a self-inflicted renderer kill.
-    expect(details.selfInitiatedTreeKillCount).toBeUndefined()
+    // read as a self-inflicted renderer kill — and a zero says that was checked.
+    expect(details.selfInitiatedTreeKillCount).toBe(0)
     expect(details.selfInitiatedGroupKillCount).toBe(2)
     expect(details.selfInitiatedKills).toContain('posix-process-group/')
   })
@@ -326,6 +332,31 @@ describe('self-initiated tree kill breadcrumb', () => {
     expect(pids).toHaveLength(32)
     expect(pids).toContain(6032)
     expect(pids).not.toContain(6000)
+  })
+
+  it('answers the question positively when no instrumented kill fired', () => {
+    // An absent field read as "nobody asked"; two investigators of report
+    // a8b4e777 never noticed the self-kill check had run at all.
+    expect(selfInitiatedTreeKillDetails(9_000_000)).toEqual({
+      selfInitiatedTreeKillCount: 0,
+      selfInitiatedTreeKillLookbackMs: 5_000
+    })
+  })
+
+  it('scopes the zero to the lookback window it actually searched', () => {
+    const goneAt = 9_000_000
+    recordSelfInitiatedTreeKill({
+      pid: 5732,
+      site: 'git-command-tree-kill',
+      scope: 'win-taskkill-tree',
+      at: goneAt - 1_046_666
+    })
+
+    // The kill happened; it is just 17 minutes too old to be in evidence.
+    expect(selfInitiatedTreeKillDetails(goneAt)).toEqual({
+      selfInitiatedTreeKillCount: 0,
+      selfInitiatedTreeKillLookbackMs: 5_000
+    })
   })
 
   it('records a kill issued through the shared runProcess choke point', () => {

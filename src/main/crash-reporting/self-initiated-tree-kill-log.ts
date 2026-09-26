@@ -182,15 +182,22 @@ function describeSelfInitiatedTreeKill(kill: SelfInitiatedTreeKill, goneAt: numb
 /**
  * Kills Orca issued near `goneAt`, split by whether the mechanism could have
  * reached a Chromium process at all — `selfInitiatedTreeKillCount` is the
- * discriminating one, and a pty-scoped sweep must never inflate it. Empty when
- * no instrumented choke point fired; see the module doc for what that omits.
+ * discriminating one, and a pty-scoped sweep must never inflate it.
+ *
+ * The count always ships, zero included, and means exactly "no instrumented
+ * self-initiated tree kill inside `selfInitiatedTreeKillLookbackMs`" — see the
+ * module doc for the kill families that omits. An absent field read as "nobody
+ * asked the question"; a zero says it was asked and answered.
  */
 export function selfInitiatedTreeKillDetails(
   goneAt: number
 ): Record<string, CrashReportDetailValue> {
   const kills = findSelfInitiatedTreeKills(goneAt)
+  const checked: Record<string, CrashReportDetailValue> = {
+    selfInitiatedTreeKillLookbackMs: SELF_TREE_KILL_LOOKBACK_MS
+  }
   if (kills.length === 0) {
-    return {}
+    return { ...checked, selfInitiatedTreeKillCount: 0 }
   }
   const treeKillCount = kills.filter((kill) => isPidAddressedTreeKill(kill.scope)).length
   const described = [...kills]
@@ -211,7 +218,8 @@ export function selfInitiatedTreeKillDetails(
   }
   const dropped = described.length - kept.length
   return {
-    ...(treeKillCount > 0 ? { selfInitiatedTreeKillCount: treeKillCount } : {}),
+    ...checked,
+    selfInitiatedTreeKillCount: treeKillCount,
     ...(kills.length - treeKillCount > 0
       ? { selfInitiatedGroupKillCount: kills.length - treeKillCount }
       : {}),
