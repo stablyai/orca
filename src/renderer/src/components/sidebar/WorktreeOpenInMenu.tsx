@@ -17,6 +17,7 @@ import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import type { ShellOpenExternalEditorResult } from '../../../../shared/shell-open-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
+import type { OpenInAppIcon } from '../../../../shared/open-in-app-icons'
 import { translate } from '@/i18n/i18n'
 
 export { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
@@ -33,6 +34,20 @@ export type OpenInMenuEntry = {
   label: string
   target: 'external-editor' | 'file-manager'
   command?: string
+  icon?: OpenInAppIcon
+}
+
+/** Shared so every menu that renders these entries stays in sync on icon changes. */
+export function OpenInMenuEntryIcon({ entry }: { entry: OpenInMenuEntry }): React.JSX.Element {
+  if (entry.target === 'file-manager') {
+    return <FolderOpen className="size-3.5" />
+  }
+  if (!entry.command) {
+    return <ExternalLink className="size-3.5" />
+  }
+  return (
+    <OpenInApplicationIcon application={{ command: entry.command, icon: entry.icon }} size={14} />
+  )
 }
 
 export function getWorktreeOpenInEntries(
@@ -44,7 +59,8 @@ export function getWorktreeOpenInEntries(
       id: application.id,
       label: application.label,
       target: 'external-editor' as const,
-      command: application.command
+      command: application.command,
+      icon: application.icon
     })),
     { id: 'file-manager', label: fileManagerLabel, target: 'file-manager' }
   ]
@@ -324,13 +340,7 @@ export function WorktreeOpenInMenuItems({
             }}
             disabled={disabled || availability.disabled}
           >
-            {entry.target === 'file-manager' ? (
-              <FolderOpen className="size-3.5" />
-            ) : entry.command ? (
-              <OpenInApplicationIcon application={{ command: entry.command }} size={14} />
-            ) : (
-              <ExternalLink className="size-3.5" />
-            )}
+            <OpenInMenuEntryIcon entry={entry} />
             <span className="min-w-0 truncate">
               {labelPrefix}
               {entry.label}

@@ -185,6 +185,22 @@ describe('WorktreeOpenInMenu', () => {
     ).toEqual(['VS Code', 'Cursor', 'Zed', 'File Manager'])
   })
 
+  it('carries a chosen icon through to the menu entry', () => {
+    const [entry] = getWorktreeOpenInEntries(
+      [
+        {
+          id: 'idea',
+          label: 'IntelliJ IDEA',
+          command: 'idea',
+          icon: { type: 'bundled', id: 'Braces' }
+        }
+      ],
+      'File Manager'
+    )
+
+    expect(entry).toMatchObject({ command: 'idea', icon: { type: 'bundled', id: 'Braces' } })
+  })
+
   it('opens settings at the Open In Apps section', () => {
     openOpenInAppsSettings()
 

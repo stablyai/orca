@@ -1,3 +1,4 @@
+import type { OpenInAppIcon } from './open-in-app-icons'
 import type { LinearConcreteWorkspaceId } from './linear/workspace-types'
 import type { LinearCustomViewModel } from './linear/project-types'
 
@@ -7,6 +8,8 @@ export type OpenInApplication = {
   id: string
   label: string
   command: string
+  // Absent means the icon is derived from the command's preset, else a generic glyph.
+  icon?: OpenInAppIcon
 }
 
 export type SourceControlViewMode = 'list' | 'tree'
