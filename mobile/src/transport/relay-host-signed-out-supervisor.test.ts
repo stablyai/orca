@@ -6,7 +6,8 @@ import {
   dependencies,
   FakeLogicalClient,
   FakeRelaySession,
-  host
+  host,
+  relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 
@@ -37,7 +38,7 @@ describe('a signed-out desktop reaches the phone verdict', () => {
         )
       })
     })
-    return { logical, supervisor: new MobileEndpointSupervisor(logical, host, deps) }
+    return { logical, supervisor: new MobileEndpointSupervisor(logical, host.id, relay, deps) }
   }
 
   it('latches the sign-out the cell reported', async () => {

@@ -30,10 +30,11 @@ export type StructuredAgentSessionReadRestoreDeps = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   hasSession: (sessionId: string) => boolean
   onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
-  retrySettlement: (
+  /** Settles what a previous generation left running. Best effort: the next acquire re-derives it. */
+  settleStaleState: (
     sessionId: string,
-    params: RestoredStructuredAgentSessionRead['params']
-  ) => Promise<boolean>
+    restored: RestoredStructuredAgentSessionRead
+  ) => Promise<void>
 }
 
 /**
@@ -62,7 +63,7 @@ export async function restoreOneStructuredAgentSessionRead(
 export async function restoreOneStructuredAgentSessionReadUnderSerialize(
   input: Pick<
     StructuredAgentSessionReadRestoreDeps,
-    'store' | 'journalRoot' | 'hasSession' | 'onReadable' | 'retrySettlement'
+    'store' | 'journalRoot' | 'hasSession' | 'onReadable' | 'settleStaleState'
   >,
   sessionId: string
 ): Promise<void> {
@@ -78,8 +79,10 @@ export async function restoreOneStructuredAgentSessionReadUnderSerialize(
   if (!restored) {
     return
   }
+  // No child in this process writes to a journal with no map entry, so anything it shows running
+  // belongs to a generation that is gone. Settled before it is published, so no reader sees it run.
+  await input.settleStaleState(sessionId, restored)
   input.onReadable(sessionId, restored)
-  await input.retrySettlement(sessionId, restored.params)
 }
 
 export async function restoreStructuredAgentSessionsOnRestart(

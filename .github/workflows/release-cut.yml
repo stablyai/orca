@@ -1314,6 +1314,16 @@ jobs:
           restore-keys: |
             electron-builder-${{ matrix.platform }}-
 
+      # PRs cache tools separately from Electron; identical paths preserve their cache version.
+      - name: Seed shared Linux packaging downloads
+        if: matrix.platform == 'linux-x64' && github.ref == 'refs/heads/main'
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/electron-builder
+          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          # The release cache above restores the same tools, so this only needs to save on a miss.
+          lookup-only: true
+
       # Why: pnpm install triggers electron's postinstall, which downloads the
       # Electron binary from GitHub release assets. GitHub's download CDN
       # occasionally returns 504s that fail the whole release. Retry on

@@ -1,5 +1,5 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
+import { ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { commitRuntimePtySize } from './spawn-commit-pty-size'
 import {
@@ -16,13 +16,8 @@ import {
   rendererSerializerReadiness
 } from '../pane/serializer-state'
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
-import { track } from '../../../telemetry/client'
-import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
-import {
-  agentKindSchema,
-  launchSourceSchema,
-  requestKindSchema
-} from '../../../../shared/telemetry-events'
+import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
+import { recordPtySpawnTelemetry } from '../pane/spawn-telemetry'
 import { persistAdmittedStablePaneBinding } from '../pane/stable-owner'
 import { claimSshPaneLease } from '../pane/ssh-pane-lease-claim'
 import {
@@ -31,17 +26,34 @@ import {
 } from '../../../runtime/terminal-model-query-authority'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
-import { clearProviderPtyState } from '../provider/state-cleanup'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
 import type { RuntimePtySpawnState } from './spawn-state'
+import {
+  admitPtyReattachOwnership,
+  discardUnpersistedPtySpawn,
+  registerPersistedPtySpawn
+} from '../pane/spawn-registration'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
+  admitPtyReattachOwnership(ctx.deps.runtime, ctx.result, args.connectionId)
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
+  if (
+    isNativeWindowsLocalPtySpawn({
+      connectionId: args.connectionId,
+      cwd: args.cwd,
+      shellOverride: ctx.daemonShellOverride
+    })
+  ) {
+    markNativeWindowsConptyPty(ctx.result.id)
+  }
+  // Seed before the first disk await so live output appends to the restored history.
+  seedHeadlessTerminalFromSpawnResult(ctx.deps.runtime, ctx.result, ctx.spawnIdentityPaneKey)
+  seedTerminalRestoreRecordsFromSpawnResult(ctx.deps.runtime, ctx.result)
   try {
-    ctx.stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
+    ctx.stablePaneBindingPersisted = await persistAdmittedStablePaneBinding({
       store: ctx.hostSessionBinding?.store,
       owner: ctx.stablePaneOwner,
       result: ctx.result,
@@ -63,12 +75,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     // reply omits isReattach; derive it once so the size commit and the reservation agree.
     const adoptedResult = { ...ctx.result, isReattach: true }
     const owner = ctx.result.agentSessionEnsure.owner
-    ptyOwnership.set(ctx.result.id, args.connectionId ?? ptyOwnership.get(ctx.result.id) ?? null)
-    ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, owner.surface.terminalHandle)
-    if (ctx.result.incarnationId) {
-      ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
-    }
-    ctx.deps.runtime?.registerPty(
+    const rejectedRegistration = registerPersistedPtySpawn(
+      ctx.deps.runtime,
+      ctx.hostSessionBinding?.store ?? ctx.deps.store,
       ctx.result.id,
       owner.surface.worktreeId,
       args.connectionId ?? null,
@@ -80,6 +89,14 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
       }
     )
+    if (rejectedRegistration) {
+      await rejectedRegistration
+    }
+    ptyOwnership.set(ctx.result.id, args.connectionId ?? ptyOwnership.get(ctx.result.id) ?? null)
+    ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, owner.surface.terminalHandle)
+    if (ctx.result.incarnationId) {
+      ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
+    }
     if (!args.connectionId) {
       ctx.deps.options?.onCodexHomePtySpawned?.({
         id: ctx.result.id,
@@ -108,81 +125,29 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       agentSessionEnsure: ctx.result.agentSessionEnsure
     }
   }
-  ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
-  if (ctx.result.incarnationId) {
-    ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
-  }
-  // Why: record the native-Windows-local-PTY determination before any byte reaches the emulator, so its ConPTY DA1 override exists from byte zero.
-  if (
-    isNativeWindowsLocalPtySpawn({
-      connectionId: args.connectionId,
-      cwd: args.cwd,
-      shellOverride: ctx.daemonShellOverride
-    })
-  ) {
-    markNativeWindowsConptyPty(ctx.result.id)
-  }
-  const persistSshLease = (): void =>
-    claimSshPaneLease({
-      store: ctx.deps.store,
-      connectionId: args.connectionId,
-      ptyId: ctx.result.id,
-      worktreeId: args.worktreeId,
-      tabId: args.tabId,
-      leafId: args.leafId
-    })
-  if (!ctx.hostSessionBinding) {
-    persistSshLease()
-  }
-  commitRuntimePtySize(ctx, ctx.result)
-  if (ctx.effectiveSessionAppId !== undefined && ctx.effectiveSessionAppId !== ctx.result.id) {
-    ptySizes.delete(ctx.effectiveSessionAppId)
-  }
-  recordCodexPaneAccountForSpawn({
-    ptyId: ctx.result.id,
-    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
-    isReattach: ctx.result.isReattach === true,
-    pinnedByResume: ctx.codexResumeHomeSelected,
-    launchCodexHomePath: ctx.selectedCodexHomePath,
-    launchEnv: args.env,
-    target: ctx.codexSelectionTarget,
-    settings: ctx.deps.getSettings?.()
-  })
   if (ctx.hostSessionBinding && !ctx.stablePaneBindingPersisted) {
     try {
+      const { store, worktreeId, tabId, leafId, expectedSourceBinding } = ctx.hostSessionBinding
       const binding = {
-        worktreeId: ctx.hostSessionBinding.worktreeId,
-        tabId: ctx.hostSessionBinding.tabId,
-        leafId: ctx.hostSessionBinding.leafId,
+        worktreeId,
+        tabId,
+        leafId,
         ptyId: ctx.result.id,
         hostAdmittedMembership: true,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
-        ...(ctx.hostSessionBinding.expectedSourceBinding
-          ? { expectedSourceBinding: ctx.hostSessionBinding.expectedSourceBinding }
-          : {}),
-        origin: spawnCommitBindingOrigin(ctx.result, ctx.hostSessionBinding.expectedSourceBinding)
+        ...(expectedSourceBinding ? { expectedSourceBinding } : {}),
+        origin: spawnCommitBindingOrigin(ctx.result, expectedSourceBinding)
       }
       const persisted = args.connectionId
-        ? ctx.hostSessionBinding.store.persistPtyBinding(
-            binding,
-            toSshExecutionHostId(args.connectionId)
-          )
-        : ctx.hostSessionBinding.store.persistPtyBinding(binding)
+        ? await store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
+        : await store.persistPtyBinding(binding)
       if (persisted === false) {
         throw new Error('terminal_split_source_not_found')
       }
     } catch (err) {
       console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
-      if (!ctx.result.isReattach) {
-        deletePtyOwnership(ctx.result.id)
-        try {
-          await ctx.provider.shutdown(ctx.result.id, { immediate: true })
-        } catch (shutdownErr) {
-          console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
-        }
-        clearProviderPtyState(ctx.result.id)
-      }
+      await discardUnpersistedPtySpawn(ctx.provider, ctx.result)
       if (err instanceof Error && err.message === 'terminal_split_source_not_found') {
         throw err
       }
@@ -190,13 +155,11 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         agentSessionOperationOutcome: 'unknown' as const
       })
     }
-    persistSshLease()
-  }
-  if (args.preAllocatedHandle && !ctx.stablePaneOwner?.handle) {
-    ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, args.preAllocatedHandle)
   }
   if (args.worktreeId) {
-    ctx.deps.runtime?.registerPty(
+    const rejectedRegistration = registerPersistedPtySpawn(
+      ctx.deps.runtime,
+      ctx.hostSessionBinding?.store ?? ctx.deps.store,
       ctx.result.id,
       args.worktreeId,
       args.connectionId ?? null,
@@ -217,10 +180,42 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ? shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd)
         : undefined
     )
+    if (rejectedRegistration) {
+      await rejectedRegistration
+    }
   } else {
     // Why: non-worktree PTYs have no later surface-registration phase to clear admission intent.
     ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
   }
+  if (args.preAllocatedHandle && !ctx.stablePaneOwner?.handle) {
+    ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, args.preAllocatedHandle)
+  }
+  ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
+  if (ctx.result.incarnationId) {
+    ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
+  }
+  claimSshPaneLease({
+    store: ctx.deps.store,
+    connectionId: args.connectionId,
+    ptyId: ctx.result.id,
+    worktreeId: args.worktreeId,
+    tabId: args.tabId,
+    leafId: args.leafId
+  })
+  commitRuntimePtySize(ctx, ctx.result)
+  if (ctx.effectiveSessionAppId !== undefined && ctx.effectiveSessionAppId !== ctx.result.id) {
+    ptySizes.delete(ctx.effectiveSessionAppId)
+  }
+  recordCodexPaneAccountForSpawn({
+    ptyId: ctx.result.id,
+    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
+    isReattach: ctx.result.isReattach === true,
+    pinnedByResume: ctx.codexResumeHomeSelected,
+    launchCodexHomePath: ctx.selectedCodexHomePath,
+    launchEnv: args.env,
+    target: ctx.codexSelectionTarget,
+    settings: ctx.deps.getSettings?.()
+  })
   // Why: runtime-controller creates (headless serve, CLI, splits) adopt surviving daemon sessions too; without this seed their records stay blank.
   seedTerminalRestoreRecordsFromSpawnResult(ctx.deps.runtime, ctx.result)
   // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
@@ -231,17 +226,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     markClaudePtySpawned(ctx.result.id)
   }
   if (args.telemetry && !ctx.stablePaneOwner) {
-    const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
-    const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
-    const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
-    if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
-      track('agent_started', {
-        agent_kind: agentKindParse.data,
-        launch_source: launchSourceParse.data,
-        request_kind: requestKindParse.data,
-        ...getCohortAtEmit()
-      })
-    }
+    recordPtySpawnTelemetry(args.telemetry)
   }
   // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; record paneKey here too since hook titles and cache cleanup need this reverse lookup.
   const paneKey = rememberPaneKeyForPty(ctx.result.id, ctx.env?.ORCA_PANE_KEY)

@@ -56,6 +56,39 @@ function review(number: number): HostedReviewInfo {
 }
 
 describe('parent PR checks projection selector', () => {
+  it.each([false, true])(
+    'releases unrelated store data while keeping the projection cached (replacement=%s)',
+    async (replacement) => {
+      if (typeof globalThis.gc !== 'function') {
+        throw new Error('Run with the repository Vitest --expose-gc config')
+      }
+      const select = createParentPrChecksProjectionSelector({
+        worktrees: [worktree(0)],
+        repos: [repo()],
+        settings: null,
+        refreshOutcomes: new Map()
+      })
+      if (replacement) {
+        select({ hostedReviewCache: {}, prCache: {}, checksCache: {} })
+      }
+      const caches = { hostedReviewCache: {}, prCache: {}, checksCache: {} }
+      function selectRetiredState(): WeakRef<object> {
+        const unrelatedData = { content: new Uint8Array(1024 * 1024) }
+        const state = { ...caches, unrelatedData }
+        select(state)
+        return new WeakRef(unrelatedData)
+      }
+      const retired = selectRetiredState()
+      const projection = select(caches)
+      for (let round = 0; round < 3; round++) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        globalThis.gc()
+      }
+      expect(retired.deref()).toBeUndefined()
+      expect(select(caches)).toBe(projection)
+    }
+  )
+
   it('does not inspect tracked keys when cache map references are unchanged', () => {
     const cacheRead = vi.fn()
     const observedCache = new Proxy(

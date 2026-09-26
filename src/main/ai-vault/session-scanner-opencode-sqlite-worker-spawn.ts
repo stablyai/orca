@@ -2,9 +2,19 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import type { SessionFileCandidate } from './session-scanner-types'
 import type { OpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-protocol'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
+import {
+  buildOpenCodeSqliteCandidatePath,
+  splitOpenCodeSqliteCandidate
+} from './session-scanner-opencode-sqlite-paths'
+import {
+  mapOpenCodeWslSession,
+  openCodeWslClient,
+  openCodeWslPath
+} from './session-scanner-opencode-wsl-client'
 
 // Why: resolve the built worker entry + own the process-wide shared client so
 // the client class stays free of Electron (require'd lazily here) and the
@@ -53,8 +63,9 @@ export function listOpenCodeSqliteSessionsViaWorker(args: {
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
+  signal?: AbortSignal
 }): Promise<SessionFileCandidate[]> {
-  return getSharedClient().list(args)
+  return listForHost(args)
 }
 
 /**
@@ -65,8 +76,9 @@ export function listOpenCode2SqliteSessionsViaWorker(args: {
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
+  signal?: AbortSignal
 }): Promise<SessionFileCandidate[]> {
-  return getSharedClient().list({ ...args, agent: 'opencode2' })
+  return listForHost({ ...args, agent: 'opencode2' })
 }
 
 /**
@@ -77,19 +89,23 @@ export function listOpenCode2SqliteSessionsViaWorker(args: {
  * @returns The parsed session, or `null` when it does not exist.
  */
 export function parseOpenCodeSqliteSessionViaWorker(args: {
+  fullFirstUserPrompt?: boolean
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  signal?: AbortSignal
 }): Promise<AiVaultSession | null> {
-  return getSharedClient().parse(args)
+  return parseForHost(args)
 }
 
 export function parseOpenCode2SqliteSessionViaWorker(args: {
+  fullFirstUserPrompt?: boolean
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  signal?: AbortSignal
 }): Promise<AiVaultSession | null> {
-  return getSharedClient().parse({ ...args, agent: 'opencode2' })
+  return parseForHost({ ...args, agent: 'opencode2' })
 }
 
 /**
@@ -104,14 +120,100 @@ export function captureOpenCodeSqliteSessionViaWorker(args: {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  signal?: AbortSignal
 }): Promise<OpenCodeSqliteCaptureValue> {
-  return getSharedClient().capture(args)
+  return captureForHost(args)
 }
 
 export function captureOpenCode2SqliteSessionViaWorker(args: {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  signal?: AbortSignal
 }): Promise<OpenCodeSqliteCaptureValue> {
-  return getSharedClient().capture({ ...args, agent: 'opencode2' })
+  return captureForHost({ ...args, agent: 'opencode2' })
+}
+
+async function listForHost(
+  args: Parameters<OpenCodeSqliteWorkerClient['list']>[0]
+): Promise<SessionFileCandidate[]> {
+  throwIfSignalAborted(args.signal)
+  const native: string[] = []
+  const groups = new Map<string, { distro: string; paths: Map<string, string> }>()
+  for (const path of args.dbPaths) {
+    const wsl = openCodeWslPath(path)
+    if (!wsl) {
+      native.push(path)
+      continue
+    }
+    const key = wsl.distro.toLowerCase()
+    const group = groups.get(key) ?? { distro: wsl.distro, paths: new Map<string, string>() }
+    group.paths.set(wsl.linuxPath, path)
+    groups.set(key, group)
+  }
+  const candidates = await Promise.all([
+    native.length ? getSharedClient().list({ ...args, dbPaths: native }) : Promise.resolve([]),
+    ...[...groups.values()].map(async ({ distro, paths }) => {
+      const first = paths.values().next().value!
+      const issues: AiVaultScanIssue[] = []
+      try {
+        const client = await openCodeWslClient(distro, first, args.signal)
+        const result = await client.list({ ...args, dbPaths: [...paths.keys()], issues })
+        return result.flatMap((candidate) => {
+          const parsed = splitOpenCodeSqliteCandidate(candidate.file.path)
+          const original = parsed && paths.get(parsed.dbPath)
+          return parsed && original
+            ? [
+                {
+                  ...candidate,
+                  file: {
+                    ...candidate.file,
+                    path: buildOpenCodeSqliteCandidatePath(original, parsed.sessionId)
+                  }
+                }
+              ]
+            : []
+        })
+      } catch (error) {
+        throwIfSignalAborted(args.signal)
+        issues.push({
+          agent: args.agent ?? 'opencode',
+          kind: 'scope',
+          path: first,
+          message: error instanceof Error ? error.message : String(error)
+        })
+        return []
+      } finally {
+        args.issues.push(
+          ...issues.map((issue) => ({ ...issue, path: paths.get(issue.path) ?? issue.path }))
+        )
+      }
+    })
+  ])
+  throwIfSignalAborted(args.signal)
+  return candidates.flat().sort((a, b) => b.file.mtimeMs - a.file.mtimeMs)
+}
+
+async function parseForHost(
+  args: Parameters<OpenCodeSqliteWorkerClient['parse']>[0]
+): Promise<AiVaultSession | null> {
+  const wsl = openCodeWslPath(args.dbPath)
+  if (!wsl) {
+    return getSharedClient().parse(args)
+  }
+  const client = await openCodeWslClient(wsl.distro, args.dbPath, args.signal)
+  const session = await client.parse({ ...args, dbPath: wsl.linuxPath, platform: 'linux' })
+  return mapOpenCodeWslSession(session, args.dbPath)
+}
+
+async function captureForHost(
+  args: Parameters<OpenCodeSqliteWorkerClient['capture']>[0]
+): Promise<OpenCodeSqliteCaptureValue> {
+  const wsl = openCodeWslPath(args.dbPath)
+  if (!wsl) {
+    return getSharedClient().capture(args)
+  }
+  const client = await openCodeWslClient(wsl.distro, args.dbPath, args.signal)
+  const capture = await client.capture({ ...args, dbPath: wsl.linuxPath, platform: 'linux' })
+  return { ...capture, session: mapOpenCodeWslSession(capture.session, args.dbPath) }
 }

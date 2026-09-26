@@ -82,6 +82,7 @@ type WindowsProcessTreeModule = {
    * prebuilt `.node` in place.
    */
   supportedProcessDataFlags?: number
+  getProcessCreationTime?: (pid: number) => number | undefined
   getAllProcesses: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags?: number
@@ -112,6 +113,7 @@ let requireNative: NativeRequire = requireFromMain
  * binding straight to the addon drops a duplicate rather than losing a guard.
  */
 type WindowsProcessTreeAddon = {
+  getProcessCreationTime?: (pid: number) => number | undefined
   getProcessList: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags: number
@@ -177,6 +179,7 @@ function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
   return {
     ProcessDataFlag: PROCESS_DATA_FLAG,
     supportedProcessDataFlags: addon.supportedProcessDataFlags,
+    getProcessCreationTime: addon.getProcessCreationTime,
     getAllProcesses: (callback, flags) => addon.getProcessList(callback, flags ?? 0)
   }
 }
@@ -526,6 +529,19 @@ export function isWindowsProcessStartTimeAvailable(): boolean {
     native !== null &&
     ((native.supportedProcessDataFlags ?? 0) & PROCESS_DATA_FLAG.CreationTime) !== 0
   )
+}
+
+/** Fresh identity for synchronous profile admission; opens one PID without taking a table snapshot. */
+export function readWindowsProcessCreationTime(pid: number): number | null {
+  if (process.platform !== 'win32' || !Number.isSafeInteger(pid) || pid <= 0 || pid > 0xffffffff) {
+    return null
+  }
+  try {
+    const value = moduleLoader()?.getProcessCreationTime?.(pid)
+    return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null
+  } catch {
+    return null
+  }
 }
 
 function resetSnapshotReaders(): void {

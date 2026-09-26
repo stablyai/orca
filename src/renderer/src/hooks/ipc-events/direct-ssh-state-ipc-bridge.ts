@@ -22,6 +22,8 @@ export function registerDirectSshStateIpcBridge(
     prepareAndSync
   } = runtime
   const sshStateWatermarkByTargetId = new Map<string, number>()
+  // Connect replies can update the store before this bridge routes the matching push.
+  const routedAuthorityByTarget = new Map<string, DirectSshAuthority>()
   const pendingPortHydrationByTargetId = new Map<
     string,
     { receivedForwardPush: boolean; receivedDetectedPush: boolean }
@@ -152,10 +154,10 @@ export function registerDirectSshStateIpcBridge(
     origin: DirectSshConnectedStateOrigin
   ): void => {
     const store = useAppStore.getState()
-    const previous = store.sshConnectionStates?.get(targetId)
     store.setSshConnectionState(targetId, state)
 
     if (canConnectSshStatus(state.status)) {
+      routedAuthorityByTarget.delete(targetId)
       reconnectAuthorityByTarget.delete(targetId)
       reconnectCoordinator.invalidate(targetId)
       store.clearRemoteDetectedAgents(targetId)
@@ -175,16 +177,8 @@ export function registerDirectSshStateIpcBridge(
       reconcileSshAuthority(targetId, state, origin, sshStateWatermarkByTargetId.get(targetId) ?? 0)
       return
     }
-    const previousAuthority =
-      previous?.status === 'connected' &&
-      previous.providerEpoch &&
-      previous.connectionGeneration !== undefined
-        ? {
-            targetId,
-            providerEpoch: previous.providerEpoch,
-            connectionGeneration: previous.connectionGeneration
-          }
-        : null
+    const previousAuthority = routedAuthorityByTarget.get(targetId) ?? null
+    routedAuthorityByTarget.set(targetId, authority)
     routeDirectSshConnectedState(
       {
         coordinator: reconnectCoordinator,
@@ -235,6 +229,7 @@ export function registerDirectSshStateIpcBridge(
           }
           const latestStore = useAppStore.getState()
           if (!targets.some((target) => target.id === data.targetId)) {
+            routedAuthorityByTarget.delete(data.targetId)
             latestStore.clearRemovedSshTargetState(data.targetId)
             return
           }

@@ -132,6 +132,10 @@ describe('failed create owner verdict', () => {
       ok: false,
       refusal: { code: 'agent_session_ownership_unknown', ownerVerdict: 'unverifiable' }
     })
-    expect(store.getRecord(SESSION)?.lease.claimStatus).not.toBe('released')
+    // Released so the next start can go ahead, but with no death evidence: nothing proved it.
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'released',
+      deathEvidence: null
+    })
   })
 })
