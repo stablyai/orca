@@ -316,6 +316,24 @@ describe('structured worker dispatch preamble', () => {
     expect(isUnknownWorkerStartOutcome(error, 'dispatch_input')).toBe(false)
   })
 
+  it('ends the message with one period whether the reason is a sentence or a marker', async () => {
+    const sentence = await send(
+      hostWithSubmission({
+        dispatchState: 'rejected',
+        reason: 'The provider stopped before this message was sent.'
+      })
+    ).catch((thrown: unknown) => thrown)
+    expect((sentence as Error).message).toBe(
+      'The dispatch preamble was not delivered: The provider stopped before this message was sent.'
+    )
+    const marker = await send(
+      hostWithSubmission({ dispatchState: 'unknown', reason: 'provider child exited' })
+    ).catch((thrown: unknown) => thrown)
+    expect((marker as Error).message).toBe(
+      'The dispatch preamble was submitted but not acknowledged (unknown): provider child exited.'
+    )
+  })
+
   it('reports a refused transport write as undelivered, never as unknown', async () => {
     // The state a provably-unwritten frame now settles. Nothing reached the provider,
     // so there is no running turn for a coordinator to go and look at.

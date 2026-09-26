@@ -214,6 +214,11 @@ export async function discardStructuredWorkerSession(
   retireSettledStructuredWorkerTab(sessionId, runtime)
 }
 
+/** A submission reason as a clause: host sentences end in a period, legacy markers do not. */
+function reasonClause(reason: string | null | undefined): string {
+  return (reason ?? 'no reason given').replace(/[.\s]+$/, '')
+}
+
 /** What a preamble send reads of the host. */
 type StructuredWorkerPreambleHost = Pick<
   StructuredAgentSessionHost,
@@ -278,7 +283,7 @@ export async function sendStructuredWorkerPreamble(args: {
       'dispatch_preamble_undelivered',
       `The dispatch preamble was not delivered${
         submission.rejection ? ` (${submission.rejection.kind})` : ''
-      }: ${submission.reason ?? 'no reason given'}.`
+      }: ${reasonClause(submission.reason)}.`
     )
   }
   // Only `accepted` is an acknowledgement — the same rule the mail lane already applies. A thrown
@@ -287,7 +292,7 @@ export async function sendStructuredWorkerPreamble(args: {
   // `outcome_unknown` receipt whose nextCommands send the coordinator to look.
   throw new OrchestrationError(
     'operation_unknown',
-    `The dispatch preamble was submitted but not acknowledged (${submission.dispatchState}): ${submission.reason ?? 'no reason given'}.`
+    `The dispatch preamble was submitted but not acknowledged (${submission.dispatchState}): ${reasonClause(submission.reason)}.`
   )
 }
 
