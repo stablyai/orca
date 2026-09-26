@@ -43,6 +43,13 @@ export function installMainWindowFocusLifecycle(args: {
   rendererWebContentsId: number
 }): MainWindowFocusLifecycle {
   const { isWindowClosing, mainWindow, opts, reloadMainWindow, rendererWebContentsId } = args
+  const rendererWebContents = mainWindow.webContents
+  const isSenderMainWindow = (sender: Electron.WebContents): boolean => {
+    if (mainWindow.isDestroyed()) {
+      return false
+    }
+    return sender === rendererWebContents || sender?.id === rendererWebContentsId
+  }
   // Why: mirror markdown-editor focus so before-input-event skips Cmd/Ctrl+B while TipTap owns focus (docs/markdown-cmd-b-bold-design.md).
   let markdownEditorFocused = false
   let terminalInputFocused = false
@@ -54,7 +61,7 @@ export function installMainWindowFocusLifecycle(args: {
   const markdownFocusChannel = 'ui:setMarkdownEditorFocused'
   // Why: strict-bool + sender check so a guest/webview or malformed IPC payload can't disable the Cmd+B sidebar carve-out.
   const onMarkdownEditorFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (!isSenderMainWindow(event.sender)) {
       return
     }
     markdownEditorFocused = focused === true
@@ -63,7 +70,7 @@ export function installMainWindowFocusLifecycle(args: {
   const terminalInputFocusChannel = 'ui:setTerminalInputFocused'
   // Why: before-input-event resolves shortcuts before renderer keydown; mirror xterm focus so Terminal-first lets shells own app chords.
   const onTerminalInputFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (!isSenderMainWindow(event.sender)) {
       return
     }
     terminalInputFocused = focused === true
@@ -73,7 +80,7 @@ export function installMainWindowFocusLifecycle(args: {
   // Why: one atomic payload for both bits so before-input-event never reads a torn terminal=true/panel=false state.
   // terminalFocused drives the Ctrl+B/L terminal-context carve-out; panelFocused is the routing-ownership superset (panel ⊇ terminal).
   const onFloatingFocus = (event: Electron.IpcMainEvent, state: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (!isSenderMainWindow(event.sender)) {
       return
     }
     const payload = (state ?? {}) as { panelFocused?: unknown; terminalFocused?: unknown }
@@ -86,7 +93,7 @@ export function installMainWindowFocusLifecycle(args: {
   const shortcutRecorderFocusChannel = 'ui:setShortcutRecorderFocused'
   // Why: the Settings recorder must receive app shortcuts to rebind them; before-input-event would otherwise consume the key first.
   const onShortcutRecorderFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (!isSenderMainWindow(event.sender)) {
       return
     }
     shortcutRecorderFocused = focused === true
@@ -95,19 +102,22 @@ export function installMainWindowFocusLifecycle(args: {
 
   let pendingRichMarkdownContextMenuTableTarget: RichMarkdownContextMenuTableTarget | null = null
   const onRichMarkdownContextMenuTarget = (event: Electron.IpcMainEvent, value: unknown): void => {
-    if (event.sender !== mainWindow.webContents) {
+    if (!isSenderMainWindow(event.sender)) {
       return
     }
     pendingRichMarkdownContextMenuTableTarget = parseRichMarkdownContextMenuTableTarget(value)
   }
   ipcMain.on(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
+    if (mainWindow.isDestroyed()) {
+      return
+    }
     const tableTarget = matchingRichMarkdownContextMenuTableTarget(
       params,
       pendingRichMarkdownContextMenuTableTarget
     )
     pendingRichMarkdownContextMenuTableTarget = null
-    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
+    const template = buildEditableContextMenuTemplate(params, rendererWebContents, {
       tableTarget
     })
     if (template.length === 0 || mainWindow.isDestroyed()) {
@@ -116,7 +126,7 @@ export function installMainWindowFocusLifecycle(args: {
     // Why: the context-menu event can precede our focus-mirror update; trust Electron's editable params, not markdownEditorFocused.
     Menu.buildFromTemplate(template).popup({ window: mainWindow, x: params.x, y: params.y })
   }
-  mainWindow.webContents.on('context-menu', onMainContextMenu)
+  rendererWebContents.on('context-menu', onMainContextMenu)
 
   // Why: a dead renderer can't clear its focus mirror; default-deny carve-outs so it can't disable app shortcuts in a later lifecycle.
   const resetMarkdownEditorFocus = (): void => {
@@ -134,7 +144,6 @@ export function installMainWindowFocusLifecycle(args: {
     shortcutRecorderFocused = false
   }
   let rendererProcessGone = false
-  const rendererWebContents = mainWindow.webContents
   registerRendererDocumentNavigation(rendererWebContents, () => {
     const frame = rendererWebContents.mainFrame
     retireBrowserClientPageRenderer(rendererWebContents)
@@ -212,7 +221,7 @@ export function installMainWindowFocusLifecycle(args: {
       recoveryReloadWatchdog.issue(details, recovery.recentRecoveryCount)
     }, 250)
   }
-  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+  rendererWebContents.on('render-process-gone', (_event, details) => {
     rendererProcessGone = true
     retireBrowserClientPageRenderer(rendererWebContents)
     browserRouteWebContentsRegistry.retireRenderer(rendererWebContentsId)
@@ -230,14 +239,14 @@ export function installMainWindowFocusLifecycle(args: {
     }
     scheduleRendererRecovery(details)
   })
-  mainWindow.webContents.on('destroyed', () => {
+  rendererWebContents.on('destroyed', () => {
     retireBrowserClientPageRenderer(rendererWebContents)
     resetMarkdownEditorFocus()
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
   })
-  mainWindow.webContents.on('did-finish-load', () => {
+  rendererWebContents.on('did-finish-load', () => {
     rendererProcessGone = false
     attachBrowserClientPageRenderer(rendererWebContents)
     clearRendererRecoveryTimer()

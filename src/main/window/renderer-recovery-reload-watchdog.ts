@@ -139,7 +139,7 @@ export function createRendererRecoveryReloadWatchdog(args: {
     latest = reload
     documentLanded = false
     // Preserve live PTYs until renderer session restore (#5787).
-    opts?.onBeforeRecoveryReload?.(mainWindow.webContents.id, trigger)
+    opts?.onBeforeRecoveryReload?.(rendererWebContentsId, trigger)
     // Only this load's promise distinguishes success from stale events and error pages.
     reloadMainWindow({
       onLoaded: () => settleLoaded(reload),
