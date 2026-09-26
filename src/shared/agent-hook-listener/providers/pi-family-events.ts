@@ -10,7 +10,8 @@ import { readString } from '../tool-input-preview'
 
 /** Maps a Pi-family hook event (Pi, OMP, Prime) onto a pane status: lifecycle
  *  events become `working` / `done`, an ask tool becomes `blocked`, and OMP's
- *  `model` stamp rides along. Returns null for events that carry no status. */
+ *  `model` stamp and the extension's live `subagents` ride along. Returns null
+ *  for events that carry no status. */
 export function normalizePiCompatibleEvent(
   state: HookListenerState,
   agentType: 'pi' | 'omp' | 'prime-agent',
@@ -32,15 +33,26 @@ export function normalizePiCompatibleEvent(
   const model = readString(hookPayload, 'model')
   const modelSwitchCommand =
     hookPayload.model_switch_command === 'orca-model' ? 'orca-model' : undefined
-  if (eventName === 'model_select') {
-    // Why: a model switch happens between turns, so it must ride on the pane's last
-    // known status instead of inventing a state — and before any status exists there
-    // is nothing for a model to describe.
-    const previous = state.lastStatusByPaneKey.get(paneKey)?.payload
-    if (!model || !previous || previous.agentType !== agentType) {
+  // Why: every post restates the extension's whole live roster, so an absent list means none.
+  const subagents = hookPayload.subagents
+  if (eventName === 'model_select' || eventName === 'subagents_update') {
+    // Why: a model switch or a child ending happens between lead events, so it rides on the
+    // pane's last visible row instead of inventing a state. Before any row exists there is
+    // nothing to describe, and a providerSessionOnly placeholder is a hidden resume record.
+    const previous = state.lastStatusByPaneKey.get(paneKey)
+    if (
+      !previous ||
+      previous.providerSessionOnly === true ||
+      previous.payload.agentType !== agentType ||
+      (eventName === 'model_select' && !model)
+    ) {
       return null
     }
-    return normalizeAgentStatusPayload({ ...previous, model, modelSwitchCommand })
+    return normalizeAgentStatusPayload({
+      ...previous.payload,
+      ...(eventName === 'model_select' ? { model, modelSwitchCommand } : {}),
+      subagents
+    })
   }
 
   // Why: gate on the event's own tool_name so a stale cached question can't re-enter blocked.
@@ -104,6 +116,7 @@ export function normalizePiCompatibleEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    subagents
   })
 }

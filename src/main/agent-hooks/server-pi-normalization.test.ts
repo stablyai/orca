@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentHookServer, _internals } from './server'
-import { buildBody } from './server.test-fixtures'
+import { AgentHookServer, agentHookServer, _internals } from './server'
+import { buildBody, postHookEvent } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -277,5 +277,99 @@ describe('Pi hook normalization', () => {
       'production'
     )
     expect(result).toBeNull()
+  })
+})
+
+const SCOUT = { id: 'run-scout', state: 'working', startedAt: 1_000, agentType: 'scout' }
+const REVIEWER = {
+  id: 'run-reviewer',
+  state: 'working',
+  startedAt: 2_000,
+  agentType: 'reviewer',
+  description: 'Review the diff'
+}
+
+describe('Pi-family child rows through the hook lane', () => {
+  let server: AgentHookServer
+
+  beforeEach(async () => {
+    server = new AgentHookServer()
+    await server.start({ env: 'production' })
+  })
+
+  afterEach(() => {
+    server.stop()
+  })
+
+  async function post(source: 'pi' | 'omp', payload: Record<string, unknown>): Promise<void> {
+    const response = await postHookEvent(server, buildBody(payload), `/hook/${source}`)
+    expect(response.status).toBe(204)
+  }
+
+  it.each(['pi', 'omp'] as const)(
+    'publishes the %s extension roster as the row subagents',
+    async (source) => {
+      await post(source, {
+        hook_event_name: 'before_agent_start',
+        prompt: 'fan out',
+        subagents: [SCOUT, REVIEWER]
+      })
+
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          agentType: source,
+          prompt: 'fan out',
+          subagents: [SCOUT, REVIEWER]
+        })
+      ])
+    }
+  )
+
+  it('restates the last row with the new roster when a child ends between lead events', async () => {
+    await post('pi', {
+      hook_event_name: 'before_agent_start',
+      prompt: 'fan out',
+      subagents: [SCOUT, REVIEWER]
+    })
+    await post('pi', { hook_event_name: 'tool_execution_start', tool_name: 'bash' })
+    await post('pi', { hook_event_name: 'subagents_update', subagents: [REVIEWER] })
+
+    const [row] = server.getStatusSnapshot()
+    expect(row).toMatchObject({
+      state: 'working',
+      prompt: 'fan out',
+      toolName: 'bash',
+      subagents: [REVIEWER]
+    })
+
+    // Why: the roster is a full restatement, so an update without one clears every child row.
+    await post('pi', { hook_event_name: 'subagents_update' })
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working', prompt: 'fan out' })
+    expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
+  })
+
+  it('keeps an update from inventing a row or unhiding a resume placeholder', async () => {
+    await post('pi', { hook_event_name: 'subagents_update', subagents: [SCOUT] })
+    expect(server.getStatusSnapshot()).toEqual([])
+
+    await post('pi', {
+      hook_event_name: 'session_start',
+      session_id: 'pi-session-1',
+      session_file: '/home/dev/.pi/agent/sessions/pi-session-1.jsonl'
+    })
+    await post('pi', { hook_event_name: 'subagents_update', subagents: [SCOUT] })
+    const [placeholder] = server.getStatusSnapshot()
+    expect(placeholder).toMatchObject({ providerSessionOnly: true, state: 'done' })
+    expect(placeholder?.subagents).toBeUndefined()
+  })
+
+  it('never lets one agent restate another agent row', async () => {
+    await post('pi', { hook_event_name: 'before_agent_start', prompt: 'pi turn' })
+    await post('omp', { hook_event_name: 'subagents_update', subagents: [SCOUT] })
+
+    const [row] = server.getStatusSnapshot()
+    expect(row).toMatchObject({ agentType: 'pi', prompt: 'pi turn' })
+    expect(row?.subagents).toBeUndefined()
   })
 })

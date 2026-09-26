@@ -21,6 +21,16 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           '    // Why: /reload re-registers the active session, but it is not a',
           '    // turn boundary and must not clear the visible status or unread state.',
           "    if (event.reason === 'reload') return",
+          ...(kind === 'pi'
+            ? [
+                // Why: Pi also shuts down for /reload, so a new session is its only roster boundary;
+                // pi-subagents never delivers the old session's completions to the new one.
+                '    const heldByChildren = lifecycleState.waiting',
+                '    resetSubagentRoster()',
+                // Why: nothing else will end the run those children held open, so settle it now.
+                '    if (heldByChildren) postAgentEndOnce()'
+              ]
+            : []),
           "    post('session_start')",
           '  })',
           ''
@@ -136,16 +146,14 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...getPiSubagentRosterSetupSourceLines(),
     ...(kind !== 'pi'
       ? [
-          "  pi.on('session_shutdown', () => { lifecycleState.active.clear(); lifecycleState.exited?.clear(); lifecycleState.waiting = false; resetPostQueue(); clearPendingAgentEndCheck() })"
+          "  pi.on('session_shutdown', () => { resetSubagentRoster(); resetPostQueue(); clearPendingAgentEndCheck() })"
         ]
       : []),
     ...(kind !== 'prime-agent'
       ? [
           "  pi.on('session_switch', (_event, ctx) => {",
           '    if (!isOmpRuntime()) return',
-          '    lifecycleState.active.clear()',
-          '    lifecycleState.exited?.clear()',
-          '    lifecycleState.waiting = false',
+          '    resetSubagentRoster()',
           '    resetPostQueue()',
           '    clearPendingAgentEndCheck()',
           '    updateRuntimeOmpSessionMetadata(ctx)',
@@ -236,20 +244,24 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    pendingAgentEndContext = null',
     '  }',
     ...getPiSubagentRosterEventSourceLines(),
-    '  function postAgentEndOnce(): void {',
-    '    for (const id of lifecycleState.exited ?? []) lifecycleState.active.delete(id)',
+    '  function postAgentEndOnce(): boolean {',
+    '    for (const id of lifecycleState.exited ?? []) {',
+    '      lifecycleState.active.delete(id)',
+    '      subagentDetails.delete(id)',
+    '    }',
     '    lifecycleState.exited?.clear()',
     '    if (lifecycleState.active.size > 0) {',
     '      lifecycleState.waiting = true',
-    '      return',
+    '      return false',
     '    }',
     '    lifecycleState.waiting = false',
-    '    if (completionPostedGeneration === endedRunGeneration) return',
+    '    if (completionPostedGeneration === endedRunGeneration) return false',
     '    completionPostedGeneration = endedRunGeneration',
     // Why: distinct from the completion guard, which holds the generation of the posted run
     // and so starts clean on a pane that has not run a turn yet — that pane is idle, not busy.
     ...(kind === 'pi' ? ['    piTurnInFlight = false'] : []),
     "    post('agent_end')",
+    '    return true',
     '  }',
     '',
     '  function checkPendingAgentEnd(): void {',
