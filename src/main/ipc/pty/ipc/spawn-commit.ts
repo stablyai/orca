@@ -1,6 +1,6 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { agentHookServer } from '../../../agent-hooks/server'
-import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
+import { markClaudePtySpawnedForAuth } from '../claude-pinned-spawn'
 import { registerPty } from '../../../memory/pty-registry'
 import type { PtySpawnResult } from '../../../providers/types'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../../agent-hooks/migration-unsupported-pty-state'
@@ -25,6 +25,11 @@ import { markNativeWindowsConptyPty } from '../../../runtime/terminal-model-quer
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
+  // Why first: the run's finally releases a pinned reservation, so a later commit step that throws
+  // must not leave this live PTY unregistered; a failed persist's cleanup marks it exited again.
+  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+    markClaudePtySpawnedForAuth(ctx.result.id, ctx.claudeAuth)
+  }
   admitPtyReattachOwnership(ctx.deps.runtime, ctx.result, args.connectionId)
   if (ctx.nativeWindowsConptySpawn) {
     markNativeWindowsConptyPty(ctx.result.id)
@@ -118,9 +123,6 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       ctx.result.id,
       typeof ctx.launchCommand === 'string' ? ctx.launchCommand : null
     )
-  }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
   }
   // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
   // Why: args.env is untrusted IPC JSON (type unenforced); bound the paneKey so malformed/oversized values can't pollute ptyPaneKey or clearPaneState.

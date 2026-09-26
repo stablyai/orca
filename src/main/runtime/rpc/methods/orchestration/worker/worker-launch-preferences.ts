@@ -9,10 +9,18 @@ import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../.
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 
+/** `--account`: which managed Claude account ran, and whether that needed a pinned launch. */
+export type OrchestrationWorkerLaunchAccount = {
+  id: string
+  email: string
+  mode: 'pinned' | 'active'
+}
+
 export type OrchestrationWorkerLaunchSelection = {
   agent: TuiAgent | null
   model: string | null
   effort: string | null
+  account?: OrchestrationWorkerLaunchAccount
 }
 
 export type OrchestrationWorkerLaunchReceipt = {
@@ -31,6 +39,19 @@ export function createWorkerLaunchReceipt(args: {
     effort: args.effort ?? null
   }
   return { requested: selection, effective: { ...selection } }
+}
+
+export function withWorkerLaunchAccount(
+  receipt: OrchestrationWorkerLaunchReceipt,
+  account: OrchestrationWorkerLaunchAccount | undefined
+): OrchestrationWorkerLaunchReceipt {
+  if (!account) {
+    return receipt
+  }
+  return {
+    requested: { ...receipt.requested, account },
+    effective: receipt.effective ? { ...receipt.effective, account } : null
+  }
 }
 
 export function createPendingWorkerLaunchReceipt(args: {

@@ -1,0 +1,7 @@
+#!/bin/sh
+# Stand-in for the Claude CLI: proves which config dir the launch received, then stays alive.
+case "$1" in
+  --version|-v) echo '2.1.999 (Claude Code stand-in)'; exit 0 ;;
+esac
+printf 'FAKE_CLAUDE_READY CLAUDE_CONFIG_DIR=[%s]\n' "${CLAUDE_CONFIG_DIR:-<unset>}"
+while :; do sleep 60; done

@@ -54,6 +54,12 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         params,
         settings: readWorkerStartModeSettings(runtime)
       })
+      if (params.on && params.account) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          "--account runs Claude on this host's accounts and cannot combine with --on."
+        )
+      }
       if (params.on) {
         // A remote worker is always a terminal agent; the mode receipt rides along so the
         // coordinator still learns why its structured default did not apply.

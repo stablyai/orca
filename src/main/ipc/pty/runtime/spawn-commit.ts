@@ -7,7 +7,7 @@ import {
   recordCodexPaneAccountForSpawn,
   codexReattachedHomeRouteField
 } from '../host-env/codex-home'
-import { markClaudePtySpawned } from '../../../claude-accounts/live-pty-gate'
+import { markRuntimeClaudePtySpawned } from './spawn-claude-account'
 import { registerPty } from '../../../memory/pty-registry'
 import { rememberPaneKeyForPty } from '../pane/key-state'
 import {
@@ -125,6 +125,11 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       agentSessionEnsure: ctx.result.agentSessionEnsure
     }
   }
+  // Why here: first step past the adopted branch, so a later throw cannot leave this live PTY
+  // unregistered after the run releases its pinned reservation.
+  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+    markRuntimeClaudePtySpawned(ctx.result.id, ctx.claudeAuth)
+  }
   if (ctx.hostSessionBinding && !ctx.stablePaneBindingPersisted) {
     try {
       const { store, worktreeId, tabId, leafId, expectedSourceBinding } = ctx.hostSessionBinding
@@ -221,9 +226,6 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
   if (!ctx.stablePaneOwner) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(ctx.result.id, ctx.launchCommand ?? null)
-  }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
-    markClaudePtySpawned(ctx.result.id)
   }
   if (args.telemetry && !ctx.stablePaneOwner) {
     recordPtySpawnTelemetry(args.telemetry)

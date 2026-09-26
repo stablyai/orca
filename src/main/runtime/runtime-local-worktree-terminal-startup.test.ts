@@ -109,3 +109,38 @@ describe('startRuntimeLocalWorktreeTerminals default shell seeding', () => {
     }
   })
 })
+
+describe('startRuntimeLocalWorktreeTerminals --account', () => {
+  it('pins only the startup terminal and never hands a failed launch to the renderer', async () => {
+    const { createTerminal, ports } = createPorts()
+    createTerminal.mockRejectedValueOnce(new Error('keychain locked'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const result = await startRuntimeLocalWorktreeTerminals({
+      request: { repoSelector: `id:${repo.id}`, name: worktree.displayName, activate: true },
+      startupClaudeAccountId: 'acct-b',
+      repo,
+      worktree,
+      createdWithAgent: 'claude',
+      startup: { command: 'claude' },
+      ports
+    })
+    warn.mockRestore()
+
+    expect(createTerminal.mock.calls[0]?.[1]).toMatchObject({
+      claudeAccountId: 'acct-b',
+      launchAgent: 'claude'
+    })
+    expect(result.warning).toContain('keychain locked')
+    expect(ports.activate).toHaveBeenCalledWith(
+      repo.id,
+      worktree.id,
+      undefined,
+      undefined,
+      undefined
+    )
+  })
+
+  it('does not add an account to launches without one', async () => {
+    expect(await startupTerminalOptions()).not.toHaveProperty('claudeAccountId')
+  })
+})

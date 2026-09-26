@@ -27,6 +27,7 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import { launchAgentInStructuredNewTab } from '@/lib/launch-agent-in-new-tab-structured'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
+import { stampClaudeLaunchAccount } from '@/lib/claude-launch-account'
 import {
   planAgentSessionLaunch,
   type AgentSessionLaunchPlan
@@ -58,6 +59,8 @@ export type LaunchAgentInNewTabArgs = {
    * terminal route, whose readiness signal the client watches itself.
    */
   onPromptDeliveryUnconfirmed?: () => void
+  /** A one-time Claude account choice; the project's saved account applies when omitted. */
+  claudeAccountId?: string
   /** Keeps a preflighted route authoritative across workspace creation. */
   agentSessionLaunchPlan?: AgentSessionLaunchPlan
   /** Lets a workspace reveal itself before the selected surface opens. */
@@ -114,7 +117,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     onPromptDelivered,
     onPromptDeliveryUnconfirmed,
     agentSessionLaunchPlan,
-    beforeSurfaceOpen
+    beforeSurfaceOpen,
+    claudeAccountId
   } = args
   const store = useAppStore.getState()
   const { worktreeSshConnectionId, resolvedLaunchPlatform, isRemote, queuedShell } =
@@ -165,6 +169,11 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     return null
   }
 
+  const launchConfig = stampClaudeLaunchAccount(
+    store,
+    { agent, worktreeId, claudeAccountId },
+    startupPlan.launchConfig
+  )
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
@@ -176,7 +185,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       environmentId: runtimeEnvironmentId,
       groupId,
       cwd: initialCwd,
-      startupPlan,
+      startupPlan: { ...startupPlan, launchConfig },
       prompt: trimmedPrompt,
       promptDelivery,
       pastePromptAfterReady: pasteDraftAfterLaunch,
@@ -185,7 +194,9 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       // Why: omission means terminal locally, but would let a paired host apply
       // its own default; send the client's resolved terminal choice explicitly.
       viewMode: initialViewModeProps.viewMode ?? 'terminal',
-      onPromptDelivered
+      onPromptDelivered,
+      relaunch: (override) =>
+        launchAgentInNewTab({ ...args, ...(override ? { claudeAccountId: override } : {}) })
     })
     return {
       surface: { kind: 'host-published' },
@@ -206,7 +217,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       promptDelivery: viewModePromptDelivery,
       tuiCustomization: { cwd: initialCwd },
       initialSessionOptions: startupPlan.sessionOptions,
-      onPromptDelivered
+      onPromptDelivered,
+      ...(claudeAccountId ? { claudeAccountId } : {})
     })
   if (plan?.route === 'structured-native-chat') {
     const structured = launchAgentInStructuredNewTab({
@@ -255,7 +267,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
-    launchConfig: startupPlan.launchConfig,
+    launchConfig,
     launchAgent: agent,
     ...(agentArgs !== undefined ? { agentArgsOverride: agentArgs } : {}),
     ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),

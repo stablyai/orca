@@ -63,7 +63,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
           request.viewMode ?? null,
-          ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
+          ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : []),
+          ...(request.claudeAccountId ? ['claude-account', request.claudeAccountId] : [])
         ])
       )
       .digest('base64url')
@@ -140,7 +141,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
             request.viewMode ?? null,
-            ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : [])
+            ...(request.terminalKittyKeyboardProtocol === true ? ['kitty-keyboard'] : []),
+            ...(request.claudeAccountId ? ['claude-account', request.claudeAccountId] : [])
           ])
         )
         .digest('base64url')
@@ -197,7 +199,10 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
         terminal = await this.createTerminal(`id:${workspace.id}`, {
           command: startup.launchCommand,
           env: startup.env,
-          launchConfig: startup.launchConfig,
+          launchConfig:
+            request.claudeAccountId && request.agent === 'claude'
+              ? { ...startup.launchConfig, claudeAccountId: request.claudeAccountId }
+              : startup.launchConfig,
           launchAgent: request.agent,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
           startupCommandDelivery: startup.startupCommandDelivery,

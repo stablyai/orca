@@ -6,6 +6,7 @@ import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/exter
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
 import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
 
@@ -74,6 +75,7 @@ export class RepoUpdatePersistenceOperations {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       ghAccount?: GhAccountBinding | null
+      agentAccounts?: RepoAgentAccounts | null
     },
     hostId?: ExecutionHostId
   ): Repo | null {
@@ -145,6 +147,10 @@ export class RepoUpdatePersistenceOperations {
     if ('ghAccount' in sanitizedUpdates && sanitizedUpdates.ghAccount == null) {
       delete repo.ghAccount
       delete sanitizedUpdates.ghAccount
+    }
+    if ('agentAccounts' in sanitizedUpdates && sanitizedUpdates.agentAccounts == null) {
+      delete repo.agentAccounts
+      delete sanitizedUpdates.agentAccounts
     }
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath

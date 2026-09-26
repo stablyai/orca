@@ -10,6 +10,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { launchWithClaudeAccountChoice } from './claude-account-prompt/choose-claude-launch-account'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
@@ -95,21 +96,24 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
       const targetGroupId =
         state.activeGroupIdByWorktree[activeWorktreeId] ??
         state.groupsByWorktree[activeWorktreeId]?.[0]?.id
-      const result = launchAgentInNewTab({
-        agent,
-        worktreeId: activeWorktreeId,
-        groupId: targetGroupId,
-        launchSource: 'shortcut'
-      })
-      if (!result) {
-        toast.error(
-          translate(
-            'auto.components.Terminal.e57db40c11',
-            'Could not build launch command for {{value0}}.',
-            { value0: agent }
+      launchWithClaudeAccountChoice(agent, { worktreeId: activeWorktreeId }, (claudeAccountId) => {
+        const result = launchAgentInNewTab({
+          agent,
+          worktreeId: activeWorktreeId,
+          groupId: targetGroupId,
+          launchSource: 'shortcut',
+          ...(claudeAccountId ? { claudeAccountId } : {})
+        })
+        if (!result) {
+          toast.error(
+            translate(
+              'auto.components.Terminal.e57db40c11',
+              'Could not build launch command for {{value0}}.',
+              { value0: agent }
+            )
           )
-        )
-      }
+        }
+      })
     },
     [activeWorktreeId]
   )

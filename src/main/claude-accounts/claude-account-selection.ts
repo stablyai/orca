@@ -6,6 +6,7 @@ import type {
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
+import { claimClaudeAccountForHostMutation } from './claude-account-host-mutation'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import {
   getClaudeSelectionTargetForAccount,
@@ -33,6 +34,20 @@ export class ClaudeAccountSelection {
 
   async remove(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
+    // Why held to the end: the managed dir and Keychain item are deleted last, outside the auth
+    // queue, and a pinned launch must not seed from them in between.
+    const endHostMutation = claimClaudeAccountForHostMutation(account, 'remove')
+    try {
+      return await this.removeClaimed(account)
+    } finally {
+      endHostMutation()
+    }
+  }
+
+  private async removeClaimed(
+    account: ClaudeManagedAccount
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const accountId = account.id
     const settings = this.store.getSettings()
     const nextAccounts = settings.claudeManagedAccounts.filter((entry) => entry.id !== accountId)
     const nextSelection = removeClaudeAccountIdFromSelection(
@@ -74,6 +89,21 @@ export class ClaudeAccountSelection {
   }
 
   async select(
+    accountId: string | null,
+    target?: ClaudeAccountSelectionTarget
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const endHostMutation =
+      accountId === null
+        ? null
+        : claimClaudeAccountForHostMutation(this.requireAccount(accountId), 'select')
+    try {
+      return await this.selectClaimed(accountId, target)
+    } finally {
+      endHostMutation?.()
+    }
+  }
+
+  private async selectClaimed(
     accountId: string | null,
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRateLimitAccountsState> {

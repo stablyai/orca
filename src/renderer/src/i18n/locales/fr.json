@@ -3165,6 +3165,7 @@
             "cc6d997c65": "Redémarrez le daemon de terminal depuis ici pour effacer un état de daemon obsolète.",
             "e16012e31e": "Le daemon de terminal propriétaire de cette session s'est arrêté ; la session et son historique de défilement n'ont pas pu être récupérés. Ouvrez un nouveau terminal pour continuer.",
             "sessionUnavailable": "Orca n'a pas pu se rattacher à la session de terminal de ce volet sur l'hôte. Ouvrez un nouveau terminal pour continuer.",
+            "startOnActiveAccount": "Démarrer avec le compte actif",
             "retry": "Réessayer",
             "retrying": "Nouvelle tentative…",
             "retryUnavailable": "Réessayez mais impossible de vous reconnecter pour l'instant. Réessayez sous peu.",
@@ -3172,6 +3173,18 @@
             "42b283ecfc": "Orca n'a pas pu reconnecter ce terminal en toute sécurité car l'hôte n'a pas pu vérifier sa session enregistrée. Orca a laissé la session enregistrée inchangée. Cliquez sur Réessayer pour essayer de vous reconnecter maintenant. S'il ne parvient toujours pas à se reconnecter, ouvrez un nouveau terminal.",
             "sourceRestoring": "Reconnexion de ce terminal - sa sortie est en cours de rétablissement. La session est toujours en cours.",
             "remoteTerminalClosed": "Le terminal distant était fermé."
+          },
+          "ClaudePinnedLaunch": {
+            "hostSessions": "Ce compte Claude est encore utilisé par des terminaux lancés lorsqu'il était le compte actif. Fermez-les, ou démarrez cette fois avec le compte actif.",
+            "hostMutation": "Les comptes Claude sont en cours de mise à jour. Réessayez dans un instant.",
+            "usageFetch": "La vérification de l'utilisation du compte a pris trop de temps. Réessayez.",
+            "accountMissing": "Le compte Claude enregistré pour ce projet n'est plus connecté. Modifiez-le dans Paramètres → Dépôt, ou démarrez avec le compte actif.",
+            "becameActive": "Ce compte vient de devenir le compte actif. Réessayez.",
+            "credentials": "Ce compte Claude doit se reconnecter. Authentifiez-le à nouveau dans Paramètres → Comptes.",
+            "provenance": "Impossible de confirmer le compte Claude de cette session, elle n'a donc pas été démarrée.",
+            "unsupportedHost": "Un compte Claude enregistré ne peut pas encore être utilisé dans WSL. Démarrez avec le compte actif, ou réglez le compte de ce projet sur Par défaut dans Paramètres → Dépôt.",
+            "hostSessionsDetail_one": "{{email}} est encore utilisé par {{count}} terminal Claude lancé lorsqu'il était le compte actif. Fermez-le, ou démarrez cette fois avec le compte actif.",
+            "hostSessionsDetail_other": "{{email}} est encore utilisé par {{count}} terminaux Claude lancés lorsqu'il était le compte actif. Fermez-les, ou démarrez cette fois avec le compte actif."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Limite de consoles Git Bash atteinte",
@@ -6605,6 +6618,8 @@
           "codexConfigSyncBlankSource": "Codex utilise toujours les derniers paramètres synchronisés car {{value0}} est vide. C'est attendu tant qu'un dossier synchronisé finit de se télécharger.",
           "codexConfigSyncManagedHomeUnavailable": "Orca n'a pas réussi à lire les fichiers Codex de ce compte à l'instant ; les paramètres peuvent donc ne plus se synchroniser. Cela se résout généralement tout seul — un antivirus ou un outil de sauvegarde les verrouille brièvement.",
           "codexConfigSyncUnreadableSource": "Codex utilise toujours les derniers paramètres synchronisés car {{value0}} n'a pas pu être lu. Vérifiez les permissions de ce fichier.",
+          "askClaudeAccountPerProjectTitle": "Demander quel compte Claude utiliser pour chaque projet",
+          "askClaudeAccountPerProjectDescription": "Si activé, les projets sans compte Claude enregistré demandent avant de démarrer Claude.",
           "d5267cce63": "). Le cookie d'authentification couvre toujours la découverte de l'espace de travail ; l'authentification seule n'est pas suffisante pour l'utilisation. L'authentification OpenCode Go est basée sur le Web et partagée sur les terminaux Windows et WSL.",
           "62ab430f94": "Collez l'en-tête Cookie complet depuis DevTools → Réseau → toute requête opencode.ai, y compris __Host-console_session (par ex.",
           "37b4b4a3f7": "auth=…; __Host-console_session=…",
@@ -9030,6 +9045,12 @@
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
             "a9f3d7b5c8": "connexion",
+            "askPerProjectAccounts": "comptes",
+            "askPerProjectProject": "projet",
+            "askPerProjectPerProject": "par projet",
+            "askPerProjectAsk": "demander",
+            "askPerProjectAskWhich": "demander lequel",
+            "askPerProjectPrompt": "invite",
             "37020a02c2": "console",
             "25591bf95b": "Collez l'en-tête complet du cookie opencode.ai, y compris __Host-console_session, pour la récupération de la limite de débit.",
             "d16378a88f": "minimax",
@@ -10379,6 +10400,11 @@
             "projectRuntimeDescription": "Choisissez si ce projet s'exécute sous Windows ou WSL.",
             "externalWorktrees": "Worktrees externes",
             "externalWorktreesDescription": "Définir si les worktrees créés hors d'Orca apparaissent pour ce projet.",
+            "claudeAccount": "Compte Claude",
+            "claudeAccountDescription": "Choisissez quel compte Claude démarre dans ce projet.",
+            "claudeAccountKeyword": "compte claude",
+            "claudeAccountsKeyword": "comptes claude",
+            "accountsKeyword": "comptes",
             "githubAccount": "Compte GitHub",
             "githubAccountDescription": "Liez un trousseau de clés de connexion pour les appels de l'API GitHub de ce projet.",
             "githubAccountKeyword": "compte github",
@@ -12081,6 +12107,18 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Bloqué par Mission Control. Remappez ici ou changez-le dans Réglages Système."
+        },
+        "RepositoryClaudeAccountSection": {
+          "title": "Compte Claude",
+          "description": "Choisissez quel compte Claude démarre dans ce projet.",
+          "selectLabel": "Compte",
+          "default": "Par défaut",
+          "ask": "Demander à chaque fois",
+          "unsupported": "Les comptes Claude par projet ne sont pas encore pris en charge pour l'hôte de ce projet.",
+          "saveFailed": "Impossible d'enregistrer la préférence de compte Claude.",
+          "notEnforced": "Enregistré, mais non appliqué par cet environnement d'exécution (hôte d'une autre version).",
+          "loadFailed": "Impossible de charger les comptes Claude.",
+          "removedAccountOption": "Compte supprimé (indisponible)"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arme les gestes de capture audacieux sur cette machine : {{samplingShortcut}} démarre une rafale d'échantillonnage ; {{captureShortcut}} capture les preuves du volet sur le disque.",
@@ -17209,6 +17247,15 @@
         "expiredCompact": "Expiré",
         "typeMarkdown": "Markdown",
         "typeHtml": "HTML"
+      },
+      "ClaudeAccountPromptDialog": {
+        "title": "Choisir un compte Claude",
+        "description": "Choisissez le compte Claude à utiliser dans {{value0}}.",
+        "accountLabel": "Compte",
+        "remember": "Mémoriser pour ce projet",
+        "rememberHint": "Vous pouvez le modifier dans Paramètres → Dépôt",
+        "cancel": "Annuler",
+        "start": "Démarrer"
       },
       "NativeChatResumeOnRestartModal": {
         "title": "Reprendre les discussions interrompues ?",

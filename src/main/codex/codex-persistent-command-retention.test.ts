@@ -71,14 +71,15 @@ describe('persistent command retention', () => {
     items.streams.flush()
     const originalJoin = Array.prototype.join
     let retainedJoins = 0
-    const spy = vi
-      .spyOn(Array.prototype, 'join')
-      .mockImplementation(function (this: unknown[], separator) {
-        if (this[0] === 'retained-prefix') {
-          retainedJoins += 1
-        }
-        return originalJoin.call(this, separator)
-      })
+    const spy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
+      this: unknown[],
+      separator
+    ) {
+      if (this[0] === 'retained-prefix') {
+        retainedJoins += 1
+      }
+      return originalJoin.call(this, separator)
+    })
     try {
       for (let index = 0; index < 100; index += 1) {
         items.streams.flush()

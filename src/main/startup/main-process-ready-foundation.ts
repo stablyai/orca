@@ -31,6 +31,7 @@ import {
   onLiveClaudePtysDrained,
   seedLiveClaudePtysFromPersistence
 } from '../claude-accounts/live-pty-gate'
+import { seedClaudePtyAccountRegistries } from '../claude-accounts/claude-pty-account-registries-startup'
 import { applyAppIcon } from '../app-icon'
 import {
   shouldSuppressDevEducation,
@@ -274,6 +275,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   const persistedClaudePtyIds = store.getClaudeLivePtySessionIds()
   seedLiveClaudePtysFromPersistence(persistedClaudePtyIds)
+  seedClaudePtyAccountRegistries(store, persistedClaudePtyIds, app.getPath('userData'))
   if (persistedClaudePtyIds.length > 0) {
     console.log(
       `[claude-live-pty] Seeded ${persistedClaudePtyIds.length} persisted Claude session id(s) into the refresh gate`

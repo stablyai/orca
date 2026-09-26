@@ -4,6 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
+import { normalizeRepoAgentAccounts } from '../../../../shared/claude/project-claude-account-preference'
 import {
   findRepoForHost,
   getRepoHostIdentityForParts,
@@ -57,6 +58,14 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
       delete sanitized.ghAccount
     } else {
       sanitized.ghAccount = normalized
+    }
+  }
+  if ('agentAccounts' in sanitized && sanitized.agentAccounts != null) {
+    const normalized = normalizeRepoAgentAccounts(sanitized.agentAccounts)
+    if (!normalized) {
+      delete sanitized.agentAccounts
+    } else {
+      sanitized.agentAccounts = normalized
     }
   }
   if ('customWorktreeVisibilitySources' in sanitized) {
@@ -155,6 +164,7 @@ export function createRepoUpdateActions(
                 sourceControlAi,
                 externalWorktreeDiscoverySuppressedAt,
                 ghAccount,
+                agentAccounts,
                 externalWorktreeVisibility,
                 agentWorktreeVisibility,
                 ...updatesWithoutClearSentinels
@@ -195,6 +205,12 @@ export function createRepoUpdateActions(
                 mergedRepo = repoWithoutGhAccount
               } else if (ghAccount !== undefined) {
                 mergedRepo = { ...mergedRepo, ghAccount }
+              }
+              if (agentAccounts === null) {
+                const { agentAccounts: _agentAccounts, ...repoWithoutAgentAccounts } = mergedRepo
+                mergedRepo = repoWithoutAgentAccounts
+              } else if (agentAccounts !== undefined) {
+                mergedRepo = { ...mergedRepo, agentAccounts }
               }
               return mergedRepo
             })

@@ -9,9 +9,11 @@ import {
 import { hasLiveClaudePtys } from '../live-pty-gate'
 import { isOauthTokenExpiring } from '../oauth-refresh'
 import { writeActiveClaudeKeychainCredentialsForRuntime } from '../keychain'
-import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
+import { ClaudeRuntimeAuthPinnedLaunch } from './runtime-auth-pinned-launch'
+import { countClaudePinnedAccountUsers } from '../claude-pinned-pty-registry'
+import { hasPendingPinnedClaudeSeed } from '../claude-pinned-credentials'
 
-export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
+export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPinnedLaunch {
   protected async doSyncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
     const settings = this.store.getSettings()
     const effectiveTarget = this.resolveWslDefaultTarget(target)
@@ -156,6 +158,18 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
       return
     }
 
+    if (
+      process.platform === 'darwin' &&
+      hasPendingPinnedClaudeSeed(activeAccount.id) &&
+      countClaudePinnedAccountUsers(activeAccount.id) === 0
+    ) {
+      // Why: a pinned session that ended without a read-back (crash) may hold the only unspent
+      // refresh token; take it back before materializing this account for the host.
+      const ownedPath = await this.getOwnedManagedAuthPath(activeAccount)
+      if (ownedPath) {
+        await this.reconcilePinnedKeychainCredentials(activeAccount, ownedPath, { strict: false })
+      }
+    }
     let credentialsJson = await this.readManagedCredentials(activeAccount)
     if (!credentialsJson || !this.isValidCredentialsJsonObject(credentialsJson)) {
       console.warn(

@@ -6,6 +6,7 @@ import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { RepoProjectHostSetupMethod } from './project-types'
+import type { RepoAgentAccounts } from './claude/project-claude-account-preference'
 
 // ─── Repo ────────────────────────────────────────────────────────────
 export type RepoKind = 'git' | 'folder'
@@ -77,6 +78,8 @@ export type Repo = {
    * and injects it into that child env only.
    */
   ghAccount?: GhAccountBinding
+  /** Per-agent account preference for this project; ids only, never credentials. */
+  agentAccounts?: RepoAgentAccounts
   /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
   /** Canonical identity for the repo remote Orca should use for provider-level grouping. */

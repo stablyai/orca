@@ -21,6 +21,7 @@ import {
   shouldOfferDaemonRestart,
   stripSshReconnectOwnedErrorLines
 } from './TerminalErrorToast'
+import { claudePinnedLaunchError } from '../../../../shared/claude/claude-pinned-launch-error'
 
 beforeEach(() => {
   environmentMocks.resolveFooter.mockReset()
@@ -414,5 +415,24 @@ describe('TerminalErrorToast environment footer', () => {
     await waitFor(() =>
       expect(view.container.textContent).toContain('Retry could not reconnect yet')
     )
+  })
+
+  it('shows the friendly message and a "Start on active account" button for a tagged host-sessions refusal', () => {
+    const onStartOnActiveAccount = vi.fn()
+    const error = claudePinnedLaunchError('host-sessions', 'refused').message
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error,
+        onDismiss: vi.fn(),
+        onStartOnActiveAccount
+      })
+    )
+
+    expect(view.container.textContent).toContain(
+      'This Claude account is still used by terminals started while it was the active account.'
+    )
+    expect(view.container.querySelector('a')).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'Start on active account' }))
+    expect(onStartOnActiveAccount).toHaveBeenCalledTimes(1)
   })
 })

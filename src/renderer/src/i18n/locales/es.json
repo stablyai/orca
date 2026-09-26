@@ -875,6 +875,15 @@
       }
     },
     "components": {
+      "ClaudeAccountPromptDialog": {
+        "title": "Elige una cuenta de Claude",
+        "description": "Elige la cuenta de Claude con la que empezar en {{value0}}.",
+        "accountLabel": "Cuenta",
+        "remember": "Recordar para este proyecto",
+        "rememberHint": "Puedes cambiarlo en Ajustes → Repositorio",
+        "cancel": "Cancelar",
+        "start": "Empezar"
+      },
       "CodexRestartChip": {
         "c72a5fb234": "Reiniciar",
         "9263e75f49": "Codex está usando la cuenta anterior.",
@@ -2777,7 +2786,20 @@
             "a7e2fd2699": "abre un issue",
             "5c8ce20be6": "Si esto persiste, por favor",
             "cc6d997c65": "Reinicia el servicio del terminal desde aquí para borrar el estado obsoleto.",
-            "remoteTerminalClosed": "La terminal remota se cerró."
+            "remoteTerminalClosed": "La terminal remota se cerró.",
+            "startOnActiveAccount": "Empezar con la cuenta activa"
+          },
+          "ClaudePinnedLaunch": {
+            "hostSessions": "Esta cuenta de Claude sigue en uso en terminales iniciados cuando era la cuenta activa. Ciérralos o empieza esta vez con la cuenta activa.",
+            "hostMutation": "Las cuentas de Claude se están actualizando. Vuelve a intentarlo en un momento.",
+            "usageFetch": "La comprobación del uso de la cuenta tardó demasiado. Vuelve a intentarlo.",
+            "accountMissing": "La cuenta de Claude guardada para este proyecto ya no tiene la sesión iniciada. Cámbiala en Ajustes → Repositorio o empieza con la cuenta activa.",
+            "becameActive": "Esa cuenta acaba de convertirse en la cuenta activa. Vuelve a intentarlo.",
+            "credentials": "Esta cuenta de Claude necesita volver a iniciar sesión. Vuelve a autenticarla en Ajustes → Cuentas.",
+            "provenance": "No se pudo confirmar la cuenta de Claude de esta sesión, así que no se inició.",
+            "unsupportedHost": "Aún no se puede usar una cuenta de Claude guardada en WSL. Empieza con la cuenta activa o cambia la cuenta de este proyecto a Predeterminado en Ajustes → Repositorio.",
+            "hostSessionsDetail_one": "{{email}} sigue en uso en {{count}} terminal de Claude iniciado cuando era la cuenta activa. Ciérralo o empieza esta vez con la cuenta activa.",
+            "hostSessionsDetail_other": "{{email}} sigue en uso en {{count}} terminales de Claude iniciados cuando era la cuenta activa. Ciérralos o empieza esta vez con la cuenta activa."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Se alcanzó el límite de consolas de Git Bash",
@@ -5548,6 +5570,8 @@
           "remoteServerFallback": "el servidor remoto",
           "loadAccountsFailed": "No se pudieron cargar las cuentas de proveedor.",
           "remoteScopeAccounts": "Mostrando las cuentas administradas por {{value0}}. Agrega o vuelve a autenticar cuentas en ese servidor.",
+          "askClaudeAccountPerProjectTitle": "Preguntar qué cuenta de Claude usar en cada proyecto",
+          "askClaudeAccountPerProjectDescription": "Si está activado, los proyectos sin una cuenta de Claude guardada preguntan antes de iniciar Claude.",
           "accountScopePrefix": "Alcance de la cuenta",
           "accountScopeRemoteServerUnnamed": "Servidor remoto",
           "remoteScopeLocalAccountsKept": "Las cuentas administradas en este escritorio no cambian. Vuelve a cambiar el runtime predeterminado a Escritorio local para verlas.",
@@ -7828,6 +7852,12 @@
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
             "a9f3d7b5c8": "inicio de sesión",
+            "askPerProjectAccounts": "cuentas",
+            "askPerProjectProject": "proyecto",
+            "askPerProjectPerProject": "por proyecto",
+            "askPerProjectAsk": "preguntar",
+            "askPerProjectAskWhich": "preguntar cuál",
+            "askPerProjectPrompt": "aviso",
             "cursor": {
               "description": "Uso mensual del plan obtenido del inicio de sesión de Cursor que ya está en este equipo (cursor-agent login).",
               "kw": {
@@ -9046,6 +9076,11 @@
             "ghAccount": "cuenta gh",
             "login": "inicio de sesión",
             "token": "token",
+            "claudeAccount": "Cuenta de Claude",
+            "claudeAccountDescription": "Elige qué cuenta de Claude se inicia en este proyecto.",
+            "claudeAccountKeyword": "cuenta de claude",
+            "claudeAccountsKeyword": "cuentas de claude",
+            "accountsKeyword": "cuentas",
             "externalWorktrees": "Worktrees externos",
             "externalWorktreesDescription": "Sobrescribe si los worktrees creados fuera de Orca aparecen en este proyecto.",
             "copy": "copy",
@@ -9472,6 +9507,18 @@
           "capabilityBlocked": "La vinculación no está disponible hasta que la CLI de GitHub de este runtime admita `gh auth token --user` (gh ≥ 2.40).",
           "capabilityUnknownHint": "No se pudo determinar si la CLI de GitHub de este runtime admite la vinculación de cuentas. Borra la vinculación o reintenta.",
           "notEnforced": "Guardado, pero este runtime no lo aplica (host de versión mixta)."
+        },
+        "RepositoryClaudeAccountSection": {
+          "title": "Cuenta de Claude",
+          "description": "Elige qué cuenta de Claude se inicia en este proyecto.",
+          "selectLabel": "Cuenta",
+          "default": "Predeterminado",
+          "ask": "Preguntar cada vez",
+          "unsupported": "Las cuentas de Claude por proyecto aún no se admiten en el host de este proyecto.",
+          "saveFailed": "No se pudo guardar la preferencia de cuenta de Claude.",
+          "notEnforced": "Guardado, pero este runtime no lo aplica (host con otra versión).",
+          "loadFailed": "No se pudieron cargar las cuentas de Claude.",
+          "removedAccountOption": "Cuenta eliminada (no disponible)"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Hooks de estado del agente",

@@ -28,6 +28,10 @@ import {
   reportActiveRendererPtyForPane
 } from './terminal-pane-lifecycle-primitives'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
+import {
+  redirectsPtylessPaneActivation,
+  refusedClaudeLaunchStartupsFor
+} from './refused-claude-launch-recovery'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 
@@ -54,7 +58,14 @@ export function createTerminalPaneManagerOptions(
     onActivePaneChange: (pane) => {
       const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
       const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
-      if (Object.keys(ptyIdsByLeafId).length > 0 && !ptyIdsByLeafId[pane.leafId]) {
+      if (
+        redirectsPtylessPaneActivation({
+          ptyIdsByLeafId,
+          leafId: pane.leafId,
+          paneId: pane.id,
+          refusedStartups: refusedClaudeLaunchStartupsFor(paneTransportsRef)
+        })
+      ) {
         const fallbackLeafId = resolveTerminalLayoutActiveLeafId({
           root: layout?.root,
           activeLeafId: pane.leafId,

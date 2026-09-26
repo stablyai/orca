@@ -4,9 +4,12 @@ import {
   refreshClaudeOauthCredentials
 } from '../claude-accounts/oauth-refresh'
 import {
+  beginClaudeManagedUsageFetch,
   readClaudeManagedCredentialsJson,
+  readStagedClaudeManagedPreviewCredentials,
   resolveClaudeManagedCredentialsLocation,
   writeClaudeManagedCredentialsJson,
+  type ClaudeManagedCredentialsLocation,
   type InactiveClaudeAccount
 } from './claude-managed-account-credentials'
 import { fetchClaudeManagedUsagePanelSupplement } from './claude-managed-usage-panel'
@@ -38,8 +41,28 @@ export async function fetchInactiveClaudeAccountUsage(
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+  // Why: a `--account` Claude may be refreshing this account right now; a second refresh from
+  // here would replay its single-use refresh token and revoke the session. Held to the end so a
+  // pinned launch cannot start between this fetch's refresh or preview and its write-back.
+  const endUsageFetch = beginClaudeManagedUsageFetch(account.id)
+  try {
+    return await fetchClaimedInactiveClaudeAccountUsage(account, options, endUsageFetch === null)
+  } finally {
+    endUsageFetch?.()
+  }
+}
+
+async function fetchClaimedInactiveClaudeAccountUsage(
+  account: InactiveClaudeAccount,
+  options: ClaudeManagedAccountUsageOptions,
+  heldByPinnedLaunch: boolean
+): Promise<ProviderRateLimits> {
   const location = resolveClaudeManagedCredentialsLocation(account)
-  let credentialsJson = location ? await readClaudeManagedCredentialsJson(location) : null
+  let credentialsJson = location
+    ? heldByPinnedLaunch
+      ? await readPinnedLaunchCredentialsJson(location)
+      : await readClaudeManagedCredentialsJson(location)
+    : null
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
@@ -48,7 +71,7 @@ export async function fetchInactiveClaudeAccountUsage(
   }
 
   let token = parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file').token
-  if (isOauthTokenExpiring(credentialsJson)) {
+  if (!heldByPinnedLaunch && isOauthTokenExpiring(credentialsJson)) {
     const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
     if (options.signal?.aborted) {
       return abortedClaudeRateLimitResult()
@@ -72,6 +95,7 @@ export async function fetchInactiveClaudeAccountUsage(
     return abortedClaudeRateLimitResult()
   }
   if (
+    heldByPinnedLaunch ||
     !canSupplementClaudeOAuthUsage({
       oauthLimits,
       authPreparation: undefined,
@@ -101,4 +125,14 @@ export async function fetchInactiveClaudeAccountUsage(
     )
     return oauthLimits
   }
+}
+
+/** Read-only: the pinned session's own Keychain copy is the fresher store on macOS. */
+async function readPinnedLaunchCredentialsJson(
+  location: ClaudeManagedCredentialsLocation
+): Promise<string | null> {
+  return (
+    (await readStagedClaudeManagedPreviewCredentials(location)) ??
+    (await readClaudeManagedCredentialsJson(location))
+  )
 }

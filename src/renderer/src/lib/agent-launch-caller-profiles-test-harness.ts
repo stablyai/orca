@@ -1,4 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
 import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab'
 
 /**
@@ -194,6 +195,22 @@ export const AGENT_LAUNCH_CALLER_PROFILES: readonly AgentLaunchCallerProfile[] =
     passesLaunchPlan: true,
     passesOnPromptDelivered: false,
     readsBack: ['null-only']
+  },
+  {
+    id: 'terminal-pane-start-on-active-account',
+    caller: 'src/renderer/src/components/terminal-pane/TerminalPaneSurface.tsx',
+    // `args.agent` is the table's normalized stand-in (see the type doc); the marker anchors the real 'claude'.
+    sourceMarkers: ["agent: 'claude'", 'claudeAccountId: ACTIVE_CLAUDE_ACCOUNT'],
+    args: {
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      claudeAccountId: ACTIVE_CLAUDE_ACCOUNT,
+      launchSource: 'unknown'
+    },
+    passesBeforeSurfaceOpen: false,
+    passesLaunchPlan: false,
+    passesOnPromptDelivered: false,
+    readsBack: ['discarded']
   },
   {
     id: 'terminal-create-shortcut',

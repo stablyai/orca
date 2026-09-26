@@ -11,6 +11,12 @@ import {
   onLiveClaudePtysDrained,
   seedLiveClaudePtysFromPersistence
 } from './live-pty-gate'
+import {
+  _internals as pinnedRegistryInternals,
+  hasLivePinnedClaudePtys,
+  markPinnedClaudePtySpawned,
+  onClaudePinnedAccountDrained
+} from './claude-pinned-pty-registry'
 
 describe('Claude live PTY gate', () => {
   afterEach(() => {
@@ -20,6 +26,7 @@ describe('Claude live PTY gate', () => {
     confirmSeededClaudeLivePtys([])
     attachClaudeLivePtyPersistence(null)
     endClaudeAuthSwitch()
+    pinnedRegistryInternals.reset()
   })
 
   it('allows switching while Claude PTYs are live', () => {
@@ -138,5 +145,25 @@ describe('Claude live PTY gate', () => {
 
     markClaudePtyExited('live-claude-pty')
     expect(removeClaudeLivePtySessionId).toHaveBeenCalledWith('live-claude-pty')
+  })
+
+  it('keeps pinned PTYs out of the global gate but releases them through the same exit', () => {
+    const onGlobalDrained = vi.fn()
+    const onPinnedDrained = vi.fn()
+    const unsubscribe = onLiveClaudePtysDrained(onGlobalDrained)
+    onClaudePinnedAccountDrained(onPinnedDrained)
+    try {
+      markPinnedClaudePtySpawned('pinned-pty', 'acct-b')
+
+      expect(hasLiveClaudePtys()).toBe(false)
+
+      markClaudePtyExited('pinned-pty')
+
+      expect(hasLivePinnedClaudePtys('acct-b')).toBe(false)
+      expect(onPinnedDrained).toHaveBeenCalledExactlyOnceWith('acct-b')
+      expect(onGlobalDrained).not.toHaveBeenCalled()
+    } finally {
+      unsubscribe()
+    }
   })
 })

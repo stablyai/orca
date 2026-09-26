@@ -35,6 +35,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { hasExplicitTuiLaunchCommand } from '../../shared/tui-agent-launch-command-override'
 import type { WorkspaceLaunchKind } from '../../shared/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { resolveProjectClaudeAccount } from '../claude-accounts/project-claude-account-resolution'
 
 // The receipt is part of the launch contract, so it is declared with the rest of it; re-exported
 // here because this module is where the decision that fills it lives.
@@ -73,6 +74,8 @@ export type AgentLaunchModePlacement = {
    *  resolved — never accepted from a caller, which would let one route around this decision.
    *  Absent means the kind was never established, and is not read as any particular kind. */
   workspaceKind?: WorkspaceLaunchKind
+  /** `--account`: a structured session has no way to run on a non-active account yet. */
+  claudeAccount?: string
   /** A requested start directory. It belongs here, unlike `model` or `effort`, because a structured
    *  session has no way to apply one — it runs in its workspace — so honouring it and honouring the
    *  chat preference are mutually exclusive rather than merely awkward. Read against
@@ -92,7 +95,9 @@ const DOWNGRADE_DETAIL: Record<Exclude<AgentLaunchModeReason, 'user_default'>, s
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
-  structured_unsupported_on_host: 'the execution host cannot create one here'
+  structured_unsupported_on_host: 'the execution host cannot create one here',
+  pinned_claude_account:
+    '--account runs Claude on a non-active account, which only a terminal can do'
 }
 
 const BLOCKER_REASON: Record<
@@ -138,6 +143,9 @@ export function decideAgentLaunchMode(args: {
       detail: `Started ${vocabulary.terminal}, the default for new agent tabs in your settings.`
     }
   }
+  if (placement.claudeAccount) {
+    return downgraded('pinned_claude_account', vocabulary)
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an unrecognized agent name is handled rather than trusted; isAgentSessionHandleProvider rejects it and the launch downgrades to a terminal.
   const agent = placement.agent as TuiAgent
   const support = resolveStructuredNativeChatSupport({
@@ -173,7 +181,8 @@ export function decideAgentLaunchMode(args: {
  * becomes a terminal agent rather than a failed launch.
  */
 export async function resolveAgentLaunchModeOnHost(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
+  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'> &
+    Partial<Pick<OrcaRuntimeService, 'listRepos'>>,
   receipt: AgentLaunchModeReceipt,
   worktreeId: string | undefined,
   agent: TuiAgent | undefined,
@@ -182,12 +191,47 @@ export async function resolveAgentLaunchModeOnHost(
   if (receipt.mode !== 'structured' || !worktreeId) {
     return receipt
   }
-  return downgradeAgentLaunchModeForHost(
+  const settled = downgradeAgentLaunchModeForHost(
     receipt,
     await readStructuredCreateSupport(runtime, worktreeId, agent),
     vocabulary
   )
+  return downgradeAgentLaunchModeForProjectClaudeAccount(
+    runtime,
+    settled,
+    worktreeId,
+    agent,
+    vocabulary
+  )
 }
+
+/**
+ * The project's saved Claude account pins the terminal spawn, and a structured session has no way
+ * to run on it, so a host-side launch downgrades the way the renderer's own plan does. Read after
+ * the host verdict so an SSH or WSL workspace, which never pins, keeps its own reason.
+ */
+function downgradeAgentLaunchModeForProjectClaudeAccount(
+  runtime: Partial<Pick<OrcaRuntimeService, 'listRepos'>>,
+  receipt: AgentLaunchModeReceipt,
+  worktreeId: string,
+  agent: TuiAgent | undefined,
+  vocabulary: AgentLaunchModeVocabulary
+): AgentLaunchModeReceipt {
+  if (receipt.mode !== 'structured' || agent !== 'claude') {
+    return receipt
+  }
+  const repos = runtime.listRepos?.() ?? []
+  const accountId = resolveProjectClaudeAccount({
+    getRepo: (repoId) => repos.find((repo) => repo.id === repoId),
+    worktreeId
+  })
+  return accountId
+    ? downgraded('pinned_claude_account', vocabulary, PROJECT_CLAUDE_ACCOUNT_DETAIL)
+    : receipt
+}
+
+const PROJECT_CLAUDE_ACCOUNT_DETAIL =
+  'this project runs Claude on its saved account, which only a terminal can do'
 
 /** A host that cannot answer has not proved it can create one, so the launch stays a PTY agent. */
 async function readStructuredCreateSupport(
@@ -228,9 +272,10 @@ export function downgradeAgentLaunchModeForHost(
 
 function downgraded(
   reason: Exclude<AgentLaunchModeReason, 'user_default'>,
-  vocabulary: AgentLaunchModeVocabulary
+  vocabulary: AgentLaunchModeVocabulary,
+  detail?: string
 ): AgentLaunchModeReceipt {
-  const why = vocabulary.detailOverrides?.[reason] ?? DOWNGRADE_DETAIL[reason]
+  const why = detail ?? vocabulary.detailOverrides?.[reason] ?? DOWNGRADE_DETAIL[reason]
   return {
     mode: 'terminal',
     preferred: 'structured',

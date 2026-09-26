@@ -7,6 +7,22 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/project-exe
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { isLaunchConfigClaudeAccountId } from '../../shared/claude/project-claude-account-preference'
+
+/**
+ * Account fields a background terminal create forwards to the PTY spawn: an explicit `--account`,
+ * else the launch config's recorded choice, which the spawn resolves below any explicit pin.
+ */
+export function terminalCreateClaudeAccountIdField(launchOpts: {
+  claudeAccountId?: string
+  launchConfig?: Pick<SleepingAgentLaunchConfig, 'claudeAccountId'>
+}): { claudeAccountId?: string; launchConfigClaudeAccountId?: string } {
+  if (launchOpts.claudeAccountId) {
+    return { claudeAccountId: launchOpts.claudeAccountId }
+  }
+  const recorded = launchOpts.launchConfig?.claudeAccountId
+  return isLaunchConfigClaudeAccountId(recorded) ? { launchConfigClaudeAccountId: recorded } : {}
+}
 
 export function mergeTerminalEnvDeletionKeys(
   first: readonly string[] | undefined,
@@ -40,7 +56,8 @@ export function copySleepingAgentLaunchConfig(
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
     agentEnv: { ...config.agentEnv },
-    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {})
+    ...(config.ompResumeFilePath ? { ompResumeFilePath: config.ompResumeFilePath } : {}),
+    ...(config.claudeAccountId ? { claudeAccountId: config.claudeAccountId } : {})
   }
 }
 

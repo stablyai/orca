@@ -22,6 +22,50 @@ export const getAccountsLocationSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+const getAskClaudeAccountPerProjectSearchEntry = createLocalizedCatalog(
+  (): SettingsSearchEntry => ({
+    title: translate(
+      'auto.components.settings.AccountsPane.askClaudeAccountPerProjectTitle',
+      'Ask which Claude account to use for each project'
+    ),
+    description: translate(
+      'auto.components.settings.AccountsPane.askClaudeAccountPerProjectDescription',
+      'When on, projects without a saved Claude account ask before starting Claude.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.askPerProjectAccounts',
+        'accounts'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.askPerProjectProject',
+        'project'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.askPerProjectPerProject',
+        'per project'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.askPerProjectAsk', 'ask'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.askPerProjectAskWhich',
+        'ask which'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.askPerProjectPrompt',
+        'prompt'
+      )
+    ]
+  })
+)
+
+// Why: the toggle's own SearchableSetting needs the identical keyword set so a
+// query that opens this pane section also keeps the toggle itself visible.
+export function getAskClaudeAccountPerProjectSearchKeywords(): string[] {
+  return getAskClaudeAccountPerProjectSearchEntry().keywords ?? []
+}
+
 export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.accounts.search.75682e1b62', 'Claude Accounts'),
@@ -41,7 +85,8 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.f2d666a886', 'optional')
     ]
-  }
+  },
+  getAskClaudeAccountPerProjectSearchEntry()
 ])
 
 export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [

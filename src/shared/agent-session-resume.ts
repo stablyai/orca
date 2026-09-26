@@ -43,6 +43,8 @@ export type SleepingAgentLaunchConfig = {
   agentArgs: string
   agentEnv: Record<string, string>
   ompResumeFilePath?: string
+  /** Account this launch was pinned to, or ACTIVE_CLAUDE_ACCOUNT; replayed on resume. */
+  claudeAccountId?: string
 }
 
 export type SleepingAgentSessionRecord = {

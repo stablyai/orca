@@ -3,6 +3,13 @@ import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../shared/claude/project-claude-account-preference'
+import {
+  refusedClaudeLaunchStartupsFor,
+  replayRefusedClaudeLaunch,
+  startRefusedPaneOnActiveClaudeAccount
+} from './refused-claude-launch-recovery'
 import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
@@ -87,6 +94,7 @@ export function TerminalPaneSurface({
     renameInputRef,
     renameValue,
     renamingPaneId,
+    restartPaneWithStartup,
     saveQuickCommand,
     searchOpen,
     searchStateRef,
@@ -169,6 +177,32 @@ export function TerminalPaneSurface({
               error={visibleTerminalError}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
+              onRetryLaunch={() => {
+                const replayed = replayRefusedClaudeLaunch({
+                  paneId: activePane.id,
+                  refusedStartups: refusedClaudeLaunchStartupsFor(paneTransportsRef),
+                  restartPane: restartPaneWithStartup,
+                  onActiveAccount: false
+                })
+                if (!replayed) {
+                  dismissTerminalError()
+                }
+              }}
+              onStartOnActiveAccount={() =>
+                startRefusedPaneOnActiveClaudeAccount({
+                  paneId: activePane.id,
+                  refusedStartups: refusedClaudeLaunchStartupsFor(paneTransportsRef),
+                  restartPane: restartPaneWithStartup,
+                  // Why no tab close: the old tab may hold live split siblings.
+                  openNewTab: () =>
+                    launchAgentInNewTab({
+                      agent: 'claude',
+                      worktreeId,
+                      claudeAccountId: ACTIVE_CLAUDE_ACCOUNT,
+                      launchSource: 'unknown'
+                    })
+                })
+              }
               onRetry={
                 isPaneOwnerUnverifiedError(visibleTerminalError)
                   ? () => {

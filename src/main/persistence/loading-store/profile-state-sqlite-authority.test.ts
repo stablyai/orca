@@ -70,12 +70,12 @@ function createAuthority(databasePath: string, profileId: string): ProfileStateS
 }
 
 beforeEach(() => {
-  vi.spyOn(ProfileStateSqliteAuthority.prototype, 'scheduleBackup').mockImplementation(
-    function (this: ProfileStateSqliteAuthority) {
-      backupAuthorities.add(this)
-      scheduleBackup.call(this)
-    }
-  )
+  vi.spyOn(ProfileStateSqliteAuthority.prototype, 'scheduleBackup').mockImplementation(function (
+    this: ProfileStateSqliteAuthority
+  ) {
+    backupAuthorities.add(this)
+    scheduleBackup.call(this)
+  })
 })
 
 afterEach(async () => {
