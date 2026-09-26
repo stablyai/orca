@@ -11,7 +11,7 @@ import { BridgeConnectionCache } from './bridge-client-connection-cache'
 import type { BridgeRpcClientDiagnostic } from './bridge-client-diagnostics'
 import { createBridgeClientShellSession } from './bridge-client-shell-session'
 import type { BridgeShellSession } from './bridge-client-session'
-import { createBridgeInitHandshake } from './bridge-client-init-handshake'
+import { createBridgeInitHandshake, createPageReadyFrame } from './bridge-client-init-handshake'
 import {
   BridgeClientCapExceededError,
   BridgeClientClosedError,
@@ -24,17 +24,12 @@ import {
 import type { BridgeHapticsKind } from './bridge-haptics-notify'
 import { createBridgeInboundFrameReader } from './bridge-client-inbound-frames'
 import { createBridgeClientNotifications } from './bridge-client-notifications'
-import { BRIDGE_BACK_FRAME } from './bridge-page-back'
-import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
+import type { BridgeSafeAreaInsets } from './bridge-safe-area-insets'
 import { createPageBackConsumers, type PageBackConsumer } from './page-back-consumers'
 import { BridgeClientRequests } from './bridge-client-requests'
 import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
 import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
-import {
-  BRIDGE_ROUTE_PARAM_CLEAR,
-  BRIDGE_ROUTE_UPDATE_ACCEPT,
-  type BridgeClearableRouteParam
-} from './bridge-route-update'
+import { BRIDGE_ROUTE_PARAM_CLEAR, type BridgeClearableRouteParam } from './bridge-route-update'
 import {
   BRIDGE_PROTOCOL_VERSION,
   type BridgeClientMessage,
@@ -80,6 +75,8 @@ export type BridgeRpcClient = RpcClient & {
    * listener that deduplicated by value would lose exactly that one.
    */
   onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
+  /** Fires when an `init` moved the safe-area insets; the value itself is on `getShellSession`. */
+  onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
   getShellSession: () => BridgeShellSession | null
   /**
    * Asks the shell to open a screen this page does not render. False when the shell granted no
@@ -227,16 +224,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
   })
 
   const handshake = createBridgeInitHandshake(() => {
-    // Declared on every ask, because the shell reads it off whichever `ready` it answers: this
-    // page build knows how to take a second `init` for the session it already holds.
-    // `reports` runs the other way from `accepts`: it is what a shell may wait for this page to
-    // post, and the shell holds a frame over the view until the one below arrives.
-    sendFrame({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'ready',
-      accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT, BRIDGE_BACK_FRAME],
-      reports: [BRIDGE_PAGE_PAINTED]
-    })
+    sendFrame(createPageReadyFrame())
   })
 
   /**
@@ -476,6 +464,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     close,
     onReady: shellSession.onReady,
     onRouteUpdate: shellSession.onRouteUpdate,
+    onSafeAreaInsetsUpdate: shellSession.onSafeAreaInsetsUpdate,
     getShellSession: shellSession.current,
     clearRouteParam: (param, value) =>
       shellSession.current()?.accepts.includes(BRIDGE_ROUTE_PARAM_CLEAR) === true &&

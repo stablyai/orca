@@ -1,0 +1,19 @@
+{
+  "capturedAt": "2026-09-24T04:11:27.821Z",
+  "platform": "darwin",
+  "command": [
+    "vim",
+    "-u",
+    "NONE",
+    "-N",
+    "-c",
+    "syntax on",
+    "-c",
+    "set number ruler laststatus=2",
+    "sample.ts"
+  ],
+  "cols": 100,
+  "rows": 30,
+  "note": "file: a copy of src/main/daemon/headless-emulator.ts plus CJK/emoji lines",
+  "exitCode": 0
+}

@@ -1,12 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { z } from 'zod'
-import {
-  AGENT_SESSION_RESUME_MARKER_TTL_MS,
-  isExpiredAgentSessionResumeMarker,
-  parseAgentSessionResumeMarker,
-  type AgentSessionResumeMarker
-} from '../../shared/agent-session-resume-marker'
+import type { AgentSessionResumeMarker } from '../../shared/agent-session-resume-marker'
 import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
 import {
@@ -16,128 +10,29 @@ import {
   writeTempFileDurable
 } from '../durable-file-write'
 import { withFileTransactionLock } from '../file-transaction-lock'
+import {
+  MAX_FAILURE_FIELD_LENGTH,
+  normalizeState,
+  parseState,
+  shouldReplaceMarker,
+  type AgentSessionResumeFailureInput,
+  type AgentSessionResumeFailureRecord,
+  type RecoveryCapsuleState,
+  type RecoveryEntry
+} from './agent-session-recovery-capsule-entries'
+
+export type {
+  AgentSessionResumeFailureInput,
+  AgentSessionResumeFailureRecord
+} from './agent-session-recovery-capsule-entries'
 
 export const AGENT_SESSION_RECOVERY_CAPSULE_FILE = 'agent-session-recovery.json'
 const MAX_CAPSULE_BYTES = 4 * 1024 * 1024
-const RESUME_ACTION_LEASE_TTL_MS = 10 * 60 * 1000
 
-const legacyCapsuleSchema = z.object({ version: z.literal(1), markers: z.array(z.unknown()) })
-const entrySchema = z.object({
-  state: z.enum(['pending', 'in-progress']),
-  operationId: z.string().min(1).optional(),
-  startedAt: z.number().int().nonnegative().optional(),
-  marker: z.unknown(),
-  replacement: z.unknown().optional()
-})
-const capsuleSchema = z.object({
-  version: z.literal(2),
-  entries: z.array(z.unknown()),
-  dismissedAt: z.number().int().nonnegative().optional()
-})
+/** Crash-leftover temp files only; offers themselves have no expiry. */
+const STALE_WRITE_TEMP_FILE_AGE_MS = 24 * 60 * 60 * 1000
 
-type RecoveryEntry = {
-  state: 'pending' | 'in-progress'
-  operationId?: string
-  startedAt?: number
-  marker: AgentSessionResumeMarker
-  replacement?: AgentSessionResumeMarker
-}
-
-type RecoveryCapsuleState = {
-  entries: RecoveryEntry[]
-  dismissedAt?: number
-}
-
-function parseMarker(value: unknown): AgentSessionResumeMarker {
-  const marker = parseAgentSessionResumeMarker(value)
-  if (!marker) {
-    throw new Error('agent_session_recovery_capsule_invalid')
-  }
-  return marker
-}
-
-function parseState(raw: string): RecoveryCapsuleState {
-  const value: unknown = JSON.parse(raw)
-  const legacy = legacyCapsuleSchema.safeParse(value)
-  if (legacy.success) {
-    return {
-      entries: legacy.data.markers.map((marker) => ({
-        state: 'pending',
-        marker: parseMarker(marker)
-      }))
-    }
-  }
-  const capsule = capsuleSchema.parse(value)
-  const entries = capsule.entries.map((entry) => {
-    const parsed = entrySchema.parse(entry)
-    const marker = parseMarker(parsed.marker)
-    const replacement =
-      parsed.replacement === undefined ? undefined : parseMarker(parsed.replacement)
-    if (replacement && replacement.sessionId !== marker.sessionId) {
-      throw new Error('agent_session_recovery_capsule_invalid')
-    }
-    if (parsed.state === 'pending') {
-      return { state: 'pending' as const, marker, ...(replacement ? { replacement } : {}) }
-    }
-    if (parsed.operationId === undefined || parsed.startedAt === undefined) {
-      throw new Error('agent_session_recovery_capsule_invalid')
-    }
-    return {
-      state: 'in-progress' as const,
-      operationId: parsed.operationId,
-      startedAt: parsed.startedAt,
-      marker,
-      ...(replacement ? { replacement } : {})
-    }
-  })
-  return {
-    entries,
-    ...(capsule.dismissedAt === undefined ? {} : { dismissedAt: capsule.dismissedAt })
-  }
-}
-
-function normalizeEntries(entries: readonly RecoveryEntry[], now: number): RecoveryEntry[] {
-  const bySession = new Map<string, RecoveryEntry>()
-  for (const entry of entries) {
-    const replacement =
-      entry.replacement && !isExpiredAgentSessionResumeMarker(entry.replacement, now)
-        ? entry.replacement
-        : undefined
-    if (isExpiredAgentSessionResumeMarker(entry.marker, now) && replacement === undefined) {
-      continue
-    }
-    if (bySession.has(entry.marker.sessionId)) {
-      throw new Error('agent_session_recovery_capsule_duplicate_session')
-    }
-    const reclaimed =
-      entry.state === 'in-progress' &&
-      entry.startedAt !== undefined &&
-      now - entry.startedAt > RESUME_ACTION_LEASE_TTL_MS
-    const normalized: RecoveryEntry =
-      entry.state === 'in-progress' && reclaimed
-        ? { state: 'pending', marker: replacement ?? entry.marker }
-        : entry.state === 'pending' && replacement
-          ? { state: 'pending', marker: replacement }
-          : replacement
-            ? { ...entry, replacement }
-            : entry
-    bySession.set(normalized.marker.sessionId, normalized)
-  }
-  return [...bySession.values()]
-}
-
-function shouldReplaceMarker(
-  current: AgentSessionResumeMarker,
-  incoming: AgentSessionResumeMarker
-): boolean {
-  if (incoming.recordedAt !== current.recordedAt) {
-    return incoming.recordedAt > current.recordedAt
-  }
-  // A single teardown may publish the same witness more than once. Different teardown IDs at the
-  // same clock value have no ordering signal, so keep the first one rather than let a late writer
-  // regress a newer witness from another host.
-  return incoming.teardownId === current.teardownId
-}
+type StoredRecords = Pick<RecoveryCapsuleState, 'entries' | 'failed'>
 
 /** Durable, per-session restart offers. Listing never spends an offer. */
 export class AgentSessionRecoveryCapsule {
@@ -149,23 +44,29 @@ export class AgentSessionRecoveryCapsule {
 
   list(now: number): Promise<AgentSessionResumeMarker[]> {
     return withFileTransactionLock(this.filePath, async () => {
-      const entries = normalizeEntries((await this.readState()).entries, now)
+      const { entries } = normalizeState(await this.readState(), now)
       return entries.filter((entry) => entry.state === 'pending').map((entry) => entry.marker)
     })
+  }
+
+  /** Offers that were acted on and did not end with the agent carrying on. Read-only, like `list`. */
+  listFailed(now: number): Promise<AgentSessionResumeFailureRecord[]> {
+    return withFileTransactionLock(
+      this.filePath,
+      async () => normalizeState(await this.readState(), now).failed
+    )
   }
 
   /** Adds fresh teardown witnesses while preserving an action already in progress. */
   record(markers: readonly AgentSessionResumeMarker[], now: number): Promise<void> {
     return withFileTransactionLock(this.filePath, async () => {
       const state = await this.readState()
-      const entries = normalizeEntries(state.entries, now)
+      const { entries, failed } = normalizeState(state, now)
       const bySession = new Map(entries.map((entry) => [entry.marker.sessionId, entry]))
+      const failedBySession = new Map(failed.map((failure) => [failure.marker.sessionId, failure]))
       const dismissedAt = state.dismissedAt
       for (const marker of markers) {
-        if (
-          isExpiredAgentSessionResumeMarker(marker, now) ||
-          (dismissedAt !== undefined && marker.recordedAt <= dismissedAt)
-        ) {
+        if (dismissedAt !== undefined && marker.recordedAt <= dismissedAt) {
           continue
         }
         const existing = bySession.get(marker.sessionId)
@@ -179,18 +80,26 @@ export class AgentSessionRecoveryCapsule {
           }
           continue
         }
-        if (existing && !shouldReplaceMarker(existing.marker, marker)) {
+        const failure = failedBySession.get(marker.sessionId)
+        if (
+          (existing && !shouldReplaceMarker(existing.marker, marker)) ||
+          (failure && !shouldReplaceMarker(failure.marker, marker))
+        ) {
           continue
         }
+        // A newer witness than a recorded failure supersedes it when the records are normalized.
         bySession.set(marker.sessionId, { state: 'pending', marker })
       }
       // Keep the fence after a newer interruption. It still admits genuinely newer markers,
       // while an older delayed writer remains unable to resurrect a dismissed chat later.
-      await this.publish([...bySession.values()], dismissedAt)
+      await this.publish({ entries: [...bySession.values()], failed }, now, dismissedAt)
     })
   }
 
-  /** Reserves only the selected pending sessions for one explicit user action. */
+  /** Reserves only the selected pending sessions for one explicit user action. A recorded failure
+   *  is reserved too when the action names it — that is a retry — but never by an unselective
+   *  action, which must not re-run what already failed. The failure stays on record until the
+   *  retry settles. */
   beginResume(
     sessionIds: readonly string[] | undefined,
     operationId: string,
@@ -198,52 +107,168 @@ export class AgentSessionRecoveryCapsule {
   ): Promise<AgentSessionResumeMarker[]> {
     return withFileTransactionLock(this.filePath, async () => {
       const state = await this.readState()
-      const entries = normalizeEntries(state.entries, now)
+      const { entries, failed } = normalizeState(state, now)
       const requested = sessionIds === undefined ? null : new Set(sessionIds)
       const selected: AgentSessionResumeMarker[] = []
-      const next = entries.map((entry) => {
-        if (
-          entry.state !== 'pending' ||
-          (requested !== null && !requested.has(entry.marker.sessionId))
-        ) {
-          return entry
+      const reserve = (marker: AgentSessionResumeMarker): RecoveryEntry => {
+        selected.push(marker)
+        return { state: 'in-progress', operationId, startedAt: now, marker }
+      }
+      const next = entries.map((entry) =>
+        entry.state === 'pending' && (requested === null || requested.has(entry.marker.sessionId))
+          ? reserve(entry.marker)
+          : entry
+      )
+      const held = new Set(entries.map((entry) => entry.marker.sessionId))
+      for (const failure of failed) {
+        if (requested?.has(failure.marker.sessionId) && !held.has(failure.marker.sessionId)) {
+          next.push(reserve(failure.marker))
         }
-        selected.push(entry.marker)
-        return { state: 'in-progress' as const, operationId, startedAt: now, marker: entry.marker }
-      })
-      await this.publish(next, state.dismissedAt)
+      }
+      await this.publish({ entries: next, failed }, now, state.dismissedAt)
       return selected
     })
   }
 
+  /** The agent carried on: the reservation and any failure it was retrying both go. */
   completeResume(operationId: string, sessionIds: readonly string[], now: number): Promise<void> {
     return withFileTransactionLock(this.filePath, async () => {
       const selected = new Set(sessionIds)
       const state = await this.readState()
-      const entries = normalizeEntries(state.entries, now).flatMap((entry) => {
-        if (
-          entry.state !== 'in-progress' ||
-          entry.operationId !== operationId ||
-          !selected.has(entry.marker.sessionId)
-        ) {
+      const { entries, failed } = normalizeState(state, now)
+      const completed = new Set<string>()
+      const next = entries.flatMap((entry) => {
+        if (!this.owns(entry, operationId) || !selected.has(entry.marker.sessionId)) {
           return [entry]
         }
+        completed.add(entry.marker.sessionId)
         return entry.replacement ? [{ state: 'pending' as const, marker: entry.replacement }] : []
       })
-      await this.publish(entries, state.dismissedAt)
+      await this.publish(
+        {
+          entries: next,
+          failed: failed.filter((failure) => !completed.has(failure.marker.sessionId))
+        },
+        now,
+        state.dismissedAt
+      )
+    })
+  }
+
+  /** Records how a reserved session's action ended when the agent did not carry on, replacing any
+   *  earlier failure of the same chat. Only rows this operation owns move, so a competing owner's
+   *  reservation cannot be settled by proxy. */
+  failResume(
+    operationId: string,
+    failures: readonly AgentSessionResumeFailureInput[],
+    now: number
+  ): Promise<void> {
+    return withFileTransactionLock(this.filePath, async () => {
+      const bySession = new Map(failures.map((failure) => [failure.sessionId, failure]))
+      const state = await this.readState()
+      const { entries, failed } = normalizeState(state, now)
+      const filed = new Map<string, AgentSessionResumeFailureRecord>()
+      const next = entries.flatMap((entry) => {
+        const failure = this.owns(entry, operationId)
+          ? bySession.get(entry.marker.sessionId)
+          : undefined
+        if (!failure) {
+          return [entry]
+        }
+        const { sessionId, ...record } = failure
+        filed.set(sessionId, {
+          ...record,
+          marker: entry.marker,
+          reason: record.reason.slice(0, MAX_FAILURE_FIELD_LENGTH),
+          latestPrompt: record.latestPrompt.slice(0, MAX_FAILURE_FIELD_LENGTH)
+        })
+        // A newer teardown seen mid-action is a fresh offer; normalizing drops the stale verdict.
+        return entry.replacement ? [{ state: 'pending' as const, marker: entry.replacement }] : []
+      })
+      await this.publish(
+        {
+          entries: next,
+          failed: [
+            ...failed.filter((failure) => !filed.has(failure.marker.sessionId)),
+            ...filed.values()
+          ]
+        },
+        now,
+        state.dismissedAt
+      )
+    })
+  }
+
+  /** Forgets the named sessions whatever their state. Unlike `clearAll`, this is not a fence: a
+   *  later teardown of the same chat may record a fresh offer. */
+  dismiss(sessionIds: readonly string[], now: number): Promise<number> {
+    return withFileTransactionLock(this.filePath, async () => {
+      const named = new Set(sessionIds)
+      const state = await this.readState()
+      const { entries, failed } = normalizeState(state, now)
+      const dismissed = new Set(
+        [...entries, ...failed]
+          .map((record) => record.marker.sessionId)
+          .filter((sessionId) => named.has(sessionId))
+      )
+      if (dismissed.size > 0) {
+        await this.publish(
+          {
+            entries: entries.filter((entry) => !dismissed.has(entry.marker.sessionId)),
+            failed: failed.filter((failure) => !dismissed.has(failure.marker.sessionId))
+          },
+          now,
+          state.dismissedAt
+        )
+      }
+      return dismissed.size
+    })
+  }
+
+  /** Drops records the chat itself has since superseded — the user's own newer message ends both a
+   *  pending offer and a recorded failure. Witness-keyed (`recordedAt`, and `failedAt` for a
+   *  failure) so a fresh record written after the caller read the stale one is kept. */
+  forgetSuperseded(
+    superseded: readonly { sessionId: string; recordedAt: number; failedAt?: number }[],
+    now: number
+  ): Promise<void> {
+    return withFileTransactionLock(this.filePath, async () => {
+      const state = await this.readState()
+      const { entries, failed } = normalizeState(state, now)
+      const keptEntries = entries.filter(
+        (entry) =>
+          entry.state !== 'pending' ||
+          !superseded.some(
+            (gone) =>
+              gone.failedAt === undefined &&
+              gone.sessionId === entry.marker.sessionId &&
+              gone.recordedAt === entry.marker.recordedAt
+          )
+      )
+      const keptFailures = failed.filter(
+        (failure) =>
+          !superseded.some(
+            (gone) =>
+              gone.sessionId === failure.marker.sessionId && gone.failedAt === failure.failedAt
+          )
+      )
+      if (keptEntries.length !== entries.length || keptFailures.length !== failed.length) {
+        await this.publish({ entries: keptEntries, failed: keptFailures }, now, state.dismissedAt)
+      }
     })
   }
 
   rollbackResume(operationId: string, now: number): Promise<void> {
     return withFileTransactionLock(this.filePath, async () => {
       const state = await this.readState()
-      const entries = normalizeEntries(state.entries, now).flatMap((entry) => {
-        if (entry.state !== 'in-progress' || entry.operationId !== operationId) {
-          return [entry]
-        }
-        return [{ state: 'pending' as const, marker: entry.replacement ?? entry.marker }]
-      })
-      await this.publish(entries, state.dismissedAt)
+      const { entries, failed } = normalizeState(state, now)
+      const next = entries.map((entry): RecoveryEntry =>
+        this.owns(entry, operationId)
+          ? { state: 'pending', marker: entry.replacement ?? entry.marker }
+          : entry
+      )
+      // Normalizing on publish keeps a rolled-back retry a failure rather than a pending offer.
+      await this.publish({ entries: next, failed }, now, state.dismissedAt)
     })
   }
 
@@ -251,20 +276,24 @@ export class AgentSessionRecoveryCapsule {
     return withFileTransactionLock(this.filePath, async () => {
       let entries: RecoveryEntry[]
       try {
-        entries = normalizeEntries((await this.readState()).entries, now)
+        entries = normalizeState(await this.readState(), now).entries
       } catch {
         // Dismiss is an explicit request to forget this advisory file. Replace unreadable bytes
         // with an empty, fenced capsule so a late teardown writer cannot resurrect the offer.
-        await this.publish([], now)
+        await this.publish({ entries: [], failed: [] }, now, now)
         return 0
       }
       const pending = entries.filter((entry) => entry.state === 'pending')
       // Dismiss is the explicit user request to forget every recovery record. An in-flight
       // action may still finish, but its later complete/rollback becomes a no-op and cannot
       // resurrect a row the user dismissed.
-      await this.publish([], now)
+      await this.publish({ entries: [], failed: [] }, now, now)
       return pending.length
     })
+  }
+
+  private owns(entry: RecoveryEntry, operationId: string): boolean {
+    return entry.state === 'in-progress' && entry.operationId === operationId
   }
 
   private async readState(): Promise<RecoveryCapsuleState> {
@@ -275,20 +304,30 @@ export class AgentSessionRecoveryCapsule {
       )
     } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        return { entries: [] }
+        return { entries: [], failed: [] }
       }
       throw error
     }
     return parseState(raw)
   }
 
-  private async publish(entries: readonly RecoveryEntry[], dismissedAt?: number): Promise<void> {
+  private async publish(
+    records: StoredRecords,
+    now: number,
+    dismissedAt: number | undefined
+  ): Promise<void> {
+    const { entries, failed } = normalizeState(records, now)
     const { serialized } = stringifyJsonWithinByteLimit(
-      { version: 2, entries, ...(dismissedAt === undefined ? {} : { dismissedAt }) },
+      {
+        version: 2,
+        entries,
+        ...(dismissedAt === undefined ? {} : { dismissedAt }),
+        ...(failed.length === 0 ? {} : { failed })
+      },
       MAX_CAPSULE_BYTES
     )
     await removeStaleDurableWriteTempFiles(this.filePath, {
-      minimumAgeMs: AGENT_SESSION_RESUME_MARKER_TTL_MS
+      minimumAgeMs: STALE_WRITE_TEMP_FILE_AGE_MS
     })
     const tempPath = durableWriteTempPath(this.filePath)
     try {

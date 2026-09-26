@@ -168,6 +168,77 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     expect(payload.agentType).toBe(agent)
   })
 
+  it.each([0, 1, 2, 3])(
+    'delivers Cursor form payloads with %i BOMs to the host-owned status store',
+    async (count) => {
+      const { port, token } = hookServer.getCoordinates()
+      for (const [hookEventName, state] of [
+        ['beforeSubmitPrompt', 'working'],
+        ['stop', 'done']
+      ]) {
+        const payload = Buffer.concat([
+          ...Array.from({ length: count }, () => Buffer.from([0xef, 0xbb, 0xbf])),
+          Buffer.from(
+            JSON.stringify({
+              hook_event_name: hookEventName,
+              prompt: 'Synthetic café 😀',
+              status: 'completed'
+            })
+          )
+        ])
+        const response = await fetch(`http://127.0.0.1:${port}/hook/cursor`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: new URLSearchParams({
+            paneKey: `tab-7:${LEAF_7}`,
+            worktreeId: 'folder:synthetic-cursor',
+            payload: payload.toString('utf8')
+          }).toString()
+        })
+        expect(response.status).toBe(204)
+        await expect
+          .poll(() => orcaServer.getStatusSnapshot())
+          .toEqual([
+            expect.objectContaining({
+              paneKey: `tab-7:${LEAF_7}`,
+              worktreeId: 'folder:synthetic-cursor',
+              connectionId: 'conn-test',
+              state,
+              agentType: 'cursor',
+              prompt: 'Synthetic café 😀'
+            })
+          ])
+      }
+    }
+  )
+
+  it('acknowledges malformed Cursor form payloads without publishing status', async () => {
+    const { port, token } = hookServer.getCoordinates()
+    for (const payload of [
+      '',
+      '\uFEFF\uFEFFnot json',
+      ' \uFEFF{}',
+      '{\uFEFF"hook_event_name":"stop"}',
+      '\uFEFF\uFEFF{"hook_event_name":"unknown"}'
+    ]) {
+      const response = await fetch(`http://127.0.0.1:${port}/hook/cursor`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: new URLSearchParams({ paneKey: `tab-7:${LEAF_7}`, payload }).toString()
+      })
+      expect(response.status).toBe(204)
+    }
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(hookServer.replayCachedPayloadsForPanes()).toBe(0)
+    expect(orcaServer.getStatusSnapshot()).toEqual([])
+  })
+
   it('sheds an oversized assistant message through the production publication path', async () => {
     const events: { payload: { state: string; lastAssistantMessage?: string } }[] = []
     orcaServer.setListener((event) => {

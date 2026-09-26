@@ -73,8 +73,6 @@
         "f5a6b38a14": "sheet"
       },
       "NativeChatResumeOnRestartModal": {
-        "continueRefused_one": "{{value0}} chat could not be continued. Open it to continue manually.",
-        "continueRefused_other": "{{value0}} chats could not be continued. Open them to continue manually.",
         "continueUnconfirmed_one": "Continuation delivery is unconfirmed for {{value0}} chat. Open it to check before sending another message.",
         "continueUnconfirmed_other": "Continuation delivery is unconfirmed for {{value0}} chats. Open them to check before sending another message."
       },
@@ -383,10 +381,6 @@
         "EditorContent": {
           "d07e4b8553": "branch",
           "d16e037f40": "rich"
-        },
-        "IpynbViewer": {
-          "59b6cd874b": "code",
-          "ba149053d5": "markdown"
         },
         "ReviewNotesSendMenuContent": {
           "50f7e753ea": "Sending notes to active agent...",

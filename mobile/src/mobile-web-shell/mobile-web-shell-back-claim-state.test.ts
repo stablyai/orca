@@ -13,7 +13,7 @@ describe('the page claiming the device Back key', () => {
   function claimed(): MobileWebShellStep {
     return run(
       readySession().session,
-      { type: 'page-ready', reports: [] },
+      { type: 'page-ready', reports: [], accepts: [] },
       { type: 'page-back-claim', claimed: true }
     )
   }
@@ -38,7 +38,7 @@ describe('the page claiming the device Back key', () => {
   })
 
   it('drops it when the document asks for a session again, so the page has to claim again', () => {
-    const reasked = run(claimed().session, { type: 'page-ready', reports: [] })
+    const reasked = run(claimed().session, { type: 'page-ready', reports: [], accepts: [] })
     expect(shellPageBackClaimed(reasked.session)).toBe(false)
   })
 

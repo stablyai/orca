@@ -129,10 +129,8 @@ export async function classifyHomeSkillTopology(
     normalizedSkillIdentityPath(dirname(resolvedPath)) ===
     normalizedSkillIdentityPath(canonicalRoot)
   let topology: SkillInstallationTopology
-  if (linked) {
+  if (linked || rootOrProviderParentLinked) {
     topology = isCanonicalTarget ? 'provider-alias' : 'external-link'
-  } else if (rootOrProviderParentLinked) {
-    topology = 'external-link'
   } else {
     topology = root.id === 'home-agents' ? 'canonical-copy' : 'independent-copy'
   }

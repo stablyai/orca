@@ -1,4 +1,7 @@
-import type { StructuredAgentSessionLifecycleEvent } from './structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionEndedEvent,
+  StructuredAgentSessionProviderChildPhase
+} from './structured-agent-session-adapter'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import {
   releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExit,
@@ -14,7 +17,7 @@ import {
 } from './structured-agent-session-dead-generation-settlement'
 import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
 
-type UnexpectedExitLifecycleEvent = StructuredAgentSessionLifecycleEvent & {
+type UnexpectedExitLifecycleEvent = StructuredAgentSessionEndedEvent & {
   cause: 'unexpected-exit'
 }
 
@@ -30,6 +33,7 @@ export type StructuredAgentSessionUnexpectedExitSession = {
   hasProviderChild: boolean
   fence: number
   acquisitionGeneration: string | null
+  providerChildPhase?: StructuredAgentSessionProviderChildPhase
 }
 
 export type StructuredAgentSessionUnexpectedExitContext<
@@ -50,7 +54,7 @@ export async function settleUnexpectedStructuredAgentSessionExit<
   TSession extends StructuredAgentSessionUnexpectedExitSession
 >(
   context: StructuredAgentSessionUnexpectedExitContext<TSession>,
-  event: StructuredAgentSessionLifecycleEvent
+  event: StructuredAgentSessionEndedEvent
 ): Promise<StructuredAgentSessionRecoveryTicket | null> {
   if (event.cause !== 'unexpected-exit') {
     return null
@@ -69,11 +73,15 @@ export async function settleUnexpectedStructuredAgentSessionExit<
     }
     const record = context.store.getRecord(unexpectedEvent.sessionId)
     if (!record || record.lease.handoffStage !== null) {
-      // The handoff coordinator owns an already-started transition.
+      // An acquisition or recovery already owns this lease's transition.
       session.hasProviderChild = false
       context.publishStatus?.(unexpectedEvent.sessionId)
       return null
     }
+    // The host's own phase decides, so a provider that omits the flag still gets a start that
+    // failed told as one: the row says so, and nothing resumes into the same failure.
+    const exitedDuringStartup =
+      unexpectedEvent.startupUnproven === true || session.providerChildPhase === 'starting'
 
     let settlementFailed = false
     const stableSettlementId = providerExitSettlementId(unexpectedEvent)
@@ -96,11 +104,15 @@ export async function settleUnexpectedStructuredAgentSessionExit<
         session,
         stableSettlementId,
         verdict: { state: 'interrupted', completedAt: observedAt },
-        showUnexpectedExitOutcome: unfinishedStructuredAgentSessionWorkWasInterrupted(
-          unfinishedWork,
-          session.journal,
-          observedAt
-        )
+        exitedDuringStartup,
+        // A failed start always says why: no response was running to carry the reason.
+        showUnexpectedExitOutcome:
+          exitedDuringStartup ||
+          unfinishedStructuredAgentSessionWorkWasInterrupted(
+            unfinishedWork,
+            session.journal,
+            observedAt
+          )
       }))
     } finally {
       // Provider exit was positively observed, so release the owner even when
@@ -138,7 +150,8 @@ export async function settleUnexpectedStructuredAgentSessionExit<
     if (settlementFailed || !released) {
       return null
     }
-    if (!context.hasResumeCapableHolder(unexpectedEvent.sessionId)) {
+    // Resuming a start that failed would respawn into the same failure; the next send retries.
+    if (exitedDuringStartup || !context.hasResumeCapableHolder(unexpectedEvent.sessionId)) {
       return null
     }
     return {
@@ -183,6 +196,7 @@ async function retryUnexpectedExitSettlement(input: {
   session: Pick<StructuredAgentSessionUnexpectedExitSession, 'journal' | 'fence'>
   stableSettlementId: string
   verdict: StructuredAgentSessionTurnVerdict
+  exitedDuringStartup: boolean
   showUnexpectedExitOutcome?: boolean
 }): Promise<boolean> {
   return settleStructuredAgentSessionDeadGeneration({
@@ -194,6 +208,7 @@ async function retryUnexpectedExitSettlement(input: {
     pendingSubmissionReason: 'provider_exited_before_acknowledgement',
     showUnexpectedExitOutcome: input.showUnexpectedExitOutcome,
     unexpectedExitReason: input.event.reason,
+    exitedDuringStartup: input.exitedDuringStartup,
     onError: input.context.onBarrierError
   })
 }

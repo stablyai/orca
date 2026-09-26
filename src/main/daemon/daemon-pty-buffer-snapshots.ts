@@ -1,8 +1,7 @@
 import { normalizeDesktopTerminalSnapshotRows } from '../../shared/terminal-scrollback-policy'
 import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
-import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
+import { boundSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtySessionControl } from './daemon-pty-session-control'
-import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from './daemon-session-scrollback-window'
 import type { GetSnapshotResult } from './types'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
@@ -171,21 +170,9 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       if (checkpoint.checkpoint !== 'committed' || !checkpoint.snapshot) {
         return checkpoint.snapshot ?? liveSnapshot
       }
-      if (scrollbackRows === undefined || scrollbackRows >= DAEMON_RESTORE_SCROLLBACK_ROWS) {
-        return checkpoint.snapshot
-      }
-      const restoreInfo = await this.historyReader.detectColdRestore(sessionId, {
-        ignoreCleanEnd: true,
-        wslDistro: this.wslDistrosBySessionId.get(sessionId)
-      })
-      if (!restoreInfo) {
-        return liveSnapshot
-      }
-      return await buildDurableCheckpointSnapshot({
-        liveSnapshot: checkpoint.snapshot,
-        restoreInfo,
-        scrollbackRows
-      })
+      return scrollbackRows !== undefined && checkpoint.snapshot.scrollbackLines > scrollbackRows
+        ? await boundSnapshot(checkpoint.snapshot, scrollbackRows)
+        : checkpoint.snapshot
     } catch (error) {
       console.warn('[history] durable snapshot overlay failed:', sessionId, error)
       return liveSnapshot

@@ -268,7 +268,8 @@ export function installShellDouble({
   backFrame = null,
   replies,
   streams = [],
-  windowCaps = null
+  windowCaps = null,
+  safeAreaInsets = null
 }) {
   // Where the page's own fault reports land. Read back after the render, so a route that threw
   // under the boundary names itself instead of timing out as a page that never mounted.
@@ -298,6 +299,44 @@ export function installShellDouble({
     }
     channel.onmessage?.({ data: JSON.stringify({ v: version, type: backFrame }) })
   }
+  // One `init` as the shell builds it; a second one for the same session is how the shell moves
+  // the route or the safe-area insets under a live page.
+  const initFrame = (patch = {}) => ({
+    v: version,
+    type: 'init',
+    sessionId,
+    buildId,
+    connection: {
+      state: 'connected',
+      reconnectAttempt: 0,
+      lastConnectedAt: 1,
+      lastInboundAt: 1,
+      generation: 0
+    },
+    grants: {
+      rpc: { maxPendingRequests: 64, maxSubscriptions: 32 },
+      // The fault grant alone unless the caller named a set: every check needs that one,
+      // and a check that names none must not be handed an undefined list.
+      native: grants ?? [faultGrant]
+    },
+    ...(pageRoutes === null ? {} : { pageRoutes }),
+    // Omitted when the caller names none, which is the older-shell case the page falls back
+    // on: an absent field is not an empty one, and the page reads the difference.
+    ...(pageRouteGrants === null ? {} : { pageRouteGrants }),
+    // Omitted when a check names none, which is the shell that performs no swap and the
+    // state every other rig in this directory runs in.
+    ...(accepts === null ? {} : { accepts }),
+    // Omitted for a shell too old to name one, which is the case the page has a panel for.
+    ...(route === null ? {} : { route }),
+    ...(host === null ? {} : { host }),
+    storage,
+    // Omitted when a check names none, which is every shell before the field.
+    ...(safeAreaInsets === null ? {} : { safeAreaInsets }),
+    ...patch
+  })
+  globalThis.__orcaRenderCheckResendInit = (patch) => {
+    channel.onmessage?.({ data: JSON.stringify(initFrame(patch)) })
+  }
   const channel = {
     postMessage: (json) => {
       const frame = JSON.parse(json)
@@ -309,36 +348,7 @@ export function installShellDouble({
         })
       }
       if (frame.type === 'ready') {
-        answer({
-          v: version,
-          type: 'init',
-          sessionId,
-          buildId,
-          connection: {
-            state: 'connected',
-            reconnectAttempt: 0,
-            lastConnectedAt: 1,
-            lastInboundAt: 1,
-            generation: 0
-          },
-          grants: {
-            rpc: { maxPendingRequests: 64, maxSubscriptions: 32 },
-            // The fault grant alone unless the caller named a set: every check needs that one,
-            // and a check that names none must not be handed an undefined list.
-            native: grants ?? [faultGrant]
-          },
-          ...(pageRoutes === null ? {} : { pageRoutes }),
-          // Omitted when the caller names none, which is the older-shell case the page falls back
-          // on: an absent field is not an empty one, and the page reads the difference.
-          ...(pageRouteGrants === null ? {} : { pageRouteGrants }),
-          // Omitted when a check names none, which is the shell that performs no swap and the
-          // state every other rig in this directory runs in.
-          ...(accepts === null ? {} : { accepts }),
-          // Omitted for a shell too old to name one, which is the case the page has a panel for.
-          ...(route === null ? {} : { route }),
-          ...(host === null ? {} : { host }),
-          storage
-        })
+        answer(initFrame())
         return
       }
       if (frame.type === 'notify') {

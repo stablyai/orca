@@ -358,7 +358,6 @@
           "9e2a9bb87b": "Continue",
           "6f8056a565": "Command Code",
           "4238b771b5": "Codebuff",
-          "b0b350de65": "Freebuff",
           "cbaf0c2e0b": "Cline",
           "1f8a19e9ad": "Autohand Code",
           "5e8eff11b3": "Auggie",
@@ -384,7 +383,8 @@
           "060d152fb5": "Trae",
           "d443a47995": "Prime Agent",
           "mimo_code_label": "MiMo Code",
-          "muse_label": "Muse"
+          "muse_label": "Muse",
+          "zcode_label": "ZCode"
         },
         "skill": {
           "cli": {
@@ -1596,8 +1596,7 @@
         "4725b0e931": "El escaneo de apertura rápida es demasiado grande (",
         "b227d88520": "{{value0}} archivos encontrados",
         "995be8ea22": "Copiar",
-        "cf144856dc": "Copiado",
-        "344f8a48dd": "on the host running the Quick Open scan to enable fast, gitignore-aware listing:"
+        "cf144856dc": "Copiado"
       },
       "SelectedTextCopyMenu": {
         "9b40d7b018": "Copiar"
@@ -2799,6 +2798,14 @@
             "e2fcf07c0d": "Orca no pudo guardar esta sesión de terminal porque el almacenamiento local está lleno o no permite escritura. Abre el analizador de espacio en disco para encontrar almacenamiento de espacios de trabajo que puedas limpiar.",
             "678c780a2c": "El espacio en disco no está disponible"
           },
+          "zcode": {
+            "missing": {
+              "tui": {
+                "title": "This ZCode build has no terminal UI",
+                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+              }
+            }
+          },
           "osc52": {
             "clipboard": {
               "blocked": {
@@ -3495,7 +3502,12 @@
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
-            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "usage": {
+              "noSubscription": {
+                "label": "Sin suscripción"
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "Host SSH"
@@ -3575,6 +3587,18 @@
             "stoppingLabel": "Stopping update",
             "stoppingTooltip": "Stopping the skill update…",
             "stoppingAria": "Stopping the skill update. Click to open details."
+          },
+          "NativeChatResumeStatusSegment": {
+            "failedLabelOne": "1 chat no pudo reanudarse",
+            "failedLabel": "{{value0}} chats no pudieron reanudarse",
+            "failedAriaOne": "1 chat no pudo reanudarse. Haz clic para ver los detalles.",
+            "failedAria": "{{value0}} chats no pudieron reanudarse. Haz clic para ver los detalles.",
+            "failedTooltip": "Chats que Orca no pudo reanudar tras el reinicio. Haz clic para ver los detalles.",
+            "checkLabelOne": "1 chat por revisar",
+            "checkLabel": "{{value0}} chats por revisar",
+            "checkAriaOne": "1 chat por revisar tras la reanudación. Haz clic para ver los detalles.",
+            "checkAria": "{{value0}} chats por revisar tras la reanudación. Haz clic para ver los detalles.",
+            "checkTooltip": "Chats que Orca no pudo reanudar, o no pudo confirmar que reanudó, tras el reinicio. Haz clic para ver los detalles."
           }
         }
       },
@@ -4729,6 +4753,7 @@
           "76865d827f": "Mover al grupo",
           "503ec0f8e6": "Nuevo grupo del proyecto",
           "3350101edb": "Copiar ruta",
+          "copyWorktreeName": "Copiar nombre del worktree",
           "f4475537d8": "Eliminar",
           "f5ac91531d": "Quitar proyecto de Orca",
           "b42391d8bf": "Eliminando…",
@@ -5308,7 +5333,6 @@
           "parkTerminal": "Park terminal"
         },
         "SidebarFeedbackImageAttachments": {
-          "screenshotsHint": "Attach up to {count} screenshots",
           "attachImages": "Attach",
           "removeImage": "Remove {{fileName}}"
         },
@@ -5319,6 +5343,18 @@
           "3b7ea51793": "Borrar búsqueda",
           "7f1c2e94a5": "El texto de búsqueda es demasiado largo: el tablero no está filtrado",
           "9a4d0f6b21": "Demasiado largo"
+        },
+        "LocalGitToolchainScanBanner": {
+          "xcodeLicenseTitle": "Acepta la licencia de Xcode para usar Git",
+          "xcodeLicenseBody": "macOS bloquea Git hasta que la aceptes. Ejecuta esto en la terminal y vuelve a Orca. Lo comprobará de nuevo automáticamente.",
+          "developerToolsTitle": "Instala las herramientas de línea de comandos de Apple",
+          "developerToolsBody": "Git necesita las herramientas de desarrollo de Apple. Ejecuta esto en la terminal y vuelve a Orca. Lo comprobará de nuevo automáticamente.",
+          "affectedOne": "Escaneo de worktrees en pausa para {{value0}}",
+          "affectedMany": "Escaneo de worktrees en pausa para {{value0}} proyectos",
+          "copyCommand": "Copiar comando",
+          "copied": "Comando copiado",
+          "retry": "Reintentar ahora",
+          "restored": "Git funciona de nuevo. Worktrees actualizados."
         }
       },
       "shared": {
@@ -5510,7 +5546,16 @@
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
           "codexConfigSyncManagedHomeUnavailable": "Orca no pudo leer los archivos de Codex de esta cuenta en este momento, por lo que es posible que la configuración no se esté sincronizando. Normalmente se resuelve solo: un antivirus o una herramienta de copia de seguridad puede bloquearlos brevemente.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "opencodeGo": {
+            "apiKey": {
+              "title": "Clave de API de OpenCode Go",
+              "description": "Opcional. De lo contrario, Orca usa la clave que OpenCode guardó cuando ejecutaste /connect y después OPENCODE_API_KEY.",
+              "label": "Clave de API de OpenCode Go",
+              "placeholder": "Déjalo en blanco para usar la clave guardada por /connect o OPENCODE_API_KEY",
+              "help": "Se usa para mostrar el uso de OpenCode Go en la barra de estado. La cookie de sesión de abajo solo es necesaria para cuentas antiguas de consola (OpenCode Black)."
+            }
+          }
         },
         "AdvancedPane": {
           "40b29e0bf3": "Reiniciar",
@@ -6010,7 +6055,16 @@
             "defaultCopy": "Elige cómo se abren las nuevas pestañas de terminal de agentes compatibles.",
             "defaultViewLabel": "Vista predeterminada de Chat UI",
             "defaultViewTerminal": "Chat en terminal",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "shellEnvNamesLabel": "Variables que se pasan desde tu shell",
+            "shellEnvNamePlaceholder": "Nombre de la variable",
+            "shellEnvNameAdd": "Agregar",
+            "shellEnvNameRemove": "Quitar {{value0}}",
+            "shellEnvNamesEmpty": "Aún no se han agregado variables.",
+            "shellEnvNamesAlwaysPassed": "PATH, la configuración regional y SSH_AUTH_SOCK se pasan siempre. Se aplica la próxima vez que un chat se inicie o se reanude.",
+            "shellEnvTitle": "Usar el entorno de tu shell",
+            "shellEnvCopy": "Los chats de Codex y Claude empiezan con todas las variables que exporta tu shell de inicio de sesión, igual que un terminal. Desactívalo para elegir cuáles reciben.",
+            "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell"
           },
           "agentDashboard": {
             "title": "Panel de agentes",
@@ -8600,6 +8654,20 @@
             }
           }
         },
+        "machine": {
+          "name": {
+            "search": {
+              "title": "Nombre del equipo",
+              "description": "Elige el nombre con el que otros dispositivos y hosts muestran este equipo.",
+              "machineName": "nombre del equipo",
+              "machine": "máquina",
+              "hostname": "hostname",
+              "computer": "equipo",
+              "rename": "renombrar",
+              "name": "nombre"
+            }
+          }
+        },
         "mobile": {
           "emulator": {
             "search": {
@@ -9900,6 +9968,12 @@
           "step2LocalDescription": "El teléfono debe poder alcanzar esta dirección por Tailscale o Wi‑Fi.",
           "step2RelayDescription": "Opcional. Elige la dirección Wi‑Fi o Tailscale que el teléfono usará cuando esté cerca — suele ser más rápido que Relay. Relay sigue funcionando cuando estás fuera.",
           "step2RelayDisclosure": "También usar una ruta local más rápida"
+        },
+        "MachineNameField": {
+          "label": "Nombre del equipo",
+          "description": "Otros dispositivos y hosts ven “{{name}}”. Déjalo en blanco para usar el nombre propio del equipo.",
+          "pending": "Otros dispositivos y hosts ven este nombre. Déjalo en blanco para usar el nombre detectado del equipo.",
+          "placeholder": "Detectado automáticamente"
         },
         "MobileRelayBetaAvailability": {
           "about": "Acerca de la beta de Orca Relay",
@@ -12992,8 +13066,6 @@
           "10ed04a685": "Las celdas del notebook ejecutan Python localmente en esta máquina desde la carpeta del notebook. Ejecuta solo celdas de archivos en los que confíes.",
           "9e06ae5d36": "¿Ejecutar código del notebook?",
           "d6f37a640b": "Notebook vacío",
-          "8c3b21369a": "nbformat",
-          "329764e9fc": "BETA",
           "15ec40a735": "Guardar notebook",
           "07e7d96612": "celdas",
           "c1601b23b2": "No se puede renderizar el cuaderno",
@@ -13008,8 +13080,32 @@
           "3e4cbf15ea": "Raw",
           "1833dbbc43": "Markdown",
           "7005960d73": "Código",
-          "59b6cd874b": "código",
-          "ba149053d5": "markdown"
+          "8dbe39a152": "Más acciones de celda",
+          "fa8fd99cf1": "Tipo de celda",
+          "kernelStarting": "Iniciando…",
+          "kernelInstalling": "Instalando ipykernel…",
+          "kernelDead": "El kernel murió",
+          "selectKernel": "Seleccionar kernel",
+          "notPython": "Ese archivo no es un intérprete de Python.",
+          "interrupt": "Interrumpir",
+          "restart": "Reiniciar kernel",
+          "trustFirst": "Ejecuta una celda para confiar primero en este notebook",
+          "runAll": "Ejecutar todo",
+          "clearAll": "Borrar todas las salidas",
+          "notResponding": "Sin respuesta. Reinicia el kernel",
+          "findingPython": "Buscando entornos de Python…",
+          "recommended": "Recomendado",
+          "pythonOnPath": "Python en PATH",
+          "browsePython": "Buscar Python…",
+          "missingIpykernelTitle": "¿Instalar ipykernel?",
+          "missingIpykernel": "Ejecutar celdas con '{{env}}' requiere el paquete ipykernel.",
+          "copyCommand": "Copiar comando",
+          "install": "Instalar",
+          "kernelStartFailed": "El kernel no pudo iniciarse.",
+          "noPython": "No se encontró Python en este equipo. Instálalo desde [python.org](https://www.python.org/downloads/) y vuelve a ejecutar la celda.",
+          "kernelDied": "El kernel murió.",
+          "localOnly": "Las celdas del notebook solo pueden ejecutarse para archivos de este equipo.",
+          "pythonOnly": "Solo los notebooks de Python pueden ejecutarse en Orca."
         },
         "MarkdownPreview": {
           "e4683f70c4": "Cancelar",
@@ -14589,6 +14685,50 @@
           "deleteTitle": "¿Eliminar el artefacto?",
           "deleteDescription": "“{{name}}” ya no estará disponible en su enlace público.",
           "delete": "Eliminar"
+        },
+        "ArtifactPublishButton": {
+          "a4a49da6af": "Compartir como artefacto",
+          "confirmTitle": "Compartir como artefacto",
+          "confirmDescription": "Esto publica el archivo actual en un enlace que cualquier persona con la URL puede ver.",
+          "accountTitle": "Cuenta de Orca",
+          "accountDescription": "Inicia sesión para crear y gestionar este enlace.",
+          "signInAgain": "Iniciar sesión de nuevo",
+          "signIn": "Iniciar sesión",
+          "publishingOffTitle": "El uso compartido de artefactos está desactivado",
+          "publishingOffDescription": "Obtén más información sobre los enlaces públicos y activa el uso compartido en Ajustes.",
+          "openSettings": "Abrir los ajustes de artefactos",
+          "sharing": "Compartiendo…",
+          "sharePublicLink": "Generar enlace",
+          "publishedDescription": "Cualquier persona con este enlace puede ver el archivo compartido.",
+          "checkingLink": "Comprobando si existe un enlace…",
+          "checkFailed": "No se pudo comprobar si existe un enlace.",
+          "tryAgain": "Reintentar"
+        },
+        "artifact-publish-flow": {
+          "9a078a0c65": "El uso compartido de artefactos no está disponible",
+          "bba20daa6d": "Inicia sesión en Orca e inténtalo de nuevo.",
+          "54b1805328": "No se pudo compartir el artefacto",
+          "430019efd0": "Artefacto compartido",
+          "2fc727c831": "Artefacto actualizado",
+          "5cb4f5ec36": "Copiar enlace",
+          "fbb5018602": "Este archivo está vacío.",
+          "6112db5a1c": "Este artefacto es demasiado grande para compartirlo.",
+          "e2ed5acd8c": "Orca no pudo leer este archivo. Ábrelo desde un espacio de trabajo e inténtalo de nuevo.",
+          "6d475e9b25": "Solo los archivos HTML y Markdown locales se pueden compartir como artefactos.",
+          "29a406be09": "Los artefactos deben contener texto."
+        },
+        "ArtifactPublishedLinkPanel": {
+          "copyLink": "Copiar enlace",
+          "openLink": "Abrir enlace",
+          "updating": "Actualizando…",
+          "update": "Actualizar el contenido compartido"
+        }
+      },
+      "native": {
+        "chat": {
+          "NativeChatStructuredSessionStatus": {
+            "starting": "{{value0}} todavía se está iniciando. Los mensajes esperan hasta que esté listo; cierra este chat para abandonarlo."
+          }
         }
       },
       "ComposerParentWorktreePicker": {
@@ -14597,6 +14737,36 @@
         "description": "Anida este espacio de trabajo bajo otro en la barra lateral. No cambia la rama base.",
         "searchPlaceholder": "Buscar espacios de trabajo...",
         "noMatches": "No hay coincidencias."
+      },
+      "NativeChatResumeOnRestartModal": {
+        "notContinuedOne": "1 chat no pudo reanudarse",
+        "notContinuedMany": "{{value0}} chats no pudieron reanudarse",
+        "notConfirmedOne": "No se pudo confirmar que 1 chat se reanudó",
+        "notConfirmedMany": "No se pudo confirmar que {{value0}} chats se reanudaron",
+        "notConfirmedOtherOne": "No se pudo confirmar que 1 otro chat se reanudó",
+        "notConfirmedOtherMany": "No se pudo confirmar que {{value0}} otros chats se reanudaron",
+        "show": "Mostrar",
+        "dismiss": "Descartar"
+      },
+      "NativeChatResumeOutcomeRow": {
+        "openChat": "Abrir chat",
+        "retry": "Reintentar",
+        "dismiss": "Descartar",
+        "unconfirmed": "No se pudo confirmar que el chat se reanudó",
+        "failed": "No se pudo reanudar",
+        "statusFor": "{{value0}}: {{value1}}",
+        "dismissChat": "Descartar \"{{value0}}\" en {{value1}}",
+        "toResume": "Para reanudar:"
+      },
+      "NativeChatResumeFailureGuidance": {
+        "unconfirmed": "Orca no pudo confirmar que el mensaje “continue” se entregó. Abre el chat y compruébalo antes de enviar otro.",
+        "superseded": "Abre el chat y responde. Llegó trabajo nuevo justo después del reinicio, así que Orca no envió su mensaje “continue”.",
+        "conflict": "Otra ventana de Orca o terminal aún conserva esta sesión. Ciérrala e inténtalo de nuevo.",
+        "ownershipUnknown": "Orca aún está determinando qué proceso posee esta sesión. Espera un momento e inténtalo de nuevo.",
+        "notAttached": "El chat no se reconectó. Reinténtalo o ábrelo para empezar un turno nuevo.",
+        "dispatchRejected": "El agente rechazó el mensaje “continue”. Abre el chat y envía uno tú mismo.",
+        "unsupported": "Orca no puede reanudar este chat. Ábrelo para ver dónde se detuvo.",
+        "fallback": "Orca no pudo reanudar este chat. Ábrelo para continuar manualmente."
       }
     },
     "i18n": {
@@ -14756,6 +14926,7 @@
       "scrollMessageToTop": "Desplazar este mensaje hacia arriba",
       "loadingEarlier": "Cargando…",
       "loadEarlier": "Cargar mensajes anteriores",
+      "loadingEarlierMessages": "Cargando mensajes anteriores…",
       "question": {
         "step": "Paso {{value0}}",
         "other": "Otro…",
@@ -14771,7 +14942,17 @@
         "allow": "Permitir",
         "deny": "Denegar"
       },
-      "launchPromptNotDelivered": "No entregado — revisa la terminal"
+      "launchPromptNotDelivered": "No entregado — revisa la terminal",
+      "fileLinks": {
+        "notFound": "No se encontró el archivo: {{value0}}",
+        "unverifiable": "No se pudo comprobar {{value0}}: {{value1}}",
+        "unresolved": "No se pudo resolver {{value0}} en este espacio de trabajo"
+      },
+      "contextUsage": {
+        "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
+        "title": "Contexto",
+        "estimated": "Estimado a partir de la última respuesta."
+      }
     },
     "tab": {
       "bar": {
@@ -14825,7 +15006,9 @@
       "agentUnavailable": "No se detectó {{agent}} en el host de este espacio de trabajo.",
       "sent": "El contexto de la sesión se envió a {{agent}} en una sesión nueva.",
       "deliveryFailed": "La nueva sesión de {{agent}} se inició, pero no se pudo enviar su contexto.",
-      "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}."
+      "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}.",
+      "deliveryUnconfirmed": "Orca no pudo confirmar que {{agent}} recibió el contexto de la sesión. Revisa la nueva sesión y pégalo tú mismo si su entrada está vacía.",
+      "copyPrompt": "Copiar prompt"
     },
     "terminalPane": {
       "TerminalContextMenu": {

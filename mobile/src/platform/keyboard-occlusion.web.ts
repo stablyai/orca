@@ -32,8 +32,8 @@ import { useEffect, useState } from 'react'
  * `scale` is read defensively because older WebViews do not implement it, and treating its absence
  * as zoomed would answer 0 for every keyboard on them.
  *
- * No `visualViewport` at all is 0 rather than a guess — that guard is in the effect below, which
- * is also the only thing that can act on it, and a second copy here was unreachable.
+ * No `visualViewport` at all is 0 rather than a guess — that guard is in the two readers below,
+ * which are the only things that can act on it.
  */
 function occlusion(viewport: VisualViewport): number {
   if ((viewport.scale ?? 1) !== 1) {
@@ -42,25 +42,59 @@ function occlusion(viewport: VisualViewport): number {
   return Math.max(0, window.innerHeight - (viewport.height + viewport.offsetTop))
 }
 
+/** Both shapes: `null` is what the DOM declares, `undefined` is a WebView without the property. */
+function visualViewport(): VisualViewport | undefined {
+  return window.visualViewport ?? undefined
+}
+
+/**
+ * The strip as events, with duration 0: the browser has already moved the viewport by the time it
+ * says so. Inside the shell nothing fires, because the shell shortens the WebView above the IME and
+ * the strip stays 0; in a plain mobile browser the keyboard overlays the page and this is the lift.
+ */
+export function subscribeSoftKeyboard(
+  onShow: (height: number, duration: number) => void,
+  onHide: (duration: number) => void
+): () => void {
+  const viewport = visualViewport()
+  if (viewport === undefined) {
+    return () => {}
+  }
+  let open = occlusion(viewport) > 0
+  const read = (): void => {
+    const height = occlusion(viewport)
+    if (height > 0) {
+      open = true
+      onShow(height, 0)
+    } else if (open) {
+      open = false
+      onHide(0)
+    }
+  }
+  viewport.addEventListener('resize', read)
+  viewport.addEventListener('scroll', read)
+
+  return () => {
+    viewport.removeEventListener('resize', read)
+    viewport.removeEventListener('scroll', read)
+  }
+}
+
+/** A keyboard already up when a composer opens gets no event at all. */
+export function currentSoftKeyboardHeight(): number {
+  const viewport = visualViewport()
+  return viewport === undefined ? 0 : occlusion(viewport)
+}
+
 export function useKeyboardOcclusion(): number {
   const [keyboardLift, setKeyboardLift] = useState(0)
 
   useEffect(() => {
-    // Both shapes: `null` is what the DOM declares, `undefined` is a WebView without the property.
-    const viewport = window.visualViewport
-    if (viewport === null || viewport === undefined) {
-      return
-    }
-    const read = (): void => setKeyboardLift(occlusion(viewport))
-    // Read once on mount: a composer opened while the keyboard is already up gets no event at all.
-    read()
-    viewport.addEventListener('resize', read)
-    viewport.addEventListener('scroll', read)
-
-    return () => {
-      viewport.removeEventListener('resize', read)
-      viewport.removeEventListener('scroll', read)
-    }
+    setKeyboardLift(currentSoftKeyboardHeight())
+    return subscribeSoftKeyboard(
+      (height) => setKeyboardLift(height),
+      () => setKeyboardLift(0)
+    )
   }, [])
 
   return keyboardLift

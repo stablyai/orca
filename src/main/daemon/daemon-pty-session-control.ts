@@ -10,6 +10,8 @@ import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import type { PtySpawnResult } from '../providers/types'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
+
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
 const MAX_TOMBSTONES = 1000
@@ -213,7 +215,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
   }
 
   protected buildColdRestorePayload(restoreInfo: ColdRestoreInfo): ColdRestorePayload | null {
-    // Why: alt-screen prefers normal scrollback, else snapshotAnsi alone — not rehydrate, which starts with \x1b[?1049h that POST_REPLAY_MODE_RESET won't undo — so a hibernated TUI's last frame isn't blank on wake.
+    // Why no rehydrate on alt-screen: its ?1049h would paint the TUI frame on the alt buffer, which the appended ground's ?1049l then discards.
     const scrollback = restoreInfo.modes.alternateScreen
       ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
       : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
@@ -221,7 +223,8 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
       return null
     }
     return {
-      scrollback,
+      // Why grounded here too: main's mirror seeds from this payload, not the renderer's reset.
+      scrollback: `${scrollback}${PROCESS_BOUNDARY_GROUND}`,
       cwd: restoreInfo.cwd,
       cols: restoreInfo.cols,
       rows: restoreInfo.rows,

@@ -5,10 +5,9 @@
 // into different eligibility or different double-fire protection.
 //
 // Resume itself acquires a provider child, not a new send. The first resume-capable hold on a
-// childless session
-// re-acquires the provider at the cursor the record already proved — Claude's `resume` +
-// `resumeSessionAt`, Codex's thread id — which is native continuation. Nothing re-sends the user's
-// prompt: that is what makes an agent redo work it already finished.
+// childless session re-acquires the provider's own conversation — Claude's `resume` by session id,
+// Codex's thread id — which is native continuation. Nothing re-sends the user's prompt: that is
+// what makes an agent redo work it already finished.
 
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { StructuredAgentSessionResumeCandidate } from './structured-agent-session-restart-resume-set'
@@ -19,6 +18,9 @@ export const STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY = 3
 
 export const STRUCTURED_AGENT_SESSION_RESUME_IN_PROGRESS =
   'agent_session_resume_already_in_progress'
+
+/** The chat stopped being resumable between listing and acting; nothing was attempted. */
+export const STRUCTURED_AGENT_SESSION_RESUME_NOT_ELIGIBLE = 'agent_session_resume_not_eligible'
 
 export type StructuredAgentSessionResumeOutcome = {
   sessionId: string
@@ -112,7 +114,7 @@ async function resumeOne(
         return {
           sessionId,
           outcome: 'refused' as const,
-          reason: 'agent_session_resume_not_eligible'
+          reason: STRUCTURED_AGENT_SESSION_RESUME_NOT_ELIGIBLE
         }
       }
       await deps.resume(sessionId)

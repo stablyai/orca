@@ -7,9 +7,10 @@ import { notify } from './host-notify'
 import { flog } from './viewport-transform'
 import { attachWebglAddon } from './webgl-recovery'
 import type { TerminalDocumentHost } from './document-host-seams'
+import { documentSourceText } from './document-module-source.test-support'
 
 /**
- * The eight host seams the page sets, and the window reads and writes they default to.
+ * The host seams the page sets, and the window reads and writes they default to.
  *
  * The document reached its host through `window.ReactNativeWebView` and built its engine from
  * `window.Terminal` and the two addon globals the engine bundle installs. On the page neither is
@@ -17,7 +18,7 @@ import type { TerminalDocumentHost } from './document-host-seams'
  * a terminal notify posted through it would put raw terminal JSON into the bridge's own channel,
  * and there is no engine bundle at all because the page imports xterm as a module.
  *
- * So each of the eight is a scope field. The default is the window read the document already did,
+ * So each is a scope field. The default is the window read the document already did,
  * unchanged and still performed at call time rather than captured when the scope is built; the
  * page assigns the field instead. Both halves are asserted here, because a seam whose default
  * quietly stopped reading the window would leave the native document mute with every other
@@ -195,9 +196,35 @@ describe('the document host seams, by default', () => {
     expect(built.createUnicode11Addon()).toBeInstanceOf(Unicode11Addon)
     expect(built.createWebglAddon()).toBeInstanceOf(WebglAddon)
   })
+  it('frames the viewport as the window, read at call time', () => {
+    const scope = createTerminalDocumentScope()
+    vi.stubGlobal('innerWidth', 381)
+    vi.stubGlobal('innerHeight', 612)
+    expect(scope.viewportRect()).toEqual({ left: 0, top: 0, width: 381, height: 612 })
+  })
 })
 
 describe('the document host seams, once the page sets them', () => {
+  it('fits a measure with no container height to the host rather than the window', () => {
+    // The page's host is one element on a page that is taller and wider than it; the window is
+    // happy-dom's 1024x768, so a fit read off the window would answer 136x51.
+    const cell = { width: 7.5, height: 15 }
+    const terminal = Object.assign(terminalDouble(), {
+      _core: { _renderService: { dimensions: { css: { cell } } } }
+    })
+    const posted: Record<string, unknown>[] = []
+    const scope = startedScope({
+      createTerminal: () => terminal,
+      postToHost: (message) => posted.push(message),
+      viewportRect: () => ({ left: 0, top: 82, width: 390, height: 600 })
+    })
+    handleMsg(scope, { type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false })
+    handleMsg(scope, { type: 'measure' })
+    expect(posted.filter((message) => message.type === 'measure-result')).toEqual([
+      { type: 'measure-result', cols: 52, rows: 40 }
+    ])
+  })
+
   it('routes every notify to the field and nothing to the bridge', () => {
     const postMessage = vi.fn<(data: string) => void>()
     vi.stubGlobal('ReactNativeWebView', { postMessage })
@@ -267,5 +294,67 @@ describe('the document host seams, once the page sets them', () => {
 
   it('reports no webgl addon as a DOM-renderer fallback rather than as a failure', () => {
     expect(attachWebglAddon(startedScope({ createWebglAddon: () => null }), true)).toBe(false)
+  })
+})
+
+describe("the document's viewport", () => {
+  it('refits when the host says its box changed, and not on a window resize it does not own', () => {
+    const changes: (() => void)[] = []
+    const scope = startedScope({
+      createTerminal: () => terminalDouble(),
+      observeViewport: (onChange) => {
+        changes.push(onChange)
+        return () => {}
+      }
+    })
+    handleMsg(scope, { type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false })
+    scope.panX = 50
+    window.dispatchEvent(new Event('resize'))
+    expect(scope.panX).toBe(50)
+    expect(changes).toHaveLength(1)
+    changes[0]!()
+    expect(scope.panX).toBe(0)
+  })
+
+  it('refits on a window resize by default, where the window is the frame', () => {
+    const scope = startedScope({ createTerminal: () => terminalDouble() })
+    handleMsg(scope, { type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false })
+    scope.panX = 50
+    window.dispatchEvent(new Event('resize'))
+    expect(scope.panX).toBe(0)
+  })
+
+  it('is read through the seam everywhere, never off the window directly', () => {
+    // The default in `document-host-seams.ts` is the one window read, so the census runs over
+    // every other module; a raw read elsewhere sizes a page terminal to the whole page.
+    const raw = documentSourceText()
+      .split('\n')
+      .filter((line) => /window\.inner(Height|Width)|\binner(Height|Width)\b/.test(line))
+    expect(raw).toEqual([
+      '  return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }'
+    ])
+  })
+
+  it('maps a client point into the grid only through viewportPoint', () => {
+    // On the page the host's origin is not the window's, so a client coordinate used against
+    // anything but another client coordinate lands rows low. Differences of two need no origin.
+    const arithmetic = documentSourceText()
+      .split('\n')
+      .filter((line) => !/^\s*(\*|\/\/)/.test(line))
+      .filter((line) => /client[XY]\s*[-+*/<>]|[-+*/<>]=?\s*[\w.[\]]*client[XY]\b/.test(line))
+      .map((line) => line.trim())
+      .sort()
+    expect(arithmetic).toEqual([
+      'const dx = Math.abs(e.clientX - gesture.startX)',
+      'const dx = Math.abs(mt.clientX - scope.tapCandidate.x)',
+      'const dx = Math.abs(t.clientX - scope.longPressOrigin.x)',
+      'const dx = a.clientX - b.clientX,',
+      'const dy = Math.abs(e.clientY - gesture.startY)',
+      'const dy = Math.abs(mt.clientY - scope.tapCandidate.y)',
+      'const dy = Math.abs(t.clientY - scope.longPressOrigin.y)',
+      'dy = a.clientY - b.clientY',
+      'return viewportPoint(scope, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2)',
+      'return { x: clientX - frame.left, y: clientY - frame.top }'
+    ])
   })
 })

@@ -7,7 +7,10 @@ import type {
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
-import { agentJournalLinkageFields } from '../../../shared/agent-session-journal-producer'
+import {
+  agentJournalLinkageFields,
+  namesAgentJournalProducer
+} from '../../../shared/agent-session-journal-producer'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { JournalReducerState } from './journal-reducer'
 import type {
@@ -100,18 +103,57 @@ function boundedDispatchReason(input: ResolveDispatchInput): string | null {
 }
 
 export type JournalLifecycleMutationInput =
-  | { kind: 'item'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+  | {
+      kind: 'item'
+      identity: AgentJournalItemIdentity
+      body: AgentJournalItemBody
+      /** Who wrote the row. Absent ⇒ the session's own agent on a first write,
+       *  and the row's existing producer on a revision. */
+      linkage?: AgentJournalProducerLinkage
+    }
   | { kind: 'tombstone'; identity: AgentJournalItemIdentity }
+
+/** An item mutation from a writer that knows who produced the row. Needed
+ *  because a batch can CREATE a row — a Codex child's prompt, or its item
+ *  settled before any checkpoint landed — and one batch can mix producers.
+ *  The session's own rows carry no key at all: absence is the claim. */
+export function journalLifecycleItemMutation(
+  producer: AgentJournalProducerLinkage,
+  identity: AgentJournalItemIdentity,
+  body: AgentJournalItemBody
+): JournalLifecycleMutationInput {
+  return namesAgentJournalProducer(producer)
+    ? { kind: 'item', identity, body, linkage: agentJournalLinkageFields(producer) }
+    : { kind: 'item', identity, body }
+}
+
+/** The persisted form of one mutation, shared with the partitioner's size probe
+ *  so a chunk is measured with the linkage it will actually carry. */
+export function journalLifecycleMutationRow(
+  mutation: JournalLifecycleMutationInput,
+  itemId: string,
+  revision: number
+): JournalLifecycleMutation {
+  return mutation.kind === 'item'
+    ? {
+        kind: 'item',
+        itemId,
+        revision,
+        body: mutation.body,
+        ...agentJournalLinkageFields(mutation.linkage)
+      }
+    : { kind: 'tombstone', itemId, revision }
+}
 
 export function journalLifecycleBatchRowBuilder(
   state: () => JournalReducerState,
   settlementId: string,
   mutations: readonly JournalLifecycleMutationInput[],
-  /** No producer linkage: one batch row covers N mutations, so a row-level
-   *  producer would stamp whoever opened the batch onto every one of them. The
-   *  reducer still READS linkage off a batch row, because a row may come from a
-   *  host that writes one; a mixed-producer batch would have to stamp per
-   *  mutation, which nothing needs yet. */
+  /** No ROW-level producer: one batch row covers N mutations, so a row-level
+   *  producer would stamp whoever opened the batch onto every one of them.
+   *  An item mutation names its own, or none to keep the row's existing one.
+   *  The reducer still reads row-level linkage as the fallback for a mutation
+   *  that names none, because a row may come from a host that wrote one. */
   options: { fence: number; recovered?: true }
 ): RowBuilder<JournalLifecycleBatchRow> {
   return (seq, ts) => {
@@ -130,9 +172,7 @@ export function journalLifecycleBatchRowBuilder(
             current.tombstones.get(resolved) ?? 0
           )) + 1
       revisions.set(resolved, revision)
-      return mutation.kind === 'item'
-        ? { kind: 'item', itemId, revision, body: mutation.body }
-        : { kind: 'tombstone', itemId, revision }
+      return journalLifecycleMutationRow(mutation, itemId, revision)
     })
     const row: JournalLifecycleBatchRow = {
       kind: 'lifecycle-batch',

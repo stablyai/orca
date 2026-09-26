@@ -137,7 +137,7 @@ describe('codex goal lifecycle admission', () => {
       appendTombstone: () => {},
       publish: () => {}
     } satisfies StructuredAgentSessionEventSink
-    const goals = new CodexJournalGoals(sink)
+    const goals = new CodexJournalGoals(sink, () => ({}))
     const update = (goal: Record<string, unknown> = {}) =>
       goals.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame(goal) })
     const clear = () =>
@@ -178,7 +178,7 @@ describe('codex goal lifecycle admission', () => {
       appendTombstone: () => {},
       publish: () => {}
     } satisfies StructuredAgentSessionEventSink
-    const goals = new CodexJournalGoals(sink)
+    const goals = new CodexJournalGoals(sink, () => ({}))
     const send = (threadId: string) =>
       goals.handle({ threadId, method: 'thread/goal/updated', params: goalFrame() })
 
@@ -211,7 +211,7 @@ describe('codex goal lifecycle admission', () => {
       appendTombstone: () => {},
       publish: () => {}
     } satisfies StructuredAgentSessionEventSink
-    const goals = new CodexJournalGoals(sink)
+    const goals = new CodexJournalGoals(sink, () => ({}))
     const event = { threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() }
 
     goals.handle(event)

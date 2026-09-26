@@ -1,4 +1,5 @@
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
+import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
 import { RelayMovedSchema } from '../../../src/shared/mobile-relay-phone-protocol'
 
 export class RelayDirectorMoveNotNewerError extends Error {
@@ -28,7 +29,7 @@ export function resolvePairingInviteThroughDirector(args: {
   createSocket?: (url: string) => WebSocket
 }): Promise<PairingRelay> {
   const socket = (args.createSocket ?? ((url) => new WebSocket(url)))(
-    directorWebSocketUrl(args.relay)
+    relayConnectWebSocketUrl(args.relay.directorUrl, args.relay.relayHostId)
   )
   return new Promise((resolve, reject) => {
     let settled = false
@@ -100,11 +101,4 @@ export function resolvePairingInviteThroughDirector(args: {
       reject(error)
     }
   })
-}
-
-export function directorWebSocketUrl(relay: PairingRelay): string {
-  const url = new URL(relay.directorUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
 }

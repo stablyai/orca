@@ -356,7 +356,7 @@ describe('terminal send CLI', () => {
     ])
   })
 
-  it('explains that Structured Chat blocked a refused send and how to recover', async () => {
+  it("reports an older host's lease refusal as a plain refused send", async () => {
     const call = vi.fn().mockResolvedValue({
       result: {
         send: {
@@ -390,9 +390,7 @@ describe('terminal send CLI', () => {
     })
 
     expect(client.getCliStatus).toHaveBeenCalledOnce()
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringMatching(/Structured Chat.*Switch it to Terminal.*orca terminal send/s)
-    )
+    expect(console.log).toHaveBeenCalledWith('Input refused by term-1.')
     expect(process.exitCode).toBe(1)
   })
 

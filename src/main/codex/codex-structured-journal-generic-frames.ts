@@ -12,9 +12,16 @@ import {
   MAX_CODEX_GENERIC_TURN_BUCKETS
 } from './codex-structured-journal-limits'
 import { readCodexTurnId } from './codex-structured-thread-facts'
+import type { CodexRowLinkage } from './codex-subagent-linkage'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
-type SuppressedSummary = { count: number; publishedCount: number }
+/** `producer` is absent only on the overflow bucket, which pools every thread's
+ *  evicted turns and so has no single author: it reads as the session's own. */
+type SuppressedSummary = {
+  count: number
+  publishedCount: number
+  producer?: { threadId: string; turnId: string }
+}
 
 function boundedTurnBucket(threadId: string, turnId: string): string {
   const encoded = `${encodeURIComponent(threadId)}:${encodeURIComponent(turnId)}`
@@ -51,7 +58,9 @@ export class CodexJournalGenericFrames {
   private cancelSuppressionFlush: (() => void) | null = null
 
   constructor(
-    private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'schedule' | 'coalesceMs'>,
+    private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'schedule' | 'coalesceMs'> & {
+      linkageFor: CodexRowLinkage
+    },
     private readonly activeTurn: (threadId: string) => string | null
   ) {
     this.schedule = deps.schedule ?? defaultSchedule
@@ -61,7 +70,7 @@ export class CodexJournalGenericFrames {
   appendUnhandled(
     kind: string,
     payload: unknown,
-    threadId = 'session'
+    threadId: string
   ): CodexJournalTranslationAdmission {
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
     // A frame the classifier declines is deliberately not journaled, which is success.
@@ -69,14 +78,15 @@ export class CodexJournalGenericFrames {
     if (!translated) {
       return CODEX_JOURNAL_ADMITTED
     }
-    const turnId = readCodexTurnId(payload) ?? this.activeTurn(threadId) ?? 'outside-turn'
+    const frameTurnId = readCodexTurnId(payload) ?? this.activeTurn(threadId)
+    const turnId = frameTurnId ?? 'outside-turn'
     const bucket = this.bucketFor(threadId, turnId)
     const rowCount = this.genericRowsByTurn.get(bucket) ?? 0
     // The cap bounds noise, never evidence: an error frame is always journaled, and
     // capped frames stay countable through one summary row per turn.
     const isError = translated.classification === 'error-surface'
     if (!isError && rowCount >= MAX_CODEX_GENERIC_ROWS_PER_TURN) {
-      this.addSuppressed(bucket, 1)
+      this.addSuppressed(bucket, 1, { threadId, turnId })
       this.recordBucket(bucket)
       this.scheduleSuppressedRows()
       return CODEX_JOURNAL_ADMITTED
@@ -88,16 +98,14 @@ export class CodexJournalGenericFrames {
       }
     }
     this.fallbackSequence += 1
+    const identity = {
+      provider: 'orca' as const,
+      clientMessageId: `provider-frame:codex:${this.fallbackSequence}`
+    }
+    const linkage = this.deps.linkageFor(threadId, frameTurnId)
     const admission = this.deps.sink.tryAppendItem
-      ? this.deps.sink.tryAppendItem(
-          { provider: 'orca', clientMessageId: `provider-frame:codex:${this.fallbackSequence}` },
-          translated.body
-        )
-      : (this.deps.sink.appendItem(
-          { provider: 'orca', clientMessageId: `provider-frame:codex:${this.fallbackSequence}` },
-          translated.body
-        ),
-        CODEX_JOURNAL_ADMITTED)
+      ? this.deps.sink.tryAppendItem(identity, translated.body, linkage)
+      : (this.deps.sink.appendItem(identity, translated.body, linkage), CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
       this.fallbackSequence -= 1
       return admission
@@ -109,7 +117,7 @@ export class CodexJournalGenericFrames {
 
   suppress(threadId: string, turnId: string, count = 1): void {
     const bucket = this.bucketFor(threadId, turnId)
-    this.addSuppressed(bucket, count)
+    this.addSuppressed(bucket, count, { threadId, turnId })
     this.recordBucket(bucket)
   }
 
@@ -127,20 +135,19 @@ export class CodexJournalGenericFrames {
         bucket === OVERFLOW_BUCKET
           ? `${summary.count} more provider notification${summary.count === 1 ? '' : 's'} not shown across evicted turns`
           : `${summary.count} more provider notification${summary.count === 1 ? '' : 's'} not shown for this turn`
+      const identity = {
+        provider: 'orca' as const,
+        clientMessageId: `provider-frame-suppressed:codex:${bucket}`
+      }
+      const options = {
+        coalescingKey: `provider-frame-suppressed:codex:${bucket}`,
+        ...(summary.producer
+          ? this.deps.linkageFor(summary.producer.threadId, summary.producer.turnId)
+          : {})
+      }
       const admission = this.deps.sink.tryAppendItem
-        ? this.deps.sink.tryAppendItem(
-            { provider: 'orca', clientMessageId: `provider-frame-suppressed:codex:${bucket}` },
-            {
-              kind: 'status',
-              text
-            },
-            { coalescingKey: `provider-frame-suppressed:codex:${bucket}` }
-          )
-        : (this.deps.sink.appendItem(
-            { provider: 'orca', clientMessageId: `provider-frame-suppressed:codex:${bucket}` },
-            { kind: 'status', text },
-            { coalescingKey: `provider-frame-suppressed:codex:${bucket}` }
-          ),
+        ? this.deps.sink.tryAppendItem(identity, { kind: 'status', text }, options)
+        : (this.deps.sink.appendItem(identity, { kind: 'status', text }, options),
           CODEX_JOURNAL_ADMITTED)
       if (!admission.accepted) {
         blocked ??= admission
@@ -188,8 +195,16 @@ export class CodexJournalGenericFrames {
       : requested
   }
 
-  private addSuppressed(bucket: string, count: number): void {
-    const summary = this.suppressedRowsByTurn.get(bucket) ?? { count: 0, publishedCount: 0 }
+  private addSuppressed(
+    bucket: string,
+    count: number,
+    producer?: SuppressedSummary['producer']
+  ): void {
+    const summary = this.suppressedRowsByTurn.get(bucket) ?? {
+      count: 0,
+      publishedCount: 0,
+      ...(producer && bucket !== OVERFLOW_BUCKET ? { producer } : {})
+    }
     summary.count += count
     this.suppressedRowsByTurn.set(bucket, summary)
   }

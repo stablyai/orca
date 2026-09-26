@@ -80,6 +80,33 @@ function queries(
 }
 
 describe('RuntimeManagedWorktreeQueries.listDetected', () => {
+  it('stamps a scanned listing with the generation its scan began at', async () => {
+    resetLocalWorktreeScanGenerationsForTests()
+    const repo = folderRepo({ kind: 'git', path: '/source/git-app' })
+    const store = {
+      getRepos: () => [repo],
+      getRepo: () => repo,
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      setWorktreeMeta: vi.fn(),
+      getAllWorktreeLineage: () => ({}),
+      getSettings: () => settings
+    } as unknown as RuntimeStore
+    const atScanStart = getLocalWorktreeScanGeneration(repo.id)
+    const scanRepo = vi.fn(async () => {
+      // A mutation lands after the scan settles; the listing still names the catalog it scanned.
+      return { ok: true as const, worktrees: [] }
+    })
+
+    const listing = await queries(store, { scanRepo }).listDetected(repo)
+    bumpLocalWorktreeScanGeneration(repo.id)
+
+    expect(listing.authoritative).toBe(true)
+    expect(listing.catalogVersion?.sequence).toBe(atScanStart)
+    expect(listing.catalogVersion?.epoch).toEqual(expect.any(String))
+    expect(getLocalWorktreeScanGeneration(repo.id)).toBeGreaterThan(atScanStart)
+  })
+
   it("does not project another host's folder metadata", async () => {
     const local = folderRepo()
     const remote = folderRepo({ connectionId: 'build-box', displayName: 'Remote app' })
