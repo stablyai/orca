@@ -413,10 +413,8 @@ describe('terminal exit records', () => {
 
     const { snapshotVersion: _retiredVersion, ...retiredView } = retired
     const { snapshotVersion: _keptVersion, ...keptView } = projected
-    // Why parsed, not string-equal: clients read fields by name, so key order is not on the wire.
-    expect(JSON.parse(JSON.stringify(keptView))).toStrictEqual(
-      JSON.parse(JSON.stringify(retiredView))
-    )
+    // Why structural, not string-equal: clients read fields by name, so key order is not on the wire.
+    expect(keptView).toEqual(retiredView)
   })
 
   it('routes a user activation of a desktop-held exited leaf to the desktop pane', async () => {
