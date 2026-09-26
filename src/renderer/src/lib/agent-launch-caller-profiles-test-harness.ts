@@ -233,7 +233,8 @@ export const AGENT_LAUNCH_CALLER_PROFILES: readonly AgentLaunchCallerProfile[] =
     id: 'session-continuation',
     caller: 'src/renderer/src/lib/launch-agent-session-continuation.ts',
     sourceMarkers: [
-      "promptDelivery: agent === 'claude' ? 'draft' : 'submit-after-ready'",
+      "const promptDelivery = agent === 'claude' ? 'draft' : 'submit-after-ready'",
+      '\n    promptDelivery,\n',
       'onPromptDelivered: () =>'
     ],
     args: {
