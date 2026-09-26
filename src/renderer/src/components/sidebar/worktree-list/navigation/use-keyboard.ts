@@ -3,6 +3,7 @@ import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { beginWorktreeListKeyboardNavigation } from '@/lib/worktree-list-keyboard-navigation'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
@@ -16,6 +17,7 @@ import {
   resolveCycledWorktreeId
 } from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
+import { focusActiveWorkspaceTerminal } from './focus-active-workspace-terminal'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -147,15 +149,11 @@ export function useWorktreeListKeyboardNavigation(args: {
           return
         }
         markDirectScrollInput()
+        beginWorktreeListKeyboardNavigation(e.currentTarget)
         navigateWorktree(e.key === 'ArrowUp' ? 'up' : 'down')
         e.preventDefault()
       } else if (e.key === 'Enter') {
-        const helper = document.querySelector(
-          '.xterm-helper-textarea'
-        ) as HTMLTextAreaElement | null
-        if (helper) {
-          helper.focus()
-        }
+        focusActiveWorkspaceTerminal()
         e.preventDefault()
       } else if (['PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) {
         markDirectScrollInput()

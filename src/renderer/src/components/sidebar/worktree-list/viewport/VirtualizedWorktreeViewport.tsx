@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { endWorktreeListKeyboardNavigation } from '@/lib/worktree-list-keyboard-navigation'
 import { WorktreeListScrollToTopButton } from '../../WorktreeListScrollToTopButton'
 import { renderWorktreeSidebarDropIndicators } from './drop-indicators'
 import { useWorktreeListScrollToTop } from './use-scroll-to-top'
@@ -265,6 +266,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         clearRevealHighlightFrame()
         clearRevealHighlightTimeout()
         clearWorktreeDrag()
+        // Why: removing a focused list doesn't reliably fire focusout, so drop the navigation mark here.
+        endWorktreeListKeyboardNavigation()
       }
       scrollRef.current = node
       setScrollElement(node)

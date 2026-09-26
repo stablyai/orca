@@ -4,6 +4,10 @@ import { PaneManager } from './pane-manager'
 import { createInitialManagedPane } from './pane-manager-pane-creation'
 import type { PaneManagerHost } from './pane-manager-host'
 import type { ManagedPaneInternal } from './pane-manager-types'
+import {
+  beginWorktreeListKeyboardNavigation,
+  endWorktreeListKeyboardNavigation
+} from '../worktree-list-keyboard-navigation'
 
 vi.mock('./pane-lifecycle', () => ({
   openTerminal: vi.fn(),
@@ -13,6 +17,7 @@ vi.mock('./pane-lifecycle', () => ({
 }))
 
 afterEach(() => {
+  endWorktreeListKeyboardNavigation()
   document.body.innerHTML = ''
 })
 
@@ -101,6 +106,26 @@ describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
   it('allows focus with only persistent sidebar chrome', () => {
     const f = fixture()
     overlay('listbox').setAttribute('data-worktree-sidebar', '')
+    focus(f)
+    expect(document.activeElement).toBe(f.textarea)
+  })
+
+  it('keeps focus on a workspace list being navigated with arrow keys', () => {
+    const f = fixture()
+    const sidebar = overlay('listbox')
+    sidebar.setAttribute('data-worktree-sidebar', '')
+    beginWorktreeListKeyboardNavigation(sidebar)
+    focus(f)
+    expect(document.activeElement).toBe(sidebar)
+    expect(f.pane.terminal.focus).not.toHaveBeenCalled()
+  })
+
+  it('focuses the terminal again after a click ends list navigation', () => {
+    const f = fixture()
+    const sidebar = overlay('listbox')
+    sidebar.setAttribute('data-worktree-sidebar', '')
+    beginWorktreeListKeyboardNavigation(sidebar)
+    sidebar.dispatchEvent(new Event('pointerdown'))
     focus(f)
     expect(document.activeElement).toBe(f.textarea)
   })
