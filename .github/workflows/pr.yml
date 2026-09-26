@@ -23,8 +23,10 @@ jobs:
   # Per-job outputs also skip git-compat/xterm/packaging/shell when those
   # inputs are unchanged; empty diffs fail closed and run everything.
   code_paths:
-    name: detect code-relevant changes
-    runs-on: ubuntu-latest
+    name: detect changes and check repository guards
+    # Reuse one lightweight checkout for detection and the always-required guards.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       native_cache_changed: ${{ steps.filter.outputs.native_cache_changed }}
@@ -56,7 +58,26 @@ jobs:
           # few this job actually reads on demand.
           fetch-depth: 0
           filter: blob:none
+          sparse-checkout: |
+            /package.json
+            /README.md
+            /docs/readme/
+            /.github/scripts/check-root-directory-entries.mjs
+            /config/scripts/check-readme-local-links.mjs
+            /config/scripts/pr-code-change-scope.mjs
+            /config/scripts/pr-e2e-source-routing.mjs
+          sparse-checkout-cone-mode: false
           persist-credentials: false
+
+      - name: Reject new root-level files and folders
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
+
+      # The full Git index retains link targets outside the sparse working tree.
+      - name: Check README local links
+        run: node config/scripts/check-readme-local-links.mjs
 
       - name: Classify changed paths
         id: filter
@@ -249,37 +270,11 @@ jobs:
       - name: Verify macOS entitlements
         run: pnpm verify:macos-entitlements
 
-  root_directory_guard:
-    name: root directory guard
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          # Why blob:none: full history is needed for the merge-base diff, but historical
-          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
-          # few this job actually reads on demand.
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-
-      - name: Reject new root-level files and folders
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
-
-      # Why here: the READMEs embed media owned by docs/site and resources/onboarding,
-      # and the classifier skips static_analysis for docs-only diffs. This job runs
-      # on every PR and needs no install.
-      - name: Check README local links
-        run: node config/scripts/check-readme-local-links.mjs
-
   typecheck:
     needs: [code_paths]
     if: needs.code_paths.outputs.typecheck == 'true'
-    runs-on: ubuntu-latest
+    # Typechecking uses no native runtime, so it can use the free public ARM runner.
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -1092,7 +1087,6 @@ jobs:
     needs:
       - code_paths
       - static_analysis
-      - root_directory_guard
       - typecheck
       - git_compatibility
       - codex_index_heal_contract
@@ -1105,7 +1099,9 @@ jobs:
       - managed_hook_node18
       - package
       - package_windows
-    runs-on: ubuntu-latest
+    # Evaluating job results only needs the lightweight container runner.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
 
     steps:
       # Why: e2e is deliberately absent from needs. The suite is currently red on
@@ -1122,7 +1118,6 @@ jobs:
           SHOULD_RUN: ${{ needs.code_paths.outputs.should_run }}
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
           STATIC_ANALYSIS_SHOULD_RUN: ${{ needs.code_paths.outputs.static_analysis }}
-          ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           TYPECHECK_SHOULD_RUN: ${{ needs.code_paths.outputs.typecheck }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
@@ -1149,9 +1144,6 @@ jobs:
           PACKAGE_WINDOWS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows }}
         run: |
           if [ "$CODE_PATHS" != "success" ]; then
-            exit 1
-          fi
-          if [ "$ROOT_DIRECTORY_GUARD" != "success" ]; then
             exit 1
           fi
           if [ "$SHOULD_RUN" != "true" ]; then
