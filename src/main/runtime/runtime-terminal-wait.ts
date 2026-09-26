@@ -154,10 +154,12 @@ export class RuntimeTerminalWait {
               // dismissed. Its visible composer is authoritative, so probe whenever the
               // pane is identified as AGY (or its banner is present), regardless of that
               // stale status.
-              (paneAgent === 'antigravity' ||
+              (paneAgent === 'cline' ||
+                paneAgent === 'antigravity' ||
                 hasAntigravityTerminalHeader(livePtyWaitText) ||
                 live.pty.lastAgentStatus === null) &&
-              (livePtyWaitText.length === 0 ||
+              (paneAgent === 'cline' ||
+                livePtyWaitText.length === 0 ||
                 paneAgent === 'antigravity' ||
                 hasAntigravityTerminalHeader(livePtyWaitText))
             ) {
@@ -254,10 +256,12 @@ export class RuntimeTerminalWait {
             this.polls.startLeaf(waiter, live.leaf)
             const paneAgent = this.deps.getPaneAgent(live.leaf.ptyId)
             if (
-              (paneAgent === 'antigravity' ||
+              (paneAgent === 'cline' ||
+                paneAgent === 'antigravity' ||
                 hasAntigravityTerminalHeader(liveLeafWaitText) ||
                 live.leaf.lastAgentStatus === null) &&
-              (liveLeafWaitText.length === 0 ||
+              (paneAgent === 'cline' ||
+                liveLeafWaitText.length === 0 ||
                 paneAgent === 'antigravity' ||
                 hasAntigravityTerminalHeader(liveLeafWaitText))
             ) {

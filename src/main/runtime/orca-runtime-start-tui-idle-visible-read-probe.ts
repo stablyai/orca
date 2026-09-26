@@ -26,9 +26,13 @@ import {
 import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
 import { isAntigravityReadyPromptSnapshot } from './antigravity-terminal-readiness'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { observeClineStartup } from './cline-startup-probe'
+import { hasFreshWorkingFirstPartyStatus } from './tui-idle-evidence'
 
 export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
-  /** One bounded look at the provider's screen for an adopted PTY whose retained
+  /** Cline startup uses bounded stable-screen sampling because its cursor-addressed
+   *  composer cannot be reconstructed from retained text. Other agents get one
+   *  bounded look at the provider's screen for an adopted PTY whose retained
    *  readiness metadata was lost. Deliberately single-shot: it answers "is the
    *  screen already showing a settled prompt", and the poll above owns every
    *  later transition. A provider screen that is still working when this fires
@@ -38,6 +42,39 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     waiterTimeoutMs: number,
     agent: TuiAgent | null
   ): void {
+    if (agent === 'cline') {
+      void observeClineStartup({
+        timeoutMs: waiterTimeoutMs,
+        isCurrent: () => {
+          if (!this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
+            return false
+          }
+          const pty = this.getLivePtyForHandle(waiter.handle)?.pty
+          const leaf = pty ? null : this.getLiveLeafForHandle(waiter.handle).leaf
+          const record = pty ?? leaf
+          return Boolean(
+            record?.connected &&
+            this.getPaneAgentForTuiIdle(record.ptyId) === 'cline' &&
+            !hasFreshWorkingFirstPartyStatus(
+              this.ptysById.get(record.ptyId)?.lastExplicitAgentStatus ?? null
+            )
+          )
+        },
+        readScreen: () =>
+          withTimeout(
+            this.readTerminal(waiter.handle, { screen: true }, { visibleScreenOnly: true }),
+            Math.min(VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, waiterTimeoutMs),
+            null
+          )
+      })
+        .then((ready) => {
+          if (ready && this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
+            this.terminalWaiters.resolve(waiter, this.buildTuiIdleProbeResult(waiter.handle, null))
+          }
+        })
+        .catch(() => {})
+      return
+    }
     const settleMarginMs = Math.min(
       TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
       Math.max(1, Math.floor(waiterTimeoutMs / 3))

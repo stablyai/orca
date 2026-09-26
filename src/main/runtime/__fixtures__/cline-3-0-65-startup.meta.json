@@ -1,0 +1,18 @@
+{
+  "capturedAt": "2026-09-26T20:48:58.276Z",
+  "platform": "win32",
+  "command": [
+    "node",
+    "<global-cline-wrapper>",
+    "--provider",
+    "openrouter",
+    "--model",
+    "xiaomi/mimo-v2.6-pro",
+    "--auto-approve",
+    "true"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "Cline 3.0.65; OpenRouter MiMo 2.6 Pro; startup only, no model prompt; Escape dismisses promotion if present; recorder uses installed node-pty 1.1.0.",
+  "exitCode": -1073741510
+}
