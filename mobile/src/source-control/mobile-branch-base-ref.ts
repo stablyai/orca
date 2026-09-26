@@ -1,3 +1,4 @@
+import { preferRemoteTrackingCompareBase } from '../../../src/shared/worktree/base-ref'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import { isMobileGitUnavailableReply } from './mobile-git-status'
 import { repoBaseRefListRead, repoDefaultBaseRefRead } from './mobile-repo-base-ref-operations'
@@ -23,31 +24,27 @@ export async function resolveMobileBranchCompareBaseRef(
     repoBaseRefListRead.request(client).catch(() => null)
   ])
   const worktreeSummary = worktreeReply && worktreeSummaryRead.interpret(worktreeReply)
-  if (worktreeSummary?.accepted) {
-    const worktreeBaseRef = worktreeSummary.value?.baseRef?.trim() || null
-    if (worktreeBaseRef) {
-      return worktreeBaseRef
-    }
-  }
-
   const repos = repoReply && repoBaseRefListRead.interpret(repoReply)
-  if (repos?.accepted) {
-    const repo = repos.value.find((candidate) => candidate.id === repoId)
-    const repoBaseRef = repo?.worktreeBaseRef?.trim() || null
-    if (repoBaseRef) {
-      return repoBaseRef
+  const worktreeBaseRef = worktreeSummary?.accepted
+    ? worktreeSummary.value?.baseRef?.trim() || null
+    : null
+  const repo = repos?.accepted
+    ? repos.value.find((candidate) => candidate.id === repoId)
+    : undefined
+  const repoBaseRef = repo?.worktreeBaseRef?.trim() || null
+  let remoteCandidate = repoBaseRef
+  if (!repoBaseRef) {
+    const defaultReply = await repoDefaultBaseRefRead.request(client, { repo: `id:${repoId}` })
+    // Why the raw refusal: a host that does not offer git to mobile is a capability gap to degrade
+    // on, not an error to surface, and no acceptance policy carries the code and message through.
+    if (isMobileGitUnavailableReply(defaultReply)) {
+      return preferRemoteTrackingCompareBase(worktreeBaseRef, null)
+    }
+    try {
+      remoteCandidate = repoDefaultBaseRefRead.interpret(defaultReply)
+    } catch (error) {
+      throw new Error(refusedRpcMessageOrFallback(error, 'Unable to resolve branch base'))
     }
   }
-
-  const defaultReply = await repoDefaultBaseRefRead.request(client, { repo: `id:${repoId}` })
-  // Why the raw refusal: a host that does not offer git to mobile is a capability gap to degrade
-  // on, not an error to surface, and no acceptance policy carries the code and message through.
-  if (isMobileGitUnavailableReply(defaultReply)) {
-    return null
-  }
-  try {
-    return repoDefaultBaseRefRead.interpret(defaultReply)
-  } catch (error) {
-    throw new Error(refusedRpcMessageOrFallback(error, 'Unable to resolve branch base'))
-  }
+  return preferRemoteTrackingCompareBase(worktreeBaseRef, remoteCandidate)
 }

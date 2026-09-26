@@ -1,4 +1,5 @@
 import type { GitUpstreamStatus } from '../../../../../../shared/git-status-types'
+import { preferRemoteTrackingCompareBase } from '../../../../../../shared/worktree/base-ref'
 
 export function resolveSourceControlBaseRef(input: {
   worktreeBaseRef?: string | null
@@ -15,7 +16,8 @@ export function resolveSourceControlBaseRef(input: {
   if (worktreeBaseRef && isFullGitCommitOid(worktreeBaseRef) && hasReviewBaseRefName) {
     return reviewBaseRef
   }
-  return worktreeBaseRef || input.repoBaseRef?.trim() || input.defaultBaseRef?.trim() || null
+  const repoOrDefault = input.repoBaseRef?.trim() || input.defaultBaseRef?.trim() || null
+  return preferRemoteTrackingCompareBase(worktreeBaseRef, repoOrDefault)
 }
 
 // Why: the compare base is distinct from the PR/rebase target; when enabled it defaults to the branch upstream (else effectiveBaseRef) to surface local changes.
@@ -29,7 +31,7 @@ export function resolveSourceControlCompareBaseRef(input: {
   if (!input.enabled) {
     return input.fallbackBaseRef?.trim() || null
   }
-  const pinned = input.worktreeBaseRef?.trim() || input.repoBaseRef?.trim()
+  const pinned = preferRemoteTrackingCompareBase(input.worktreeBaseRef, input.repoBaseRef)
   if (pinned) {
     return pinned
   }
