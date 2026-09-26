@@ -164,6 +164,9 @@ describe('computeActiveTerminalKeyboardLift', () => {
       const drawn425 = metrics({ rows: 50, rowPitch: 8.5, cursorY: 49, contentBottomRow: 49 })
       expect(lift(312, drawn425)).toBeCloseTo(23.3, 5)
       expect(lift(312, { ...drawn425, altScreen: true })).toBeCloseTo(23.3, 5)
+      // A caret mid-grid lifts only enough to clear its row plus one: 47 x 8.5 + 8.5 - 401.7.
+      expect(lift(312, { ...drawn425, cursorY: 46, contentBottomRow: 46 })).toBeCloseTo(6.3, 5)
+      expect(lift(312, { ...drawn425, cursorY: 45, contentBottomRow: 45 })).toBe(0)
     })
 
     it('lifts nothing for a keyboard that is open and covers nothing', () => {

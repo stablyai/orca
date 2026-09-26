@@ -1,9 +1,10 @@
-import { readFileSync } from 'node:fs'
+// @vitest-environment happy-dom
 import { Terminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
 import { documentModuleSource } from './document/document-module-source.test-support'
 import { emitKeyboardAvoidanceMetrics } from './document/keyboard-avoidance-metrics'
+import { commitFitScale } from './document/fit-scale'
 import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contract'
 
 // The scope object plus the metrics block, exactly as the document carries them.
@@ -236,12 +237,25 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     }).toEqual({ phone: 15, desktop: 7.5, unmeasured: 0 })
   })
 
-  it('reports again when a fit commits a new scale', () => {
-    const fit = readFileSync(new URL('./document/fit-scale.ts', import.meta.url), 'utf8')
-    const commit = fit.slice(fit.indexOf('export function commitFitScale('))
-    const body = commit.slice(0, commit.indexOf('\n}\n'))
-    expect(body.indexOf('emitKeyboardAvoidanceMetrics(scope)')).toBeGreaterThan(
-      body.indexOf('scope.currentScale = 1')
-    )
+  it('reports again when a fit commits a new scale, carrying the new pitch', () => {
+    const notifications: Record<string, unknown>[] = []
+    const scope = createTerminalDocumentScope({
+      postToHost: (message) => notifications.push(message),
+      // Half the width 80 columns of 8 px need, so the fit commits a scale of 0.5.
+      viewportRect: () => ({ width: 320, height: 700 })
+    })
+    const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements every member the fit and the metrics read, which the assertion checks.
+    scope.term = {
+      buffer: { active: buffer },
+      cols: 80,
+      rows: 40,
+      element: { scrollWidth: 640 },
+      _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } }
+    } as unknown as typeof scope.term
+    scope.surface = document.createElement('div')
+    commitFitScale(scope, 'test', 0, 'test')
+    const metrics = notifications.filter((message) => message.type === 'keyboard-avoidance-metrics')
+    expect(metrics.at(-1)?.rowPitch).toBe(7.5)
   })
 })
