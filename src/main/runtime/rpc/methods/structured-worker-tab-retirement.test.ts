@@ -47,6 +47,7 @@ function installHost(options: { closeThrows?: boolean; lease?: Record<string, un
     setSessionTabVisibility,
     close,
     hasSession: () => attached,
+    reconcileRestartLeases: async () => {},
     hold: async () => {},
     release: () => {},
     subscribe: () => () => {},
