@@ -21,6 +21,7 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
       this.isOptionalNullableString(snapshot.legacyKeychainCredentialsJson) &&
       this.isOptionalBoolean(snapshot.scopedKeychainCredentialsCaptured) &&
       this.isOptionalBoolean(snapshot.legacyKeychainCredentialsCaptured) &&
+      (snapshot.configPath === undefined || typeof snapshot.configPath === 'string') &&
       this.hasValidKeychainSnapshotValue(snapshot, 'scoped') &&
       this.hasValidKeychainSnapshotValue(snapshot, 'legacy') &&
       (snapshot.capturedAt === undefined || typeof snapshot.capturedAt === 'number')

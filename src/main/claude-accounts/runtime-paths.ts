@@ -25,8 +25,14 @@ export class ClaudeRuntimePathResolver {
   }
 
   private resolveConfigPath(configDir: string, inheritedConfigDir: string | null): string {
+    // Why: mirrors Claude's global-config rule: a legacy .config.json in the config directory
+    // wins; otherwise the colocated .claude.json is read only when CLAUDE_CONFIG_DIR is set.
+    const legacyConfigPath = join(configDir, '.config.json')
+    if (existsSync(legacyConfigPath)) {
+      return legacyConfigPath
+    }
     const colocatedConfigPath = join(configDir, '.claude.json')
-    if (inheritedConfigDir || existsSync(colocatedConfigPath)) {
+    if (inheritedConfigDir) {
       return colocatedConfigPath
     }
     return join(homedir(), '.claude.json')
