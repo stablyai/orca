@@ -12,6 +12,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { isLocalBrowserPageOwner } from './browser-host-state'
+import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 
 export function createBrowserPageConversionActions(
   set: BrowserSliceSet,
@@ -97,6 +98,9 @@ export function createBrowserPageConversionActions(
       } | null
       if (!newPage) {
         return null
+      }
+      if (!findPage(get().browserPagesByWorkspace, pageId)) {
+        releaseBrowserPageMount(pageId)
       }
       if (remoteClose) {
         closeRemoteBrowserPageInOwningEnvironment(
