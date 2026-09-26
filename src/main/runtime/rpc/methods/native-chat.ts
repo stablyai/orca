@@ -92,7 +92,7 @@ export const NATIVE_CHAT_METHODS = [
   defineStreamingMethod({
     name: 'nativeChat.subscribe',
     params: NativeChatSession,
-    handler: async (params, { runtime, connectionId, clientKind, signal }, emit) => {
+    handler: async (params, { runtime, connectionId, requestId, clientKind, signal }, emit) => {
       if (signal?.aborted) {
         return
       }
@@ -123,7 +123,7 @@ export const NATIVE_CHAT_METHODS = [
         runtime.cleanupSubscription(subscriptionId)
       }
       signal?.addEventListener('abort', handleAbort, { once: true })
-      runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
+      runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId, requestId)
       if (signal?.aborted) {
         runtime.cleanupSubscription(subscriptionId)
         return
@@ -212,6 +212,12 @@ export const NATIVE_CHAT_METHODS = [
     name: 'nativeChat.unsubscribe',
     params: NativeChatUnsubscribe,
     handler: async (params, { runtime, connectionId }) => {
+      if (params.requestId !== undefined) {
+        // Why: an unknown request already ended or never registered; the token path could end a newer stream.
+        runtime.releaseSubscriptionByRequest(connectionId, params.requestId)
+        return { unsubscribed: true }
+      }
+      // COMPAT(native chat request-addressed unsubscribe): token and prefix paths for the web client and phones that predate `requestId`.
       const connection = connectionId ?? 'local'
       if (params.subscriptionId) {
         runtime.cleanupSubscription(`nativeChat:${connection}:${params.subscriptionId}`)

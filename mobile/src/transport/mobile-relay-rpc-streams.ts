@@ -6,7 +6,8 @@ import {
 import {
   buildStreamUnsubscribe,
   buildTerminalUnsubscribeParams,
-  updateTerminalSubscriptionViewport
+  updateTerminalSubscriptionViewport,
+  withUnsubscribeRequestId
 } from './rpc-client-terminal-subscription'
 import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
 import { isStreamingOpenerReply } from './rpc-acceptance-policies'
@@ -204,7 +205,7 @@ export class MobileRelayRpcStreams {
           // The host registers cleanup only after resolving the initial snapshot.
           this.cancelledSubscriptions.set(id, { method: stream.method, unsubscribe: byParams })
         } else if (unsubscribe || byParams) {
-          this.sendUnsubscribe((unsubscribe ?? byParams)!)
+          this.sendUnsubscribe((unsubscribe ?? byParams)!, id)
         } else if (
           stream.method === 'browser.screencast' ||
           stream.method === 'runtime.clientEvents.subscribe'
@@ -212,10 +213,13 @@ export class MobileRelayRpcStreams {
           // Keep only the cleanup route while the server assigns its subscription ID.
           this.cancelledSubscriptions.set(id, { method: stream.method })
         } else if (stream.subscriptionId) {
-          this.sendUnsubscribe({
-            method: stream.method.replace(/\.subscribe$/, '.unsubscribe'),
-            params: { subscriptionId: stream.subscriptionId }
-          })
+          this.sendUnsubscribe(
+            {
+              method: stream.method.replace(/\.subscribe$/, '.unsubscribe'),
+              params: { subscriptionId: stream.subscriptionId }
+            },
+            id
+          )
         }
       }
     }
@@ -224,14 +228,12 @@ export class MobileRelayRpcStreams {
 
   /** Skip the unsubscribe when a live sibling shares the host cleanup token (e.g. nativeChat's
    *  deterministic `agent:sessionId`), since the host would evict the sibling's registration. */
-  private sendUnsubscribe(unsubscribe: StreamUnsubscribe, terminalRequestId?: string): void {
+  private sendUnsubscribe(unsubscribe: StreamUnsubscribe, requestId: string): void {
     if (this.hasLiveOwner(unsubscribe)) {
       return
     }
     // Why: added after the sibling check; an old host strips it and would evict the live sibling.
-    const params = terminalRequestId
-      ? { ...unsubscribe.params, requestId: terminalRequestId }
-      : unsubscribe.params
+    const params = withUnsubscribeRequestId(unsubscribe, requestId)
     this.options.sendFrame({ id: this.options.nextId(), method: unsubscribe.method, params })
   }
 

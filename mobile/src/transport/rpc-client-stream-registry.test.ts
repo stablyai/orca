@@ -100,6 +100,23 @@ describe('RpcClientStreamRegistry', () => {
     })
   })
 
+  it('names the native chat request it sent when unsubscribing, and keeps the token for older hosts', () => {
+    const { registry, sent } = createRegistry()
+    const dispose = registry.subscribe(
+      'nativeChat.subscribe',
+      { agent: 'claude', sessionId: 's1', subscriptionId: 'claude:s1' },
+      () => {}
+    )
+    const subscribe = sent[0]!
+
+    dispose()
+
+    expect(sent[1]).toMatchObject({
+      method: 'nativeChat.unsubscribe',
+      params: { subscriptionId: 'claude:s1', requestId: subscribe.id }
+    })
+  })
+
   it('keeps a disposed browser tombstone until ready can be unsubscribed', () => {
     const { registry, sent } = createRegistry()
     const dispose = registry.subscribe('browser.screencast', { page: 'page-1' }, () => {})

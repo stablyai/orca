@@ -44,7 +44,9 @@ export const NativeChatSession = z.object({
 })
 
 export const NativeChatUnsubscribe = z.object({
-  subscriptionId: z.string().min(1).optional()
+  subscriptionId: z.string().min(1).optional(),
+  // Why: the `nativeChat.subscribe` frame id; addresses that exact request, so a stale unsubscribe can't end a newer stream on the same token.
+  requestId: z.string().min(1).optional()
 })
 
 export const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
