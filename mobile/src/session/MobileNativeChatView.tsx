@@ -11,6 +11,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type {
@@ -62,6 +64,12 @@ type Props = {
   /** Structured lane: host-recorded turn timing feeding the per-turn status rows. */
   workingStartedAt?: number | null
   settledTurns?: NativeChatSettledTurns | null
+  /** Structured lane: the session's self-reported command surface, driving the
+   *  composer's `/` menu (undefined on the PTY lane). */
+  sessionCommands?: readonly AgentSessionSlashCommand[]
+  /** Filesystem-discovered skills for the active worktree — offered in the
+   *  composer's `/` menu on every lane. */
+  skillSuggestions?: readonly SlashCommandSuggestion[]
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   /** Interrupt a provider turn. */
   onStop?: () => void
@@ -147,6 +155,8 @@ export function MobileNativeChatView({
   turnIndicator = null,
   workingStartedAt,
   settledTurns,
+  sessionCommands,
+  skillSuggestions,
   onStop,
   streaming,
   hasMore,
@@ -291,7 +301,6 @@ export function MobileNativeChatView({
   const showLoading = status === 'loading' && messages.length === 0
 
   const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
-
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
       {showLoading ? (
@@ -422,6 +431,8 @@ export function MobileNativeChatView({
         structuredCommands={
           structuredActivityUi ? (sessionOptions?.controller.conversationCommands ?? []) : undefined
         }
+        sessionCommands={sessionCommands}
+        skillSuggestions={skillSuggestions}
         value={composerText}
         onChangeText={onComposerTextChange}
         onSend={handleSend}
