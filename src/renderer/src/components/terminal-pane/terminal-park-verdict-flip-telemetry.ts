@@ -36,11 +36,7 @@ export const TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT = 12
  * for a full window past its pin deadline — so roughly nine minutes of real
  * silence at the ceiling, not one window. See lastFlipMs.
  *
- * Only the notice path backs off. A burst still takes a flat one-window pin,
- * which the corpus supports: repeat bursts arrive a median 673s apart (n=29,
- * grouped by bundle/launch/tab; 356s if physical pairs are deduped), and just
- * 1 of those 29 inter-arrivals falls in the 59-75s band that would mean a burst
- * re-firing the instant its pin lapsed.
+ * Only sustained churn backs off; burst protection keeps its one-window pin.
  */
 export const TERMINAL_TAB_PARK_FLIP_SUSTAINED_PIN_MAX_MS = 8 * TERMINAL_TAB_PARK_FLIP_WINDOW_MS
 
@@ -204,7 +200,7 @@ export function recordParkVerdictFlips(args: {
       // looks like no flips at all, so a flip-gated reset would ratchet — a tab
       // that churned once at launch would still carry a ceiling pin hours on.
       //
-      // Why no isParkVerdictPinLive check: a live pin puts quietSinceMs in the
+      // Why no isParkVerdictPinLive check: a live pin puts lastFlipMs in the
       // future, so the window test already fails. Asserting it too reads as the
       // guard protecting this invariant when it is not.
       if (record.sustainedPinCount && hasBeenQuietForAWindow(record, nowMs, flipWindowMs)) {

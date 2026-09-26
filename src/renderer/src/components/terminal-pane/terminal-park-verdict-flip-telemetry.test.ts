@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CrashReportBreadcrumbData } from '../../../../shared/crash-reporting'
 import {
   TERMINAL_TAB_PARK_FLIP_BURST_LIMIT,
   TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS,
@@ -12,10 +13,18 @@ import {
   type ParkVerdictFlipRecord
 } from './terminal-park-verdict-flip-telemetry'
 
-const recordBreadcrumb = vi.fn()
+const recordBreadcrumb = vi.fn<(name: string, data?: CrashReportBreadcrumbData) => void>()
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
-  recordRendererCrashBreadcrumb: (name: string, data?: unknown) => recordBreadcrumb(name, data)
+  recordRendererCrashBreadcrumb: (name: string, data?: CrashReportBreadcrumbData) =>
+    recordBreadcrumb(name, data)
 }))
+
+function pinDuration(data?: CrashReportBreadcrumbData): number {
+  if (typeof data?.pinnedForMs !== 'number') {
+    throw new Error('Missing numeric pin duration')
+  }
+  return data.pinnedForMs
+}
 
 const TAB = 'tab-1'
 /** Slower than the burst window, so only the notice limit can fire. */
@@ -255,7 +264,7 @@ describe('recordParkVerdictFlips', () => {
 
       const pinnedForMs = recordBreadcrumb.mock.calls
         .filter((call) => call[0] === 'terminal_park_verdict_churn')
-        .map((call) => (call[1] as { pinnedForMs: number }).pinnedForMs)
+        .map((call) => pinDuration(call[1]))
       expect(pinnedForMs[0]).toBe(TERMINAL_TAB_PARK_FLIP_WINDOW_MS)
       expect(pinnedForMs.at(-1)).toBe(TERMINAL_TAB_PARK_FLIP_SUSTAINED_PIN_MAX_MS)
     })
@@ -296,7 +305,7 @@ describe('recordParkVerdictFlips', () => {
       return {
         remounts,
         crumbs: crumbs.length,
-        pinnedForMs: crumbs.map((call) => (call[1] as { pinnedForMs: number }).pinnedForMs)
+        pinnedForMs: crumbs.map((call) => pinDuration(call[1]))
       }
     }
 
@@ -359,7 +368,7 @@ describe('recordParkVerdictFlips', () => {
 
       const pinnedForMs = recordBreadcrumb.mock.calls
         .filter((call) => call[0] === 'terminal_park_verdict_churn')
-        .map((call) => (call[1] as { pinnedForMs: number }).pinnedForMs)
+        .map((call) => pinDuration(call[1]))
       expect(Math.max(...pinnedForMs)).toBe(TERMINAL_TAB_PARK_FLIP_SUSTAINED_PIN_MAX_MS)
     })
 
@@ -384,7 +393,7 @@ describe('recordParkVerdictFlips', () => {
 
       const pinnedForMs = recordBreadcrumb.mock.calls
         .filter((call) => call[0] === 'terminal_park_verdict_churn')
-        .map((call) => (call[1] as { pinnedForMs: number }).pinnedForMs)
+        .map((call) => pinDuration(call[1]))
       expect(pinnedForMs).toHaveLength(4)
       expect(pinnedForMs.every((ms) => ms === TERMINAL_TAB_PARK_FLIP_WINDOW_MS)).toBe(true)
     })
@@ -402,7 +411,7 @@ describe('recordParkVerdictFlips', () => {
 
         const pinnedForMs = recordBreadcrumb.mock.calls
           .filter((call) => call[0] === 'terminal_park_verdict_churn')
-          .map((call) => (call[1] as { pinnedForMs: number }).pinnedForMs)
+          .map((call) => pinDuration(call[1]))
         expect(Math.max(...pinnedForMs)).toBeGreaterThan(TERMINAL_TAB_PARK_FLIP_WINDOW_MS)
       }
     )
