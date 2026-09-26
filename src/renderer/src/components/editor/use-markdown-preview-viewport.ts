@@ -14,6 +14,7 @@ import {
 } from './markdown-preview-search'
 import type { MarkdownPreviewFoundation } from './use-markdown-preview-foundation'
 import { useMarkdownPreviewScrollViewport } from './use-markdown-preview-scroll-viewport'
+import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 
 function clearMarkdownPreviewTimeout(timeoutRef: MutableRefObject<number | null>): void {
   if (timeoutRef.current === null) {
@@ -244,7 +245,12 @@ export function useMarkdownPreviewViewport({
       const targetInsidePreview = target instanceof Node && root.contains(target)
 
       if (
-        isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
+        isMarkdownPreviewFindShortcut(
+          event,
+          getShortcutPlatform(),
+          keybindings,
+          getLayoutBaseCharacterForCode
+        ) &&
         targetInsidePreview
       ) {
         event.preventDefault()

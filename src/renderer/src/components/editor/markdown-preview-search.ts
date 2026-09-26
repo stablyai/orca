@@ -1,4 +1,8 @@
-import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
+import {
+  keybindingMatchesAction,
+  type KeybindingOverrides,
+  type LayoutCharacterLookup
+} from '../../../../shared/keybindings'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export const MARKDOWN_PREVIEW_SEARCH_QUERY_MAX_BYTES = 2 * 1024
@@ -13,17 +17,23 @@ export function isMarkdownPreviewSearchQueryTooLarge(
 export function isMarkdownPreviewFindShortcut(
   event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
   platform: NodeJS.Platform,
-  keybindings?: KeybindingOverrides
+  keybindings?: KeybindingOverrides,
+  layoutCharacterForCode?: LayoutCharacterLookup
 ): boolean {
-  return keybindingMatchesAction('editor.find', event, platform, keybindings)
+  return keybindingMatchesAction('editor.find', event, platform, keybindings, {
+    layoutCharacterForCode
+  })
 }
 
 export function isMarkdownPreviewReplaceShortcut(
   event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
   platform: NodeJS.Platform,
-  keybindings?: KeybindingOverrides
+  keybindings?: KeybindingOverrides,
+  layoutCharacterForCode?: LayoutCharacterLookup
 ): boolean {
-  return keybindingMatchesAction('editor.replace', event, platform, keybindings)
+  return keybindingMatchesAction('editor.replace', event, platform, keybindings, {
+    layoutCharacterForCode
+  })
 }
 
 export type TextMatchOptions = {

@@ -4,6 +4,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
+import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import {
@@ -68,7 +69,8 @@ export function useFloatingTerminalGlobalShortcutListeners({
       const matches = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, event, getShortcutPlatform(), state.keybindings, {
           context,
-          terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
+          terminalShortcutPolicy: state.settings?.terminalShortcutPolicy,
+          layoutCharacterForCode: getLayoutBaseCharacterForCode
         })
       const consume = (): void => {
         event.preventDefault()
