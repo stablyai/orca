@@ -92,6 +92,7 @@
     "../src/main/codex/config-toml-hook-trust-read.ts",
     "../src/main/codex/config-toml-key-path.ts",
     "../src/main/codex/config-toml-line-scan.ts",
+    "../src/main/codex/config-toml-mcp-servers.ts",
     "../src/main/codex/config-toml-project-trust.ts",
     "../src/main/codex/config-toml-runtime-owned-sections.ts",
     "../src/main/codex/config-toml-syntax.ts",

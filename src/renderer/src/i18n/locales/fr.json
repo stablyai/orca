@@ -133,7 +133,8 @@
         "resourceUsageToggleDescription": "Afficher le gestionnaire de ressources. Cliquez dessus pour le CPU, la mémoire, les sessions, les contrôles des daemons et les analyses disque des espaces de travail.",
         "portsToggleDescription": "Afficher les ports actifs de l'espace de travail. Cliquez dessus pour les ports par espace de travail et les écouteurs externes.",
         "antigravityToggleDescription": "Afficher l'utilisation de l'abonnement Antigravity pour l'espace de travail actif.",
-        "grokToggleDescription": "Afficher l'utilisation des crédits de l'abonnement Grok lorsque vous êtes connecté via Grok CLI."
+        "grokToggleDescription": "Afficher l'utilisation des crédits de l'abonnement Grok lorsque vous êtes connecté via Grok CLI.",
+        "cursorToggleDescription": "Afficher l'utilisation du forfait Cursor lorsque vous êtes connecté via cursor-agent ou Cursor IDE."
       },
       "menuBarIcon": {
         "title": "Afficher l'icône dans la barre de menus",
@@ -968,7 +969,8 @@
             "tooMany": "Vous pouvez joindre jusqu'à {{maxCount}} images.",
             "dimensionsTooLarge": "{{fileName}} a des dimensions trop grandes pour un aperçu sans risque.",
             "invalidImage": "{{fileName}} n'est pas une image valide prise en charge.",
-            "additionalErrors": "{{count}} images supplémentaires n'ont pas pu être jointes."
+            "additionalErrors": "{{count}} images supplémentaires n'ont pas pu être jointes.",
+            "totalTooLarge": "{{fileName}} ferait dépasser {{maxSize}} au total pour les pièces jointes."
           }
         }
       },
@@ -3215,7 +3217,7 @@
             "missing": {
               "tui": {
                 "title": "This ZCode build has no terminal UI",
-                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+                "description": "Orca's hooks installed correctly — the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
               }
             }
           },
@@ -3761,7 +3763,8 @@
             "grokUsageMenu": "Utilisation Grok",
             "floatingTerminalNewActivity": "{{label}}, nouvelle activité",
             "codexSignInSuccess": "Connecté à Codex",
-            "codexSignInError": "Échec de la connexion à Codex. Veuillez réessayer."
+            "codexSignInError": "Échec de la connexion à Codex. Veuillez réessayer.",
+            "cursorUsageMenu": "Utilisation Cursor"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connecter un compte",
@@ -3952,6 +3955,13 @@
               "noSubscription": {
                 "label": "Aucun abonnement"
               }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Connexion expirée",
+                "message": "Exécutez cursor-agent login dans un terminal sur l'ordinateur qui exécute Orca, puis réessayez."
+              },
+              "plan": "Forfait"
             }
           },
           "SshTargetStatusRow": {
@@ -5341,7 +5351,9 @@
           "69969ba364": "Envoi…",
           "imageReadFailed": "Impossible de lire les images jointes. Essayez de les joindre à nouveau.",
           "attachWhileSending": "Attendez la fin de l'envoi du commentaire en cours avant de joindre d'autres images.",
-          "imagesNotDelivered": "Commentaire envoyé, mais la livraison des images n'a pas pu être confirmée."
+          "imagesNotDelivered": "Commentaire envoyé, mais la livraison des images n'a pas pu être confirmée.",
+          "imagesNotIncluded": "Commentaire envoyé. Vos captures d'écran n'ont pas pu être téléversées et n'ont pas été incluses.",
+          "imagesRejected": "Commentaire envoyé. Vos captures d'écran étaient trop volumineuses pour être téléversées et n'ont pas été incluses."
         },
         "SidebarFilter": {
           "e3b3898218": "Ajouter un projet",
@@ -6241,7 +6253,8 @@
         },
         "SidebarFeedbackImageAttachments": {
           "attachImages": "Joindre",
-          "removeImage": "Supprimer {{fileName}}"
+          "removeImage": "Supprimer {{fileName}}",
+          "screenshotsHint": "Joignez jusqu'à {{count}} captures d'écran, {{maxSize}} au total"
         },
         "WorkspaceKanbanSearchField": {
           "bdb753c78d": "Aucun espace de travail correspondant",
@@ -9023,7 +9036,18 @@
             "b2c4e7f1a8": "point final",
             "3a9b6d2c4e": "clé API",
             "5d8f1a3b7c": "Chine",
-            "7e2a4b8c1d": "outre-mer"
+            "7e2a4b8c1d": "outre-mer",
+            "cursor": {
+              "description": "Utilisation mensuelle du forfait lue depuis la connexion Cursor déjà présente sur cet ordinateur (cursor-agent login).",
+              "kw": {
+                "cursor": "cursor",
+                "rateLimit": "limite de débit",
+                "spend": "dépenses",
+                "statusBar": "barre d'état",
+                "usage": "utilisation"
+              },
+              "title": "Utilisation Cursor"
+            }
           }
         },
         "advanced": {
@@ -9279,6 +9303,13 @@
               "close": "fermer",
               "notification": "zone de notification",
               "background": "arrière-plan"
+            },
+            "cursor": {
+              "description": "Afficher l'utilisation mensuelle du forfait Cursor à partir de la connexion Cursor sur cet ordinateur.",
+              "kw": {
+                "cursor": "cursor"
+              },
+              "title": "Utilisation Cursor"
             }
           }
         },
@@ -12095,6 +12126,31 @@
         "TerminalRenderingSection": {
           "6d4c55bacc": "Images en ligne",
           "fffab5890b": "Affichez les images directement dans le terminal à l'aide des protocoles graphiques SIXEL, iTerm2 (IIP) et Kitty."
+        },
+        "CursorAccountsSection": {
+          "dashboardLink": "Tableau de bord Cursor",
+          "expired": "Connexion expirée — exécutez cursor-agent login sur l'ordinateur qui exécute Orca, puis cliquez sur Actualiser l'utilisation.",
+          "loading": "Chargement…",
+          "noAllowance": "Cursor n'a signalé aucun quota d'utilisation pour ce compte.",
+          "planTotal": "Forfait",
+          "refreshUsage": "Actualiser l'utilisation",
+          "resets": "Réinitialisation {{when}}",
+          "signedIn": "Connecté",
+          "signedInFrom": "Connecté. Orca lit la session stockée dans {{source}}.",
+          "signedInGeneric": "Connecté. Orca lit la session Cursor stockée sur cet ordinateur.",
+          "signedOut": "Aucune connexion Cursor trouvée sur cet ordinateur",
+          "signedOutHelp": "Connectez-vous avec Cursor IDE, ou exécutez cursor-agent login dans un terminal, puis cliquez ici sur Actualiser l'utilisation.",
+          "source": {
+            "cli": "Fichier d'authentification du CLI Cursor",
+            "desktop": "Cursor IDE",
+            "keychain": "Trousseau macOS (cursor-agent)"
+          },
+          "staleUsage": "Dernière utilisation connue — la dernière actualisation a échoué : {{reason}}",
+          "subtitle": "Affiche l'utilisation mensuelle de votre forfait Cursor à partir de la connexion déjà présente sur cet ordinateur. Orca se contente de la lire — il ne modifie jamais votre connexion Cursor.",
+          "title": "Cursor",
+          "usageDescription": "Cursor facture deux enveloppes qui se réinitialisent avec votre cycle de facturation, plus des dépenses à la demande une fois épuisées.",
+          "usageLabel": "Utilisation",
+          "usageTitle": "Utilisation mensuelle du forfait"
         }
       },
       "right": {
@@ -15036,7 +15092,22 @@
           "noPython": "Python est introuvable sur cet ordinateur. Installez-le depuis [python.org](https://www.python.org/downloads/), puis réexécutez la cellule.",
           "kernelDied": "Le kernel est mort.",
           "localOnly": "Les cellules du notebook ne peuvent s'exécuter que pour des fichiers sur cet ordinateur.",
-          "pythonOnly": "Seuls les notebooks Python peuvent s'exécuter dans Orca."
+          "pythonOnly": "Seuls les notebooks Python peuvent s'exécuter dans Orca.",
+          "commandCopied": "Commande copiée.",
+          "createVenv": "Créer .venv",
+          "createVenvItem": "Créer un environnement virtuel…",
+          "createVenvTitle": "Créer un environnement virtuel ?",
+          "creatingButton": "Création…",
+          "creatingVenvDescription": "Création de .venv dans {{folder}} et installation d'ipykernel. Cela peut prendre une minute.",
+          "creatingVenvTitle": "Création de l'environnement virtuel…",
+          "installingButton": "Installation…",
+          "installingDescription": "Installation d'ipykernel dans « {{env}} » avec pip. Cela peut prendre une minute.",
+          "installingTitle": "Installation d'ipykernel…",
+          "kernelCreatingVenv": "Création de .venv…",
+          "setupFailed": "Cela n'a pas fonctionné. Sortie de Python :",
+          "tryAgain": "Réessayer",
+          "useAnotherPython": "Utiliser un autre Python…",
+          "venvDescription": "Orca va créer un .venv dans {{folder}} à partir de « {{env}} », y installer ipykernel, puis y exécuter ce notebook."
         },
         "MarkdownPreview": {
           "e4683f70c4": "Annuler",
@@ -17255,6 +17326,13 @@
         "dispatchRejected": "L'agent a refusé le message “continue”. Ouvrez le chat et envoyez-en un vous-même.",
         "unsupported": "Orca ne peut pas reprendre ce chat. Ouvrez-le pour voir où il s'est arrêté.",
         "fallback": "Orca n'a pas pu reprendre ce chat. Ouvrez-le pour continuer manuellement."
+      },
+      "web": {
+        "preloadApi": {
+          "cursorAccounts": {
+            "hostOnly": "Les détails de connexion Cursor ne sont lisibles que sur l'ordinateur qui exécute Orca."
+          }
+        }
       }
     },
     "i18n": {
@@ -18146,6 +18224,52 @@
       "unassignedInstruction": "Assignez un raccourci de dictée avant de lancer la dictée vocale dans un volet actif.",
       "settingsInstruction": "Modifiez le modèle, le mode de dictée ou le raccourci à tout moment dans",
       "settingsLink": "Paramètres → Voix"
+    },
+    "sessionSearch": {
+      "ageHours": "2 h",
+      "ageMinutes": "12 min",
+      "ageYesterday": "1 j",
+      "agentsInstruction": "Vos agents peuvent aussi la fouiller. Demandez à l'un d'eux de « retrouver la session où nous avons corrigé le délai de connexion ».",
+      "consentInstruction": "Modifiez ce réglage ou désactivez-le à tout moment dans",
+      "continueInBackground": "Continuer en arrière-plan",
+      "demoHit1Age": "3 j",
+      "demoHit1Snippet": "Le [[délai de connexion]] est passé à 30 s avec un nouvel essai sur l'actualisation du jeton.",
+      "demoHit1Title": "Corriger la redirection d'authentification instable",
+      "demoHit2Age": "1 sem.",
+      "demoHit2Snippet": "Pourquoi la page de [[connexion]] se fige-t-elle après un [[délai dépassé]] au réveil ?",
+      "demoHit2Title": "Actualisation de session après la mise en veille",
+      "demoHit3Age": "2 sem.",
+      "demoHit3Snippet": "Ajout d'un test couvrant le parcours [[délai de connexion]] de bout en bout.",
+      "demoHit3Title": "Renforcement des tests e2e d'authentification",
+      "demoHit4Age": "5 j",
+      "demoHit4Snippet": "Le [[retour en arrière]] supprime d'abord le nouvel index, puis restaure l'ancienne colonne.",
+      "demoHit4Title": "Migration de la table des commandes",
+      "demoHit5Age": "3 sem.",
+      "demoHit5Snippet": "Pouvez-vous rédiger un plan de [[retour en arrière]] de [[migration]] avant le nouvel essai ?",
+      "demoHit5Title": "Échec du déploiement en préproduction",
+      "demoHit6Age": "1 mois",
+      "demoHit6Snippet": "Chaque [[migration]] ici est réversible, sauf le renommage de l'enum.",
+      "demoHit6Title": "Notes de révision du schéma",
+      "demoQuery": "délai de connexion",
+      "demoQuery2": "retour en arrière de migration",
+      "demoRoleAssistant": "Assistant",
+      "demoRoleUser": "Utilisateur",
+      "enableFailed": "Impossible d'activer la recherche de session. Réessayez.",
+      "indexingDescription": "Orca lit vos transcriptions d'agent passées pour vous permettre de les rechercher. Cela peut prendre quelques minutes.",
+      "indexingTitle": "Indexation de vos sessions d'agent",
+      "progressStarting": "Recherche de vos sessions…",
+      "readyDescription": "Chaque session d'agent sur cet ordinateur peut désormais être retrouvée par son contenu.",
+      "readyTitle": "La recherche de session est prête",
+      "readyToast": "La recherche de session est prête",
+      "readyToastOpen": "Ouvrir",
+      "recent1Text": "Entrées de recherche déplacées sous Flux de travail et tests mis à jour.",
+      "recent1Title": "Ranger la barre latérale des paramètres",
+      "recent2Text": "Mettez à jour les dépendances et vérifiez que la compilation réussit toujours.",
+      "recent2Title": "Mettre à jour le fichier de verrouillage",
+      "recent3Text": "Voici une première version des notes, regroupées par domaine.",
+      "recent3Title": "Brouillon des notes de version",
+      "settingsLink": "Paramètres → Recherche de session d'agent",
+      "startSearching": "Commencer la recherche"
     }
   },
   "quickOpen": {

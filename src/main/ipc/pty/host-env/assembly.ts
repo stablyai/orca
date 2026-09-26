@@ -11,6 +11,7 @@ import { agentHookServer } from '../../../agent-hooks/server'
 import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
+import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-managed-cli'
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/codex-shell-launch-preflight'
@@ -271,11 +272,17 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
   }
 
+  // Why: an inherited copy (e.g. Orca launched from a WSL pane) names another launch's CLI.
+  delete baseEnv.ORCA_WSL_CLI_DIR
   // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `orca` targets the live dev instance.
   if (opts.isWsl) {
     baseEnv.ORCA_USER_DATA_PATH = opts.userDataPath
     // Why: managed WSL registration uses `orca-ide`; exposing that literal scopes agent guidance to WSL without a bare-orca shim.
-    baseEnv.ORCA_CLI_COMMAND = opts.isPackaged ? 'orca-ide' : 'orca-dev'
+    baseEnv.ORCA_CLI_COMMAND = getWslCliCommandName(opts.isPackaged)
+    const managedCliDir = getManagedWslCliDir(opts)
+    if (managedCliDir) {
+      baseEnv.ORCA_WSL_CLI_DIR = managedCliDir
+    }
   } else {
     if (!opts.isPackaged) {
       baseEnv.ORCA_USER_DATA_PATH ??= opts.userDataPath
@@ -293,7 +300,7 @@ export function buildPtyHostEnv(
     baseEnv.BROWSER === undefined &&
     process.env.BROWSER === undefined
   ) {
-    const cliCommand = opts.isWsl ? (opts.isPackaged ? 'orca-ide' : 'orca-dev') : 'orca'
+    const cliCommand = opts.isWsl ? getWslCliCommandName(opts.isPackaged) : 'orca'
     baseEnv.BROWSER = `${cliCommand} open-url --url %s`
   }
 

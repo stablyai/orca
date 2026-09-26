@@ -1,3 +1,4 @@
+import { readMcpServerTomlOwnership } from './config-toml-mcp-servers'
 import { dirname, join } from 'node:path'
 import { observeAgentStateFile } from './codex-path-observation'
 import {
@@ -21,6 +22,7 @@ import { preserveRuntimeConflictValues } from './codex-config-settings-preservat
 import { applyCodexDaemonSocketGuard } from './codex-daemon-socket-path-guard'
 import {
   deduplicateProjectTomlSections,
+  getMcpServerTomlSectionName,
   getProjectTrustLevel,
   getRevocationTomlSectionHeaderKey,
   getTomlSectionHeaderKey,
@@ -109,7 +111,9 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
     ),
     // Why: this pass made the runtime's marketplace and plugin tables canonical,
     // so a later source config that lacks one is a removal, not an addition.
-    mirroredRegistrations: true
+    mirroredRegistrations: true,
+    mirroredMcpServers: mirrorResult.mirroredMcpServerNames,
+    mirroredMcpServerRoot: mirrorResult.mirroredMcpServerRoot
   })
   return true
 }
@@ -167,11 +171,14 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
   let mirroredRuntimeConfig = runtimeConfigBeforeMirror ?? ''
   if (rawSystemConfig.trim() !== '') {
     const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(homes.systemHomePath)
+    // The retired home has no ownership baseline; its entire MCP root stays canonical.
     mirroredRuntimeConfig =
       runtimeConfigBeforeMirror !== null
         ? mergeSystemCodexConfigIntoRuntime(
             runtimeConfigBeforeMirror,
-            prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+            prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir),
+            new Set(),
+            true
           )
         : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
   }
@@ -191,7 +198,12 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
 type CodexConfigMirrorResult =
   | { status: 'skipped-missing-source' }
   | { status: 'refused-indeterminate'; error: unknown }
-  | { status: 'mirrored'; preservedConflictKeys: ReadonlySet<string> }
+  | {
+      status: 'mirrored'
+      preservedConflictKeys: ReadonlySet<string>
+      mirroredMcpServerNames: ReadonlySet<string>
+      mirroredMcpServerRoot: boolean
+    }
 
 function syncSystemConfigIntoManagedCodexHomeUnsafe(
   { runtimeHomePath, systemHomePath, systemConfigDir }: CodexSettingsPromotionHomes,
@@ -225,34 +237,55 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     )
     return runtimeConfigExists
       ? { status: 'skipped-missing-source' }
-      : { status: 'mirrored', preservedConflictKeys: new Set() }
+      : {
+          status: 'mirrored',
+          preservedConflictKeys: new Set(),
+          mirroredMcpServerNames: new Set(),
+          mirroredMcpServerRoot: false
+        }
   }
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
-    writeFileAtomically(
-      runtimeConfigPath,
-      applyCodexDaemonSocketGuard(
-        prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir),
-        runtimeHomePath
-      )
+    const freshRuntimeConfig = applyCodexDaemonSocketGuard(
+      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir),
+      runtimeHomePath
     )
-    return { status: 'mirrored', preservedConflictKeys: new Set() }
+    const ownership = readMcpServerTomlOwnership(freshRuntimeConfig)
+    writeFileAtomically(runtimeConfigPath, freshRuntimeConfig)
+    return {
+      status: 'mirrored',
+      preservedConflictKeys: new Set(),
+      mirroredMcpServerNames: ownership.names,
+      mirroredMcpServerRoot: ownership.ownsRoot
+    }
   }
 
   const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+  const { names: mirroredMcpServerNames, ownsRoot: mirroredMcpServerRoot } =
+    readMcpServerTomlOwnership(systemConfig)
   // Why: reuse the bytes already observed above rather than re-reading. A second
   // read could succeed where the first failed and re-open the gap this closes.
   const runtimeConfig = runtimeConfigObservation.value
   const preserved = preserveRuntimeConflictValues(
-    mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig),
+    mergeSystemCodexConfigIntoRuntime(
+      runtimeConfig,
+      systemConfig,
+      promotionPlan.mirroredMcpServers,
+      promotionPlan.mirroredMcpServerRoot
+    ),
     promotionPlan.runtimeValuesToPreserve
   )
   const nextRuntimeConfig = applyCodexDaemonSocketGuard(preserved.content, runtimeHomePath)
   if (nextRuntimeConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, nextRuntimeConfig)
   }
-  return { status: 'mirrored', preservedConflictKeys: preserved.keys }
+  return {
+    status: 'mirrored',
+    preservedConflictKeys: preserved.keys,
+    mirroredMcpServerNames,
+    mirroredMcpServerRoot
+  }
 }
 
 export function resolveCodexConfigMirrorSourceDirectory(
@@ -284,7 +317,12 @@ export function prepareSystemConfigForFreshRuntimeMirror(
   return stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
 }
 
-function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: string): string {
+function mergeSystemCodexConfigIntoRuntime(
+  runtimeConfig: string,
+  systemConfig: string,
+  mirroredMcpServerNames: ReadonlySet<string> = new Set(),
+  mirroredMcpServerRoot = false
+): string {
   const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig))
   const runtimeProjectHeaders = new Set(
     runtimeSections
@@ -307,6 +345,7 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
       .filter((section) => getProjectTrustLevel(section.block) === 'trusted')
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
+  const systemMcpServers = readMcpServerTomlOwnership(systemConfig)
   // Why: ordinary Codex settings should mirror ~/.codex exactly; runtime hook
   // trust and project trust are written under Orca's managed CODEX_HOME and
   // must survive the copy unless the user explicitly revoked project trust in
@@ -314,7 +353,19 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
   return joinTomlBlocks([
     stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders),
     ...runtimeSections
-      .filter((section) => isRuntimePreservedTomlSection(section.header))
+      .filter((section) => {
+        if (isRuntimePreservedTomlSection(section.header)) {
+          return true
+        }
+        const mcpServerName = getMcpServerTomlSectionName(section.header)
+        return (
+          mcpServerName !== null &&
+          !systemMcpServers.ownsRoot &&
+          !mirroredMcpServerRoot &&
+          !systemMcpServers.names.has(mcpServerName) &&
+          !mirroredMcpServerNames.has(mcpServerName)
+        )
+      })
       .filter(
         (section) =>
           !isRuntimeProjectTomlSection(section.header) ||

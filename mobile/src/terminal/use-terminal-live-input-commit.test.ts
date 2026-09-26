@@ -6,6 +6,13 @@ import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 import { TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS } from './terminal-live-preedit-mirror'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 
+// The host's report is the seam's subject; here only whether it reports a range at all matters.
+const composingRange = vi.hoisted(() => ({ hostReportsNone: false }))
+vi.mock('../platform/live-input-composing-range', () => ({
+  reportedLiveInputComposing: (isComposing: boolean | undefined) =>
+    composingRange.hostReportsNone ? undefined : isComposing
+}))
+
 type TerminalLiveInputCommitHandlers = ReturnType<typeof useTerminalLiveInputCommit<string>>
 
 /** `isComposing` omitted models a platform that reports no marked-text range. */
@@ -121,7 +128,7 @@ function createTerminalLiveInputCommitHarness({
 describe('terminal live input commit hook', () => {
   afterEach(() => {
     vi.useRealTimers()
-    vi.unstubAllGlobals()
+    composingRange.hostReportsNone = false
   })
 
   it('Given Hangul composition and no marked-text report When steps arrive Then no jamo leaks', async () => {
@@ -171,7 +178,7 @@ describe('terminal live input commit hook', () => {
 
   it('Given an Android WebView composing each word When letters follow a slash Then each reaches the terminal as typed', async () => {
     // Given: the page's field event is the DOM's, and an Android keyboard composes Latin words
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Linux; Android 16; wv) Chrome/140' })
+    composingRange.hostReportsNone = true
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
 
     // When
@@ -190,7 +197,7 @@ describe('terminal live input commit hook', () => {
   it('Given an Android WebView composing Hangul When steps arrive Then the non-ASCII run still settles on the timer', async () => {
     // Given
     vi.useFakeTimers()
-    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Linux; Android 16; wv) Chrome/140' })
+    composingRange.hostReportsNone = true
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
 
     // When

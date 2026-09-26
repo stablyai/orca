@@ -1,0 +1,67 @@
+# Translation scan tracker
+
+Recurring task: after a batch of merged PRs, scan for i18n gaps and fix them:
+1. unkeyed user-visible UI strings (gate: `audit:localization` / `verify:localization-coverage`),
+2. keyed strings missing target-locale translations (en.json has the key, es/fr/ja/ko/zh does not),
+3. badly translated target values (placeholder mismatch, brand/term policy violations).
+
+Method (reproducible):
+- `node config/scripts/verify-localization-catalog.mjs` — key references vs en.json,
+  per-locale coverage, interpolation mismatches, generic-term regressions.
+- `node config/scripts/audit-localization-coverage.mjs --check` — unkeyed strings.
+- `node config/scripts/verify-localization-extraction.mjs` — en.json in sync with code.
+- Missing-key delta since last scan: flatten en.json at HEAD vs at the last-scanned
+  base commit, keep keys absent from each target locale.
+- Translate the delta per `config/i18n-translation-source.md` policy and the overrides in
+  `config/scripts/locale-*-overrides.mjs` / `locale-*-fixes.mjs` / `locale-generic-ui-terms.mjs`
+  (brands such as Orca/OpenCode/Git/Python stay Latin; `{{placeholders}}`, markdown links,
+  backtick code spans, and `[python.org](...)` links are preserved verbatim).
+- Apply with `node config/scripts/apply-translation-delta.mjs /tmp/translations.json`
+  (validates placeholder parity and runs every value through `repairTranslatedValue`
+  so CJK spacing, brand-mistranslation fixes, and phrase fixes match the repo pipeline).
+- Re-run all four gates plus the vitest locale suites before finishing.
+- Mobile (`mobile/`) has no locale catalogs (only SVG `translate()` transforms); out of scope
+  until the mobile catalog migration lands. Missing keys fall back to English at runtime
+  (sparse-catalog architecture, PR #8512), so untranslated leftovers are safe, not broken.
+
+## Scan 2026-09-25 (first tracked scan; no prior file existed)
+
+- HEAD scanned: 80e0bee23b (2026-09-24)
+- Window covered: 519bde81df^ .. HEAD (all PRs merged 2026-09-23..2026-09-24 back to and
+  including #22519; en.json deltas computed per commit, full commit list below).
+- Gates before fix: catalog verify PASS, coverage --check PASS (58 allowlisted), extraction
+  PASS, runtime-catalog PASS. So no unkeyed strings and en.json in sync; the gap was
+  target-locale coverage only.
+
+## Scan 2026-09-26
+
+- HEAD scanned: a15a5c8c1a6 (origin/main @ 067975bfd1 plus merge; 12 newest main
+  commits add zero en keys, verified).
+- Window covered: 80e0bee23b .. HEAD. Note: the previous scan's own branch commits
+  (chat-resume/Git-toolchain/notebook translations + fr/ko terminology fixes +
+  jupyter fix) have since landed upstream as #22746, so this scan's base-to-HEAD
+  delta already includes them; the merge was resolved with --theirs on
+  es/fr/ja/zh (our stale native-chat.handoff.* translations correctly dropped:
+  the keys were removed from en.json by upstream #22783).
+- Delta since base: 113 new en keys (mostly sessionSearch x44, resume-modal
+  activity, ipynb venv, Cursor accounts, feature-tips), 4 changed en values
+  (3x "mid-turn" -> "working" resume copy; screenshotsHint gained {{maxSize}}).
+  fr/ja/ko/zh translations of the 3 resume keys already matched new semantics.
+- Applied: es +111 (107 new + 3 resume + screenshotsHint), fr/ja/ko/zh +100 each
+  (99 new + screenshotsHint) via apply-translation-delta.mjs (pipeline repaired
+  ja 使用状況->使用量 x1, ja phrase x2, zh 智能体->代理 x5). Strictly additive:
+  +511 keys, 0 removed.
+- Gates after fix: catalog verify PASS (fr/ja/ko/zh 14733/14733 = 100%;
+  es 12328/14733, remaining 2405 missing are pre-existing es backlog, out of
+  delta scope), coverage --check PASS (58 allowlisted), extraction PASS,
+  locale vitest suites PASS (policy x7 files, ko overrides, generic terms,
+  frozen keywords, native-chat locales).
+- Reviews (3 of max 4 rounds, subagents; round 0 = 5 parallel translators):
+  R1 fixed 20 (es kw.rateLimit->EN per 10-hit precedent; fr NBSP guillemets;
+  ja settingsLink/progressStarting; ko demo-snippet localization x8 +
+  consentInstruction fragment; zh x6 incl. 仪表盘/表结构/工作流程).
+  R2 fixed 5 and reverted fr NBSP->plain spaces (91-vs-7 file convention;
+  R1 evidence was circular) + ja kw.spend->追加料金 + ja particle fix +
+  ko 색인화. R3 sign-off clean on all locales (R2 fixes byte-verified,
+  full placeholder parity 0 mismatches, 0 missing keys).
+
