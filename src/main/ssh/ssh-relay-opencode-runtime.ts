@@ -150,7 +150,7 @@ async function install(
   let target: OrcadBunTarget | undefined
   let localRuntime: string | undefined
   if (node.status === 'unsupported') {
-    target = await remote(() => resolveOrcadDeploymentTarget({ conn, host, signal }))
+    target = await resolveOrcadDeploymentTarget({ conn, host, signal, exec })
     const expectedHash = ORCAD_BUN_RELEASE_ASSETS[target].executableSha256
     executable = joinRemotePath(
       host,
