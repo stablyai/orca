@@ -50,6 +50,54 @@ afterEach(() => {
 })
 
 describe('NativeChatImageAttachments', () => {
+  it('opens a pasted transcript image in the full-size dialog', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => {
+        root.render(
+          createElement(NativeChatImageAttachments, {
+            blocks: [{ type: 'image-ref', path: 'C:\\Temp\\orca-paste-test.png' }],
+            runtimeContext: runtimeContext('wt-1')
+          })
+        )
+        await flushPromises()
+      })
+      expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:owner-1')
+      const button = container.querySelector('button')
+      expect(button).not.toBeNull()
+      await act(async () => button?.click())
+      expect(document.querySelector('[role="dialog"] img')?.getAttribute('src')).toBe(
+        'blob:owner-1'
+      )
+      expect(window.api.fs.readFile).toHaveBeenCalledOnce()
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('does not read a transcript image before its execution host is resolved', async () => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => {
+        root.render(
+          createElement(NativeChatImageAttachments, {
+            blocks: [{ type: 'image-ref', path: '/tmp/orca-paste-test.png' }],
+            runtimeContext: null
+          })
+        )
+        await flushPromises()
+      })
+      expect(window.api.fs.readFile).not.toHaveBeenCalled()
+      expect(container.querySelector('img')).toBeNull()
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
+
   it('pools visibility observation across image refs', async () => {
     class FakeIntersectionObserver {
       static instances: FakeIntersectionObserver[] = []
