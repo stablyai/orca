@@ -1,4 +1,3 @@
-import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
 import {
   ORCA_EDITOR_FILE_SAVED_EVENT,
   requestEditorFileSave,
@@ -185,12 +184,13 @@ function resolveMarkdownTarget(
   tabId: string
 ): { tab: OpenFile; sourceFile: OpenFile } {
   const state = useAppStore.getState()
-  const orderItem = getActiveTabNavOrder(state, worktreeId).find(
-    (item) => item.type === 'editor' && (item.tabId === tabId || item.id === tabId)
+  const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.contentType === 'editor' && candidate.id === tabId
   )
-  const tabFileId = orderItem?.type === 'editor' ? orderItem.id : tabId
+  // Why: hydration can publish the file ID before a unified editor wrapper exists.
+  const tabFileId = unifiedTab?.entityId ?? tabId
   const tab = state.openFiles.find(
-    (file) => file.worktreeId === worktreeId && (file.id === tabFileId || file.id === tabId)
+    (file) => file.worktreeId === worktreeId && file.id === tabFileId
   )
   if (!tab || !isMarkdownTab(tab)) {
     throw new Error('tab_not_found')
