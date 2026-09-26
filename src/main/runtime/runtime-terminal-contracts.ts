@@ -79,6 +79,8 @@ export type TerminalCreateOptions = {
   agentSessionCreateOperationId?: string
   signal?: AbortSignal
   onPtySpawnCommitted?: () => void
+  /** Called before the spawn request leaves this process; a throw before it proves nothing spawned. */
+  onPtySpawnDispatched?: () => void
   deferMobileSessionPublish?: boolean
 }
 

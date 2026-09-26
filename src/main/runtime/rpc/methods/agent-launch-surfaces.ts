@@ -36,6 +36,7 @@ import { AgentLaunchSessionAlreadyExistsError } from '../../../../shared/agent-l
 import { createStructuredAgentSessionId } from '../../../../shared/structured-agent-session-create'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch-preferences'
 import { paneIdentity } from '../../runtime-terminal-pane-identity'
+import { trackTerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 
 /** Replay-safe launches keep the nested attach in the same stable caller namespace as the launch. */
 export function agentLaunchSurfaceFactory(
@@ -118,7 +119,8 @@ export function agentLaunchSurfaceFactory(
       options
     }) => {
       const launchPreferences = toAgentLaunchPreferences(options)
-      const terminal = await context.runtime.createTerminal(`id:${worktreeId}`, {
+      const spawn = trackTerminalSpawnDispatch()
+      const created = context.runtime.createTerminal(`id:${worktreeId}`, {
         // The agent id is not a shell command — `cursor` is the desktop app, its CLI is
         // `cursor-agent` — so the runtime builds the configured launcher.
         startupAgent: agent,
@@ -131,8 +133,10 @@ export function agentLaunchSurfaceFactory(
         ...(launchPreferences ? { launchPreferences } : {}),
         // A live reserved pane would be attached, not launched into, so the runtime refuses it.
         ...(paneKey ? { ...paneIdentity(paneKey), requireFreshPane: true } : {}),
-        ...agentLaunchTelemetry(agent, launchSource)
+        ...agentLaunchTelemetry(agent, launchSource),
+        onPtySpawnDispatched: spawn.onPtySpawnDispatched
       })
+      const terminal = await created.catch(spawn.rethrow)
       return {
         handle: terminal.handle,
         // The runtime already minted this pane and baked it into the PTY's env and its own reveal;
