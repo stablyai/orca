@@ -5,6 +5,7 @@ import type {
   TerminalWaiter
 } from './runtime-terminal-contracts'
 import {
+  TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './orca-runtime-postlude'
@@ -25,14 +26,13 @@ import {
 } from './terminal-wait-results'
 import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
 import { isAntigravityReadyPromptSnapshot } from './antigravity-terminal-readiness'
+import { isHermesReadyPromptSnapshot } from './hermes-terminal-readiness'
+import { hasFreshWorkingFirstPartyStatus } from './tui-idle-evidence'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
-  /** One bounded look at the provider's screen for an adopted PTY whose retained
-   *  readiness metadata was lost. Deliberately single-shot: it answers "is the
-   *  screen already showing a settled prompt", and the poll above owns every
-   *  later transition. A provider screen that is still working when this fires
-   *  resolves through the poll, not here. */
+  /** Hermes repaints the grid without a usable retained tail; unlike other agents,
+   *  it needs bounded screen retries while the same waiter remains live. */
   protected startTuiIdleVisibleReadProbe(
     waiter: TerminalWaiter,
     waiterTimeoutMs: number,
@@ -53,46 +53,83 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     if (providerTimeoutMs < 1) {
       return
     }
-    void withTimeout(
-      this.readTerminal(waiter.handle, agent === 'antigravity' ? { screen: true } : {}, {
-        timeoutMs: providerTimeoutMs,
-        retireOnTimeout: true,
-        // Why: the ready banner stays in scrollback for the whole session, so
-        // classifying history would call a working agent idle (#15569 review).
-        visibleScreenOnly: true
-      } satisfies RuntimeProviderSnapshotReadOptions),
-      probeTimeoutMs,
-      null
+    const retryIntervalMs = Math.min(
+      TUI_IDLE_POLL_INTERVAL_MS,
+      Math.max(50, Math.floor(waiterTimeoutMs / 3))
     )
-      .then((projection) => {
-        if (
-          !projection ||
-          projection.source !== 'screen' ||
-          !this.terminalWaiters.get(waiter.handle)?.has(waiter)
-        ) {
-          return
-        }
-        const snapshotText =
-          agent === 'antigravity'
-            ? [...projection.tail, projection.draft ?? ''].join('\n')
-            : projection.tail.join('\n')
-        const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        const ready =
-          agent === 'antigravity'
-            ? isAntigravityReadyPromptSnapshot(snapshotText)
-            : isKnownReadyPromptPreview(snapshotText)
-        if (!blockedReason && !ready) {
-          return
-        }
-        const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
-        if (waiter.cancelIdlePoll) {
-          waiter.cancelIdlePoll()
-        }
-        this.terminalWaiters.resolve(waiter, result)
-      })
-      .catch(() => {})
+    /** A short wait must get another visible read before its own deadline. */
+    const probe = (): void => {
+      if (!this.terminalWaiters.get(waiter.handle)?.has(waiter)) {
+        return
+      }
+      // Schedule from the start, not after the read. A slow provider cannot use up
+      // the whole deadline before a short Hermes waiter gets its next screen read.
+      const retry = agent === 'hermes' ? setTimeout(probe, retryIntervalMs) : null
+      retry?.unref?.()
+      void withTimeout(
+        this.readTerminal(
+          waiter.handle,
+          agent === 'antigravity' || agent === 'hermes' ? { screen: true } : {},
+          {
+            timeoutMs: providerTimeoutMs,
+            retireOnTimeout: true,
+            // Why: the ready banner stays in scrollback for the whole session, so
+            // classifying history would call a working agent idle (#15569 review).
+            visibleScreenOnly: true
+          } satisfies RuntimeProviderSnapshotReadOptions
+        ),
+        probeTimeoutMs,
+        null
+      )
+        .then((projection) => {
+          if (
+            !projection ||
+            projection.source !== 'screen' ||
+            !this.terminalWaiters.get(waiter.handle)?.has(waiter)
+          ) {
+            return
+          }
+          const snapshotText =
+            agent === 'antigravity'
+              ? [...projection.tail, projection.draft ?? ''].join('\n')
+              : projection.tail.join('\n')
+          const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
+          let ready = false
+          if (agent === 'antigravity') {
+            ready = isAntigravityReadyPromptSnapshot(snapshotText)
+          } else if (agent === 'hermes') {
+            ready = isHermesReadyPromptSnapshot(snapshotText)
+          } else {
+            ready = isKnownReadyPromptPreview(snapshotText)
+          }
+          if (!blockedReason && !ready) {
+            return
+          }
+          if (agent === 'hermes' && ready && !blockedReason) {
+            const ptyId =
+              this.getLivePtyForHandle(waiter.handle)?.pty.ptyId ??
+              this.getLiveLeafForHandle(waiter.handle).leaf.ptyId
+            const status = ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null
+            // A fresh turn or approval owns input even if the previous ready frame remains painted.
+            if (hasFreshWorkingFirstPartyStatus(status ?? null)) {
+              return
+            }
+          }
+          const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
+          if (retry) {
+            clearTimeout(retry)
+          }
+          if (waiter.cancelIdlePoll) {
+            waiter.cancelIdlePoll()
+          }
+          this.terminalWaiters.resolve(waiter, result)
+        })
+        .catch(() => {})
+    }
+    probe()
   }
 
+  /** Build a visible-probe verdict against the current PTY or leaf. */
   protected buildTuiIdleProbeResult(
     handle: string,
     blockedReason: RuntimeTerminalWaitBlockedReason | null
