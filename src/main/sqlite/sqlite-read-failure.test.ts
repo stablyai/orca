@@ -1,9 +1,13 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from './sync-database'
-import { classifySqliteReadFailure, isTransientSqliteContention } from './sqlite-read-failure'
+import {
+  classifySqliteReadFailure,
+  isTransientSqliteContention,
+  isUnusableSqliteDatabaseError
+} from './sqlite-read-failure'
 
 // Error codes here are the ones a real node:sqlite open produces: a contended
 // database reports errcode 5 ("database is locked"), while a read-only WAL open
@@ -109,5 +113,23 @@ describe('classifySqliteReadFailure', () => {
         databaseFileExists: true
       })
     ).toBe('unreadable')
+  })
+})
+
+describe('isUnusableSqliteDatabaseError', () => {
+  it('recognizes the error a real open of a garbage file throws, and nothing transient', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-sqlite-unusable-'))
+    tempDirs.push(dir)
+    const path = join(dir, 'garbage.db')
+    writeFileSync(path, Buffer.alloc(4096, 7))
+    let thrown: unknown
+    try {
+      new SyncDatabase(path).pragma('user_version', { simple: true })
+    } catch (error) {
+      thrown = error
+    }
+    expect(isUnusableSqliteDatabaseError(thrown)).toBe(true)
+    expect(isUnusableSqliteDatabaseError(new Error('database is locked'))).toBe(false)
+    expect(isUnusableSqliteDatabaseError({ errcode: 14, message: 'unable to open' })).toBe(false)
   })
 })

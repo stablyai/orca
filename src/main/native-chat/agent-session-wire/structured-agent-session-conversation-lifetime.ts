@@ -17,6 +17,7 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { isUnusableSqliteDatabaseError } from '../../sqlite/sqlite-read-failure'
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<
   typeof createStructuredAgentSessionConversationLifetime
@@ -107,7 +108,12 @@ export function createStructuredAgentSessionConversationLifetime(host: {
         throw new Error('structured_agent_session_unsupported')
       }
       return serialize(sessionId, async () => {
-        const session = await host.open(sessionId)
+        const session = await host.open(sessionId).catch((error: unknown) => {
+          // Final: the same file answers the same on every retry. Anything else stays retryable.
+          throw isUnusableSqliteDatabaseError(error)
+            ? new Error('agent_session_journal_unreadable')
+            : error
+        })
         if (!session) {
           throw new Error('agent_session_identity_required')
         }
