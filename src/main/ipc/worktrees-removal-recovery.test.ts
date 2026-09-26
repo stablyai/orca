@@ -321,7 +321,9 @@ describe('registerWorktreeHandlers', () => {
         expect(finish).toHaveBeenCalledWith(false)
         expect(removePath).toHaveBeenCalledTimes(mode === 'removal-fails' ? 1 : 0)
         await rm(orphanPath, { recursive: true, force: true })
-        await expect(handlers['worktrees:remove'](null, { worktreeId })).resolves.toEqual({})
+        await expect(handlers['worktrees:remove'](null, { worktreeId })).resolves.toEqual({
+          catalogVersion: anyCatalogVersion
+        })
         expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
         expect(finish).toHaveBeenLastCalledWith(true)
       } finally {
