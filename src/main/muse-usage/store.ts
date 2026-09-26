@@ -56,16 +56,15 @@ export class MuseUsageStore extends UsageProviderStoreLifecycle<
     range: MuseUsageRange,
     recentSessionLimit = 10
   ): MuseUsageSnapshot {
+    const daily = this.getFilteredDaily(scope, range)
+    const sessions = this.getFilteredSessions(scope, range)
     return {
       scanState: this.getScanState(),
-      summary: this.buildSummary(scope, range),
-      daily: buildMuseUsageDailyPoints(this.getFilteredDaily(scope, range)),
-      modelBreakdown: this.buildBreakdown(scope, range, 'model'),
-      projectBreakdown: this.buildBreakdown(scope, range, 'project'),
-      recentSessions: buildMuseUsageRecentSessions(
-        this.getFilteredSessions(scope, range),
-        recentSessionLimit
-      )
+      summary: buildMuseUsageSummary(scope, range, daily, sessions),
+      daily: buildMuseUsageDailyPoints(daily),
+      modelBreakdown: buildMuseUsageBreakdownRows('model', scope, daily, sessions),
+      projectBreakdown: buildMuseUsageBreakdownRows('project', scope, daily, sessions),
+      recentSessions: buildMuseUsageRecentSessions(sessions, recentSessionLimit)
     }
   }
 

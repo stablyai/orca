@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from './persistence-test-harness'
 // Why this file exists: worktree removal writes to host session partitions, and the two hazards below
 // are only visible across a removal followed by a renderer session write — persistence.test.ts covers
 // removal and partitioning separately, so neither suite catches the interaction.
@@ -34,7 +35,7 @@ async function createStore() {
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
-  return new Store()
+  return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 const makeTerminalTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => ({
@@ -58,7 +59,8 @@ describe('worktree removal across host session partitions', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

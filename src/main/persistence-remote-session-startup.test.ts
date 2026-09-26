@@ -1,10 +1,10 @@
+import { closeTestStores, createStore, makeRepo, testState } from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import type { BrowserPage, BrowserWorkspace } from '../shared/browser-workspace-types'
-import { createStore, makeRepo, testState } from './persistence-test-harness'
 
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -65,7 +65,8 @@ describe('remote session startup ownership', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-remote-session-'))
   })
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

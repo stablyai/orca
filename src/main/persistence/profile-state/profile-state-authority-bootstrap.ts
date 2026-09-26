@@ -2,19 +2,12 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { publishProfileStateDatabase } from './profile-state-database-publication'
-import type {
-  ProfileStateAuthorityInitialState,
-  ProfileStateStartupPaneAlias
-} from '../loading-store/profile-state-authority'
-import { Store } from '../loading-store/store'
+import type { ProfileStateAuthorityInitialState } from '../loading-store/profile-state-authority'
 import { isProfileStateSqliteAvailable, openProfileStateDatabase } from './profile-state-database'
 import { ProfileStateDatabaseOpenError } from './profile-state-database-errors'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { migrateProfileStateToSqlite } from './profile-state-migration'
-import {
-  PROFILE_STATE_LEGACY_BACKUP_COUNT,
-  profileStateLegacyBackupPath
-} from './profile-state-legacy-backup-path'
+import { prepareLegacyProfileState } from './legacy-json/profile-state-legacy-import'
 import {
   assertProfileStateCanInitialize,
   ProfileStateAuthorityBootstrapError,
@@ -155,38 +148,4 @@ function migrateJsonOnlyProfile(
     initialState: { ...migrated.initialState, unboundPaneAliases },
     migrated: true
   }
-}
-
-function prepareLegacyProfileState(dataFile: string, rawJson: string) {
-  try {
-    return prepareLegacySnapshot(dataFile, rawJson)
-  } catch (error) {
-    // Import the first usable legacy backup without overwriting the damaged source.
-    for (let index = 0; index < PROFILE_STATE_LEGACY_BACKUP_COUNT; index += 1) {
-      const path = profileStateLegacyBackupPath(dataFile, index)
-      if (!existsSync(path)) {
-        continue
-      }
-      try {
-        const prepared = prepareLegacySnapshot(dataFile, readFileSync(path, 'utf8'))
-        console.warn(`[profile-state] Recovered legacy state from ${path}`)
-        return prepared
-      } catch {
-        // A corrupt backup must not prevent trying the remaining legacy ring.
-      }
-    }
-    throw new ProfileStateAuthorityBootstrapError(
-      `Failed to load imported profile state or its legacy backups: ${dataFile}. ${error instanceof Error ? error.message : String(error)}`
-    )
-  }
-}
-
-function prepareLegacySnapshot(dataFile: string, serializedState: string) {
-  const unboundPaneAliases: ProfileStateStartupPaneAlias[] = []
-  const store = new Store({
-    dataFile,
-    serializedState,
-    collectUnboundPaneAlias: (entry) => unboundPaneAliases.push(entry)
-  })
-  return { prepared: store.prepareProfileStateExport(), unboundPaneAliases }
 }

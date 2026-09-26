@@ -28,7 +28,7 @@ import {
 import {
   profileStateJsonExportPath,
   profileStateJsonExportPaths
-} from './profile-state-export-path'
+} from './legacy-json/profile-state-export-path'
 import {
   createProfileStateDatabaseBackupId,
   profileStateDatabaseBackupPath,
@@ -36,7 +36,7 @@ import {
 } from './profile-state-backup-path'
 import { writeProfileStateDatabaseSnapshotAsync } from './profile-state-database-snapshot'
 import { createProfileStateStore } from './profile-state-store-factory'
-import { restoreProfileStateJsonExport } from './profile-state-recovery'
+import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
 import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
 import {
   buildRecoveryCrashProcess,
@@ -206,8 +206,7 @@ function assertRestart(profile: Fixture, expected: 'old' | 'selected' | 'refused
       createProfileStateStore({
         dataFile: profile.dataFile,
         databaseFile: profile.databasePath,
-        profileId,
-        authorityMode: 'sqlite-established'
+        profileId
       })
     if (expected === 'refused') {
       expect(open).toThrow()
@@ -224,7 +223,9 @@ function assertRestart(profile: Fixture, expected: 'old' | 'selected' | 'refused
     expect(raw).toEqual(expectedState)
     const reopened = open()
     try {
-      expect(reopened.backend).toBe(storage)
+      expect(reopened.backend).toBe('sqlite')
+      expect(reopened.migrated).toBe(storage === 'json')
+      expect(profileStateStorage(profileId, profile.root)).toBe('sqlite')
       const projected: unknown = JSON.parse(reopened.store.prepareProfileStateExport().json)
       expect(projected).toMatchObject(expectedState)
     } finally {
@@ -310,12 +311,13 @@ describe.each([false, true])('JSON recovery process death, accepted prior JSON=%
             (boundary === 'json-publish:after' && accepted)
           ? 'old'
           : 'refused'
-      assertRestart(profile, expected)
       if (finished) {
         expect(readFileSync(profile.dataFile, 'utf8')).toBe(selectedJson)
         expect(profileStateJsonExportPaths(profile.dataFile)).toEqual([])
         expect(profileStateDatabaseBackups(profile.databasePath)).toEqual([])
-      } else {
+      }
+      assertRestart(profile, expected)
+      if (!finished) {
         expect(readFileSync(profile.exportPath, 'utf8')).toBe(selectedJson)
         retry(profile)
       }

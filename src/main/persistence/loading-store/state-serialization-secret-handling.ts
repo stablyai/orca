@@ -1,4 +1,7 @@
-import { serializeCompleteProfileStateDomains } from './profile-state-authority-writes'
+import {
+  serializeCompleteProfileStateDomains,
+  serializeSelectiveProfileStateDomains
+} from './profile-state-authority-writes'
 import type { ProfileStateDomainReplacement } from './profile-state-authority'
 import { randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -35,7 +38,7 @@ export class StateSerializationSecretHandlingOperations {
   /** Serialize domains with complete secret handling; unknown domains fall back to a full write. */
   buildStateDomainsToSave(domains: ReadonlySet<string>):
     | {
-        payload: Buffer
+        replacements: ProfileStateDomainReplacement[]
         protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
       }
     | undefined {
@@ -111,7 +114,7 @@ export class StateSerializationSecretHandlingOperations {
       }
     }
     return {
-      payload: Buffer.from(JSON.stringify(stateToSave), 'utf8'),
+      replacements: serializeSelectiveProfileStateDomains(stateToSave, domains),
       protectedSecretUpdates
     }
   }
