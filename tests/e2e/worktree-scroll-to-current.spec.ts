@@ -40,7 +40,7 @@ test.describe('Reveal active workspace button', () => {
   // (not a scenario real users hit). Reveal-into-view is covered robustly by
   // the "outside the virtualized window" test below.
 
-  test('clears sidebar filters before revealing a hidden current workspace', async ({
+  test('adjusts sidebar filters before revealing a hidden current workspace', async ({
     orcaPage,
     testRepoPath
   }, testInfo) => {
@@ -94,6 +94,14 @@ test.describe('Reveal active workspace button', () => {
     if (!targetId) {
       throw new Error('Seeded secondary worktree is missing')
     }
+    const targetRepoId = await orcaPage.evaluate((id) => {
+      return Object.values(window.__store!.getState().worktreesByRepo)
+        .flat()
+        .find((worktree) => worktree.id === id)?.repoId
+    }, targetId)
+    if (!targetRepoId) {
+      throw new Error('Seeded secondary worktree repository is missing')
+    }
 
     const targetRows = orcaPage.locator(
       `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(targetId)}]`
@@ -132,27 +140,14 @@ test.describe('Reveal active workspace button', () => {
     await revealButton.click()
     await orcaPage
       .getByRole('dialog', { name: 'Reveal hidden workspace?' })
-      .getByRole('button', { name: 'Clear filters and reveal' })
+      .getByRole('button', { name: 'Adjust filters and reveal' })
       .click()
 
     await expect(targetRow).toBeVisible()
     await expect(targetRow).toHaveAttribute('data-scroll-reveal-highlight', 'true')
     await expect
-      .poll(
-        () =>
-          orcaPage.evaluate(() => {
-            const store = window.__store
-            if (!store) {
-              throw new Error('window.__store is not available')
-            }
-            return store.getState().filterRepoIds
-          }),
-        {
-          timeout: 10_000,
-          message: 'Reveal button should clear repo filters that hide the current workspace'
-        }
-      )
-      .toEqual([])
+      .poll(() => orcaPage.evaluate(() => window.__store!.getState().filterRepoIds))
+      .toEqual([filterRepoId, targetRepoId])
   })
 
   test('reveals the current workspace when it starts outside the virtualized window', async ({
