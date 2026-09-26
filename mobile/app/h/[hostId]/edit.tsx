@@ -17,7 +17,7 @@ import { colors, radii, spacing, typography } from '../../../src/theme/mobile-th
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
 import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
-import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
+import { usePrimeHosts, useRefreshHostClient } from '../../../src/transport/client-context'
 import type { HostProfile } from '../../../src/transport/types'
 
 export default function EditHostScreen() {
@@ -25,7 +25,7 @@ export default function EditHostScreen() {
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
   const primeHosts = usePrimeHosts()
-  const forceReconnectHost = useForceReconnect()
+  const refreshHostClient = useRefreshHostClient()
 
   const [host, setHost] = useState<HostProfile | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -51,7 +51,8 @@ export default function EditHostScreen() {
         return
       }
       setHost(found)
-      setName(found.name)
+      // The field edits the phone's override; an empty field means "use the desktop's name".
+      setName(found.personalName ?? '')
       setAddress(displayHostEndpoint(found.endpoint))
       setLoadError(null)
     } catch (err) {
@@ -70,12 +71,11 @@ export default function EditHostScreen() {
   )
 
   const nameTrimmed = name.trim()
-  const nameChanged = host != null && nameTrimmed.length > 0 && nameTrimmed !== host.name
+  const nameChanged = host != null && nameTrimmed !== (host.personalName ?? '')
   const endpointChanged = endpointEdit?.kind === 'changed'
   const canSave =
     host != null &&
     endpointEdit != null &&
-    nameTrimmed.length > 0 &&
     endpointEdit.kind !== 'invalid' &&
     (nameChanged || endpointChanged) &&
     !saving
@@ -85,16 +85,12 @@ export default function EditHostScreen() {
       return
     }
     const nextName = name.trim()
-    if (!nextName) {
-      setSaveError('Enter a name.')
-      return
-    }
     if (endpointEdit.kind === 'invalid') {
       setSaveError(endpointEdit.error)
       return
     }
 
-    const willRename = nextName !== host.name
+    const willRename = nextName !== (host.personalName ?? '')
     const nextEndpoint = endpointEdit.kind === 'changed' ? endpointEdit.endpoint : undefined
     if (!willRename && nextEndpoint === undefined) {
       router.back()
@@ -109,7 +105,7 @@ export default function EditHostScreen() {
       // atomically — a mid-save failure can never persist one without the
       // other, and a host removed mid-edit throws instead of no-oping.
       await updateHostNameAndEndpoint(host.id, {
-        ...(willRename ? { name: nextName } : {}),
+        ...(willRename ? { personalName: nextName || null } : {}),
         ...(nextEndpoint !== undefined ? { endpoint: nextEndpoint } : {})
       })
     } catch (err) {
@@ -134,10 +130,8 @@ export default function EditHostScreen() {
     router.back()
 
     if (nextEndpoint !== undefined) {
-      // Why: reconnect is a follow-on side effect of a save that already
-      // committed — its failure or a hang must not be reported as a save
-      // failure or block navigating back.
-      void forceReconnectHost?.(host.id).catch(() => {})
+      // Why: the live client, even one riding the relay, and its primed profile hold the old address.
+      refreshHostClient(host.id)
     }
   }
 
@@ -192,9 +186,10 @@ export default function EditHostScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <Text style={styles.help}>
-              Change the display name or connection address. Address edits only switch where this
-              phone connects — they do not re-pair. Use this when the same desktop is reachable at a
-              different IP (for example home LAN vs Tailscale).
+              Change the display name or connection address. Leave the name empty to use the name
+              the desktop reports. Address edits only switch where this phone connects — they do not
+              re-pair. Use this when the same desktop is reachable at a different IP (for example
+              home LAN vs Tailscale).
             </Text>
 
             <Text style={styles.label}>Name</Text>
@@ -206,7 +201,7 @@ export default function EditHostScreen() {
                 setName(value)
                 setSaveError(null)
               }}
-              placeholder="Host name"
+              placeholder={host.lastKnownMachineName ?? 'Host name'}
               placeholderTextColor={colors.textMuted}
               autoCapitalize="words"
               autoCorrect={false}

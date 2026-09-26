@@ -59,13 +59,6 @@ export type LaunchAgentInNewTabArgs = {
    * terminal route, whose readiness signal the client watches itself.
    */
   onPromptDeliveryUnconfirmed?: () => void
-  /**
-   * Whether the new terminal tab takes the global selection. The floating workspace passes `false`
-   * and selects within its own group instead, so launching there does not move the main window's
-   * active tab. Terminal surface only — the structured and host-published routes own their own
-   * activation.
-   */
-  activate?: boolean
   /** A one-time Claude account choice; the project's saved account applies when omitted. */
   claudeAccountId?: string
   /** Keeps a preflighted route authoritative across workspace creation. */
@@ -125,7 +118,6 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     onPromptDeliveryUnconfirmed,
     agentSessionLaunchPlan,
     beforeSurfaceOpen,
-    activate,
     claudeAccountId
   } = args
   const store = useAppStore.getState()
@@ -265,7 +257,6 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
-    ...(activate === false ? { activate: false } : {}),
     ...initialViewModeProps
   })
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
@@ -337,9 +328,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   }
 
   // Why: without setActiveTabType('terminal') an activated launch can stay hidden behind an editor.
-  if (activate !== false) {
-    store.setActiveTabType('terminal')
-  }
+  // Scoped to the launch's worktree so a floating or background launch leaves the main window's tab alone.
+  store.setActiveTabType('terminal', worktreeId)
 
   // Why: persist tab-bar order so reconcileTabOrder doesn't fall back to terminals-first and jump the new tab to index 0.
   persistAgentLaunchTabOrder(worktreeId, tab.id)

@@ -153,7 +153,9 @@ describe('RuntimeClient module-graph deferral', () => {
     async (_name, argv, constructs) => {
       vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
       vi.stubEnv('ORCA_ENVIRONMENT', 'some-environment')
-      getCliStatusMock.mockResolvedValue({ result: { runtime: { reachable: false } } })
+      getCliStatusMock.mockResolvedValue({
+        result: { runtime: { reachable: false }, app: { running: false } }
+      })
 
       await main(argv, '/tmp/repo')
 

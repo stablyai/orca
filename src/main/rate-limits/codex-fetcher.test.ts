@@ -52,7 +52,7 @@ import { fetchCodexRateLimits } from './codex-fetcher'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
 import { getCmdExePath } from '../win32-utils'
-import { CODEX_RATE_LIMIT_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
+import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -788,7 +788,12 @@ describe('fetchCodexRateLimits', () => {
 
       const [spawnFile, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0]
       expect(spawnFile).toBe(getCmdExePath())
-      expect(spawnArgs).toEqual(['/d', '/c', codexCommand, ...CODEX_RATE_LIMIT_APP_SERVER_ARGS])
+      expect(spawnArgs).toEqual([
+        '/d',
+        '/c',
+        codexCommand,
+        ...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
+      ])
       expect(spawnOptions).toEqual(
         expect.objectContaining({
           env: expect.objectContaining({ CODEX_HOME: 'C:\\Users\\alice\\.codex' })

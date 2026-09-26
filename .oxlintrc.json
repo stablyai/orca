@@ -143,7 +143,26 @@
     {
       "files": ["src/renderer/src/**/*.{ts,tsx}"],
       "rules": {
-        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error"
+        "renderer-scrollbar-style/require-styled-vertical-scrollbar": "error",
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "randomUUID",
+            "message": "crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP), which white-screens the app. Use createBrowserUuid() from '@/lib/browser-uuid'."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/shared/**/*.ts"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "randomUUID",
+            "message": "src/shared is compiled into the web bundle, where crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP). Use createNonSecureContextUuid() from './non-secure-context-uuid', or import randomUUID from 'node:crypto' in main-only code."
+          }
+        ]
       }
     },
     {
@@ -155,7 +174,7 @@
       }
     },
     {
-      "files": ["**/*.ts"],
+      "files": ["**/*.ts", "**/*.mts", "**/*.cts"],
       "rules": {
         "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }]
       }
@@ -173,7 +192,16 @@
       }
     },
     {
-      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.test.mts",
+        "**/*.test.cts",
+        "**/*.spec.mts",
+        "**/*.spec.cts"
+      ],
       "rules": {
         "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
       }

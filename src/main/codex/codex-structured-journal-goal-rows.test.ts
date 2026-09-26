@@ -35,8 +35,8 @@ function frames(): {
     },
     publish: vi.fn()
   } as unknown as StructuredAgentSessionEventSink
-  const goals = new CodexJournalGoals(sink)
-  const generic = new CodexJournalGenericFrames({ sink }, () => null)
+  const goals = new CodexJournalGoals(sink, () => ({}))
+  const generic = new CodexJournalGenericFrames({ sink, linkageFor: () => ({}) }, () => null)
   return {
     rows,
     frames: {

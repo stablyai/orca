@@ -1,5 +1,6 @@
 import type { EffortLevel, PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
+import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-requests'
 import {
   AgentSessionOptionRejectedError,
   isAgentSessionOptionRejectedError
@@ -38,6 +39,23 @@ export function restoredClaudeStructuredSessionOptions(
       return value ? [[key, value] as const] : []
     })
   )
+}
+
+/** A client's write; the startup restore writes through `setClaudeStructuredOption` directly. */
+export function setClaudeStructuredSessionOption(
+  session: ClaudeSession,
+  input: { key: string; value: string },
+  timeoutMs: number | undefined
+): Promise<Readonly<Record<string, string>>> {
+  // Each write is a control request the CLI answers only after initialize.
+  if (session.startup.state !== 'proven') {
+    return Promise.reject(
+      new AgentSessionOptionRejectedError(
+        'Claude is still starting; options can be changed once it is ready.'
+      )
+    )
+  }
+  return setClaudeStructuredOption(session, input, timeoutMs)
 }
 
 export async function setClaudeStructuredOption(
@@ -146,6 +164,8 @@ export async function setClaudeStructuredOption(
     }
     if (input.key === 'model') {
       session.translator?.modelWritten(input.value)
+      // It described the model this write replaced; the next readback re-reads it.
+      delete session.appliedOptions
     }
     if (
       input.key === 'model' &&
@@ -237,6 +257,16 @@ export async function restoreClaudeStructuredSessionOptions(
     try {
       await setClaudeStructuredOption(session, { key, value }, timeoutMs, value)
     } catch (error) {
+      // A write the CLI never answered must not fault a start that is otherwise fine. Silence is
+      // not a refusal, so the choice stays wanted, unconfirmed, and the next start retries it.
+      if (error instanceof ClaudeControlRequestTimeoutError) {
+        console.warn(
+          `[claude-structured] restore of ${key} for ${session.providerSessionId} was not answered in time; keeping it unconfirmed`
+        )
+        session.options.set(key, value)
+        session.confirmedOptions.delete(key)
+        continue
+      }
       if (!isAgentSessionOptionRejectedError(error)) {
         throw error
       }

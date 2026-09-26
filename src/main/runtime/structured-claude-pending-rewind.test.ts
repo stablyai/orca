@@ -2,7 +2,7 @@
 // RPC leaves nothing behind, and that a pending rewind persisted by an older build never strands
 // the chat: the next attach resumes by session id and settles the rewind as refused.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -67,6 +67,10 @@ const fence = (): number => store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFen
 /** What an older build left behind: an admitted rewind whose outcome was never recorded. */
 async function seedPendingRewind(phase: 'prepared' | 'provider-succeeded') {
   const request = rewindParams(fence())
+  // A rewind had a turn to target, so Claude had written the transcript a resume continues.
+  const projects = join(directory, 'claude-home', 'projects', 'workspace')
+  await mkdir(projects, { recursive: true })
+  await writeFile(join(projects, `${PROVIDER_SESSION_ID}.jsonl`), '')
   await store.admitMutationOperation({
     callerKey: caller.callerKey,
     envelope: request.envelope,
@@ -113,7 +117,7 @@ beforeEach(async () => {
     resolveClaudeAuthPolicy: () => ({ stripAuthEnv: false }),
     openClaudeConnection: claude.openConnection,
     readProcessStartTime: async () => HOST_TEST_NOW,
-    onUnexpectedExit: () => {}
+    onLifecycleEvent: () => {}
   })
   host = new StructuredAgentSessionHost({
     store,

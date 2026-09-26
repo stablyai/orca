@@ -88,13 +88,17 @@ export type JournalDispatchRow = JournalRowBase & {
   reason: string | null
 }
 
+/** An item mutation may name its own producer, because one batch can CREATE
+ *  rows several agents produced. Naming none keeps the row's existing producer.
+ *  Inline like the row base, and for the same reason no `v` bump: an older host
+ *  ignores the unknown keys and reads the mutation as root, as it always did. */
 export type JournalLifecycleMutation =
-  | {
+  | (AgentJournalProducerLinkage & {
       kind: 'item'
       itemId: string
       revision: number
       body: AgentJournalItemBody
-    }
+    })
   | { kind: 'tombstone'; itemId: string; revision: number }
 
 /** One durable append whose nested mutations share the outer ordering facts. */
@@ -159,6 +163,13 @@ export function parseJournalRow(line: string): JournalRowParse {
   }
   const upcast = upcastRow(record, version)
   dropUnusableProducerLinkage(upcast)
+  if (upcast.kind === 'lifecycle-batch' && Array.isArray(upcast.mutations)) {
+    for (const mutation of upcast.mutations) {
+      if (isPlainObject(mutation)) {
+        dropUnusableProducerLinkage(mutation)
+      }
+    }
+  }
   dropUnusableContextUsage(upcast)
   return isJournalRow(upcast) ? { ok: true, row: upcast } : { ok: false, unreadable: false }
 }

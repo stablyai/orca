@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import { app, session } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
@@ -12,7 +11,11 @@ import {
 } from '../hang-watchdog/hang-detection-marker'
 import { browserCertificateTrustController } from '../browser/browser-manager'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import { Store, getCanonicalUserDataPath } from '../persistence'
+import { getCanonicalUserDataPath } from '../persistence'
+import {
+  createProfileStateStoreForStartup,
+  desktopProfileStateAuthorityMode
+} from '../persistence/profile-state/profile-state-startup-authority'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
 import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
@@ -28,20 +31,7 @@ import {
   onLiveClaudePtysDrained,
   seedLiveClaudePtysFromPersistence
 } from '../claude-accounts/live-pty-gate'
-import {
-  attachClaudePinnedPtyPersistence,
-  createClaudePinnedPtyFilePersistence,
-  readClaudePinnedPtyRegistryFile,
-  seedPinnedClaudePtysFromPersistence
-} from '../claude-accounts/claude-pinned-pty-registry'
-import {
-  attachClaudeHostPtyAccountPersistence,
-  createClaudeHostPtyAccountFilePersistence,
-  readClaudeHostPtyAccountsFile,
-  seedHostClaudePtyAccounts,
-  setClaudeActiveHostAccountResolver
-} from '../claude-accounts/claude-host-pty-accounts'
-import { getSelectedClaudeAccountIdForTarget } from '../claude-accounts/runtime-selection'
+import { seedClaudePtyAccountRegistries } from '../claude-accounts/claude-pty-account-registries-startup'
 import { applyAppIcon } from '../app-icon'
 import {
   shouldSuppressDevEducation,
@@ -64,6 +54,7 @@ import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
 import { reconcileManagedWslCliRegistrations } from '../cli/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { reportProfileStateWriteFailure } from './profile-state-write-failure'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
@@ -149,10 +140,24 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
   // read has to have happened by then or the renderer and the browser-host lease disagree.
   initializeBrowserClientHostId(profile.profileDirectory)
-  const store = new Store({
+  const profileStateAuthorityMode = desktopProfileStateAuthorityMode()
+  const profileState = await createProfileStateStoreForStartup({
     dataFile: profile.dataFile,
-    storageAuthority: state.isServeMode ? 'runtime' : 'desktop'
+    databaseFile: profile.stateDatabaseFile,
+    profileId: profile.profile.id,
+    runtime: 'desktop',
+    authorityMode: profileStateAuthorityMode,
+    storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
+    onPersistenceFailure: reportProfileStateWriteFailure
   })
+  state.profileStateStartup = {
+    backend: profileState.backend,
+    classification: profileState.classification,
+    authorityMode: profileStateAuthorityMode,
+    runtime: 'desktop',
+    migrated: profileState.migrated
+  }
+  const store = profileState.store
   state.store = store
   // Why: create pending readiness before the guard can observe the default session.
   // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
@@ -212,7 +217,8 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why: pre-`ready` startup reads this flag from a marker so it never has to parse orca-data.json.
   writeHttp1CompatibilityMarker(
     canonicalUserDataPath,
-    store.getSettings().electronHttp1CompatibilityMode === true
+    store.getSettings().electronHttp1CompatibilityMode === true,
+    profile.profile.id
   )
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
@@ -220,7 +226,8 @@ export async function initializeReadyFoundation(): Promise<void> {
     if ('electronHttp1CompatibilityMode' in updates) {
       writeHttp1CompatibilityMarker(
         canonicalUserDataPath,
-        settings.electronHttp1CompatibilityMode === true
+        settings.electronHttp1CompatibilityMode === true,
+        profile.profile.id
       )
     }
     if ('terminalWindowsWslDistro' in updates) {
@@ -268,27 +275,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   const persistedClaudePtyIds = store.getClaudeLivePtySessionIds()
   seedLiveClaudePtysFromPersistence(persistedClaudePtyIds)
-  // Why: `--account` must not pin an account a surviving host Claude still refreshes.
-  setClaudeActiveHostAccountResolver(() =>
-    getSelectedClaudeAccountIdForTarget(store.getSettings(), { runtime: 'host' })
-  )
-  const hostClaudePtyAccountsPath = join(app.getPath('userData'), 'claude-host-pane-accounts.json')
-  attachClaudeHostPtyAccountPersistence(
-    createClaudeHostPtyAccountFilePersistence(hostClaudePtyAccountsPath)
-  )
-  seedHostClaudePtyAccounts(
-    persistedClaudePtyIds,
-    readClaudeHostPtyAccountsFile(hostClaudePtyAccountsPath)
-  )
-  // Why: same restart hazard for `--account` PTYs, whose accounts the global gate never covers.
-  const pinnedClaudePtyRegistryPath = join(
-    app.getPath('userData'),
-    'claude-pinned-pane-accounts.json'
-  )
-  seedPinnedClaudePtysFromPersistence(readClaudePinnedPtyRegistryFile(pinnedClaudePtyRegistryPath))
-  attachClaudePinnedPtyPersistence(
-    createClaudePinnedPtyFilePersistence(pinnedClaudePtyRegistryPath)
-  )
+  seedClaudePtyAccountRegistries(store, persistedClaudePtyIds, app.getPath('userData'))
   if (persistedClaudePtyIds.length > 0) {
     console.log(
       `[claude-live-pty] Seeded ${persistedClaudePtyIds.length} persisted Claude session id(s) into the refresh gate`

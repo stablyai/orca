@@ -63,7 +63,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import {
   getStructuredAgentSessionTabs,
-  StructuredAgentSessionStatusBridge
+  StructuredAgentSessionStatusBridge,
+  useStructuredAgentSessionHostExecutionPhase
 } from './StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 
@@ -695,6 +696,30 @@ describe('StructuredAgentSessionStatusBridge', () => {
 
     expect(mocks.subscribeStatus).not.toHaveBeenCalled()
     expect(mocks.setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('re-renders a startup-phase reader only when the phase changes', async () => {
+    const phases: (string | null)[] = []
+    function PhaseProbe(): null {
+      phases.push(useStructuredAgentSessionHostExecutionPhase('session-1', { kind: 'local' }))
+      return null
+    }
+    render(<PhaseProbe />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() => feed().emit({ type: 'status', session: summary({ hostExecutionPhase: 'starting' }) }))
+    const rendersWhileStarting = phases.length
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({ hostExecutionPhase: 'starting', latestPrompt: 'next', updatedAt: 2 })
+      })
+    )
+    expect(phases).toHaveLength(rendersWhileStarting)
+
+    act(() => feed().emit({ type: 'status', session: summary({ hostExecutionPhase: 'ready' }) }))
+    expect(phases.at(-1)).toBe('ready')
+    expect(phases).toContain('starting')
   })
 })
 

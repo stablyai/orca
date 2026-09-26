@@ -62,16 +62,11 @@ export const AGENT_LAUNCH_CALLER_PROFILES: readonly AgentLaunchCallerProfile[] =
   {
     id: 'floating-default-agent',
     caller: 'src/renderer/src/components/floating-terminal/FloatingTerminalWindowControls.tsx',
-    sourceMarkers: [
-      'worktreeId: FLOATING_TERMINAL_WORKTREE_ID',
-      "launchSource: 'shortcut'",
-      'activate: false'
-    ],
+    sourceMarkers: ['worktreeId: FLOATING_TERMINAL_WORKTREE_ID', "launchSource: 'shortcut'"],
     args: {
       agent: 'codex',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      launchSource: 'shortcut',
-      activate: false
+      launchSource: 'shortcut'
     },
     passesBeforeSurfaceOpen: false,
     passesLaunchPlan: false,

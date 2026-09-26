@@ -155,7 +155,7 @@ export function launchAgentInWebHostTab(args: {
       toastWebHostLaunchFailure(agent, outcome.message, relaunch)
       return { delivered: false, failureNotified: true }
     }
-    useAppStore.getState().setActiveTabType('terminal')
+    useAppStore.getState().setActiveTabType('terminal', worktreeId)
     if (hasPrompt && promptDelivered) {
       onPromptDelivered?.()
     }

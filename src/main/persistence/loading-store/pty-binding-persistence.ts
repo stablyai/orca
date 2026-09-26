@@ -1,15 +1,9 @@
+import { isDeepStrictEqual } from 'node:util'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import {
-  cloneLayoutNode,
-  layoutContainsLeafId
-} from '../restoring-sessions/terminal-layout-normalization'
-import {
-  cloneWorkspaceSessionState,
-  createMinimalPersistedTerminalTab
-} from '../restoring-sessions/session-owner-fields'
+import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
+import { cloneWorkspaceSessionState } from '../restoring-sessions/session-owner-fields'
 
 import type { PtyBindingSourceExpectation } from './store'
 
@@ -18,21 +12,22 @@ import type { SessionHostPartitionOperations } from './session-host-partitions'
 import { resolveHostId } from './session-host-partitions'
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
-import { startPtyBindingSpan, type PtyBindingOrigin } from './pty-binding-span'
-import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
+import { startPtyBindingSpan, type PtyBindingOrigin, type PtyBindingSpan } from './pty-binding-span'
+import { applyPtyBinding } from './pty-binding-session-update'
 
 type PtyBindingPersistenceOperationsRuntime = Pick<
   StoreRuntimeState,
-  | 'flushOrThrow'
+  | 'runDurableMutation'
   | 'lastDurableWriteGeneration'
   | 'pendingWrite'
   | 'quitFlushStarted'
+  | 'dirtyProfileStateDomains'
   | 'state'
   | 'writeGeneration'
   | 'writeTimer'
 >
 
-type PersistPtyBindingArgs = {
+export type PersistPtyBindingArgs = {
   worktreeId: string
   tabId: string
   leafId: string
@@ -72,43 +67,57 @@ export class PtyBindingPersistenceOperations {
     this[ptyBindingPersistenceOperationsContext] = { runtime, sessions }
   }
 
-  persistPtyBinding(args: PersistPtyBindingArgs, hostId?: string | null): boolean {
-    const runtime = this[ptyBindingPersistenceOperationsContext].runtime
+  async persistPtyBinding(
+    input: PersistPtyBindingArgs | (() => PersistPtyBindingArgs | null),
+    hostId?: string | null
+  ): Promise<boolean> {
+    const { runtime, sessions } = this[ptyBindingPersistenceOperationsContext]
     const resolvedHostId = resolveHostId(hostId)
-    const session =
-      this[ptyBindingPersistenceOperationsContext].sessions.getWorkspaceSession(resolvedHostId)
-    const paneKey = `${args.tabId}:${args.leafId}`
-    const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
-    const span = startPtyBindingSpan({
-      hostKind: parseExecutionHostId(resolvedHostId)?.kind ?? 'local',
-      origin: args.origin ?? 'unknown',
-      savePending: runtime.writeTimer !== null || runtime.pendingWrite !== null,
-      generationGap: runtime.writeGeneration - runtime.lastDurableWriteGeneration
-    })
-    if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey)) {
-      span.finish('refused')
-      return false
-    }
-    // A durable reattach needs neither a session clone nor whole-state serialization.
-    const verdict = evaluatePtyBindingFastLane(
-      args,
-      session,
-      bindingWorktreeId,
-      !runtime.quitFlushStarted && runtime.lastDurableWriteGeneration >= runtime.writeGeneration
-    )
-    span.setEligibility(verdict)
-    if (verdict.eligible) {
-      span.finish('fast_lane')
-      return true
-    }
+    const savePending = runtime.writeTimer !== null || runtime.pendingWrite !== null
+    let span: PtyBindingSpan | undefined
+    let outcome: 'refused' | 'fast_lane' | 'flushed' = 'flushed'
     try {
-      writePtyBinding(this, args, session, resolvedHostId, bindingWorktreeId, paneKey)
-    } catch (err) {
-      span.finish('threw', err)
-      throw err
+      const persisted = await runtime.runDurableMutation(() => {
+        const args = typeof input === 'function' ? input() : input
+        if (!args) {
+          return { value: false, persist: false }
+        }
+        // Measure the admitted binding operation; queue time precedes its current-state checks.
+        span = startPtyBindingSpan({
+          hostKind: parseExecutionHostId(resolvedHostId)?.kind ?? 'local',
+          origin: args.origin ?? 'unknown',
+          savePending,
+          generationGap: runtime.writeGeneration - runtime.lastDurableWriteGeneration
+        })
+        const paneKey = `${args.tabId}:${args.leafId}`
+        const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
+        const session = sessions.getWorkspaceSession(resolvedHostId)
+        if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey)) {
+          outcome = 'refused'
+          return { value: false, persist: false }
+        }
+        const verdict = evaluatePtyBindingFastLane(
+          args,
+          session,
+          bindingWorktreeId,
+          !runtime.quitFlushStarted && runtime.lastDurableWriteGeneration >= runtime.writeGeneration
+        )
+        span.setEligibility(verdict)
+        if (verdict.eligible) {
+          outcome = 'fast_lane'
+          return { value: true, persist: false }
+        }
+        return {
+          value: true,
+          rollback: writePtyBinding(this, args, session, resolvedHostId, bindingWorktreeId, paneKey)
+        }
+      })
+      span?.finish(outcome)
+      return persisted
+    } catch (error) {
+      span?.finish('threw', error)
+      throw error
     }
-    span.finish('flushed')
-    return true
   }
 }
 
@@ -119,9 +128,19 @@ function writePtyBinding(
   resolvedHostId: ReturnType<typeof resolveHostId>,
   bindingWorktreeId: string,
   paneKey: string
-): void {
-  const runtime = owner[ptyBindingPersistenceOperationsContext].runtime
+): () => void {
+  const { runtime, sessions } = owner[ptyBindingPersistenceOperationsContext]
   const sessionBeforeBinding = cloneWorkspaceSessionState(session)
+  const restore = (restoredSession = sessionBeforeBinding): void => {
+    if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
+      runtime.state.workspaceSession = restoredSession
+    } else {
+      runtime.state.workspaceSessionsByHostId = {
+        ...runtime.state.workspaceSessionsByHostId,
+        [resolvedHostId]: restoredSession
+      }
+    }
+  }
   try {
     if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
       runtime.state.workspaceSessionsByHostId = {
@@ -130,144 +149,44 @@ function writePtyBinding(
       }
     }
     applyPtyBinding(args, session, bindingWorktreeId, paneKey)
-    runtime.flushOrThrow()
-  } catch (err) {
-    if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
-      runtime.state.workspaceSession = sessionBeforeBinding
-    } else {
-      runtime.state.workspaceSessionsByHostId = {
-        ...runtime.state.workspaceSessionsByHostId,
-        [resolvedHostId]: sessionBeforeBinding
-      }
-    }
-    throw err
-  }
-}
-
-function applyPtyBinding(
-  args: PersistPtyBindingArgs,
-  session: WorkspaceSessionState,
-  bindingWorktreeId: string,
-  paneKey: string
-): void {
-  const reconciledIncarnation =
-    args.expectedBinding !== undefined && args.incarnationId !== args.expectedBinding.incarnationId
-  let terminalMembershipChanged = false
-  let hostAdmittedTabCreated = false
-  const advanceTopologyFence = (): void => {
-    const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
-    const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-    // Why: a split, or a host-admitted tab the renderer has never seen, is itself
-    // the authority — with no fence the renderer's pre-create tab list replays
-    // over it and the tab is lost even on the repo's first such change.
-    const establishesMembershipAuthority =
-      args.expectedSourceBinding !== undefined || hostAdmittedTabCreated
-    if (
-      !reconciledIncarnation &&
-      (!terminalMembershipChanged || (currentRevision <= 0 && !establishesMembershipAuthority))
-    ) {
-      return
-    }
-    // Why: host-admitted membership or incarnation changes must outrank a stale renderer replay.
-    session.terminalTopologyRevisionByRepoId = {
-      ...session.terminalTopologyRevisionByRepoId,
-      [repoId]: currentRevision + 1
-    }
-  }
-  if (args.incarnationId) {
-    session.terminalPtyIncarnationsByPaneKey = {
-      ...session.terminalPtyIncarnationsByPaneKey,
-      [paneKey]: args.incarnationId
-    }
-    if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
-      session.terminalSurfaceTombstonesByPaneKey = {
-        ...session.terminalSurfaceTombstonesByPaneKey
-      }
-      delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
-    }
-  }
-  const tabs = session.tabsByWorktree?.[bindingWorktreeId]
-  const tab = tabs?.find((t) => t.id === args.tabId)
-  if (tab) {
-    tab.ptyId = tabRowPtyIdAfterLeafBinding(
-      tab,
-      session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId,
-      args.leafId,
-      args.ptyId
+    runtime.dirtyProfileStateDomains?.add(
+      resolvedHostId === LOCAL_EXECUTION_HOST_ID ? 'workspaceSession' : 'workspaceSessionsByHostId'
     )
-  } else {
-    terminalMembershipChanged = true
-    hostAdmittedTabCreated = args.hostAdmittedMembership === true
-    // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
-    const nextTabs = [
-      ...(tabs ?? []),
-      createMinimalPersistedTerminalTab({
-        ...args,
-        worktreeId: bindingWorktreeId,
-        existingTabCount: tabs?.length ?? 0
-      })
-    ]
-    session.tabsByWorktree = {
-      ...session.tabsByWorktree,
-      [bindingWorktreeId]: nextTabs
-    }
-    session.activeWorktreeId ??= bindingWorktreeId
-    session.activeTabId ??= args.tabId
-    session.activeTabIdByWorktree = {
-      ...session.activeTabIdByWorktree,
-      [bindingWorktreeId]: session.activeTabIdByWorktree?.[bindingWorktreeId] ?? args.tabId
-    }
-  }
-  // Why: host-initiated persist snapshots used to omit this write-once guard, so every launch or reattach treated the worktree as never having default terminals applied.
-  session.defaultTerminalTabsAppliedByWorktreeId = {
-    ...session.defaultTerminalTabsAppliedByWorktreeId,
-    [bindingWorktreeId]: true
-  }
-  if (!isTerminalLeafId(args.leafId)) {
-    // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
-    advanceTopologyFence()
-    return
-  }
-  const layout = session.terminalLayoutsByTabId?.[args.tabId]
-  if (layout) {
-    if (!layout.root) {
-      terminalMembershipChanged = true
-      // Why: createTab can persist an empty layout before TerminalPane mounts; the sync binding still needs a durable root.
-      layout.root = { type: 'leaf', leafId: args.leafId }
-      layout.activeLeafId = args.leafId
-      layout.expandedLeafId = null
-    } else if (!layoutContainsLeafId(layout.root, args.leafId)) {
-      terminalMembershipChanged = true
-      // Why: splitPane spawns before its snapshot reaches main; add a minimal leaf so a crash can't strand the pane's binding.
-      layout.root = {
-        type: 'split',
-        direction: 'vertical',
-        first: cloneLayoutNode(layout.root),
-        second: { type: 'leaf', leafId: args.leafId }
+    const boundSession = cloneWorkspaceSessionState(session)
+    return () => {
+      const current = sessions.getWorkspaceSession(resolvedHostId)
+      const ownerState = (value: WorkspaceSessionState) => {
+        const tab = value.tabsByWorktree[bindingWorktreeId]?.find((tab) => tab.id === args.tabId)
+        return {
+          createdAt: tab?.createdAt,
+          generation: tab?.generation,
+          worktreeId: tab?.worktreeId,
+          ptyId: isTerminalLeafId(args.leafId)
+            ? value.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
+            : tab?.ptyId,
+          incarnation: value.terminalPtyIncarnationsByPaneKey?.[paneKey]
+        }
       }
-      layout.activeLeafId = args.leafId
-      if (layout.expandedLeafId && !layoutContainsLeafId(layout.root, layout.expandedLeafId)) {
-        layout.expandedLeafId = null
+      // Presentation edits do not replace the binding that must be rolled back.
+      if (!isDeepStrictEqual(ownerState(current), ownerState(boundSession))) {
+        return
+      }
+      const rolledBack = rollbackFailedPtyBinding(
+        sessionBeforeBinding,
+        boundSession,
+        current,
+        bindingWorktreeId,
+        args.tabId,
+        args.leafId
+      )
+      if (rolledBack !== current) {
+        restore(rolledBack)
       }
     }
-    layout.ptyIdsByLeafId = {
-      ...layout.ptyIdsByLeafId,
-      [args.leafId]: args.ptyId
-    }
-  } else {
-    terminalMembershipChanged = true
-    // Why: first tab spawn — persist a minimal layout so a SIGKILL before the renderer snapshot can't lose ptyIdsByLeafId.
-    session.terminalLayoutsByTabId = {
-      ...session.terminalLayoutsByTabId,
-      [args.tabId]: {
-        root: { type: 'leaf', leafId: args.leafId },
-        activeLeafId: args.leafId,
-        expandedLeafId: null,
-        ptyIdsByLeafId: { [args.leafId]: args.ptyId }
-      }
-    }
+  } catch (error) {
+    restore()
+    throw error
   }
-  advanceTopologyFence()
 }
 
 export function installPtyBindingPersistenceOperationsContext(

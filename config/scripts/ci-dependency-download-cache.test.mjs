@@ -10,8 +10,9 @@ describe('CI dependency download caches', () => {
   it('scopes desktop stores to the root lockfile and lets mixed installs opt in', () => {
     expect(action.inputs['cache-dependency-path'].default).toBe('pnpm-lock.yaml')
     for (const step of action.runs.steps.filter((step) => step.uses === 'actions/setup-node@v6')) {
-      expect(step.with.cache).toBe('pnpm')
+      expect(step.with.cache).toBe("${{ github.event_name != 'pull_request' && 'pnpm' || '' }}")
       expect(step.with['cache-dependency-path']).toBe('${{ inputs.cache-dependency-path }}')
+      expect(step.with['package-manager-cache']).toBe(false)
     }
     const install = action.runs.steps.find((step) => step.name === 'Install dependencies')
     expect(install.if).toBeUndefined()
@@ -25,6 +26,85 @@ describe('CI dependency download caches', () => {
     expect(mobile.with['cache-dependency-path'].trim().split('\n')).toEqual([
       'pnpm-lock.yaml',
       'mobile/pnpm-lock.yaml'
+    ])
+  })
+
+  it('restores PR stores with setup-node keys without registering a post-job save', () => {
+    const resolve = action.runs.steps.find((step) => step.id === 'pnpm-store')
+    const restore = action.runs.steps.find(
+      (step) => step.name === 'Restore pnpm download store without saving'
+    )
+    expect(resolve.if).toBe("github.event_name == 'pull_request'")
+    expect(restore.if).toBe(resolve.if)
+    expect(restore.uses).toBe('actions/cache/restore@v5')
+    expect(restore.with.path).toBe('${{ steps.pnpm-store.outputs.path }}')
+    expect(restore.with.key).toBe(
+      'node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}'
+    )
+    expect(restore.with['restore-keys']).toBeUndefined()
+    expect(resolve.env.LOCKFILE_HASH).toBe('${{ hashFiles(inputs.cache-dependency-path) }}')
+    expect(action.runs.steps.indexOf(resolve)).toBeLessThan(action.runs.steps.indexOf(restore))
+    expect(action.runs.steps.indexOf(restore)).toBeLessThan(
+      action.runs.steps.findIndex((step) => step.name === 'Install dependencies')
+    )
+    const saves = action.runs.steps.filter((step) => step.uses === 'actions/cache/save@v5')
+    expect(saves).toEqual([])
+  })
+
+  it('restores Windows packaging downloads from the release cache without a PR upload', () => {
+    const packaging = workflow('pr').jobs.package_windows
+    const restore = packaging.steps.find((step) => step.name === 'Cache electron-builder downloads')
+    const release = workflow('release-cut').jobs.build
+    const windows = release.strategy.matrix.include.find((entry) => entry.platform === 'win')
+    const save = release.steps.find((step) => step.name === 'Cache electron-builder downloads')
+
+    expect(packaging['runs-on']).toBe(windows.os)
+    expect(restore.uses).toBe('actions/cache/restore@v5')
+    // Cache versions include the path list, so matching key strings alone cannot prove reuse.
+    expect(restore.with.path).toBe(windows.eb_cache_path)
+    expect(restore.with.key).toBe(save.with.key.replace('${{ matrix.platform }}', 'win'))
+    expect(restore.with['restore-keys']).toBe(
+      save.with['restore-keys'].replace('${{ matrix.platform }}', 'win')
+    )
+    expect(save.uses).toBe('actions/cache@v5')
+    expect(save.with.path).toBe('${{ matrix.eb_cache_path }}')
+    for (const name of ['dev-channel-win-build', 'windows-signing-rehearsal']) {
+      const writer = Object.values(workflow(name).jobs)
+        .flatMap((job) => job.steps ?? [])
+        .find((step) => step.name === 'Cache electron-builder downloads')
+      expect(writer.uses, name).toBe('actions/cache@v5')
+      expect(writer.with.path, name).toBe(restore.with.path)
+      expect(writer.with.key, name).toBe(restore.with.key)
+      expect(writer.with['restore-keys'], name).toBe(restore.with['restore-keys'])
+    }
+  })
+
+  it('seeds the existing Linux PR tool cache from successful main x64 release builds', () => {
+    const packaging = workflow('pr').jobs.package
+    const consumer = packaging.steps.find(
+      (step) => step.name === 'Cache electron-builder downloads'
+    )
+    const release = workflow('release-cut').jobs.build
+    const combined = release.steps.find((step) => step.name === 'Cache electron-builder downloads')
+    const writer = release.steps.find(
+      (step) => step.name === 'Seed shared Linux packaging downloads'
+    )
+    const linux = release.strategy.matrix.include.find((entry) => entry.platform === 'linux-x64')
+
+    expect(packaging['runs-on']).toBe(linux.os)
+    expect(writer.if).toBe("matrix.platform == 'linux-x64' && github.ref == 'refs/heads/main'")
+    expect(writer.uses).toBe('actions/cache@v5')
+    expect(writer.with.path).toBe(consumer.with.path)
+    expect(writer.with.key).toBe(consumer.with.key)
+    expect(writer.with['restore-keys']).toBeUndefined()
+    expect(writer.with['lookup-only']).toBe(true)
+    expect(release.steps.indexOf(writer)).toBeGreaterThan(release.steps.indexOf(combined))
+    // Retain PR fallback saves until a successful release seeds the default-branch entry.
+    expect(consumer.uses).toBe('actions/cache@v5')
+    expect(combined.uses).toBe('actions/cache@v5')
+    expect(linux.eb_cache_path.trim().split('\n')).toEqual([
+      '~/.cache/electron',
+      '~/.cache/electron-builder'
     ])
   })
 })

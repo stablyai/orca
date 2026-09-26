@@ -168,6 +168,7 @@ describe('Claude effort the settings readback cannot report', () => {
     calls: string[] = []
   ): { session: ClaudeSession; calls: string[] } {
     return {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every session member the option paths under test read.
       session: {
         options: new Map<string, string>([['model', 'sonnet']]),
         reportedOptions: {},
@@ -189,7 +190,8 @@ describe('Claude effort the settings readback cannot report', () => {
               sources: {}
             }
           }
-        }
+        },
+        startup: { state: 'proven' }
       } as unknown as ClaudeSession,
       calls
     }

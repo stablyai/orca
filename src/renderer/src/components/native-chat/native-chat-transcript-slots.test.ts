@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatTurnStatus } from '../../../../shared/native-chat-turn-status'
+import {
+  selectNativeChatTurnStatuses,
+  type NativeChatTurnStatus
+} from '../../../../shared/native-chat-turn-status'
+import { selectStructuredAgentSettledTurns } from '../../../../shared/structured-agent-session-turn-timing'
 import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
 import {
@@ -156,5 +160,48 @@ describe('transcript slots', () => {
     expect(nativeChatSlotIndexOf(slots, 'b')).toBe(1)
     expect(nativeChatSlotIndexOf(slots, 'blank')).toBe(-1)
     expect(nativeChatSlotIndexOf(slots, undefined)).toBe(-1)
+  })
+})
+
+describe('a send the host rejected', () => {
+  const DIAGNOSTIC =
+    'The provider stopped before it finished starting: claude stream-json exited (code 1): claude: not signed in.'
+
+  // The restarted child died before starting, so the send was rejected and the exit wrote why.
+  // The local clock had watched the send go pending and stop; that must not settle a turn that
+  // never ran and fold the one row naming the cause behind a "Worked for 0s".
+  it('leaves the row naming the cause on screen', () => {
+    const messages = [
+      text('orca:first-start', DIAGNOSTIC, 'system'),
+      text('orca:dead', 'Reply with exactly: DEAD', 'user'),
+      text('orca:restart-exit', DIAGNOSTIC, 'system')
+    ]
+    const settledByTurn = selectStructuredAgentSettledTurns(
+      [],
+      [
+        {
+          clientMessageId: 'dead',
+          fence: 5,
+          payloadFingerprint: 'fp',
+          dispatchState: 'rejected',
+          providerItemId: null,
+          reason: 'provider_write_failed: claude: not signed in',
+          submittedAt: 1,
+          resolvedAt: 2
+        }
+      ]
+    )
+    const turnStatuses = selectNativeChatTurnStatuses(
+      { 'orca:dead': { startedAt: 900, workedSeconds: 0 } },
+      { activeTurnKey: 'orca:dead', isWorking: false, thinking: false, settledByTurn }
+    )
+
+    const slots = build(messages, { turnStatuses })
+
+    expect(slots.map((slot) => [slot.message.id, slot.folded, slot.status])).toEqual([
+      ['orca:first-start', false, undefined],
+      ['orca:dead', false, undefined],
+      ['orca:restart-exit', false, undefined]
+    ])
   })
 })

@@ -1,9 +1,9 @@
 // The restart-resume offer: list it, act on it, or turn it down.
 //
 // Each method reaches for records on disk this process may not have opened yet, so each builds the
-// host the way hold and reveal do. Listing is read-only and takes nothing live; acting goes through
-// the host's single resume path, which re-derives eligibility rather than trusting the ids it is
-// given.
+// host the way hold and reveal do. Listing takes nothing live and spends no live offer; acting goes
+// through the host's single resume path, which re-derives eligibility rather than trusting the ids
+// it is given.
 
 import { defineMethod } from '../core'
 import {

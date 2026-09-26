@@ -37,6 +37,10 @@ const hostClient = vi.hoisted(() => ({
 vi.mock('../transport/client-context', () => ({
   useHostClient: () => hostClient.current
 }))
+// Descriptor bookkeeping only; the real recorder reaches the native keychain through host-store.
+vi.mock('../transport/host-descriptor-recorder', () => ({
+  recordHostDescriptorFromStatus: vi.fn()
+}))
 
 function clientWithStatus(result: Record<string, unknown>): RpcClient {
   return { sendRequest: vi.fn().mockResolvedValue({ ok: true, result }) } as unknown as RpcClient

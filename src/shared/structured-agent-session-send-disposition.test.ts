@@ -84,6 +84,13 @@ describe('what a rejection shows the user', () => {
     )
   })
 
+  it('names the cause of a start that died before it could take the message', () => {
+    // The host words this reason for the user: the child's own diagnostic, nothing internal.
+    const reason =
+      'The provider stopped before it finished starting: claude stream-json exited (code 1): claude: not signed in.'
+    expect(notice(reason)).toBe(reason)
+  })
+
   it('claims no cause when the rejection names none', () => {
     expect(notice(null)).toBe('Message was not sent.')
   })

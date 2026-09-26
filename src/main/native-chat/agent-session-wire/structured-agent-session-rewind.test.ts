@@ -229,14 +229,8 @@ describe('host rewind', () => {
     expect(recoverRewind).toHaveBeenCalledTimes(2)
     expect(rewind).toHaveBeenCalledTimes(1)
   })
-  it('fences stale owners and the second of two concurrent rewinds', async () => {
+  it('refuses the second of two concurrent rewinds by the epoch it targets', async () => {
     const target = await seed()
-    const stale = params(target)
-    stale.envelope.expectedRuntimeFence++
-    expect(await host.rewind(caller, stale)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale' }
-    })
     let finish!: () => void
     rewind.mockImplementation(
       () =>

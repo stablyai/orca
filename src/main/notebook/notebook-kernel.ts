@@ -10,7 +10,7 @@ import {
 const STDERR_TAIL_CHARS = 4000
 const SHUTDOWN_GRACE_MS = 5000
 
-type BridgeFrame = KernelFrame | { type: 'ready' } | { type: 'missing' }
+type BridgeFrame = KernelFrame | { type: 'ready' } | { type: 'missing'; externallyManaged: boolean }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -27,8 +27,11 @@ function parseFrame(line: string): BridgeFrame | null {
     return null
   }
   const { type, content } = value
-  if (type === 'ready' || type === 'missing') {
+  if (type === 'ready') {
     return { type }
+  }
+  if (type === 'missing') {
+    return { type, externallyManaged: value.externallyManaged === true }
   }
   if (type === 'done') {
     return {
@@ -107,7 +110,7 @@ export function startNotebookKernel({
         stderrTail = ''
         settle({ status: 'ready' })
       } else if (frame.type === 'missing') {
-        settle({ status: 'missing-ipykernel' })
+        settle({ status: 'missing-ipykernel', externallyManaged: frame.externallyManaged })
       } else if (!stopping) {
         onFrame(frame)
       }

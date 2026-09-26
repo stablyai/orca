@@ -1,10 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import {
-  AGENT_SESSION_RESUME_MARKER_TTL_MS,
-  isExpiredAgentSessionResumeMarker,
-  type AgentSessionResumeMarker
-} from '../../shared/agent-session-resume-marker'
+import type { AgentSessionResumeMarker } from '../../shared/agent-session-resume-marker'
 import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
 import { stringifyJsonWithinByteLimit } from '../../shared/node-bounded-json-stringify'
 import {
@@ -32,6 +28,9 @@ export type {
 
 export const AGENT_SESSION_RECOVERY_CAPSULE_FILE = 'agent-session-recovery.json'
 const MAX_CAPSULE_BYTES = 4 * 1024 * 1024
+
+/** Crash-leftover temp files only; offers themselves have no expiry. */
+const STALE_WRITE_TEMP_FILE_AGE_MS = 24 * 60 * 60 * 1000
 
 type StoredRecords = Pick<RecoveryCapsuleState, 'entries' | 'failed'>
 
@@ -67,10 +66,7 @@ export class AgentSessionRecoveryCapsule {
       const failedBySession = new Map(failed.map((failure) => [failure.marker.sessionId, failure]))
       const dismissedAt = state.dismissedAt
       for (const marker of markers) {
-        if (
-          isExpiredAgentSessionResumeMarker(marker, now) ||
-          (dismissedAt !== undefined && marker.recordedAt <= dismissedAt)
-        ) {
+        if (dismissedAt !== undefined && marker.recordedAt <= dismissedAt) {
           continue
         }
         const existing = bySession.get(marker.sessionId)
@@ -229,24 +225,35 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
-  /** Drops failure records the chat itself has since superseded. Keyed by filing time as well, so a
-   *  failure refiled after the caller read the old one is kept. */
-  forgetFailures(
-    superseded: readonly { sessionId: string; failedAt: number }[],
+  /** Drops records the chat itself has since superseded — the user's own newer message ends both a
+   *  pending offer and a recorded failure. Witness-keyed (`recordedAt`, and `failedAt` for a
+   *  failure) so a fresh record written after the caller read the stale one is kept. */
+  forgetSuperseded(
+    superseded: readonly { sessionId: string; recordedAt: number; failedAt?: number }[],
     now: number
   ): Promise<void> {
     return withFileTransactionLock(this.filePath, async () => {
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
-      const kept = failed.filter(
+      const keptEntries = entries.filter(
+        (entry) =>
+          entry.state !== 'pending' ||
+          !superseded.some(
+            (gone) =>
+              gone.failedAt === undefined &&
+              gone.sessionId === entry.marker.sessionId &&
+              gone.recordedAt === entry.marker.recordedAt
+          )
+      )
+      const keptFailures = failed.filter(
         (failure) =>
           !superseded.some(
             (gone) =>
               gone.sessionId === failure.marker.sessionId && gone.failedAt === failure.failedAt
           )
       )
-      if (kept.length !== failed.length) {
-        await this.publish({ entries, failed: kept }, now, state.dismissedAt)
+      if (keptEntries.length !== entries.length || keptFailures.length !== failed.length) {
+        await this.publish({ entries: keptEntries, failed: keptFailures }, now, state.dismissedAt)
       }
     })
   }
@@ -320,7 +327,7 @@ export class AgentSessionRecoveryCapsule {
       MAX_CAPSULE_BYTES
     )
     await removeStaleDurableWriteTempFiles(this.filePath, {
-      minimumAgeMs: AGENT_SESSION_RESUME_MARKER_TTL_MS
+      minimumAgeMs: STALE_WRITE_TEMP_FILE_AGE_MS
     })
     const tempPath = durableWriteTempPath(this.filePath)
     try {

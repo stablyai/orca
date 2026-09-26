@@ -13,6 +13,7 @@ import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-c
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
+import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import {
   NativeChatAgentControls,
@@ -158,11 +159,14 @@ export const MessageRow = memo(function MessageRow({
             <span>{translate('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
           </div>
         ) : null}
-        <NativeChatMessageTimestamp
-          timestamp={message.timestamp}
-          focusable
-          className="select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100"
-        />
+        {/* Copy + timestamp reveal together, mirroring the agent controls row.
+            Image-only prompts have no text to copy, so the button is omitted. */}
+        {markdown || message.timestamp !== null ? (
+          <div className="flex select-none items-center gap-1 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100">
+            {markdown ? <NativeChatCopyButton text={markdown} /> : null}
+            <NativeChatMessageTimestamp timestamp={message.timestamp} focusable />
+          </div>
+        ) : null}
         {deliveryFailed ? (
           <div className="max-w-[85%] text-[11px] text-destructive/80">
             {translate(

@@ -1,7 +1,7 @@
-import { rejectPaneSpawnReservation } from '../pane/spawn-reservation'
+import { rejectPaneSpawnReservation, reserveIdlePaneSpawn } from '../pane/spawn-reservation'
 import { releasePinnedClaudeReservation } from '../claude-pinned-spawn'
 import { ptySizes } from '../delivery/visibility-state'
-import { beginPtyIpcSpawn } from './spawn-begin'
+import { beginPtyIpcSpawn, resolveEarlyPaneSpawnReservationKey } from './spawn-begin'
 import { preparePtyIpcSpawnPreflight } from './spawn-preflight'
 import { assemblePtyIpcSpawnEnv } from './spawn-env'
 import { buildPtyIpcSpawnOptions } from './spawn-options'
@@ -32,13 +32,26 @@ function restoreProvisionalPtySize(ctx: PtyIpcSpawnState): void {
 }
 
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArgs) {
-  triggerPtySpawnPushTargetMaterialization(deps, args)
   const ctx = createPtyIpcSpawnState(deps, args)
-  const early = await beginPtyIpcSpawn(ctx)
-  if (early) {
-    return early
+  const replacedPaneKey =
+    args.replacesPtyId !== undefined ? resolveEarlyPaneSpawnReservationKey(args) : null
+  if (replacedPaneKey) {
+    // Why: hold the pane across the stop, so a spawn for it arriving meanwhile (a hidden tab
+    // revealed mid-restart) joins the replacement instead of reattaching the owner being stopped.
+    ctx.paneSpawnReservation = await reserveIdlePaneSpawn(replacedPaneKey)
+    ctx.paneSpawnReservationKey = replacedPaneKey
   }
   try {
+    if (args.replacesPtyId !== undefined) {
+      // Why: stop before resolving the pane owner, so the spawn below finds a dead owner and
+      // launches fresh instead of reattaching the process this restart exists to replace.
+      await deps.stopReplacedPty(args.replacesPtyId)
+    }
+    triggerPtySpawnPushTargetMaterialization(deps, args)
+    const early = await beginPtyIpcSpawn(ctx)
+    if (early) {
+      return early
+    }
     await preparePtyIpcSpawnPreflight(ctx)
     await assemblePtyIpcSpawnEnv(ctx)
     const earlyReserved = await buildPtyIpcSpawnOptions(ctx).catch((error: unknown) => {

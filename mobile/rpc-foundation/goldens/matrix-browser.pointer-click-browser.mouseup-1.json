@@ -3,11 +3,11 @@
   "family": "browser.pointer-click",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "37820f9683527becf68d8d4d4fb564f32c49e72d",
-  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
   "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
-  "scenarioSha256": "47868afdd6d593526ea6f0a0a1e19377ee8306ab70636f2dace0da9ef2454397",
+  "scenarioSha256": "96c4862084d7ba2a8e07047abcee1716220ba35d9c754bcb97f7227020976c95",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -567,7 +567,7 @@
     "scenario": "matrix-browser.pointer-click-browser.mouseup-1",
     "checkpoints": [
       {
-        "id": "browser-pointer-click-fallback.normal:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.normal:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "82ccdef1369f"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
@@ -580,7 +580,7 @@
         }
       },
       {
-        "id": "browser-pointer-click-fallback.result-absent:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.result-absent:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "e69f81b45b18"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
@@ -593,7 +593,7 @@
         }
       },
       {
-        "id": "browser-pointer-click-fallback.result-null:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.result-null:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "4cb8c4fe79c1"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
@@ -606,7 +606,7 @@
         }
       },
       {
-        "id": "browser-pointer-click-fallback.inner-ok-missing:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.inner-ok-missing:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "34e99afff30a"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
@@ -619,7 +619,7 @@
         }
       },
       {
-        "id": "browser-pointer-click-fallback.inner-false-string-error:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.inner-false-string-error:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "158487738d61"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
@@ -632,7 +632,7 @@
         }
       },
       {
-        "id": "browser-pointer-click-fallback.inner-false-object-error:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.inner-false-object-error:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "3ef91c6fd4ad"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
@@ -645,7 +645,7 @@
         }
       },
       {
-        "id": "browser-pointer-click-fallback.outer-refused:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.outer-refused:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "05ebe84334e1"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
@@ -658,7 +658,7 @@
         }
       },
       {
-        "id": "browser-pointer-click-fallback.outer-refused-no-message:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.outer-refused-no-message:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "2553a6cba38a"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
@@ -671,7 +671,7 @@
         }
       },
       {
-        "id": "browser-pointer-click-fallback.method-not-found:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.method-not-found:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "6cce4bd96b4a"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
@@ -684,7 +684,7 @@
         }
       },
       {
-        "id": "browser-pointer-click-fallback.transport-rejection:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.transport-rejection:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "e5894a0a39c4"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
@@ -697,7 +697,7 @@
         }
       },
       {
-        "id": "browser-pointer-click-fallback.transport-rejection-no-message:clicked-by-fallback",
+        "id": "browser-pointer-click-fallback.transport-rejection-no-message:tap-settled",
         "observation": {
           "sender": ["d333a2a9fd72", "dbfbacf8be29", "e3ae5f4e0dc4", "d5b1ea216605"],
           "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],

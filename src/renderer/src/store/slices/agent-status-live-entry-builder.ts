@@ -1,5 +1,6 @@
 import type { AppState } from '../types'
 import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
+import { resolveAgentStatusLiveEntryStateHistory } from './agent-status-live-entry-state-history'
 import {
   agentSubagentsEqual,
   type MigrationUnsupportedPtyEntry,
@@ -29,7 +30,6 @@ import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pan
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import { claudeAccountIdField } from './agent-status-claude-account'
-import { advanceAgentStateHistory } from './agent-status-live-entry-history'
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry
@@ -79,7 +79,8 @@ export function buildAgentStatusLiveEntry(
     return { entry: null, reason: 'stale' }
   }
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
-  const { history, lastCompletedAssistantMessage } = advanceAgentStateHistory(existing, payload)
+  const { history, lastCompletedAssistantMessage, stateObservedAt } =
+    resolveAgentStatusLiveEntryStateHistory(existing, payload, updatedAt)
   const identity = resolveAgentStatusIdentity({
     existing: existing
       ? {
@@ -204,6 +205,7 @@ export function buildAgentStatusLiveEntry(
       : {}),
     ...(metadata?.structuredHostOwned === true ? { structuredHostOwned: true as const } : {}),
     stateStartedAt,
+    stateObservedAt,
     agentType: identity.agentType,
     model:
       payload.model ?? (existing?.agentType === identity.agentType ? existing.model : undefined),

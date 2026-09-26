@@ -8,6 +8,7 @@
 // journal rather than skipping or compacting past it.
 
 import type { AgentType } from './agent-status-types'
+import type { AgentSessionQuestionAnswer } from './agent-session-question-answer'
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
@@ -128,8 +129,11 @@ export type AgentJournalResolutionState = (typeof AGENT_JOURNAL_RESOLUTION_STATE
  *  invoking the provider callback twice. */
 export type AgentJournalResolution = {
   state: AgentJournalResolutionState
-  /** Option id the winner picked; null while pending or cancelled. */
+  /** Option id the winner picked; null while pending or cancelled. For a question, the answer in the
+   *  packed form older clients read; `answers` is the same answer structured. */
   selectedOptionId: string | null
+  /** Question answers. Absent on approvals and on rows written before hosts recorded it. */
+  answers?: AgentSessionQuestionAnswer[]
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
   resolvedAt: number | null
@@ -334,6 +338,8 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   observedAt: number
   /** Set when the row was appended by crash reconciliation rather than live. */
   recovered?: true
+  /** When crash reconciliation wrote this revision; present exactly when `recovered` is. */
+  recoveredAt?: number
 }
 
 // ─── Submissions ────────────────────────────────────────────────────────────

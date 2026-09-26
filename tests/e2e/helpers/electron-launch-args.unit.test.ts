@@ -1,9 +1,23 @@
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getOrcaElectronLaunchArgs } from './electron-launch-args'
+import { getElectronIsolatedKeychainArgs, getOrcaElectronLaunchArgs } from './electron-launch-args'
 
 describe('getOrcaElectronLaunchArgs', () => {
   afterEach(() => vi.unstubAllGlobals())
+
+  it.each(['darwin', 'linux', 'win32'])(
+    'isolates packaged and source test keychains on %s',
+    (platform) => {
+      vi.stubGlobal('process', { ...process, platform })
+      const args = getElectronIsolatedKeychainArgs()
+      expect(args).toEqual(
+        platform === 'darwin' ? ['--password-store=basic', '--use-mock-keychain'] : []
+      )
+      expect(getOrcaElectronLaunchArgs(join('orca', 'out', 'main', 'index.js'), false)).toEqual(
+        expect.arrayContaining(args)
+      )
+    }
+  )
 
   it.each([
     ['linux', 'true', true, true],

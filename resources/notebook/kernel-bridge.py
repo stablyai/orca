@@ -35,12 +35,21 @@ def send(frame):
         _frames.write(line)
 
 
+def externally_managed():
+    """PEP 668: pip refuses to install into this interpreter outside a virtual environment."""
+    import sysconfig
+
+    if sys.prefix != getattr(sys, "base_prefix", sys.prefix):
+        return False
+    return os.path.isfile(os.path.join(sysconfig.get_path("stdlib"), "EXTERNALLY-MANAGED"))
+
+
 try:
     import ipykernel  # noqa: F401
     from jupyter_client.kernelspec import KernelSpec
     from jupyter_client.manager import KernelManager
 except ImportError:
-    send({"type": "missing"})
+    send({"type": "missing", "externallyManaged": externally_managed()})
     sys.exit(0)
 
 

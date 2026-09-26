@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import {
+  readPersistedLease,
+  writeOlderBuildLease
+} from '../../runtime/agent-session-older-build-lease.test-fixture'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   resolveStructuredSessionRecovery,
@@ -10,6 +14,7 @@ import {
 } from './structured-agent-session-recovery-resolution'
 
 const NOW = 1_800_000_000_000
+const MATCHED: AgentSessionOwnerProbe = { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
 const SESSION = 'session-recovery'
 const roots: string[] = []
 let operations = 0
@@ -18,13 +23,20 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-async function openStore(): Promise<AgentSessionRecordStore> {
+async function newStoreDirectory(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-recovery-resolution-'))
   roots.push(root)
-  return AgentSessionRecordStore.open({ directory: root, hostId: 'local' })
+  return root
 }
 
-async function reserve(store: AgentSessionRecordStore, runtimeKind: 'native' | 'tui' = 'native') {
+async function openStore(directory?: string): Promise<AgentSessionRecordStore> {
+  return AgentSessionRecordStore.open({
+    directory: directory ?? (await newStoreDirectory()),
+    hostId: 'local'
+  })
+}
+
+async function reserve(store: AgentSessionRecordStore) {
   operations += 1
   return store.reserveOwner({
     sessionId: SESSION,
@@ -36,7 +48,6 @@ async function reserve(store: AgentSessionRecordStore, runtimeKind: 'native' | '
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/tmp/codex' },
-    runtimeKind,
     expectedFence: null,
     spawnToken: 'spawn-recovery',
     claimKeyId: 'key-1',
@@ -51,8 +62,8 @@ async function reserve(store: AgentSessionRecordStore, runtimeKind: 'native' | '
   })
 }
 
-async function liveOwner(store: AgentSessionRecordStore, runtimeKind: 'native' | 'tui' = 'native') {
-  const reserved = await reserve(store, runtimeKind)
+async function liveOwner(store: AgentSessionRecordStore) {
+  const reserved = await reserve(store)
   const fence = reserved.record.lease.runtimeFence
   await store.commitProcessIdentity({
     sessionId: SESSION,
@@ -79,10 +90,10 @@ async function liveOwner(store: AgentSessionRecordStore, runtimeKind: 'native' |
   })
 }
 
-async function latch(store: AgentSessionRecordStore, stage: 'recovering' | 'manual-recovery') {
+async function latch(store: AgentSessionRecordStore) {
   return store.transitionHandoff(SESSION, (record) => ({
     ...record,
-    lease: { ...record.lease, handoffStage: stage }
+    lease: { ...record.lease, handoffStage: 'recovering' }
   }))
 }
 
@@ -106,29 +117,30 @@ function deps(
 }
 
 describe('structured session recovery resolution', () => {
-  it('does not release an ownerless native reservation without processless proof', async () => {
+  it('releases an ownerless reservation: nothing it recorded can be holding it', async () => {
     const store = await openStore()
     await reserve(store)
-    await latch(store, 'recovering')
+    await latch(store)
 
     const result = await resolveStructuredSessionRecovery(
       deps(store, () => ({ outcome: 'indeterminate', reason: 'no scan' })),
       SESSION
     )
 
-    expect(result).toBe('unresolved')
+    expect(result).toBe('resolved')
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'recovering',
-      runtimeFence: 1,
-      reservedSpawnToken: 'spawn-recovery'
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      reservedSpawnToken: null,
+      deathEvidence: null
     })
   })
 
   it('evicts a latched owner the probe now proves dead, without a stop request', async () => {
     const store = await openStore()
     await liveOwner(store)
-    await latch(store, 'manual-recovery')
+    await latch(store)
     const stopOwnerProcess = vi.fn()
 
     const result = await resolveStructuredSessionRecovery(
@@ -149,7 +161,7 @@ describe('structured session recovery resolution', () => {
   it('stops a live identity-matched orphan and evicts only after absence is proven', async () => {
     const store = await openStore()
     await liveOwner(store)
-    await latch(store, 'recovering')
+    await latch(store)
     let alive = true
     const stopOwnerProcess = vi.fn(() => {
       alive = false
@@ -177,10 +189,10 @@ describe('structured session recovery resolution', () => {
     })
   })
 
-  it('escalates the stop request but never evicts an owner that stays alive', async () => {
+  it('releases an owner that survives the stop ladder, with no death evidence', async () => {
     const store = await openStore()
     await liveOwner(store)
-    await latch(store, 'recovering')
+    await latch(store)
     const stopOwnerProcess = vi.fn()
 
     const result = await resolveStructuredSessionRecovery(
@@ -190,22 +202,25 @@ describe('structured session recovery resolution', () => {
       SESSION
     )
 
-    expect(result).toBe('unresolved')
-    expect(stopOwnerProcess).toHaveBeenCalledWith(4242, 'SIGTERM')
-    expect(stopOwnerProcess).toHaveBeenCalledWith(4242, 'SIGKILL')
-    // The latch is preserved verbatim: no fence move, no cleared owner, no lost state.
+    expect(result).toBe('resolved')
+    expect(stopOwnerProcess.mock.calls).toEqual([
+      [4242, 'SIGTERM'],
+      [4242, 'SIGKILL']
+    ])
+    // Its transport died with the runtime that held it; nothing proved it gone, so no evidence.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'live',
-      handoffStage: 'recovering',
-      runtimeFence: 1,
-      ownerProcess: { pid: 4242 }
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      ownerProcess: null,
+      deathEvidence: null
     })
   })
 
-  it('leaves an unverifiable owner latched and requests no stop', async () => {
+  it('releases an owner whose identity cannot be verified, and signals nothing', async () => {
     const store = await openStore()
     await liveOwner(store)
-    await latch(store, 'recovering')
+    await latch(store)
     const stopOwnerProcess = vi.fn()
 
     const result = await resolveStructuredSessionRecovery(
@@ -215,39 +230,45 @@ describe('structured session recovery resolution', () => {
       SESSION
     )
 
-    expect(result).toBe('unresolved')
+    expect(result).toBe('resolved')
+    // The pid may have been reused by an unrelated process.
     expect(stopOwnerProcess).not.toHaveBeenCalled()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      handoffStage: 'recovering',
-      runtimeFence: 1
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      ownerProcess: null,
+      deathEvidence: null
     })
   })
 
-  it('leaves a TUI record that still names an owner to its own recovery transport', async () => {
-    const store = await openStore()
-    await liveOwner(store, 'tui')
-    await latch(store, 'recovering')
+  it('waits out a terminal owner an older build recorded, and never stops it', async () => {
+    const directory = await newStoreDirectory()
+    await liveOwner(await openStore(directory))
+    await writeOlderBuildLease(directory, SESSION, { runtimeKind: 'tui' })
+    await (await openStore(directory)).reconcileOnRestart({ probe: async () => MATCHED, now: NOW })
+    // A fresh load of what that restart persisted, as any later or older build reads it.
+    const store = await openStore(directory)
+    await store.reconcileOnRestart({ probe: async () => MATCHED, now: NOW })
+    const stopOwnerProcess = vi.fn()
+
+    expect(
+      await resolveStructuredSessionRecovery(
+        deps(store, () => MATCHED, { stopOwnerProcess }),
+        SESSION
+      )
+    ).toBe('unresolved')
+    expect(stopOwnerProcess).not.toHaveBeenCalled()
+    // Older builds stop only a native owner that is not conflicted, the same rule as this one.
+    expect(await readPersistedLease(directory, SESSION)).toMatchObject({
+      runtimeKind: 'native',
+      claimStatus: 'conflicted',
+      handoffStage: 'recovering'
+    })
 
     expect(
       await resolveStructuredSessionRecovery(
         deps(store, () => ({ outcome: 'pid-absent' })),
-        SESSION
-      )
-    ).toBe('not-applicable')
-    expect(store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
-  })
-
-  it('resolves a TUI reservation that names nobody, because nothing else can', async () => {
-    // The TUI carve-out exists because a TUI owner has its own recovery transport, and that
-    // transport needs a process to talk to. A reservation that crashed before `commitProcessIdentity`
-    // names none, so skipping it here left the session with no exit at all.
-    const store = await openStore()
-    await reserve(store, 'tui')
-    await latch(store, 'recovering')
-
-    expect(
-      await resolveStructuredSessionRecovery(
-        deps(store, () => ({ outcome: 'reservation-unused' })),
         SESSION
       )
     ).toBe('resolved')
@@ -257,44 +278,27 @@ describe('structured session recovery resolution', () => {
     })
   })
 
-  it('frees a conflicted claim once its named owner is proven gone', async () => {
-    const store = await openStore()
-    await liveOwner(store)
-    await store.markClaimConflicted(SESSION, NOW)
-
+  it('releases a terminal reservation an older build left naming nobody at restart', async () => {
+    const directory = await newStoreDirectory()
+    await reserve(await openStore(directory))
+    await writeOlderBuildLease(directory, SESSION, { runtimeKind: 'tui' })
+    const store = await openStore(directory)
+    await store.reconcileOnRestart({
+      probe: async () => ({ outcome: 'indeterminate', reason: 'no scan' }),
+      now: NOW
+    })
+    // No process is recorded for a conflict to name, so there is nothing to wait out.
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      runtimeKind: 'native',
+      claimStatus: 'released',
+      handoffStage: null,
+      deathEvidence: null
+    })
     expect(
       await resolveStructuredSessionRecovery(
-        deps(store, () => ({ outcome: 'pid-absent' })),
+        deps(store, () => ({ outcome: 'reservation-unused' })),
         SESSION
       )
-    ).toBe('resolved')
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      handoffStage: null,
-      claimStatus: 'released',
-      deathEvidence: { kind: 'pid-absent' }
-    })
-  })
-
-  it('never stops the process a conflicted claim names, and keeps the conflict without proof', async () => {
-    const store = await openStore()
-    await liveOwner(store)
-    await store.markClaimConflicted(SESSION, NOW)
-    const stopOwnerProcess = vi.fn()
-
-    const result = await resolveStructuredSessionRecovery(
-      deps(store, () => ({ outcome: 'identity-matched', matchedOn: ['spawn-token'] }), {
-        stopOwnerProcess
-      }),
-      SESSION
-    )
-
-    // Ownership was never settled, so the process on the other side of the conflict is not
-    // Orca's to kill; only the user can decide which claimant wins.
-    expect(stopOwnerProcess).not.toHaveBeenCalled()
-    expect(result).toBe('unresolved')
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'conflicted',
-      handoffStage: 'manual-recovery'
-    })
+    ).toBe('not-applicable')
   })
 })

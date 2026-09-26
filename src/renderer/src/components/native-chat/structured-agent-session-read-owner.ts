@@ -5,7 +5,6 @@ import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryResult
 } from '../../../../shared/agent-session-wire'
-import { isUnattachedAgentSessionReadRefusal } from '../../../../shared/structured-agent-session-read-refusal'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
@@ -21,6 +20,8 @@ import { startStructuredAgentSessionReadTransport } from './structured-agent-ses
 export type StructuredAgentSessionReadSnapshot = {
   state: StructuredAgentSessionState
   loadingOlder: boolean
+  /** Bumped whenever older-page reads are invalidated (open, snapshot, reset, dispose). */
+  olderHistoryGeneration: number
   providerSession?: AgentProviderSessionMetadata
 }
 
@@ -53,7 +54,8 @@ function createReadOwner(
 ): StructuredAgentSessionReadOwner {
   let snapshot: StructuredAgentSessionReadSnapshot = {
     state: EMPTY_STRUCTURED_AGENT_SESSION,
-    loadingOlder: false
+    loadingOlder: false,
+    olderHistoryGeneration: 0
   }
   let stopActiveRun: (() => void) | null = null
   const retiredHistoryRead = (): boolean => true
@@ -88,6 +90,13 @@ function createReadOwner(
     if (snapshot.loadingOlder) {
       setSnapshot({ ...snapshot, loadingOlder: false })
     }
+  }
+  const invalidateOlderPages = (): void => {
+    setSnapshot({
+      ...snapshot,
+      loadingOlder: false,
+      olderHistoryGeneration: snapshot.olderHistoryGeneration + 1
+    })
   }
   const hydrate = async (shouldStop: () => boolean): Promise<void> => {
     const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
@@ -201,17 +210,10 @@ function createReadOwner(
         }
       }
       return 'unchanged'
-    } catch (error) {
-      if (shouldStop()) {
-        return 'superseded'
-      }
-      // An unattached session is the live transport's subject, not this page's: it re-asks and
-      // decides. A page that refused that way must not put the pane in an error state the
-      // transport is about to clear.
-      if (!isUnattachedAgentSessionReadRefusal(error)) {
-        apply({ type: 'error', message: String(error) })
-      }
-      return 'failed'
+    } catch {
+      // A failed page leaves the loaded conversation intact; the list offers a retry, and
+      // the next invalidation (re-attach, snapshot, reset) re-enables paging.
+      return shouldStop() ? 'superseded' : 'failed'
     }
   }
 
@@ -223,7 +225,7 @@ function createReadOwner(
       applyEvent: (event) => apply({ type: 'event', event }),
       applyError: (message) => apply({ type: 'error', message }),
       getCursor: () => snapshot.state.cursor,
-      onHistoryReadInvalidated: clearLoadingOlder,
+      onHistoryReadInvalidated: invalidateOlderPages,
       hydrate: snapshot.state.epoch === null ? hydrate : undefined,
       sessionId,
       target

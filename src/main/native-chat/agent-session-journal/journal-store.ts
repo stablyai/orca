@@ -26,7 +26,10 @@ import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { readJournalSince } from './journal-cursor'
 import { readJournalRowsAfterCursor, type JournalLoad } from './journal-open'
 import { journalDatabaseFile } from './journal-paths'
-import { markJournalPendingSubmissionsUnknown } from './journal-pending-submission-recovery'
+import {
+  markJournalPendingSubmissionsUnknown,
+  rejectJournalPendingSubmissions
+} from './journal-pending-submission-recovery'
 import {
   applyJournalRow,
   createJournalReducerState,
@@ -73,6 +76,7 @@ export class AgentSessionJournal {
   private readOnly = false
   private malformedRows = 0
   private database: OpenJournalDatabase | null = null
+  private onCommitted: (() => void) | null = null
   private readonly queue: JournalWriteQueue
   private readonly closer: JournalConnectionCloser
   private readonly rowWriter: JournalRowWriter
@@ -108,8 +112,14 @@ export class AgentSessionJournal {
         this.readOnly = readOnly
       },
       cursor: this.cursor,
-      adopt: (loaded) => this.adoptLoadedJournal(loaded),
-      commit: (row) => applyJournalRow(this.state, row),
+      adopt: (loaded) => {
+        this.adoptLoadedJournal(loaded)
+        this.onCommitted?.()
+      },
+      commit: (row) => {
+        applyJournalRow(this.state, row)
+        this.onCommitted?.()
+      },
       loaded: () => this.loaded,
       malformedRows: () => this.malformedRows,
       setMalformedRows: (count) => {
@@ -162,6 +172,12 @@ export class AgentSessionJournal {
   close(): Promise<void> {
     this.queue.markClosed()
     return this.closer.close()
+  }
+
+  /** Told of every durable change, epoch replacements included, so a reader learns of a write
+   *  without its writer saying so. One listener: a later call replaces it. It must not throw. */
+  observeCommits(listener: () => void): void {
+    this.onCommitted = listener
   }
 
   cursor = (): AgentJournalCursor => ({
@@ -287,6 +303,11 @@ export class AgentSessionJournal {
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
   async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
     return markJournalPendingSubmissionsUnknown(this, fence, reason)
+  }
+
+  /** Reject unanswered sends after an owner that never proved its start ended: none was written. */
+  async rejectPendingSubmissions(fence: number, reason: string): Promise<string[]> {
+    return rejectJournalPendingSubmissions(this, fence, reason)
   }
 
   /** The escape hatch for corruption, an unreconcilable prefix, a forked handle,

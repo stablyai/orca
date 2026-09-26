@@ -6,7 +6,8 @@ import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
   getRegisteredDeletableWorktree,
-  isDangerousWorktreeRemovalPath
+  isDangerousWorktreeRemovalPath,
+  isWorktreePathMissing
 } from './worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME, executionHostRemovalHome } from './worktree-removal-home-guard'
 
@@ -345,6 +346,16 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
           ['/repos/main/.git/worktrees/dev/gitdir', '/home/dev/.git\n']
         ])
       )
+    ).resolves.toBe(false)
+  })
+})
+
+describe('isWorktreePathMissing', () => {
+  it('does not treat an unreadable path as absent', async () => {
+    await expect(
+      isWorktreePathMissing('/workspaces/locked', async () => {
+        throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+      })
     ).resolves.toBe(false)
   })
 })

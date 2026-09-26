@@ -23,7 +23,6 @@ export {
 export { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 export { getTerminalViewColorQueryReplyColors } from './terminal-view-attribute-store'
 export type { RuntimePtyController } from './runtime-pty-controller-contract'
-export { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 export { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 export type { IpcMainEvent } from 'electron'
 

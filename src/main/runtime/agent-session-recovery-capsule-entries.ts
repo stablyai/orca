@@ -7,7 +7,6 @@
 import { z } from 'zod'
 import {
   AGENT_SESSION_RESUME_FAILURE_OUTCOMES,
-  isExpiredAgentSessionResumeMarker,
   parseAgentSessionResumeMarker,
   type AgentSessionResumeFailureOutcome,
   type AgentSessionResumeMarker
@@ -42,8 +41,8 @@ const capsuleSchema = z.object({
 })
 
 /** What an acted-on offer left behind when the agent did not carry on. Current only while nothing
- *  newer happened in that chat; also dies with the marker's TTL, a dismissal, a successful retry,
- *  or a newer teardown of the same chat. */
+ *  newer happened in that chat; also dies with a dismissal, a successful retry, or a newer
+ *  teardown of the same chat. */
 export type AgentSessionResumeFailureRecord = {
   marker: AgentSessionResumeMarker
   failedAt: number
@@ -144,16 +143,12 @@ export function normalizeState(
 ): Pick<RecoveryCapsuleState, 'entries' | 'failed'> {
   const bySession = new Map<string, RecoveryEntry>()
   for (const entry of state.entries) {
-    const replacement =
-      entry.replacement && !isExpiredAgentSessionResumeMarker(entry.replacement, now)
-        ? entry.replacement
-        : undefined
-    if (isExpiredAgentSessionResumeMarker(entry.marker, now) && replacement === undefined) {
-      continue
-    }
+    const replacement = entry.replacement
     if (bySession.has(entry.marker.sessionId)) {
       throw new Error('agent_session_recovery_capsule_duplicate_session')
     }
+    // The action lease, not an offer expiry: an offer has none. A reservation whose action died
+    // is re-derived back to pending so a crashed resume cannot strand the offer forever.
     const reclaimed =
       entry.state === 'in-progress' &&
       entry.startedAt !== undefined &&
@@ -163,16 +158,11 @@ export function normalizeState(
         ? { state: 'pending', marker: replacement ?? entry.marker }
         : entry.state === 'pending' && replacement
           ? { state: 'pending', marker: replacement }
-          : replacement
-            ? { ...entry, replacement }
-            : entry
+          : entry
     bySession.set(normalized.marker.sessionId, normalized)
   }
   const failed: AgentSessionResumeFailureRecord[] = []
   for (const failure of state.failed) {
-    if (isExpiredAgentSessionResumeMarker(failure.marker, now)) {
-      continue
-    }
     if (failed.some((kept) => kept.marker.sessionId === failure.marker.sessionId)) {
       throw new Error('agent_session_recovery_capsule_duplicate_session')
     }

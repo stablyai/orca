@@ -982,8 +982,8 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          # Why not skill-freshness-inventory.test.ts: it holds behaviour tests, so main's copy fails a tag that predates the behaviour.
           git checkout "$WORKFLOW_SHA" -- \
-            src/main/skills/skill-freshness-inventory.test.ts \
             src/main/skills/skill-provider-runtime-roots.test.ts
 
       - uses: ./.github/actions/install-node-dependencies
@@ -1034,8 +1034,8 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          # Why not skill-freshness-inventory.test.ts: it holds behaviour tests, so main's copy fails a tag that predates the behaviour.
           git checkout "$WORKFLOW_SHA" -- \
-            src/main/skills/skill-freshness-inventory.test.ts \
             src/main/skills/skill-provider-runtime-roots.test.ts
 
       - uses: ./.github/actions/install-node-dependencies
@@ -1313,6 +1313,16 @@ jobs:
           key: electron-builder-${{ matrix.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             electron-builder-${{ matrix.platform }}-
+
+      # PRs cache tools separately from Electron; identical paths preserve their cache version.
+      - name: Seed shared Linux packaging downloads
+        if: matrix.platform == 'linux-x64' && github.ref == 'refs/heads/main'
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/electron-builder
+          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          # The release cache above restores the same tools, so this only needs to save on a miss.
+          lookup-only: true
 
       # Why: pnpm install triggers electron's postinstall, which downloads the
       # Electron binary from GitHub release assets. GitHub's download CDN

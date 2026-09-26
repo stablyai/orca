@@ -303,7 +303,7 @@ describe('the prompt receipt', () => {
       'createStructuredSession',
       'deliverStructuredPrompt'
     ])
-    // The send must name the lease the create was admitted under, not one re-read later.
+    // The send carries the create's own fence; nothing re-reads the session for it.
     expect(h.deliverStructuredPrompt).toHaveBeenCalledWith({
       sessionId: 'sess-1',
       fence: 4,
@@ -499,6 +499,29 @@ describe('caller-supplied launch inputs', () => {
       reason: 'tui_launch_command'
     })
     expect(h.createStructuredSession).not.toHaveBeenCalled()
+  })
+
+  it('still opens a structured session when the cwd names the workspace root', async () => {
+    // The root the RPC layer resolved rides on the target, so a cwd spelled as the root is not a
+    // custom directory and does not decide the route.
+    const h = harness({})
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'wt-7', workspacePath: '/repo' },
+      cwd: '/repo/'
+    })
+    expect(result.outcome.kind).toBe('structured')
+    expect(result.receipt).toMatchObject({ mode: 'structured' })
+  })
+
+  it('still downgrades for a subdirectory of a resolved root', async () => {
+    const h = harness({})
+    const result = await h.run({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'wt-7', workspacePath: '/repo' },
+      cwd: '/repo/packages/api'
+    })
+    expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'tui_launch_command' })
   })
 
   it('still opens a structured session when the cwd is only whitespace', async () => {

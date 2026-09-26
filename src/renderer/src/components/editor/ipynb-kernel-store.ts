@@ -16,7 +16,17 @@ export type CellRun = LiveOutputs & {
   committed: boolean
 }
 
-type KernelStatus = 'off' | 'starting' | 'missing-ipykernel' | 'installing' | 'ready' | 'dead'
+type KernelStatus = 'off' | 'starting' | 'ready' | 'dead'
+
+/** Getting ipykernel into a Python; while set, the setup dialog is open and cells wait. */
+export type KernelSetup = {
+  /** The interpreter missing ipykernel, or the base of the new `.venv`. */
+  base: PythonEnvironment
+  /** `venv` when pip refuses to install into `base` (PEP 668), or the user asked for one. */
+  offer: 'install' | 'venv'
+  phase: 'idle' | 'installing' | 'creating-venv'
+  error: string | null
+}
 
 export type NotebookKernelSession = {
   trusted: boolean
@@ -25,6 +35,7 @@ export type NotebookKernelSession = {
   queue: QueuedCell[]
   runs: Record<string, CellRun>
   interruptStalled: boolean
+  setup: KernelSetup | null
 }
 
 const IDLE_SESSION: NotebookKernelSession = {
@@ -32,7 +43,8 @@ const IDLE_SESSION: NotebookKernelSession = {
   status: 'off',
   queue: [],
   runs: {},
-  interruptStalled: false
+  interruptStalled: false,
+  setup: null
 }
 const ENVIRONMENTS_STORAGE_KEY = 'orca.notebookPythonEnvironments'
 
@@ -42,11 +54,15 @@ function loadEnvironments(): Record<string, PythonEnvironment> {
     return isRecord(stored)
       ? Object.fromEntries(
           Object.entries(stored).flatMap(([filePath, env]) =>
-            isRecord(env) &&
-            typeof env.path === 'string' &&
-            typeof env.name === 'string' &&
-            typeof env.version === 'string'
-              ? [[filePath, { path: env.path, name: env.name, version: env.version }]]
+            isRecord(env) && typeof env.path === 'string' && typeof env.name === 'string'
+              ? [
+                  [
+                    filePath,
+                    typeof env.version === 'string'
+                      ? { path: env.path, name: env.name, version: env.version }
+                      : { path: env.path, name: env.name }
+                  ]
+                ]
               : []
           )
         )
@@ -87,7 +103,8 @@ export function useNotebookKernelState(filePath: string) {
         status: session.status,
         trusted: session.trusted,
         busy: session.queue.length > 0 || runningCellKey(session) !== null,
-        interruptStalled: session.interruptStalled
+        interruptStalled: session.interruptStalled,
+        setup: session.setup
       }
     })
   )

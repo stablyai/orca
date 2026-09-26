@@ -4,7 +4,12 @@ import {
 } from '../../agent-status-types'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import { continueMainAgentStatus, foldAgentLeadStatus } from '../../agent-lead-status-fold'
-import type { AgentChildWorkLiveness } from '../../agent-status-child-work-liveness'
+import type { AgentChildWorkKind } from '../../agent-status-child-work'
+import {
+  agentChildWorkLiveness,
+  type AgentChildWorkLiveness,
+  type AgentChildWorkLivenessCandidate
+} from '../../agent-status-child-work-liveness'
 import { clearPaneTurnCacheState, type HookListenerState } from '../listener-state'
 import { normalizeGrokPromptId } from '../listener-limits'
 import { resolvePrompt, resolveToolState, stripGrokUserQueryWrapper } from '../prompt-fields'
@@ -92,29 +97,40 @@ function grokTurnEndApplies(
   )
 }
 
-function grokHasRunningFiniteTask(hookPayload: Record<string, unknown>): boolean {
+/** A finite `backgroundTasks[]` entry as child work. Grok lists only in-flight tasks, so none
+ *  carries a settled state. Monitors are left out: they can run indefinitely and would hold the
+ *  pane (and silence its completion) forever. */
+function grokFiniteTaskKind(task: unknown): AgentChildWorkKind | null {
+  if (!isRecord(task)) {
+    return null
+  }
+  return task.type === 'subagent' ? 'agent' : task.type === 'shell' ? 'command' : null
+}
+
+function grokRunningFiniteTasks(
+  hookPayload: Record<string, unknown>
+): AgentChildWorkLivenessCandidate[] {
   const backgroundTasks = aliasedField(hookPayload, 'backgroundTasks', 'background_tasks')
   if (!backgroundTasks.present || !Array.isArray(backgroundTasks.value)) {
-    return false
+    return []
   }
-  return backgroundTasks.value.some((task) => {
-    if (!isRecord(task)) {
-      return false
-    }
-    return task.type === 'shell' || task.type === 'subagent'
+  return backgroundTasks.value.flatMap((task) => {
+    const kind = grokFiniteTaskKind(task)
+    return kind ? [{ kind }] : []
   })
 }
 
-/** What a plain `stop` leaves running behind the main agent. Grok reports its finite tasks without a
- *  kind the roster could classify as agent work, and a still-active stop hook holds the turn the
- *  same way, so both read as watch work: the pane stays `working` in monitoring mode. */
-function grokChildWorkLivenessAfterStop(
+/** What a turn end leaves running behind the main agent. A background subagent is agent work
+ *  and keeps the pane `working`; a shell, or a still-active stop hook holding the turn, is watch
+ *  work and reads as monitoring. */
+function grokChildWorkLivenessAfterTurnEnd(
   hookPayload: Record<string, unknown>
 ): AgentChildWorkLiveness {
   const stopHookActive = aliasedField(hookPayload, 'stopHookActive', 'stop_hook_active')
-  return stopHookActive.value === true || grokHasRunningFiniteTask(hookPayload)
-    ? 'monitoring'
-    : null
+  return (
+    agentChildWorkLiveness(grokRunningFiniteTasks(hookPayload)) ??
+    (stopHookActive.value === true ? 'monitoring' : null)
+  )
 }
 
 function isGrokSessionBoundary(eventName: unknown, hookPayload: Record<string, unknown>): boolean {
@@ -206,15 +222,14 @@ export function normalizeGrokEvent(
     : isGrokEvent(eventName, 'stop_failure')
       ? ('failure' as const)
       : undefined
-  // Only a plain end-of-turn `stop` reports what it left running; a cancel, a failure and a
-  // session boundary settle the pane whatever the inventory says, as they always have.
+  // Why: every turn end reports what it left running, and a task leaves only when it reports its
+  // own end or the session ends — a cancelled or failed turn with a still-running task reads
+  // monitoring exactly like a plain `stop`. Only a session boundary settles the pane whatever
+  // the inventory says.
   const resolution = foldAgentLeadStatus({
     leadState,
-    interrupted: outcome === 'cancellation',
     childWorkLiveness:
-      isGrokEvent(eventName, 'stop') && !sessionBoundary
-        ? grokChildWorkLivenessAfterStop(hookPayload)
-        : null
+      isTurnEnd && !sessionBoundary ? grokChildWorkLivenessAfterTurnEnd(hookPayload) : null
   })
   const stateName = resolution.stateName
   const previousMainAgent = state.grokMainAgentStatusByPaneKey.get(paneKey)
@@ -255,7 +270,8 @@ export function normalizeGrokEvent(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     ...(resolution.workingMode ? { workingMode: resolution.workingMode } : {}),
-    ...(outcome === 'cancellation' ? { interrupted: true } : {}),
+    // Why: derived from the main agent, so the idle backstop that settles a cancelled turn held open by a task still reads interrupted.
+    ...(mainAgent.outcome === 'cancellation' ? { interrupted: true } : {}),
     ...(sessionBoundary ? { sessionBoundary: true } : {}),
     mainAgent
   })

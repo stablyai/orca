@@ -85,7 +85,7 @@ async function ensureTabs(page: Page, worktreeId: string, marker: string): Promi
         const reuse = existing[wanted]
         const tab = reuse ?? state.createTab(id, undefined, undefined, { activate: true })
         state.setActiveTab(tab.id)
-        state.setActiveTabType('terminal')
+        state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
         return tab.id
       },
       { id: worktreeId, wanted: index }

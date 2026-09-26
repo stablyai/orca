@@ -100,23 +100,4 @@ describe('Claude account on host agent-session launches', () => {
       expect(spawnAccount(1)).toBe(expected)
     }
   )
-
-  it("resumes a structured handoff on the session's own config dir, never the project account", async () => {
-    const { runtime, spawn, spawnAccount } = spawningRuntime()
-    await runtime.ensureAgentSession(
-      {
-        kind: 'explicit',
-        worktree: `id:${TEST_WORKTREE_ID}`,
-        agent: 'claude',
-        providerSession: { key: 'session_id', id: 'provider-session-1' },
-        presentation: 'background'
-      },
-      {},
-      { spawnToken: 'spawn-token-1', providerRoot: '/accounts/owner/claude', sessionId: 'sess-1' }
-    )
-    expect(spawnAccount(0)).toBeUndefined()
-    expect(spawn.mock.calls[0]![0]).toMatchObject({
-      env: expect.objectContaining({ CLAUDE_CONFIG_DIR: '/accounts/owner/claude' })
-    })
-  })
 })

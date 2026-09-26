@@ -4,6 +4,7 @@
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentMainAgentStatus } from './main-agent-status'
+import type { AgentStateHistoryEntry } from './agent-state-history'
 import { isAgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
@@ -25,6 +26,7 @@ export type {
   MigrationUnsupportedPtyEntry
 } from './agent-status-ipc-payload'
 export { mainAgentStatusEqual, type AgentMainAgentStatus } from './main-agent-status'
+export { AGENT_STATE_HISTORY_MAX, type AgentStateHistoryEntry } from './agent-state-history'
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
@@ -35,24 +37,6 @@ export type AgentWorkingMode = 'monitoring'
 // sentinel (no agent identified yet), a convenience union for pattern-matching.
 export type WellKnownAgentType = TuiAgent | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
-
-/** A snapshot of a previous agent state, used to render activity blocks.
- *  Why: intentionally narrower than AgentStatusEntry — tool/assistant context is
- *  per-turn, not meaningful on a historical snapshot, and would bloat memory.
- *  Coalesced-turn output lives in AgentStatusEntry.lastCompletedAssistantMessage,
- *  one copy per pane, so it can't multiply by AGENT_STATE_HISTORY_MAX. */
-export type AgentStateHistoryEntry = {
-  state: AgentStatusState
-  prompt: string
-  /** When this state was first reported. */
-  startedAt: number
-  /** True when this `done` was a cancellation (agent hook like Claude `is_interrupt`,
-   *  or Orca's guarded fallback). Always falsy for non-`done` states so retention logic can preserve it. */
-  interrupted?: boolean
-}
-
-/** Maximum number of history entries kept per agent to bound memory. */
-export const AGENT_STATE_HISTORY_MAX = 20
 
 export type AgentStatusOrchestrationContext = {
   taskId: string
@@ -105,6 +89,8 @@ export type AgentStatusEntry = {
   /** Timestamp (ms) when the current `state` was first reported.
    *  Why: separate from updatedAt so tool/prompt pings (which reset updatedAt) don't move it. */
   stateStartedAt: number
+  /** `updatedAt` of the write that switched into `state`; see AgentStateHistoryEntry.observedAt. */
+  stateObservedAt?: number
   agentType?: AgentType
   /** Provider model currently used by this session. */
   model?: string

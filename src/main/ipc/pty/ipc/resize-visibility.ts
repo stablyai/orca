@@ -15,10 +15,8 @@ import {
 import { tryGetProviderForPty, closeStartupQueryAuthorityForPty } from '../provider/registry'
 import {
   activeRendererPtys,
-  deliveredHiddenRendererResizeOutputPtys,
   invalidatePendingPtyDrainPolicy,
   invalidatePendingPtyDrainPriority,
-  pendingHiddenRendererResizeOutputPtys,
   ptySizes,
   rendererVisibilityKnownPtys,
   visibleRendererPtys
@@ -57,21 +55,9 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     if (!provider) {
       return
     }
-    const markedHiddenResizeOutput = session.rendererPtyIsKnownHidden(args.id)
-    if (markedHiddenResizeOutput) {
-      // Why: alt-screen TUIs repaint on SIGWINCH; a hidden repaint read after switch-back must not masquerade as live output and overwrite the correctly-sized screen.
-      pendingHiddenRendererResizeOutputPtys.add(args.id)
-      deliveredHiddenRendererResizeOutputPtys.delete(args.id)
-    } else if (visibleRendererPtys.has(args.id)) {
-      // Why: after the stale hidden-resize repaint is observed, the renderer's visible resize pulse owns the next repaint.
-      session.clearDeliveredHiddenRendererResizeOutput(args.id)
-    }
     try {
       provider.resize(args.id, args.cols, args.rows)
     } catch {
-      if (markedHiddenResizeOutput) {
-        pendingHiddenRendererResizeOutputPtys.delete(args.id)
-      }
       return
     }
     ptySizes.set(args.id, { cols: args.cols, rows: args.rows })
@@ -194,7 +180,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   ipcMain.removeAllListeners('pty:rendererDispatcherReady')
   ipcMain.on('pty:rendererDispatcherReady', (event) => {
     // Why: the reconcile below destructively clears delivery accounting, so a straggler handshake from a dying window must not reset the new window.
-    if (!isMainWindowPtyIpcEvent(event, mainWindow, mainWindow.webContents)) {
+    if (!isMainWindowPtyIpcEvent(event, mainWindow)) {
       return
     }
     // Why: a handshake while the gate is already open means a page load whose lifecycle reset was missed; clear the dead page's stale accounting so it can't permanently gate survivors.
