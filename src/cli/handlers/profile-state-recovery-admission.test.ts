@@ -209,6 +209,61 @@ describe('offline recovery excludes runtime admission', () => {
     acquireProfileStateRuntimeAdmission(profile.root).release()
   })
 
+  it.each([false, true])(
+    'preserves all prior exports before archival (failure: %s)',
+    async (failArchive) => {
+      const profile = await fixture()
+      const opened = openProfileStateDatabase(profile.databasePath, profileId)
+      try {
+        for (let revision = 3; revision <= 6; revision++) {
+          importProfileStateJson(opened.db, JSON.stringify(liveState), {
+            expectedRevision: revision - 1
+          })
+        }
+      } finally {
+        opened.db.close()
+      }
+      const retained = Array.from({ length: 5 }, (_, i) => ({
+        path: profileStateJsonExportPath(profile.dataFile, i + 1),
+        content: JSON.stringify({ ...backupState, retainedRevision: i + 1 })
+      }))
+      for (const entry of retained) {
+        writeFileSync(entry.path, entry.content)
+      }
+      if (failArchive) {
+        const write = durableFileWrite.writeFileDurableSync
+        vi.spyOn(durableFileWrite, 'writeFileDurableSync').mockImplementation((...args) => {
+          if (args[1].endsWith('manifest.json')) {
+            throw new Error('injected archive failure')
+          }
+          write(...args)
+        })
+        await expect(rollback(profile, 'latest-json')).rejects.toThrow('injected archive failure')
+        for (const entry of retained) {
+          expect(readFileSync(entry.path, 'utf8')).toBe(entry.content)
+        }
+        expect(JSON.parse(state(profile.databasePath).json)).toEqual(liveState)
+      } else {
+        await rollback(profile, 'latest-json')
+        const archive = readdirSync(profile.directory).find((name) =>
+          name.startsWith('profile-state-corrupt')
+        )
+        if (!archive) {
+          throw new Error('Recovery archive missing')
+        }
+        for (let revision = 1; revision <= 5; revision++) {
+          expect(
+            readFileSync(
+              join(profile.directory, archive, `orca-data.json.sqlite-export.${revision}.json`),
+              'utf8'
+            )
+          ).toBe(retained[revision - 1].content)
+        }
+        expect(JSON.parse(readFileSync(profile.dataFile, 'utf8'))).toEqual(liveState)
+      }
+    }
+  )
+
   it('leaves canonical JSON and SQLite untouched when the latest export cannot be published', async () => {
     const profile = await fixture()
     writeFileSync(profile.dataFile, JSON.stringify(backupState))

@@ -105,8 +105,10 @@ function exportLatestProfileStateJson(
   })
   const opened = openProfileStateDatabaseReadOnly(profile.databaseFile, profile.profileId)
   try {
-    const revision = writeVersionedProfileStateExport(profile.dataFile, (targetPath) =>
-      writeProfileStateAuthorityJsonExport(opened.db, targetPath)
+    const revision = writeVersionedProfileStateExport(
+      profile.dataFile,
+      (targetPath) => writeProfileStateAuthorityJsonExport(opened.db, targetPath),
+      { retainAllExports: true }
     )
     if (revision === undefined) {
       throw new ProfileStateRecoveryCommandError(
