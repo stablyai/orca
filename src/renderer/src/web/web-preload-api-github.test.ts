@@ -74,6 +74,7 @@ describe('web GitHub preload API', () => {
         'updateIssueBySlug',
         'updateIssueCommentBySlug',
         'updateIssueTypeBySlug',
+        'updatePRBranch',
         'updatePRState',
         'updatePRTitle',
         'updateProjectItemField',
@@ -297,6 +298,12 @@ describe('web GitHub preload API', () => {
         args: { repoPath, prNumber: 7, enabled: true, method: 'squash' },
         expectedMethod: 'github.setPRAutoMerge',
         expectedParams: withRepo({ repoPath, prNumber: 7, enabled: true, method: 'squash' })
+      },
+      {
+        key: 'updatePRBranch',
+        args: { repoPath, prNumber: 7 },
+        expectedMethod: 'github.updatePRBranch',
+        expectedParams: withRepo({ repoPath, prNumber: 7 })
       },
       {
         key: 'updatePRState',

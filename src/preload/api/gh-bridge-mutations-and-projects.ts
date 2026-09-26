@@ -52,6 +52,14 @@ export const ghMutationsAndProjectsApi = {
     prRepo?: GitHubOwnerRepo | null
   }): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gh:setPRAutoMerge', args),
+  updatePRBranch: (args: {
+    repoPath: string
+    repoId?: string | null
+    sourceContext?: TaskSourceContext | null
+    prNumber: number
+    prRepo?: GitHubOwnerRepo | null
+  }): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('gh:updatePRBranch', args),
   updatePRState: (args: {
     repoPath: string
     repoId?: string | null

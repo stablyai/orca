@@ -23,6 +23,7 @@ type GitHubReviewMutationName =
   | 'updateRepoPRDetails'
   | 'mergeRepoPR'
   | 'setRepoPRAutoMerge'
+  | 'updateRepoPRBranch'
   | 'markRepoPRReadyForReview'
   | 'updateRepoPRState'
   | 'requestRepoPRReviewers'
@@ -95,6 +96,7 @@ export function installRuntimeReviewCommandSurface(
     updateRepoPRDetails: ghm.updateRepoPRDetails.bind(ghm),
     mergeRepoPR: ghm.mergeRepoPR.bind(ghm),
     setRepoPRAutoMerge: ghm.setRepoPRAutoMerge.bind(ghm),
+    updateRepoPRBranch: ghm.updateRepoPRBranch.bind(ghm),
     markRepoPRReadyForReview: ghm.markRepoPRReadyForReview.bind(ghm),
     updateRepoPRState: ghm.updateRepoPRState.bind(ghm),
     requestRepoPRReviewers: ghm.requestRepoPRReviewers.bind(ghm),

@@ -8,6 +8,7 @@ import {
   requestPRReviewers,
   rerunPRChecks,
   setPRAutoMerge,
+  updatePRBranch,
   updatePRState,
   updatePRTitle
 } from '../github/client'
@@ -94,6 +95,35 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prNumber,
         args.enabled,
         args.method,
+        getGitHubRepoConnectionId(repo),
+        args.prRepo ?? null,
+        ...getGitHubLocalGitOptionArgs(store, repo)
+      )
+      broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+      return result
+    }
+  )
+
+  ipcMain.handle(
+    'gh:updatePRBranch',
+    async (
+      event,
+      args: GitHubRepoScopedArgs & {
+        prNumber: number
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => {
+      const repo = assertRegisteredGitHubRepo(args, store)
+      if (
+        typeof args.prNumber !== 'number' ||
+        !Number.isInteger(args.prNumber) ||
+        args.prNumber < 1
+      ) {
+        return { ok: false, error: 'Invalid pull request number' }
+      }
+      const result = await updatePRBranch(
+        repo.path,
+        args.prNumber,
         getGitHubRepoConnectionId(repo),
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
