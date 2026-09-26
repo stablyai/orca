@@ -21,6 +21,11 @@ export type BrowserCertificateTrustControllerDependencies = {
     failure: BrowserCertificateFailure | null,
     navigationUrl?: string
   ) => void
+  isEligibleCertificateHost?: (
+    hostname: string,
+    url: string,
+    session: Electron.Session
+  ) => Promise<boolean>
   now?: () => number
   createChallengeId?: () => string
 }
