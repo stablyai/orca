@@ -100,7 +100,10 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }))
     },
     memory: {
-      getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
+      // Why: the Resource Manager offers only the local host in the web client
+      // (see listResourceManagerHosts), so the host argument is ignored.
+      getSnapshot: (_request?: { executionHostId?: string | null }) =>
+        Promise.resolve(createEmptyMemorySnapshot())
     },
     aiVault: createWebAiVaultApi(),
     preflight: createPreflightApi(),

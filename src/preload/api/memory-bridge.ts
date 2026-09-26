@@ -3,5 +3,8 @@ import type { MemorySnapshot } from '../../shared/process-stats-types'
 import type { PreloadApi } from '../api-types'
 
 export const memoryApi = {
-  getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
+  // Why: omitted/local executionHostId keeps the local collector; a runtime host id
+  // proxies diagnostics.memory to that machine.
+  getSnapshot: (request?: { executionHostId?: string | null }): Promise<MemorySnapshot> =>
+    ipcRenderer.invoke('memory:getSnapshot', request)
 } satisfies PreloadApi['memory']

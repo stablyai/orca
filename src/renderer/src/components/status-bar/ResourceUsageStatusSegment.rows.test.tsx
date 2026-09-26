@@ -82,7 +82,7 @@ describe('resource manager row presentation', () => {
     container.remove()
   })
 
-  function renderWorktreeRow(worktree: UnifiedWorktreeRow): void {
+  function renderWorktreeRow(worktree: UnifiedWorktreeRow, readOnly = false): void {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -98,6 +98,7 @@ describe('resource manager row presentation', () => {
           onDelete={() => {}}
           onKillSession={() => {}}
           navigateToTab={() => {}}
+          readOnly={readOnly}
         />
       )
     })
@@ -158,5 +159,35 @@ describe('resource manager row presentation', () => {
     expect(container.textContent).toContain('Orca docs')
     expect(container.querySelector('.lucide-globe')).not.toBeNull()
     expect(container.querySelector('button[aria-label^="Open browser"]')).toBeNull()
+  })
+
+  // Why: killing a remote PTY needs runtime terminal.stop routing plus the
+  // live/unverifiable/exited verdicts; until then a remote host is view-only.
+  it('drops kill affordances when viewing a remote host read-only', () => {
+    renderWorktreeRow(
+      makeWorktree({
+        isRemote: true,
+        sessions: [makeSession({ sessionId: 'remote-a' }), makeSession({ sessionId: 'remote-b' })]
+      }),
+      true
+    )
+
+    expect(container.textContent).toContain('· remote')
+    expect(container.querySelectorAll('button[aria-label^="Kill session"]')).toHaveLength(0)
+  })
+
+  it('keeps remote rows navigable and still shows their metrics', () => {
+    renderWorktreeRow(
+      makeWorktree({
+        isRemote: true,
+        cpu: 12,
+        memory: 900,
+        sessions: [makeSession({ sessionId: 'remote-a', cpu: 12, memory: 900 })]
+      }),
+      true
+    )
+
+    expect(container.textContent).toContain('zsh')
+    expect(container.querySelector('button[aria-label^="Resume workspace"]')).not.toBeNull()
   })
 })

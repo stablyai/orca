@@ -43,6 +43,7 @@ function derive(
   return renderHook(() =>
     useResourceUsageDerivedModel({
       open: true,
+      viewingRemoteHost: false,
       resourceSnapshot: snapshot,
       sessions,
       resourceSessionBindings: {

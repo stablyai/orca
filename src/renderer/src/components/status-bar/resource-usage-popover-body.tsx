@@ -14,6 +14,7 @@ import {
   ROW_TRAILING_GUTTER_CLS
 } from './resource-usage-metrics'
 import type { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
+import { ResourceManagerSkeleton } from './ResourceManagerSkeleton'
 
 export function renderResourceUsagePopoverBody({
   setPopoverBodyNode,
@@ -33,7 +34,8 @@ export function renderResourceUsagePopoverBody({
   handleKillSession,
   appCollapsed,
   setAppCollapsed,
-  daemonUnreachable
+  readOnly,
+  showLoadingSkeleton
 }: {
   setPopoverBodyNode: (node: HTMLDivElement | null) => void
   unifiedRepos: UnifiedProjectGroup[]
@@ -52,62 +54,62 @@ export function renderResourceUsagePopoverBody({
   handleKillSession: (session: UnifiedSessionRow) => void
   appCollapsed: boolean
   setAppCollapsed: Dispatch<SetStateAction<boolean>>
-  daemonUnreachable: boolean
+  readOnly: boolean
+  showLoadingSkeleton: boolean
 }): React.JSX.Element {
+  // Why: the tree flexes into the leftover space; the popover's own height is
+  // fixed, so expanding worktrees or swapping hosts never resizes it.
   return (
-    <div ref={setPopoverBodyNode} tabIndex={-1} className="flex h-[420px] flex-col outline-none">
-      {(unifiedRepos.length > 0 || resourceSnapshot) && (
-        <div className="flex items-center justify-between px-3 py-1 bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wide shrink-0">
-          <button
-            type="button"
-            onClick={() => setSortOption('name')}
-            className={cn(
-              'hover:text-foreground transition-colors',
-              sortOption === 'name' ? 'font-semibold text-foreground' : 'text-muted-foreground/80'
-            )}
-            aria-pressed={sortOption === 'name'}
-          >
-            {translate('auto.components.status.bar.ResourceUsageStatusSegment.2aa2de6cb9', 'Name')}
-          </button>
-          <div className="flex items-center gap-2 shrink-0">
-            <div className={cn(METRIC_COLUMNS_CLS, 'text-[10px]')}>
-              <button
-                type="button"
-                onClick={() => setSortOption('cpu')}
-                className={cn(
-                  CPU_COLUMN_CLS,
-                  'hover:text-foreground transition-colors',
-                  sortOption === 'cpu'
-                    ? 'font-semibold text-foreground'
-                    : 'text-muted-foreground/80'
-                )}
-                aria-pressed={sortOption === 'cpu'}
-              >
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.298f4be7f2',
-                  'CPU'
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setSortOption('memory')}
-                className={cn(
-                  MEM_COLUMN_CLS,
-                  'hover:text-foreground transition-colors',
-                  sortOption === 'memory'
-                    ? 'font-semibold text-foreground'
-                    : 'text-muted-foreground/80'
-                )}
-                aria-pressed={sortOption === 'memory'}
-              >
-                {memoryMetricCopy.columnLabel}
-              </button>
-            </div>
-            {/* Why: empty trailing gutter keeps CPU/Memory header cells aligned with rows that reserve this width for the kill-X. */}
-            <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
+    <div
+      ref={setPopoverBodyNode}
+      tabIndex={-1}
+      className="flex min-h-0 flex-1 flex-col outline-none"
+    >
+      <div className="flex items-center justify-between px-3 py-1 bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wide shrink-0">
+        <button
+          type="button"
+          onClick={() => setSortOption('name')}
+          className={cn(
+            'hover:text-foreground transition-colors',
+            sortOption === 'name' ? 'font-semibold text-foreground' : 'text-muted-foreground/80'
+          )}
+          aria-pressed={sortOption === 'name'}
+        >
+          {translate('auto.components.status.bar.ResourceUsageStatusSegment.2aa2de6cb9', 'Name')}
+        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className={cn(METRIC_COLUMNS_CLS, 'text-[10px]')}>
+            <button
+              type="button"
+              onClick={() => setSortOption('cpu')}
+              className={cn(
+                CPU_COLUMN_CLS,
+                'hover:text-foreground transition-colors',
+                sortOption === 'cpu' ? 'font-semibold text-foreground' : 'text-muted-foreground/80'
+              )}
+              aria-pressed={sortOption === 'cpu'}
+            >
+              {translate('auto.components.status.bar.ResourceUsageStatusSegment.298f4be7f2', 'CPU')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSortOption('memory')}
+              className={cn(
+                MEM_COLUMN_CLS,
+                'hover:text-foreground transition-colors',
+                sortOption === 'memory'
+                  ? 'font-semibold text-foreground'
+                  : 'text-muted-foreground/80'
+              )}
+              aria-pressed={sortOption === 'memory'}
+            >
+              {memoryMetricCopy.columnLabel}
+            </button>
           </div>
+          {/* Why: empty trailing gutter keeps CPU/Memory header cells aligned with rows that reserve this width for the kill-X. */}
+          <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
         </div>
-      )}
+      </div>
 
       <div className="flex-1 overflow-y-auto scrollbar-sleek">
         {unifiedRepos.length > 0 && (
@@ -123,6 +125,7 @@ export function renderResourceUsagePopoverBody({
             navigateToTab={navigateToTab}
             onDelete={deleteWorktree}
             onKillSession={handleKillSession}
+            readOnly={readOnly}
           />
         )}
 
@@ -143,14 +146,7 @@ export function renderResourceUsagePopoverBody({
           />
         )}
 
-        {!resourceSnapshot && !daemonUnreachable && (
-          <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-            {translate(
-              'auto.components.status.bar.ResourceUsageStatusSegment.888dad8c55',
-              'Loading…'
-            )}
-          </div>
-        )}
+        {showLoadingSkeleton && <ResourceManagerSkeleton />}
       </div>
     </div>
   )

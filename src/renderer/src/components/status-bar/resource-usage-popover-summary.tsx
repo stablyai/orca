@@ -10,14 +10,19 @@ import type {
   getResourceMemoryMetricCopy
 } from './resource-memory-metric-copy'
 import { formatCpu, formatMemory } from './resource-usage-metrics'
+import { SkeletonBar } from './ResourceManagerSkeleton'
 
 export function renderResourceUsagePopoverHeader({
-  daemonActions
+  daemonActions,
+  viewingRemoteHost
 }: {
   daemonActions: DaemonActionsApi
+  viewingRemoteHost: boolean
 }): React.JSX.Element {
+  // Why: fixed height — the daemon actions are local-only, so without this the
+  // header collapses on a remote host and shifts every row below it.
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+    <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-1.5">
       <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
         <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
         <span className="truncate">
@@ -26,50 +31,56 @@ export function renderResourceUsagePopoverHeader({
       </div>
 
       <div className="flex items-center gap-0.5">
-        <Tooltip delayDuration={200}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => daemonActions.setPending('restart')}
-              disabled={daemonActions.isBusy}
-              aria-label={translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
-                'Restart daemon'
-              )}
-              className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
-            >
-              <RotateCw className="size-3" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={6}>
-            {translate(
-              'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
-              'Restart daemon'
-            )}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip delayDuration={200}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => daemonActions.setPending('killAll')}
-              disabled={daemonActions.isBusy}
-              aria-label={translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
-                'Kill all sessions'
-              )}
-              className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
-            >
-              <Trash2 className="size-3" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={6}>
-            {translate(
-              'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
-              'Kill all sessions'
-            )}
-          </TooltipContent>
-        </Tooltip>
+        {/* Why: Restart daemon and Kill all act on this machine's PTY daemon; offering
+            them while a remote host's rows are on screen invites killing the wrong box. */}
+        {viewingRemoteHost ? null : (
+          <>
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => daemonActions.setPending('restart')}
+                  disabled={daemonActions.isBusy}
+                  aria-label={translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
+                    'Restart daemon'
+                  )}
+                  className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+                >
+                  <RotateCw className="size-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>
+                {translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
+                  'Restart daemon'
+                )}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => daemonActions.setPending('killAll')}
+                  disabled={daemonActions.isBusy}
+                  aria-label={translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
+                    'Kill all sessions'
+                  )}
+                  className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>
+                {translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
+                  'Kill all sessions'
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </>
+        )}
       </div>
     </div>
   )
@@ -128,7 +139,29 @@ export function renderSessionsOnlyErrorBanner(): React.JSX.Element {
   )
 }
 
+export function renderRemoteHostUnreachableBanner(): React.JSX.Element {
+  return (
+    <div
+      className="flex items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px] text-muted-foreground"
+      role="status"
+    >
+      <AlertTriangle className="size-3 shrink-0 text-yellow-500" />
+      <span>
+        {translate(
+          'auto.components.status.bar.ResourceUsageStatusSegment.278188cd75',
+          "Can't reach this host. Its usage is unknown, not zero."
+        )}
+      </span>
+    </div>
+  )
+}
+
+// Why: always mounted once open — hiding this row while a host's first snapshot
+// lands made the whole panel jump on every switch.
 export function renderResourceUsageSummary({
+  hasSnapshot,
+  showLoadingSkeleton,
+  viewingRemoteHost,
   totalCpu,
   totalMemory,
   memoryMetricCopy,
@@ -137,6 +170,9 @@ export function renderResourceUsageSummary({
   commitToneClass,
   orphanCount
 }: {
+  hasSnapshot: boolean
+  showLoadingSkeleton: boolean
+  viewingRemoteHost: boolean
   totalCpu: number
   totalMemory: number
   memoryMetricCopy: ReturnType<typeof getResourceMemoryMetricCopy>
@@ -146,15 +182,21 @@ export function renderResourceUsageSummary({
   orphanCount: number
 }): React.JSX.Element {
   return (
-    <div className="px-3 py-2 border-b border-border flex items-baseline justify-between gap-3 text-xs tabular-nums">
+    <div className="px-3 py-2 border-b border-border shrink-0 flex items-baseline justify-between gap-3 text-xs tabular-nums">
       <div className="flex items-baseline gap-3 min-w-0">
         <Tooltip delayDuration={200}>
           <TooltipTrigger asChild>
+            {/* Why: reserve the widest plausible reading so the separator and the
+                memory label hold still as the number changes. */}
             <span
               tabIndex={0}
-              className="font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
+              className="inline-block min-w-[3.25rem] font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
             >
-              {formatCpu(totalCpu)}
+              {hasSnapshot ? (
+                formatCpu(totalCpu)
+              ) : showLoadingSkeleton ? (
+                <SkeletonBar className="h-3 w-9" />
+              ) : null}
             </span>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
@@ -171,7 +213,13 @@ export function renderResourceUsageSummary({
               tabIndex={0}
               className="font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
             >
-              {formatMemory(totalMemory)}{' '}
+              <span className="inline-block min-w-[4.5rem]">
+                {hasSnapshot ? (
+                  formatMemory(totalMemory)
+                ) : showLoadingSkeleton ? (
+                  <SkeletonBar className="h-3 w-14" />
+                ) : null}
+              </span>{' '}
               <span className="font-normal text-muted-foreground">
                 {memoryMetricCopy.summaryLabel}
               </span>
@@ -206,7 +254,7 @@ export function renderResourceUsageSummary({
           </>
         )}
       </div>
-      {orphanCount > 0 && (
+      {orphanCount > 0 && !viewingRemoteHost && (
         <span className="shrink-0 text-yellow-500" aria-live="polite">
           {orphanCount === 1
             ? translate(
