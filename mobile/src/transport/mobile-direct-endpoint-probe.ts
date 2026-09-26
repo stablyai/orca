@@ -1,14 +1,9 @@
+import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 export function directPathForEndpoint(endpoint: string): Exclude<MobileConnectionPath, 'relay'> {
-  try {
-    const hostname = new URL(endpoint).hostname
-    if (hostname.endsWith('.ts.net') || /^100\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname)) {
-      return 'tailscale'
-    }
-  } catch {}
-  return 'lan'
+  return isTailscaleEndpoint(endpoint) ? 'tailscale' : 'lan'
 }
 
 // Why: 'reconnecting' is published on any socket close, so it cannot tell a dead
