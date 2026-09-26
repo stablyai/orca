@@ -2,7 +2,7 @@
 // identity is committed the moment it spawns, before the handshake, so the next host can stop that
 // exact process and start over instead of guessing whether anything is running.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { cp, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -38,8 +38,29 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-function openStore(): Promise<AgentSessionRecordStore> {
-  return AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+type HostGeneration = 'dying' | 'relaunched'
+
+/** Each generation's files. The relaunch opens a copy taken at the crash: the dying host stays in
+ *  this process with its attach still pending, and a dead process writes nothing after it dies. */
+function generationRoot(generation: HostGeneration): string {
+  return join(root, generation)
+}
+
+async function crash(dying: AgentSessionRecordStore): Promise<void> {
+  // An empty renewal queues behind every write the dying host committed, so they are on disk.
+  await dying.renewLeases([])
+  await cp(generationRoot('dying'), generationRoot('relaunched'), {
+    recursive: true,
+    // A write still in flight at the crash never landed, and a dead process holds no lock.
+    filter: (source) => !source.endsWith('.tmp') && !source.includes('.lock')
+  })
+}
+
+function openStore(generation: HostGeneration): Promise<AgentSessionRecordStore> {
+  return AgentSessionRecordStore.open({
+    directory: join(generationRoot(generation), 'store'),
+    hostId: 'local'
+  })
 }
 
 /** A Codex adapter whose child spawns, reports its pid the way the real connection does, and then
@@ -66,6 +87,7 @@ function adapterThatNeverSpawns(): StructuredAgentSessionAdapter {
 }
 
 function host(
+  generation: HostGeneration,
   store: AgentSessionRecordStore,
   adapter: StructuredAgentSessionAdapter,
   overrides: Partial<StructuredAgentSessionHostDeps> = {}
@@ -73,7 +95,7 @@ function host(
   return new StructuredAgentSessionHost({
     store,
     adapter,
-    journalRoot: root,
+    journalRoot: generationRoot(generation),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW,
@@ -83,9 +105,9 @@ function host(
 
 describe('a host that dies while its Codex child is starting', () => {
   it('leaves the spawned child recorded, so the next host stops it by identity and starts over', async () => {
-    const first = await openStore()
-    const dying = host(first, adapterThatNeverFinishesStarting())
-    void dying.attach(CALLER, hostTestAttachParams(null))
+    const first = await openStore('dying')
+    const dying = host('dying', first, adapterThatNeverFinishesStarting())
+    void dying.attach(CALLER, hostTestAttachParams(null)).catch(() => {})
     await vi.waitFor(() => expect(first.getRecord(SESSION)?.lease.ownerProcess).toBeTruthy())
     // Durable before the handshake returned: the only record the next host will have.
     expect(first.getRecord(SESSION)?.lease).toMatchObject({
@@ -100,8 +122,10 @@ describe('a host that dies while its Codex child is starting', () => {
       orphanAlive = false
     })
     const restarted = fakeCodex()
-    const store = await openStore()
+    await crash(first)
+    const store = await openStore('relaunched')
     const relaunched = host(
+      'relaunched',
       store,
       Object.assign(adapterFor(restarted), { supportsCreate: () => true }),
       {
@@ -152,14 +176,22 @@ describe('a create replayed after the host that ran it died', () => {
     ]
   ] as const)('starts an agent when %s', async (_case, dyingAdapter, elapsedMs) => {
     const params = hostTestAttachParams(null)
-    const first = await openStore()
-    const dying = host(first, dyingAdapter())
-    void dying.attach(CALLER, params)
-    await vi.waitFor(() => expect(first.getRecord(SESSION)?.lease.claimStatus).toBe('reserved'))
+    const first = await openStore('dying')
+    const dying = host('dying', first, dyingAdapter())
+    void dying.attach(CALLER, params).catch(() => {})
+    await vi.waitFor(() =>
+      expect(first.getRecord(SESSION)?.lease).toMatchObject(
+        dyingAdapter === adapterThatNeverSpawns
+          ? { claimStatus: 'reserved' }
+          : { claimStatus: 'reserved', ownerProcess: { pid: CHILD_PID } }
+      )
+    )
 
     const restarted = fakeCodex()
-    const store = await openStore()
+    await crash(first)
+    const store = await openStore('relaunched')
     const relaunched = host(
+      'relaunched',
       store,
       Object.assign(adapterFor(restarted), { supportsCreate: () => true }),
       {
