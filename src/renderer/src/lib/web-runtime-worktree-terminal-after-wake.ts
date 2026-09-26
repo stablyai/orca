@@ -23,6 +23,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { toast } from 'sonner'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 
+/** Preserves live-host guards while letting explicit launch work bypass passive creation policy. */
 export function ensureWebRuntimeWorktreeTerminalAfterWake(
   worktreeId: string,
   opts?: {
@@ -30,6 +31,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     startup?: WorktreeStartupPayload
     agent?: TuiAgent | null
     activate?: boolean
+    hasExplicitLaunchWork?: boolean
   }
 ): void {
   const state = useAppStore.getState()
@@ -77,9 +79,12 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
     if (tabs.length === 0) {
       if (
+        !opts?.startup &&
+        !opts?.hasExplicitLaunchWork &&
         !shouldAutoCreateInitialTerminal(
           renderableTabCount,
-          Object.hasOwn(state.tabsByWorktree, worktreeId)
+          Object.hasOwn(state.tabsByWorktree, worktreeId),
+          state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
         )
       ) {
         return

@@ -30,6 +30,53 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setActiveTab).not.toHaveBeenCalled()
   })
 
+  it('suppresses only the automatic empty-workspace fallback', () => {
+    const store = createMockStore({
+      settings: { autoCreateTerminalOnWorkspaceActivation: false }
+    })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1')
+
+    expect(store.createTab).not.toHaveBeenCalled()
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', { command: 'codex' })
+
+    expect(store.createTab).toHaveBeenCalledOnce()
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', { command: 'codex' })
+  })
+
+  it('preserves configured default tabs when automatic creation is disabled', () => {
+    const store = createMockStore({
+      settings: { autoCreateTerminalOnWorkspaceActivation: false }
+    })
+
+    ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      {
+        runCommands: true,
+        tabs: [{ title: 'Dev', command: 'pnpm dev' }]
+      },
+      { activateCreatedTabs: false }
+    )
+
+    expect(store.createTab).toHaveBeenCalledOnce()
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      recordInteraction: false,
+      activate: false
+    })
+    expect(store.setTabCustomTitle).toHaveBeenCalledWith('tab-1', 'Dev', {
+      recordInteraction: false
+    })
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+      command: 'pnpm dev'
+    })
+  })
+
   it('creates a terminal when explicit launch work targets an empty workspace', () => {
     const store = createMockStore({ tabsByWorktree: { 'wt-1': [] } })
 
@@ -159,6 +206,21 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabStartupCommand).not.toHaveBeenCalledWith('tab-1', {
       command: 'claude'
     })
+  })
+
+  it('does not create a fallback for applied default tabs when automatic creation is disabled', () => {
+    const store = createMockStore({
+      defaultTerminalTabsAppliedByWorktreeId: { 'wt-1': true },
+      settings: { autoCreateTerminalOnWorkspaceActivation: false }
+    })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, undefined, {
+      runCommands: true,
+      tabs: [{ title: 'Dev', command: 'pnpm dev' }]
+    })
+
+    expect(store.createTab).not.toHaveBeenCalled()
+    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
   })
 
   it('does not create or queue anything when the worktree already has renderable content', () => {

@@ -3428,6 +3428,11 @@
           },
           "TabGroupDropOverlay": {
             "paneColumnLabel": "New split"
+          },
+          "TabGroupEmptyState": {
+            "3215fc73e9": "New Terminal",
+            "629528690b": "New Markdown Note",
+            "8b07759314": "New Browser"
           }
         },
         "bar": {
@@ -7415,7 +7420,9 @@
           "externalWorktrees": "External worktrees",
           "externalWorktreesDescription": "Choose whether worktrees created outside Orca appear by default.",
           "show": "Show",
-          "hide": "Hide"
+          "hide": "Hide",
+          "autoCreateTerminalOnWorkspaceActivation": "Open a Terminal When Selecting a Workspace",
+          "autoCreateTerminalOnWorkspaceActivationDescription": "Automatically open the first terminal when selecting a workspace with no open tabs."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
@@ -9923,7 +9930,11 @@
             "command": "command",
             "confirm": "confirm",
             "close": "close",
-            "omp": "OMP"
+            "omp": "OMP",
+            "autoCreateTerminalOnWorkspaceActivation": "Open a Terminal When Selecting a Workspace",
+            "autoCreateTerminalOnWorkspaceActivationDescription": "Automatically open the first terminal when selecting a workspace with no open tabs.",
+            "automatic": "automatic",
+            "select": "select"
           }
         },
         "git": {

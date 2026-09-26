@@ -63,6 +63,7 @@ export function reseedGatedEmptyWorkspace(
   )
 }
 
+/** Creates explicit launch work regardless of the passive empty-workspace terminal preference. */
 export function ensureWorktreeHasInitialTerminal(
   store: WorktreeActivationStore,
   worktreeId: string,
@@ -136,7 +137,12 @@ export function ensureWorktreeHasInitialTerminal(
     return null
   }
 
-  const hasExplicitLaunchWork = Boolean(sequencedStartup || setup || issueCommand)
+  const hasPendingDefaultTabs = Boolean(
+    defaultTabs?.tabs.length && !store.defaultTerminalTabsAppliedByWorktreeId[worktreeId]
+  )
+  const hasExplicitLaunchWork = Boolean(
+    sequencedStartup || setup || issueCommand || hasPendingDefaultTabs
+  )
   // Why: a caller opening its own primary surface (a structured native chat) asked for that surface
   // alone. Setup launched in its own tab needs no shell to attach to, so seeding one leaves a stray
   // "Terminal 1" beside the chat. Splits and issue automation still need a pane to split from.
@@ -149,7 +155,7 @@ export function ensureWorktreeHasInitialTerminal(
     !sequencedStartup &&
     !issueCommand &&
     !setupNeedsHostTerminal &&
-    !defaultTabs?.tabs.length &&
+    !hasPendingDefaultTabs &&
     opts?.createNewTerminalForStartup !== true
   ) {
     queueSetupAndIssueCommands(
@@ -180,7 +186,11 @@ export function ensureWorktreeHasInitialTerminal(
   // a terminal now, so it stays ungated.
   const shouldAutoCreate =
     hostAuthority === 'none' &&
-    shouldAutoCreateInitialTerminal(renderableTabCount, shouldHonourClosedTerminalTombstone)
+    shouldAutoCreateInitialTerminal(
+      renderableTabCount,
+      shouldHonourClosedTerminalTombstone,
+      ownerState.settings?.autoCreateTerminalOnWorkspaceActivation !== false
+    )
   const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
   const shouldCreateNewStartupTerminal =
     opts?.createNewTerminalForStartup === true && sequencedStartup !== undefined

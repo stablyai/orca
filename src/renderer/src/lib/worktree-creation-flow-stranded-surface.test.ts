@@ -317,6 +317,12 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
       undefined,
       expect.objectContaining({ activateCreatedTabs: false })
     )
+    expect(ensureWebRuntimeWorktreeTerminalAfterWake).toHaveBeenCalledWith('wt-1', {
+      startup: undefined,
+      agent: null,
+      activate: false,
+      hasExplicitLaunchWork: true
+    })
     // The entry is gone; the pointer stays on the other in-flight creation.
     expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
     expect(store.activePendingCreationId).toBe('creation-2')

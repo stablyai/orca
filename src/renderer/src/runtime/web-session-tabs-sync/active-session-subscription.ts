@@ -157,7 +157,9 @@ export function installActiveSessionTabsSubscription({
         isWebRuntimeInitialTerminalBootstrapInFlight(environmentId, activeWorktreeId),
       snapshotIsFresh: decision.apply,
       localTerminalCount,
-      hasPersistedTerminalState: Object.hasOwn(syncState.tabsByWorktree, activeWorktreeId)
+      hasPersistedTerminalState: Object.hasOwn(syncState.tabsByWorktree, activeWorktreeId),
+      automaticCreationEnabled:
+        syncState.settings?.autoCreateTerminalOnWorkspaceActivation !== false
     })
     const respawn = shouldRespawnWebRuntimeTerminalAfterWake({
       event: recoveredEvent,

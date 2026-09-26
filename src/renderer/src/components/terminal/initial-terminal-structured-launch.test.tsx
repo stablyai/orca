@@ -8,12 +8,18 @@ const mocks = vi.hoisted(() => ({
   gate: vi.fn(),
   resume: vi.fn(),
   authority: 'none',
+  automaticCreationEnabled: true,
   launchStatus: vi.fn((_worktreeId: string, _provider: string): string => 'idle'),
   createTab: vi.fn()
 }))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => mocks.authority, {
-    getState: () => ({ activeWorktreeId: 'wt-1' })
+    getState: () => ({
+      activeWorktreeId: 'wt-1',
+      settings: {
+        autoCreateTerminalOnWorkspaceActivation: mocks.automaticCreationEnabled
+      }
+    })
   })
 }))
 vi.mock('@/lib/worktree-agent-activation-gate', () => ({
@@ -41,6 +47,7 @@ afterEach(async () => {
   await act(async () => root?.unmount())
   vi.clearAllMocks()
   mocks.authority = 'none'
+  mocks.automaticCreationEnabled = true
 })
 
 function Watcher({ restored = true, hydrated = false, worktreeId = 'wt-1' } = {}): null {
@@ -81,6 +88,16 @@ function Watcher({ restored = true, hydrated = false, worktreeId = 'wt-1' } = {}
 }
 
 describe('passive terminal seeding during native chat creation', () => {
+  it('does not seed an empty workspace when automatic creation is disabled', async () => {
+    mocks.automaticCreationEnabled = false
+    mocks.gate.mockResolvedValue('empty')
+    root = createRoot(document.createElement('div'))
+
+    await act(async () => root?.render(<Watcher />))
+
+    expect(mocks.createTab).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['claude', 'pending', 0],
     ['codex', 'pending', 0],

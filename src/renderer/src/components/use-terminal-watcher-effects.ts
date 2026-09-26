@@ -51,6 +51,7 @@ type TerminalWatcherController = Pick<
   | 'workspaceSurfaceIds'
 >
 
+/** Defers activation seeding until the execution host and restored agent inventory are authoritative. */
 export function useTerminalWatcherEffects(controller: TerminalWatcherController): void {
   const {
     activationDeferredMountTabIdsByWorktreeRef,
@@ -230,7 +231,15 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       }
       // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.
       const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-      if (shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
+      const automaticCreationEnabled =
+        useAppStore.getState().settings?.autoCreateTerminalOnWorkspaceActivation !== false
+      if (
+        shouldAutoCreateInitialTerminal(
+          renderableTabCount,
+          activeWorktreeHasTerminalState,
+          automaticCreationEnabled
+        )
+      ) {
         // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
         createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
       }

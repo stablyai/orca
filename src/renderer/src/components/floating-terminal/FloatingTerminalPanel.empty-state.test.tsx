@@ -248,7 +248,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(collectPropValues(element, 'data-contextual-tour-target')).not.toContain(
       'floating-workspace-surface'
     )
-    expect(collectPropValues(renderedEmptyState, 'data-contextual-tour-target')).toEqual([
+    expect(collectPropValues(renderedEmptyState, 'contextualTourTarget')).toEqual([
       'floating-workspace-new-terminal',
       'floating-workspace-new-markdown'
     ])

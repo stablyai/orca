@@ -63,6 +63,23 @@ function getSegment(label: string, visibility: 'show' | 'hide' = 'show'): HTMLBu
 }
 
 describe('GeneralWorkspaceSettingsSection external visibility', () => {
+  it('turns off automatic terminal creation from its enabled default', async () => {
+    const updateSettings = vi.fn()
+    renderSection(updateSettings)
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Open a Terminal When Selecting a Workspace"]'
+        )
+        ?.click()
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      autoCreateTerminalOnWorkspaceActivation: false
+    })
+  })
+
   it('exposes a stable deep-link target for global defaults', () => {
     renderSection(vi.fn())
 

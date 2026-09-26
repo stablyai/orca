@@ -56,6 +56,23 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.general.search.autoCreateTerminalOnWorkspaceActivation',
+      'Open a Terminal When Selecting a Workspace'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.autoCreateTerminalOnWorkspaceActivationDescription',
+      'Automatically open the first terminal when selecting a workspace with no open tabs.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.terminal', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.general.search.automatic', 'automatic'),
+      ...translateSearchKeyword('auto.components.settings.general.search.select', 'select'),
+      ...translateSearchKeyword('auto.components.settings.general.search.7baf524b04', 'workspace'),
+      ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree')
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.general.search.913242091d',
       'Ask Before Deleting Workspaces'
     ),

@@ -28,7 +28,7 @@ describe('Terminal auto-create wiring', () => {
       'expected exactly one shouldAutoCreateInitialTerminal call in the watcher owner'
     ).toBe(1)
     expect(source).toContain(
-      'shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)'
+      'shouldAutoCreateInitialTerminal(\n          renderableTabCount,\n          activeWorktreeHasTerminalState,\n          automaticCreationEnabled\n        )'
     )
   })
 

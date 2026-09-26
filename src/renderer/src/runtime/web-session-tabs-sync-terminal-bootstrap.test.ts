@@ -135,6 +135,26 @@ describe('applyWebSessionTabsSnapshot', () => {
     ).toBe(true)
   })
 
+  it('does not bootstrap a terminal when automatic creation is disabled', () => {
+    const freshEmpty = makeSnapshot([], {
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null
+    })
+
+    expect(
+      shouldBootstrapInitialWebRuntimeTerminal({
+        event: { type: 'snapshot', ...freshEmpty },
+        activeWorktreeId: WT,
+        requestedInitialTerminal: false,
+        snapshotIsFresh: true,
+        localTerminalCount: 0,
+        hasPersistedTerminalState: false,
+        automaticCreationEnabled: false
+      })
+    ).toBe(false)
+  })
+
   // Why: a runtime that has published nothing for a worktree still answers a forced snapshot with a
   // synthesized empty frame (`UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH` at version 0). That is "ask me
   // later", not a host with zero terminals — seeding on it can duplicate a pane the host is about to

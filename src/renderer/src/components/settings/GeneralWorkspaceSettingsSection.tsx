@@ -16,6 +16,7 @@ type GeneralWorkspaceSettingsSectionProps = {
   sourceDefaultsSupported?: boolean
 }
 
+/** Uses the throwing updater only where host-owned settings must surface persistence failures. */
 export function GeneralWorkspaceSettingsSection({
   settings,
   updateSettings,
@@ -98,6 +99,36 @@ export function GeneralWorkspaceSettingsSection({
           )}
           checked={settings.nestWorkspaces}
           onChange={() => updateSettings({ nestWorkspaces: !settings.nestWorkspaces })}
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.autoCreateTerminalOnWorkspaceActivation',
+          'Open a Terminal When Selecting a Workspace'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.autoCreateTerminalOnWorkspaceActivationDescription',
+          'Automatically open the first terminal when selecting a workspace with no open tabs.'
+        )}
+        keywords={['terminal', 'automatic', 'select', 'workspace', 'worktree']}
+      >
+        <SettingsSwitchRow
+          label={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.autoCreateTerminalOnWorkspaceActivation',
+            'Open a Terminal When Selecting a Workspace'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.autoCreateTerminalOnWorkspaceActivationDescription',
+            'Automatically open the first terminal when selecting a workspace with no open tabs.'
+          )}
+          checked={settings.autoCreateTerminalOnWorkspaceActivation !== false}
+          onChange={() =>
+            updateSettings({
+              autoCreateTerminalOnWorkspaceActivation:
+                settings.autoCreateTerminalOnWorkspaceActivation === false
+            })
+          }
         />
       </SearchableSetting>
 

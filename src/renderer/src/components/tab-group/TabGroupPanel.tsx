@@ -23,11 +23,14 @@ import type { TabGroup } from '../../../../shared/tab-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
+import { TabGroupEmptyState } from './TabGroupEmptyState'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
+/** Leaves live terminal and browser surfaces mounted at worktree scope while group content changes. */
 export default function TabGroupPanel({
   groupId,
   worktreeId,
@@ -63,6 +66,13 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const autoCreateTerminalOnWorkspaceActivation = useAppStore(
+    (state) => state.settings?.autoCreateTerminalOnWorkspaceActivation !== false
+  )
+  const managedBrowserCreationEnabled = useAppStore(
+    (state) =>
+      getClientCreationActionPolicy(state, worktreeId)['managed-browser'].state === 'enabled'
+  )
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
     activeTab,
@@ -375,6 +385,17 @@ export default function TabGroupPanel({
           )}
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
+        {activeTab === null &&
+        model.groupTabs.length === 0 &&
+        clientHostedRows.length === 0 &&
+        !autoCreateTerminalOnWorkspaceActivation ? (
+          <TabGroupEmptyState
+            onNewTerminal={commands.newTerminalTab}
+            onNewMarkdown={commands.newFileTab}
+            onNewBrowser={commands.newBrowserTab}
+            showNewBrowser={managedBrowserCreationEnabled}
+          />
+        ) : null}
       </div>
     </div>
   )

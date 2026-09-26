@@ -10,6 +10,10 @@ describe('shouldAutoCreateInitialTerminal', () => {
     expect(shouldAutoCreateInitialTerminal(0, true)).toBe(false)
   })
 
+  it('honors an automatic creation opt-out', () => {
+    expect(shouldAutoCreateInitialTerminal(0, false, false)).toBe(false)
+  })
+
   it('does not create a terminal when the tab-group model already has content', () => {
     expect(shouldAutoCreateInitialTerminal(1)).toBe(false)
     expect(shouldAutoCreateInitialTerminal(2)).toBe(false)
