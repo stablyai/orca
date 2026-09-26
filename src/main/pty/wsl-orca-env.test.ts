@@ -62,6 +62,7 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_TERMINAL_HANDLE: 'term_wsl',
       ORCA_USER_DATA_PATH: 'C:\\Users\\jin\\AppData\\Roaming\\Orca',
       ORCA_CLI_COMMAND: 'orca-ide',
+      ORCA_WSL_CLI_DIR: 'C:\\Users\\jin\\AppData\\Roaming\\Orca\\wsl-managed-cli\\hash',
       ORCA_CODEX_LAUNCH_PREFLIGHT: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
       ORCA_OMP_FRESH_CONFIG: 'C:\\Orca\\fresh-session.yml',
       ORCA_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
@@ -87,6 +88,7 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_TERMINAL_HANDLE/u')
     expect(env.WSLENV).toContain('ORCA_USER_DATA_PATH/p')
     expect(env.WSLENV).toContain('ORCA_CLI_COMMAND/u')
+    expect(env.WSLENV).toContain('ORCA_WSL_CLI_DIR/p')
     expect(env.WSLENV).toContain('ORCA_CODEX_LAUNCH_PREFLIGHT/p')
     expect(env.WSLENV).toContain('ORCA_OMP_STATUS_EXTENSION/p')
     expect(env.WSLENV).toContain('ORCA_OMP_FRESH_CONFIG/p')

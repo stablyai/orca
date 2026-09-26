@@ -149,7 +149,13 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   )
   const applyNativeChatLeafRoute = useCallback(
     (route: NativeChatLeafRoute): void => {
-      if (!isChatViewMode && chatLeafId && route.chatLeafId === null) {
+      const state = useAppStore.getState()
+      const currentMode = selectUnifiedTerminalTabFields(
+        state.unifiedTabsByWorktree,
+        worktreeId,
+        tabId
+      ).isChatViewMode
+      if (!isChatViewMode && currentMode && chatLeafId && route.chatLeafId === null) {
         // Keep the owner through the batched toggle that turns chat mode on.
         return
       }
@@ -171,7 +177,7 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       }
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [chatLeafId, isChatViewMode, setTabLayout, setTabViewMode, tabId, unifiedTabId]
+    [chatLeafId, isChatViewMode, setTabLayout, setTabViewMode, tabId, unifiedTabId, worktreeId]
   )
   const handleConfirmedAgentExit = useCallback(
     (leafId: string): void => {
