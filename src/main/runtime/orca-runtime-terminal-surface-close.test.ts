@@ -121,7 +121,10 @@ describe('renderer close intents', () => {
   it('keeps a closed tab closed across a renderer save and a reload', async () => {
     const { store, runtime, reload } = createPersistedRuntime(makeSession())
 
-    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: TAB_ID })
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: { kind: 'tab', tabId: TAB_ID }
+    })
     store.setWorkspaceSession(rendererSaveWithout(store.getWorkspaceSession()))
 
     expect((await reload()).tabsByWorktree[WORKTREE_ID]).toEqual([])
@@ -130,10 +133,13 @@ describe('renderer close intents', () => {
   it('keeps a closed split pane closed across a renderer save and a reload', async () => {
     const { store, runtime, reload } = createPersistedRuntime(splitSession())
 
-    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
-      kind: 'pane',
-      tabId: TAB_ID,
-      leafId: LEAF_ID
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: {
+        kind: 'pane',
+        tabId: TAB_ID,
+        leafId: LEAF_ID
+      }
     })
     store.setWorkspaceSession(rendererSaveWithout(store.getWorkspaceSession(), LEAF_ID))
 
@@ -156,10 +162,13 @@ describe('renderer close intents', () => {
   ])('never widens a pane close into a tab close when %s', async (_case, session) => {
     const { runtime, reload } = createPersistedRuntime(session())
 
-    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
-      kind: 'pane',
-      tabId: TAB_ID,
-      leafId: LEAF_ID
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: {
+        kind: 'pane',
+        tabId: TAB_ID,
+        leafId: LEAF_ID
+      }
     })
 
     expect((await reload()).tabsByWorktree[WORKTREE_ID]).toEqual([

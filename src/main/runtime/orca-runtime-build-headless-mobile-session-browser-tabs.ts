@@ -12,7 +12,9 @@ import type { Tab } from '../../shared/tab-types'
 import {
   resolveTerminalCloseTarget,
   terminalSurfaceCloseMutation,
-  type PaneCloseResolution
+  type PaneCloseResolution,
+  type RendererTerminalClose,
+  type TerminalSurfaceCloseOptions
 } from './terminal-surface-close'
 import type {
   TerminalPaneCloseTarget,
@@ -21,7 +23,6 @@ import type {
 import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-contracts'
 import { captureAcknowledgedTerminalTabRetirement } from './workspace-session-terminal-tab-retirement-identity'
 
 export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
@@ -114,14 +115,17 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   protected async closeTerminalSurface(
     worktreeId: string,
     target: TerminalSurfaceCloseTarget,
-    options: { allowMissing?: boolean; force?: boolean; reason?: RuntimeSessionTabCloseReason } = {}
+    options: TerminalSurfaceCloseOptions = {}
   ): Promise<string[]> {
     const store = this.store
     if (!store?.getWorkspaceSession || !store.setWorkspaceSession || !store.runDurableMutation) {
       throw new Error('workspace_session_unavailable')
     }
+    // Why: a tab its layout owner already removed has no newer owner; refusing would only strand it.
     const acknowledgeTabRetirement =
-      target.kind === 'tab' ? this.captureTerminalTabRetirement(worktreeId, target.tabId) : null
+      target.kind === 'tab' && !options.closedByLayoutOwner
+        ? this.captureTerminalTabRetirement(worktreeId, target.tabId)
+        : null
     let ptyIdsToKill: string[] = []
     let refusal: Error | undefined
     try {
@@ -150,12 +154,9 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   }
 
   /** The desktop renderer's close intent: it already guarded, removed and killed; this only reports. */
-  async closeTerminalSurfaceFromRenderer(
-    worktreeId: string,
-    target: TerminalSurfaceCloseTarget,
-    reason?: 'user' | 'cleanup'
-  ): Promise<void> {
-    await this.closeTerminalSurface(worktreeId, target, { allowMissing: true, force: true, reason })
+  async closeTerminalSurfaceFromRenderer({ worktreeId, target, reason }: RendererTerminalClose) {
+    const options = { allowMissing: true, force: true, closedByLayoutOwner: true, reason }
+    await this.closeTerminalSurface(worktreeId, target, options)
   }
 
   /** Resolves a close main started against the copy of the tab's panes its layout owner holds. */

@@ -39,11 +39,11 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
         throw new Error('invalid_terminal_surface')
       }
       // Why only these two: main alone closes a tab for its process exit.
-      return runtime.closeTerminalSurfaceFromRenderer(
-        args.worktreeId,
+      return runtime.closeTerminalSurfaceFromRenderer({
+        worktreeId: args.worktreeId,
         target,
-        args.reason === 'cleanup' ? 'cleanup' : 'user'
-      )
+        reason: args.reason === 'cleanup' ? 'cleanup' : 'user'
+      })
     }
   )
 

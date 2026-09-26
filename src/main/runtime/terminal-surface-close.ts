@@ -156,11 +156,27 @@ export function closeTerminalSurfaceInWorkspaceSession(
   }
 }
 
+/** How one close commits; `reason` is recorded only when the close resolves to the whole tab. */
+export type TerminalSurfaceCloseOptions = {
+  allowMissing?: boolean
+  force?: boolean
+  reason?: RuntimeSessionTabCloseReason
+  /** The desktop renderer's own close: its layout owner already removed the tab. */
+  closedByLayoutOwner?: boolean
+}
+
+/** The desktop renderer's close intent as its IPC delivers it; main alone passes 'pty-exit'. */
+export type RendererTerminalClose = {
+  worktreeId: string
+  target: TerminalSurfaceCloseTarget
+  reason?: 'user' | 'cleanup'
+}
+
 /** What one close's durable mutation reads and writes, resolved when the writer admits it. */
 export type TerminalSurfaceCloseCommit = {
   worktreeId: string
   target: TerminalSurfaceCloseTarget
-  options: { allowMissing?: boolean; force?: boolean; reason?: RuntimeSessionTabCloseReason }
+  options: TerminalSurfaceCloseOptions
   /** The session as it was when the close was asked, before the writer admitted it. */
   requestedSession: WorkspaceSessionState | null | undefined
   /** The tab's owner identity still matches the one the close was asked against. */

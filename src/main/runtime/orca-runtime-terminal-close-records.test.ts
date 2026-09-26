@@ -79,11 +79,11 @@ describe('close records', () => {
     async (reason) => {
       const { store, runtime, reload } = createPersistedRuntime()
 
-      await runtime.closeTerminalSurfaceFromRenderer(
-        WORKTREE_ID,
-        { kind: 'tab', tabId: TAB_ID },
+      await runtime.closeTerminalSurfaceFromRenderer({
+        worktreeId: WORKTREE_ID,
+        target: { kind: 'tab', tabId: TAB_ID },
         reason
-      )
+      })
       store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
 
       const reloaded = (await reload()).getWorkspaceSession()
@@ -100,8 +100,14 @@ describe('close records', () => {
   it("keeps main's own record writes across later store writes", async () => {
     const { store, runtime } = createPersistedRuntime()
 
-    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: TAB_ID })
-    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: LATE_TAB_ID })
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: { kind: 'tab', tabId: TAB_ID }
+    })
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: { kind: 'tab', tabId: LATE_TAB_ID }
+    })
     store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
 
     expect(
@@ -112,10 +118,13 @@ describe('close records', () => {
   it('records nothing for a split pane close, which leaves its tab open', async () => {
     const { store, runtime } = createPersistedRuntime()
 
-    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
-      kind: 'pane',
-      tabId: 'unknown-tab',
-      leafId: LEAF_ID
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: {
+        kind: 'pane',
+        tabId: 'unknown-tab',
+        leafId: LEAF_ID
+      }
     })
 
     expect(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId).toBeUndefined()
@@ -125,10 +134,13 @@ describe('close records', () => {
   it("records nothing for a pane close aimed at its tab's only pane", async () => {
     const { store, runtime } = createPersistedRuntime()
 
-    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
-      kind: 'pane',
-      tabId: TAB_ID,
-      leafId: LEAF_ID
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: {
+        kind: 'pane',
+        tabId: TAB_ID,
+        leafId: LEAF_ID
+      }
     })
 
     expect(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId).toBeUndefined()
@@ -142,7 +154,10 @@ describe('close records', () => {
   it('refuses a closed tab whose spawn commits after a crash and reload', async () => {
     const { runtime, reload } = createPersistedRuntime()
 
-    await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: LATE_TAB_ID })
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: WORKTREE_ID,
+      target: { kind: 'tab', tabId: LATE_TAB_ID }
+    })
     const relaunched = await reload()
 
     expect(
@@ -166,9 +181,12 @@ describe('close records', () => {
       SSH_HOST_ID
     )
 
-    await runtime.closeTerminalSurfaceFromRenderer(SSH_WORKTREE_ID, {
-      kind: 'tab',
-      tabId: LATE_TAB_ID
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: SSH_WORKTREE_ID,
+      target: {
+        kind: 'tab',
+        tabId: LATE_TAB_ID
+      }
     })
 
     expect(
@@ -192,15 +210,21 @@ describe('close records', () => {
       { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } },
       SSH_HOST_ID
     )
-    await runtime.closeTerminalSurfaceFromRenderer(SSH_WORKTREE_ID, {
-      kind: 'tab',
-      tabId: 'ssh-tab'
+    await runtime.closeTerminalSurfaceFromRenderer({
+      worktreeId: SSH_WORKTREE_ID,
+      target: {
+        kind: 'tab',
+        tabId: 'ssh-tab'
+      }
     })
 
     for (let index = 0; index <= MAX_CLOSED_TERMINAL_TAB_TOMBSTONES; index += 1) {
-      await runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
-        kind: 'tab',
-        tabId: `local-${index}`
+      await runtime.closeTerminalSurfaceFromRenderer({
+        worktreeId: WORKTREE_ID,
+        target: {
+          kind: 'tab',
+          tabId: `local-${index}`
+        }
       })
     }
 
