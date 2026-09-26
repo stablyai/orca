@@ -437,6 +437,11 @@ describe('dashboard payload validation', () => {
       // Why: showIdle and filterOptions describe the frame, not one card, so a
       // bad value there has no card to drop and must fail the whole snapshot.
       expect(admitDashboardSnapshot({ ...SNAPSHOT, showIdle: 'yes' })).toBeNull()
+      expect(admitDashboardSnapshot({ ...SNAPSHOT, cardClickOpensWorktree: 'yes' })).toBeNull()
+      expect(
+        admitDashboardSnapshot({ ...SNAPSHOT, cardClickOpensWorktree: true })?.snapshot
+          .cardClickOpensWorktree
+      ).toBe(true)
       expect(
         admitDashboardSnapshot({
           ...SNAPSHOT,
@@ -451,6 +456,7 @@ describe('dashboard payload validation', () => {
         { ...SNAPSHOT, cards: 'nope' },
         { ...SNAPSHOT, repoIconsByRepoId: [] },
         { ...SNAPSHOT, showIdle: 'yes' },
+        { ...SNAPSHOT, cardClickOpensWorktree: 'yes' },
         { ...SNAPSHOT, filterOptions: { projects: [], workspaceStatuses: 'nope' } },
         null,
         []

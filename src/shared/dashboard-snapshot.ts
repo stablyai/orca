@@ -192,6 +192,9 @@ export type DashboardSnapshot = {
    *  optional for preload compatibility with older snapshot producers. */
   workspaces?: DashboardWorkspace[]
   showIdle?: boolean
+  /** Plain card click opens the worktree (modifier-click previews) instead of
+   *  the reverse. Carried in the snapshot because the pop-out has no store. */
+  cardClickOpensWorktree?: boolean
   /** Available filter dimensions are store-derived so zero-card projects and
    *  statuses remain selectable. Optional for preload-version compatibility. */
   filterOptions?: DashboardFilterOptions
