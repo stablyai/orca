@@ -646,13 +646,6 @@
           }
         }
       },
-      "native": {
-        "chat": {
-          "NativeChatStructuredSession": {
-            "93ef441197": "Message was not sent."
-          }
-        }
-      },
       "new": {
         "workspace": {
           "SmartWorkspaceNameField": {
@@ -2725,18 +2718,10 @@
         "notDoneOption": "The setting wasn't changed.",
         "notDoneSend": "Your message was not sent.",
         "notDoneStop": "The agent wasn't stopped.",
-        "outcomeUnknown": "Orca couldn't confirm whether that went through. Check the chat before trying again.",
-        "ownerUnconfirmed": "Orca couldn't confirm which agent process owns this chat.",
+        "outcomeUnknown": "Orca couldn't confirm what happened. Check the chat.",
         "questionChanged": "This question was already answered or has changed.",
         "restartFailed": "The agent couldn't restart.",
-        "sessionMissing": "Orca couldn't find this chat's agent session.",
-        "tryAgainAnswer": "Answer it again.",
-        "tryAgainCommand": "Run the command again.",
         "tryAgainComposerSend": "Send it again.",
-        "tryAgainGoal": "Set the goal again.",
-        "tryAgainOption": "Choose it again.",
-        "tryAgainSend": "Retry to send it again.",
-        "tryAgainStop": "Press Stop again.",
         "unreachable": "Orca couldn't reach the agent.",
         "unsupported": "The Orca running this chat doesn't support this. Update Orca, then try again."
       }

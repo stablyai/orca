@@ -258,8 +258,8 @@ describe('useStructuredAgentSession options', () => {
       expect(await result.current.setStructuredOption('model', 'gpt-fast')).toBe(false)
     })
 
-    // Said once, in words a person can act on; nothing stays behind under the composer.
-    expect(mocks.toastError).toHaveBeenCalledWith("Orca couldn't reach the agent. Choose it again.")
+    // Said once, without the transport's text; nothing stays behind under the composer.
+    expect(mocks.toastError).toHaveBeenCalledWith("The setting wasn't changed.")
     expect(result.current.error).toBeNull()
     expect(result.current.optionSnapshot.find((entry) => entry.id === 'model')).toMatchObject({
       settable: true

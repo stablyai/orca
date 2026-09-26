@@ -95,10 +95,7 @@ export function useStructuredAgentSessionMutate(args: {
         return enabledRef.current && stateRef.current.fence === targetFence
           ? {
               kind: 'not-done',
-              notice: agentSessionWriteFailureText(
-                { kind: 'unreachable' },
-                writeKind(fingerprintMethod)
-              )
+              notice: agentSessionWriteFailureText({ kind: 'failed' }, writeKind(fingerprintMethod))
             }
           : { kind: 'dropped' }
       }

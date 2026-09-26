@@ -97,12 +97,12 @@ describe('mobileStructuredSendDelivery', () => {
     expect(
       mobileStructuredSendDelivery({
         status: 'failed',
-        message: "Orca couldn't reach the agent. Send it again."
+        message: 'Your message was not sent. Send it again.'
       })
     ).toEqual({
       outcome: 'rejected',
       operationIdSpent: true,
-      error: "Orca couldn't reach the agent. Send it again."
+      error: 'Your message was not sent. Send it again.'
     })
   })
 
@@ -119,13 +119,13 @@ describe('mobileStructuredSendDelivery', () => {
     ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Operation expired' })
     expect(
       mobileStructuredSendDelivery(
-        { status: 'failed', message: "Orca couldn't reach the agent. Send it again." },
+        { status: 'failed', message: 'Your message was not sent. Send it again.' },
         true
       )
     ).toEqual({
       outcome: 'rejected',
       operationIdSpent: false,
-      error: "Orca couldn't reach the agent. Send it again."
+      error: 'Your message was not sent. Send it again.'
     })
   })
 

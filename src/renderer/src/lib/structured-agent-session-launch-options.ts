@@ -106,7 +106,7 @@ async function setLaunchOption(
       ? { kind: 'accepted', options: result.value.options ?? { [key]: value } }
       : { kind: 'refused', failure: agentSessionRefusalFailure(result.refusal) }
   } catch {
-    return { kind: 'refused', failure: { kind: 'unreachable' } }
+    return { kind: 'refused', failure: { kind: 'failed' } }
   }
 }
 

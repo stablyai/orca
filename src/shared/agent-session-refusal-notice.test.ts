@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_SESSION_WIRE_REFUSAL_CODES } from './agent-session-wire-refusals'
+import {
+  AGENT_SESSION_WIRE_REFUSAL_CODES,
+  type AgentSessionWireRefusalCode
+} from './agent-session-wire-refusals'
 import {
   agentSessionRefusalNotice,
   agentSessionWriteFailureNotice,
+  agentSessionWriteNoticeEnglish,
+  agentSessionWriteNoticeParts,
   parseAgentSessionWriteFailure,
-  type AgentSessionWriteKind
+  type AgentSessionWriteFailure,
+  type AgentSessionWriteKind,
+  type AgentSessionWriteNoticeSentence
 } from './agent-session-refusal-notice'
+import {
+  DISPATCH_REJECTED_QUEUE_FULL,
+  DISPATCH_REJECTED_WRITE_FAILED
+} from './structured-agent-session-dispatch-rejection'
+import { structuredAgentSessionRejectionParts } from './structured-agent-session-send-disposition'
 
 const WRITES: AgentSessionWriteKind[] = [
   'send',
@@ -17,6 +29,33 @@ const WRITES: AgentSessionWriteKind[] = [
   'goal'
 ]
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
+const FAILURES: AgentSessionWriteFailure[] = [
+  ...AGENT_SESSION_WIRE_REFUSAL_CODES.map((code) => ({ kind: 'refused' as const, code })),
+  { kind: 'failed' }
+]
+
+// A cause is named only where every host emitter of the code means it; any other code says only
+// what did not happen, because one code covers owner states or reasons the client cannot tell apart.
+const CAUSES: Partial<Record<AgentSessionWireRefusalCode, AgentSessionWriteNoticeSentence>> = {
+  // Only send preparation, when the owner it restarted for this send failed to start.
+  agent_session_owner_restart_failed: 'restartFailed',
+  // Only the ledger, when a day's retained operation ids fill a client's or the host's quota.
+  agent_session_operation_capacity: 'capacity',
+  // A replayed operation with no recorded outcome, or a send behind a rewind whose outcome is
+  // unrecorded: either way Orca cannot say what happened.
+  agent_session_operation_unknown: 'outcomeUnknown',
+  // Only the pending-prompt check.
+  agent_session_item_revision_stale: 'questionChanged',
+  agent_session_already_resolved: 'questionChanged',
+  // No emitter on this host; the code names nothing else.
+  agent_session_journal_unreadable: 'historyUnreadable',
+  // On these writes, only an older host, or the phone reading an unknown method.
+  structured_agent_session_unsupported: 'unsupported'
+}
+
+function isCause(part: unknown): boolean {
+  return typeof part === 'string' && !part.startsWith('notDone') && part !== 'tryAgainComposerSend'
+}
 
 describe('agentSessionRefusalNotice', () => {
   // Census of host emitters, one per code, that write for a log or carry a marker. One is enough
@@ -45,57 +84,58 @@ describe('agentSessionRefusalNotice', () => {
     }
   })
 
-  it('does not claim a restart for a chat whose owner is unsettled', () => {
-    for (const code of [
-      'agent_session_checkpoint_stale',
-      'agent_session_conflict',
-      'agent_session_ownership_unknown',
-      'execution_owner_reconciling'
-    ] as const) {
-      expect(agentSessionRefusalNotice({ code, message: HOST_TEXT }, 'send')).toBe(
-        "Orca couldn't confirm which agent process owns this chat. Your message was not sent. Retry to send it again."
-      )
+  it('names a cause only for a code on the allowlist', () => {
+    for (const code of AGENT_SESSION_WIRE_REFUSAL_CODES) {
+      for (const write of WRITES) {
+        const causes = agentSessionWriteNoticeParts({ kind: 'refused', code }, write).filter(
+          isCause
+        )
+        expect(causes).toEqual(CAUSES[code] ? [CAUSES[code]] : [])
+      }
     }
-    expect(
-      agentSessionRefusalNotice({ code: 'agent_session_conflict', message: HOST_TEXT }, 'stop')
-    ).toBe(
-      "Orca couldn't confirm which agent process owns this chat. The agent wasn't stopped. Press Stop again."
-    )
+    for (const write of WRITES) {
+      expect(agentSessionWriteNoticeParts({ kind: 'failed' }, write).filter(isCause)).toEqual([])
+    }
   })
 
-  // The code alone does not say why (a cleared conversation, a pending question, a provider's
-  // own rejection), and trying again can repeat the refusal.
+  // The control that sent the write is how to try again; only the phone's composer has none.
+  it('says how to try again only on the phone, or to update Orca', () => {
+    for (const failure of FAILURES) {
+      for (const write of WRITES) {
+        const notice = agentSessionWriteNoticeEnglish(agentSessionWriteNoticeParts(failure, write))
+        const allowed =
+          write === 'composer-send' ||
+          (failure.kind === 'refused' && failure.code === 'structured_agent_session_unsupported')
+        if (!allowed) {
+          expect(notice).not.toMatch(/again/i)
+        }
+      }
+    }
+    for (const reason of [null, DISPATCH_REJECTED_WRITE_FAILED, DISPATCH_REJECTED_QUEUE_FULL]) {
+      expect(
+        agentSessionWriteNoticeEnglish(structuredAgentSessionRejectionParts(reason, 'send'))
+      ).not.toMatch(/again/i)
+    }
+  })
+
+  // The phone resends under the same operation id. Owner refusals and failed requests record
+  // nothing under it, so a resend can go through; a conflicting or expired id is refused again.
   it.each([
-    ['send', 'Your message was not sent.'],
-    ['composer-send', 'Your message was not sent.'],
-    ['command', "The command didn't run."],
-    ['goal', "The goal wasn't changed."],
-    ['answer', 'Your answer was not sent.'],
-    ['option', "The setting wasn't changed."]
-  ] as const)('offers no next step for an invalid %s', (write, expected) => {
-    expect(
-      agentSessionRefusalNotice(
-        {
-          code: 'agent_session_operation_invalid',
-          message: 'This conversation has been cleared. Use the current conversation.'
-        },
-        write
-      )
-    ).toBe(expected)
+    ['agent_session_checkpoint_stale', 'Your message was not sent. Send it again.'],
+    ['execution_owner_reconciling', 'Your message was not sent. Send it again.'],
+    ['agent_session_operation_expired', 'Your message was not sent.'],
+    ['agent_session_operation_conflict', 'Your message was not sent.'],
+    ['agent_session_operation_invalid', 'Your message was not sent.'],
+    ['agent_session_owner_restart_failed', "The agent couldn't restart. Your message was not sent."]
+  ] as const)('tells the phone to send it again only where that can work: %s', (code, expected) => {
+    expect(agentSessionRefusalNotice({ code, message: HOST_TEXT }, 'composer-send')).toBe(expected)
   })
 
-  it('tells the phone to send a refused message again rather than press Retry', () => {
-    expect(
-      agentSessionRefusalNotice(
-        { code: 'agent_session_checkpoint_stale', message: HOST_TEXT },
-        'composer-send'
-      )
-    ).toBe(
-      "Orca couldn't confirm which agent process owns this chat. Your message was not sent. Send it again."
-    )
+  it('says what did not happen for a failed request', () => {
     expect(agentSessionWriteFailureNotice('composer-send')).toBe(
-      "Orca couldn't reach the agent. Send it again."
+      'Your message was not sent. Send it again.'
     )
+    expect(agentSessionWriteFailureNotice('stop')).toBe("The agent wasn't stopped.")
   })
 
   it('says an agent could not restart without promising a retry will work', () => {
@@ -125,7 +165,7 @@ describe('parseAgentSessionWriteFailure', () => {
         JSON.parse(JSON.stringify({ kind: 'refused', code: 'agent_session_conflict' }))
       )
     ).toEqual({ kind: 'refused', code: 'agent_session_conflict' })
-    expect(parseAgentSessionWriteFailure({ kind: 'unreachable' })).toEqual({ kind: 'unreachable' })
+    expect(parseAgentSessionWriteFailure({ kind: 'failed' })).toEqual({ kind: 'failed' })
     expect(
       parseAgentSessionWriteFailure({
         kind: 'refused',

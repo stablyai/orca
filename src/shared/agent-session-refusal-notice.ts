@@ -2,8 +2,10 @@
 //
 // A refusal's `message` is never shown. Every code has at least one host emitter whose message is
 // written for a log or carries a marker (the census is pinned in the test), so the code and the
-// write pick the copy, and it names a next step only where one works for every emitter. Surfaces
-// keep the fact and choose the words when they show it, so nothing saved carries copy.
+// write pick the copy. A cause is named only where every emitter of the code means it. No notice
+// says how to try again: the control that sent the write does that, except on the phone, whose
+// message goes back to the composer. Surfaces keep the fact and choose the words when they show
+// it, so nothing saved carries copy.
 
 import {
   isAgentSessionWireRefusalCode,
@@ -11,8 +13,9 @@ import {
   type AgentSessionWireRefusalCode
 } from './agent-session-wire-refusals'
 
-/** What the person was doing, which decides how they try again. `send` keeps the message
- *  behind a Retry control; `composer-send` puts it back in the composer, as the phone does. */
+/** What the person was doing, which decides what the notice says did not happen. `send` keeps
+ *  the message behind a Retry control; `composer-send` puts it back in the composer, as the phone
+ *  does. */
 export type AgentSessionWriteKind =
   | 'send'
   | 'composer-send'
@@ -45,8 +48,9 @@ export function agentSessionWriteKindForMethod(fingerprintMethod: string): Agent
 /** Why a write did not happen. */
 export type AgentSessionWriteFailure =
   | { kind: 'refused'; code: AgentSessionWireRefusalCode }
-  /** The request failed without a refusal, so nothing is known about the host's view of it. */
-  | { kind: 'unreachable' }
+  /** The request failed without a refusal (a transport, compatibility or host error), so nothing
+   *  is known about why. */
+  | { kind: 'failed' }
 
 export function agentSessionRefusalFailure(
   refusal: Pick<AgentSessionWireRefusal, 'code'>
@@ -61,8 +65,8 @@ export function parseAgentSessionWriteFailure(
   if (typeof value !== 'object' || value === null || !('kind' in value)) {
     return undefined
   }
-  if (value.kind === 'unreachable') {
-    return { kind: 'unreachable' }
+  if (value.kind === 'failed') {
+    return { kind: 'failed' }
   }
   return value.kind === 'refused' && 'code' in value && isAgentSessionWireRefusalCode(value.code)
     ? { kind: 'refused', code: value.code }
@@ -73,29 +77,19 @@ export function parseAgentSessionWriteFailure(
  *  fallback; mobile shows it as is. */
 export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneSend: 'Your message was not sent.',
-  tryAgainSend: 'Retry to send it again.',
   tryAgainComposerSend: 'Send it again.',
   notDoneStop: "The agent wasn't stopped.",
-  tryAgainStop: 'Press Stop again.',
   notDoneAnswer: 'Your answer was not sent.',
-  tryAgainAnswer: 'Answer it again.',
   notDoneOption: "The setting wasn't changed.",
-  tryAgainOption: 'Choose it again.',
   notDoneCommand: "The command didn't run.",
-  tryAgainCommand: 'Run the command again.',
   notDoneGoal: "The goal wasn't changed.",
-  tryAgainGoal: 'Set the goal again.',
   restartFailed: "The agent couldn't restart.",
-  ownerUnconfirmed: "Orca couldn't confirm which agent process owns this chat.",
   capacity: 'Orca has received too many requests in the last day.',
-  outcomeUnknown:
-    "Orca couldn't confirm whether that went through. Check the chat before trying again.",
+  outcomeUnknown: "Orca couldn't confirm what happened. Check the chat.",
   questionChanged: 'This question was already answered or has changed.',
-  sessionMissing: "Orca couldn't find this chat's agent session.",
   historyUnreadable: "Orca couldn't read this chat's saved history.",
   unsupported: "The Orca running this chat doesn't support this. Update Orca, then try again.",
-  unreachable: "Orca couldn't reach the agent.",
-  messageNotSent: 'Message was not sent.'
+  unreachable: "Orca couldn't reach the agent."
 } as const
 
 export type AgentSessionWriteNoticeSentence = keyof typeof AGENT_SESSION_WRITE_NOTICE_COPY
@@ -112,21 +106,13 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   goal: 'notDoneGoal'
 }
 
-const TRY_AGAIN: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> = {
-  send: 'tryAgainSend',
-  'composer-send': 'tryAgainComposerSend',
-  stop: 'tryAgainStop',
-  answer: 'tryAgainAnswer',
-  option: 'tryAgainOption',
-  command: 'tryAgainCommand',
-  goal: 'tryAgainGoal'
-}
-
-/** That the write did not happen, and how to try it again on this surface. */
-export function agentSessionWriteRetryParts(
+/** That the write did not happen, for one that a second attempt can carry out. Only the phone says
+ *  how: its message goes back to the composer and it has no Retry control. Everywhere else the
+ *  control that sent the write is the way to try again. */
+export function agentSessionWriteNotDoneParts(
   write: AgentSessionWriteKind
 ): AgentSessionWriteNoticeSentence[] {
-  return [NOT_DONE[write], TRY_AGAIN[write]]
+  return write === 'composer-send' ? ['notDoneSend', 'tryAgainComposerSend'] : [NOT_DONE[write]]
 }
 
 export function agentSessionWriteNoticeParts(
@@ -134,37 +120,38 @@ export function agentSessionWriteNoticeParts(
   write: AgentSessionWriteKind
 ): AgentSessionWriteNoticePart[] {
   const notDone = NOT_DONE[write]
-  if (failure.kind === 'unreachable') {
-    return ['unreachable', TRY_AGAIN[write]]
+  if (failure.kind === 'failed') {
+    return agentSessionWriteNotDoneParts(write)
   }
   switch (failure.code) {
     // The cause is in the chat's own status row. Some restarts can be retried and some need a new
     // chat, and the code does not say which.
     case 'agent_session_owner_restart_failed':
       return ['restartFailed', notDone]
+    // Several different owner states share these codes. Each is refused before the id is recorded,
+    // so the phone's resend under the same id can go through.
     case 'agent_session_checkpoint_stale':
     case 'agent_session_conflict':
     case 'agent_session_ownership_unknown':
     case 'execution_owner_reconciling':
-      return ['ownerUnconfirmed', ...agentSessionWriteRetryParts(write)]
+      return agentSessionWriteNotDoneParts(write)
     // Counted across every chat and freed only as a day's requests age out, so trying again now
     // would likely be refused again.
     case 'agent_session_operation_capacity':
       return ['capacity', notDone]
+    // The phone resends under the same id, which the host refuses the same way again. The rest
+    // stand for reasons the code does not name (a cleared conversation, a pending question, a
+    // provider's own rejection...), so any cause or next step could be false.
     case 'agent_session_operation_conflict':
     case 'agent_session_operation_expired':
-      return agentSessionWriteRetryParts(write)
-    // Refused for a reason the code does not name (a cleared conversation, a pending question, a
-    // provider's own rejection...), so any next step could be false.
     case 'agent_session_operation_invalid':
+    case 'agent_session_identity_required':
       return [notDone]
     case 'agent_session_operation_unknown':
       return ['outcomeUnknown']
     case 'agent_session_item_revision_stale':
     case 'agent_session_already_resolved':
       return ['questionChanged']
-    case 'agent_session_identity_required':
-      return ['sessionMissing', notDone]
     case 'agent_session_journal_unreadable':
       return ['historyUnreadable', notDone]
     case 'structured_agent_session_unsupported':
@@ -195,7 +182,5 @@ export function agentSessionRefusalNotice(
 
 /** English, for a write whose request failed without a refusal. */
 export function agentSessionWriteFailureNotice(write: AgentSessionWriteKind): string {
-  return agentSessionWriteNoticeEnglish(
-    agentSessionWriteNoticeParts({ kind: 'unreachable' }, write)
-  )
+  return agentSessionWriteNoticeEnglish(agentSessionWriteNoticeParts({ kind: 'failed' }, write))
 }

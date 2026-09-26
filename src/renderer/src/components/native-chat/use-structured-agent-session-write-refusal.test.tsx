@@ -76,9 +76,7 @@ describe('a chat write the host refused', () => {
       await expect(result.current.cancel('turn-1')).resolves.toBeNull()
     })
 
-    expect(mocks.toastError).toHaveBeenCalledWith(
-      "Orca couldn't confirm which agent process owns this chat. The agent wasn't stopped. Press Stop again."
-    )
+    expect(mocks.toastError).toHaveBeenCalledWith("The agent wasn't stopped.")
     expect(result.current.error).toBeNull()
   })
 

@@ -157,8 +157,7 @@ describe('what a structured refusal says on the phone', () => {
     expect(result).toEqual({
       status: 'refused',
       code: 'agent_session_checkpoint_stale',
-      message:
-        "Orca couldn't confirm which agent process owns this chat. Your message was not sent. Send it again."
+      message: 'Your message was not sent. Send it again.'
     })
   })
 
@@ -181,7 +180,7 @@ describe('what a structured refusal says on the phone', () => {
 
     expect(result).toEqual({
       status: 'failed',
-      message: "Orca couldn't reach the agent. Press Stop again."
+      message: "The agent wasn't stopped."
     })
   })
 

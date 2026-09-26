@@ -30,12 +30,13 @@ afterEach(cleanup)
 
 describe("the Retry row's reason", () => {
   it('chooses its words from the saved failure when it is shown', () => {
-    renderRow({ ...blocked, lastFailure: { kind: 'refused', code: 'agent_session_conflict' } })
+    renderRow({
+      ...blocked,
+      lastFailure: { kind: 'refused', code: 'agent_session_owner_restart_failed' }
+    })
 
     expect(
-      screen.getByText(
-        "Orca couldn't confirm which agent process owns this chat. Your message was not sent. Retry to send it again."
-      )
+      screen.getByText("The agent couldn't restart. Your message was not sent.")
     ).toBeInTheDocument()
   })
 

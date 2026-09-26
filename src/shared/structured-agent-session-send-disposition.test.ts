@@ -82,10 +82,7 @@ describe('what a rejection shows the user', () => {
     // `provider_write_failed: broken pipe` names nothing a person can act on.
     expect(shown).not.toContain('provider_write_failed')
     expect(shown).not.toContain('broken pipe')
-    // And it says the message is safe to send again, which it is: the frame never left.
-    expect(shown).toBe(
-      "Orca couldn't reach the agent. Your message was not sent. Retry to send it again."
-    )
+    expect(shown).toBe("Orca couldn't reach the agent. Your message was not sent.")
   })
 
   it('shows a content rejection in the provider own words', () => {
@@ -103,7 +100,7 @@ describe('what a rejection shows the user', () => {
   })
 
   it('claims no cause when the rejection names none', () => {
-    expect(notice(null)).toBe('Message was not sent.')
+    expect(notice(null)).toBe('Your message was not sent.')
   })
 
   it('never puts a local-capacity marker on screen either', () => {
@@ -111,7 +108,7 @@ describe('what a rejection shows the user', () => {
     // ourselves. It has no user-facing meaning, so it gets copy rather than the token.
     const shown = notice(DISPATCH_REJECTED_QUEUE_FULL)
     expect(shown).not.toContain('queue is full')
-    expect(shown).toBe('Your message was not sent. Retry to send it again.')
+    expect(shown).toBe('Your message was not sent.')
   })
 })
 
@@ -144,12 +141,10 @@ describe('what a refusal shows the user', () => {
       agentSessionWriteNoticeEnglish(
         structuredAgentSessionAttemptFailureParts(disposition.entries[0]!.lastFailure!)
       )
-    ).toBe(
-      "Orca couldn't confirm which agent process owns this chat. Your message was not sent. Retry to send it again."
-    )
+    ).toBe('Your message was not sent.')
   })
 
-  it('keeps an unreachable host as a fact, not a transport error string', () => {
+  it('keeps a failed request as a fact, not a transport error string', () => {
     const disposition = disposeStructuredAgentSessionSendFailure({
       entries: [entry],
       entry,
@@ -159,7 +154,7 @@ describe('what a refusal shows the user', () => {
     })
 
     expect(disposition.error).toBeNull()
-    expect(disposition.entries[0]?.lastFailure).toEqual({ kind: 'unreachable' })
+    expect(disposition.entries[0]?.lastFailure).toEqual({ kind: 'failed' })
   })
 
   it('drops the reason once the same message is accepted', () => {

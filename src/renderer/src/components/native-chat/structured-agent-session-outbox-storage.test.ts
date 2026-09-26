@@ -117,7 +117,7 @@ describe("a saved message's last failure", () => {
     { kind: 'refused', code: 'agent_session_checkpoint_stale' },
     { kind: 'rejected', reason: 'Claude messages support at most 20 images' },
     { kind: 'rejected', reason: null },
-    { kind: 'unreachable' }
+    { kind: 'failed' }
   ])('reads back $kind as it was saved', (lastFailure) => {
     writeOutbox('session-a', [{ ...entry('session-a', 'client-1'), lastFailure }])
 

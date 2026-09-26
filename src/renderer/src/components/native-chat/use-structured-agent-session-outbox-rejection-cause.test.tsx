@@ -131,9 +131,7 @@ describe('a send refused while its agent restarted', () => {
 
     act(() => expect(result.current.send('hello')).toBe(true))
     await waitFor(() =>
-      expect(shownFailure(result.current.outbox[0])).toBe(
-        "Orca couldn't confirm which agent process owns this chat. Your message was not sent. Retry to send it again."
-      )
+      expect(shownFailure(result.current.outbox[0])).toBe('Your message was not sent.')
     )
 
     // The pane learns the new owner and sends the same message again.

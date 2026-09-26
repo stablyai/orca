@@ -26,20 +26,13 @@ describe('desktop words for a write that did not happen', () => {
   })
 
   it('keeps the English catalog in step with the shared copy', () => {
-    const catalog: Record<string, string> = {
-      ...en.components['native-chat'].writeNotice,
-      // The Retry row's long-standing wording keeps its existing key.
-      messageNotSent: en.auto.components.native.chat.NativeChatStructuredSession['93ef441197']
-    }
-    for (const sentence of SENTENCES) {
-      expect(catalog[sentence]).toBe(AGENT_SESSION_WRITE_NOTICE_COPY[sentence])
-    }
+    expect(en.components['native-chat'].writeNotice).toEqual(AGENT_SESSION_WRITE_NOTICE_COPY)
   })
 
   it('translates each sentence whole and shows a provider reason as written', async () => {
     await i18n.changeLanguage('fr')
-    expect(agentSessionWriteNoticeText(['notDoneSend', 'tryAgainSend'])).toBe(
-      "Votre message n'a pas été envoyé. Cliquez sur Réessayer pour le renvoyer."
+    expect(agentSessionWriteNoticeText(['restartFailed', 'notDoneSend'])).toBe(
+      "L'agent n'a pas pu redémarrer. Votre message n'a pas été envoyé."
     )
     expect(
       agentSessionWriteNoticeText([{ text: 'Claude messages support at most 20 images' }])

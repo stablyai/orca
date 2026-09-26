@@ -12,7 +12,7 @@ import {
   agentSessionRefusalFailure,
   agentSessionWriteNoticeEnglish,
   agentSessionWriteNoticeParts,
-  agentSessionWriteRetryParts,
+  agentSessionWriteNotDoneParts,
   type AgentSessionWriteNoticePart
 } from './agent-session-refusal-notice'
 import {
@@ -100,11 +100,11 @@ function refusedRedelivery(
  * a generic string would throw it away. A transport rejection's reason is an
  * internal marker; printing it put `provider_write_failed: broken pipe` in front of
  * users, which names nothing they can act on. That case gets copy that says what
- * happened and that the message is safe to send again — which it is, because the
- * frame provably never left, so a resend cannot duplicate.
+ * happened, and on the phone that the message can be sent again — which it can,
+ * because the frame provably never left, so a resend cannot duplicate.
  *
- * The null default claims no cause, because at that point we know none: all it
- * asserts is the one thing every rejection shares.
+ * The null default claims no cause and no next step, because at that point we know
+ * neither: all it asserts is the one thing every rejection shares.
  *
  * Exported because a client without an outbox needs the same copy: the rule about
  * which reasons a person may read is a property of the reason, not of the queue.
@@ -121,15 +121,15 @@ export function structuredAgentSessionRejectionParts(
   write: 'send' | 'composer-send'
 ): AgentSessionWriteNoticePart[] {
   if (reason === null) {
-    return ['messageNotSent']
+    return ['notDoneSend']
   }
   if (dispatchRejectionWasTransportWriteFailure(reason)) {
-    return ['unreachable', ...agentSessionWriteRetryParts(write)]
+    return ['unreachable', ...agentSessionWriteNotDoneParts(write)]
   }
   // Any other reason we minted is an internal cause with no user-facing meaning;
   // only a provider's own explanation is worth reading verbatim.
   return dispatchRejectionReasonIsInternal(reason)
-    ? agentSessionWriteRetryParts(write)
+    ? agentSessionWriteNotDoneParts(write)
     : [{ text: reason }]
 }
 
@@ -244,7 +244,7 @@ export function disposeStructuredAgentSessionSendFailure(
     // An unconfirmed entry's Retry row already says delivery is unconfirmed.
     entries: deliveryUnknown
       ? replaceEntryState(input, 'unconfirmed')
-      : replaceEntryState(input, 'queued', { kind: 'unreachable' }),
+      : replaceEntryState(input, 'queued', { kind: 'failed' }),
     error: null,
     blockedClientMessageId: deliveryUnknown
       ? input.blockedClientMessageId
