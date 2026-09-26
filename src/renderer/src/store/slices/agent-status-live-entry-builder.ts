@@ -1,10 +1,8 @@
 import type { AppState } from '../types'
 import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
 import {
-  AGENT_STATE_HISTORY_MAX,
   agentSubagentsEqual,
   type MigrationUnsupportedPtyEntry,
-  type AgentStateHistoryEntry,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import {
@@ -30,6 +28,8 @@ import { registryEntryMatchesStatus } from './agent-status-launch-config'
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { claudeAccountIdField } from './agent-status-claude-account'
+import { advanceAgentStateHistory } from './agent-status-live-entry-history'
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry
@@ -79,34 +79,7 @@ export function buildAgentStatusLiveEntry(
     return { entry: null, reason: 'stale' }
   }
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
-  let history: AgentStateHistoryEntry[] = existing?.stateHistory ?? []
-  let lastCompletedAssistantMessage = existing?.lastCompletedAssistantMessage
-  const boundaryLandsOnRealDone =
-    existing?.state === 'done' &&
-    existing.sessionBoundary !== true &&
-    payload.state === 'done' &&
-    payload.sessionBoundary === true
-  if (
-    existing &&
-    (existing.state !== payload.state || boundaryLandsOnRealDone) &&
-    !(existing.state === 'done' && existing.sessionBoundary === true)
-  ) {
-    history = [
-      ...history,
-      {
-        state: existing.state,
-        prompt: existing.prompt,
-        startedAt: existing.stateStartedAt,
-        interrupted: existing.interrupted
-      }
-    ]
-    if (history.length > AGENT_STATE_HISTORY_MAX) {
-      history = history.slice(history.length - AGENT_STATE_HISTORY_MAX)
-    }
-    if (existing.state === 'done') {
-      lastCompletedAssistantMessage = existing.lastAssistantMessage
-    }
-  }
+  const { history, lastCompletedAssistantMessage } = advanceAgentStateHistory(existing, payload)
   const identity = resolveAgentStatusIdentity({
     existing: existing
       ? {
@@ -270,6 +243,7 @@ export function buildAgentStatusLiveEntry(
       : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+    ...claudeAccountIdField(existing, payload, identity.agentType),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,
     ...(payload.observation ? { observation: payload.observation } : {}),
     interrupted: payload.interrupted,

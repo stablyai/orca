@@ -14,9 +14,14 @@ import {
   enrichAgentStatusIpcPayload,
   type AgentStatusRuntimeEnrichment
 } from './agent-status-ipc-boundary'
+import {
+  withPinnedClaudeAccount,
+  type PinnedClaudePaneLookup
+} from '../claude-accounts/pinned-claude-pane-account'
 
 type AgentHookHandlerDependencies = {
   getPtyIdForPaneKey?: (paneKey: string) => string | undefined
+  getPersistedTerminalLayouts?: PinnedClaudePaneLookup['getPersistedTerminalLayouts']
 }
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
@@ -45,6 +50,10 @@ export function registerAgentHookHandlers(
         runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
     })
   })
+  const pinnedPaneLookup: PinnedClaudePaneLookup = {
+    getLivePtyIdForPaneKey: (paneKey) => dependencies.getPtyIdForPaneKey?.(paneKey),
+    getPersistedTerminalLayouts: () => dependencies.getPersistedTerminalLayouts?.()
+  }
   ipcMain.handle('agentStatus:getSnapshot', (): AgentStatusIpcPayload[] => {
     // Why: the renderer pulls this after workspace hydration, so startup cannot
     // lose replayed statuses while its local store is still empty. Match the
@@ -54,7 +63,9 @@ export function registerAgentHookHandlers(
         .getStatusSnapshot()
         // Same rule as the live push: the renderer's feed bridge owns structured rows for now.
         .filter((entry) => entry.structuredHost === undefined)
-        .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
+        .map((entry) =>
+          withPinnedClaudeAccount(enrichAgentStatusIpcPayload(entry, runtime), pinnedPaneLookup)
+        )
     )
   })
   ipcMain.handle('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {

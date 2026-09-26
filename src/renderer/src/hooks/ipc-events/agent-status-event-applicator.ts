@@ -31,7 +31,8 @@ import type {
 } from './agent-status-bridge-types'
 import {
   normalizeAgentStatusEvent,
-  normalizeAgentStatusMetadata
+  normalizeAgentStatusMetadata,
+  normalizeMainClaudeAccountId
 } from './normalize-agent-status-event'
 
 export function createAgentStatusEventApplicator(args: {
@@ -192,9 +193,12 @@ export function createAgentStatusEventApplicator(args: {
       data.restoredUnconfirmed === true
         ? { ...statusPayloadWithTurnBoundary, restoredUnconfirmed: true }
         : statusPayloadWithTurnBoundary
-    const statusPayloadWithObservation = data.observation
-      ? { ...statusPayloadWithProvenance, observation: data.observation }
-      : statusPayloadWithProvenance
+    const statusPayloadWithObservation = {
+      ...(data.observation
+        ? { ...statusPayloadWithProvenance, observation: data.observation }
+        : statusPayloadWithProvenance),
+      claudeAccountId: normalizeMainClaudeAccountId(data)
+    }
     const identity = resolveAgentStatusIdentity({
       existing: existingStatus
         ? {

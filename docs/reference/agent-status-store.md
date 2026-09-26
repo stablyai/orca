@@ -450,3 +450,13 @@ not restore orchestration or launch credentials.
 It is scoped to the requesting desktop renderer. A different window's retirement
 UUID cannot be cleared by the acknowledgement, and web mirrors keep their existing
 host-snapshot/attach behavior.
+
+## Pinned Claude account
+
+Main stamps `claudeAccountId` on the `agentStatus:set` push and the `agentStatus:getSnapshot`
+rows, read from the pinned PTY registry (`claude-pinned-pane-accounts.json`) for the pane's
+PTY. It is a publish-time projection, not stored in `last-status.json`: the registry is the
+durable record, and it survives restarts and daemon reattach. Before a restored pane reattaches,
+main resolves its PTY from the persisted terminal layout. SSH rows are never stamped. The field
+is optional, so older renderers ignore it and a row without it reads as unpinned. The renderer
+keeps it on the row across its own local writes and shows it as the tab's " · email" label.

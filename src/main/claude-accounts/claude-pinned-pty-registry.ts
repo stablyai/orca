@@ -54,6 +54,10 @@ export function countClaudePinnedAccountUsers(accountId: string): number {
   return count
 }
 
+export function getPinnedClaudeAccountIdForPty(ptyId: string): string | undefined {
+  return accountIdByPtyId.get(ptyId)
+}
+
 export function hasLivePinnedClaudePtys(accountId: string): boolean {
   for (const pinnedAccountId of accountIdByPtyId.values()) {
     if (pinnedAccountId === accountId) {

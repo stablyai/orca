@@ -79,6 +79,9 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
   /** Ingress provenance for this write (STA-4293). Read by nothing yet; a caller that omits
    *  it produces exactly the entry it produces today. See agent-status-observation.ts. */
   observation?: AgentStatusObservation
+  /** Main's pinned account for the pane: null when main published the row unpinned, undefined
+   *  from renderer-local writers, which keep the row's current value. */
+  claudeAccountId?: string | null
 }
 
 export type AgentStatusTiming = {
