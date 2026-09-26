@@ -36,7 +36,11 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   sessions: Map<string, StructuredAgentSessionHostSession>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   trackStart: <T>(start: Promise<T>) => Promise<T>
-  ensureProviderChild: (sessionId: string) => Promise<StructuredAgentSessionResumeOutcome>
+  /** Starts a child for `startedFor`, the queued message at the head, if the session has none. */
+  ensureProviderChild: (
+    sessionId: string,
+    startedFor: string
+  ) => Promise<StructuredAgentSessionResumeOutcome>
   reset: (sessionId: string, journal: AgentSessionJournal, reset: AgentJournalResetReason) => void
   publishRestored: (sessionId: string) => void
 }): StructuredAgentSessionConversationDelivery {

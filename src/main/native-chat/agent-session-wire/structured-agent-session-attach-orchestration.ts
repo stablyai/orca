@@ -44,6 +44,8 @@ import {
 
 export type StructuredAgentSessionAttachOptions = {
   recordPhase?: AgentSessionCreatePhaseRecorder
+  /** The queued message a start is for; see `StructuredAgentSessionProviderChild.startedFor`. */
+  startedFor?: string
 }
 
 /**
@@ -178,6 +180,7 @@ async function runAttach(
       onAttached: async (attached, acquisitionGeneration, acquiredOwner, providerChildPhase) => {
         const fence = structuredAgentSessionConversationFence(context.deps.store, sessionId)
         const current = context.sessions.get(sessionId)?.child ?? null
+        const startedFor = acquiredOwner ? options.startedFor : current?.startedFor
         // A re-attach to a live child keeps the sink that child already writes through.
         const eventSink = acquiredOwner
           ? attemptSink
@@ -199,8 +202,9 @@ async function runAttach(
           child: {
             generation: acquisitionGeneration ?? current?.generation ?? null,
             fence,
-            // A re-attach to a live child keeps what that child already proved.
-            phase: acquiredOwner ? providerChildPhase : (current?.phase ?? 'ready')
+            // A re-attach to a live child keeps what that child already proved, and its cause.
+            phase: acquiredOwner ? providerChildPhase : (current?.phase ?? 'ready'),
+            ...(startedFor === undefined ? {} : { startedFor })
           }
         }
         await recoverStructuredRewind(
