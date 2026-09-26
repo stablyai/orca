@@ -1,5 +1,5 @@
 import { ORCA_HOOK_PROTOCOL_VERSION } from '../agent-hook-types'
-import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from '../agent-hook-relay'
+import { REMOTE_AGENT_HOOK_ENV } from '../agent-hook-relay'
 import type { HookListenerState } from './listener-state'
 
 /** Bound the warn-once Sets so a client varying `version`/`env` per request can't grow them unbounded. */
@@ -50,17 +50,6 @@ export function normalizeGrokPromptId(value: unknown): string | undefined {
   }
   return normalized
 }
-/** Provider-owned turn identity: Claude's `prompt_id` UUID, or Grok's and Codex's opaque ids. */
-export function normalizeProviderPromptId(
-  source: AgentHookSource | undefined,
-  value: unknown
-): string | undefined {
-  if (source === 'claude') {
-    return normalizeClaudePromptId(value)
-  }
-  return source === 'grok' || source === 'codex' ? normalizeGrokPromptId(value) : undefined
-}
-
 /** Warn-once on cross-build (`version`) and dev-vs-prod (`env`) mismatches; the relay's "remote" env marker is a location tag, not a build env, so it must not warn as a stale local hook. */
 export function warnOnHookEnvOrVersionMismatch(
   state: HookListenerState,

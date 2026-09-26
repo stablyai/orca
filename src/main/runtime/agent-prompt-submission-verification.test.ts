@@ -18,8 +18,6 @@ function activity(overrides: Partial<AgentPromptActivity> = {}): AgentPromptActi
     explicitWorkingStartedAt: null,
     outputSequence: 7,
     status: 'idle',
-    promptAcceptedAt: null,
-    requiresPromptAcceptance: false,
     ...overrides
   }
 }
@@ -50,7 +48,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ workingSequence: 5, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toEqual({ resubmitted: false })
+    await expect(verification).resolves.toBeUndefined()
   })
 
   it('accepts a completed lifecycle transition between polls', async () => {
@@ -64,7 +62,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ workingSequence: 5 })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toEqual({ resubmitted: false })
+    await expect(verification).resolves.toBeUndefined()
   })
 
   it('does not accept an unrelated transition to a neutral title', async () => {
@@ -108,7 +106,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ workingSequence: 5, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toEqual({ resubmitted: false })
+    await expect(verification).resolves.toBeUndefined()
   })
 
   it('blocks when permission appears after submit', async () => {
@@ -176,7 +174,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ explicitWorkingStartedAt: 2_000, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toEqual({ resubmitted: false })
+    await expect(verification).resolves.toBeUndefined()
   })
 
   it('requires request claim approval for hook working evidence', async () => {
@@ -244,7 +242,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ status: 'working', outputSequence: 8 })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toEqual({ resubmitted: false })
+    await expect(verification).resolves.toBeUndefined()
   })
 
   it('does not accept existing-turn output as durable submission evidence', async () => {
@@ -291,7 +289,7 @@ describe('agent prompt submission verification', () => {
     current = activity({ explicitWorkingStartedAt: 9_000, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 
-    await expect(verification).resolves.toEqual({ resubmitted: false })
+    await expect(verification).resolves.toBeUndefined()
   })
 
   it('gives hook-observed agents the longer effect window', () => {

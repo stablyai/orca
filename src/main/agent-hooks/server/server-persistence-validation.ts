@@ -7,7 +7,10 @@ import {
   type ParsedAgentStatusPayload
 } from '../../../shared/agent-status-types'
 import { isAgentHookSource } from '../../../shared/agent-hook-relay'
-import { normalizeProviderPromptId } from '../../../shared/agent-hook-listener/listener-limits'
+import {
+  normalizeClaudePromptId,
+  normalizeGrokPromptId
+} from '../../../shared/agent-hook-listener/listener-limits'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookAuthorityEvidence, EnrichedAgentHookEventPayload } from './server-types'
 import { isValidPaneKey, isValidPiProviderSessionOnly } from './server-status-identity'
@@ -136,7 +139,12 @@ export function sanitizeHydratedEntry(
     return null
   }
   const source = isAgentHookSource(record.source) ? record.source : undefined
-  const providerPromptId = normalizeProviderPromptId(source, record.providerPromptId)
+  const providerPromptId =
+    source === 'claude'
+      ? normalizeClaudePromptId(record.providerPromptId)
+      : source === 'grok'
+        ? normalizeGrokPromptId(record.providerPromptId)
+        : undefined
   const compactTrigger =
     source === 'claude' && (record.compactTrigger === 'manual' || record.compactTrigger === 'auto')
       ? record.compactTrigger
