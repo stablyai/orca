@@ -1,5 +1,14 @@
-import { useEffect, useState } from 'react'
-import { CircleCheck, Copy, MessageSquarePlus, Pencil, Send, Trash2 } from 'lucide-react'
+import { useEffect, useId, useState } from 'react'
+import {
+  ChevronDown,
+  ChevronUp,
+  CircleCheck,
+  Copy,
+  MessageSquarePlus,
+  Pencil,
+  Send,
+  Trash2
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -53,6 +62,19 @@ export function BrowserPageAnnotationTray({
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null)
   const [editComment, setEditComment] = useState('')
   const [editIntent, setEditIntent] = useState<BrowserAnnotationIntent>('change')
+  const [collapsed, setCollapsed] = useState(false)
+  const trayId = useId()
+  const actionsId = `${trayId}-actions`
+  const listId = `${trayId}-list`
+  const collapseLabel = collapsed
+    ? translate(
+        'auto.components.browser.pane.annotate.browser.page.annotation.tray.9f209891a7',
+        'Expand annotations'
+      )
+    : translate(
+        'auto.components.browser.pane.annotate.browser.page.annotation.tray.38d320108c',
+        'Collapse annotations'
+      )
 
   // Why: a delete or clear while a row is mid-edit must not leave edit state pointing at nothing.
   useEffect(() => {
@@ -83,6 +105,13 @@ export function BrowserPageAnnotationTray({
     setEditingAnnotationId(null)
   }
 
+  const handleToggleCollapsed = (): void => {
+    if (!collapsed) {
+      handleAnnotationTraySendOpenChange(false)
+    }
+    setCollapsed(!collapsed)
+  }
+
   return (
     <div className="absolute right-3 bottom-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -100,77 +129,104 @@ export function BrowserPageAnnotationTray({
                 { value0: browserAnnotations.length }
               )}
         </div>
-        <DropdownMenu
-          modal={false}
-          open={annotationTraySendOpen}
-          onOpenChange={handleAnnotationTraySendOpenChange}
-        >
+        <div id={actionsId} className="flex items-center gap-2" hidden={collapsed}>
+          <DropdownMenu
+            modal={false}
+            open={annotationTraySendOpen}
+            onOpenChange={handleAnnotationTraySendOpenChange}
+          >
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button size="xs" variant="outline" className="gap-1.5">
+                    <Send className="size-3" />
+                    {translate('auto.components.browser.pane.BrowserPane.ac39b9366b', 'Send')}
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {translate(
+                  'auto.components.browser.pane.BrowserPane.95af781091',
+                  'Send feedback to an agent'
+                )}
+              </TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent
+              align="end"
+              className="min-w-[180px]"
+              onInteractOutside={preventAgentSendTargetOutsideDismiss}
+              onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+            >
+              <BrowserAnnotationSendMenuContent
+                worktreeId={worktreeId}
+                groupId={activeGroupId ?? worktreeId}
+                prompt={browserAnnotationsPrompt}
+                onPromptDelivered={handleBrowserAnnotationsSentToAgent}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            size="xs"
+            variant="outline"
+            className="gap-1.5"
+            onClick={handleCopyBrowserAnnotations}
+          >
+            {browserAnnotationsCopied ? (
+              <CircleCheck className="size-3" />
+            ) : (
+              <Copy className="size-3" />
+            )}
+            {browserAnnotationsCopied
+              ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
+              : translate('auto.components.browser.pane.BrowserPane.d51ef37351', 'Copy')}
+          </Button>
           <Tooltip>
             <TooltipTrigger asChild>
-              <DropdownMenuTrigger asChild>
-                <Button size="xs" variant="outline" className="gap-1.5">
-                  <Send className="size-3" />
-                  {translate('auto.components.browser.pane.BrowserPane.ac39b9366b', 'Send')}
-                </Button>
-              </DropdownMenuTrigger>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={handleClearBrowserAnnotations}
+                aria-label={translate(
+                  'auto.components.browser.pane.BrowserPane.734e4343ec',
+                  'Clear browser annotations'
+                )}
+              >
+                <Trash2 className="size-3" />
+              </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
               {translate(
-                'auto.components.browser.pane.BrowserPane.95af781091',
-                'Send feedback to an agent'
+                'auto.components.browser.pane.BrowserPane.11c5084aa2',
+                'Clear annotations'
               )}
             </TooltipContent>
           </Tooltip>
-          <DropdownMenuContent
-            align="end"
-            className="min-w-[180px]"
-            onInteractOutside={preventAgentSendTargetOutsideDismiss}
-            onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
-          >
-            <BrowserAnnotationSendMenuContent
-              worktreeId={worktreeId}
-              groupId={activeGroupId ?? worktreeId}
-              prompt={browserAnnotationsPrompt}
-              onPromptDelivered={handleBrowserAnnotationsSentToAgent}
-            />
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button
-          size="xs"
-          variant="outline"
-          className="gap-1.5"
-          onClick={handleCopyBrowserAnnotations}
-        >
-          {browserAnnotationsCopied ? (
-            <CircleCheck className="size-3" />
-          ) : (
-            <Copy className="size-3" />
-          )}
-          {browserAnnotationsCopied
-            ? translate('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
-            : translate('auto.components.browser.pane.BrowserPane.d51ef37351', 'Copy')}
-        </Button>
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               size="icon-xs"
               variant="ghost"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={handleClearBrowserAnnotations}
-              aria-label={translate(
-                'auto.components.browser.pane.BrowserPane.734e4343ec',
-                'Clear browser annotations'
-              )}
+              onClick={handleToggleCollapsed}
+              aria-expanded={!collapsed}
+              aria-controls={`${actionsId} ${listId}`}
+              aria-label={collapseLabel}
             >
-              <Trash2 className="size-3" />
+              {!collapsed ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.browser.pane.BrowserPane.11c5084aa2', 'Clear annotations')}
+            {collapseLabel}
           </TooltipContent>
         </Tooltip>
       </div>
-      <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-1.5">
+      {/* Why: keep the list mounted so an in-progress edit survives collapse. */}
+      <div
+        id={listId}
+        className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-1.5"
+        hidden={collapsed}
+      >
         {browserAnnotations.map((annotation, index) => {
           const isEditing = annotation.id === editingAnnotationId
           return (
