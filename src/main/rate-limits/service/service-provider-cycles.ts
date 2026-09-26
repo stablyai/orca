@@ -1,5 +1,5 @@
 import { RateLimitServiceFullCycleApplication } from './service-full-cycle-application'
-import { fetchClaudeRateLimits } from '../claude-fetcher'
+import { fetchClaudeRateLimits, fetchConsoleBalance } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
@@ -85,8 +85,48 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (signal.aborted) {
       return
     }
-    // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
+    // Why: Claude OAuth usage and Console balance have independent credentials and
+    // rate limits, so a live-session or Retry-After gate must not suppress balance.
     if (!options?.force && this.shouldSkipAutomatedClaudeFetch(this.state.claude)) {
+      // Why: nothing to refresh without a Console credential; return as the plain gate would.
+      if (!this.state.claude || !this.consoleCredentialResolver) {
+        return
+      }
+      // Why: the balance resolves under the target/generation captured here; a
+      // mid-flight account switch must not paint it onto the newly selected target.
+      const gatedTarget = this.claudeFetchTarget
+      const gatedGeneration = this.claudeFetchGeneration
+      const applyConsoleUpdate = (
+        update: Pick<ProviderRateLimits, 'consoleBalance' | 'consoleBalanceError'>
+      ): void => {
+        const latestClaude = this.state.claude
+        if (
+          latestClaude &&
+          gatedGeneration === this.claudeFetchGeneration &&
+          this.isSameClaudeTarget(gatedTarget, this.claudeFetchTarget)
+        ) {
+          this.updateState({
+            ...this.state,
+            claude: { ...latestClaude, ...update }
+          })
+        }
+      }
+      try {
+        const apiKey = await this.consoleCredentialResolver()
+        if (apiKey && !signal.aborted) {
+          const balance = await fetchConsoleBalance(apiKey, undefined, signal)
+          applyConsoleUpdate({ consoleBalance: balance, consoleBalanceError: undefined })
+        } else if (!signal.aborted) {
+          applyConsoleUpdate({ consoleBalance: undefined, consoleBalanceError: undefined })
+        }
+      } catch (error) {
+        if (!signal.aborted) {
+          applyConsoleUpdate({
+            consoleBalance: undefined,
+            consoleBalanceError: error instanceof Error ? error.message : 'Unknown error'
+          })
+        }
+      }
       return
     }
     const claudeTarget = this.claudeFetchTarget
@@ -124,6 +164,36 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       return
     }
 
+    let claudeWithBalance = claude
+    let consoleBalanceUpdate:
+      | Pick<ProviderRateLimits, 'consoleBalance' | 'consoleBalanceError'>
+      | undefined
+    // Why: skip the balance fetch (and its await) when no Console credential is configured.
+    if (this.consoleCredentialResolver) {
+      try {
+        const apiKey = await this.consoleCredentialResolver()
+        if (apiKey && !signal.aborted) {
+          const balance = await fetchConsoleBalance(apiKey, undefined, signal)
+          consoleBalanceUpdate = { consoleBalance: balance, consoleBalanceError: undefined }
+          claudeWithBalance = {
+            ...claude,
+            ...consoleBalanceUpdate
+          }
+        } else if (!signal.aborted) {
+          consoleBalanceUpdate = { consoleBalance: undefined, consoleBalanceError: undefined }
+        }
+      } catch (error) {
+        consoleBalanceUpdate = {
+          consoleBalance: undefined,
+          consoleBalanceError: error instanceof Error ? error.message : 'Unknown error'
+        }
+        claudeWithBalance = {
+          ...claude,
+          ...consoleBalanceUpdate
+        }
+      }
+    }
+
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
@@ -135,13 +205,21 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
 
     if (shouldApplyClaude) {
-      this.trackActiveFailureStreak('claude', claude)
+      this.trackActiveFailureStreak('claude', claudeWithBalance)
     }
     this.updateState({
       ...this.state,
-      claude: shouldApplyClaude
-        ? this.resolveClaudeFetchApply(claude, previousState.claude)
-        : this.state.claude
+      claude: (() => {
+        // Why: a rejected cycle (account/target switched mid-flight) must leave the
+        // newly selected target untouched — its stale console balance included.
+        if (!shouldApplyClaude) {
+          return this.state.claude
+        }
+        const resolvedClaude = this.resolveClaudeFetchApply(claudeWithBalance, previousState.claude)
+        return consoleBalanceUpdate && resolvedClaude
+          ? { ...resolvedClaude, ...consoleBalanceUpdate }
+          : resolvedClaude
+      })()
     })
   }
 
