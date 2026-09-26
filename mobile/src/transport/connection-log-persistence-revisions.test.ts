@@ -50,7 +50,7 @@ describe('connection log persistence revisions', () => {
     )
   })
 
-  it('preserves distinct queued revisions while a save is delayed', async () => {
+  it('replaces obsolete queued revisions while a save is delayed', async () => {
     const saved: string[][] = []
     let release!: () => void
     let delay = false
@@ -79,7 +79,7 @@ describe('connection log persistence revisions', () => {
     expect(saved).toEqual([['1']])
     release()
     await drain()
-    expect(saved).toEqual([['1'], ['1', '2'], ['2', '3']])
+    expect(saved).toEqual([['1'], ['2', '3']])
   })
 
   it('retains retries and later attempts when both initial save attempts fail', async () => {
@@ -115,5 +115,22 @@ describe('connection log persistence revisions', () => {
     await drain()
     expect(save).toHaveBeenCalledTimes(1)
     expect(save).toHaveBeenLastCalledWith('a', store.get('a'))
+  })
+
+  it('clears unused retry opportunities once the latest revision is saved', async () => {
+    const save = vi.fn<ConnectionLogPersistence['save']>(async () => {})
+    const store = createConnectionLogStore(200, { load: async () => [], save })
+    await store.hydrate('a')
+    await drain()
+    save.mockClear()
+    for (let i = 0; i < 100; i++) {
+      store.append('a', entry(i))
+    }
+    await drain()
+    expect(save).toHaveBeenCalledTimes(1)
+    save.mockReset().mockRejectedValue(new Error('unavailable'))
+    store.append('a', entry(100))
+    await drain()
+    expect(save).toHaveBeenCalledTimes(2)
   })
 })
