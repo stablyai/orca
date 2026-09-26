@@ -5,13 +5,11 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  realpathSync,
-  statSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
+import { mirrorEntry, mirrorPluginDirectory, safeRemoveTree } from '../pty/overlay-mirror'
 import { getStatusPluginEndpointSource } from './status-plugin-endpoint-source'
 import { getStatusPluginRuntimeStateSource } from './status-plugin-runtime-state-source'
 import { getStatusPluginMessagePreviewSource } from './status-plugin-message-preview-source'
@@ -213,34 +211,14 @@ export class OpenCodeHookService {
       const sourcePath = join(sourceDir, entry.name)
 
       if (entry.name === 'plugins') {
-        // Why: check isSymbolicLink before isDirectory — a Windows junction reports both, and the symlink branch must win.
-        const isSymlink = entry.isSymbolicLink()
-        let isLinkPointingToDir = false
-        if (isSymlink) {
-          try {
-            isLinkPointingToDir = statSync(sourcePath).isDirectory()
-          } catch {
-            // Why: broken/inaccessible symlink — mirror the dangling link verbatim instead of resolving through it.
-            isLinkPointingToDir = false
-          }
-        }
-
-        if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
-          // Why: resolve a symlinked plugins/ to its real target so <overlay>/plugins stays a real dir and writePluginIntoOverlay can't write through the user's link.
-          const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
-          const overlayPluginsDir = join(overlayDir, 'plugins')
-          mkdirSync(overlayPluginsDir, { recursive: true })
-          for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            // Why: skip a user plugin sharing Orca's filename; mirroring it would let writePluginIntoOverlay clobber the user's file.
-            if (pluginEntry.name === this.pluginFileName) {
-              continue
-            }
-            mirrorEntry(
-              join(resolvedSource, pluginEntry.name),
-              join(overlayPluginsDir, pluginEntry.name)
-            )
-            nextManifest.pluginEntries.push(pluginEntry.name)
-          }
+        const pluginEntries = mirrorPluginDirectory(
+          sourcePath,
+          join(overlayDir, 'plugins'),
+          entry,
+          this.pluginFileName
+        )
+        if (pluginEntries !== null) {
+          nextManifest.pluginEntries = pluginEntries
           continue
         }
       }

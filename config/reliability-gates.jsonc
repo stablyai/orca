@@ -11,6 +11,99 @@
   },
   "gates": [
     {
+      "id": "agent-session.mimo-overlay-source-preservation",
+      "title": "MiMo plugin overlays preserve source files behind links",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-hooks",
+      "layer": "main-unit",
+      "surfaces": [
+        "MiMo launch environment",
+        "MiMo config/plugins overlay",
+        "OpenCode plugin directory mirror"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime", "mobile-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Actual filesystem/service behavior in disposable macOS directories, with targeted unlink fault injection. No live PTY, agent, SSH, WSL, remote host, mobile or native Linux/Windows execution. Directory fixtures use junction on Windows; the file-symlink case is skipped there. OpenCode source mirroring/manifest/runtime controls pass.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/mimo/hook-service.ts"
+      ],
+      "invariant": "Building the MiMo config/plugins overlay preserves user source plugin bytes and does not install Orca files through linked config/plugins directories or a retained plugin link. Failure to detach the managed path returns the original environment without falling through to a write.",
+      "oracle": "Compare source sentinels and absent files after actual service installation with linked/ordinary/broken source directories, retained overlay links, unlink denial and a hardlink inserted after unlink; require successful overlay plugin and unchanged runtime data for healthy inputs.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/mimo/hook-service-overlay.test.ts src/main/mimo/hook-service.test.ts src/main/opencode/hook-service.test.ts src/main/pty/overlay-mirror.test.ts"
+      ],
+      "testFiles": [
+        "src/main/mimo/hook-service-overlay.test.ts",
+        "src/main/mimo/hook-service.test.ts",
+        "src/main/opencode/hook-service.test.ts",
+        "src/main/pty/overlay-mirror.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/mimo/hook-service-overlay.test.ts",
+          "assertions": [
+            "preserves a same-named user plugin behind a linked directory",
+            "keeps a linked user directory free of an absent Orca filename",
+            "replaces stale overlay links without removing source files or runtime data",
+            "does not fall through to a write after unlink is denied",
+            "refuses a file link inserted after the old plugin was removed"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/mimo/hook-service-overlay.test.ts src/main/mimo/hook-service.test.ts src/main/opencode/hook-service.test.ts src/main/pty/overlay-mirror.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.217,
+          "summary": "53 cases/four suites pass, including13 new preservation/failure cases. Original service fails10 new cases and passes3 controls. All fixtures own their temporary roots; no real profile, provider or app touched."
+        },
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/mimo/hook-service-overlay.test.ts src/main/mimo/hook-service.test.ts src/main/opencode/hook-service.test.ts src/main/pty/overlay-mirror.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.473,
+          "summary": "Root reran all53 permanent cases in a fresh-main snapshot at d20cb69c. Six additional independent source-preservation/fallback cases pass; original fails4 and passes2 controls. Node typecheck passes on that snapshot. No app or provider actions."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused temporary-filesystem unit run; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local deterministic validation only; CI soak pending."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Origin/main d20cb69c Mimo bytes restored through test-only Vite loader: new10fail/3controls. Same13 pass on candidate; related total53 pass."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Correctness only. Actual100-user-plugin normal-directory fixture keeps mkdir7/readdir3/symlink100/write1, adds3 lstat and1 unlink. Linked100-plugin fixture changes readdir2to3, symlink1to100, lstat2to104, stat/realpath/unlink0to1; source overwrite1to0. No polling, subprocess, startup await or speedup claim."
+      },
+      "knownGaps": [
+        "Native Linux/Windows and physical PTY/provider validation not run; file-symlink test skipped on Windows.",
+        "Leaf checks protect config/plugins paths, not arbitrary trusted app-userData ancestors or hostile concurrent directory replacement after lstat.",
+        "Same shared home across different MiMo source homes and source-equals-overlay inputs remain outside scope.",
+        "Linked plugin directories require one listing plus per-entry mirrors; large/slow catalogs may increase launch time. No latency measurement.",
+        "On guard/unlink/exclusive-create failure, the launch returns original MIMOCODE_HOME or no override; Orca status plugin can be unavailable on that attempt. No retry/polling added.",
+        "OpenCode shares the extracted source resolver/mirror and adds a target-directory guard, but its unrelated manifest cleanup/global plugin writer races are outside this invariant.",
+        "Generated plugin payloads/status ownership and remote wire unchanged. SSH/mobile flows are unaffected by this local host-env preparation; WSL/native-host integration remains unexecuted."
+      ],
+      "promotionCriteria": [
+        "Retain source-preservation and fallback assertions; collect CI soak and native platform coverage before promotion."
+      ],
+      "demotionRule": "Keep experimental without soak; investigate any source mutation, failed healthy overlay or stale runtime cleanup without weakening the sentinel assertions."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",

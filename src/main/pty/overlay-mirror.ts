@@ -9,14 +9,58 @@
 
 import {
   cpSync,
+  type Dirent,
   linkSync,
   lstatSync,
+  mkdirSync,
   readdirSync,
+  realpathSync,
   rmdirSync,
+  statSync,
   symlinkSync,
   unlinkSync
 } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+
+export function ensureOverlayDirectory(path: string): void {
+  mkdirSync(path, { recursive: true })
+  if (!isSafeDescendCandidate(lstatSync(path))) {
+    throw new Error(`Overlay directory is not a real directory: ${path}`)
+  }
+}
+
+export function mirrorPluginDirectory(
+  sourcePath: string,
+  targetPath: string,
+  sourceEntry: Pick<Dirent, 'isSymbolicLink' | 'isDirectory'>,
+  managedPluginFile: string
+): string[] | null {
+  let resolvedSource = sourcePath
+  if (sourceEntry.isSymbolicLink()) {
+    try {
+      if (!statSync(sourcePath).isDirectory()) {
+        return null
+      }
+    } catch {
+      return null
+    }
+    resolvedSource = realpathSync(sourcePath)
+  } else if (!sourceEntry.isDirectory()) {
+    return null
+  }
+
+  // A plugins link must become a real overlay directory before adding Orca's file.
+  ensureOverlayDirectory(targetPath)
+  const mirrored: string[] = []
+  for (const entry of readdirSync(resolvedSource, { withFileTypes: true })) {
+    if (entry.name === managedPluginFile) {
+      continue
+    }
+    mirrorEntry(join(resolvedSource, entry.name), join(targetPath, entry.name))
+    mirrored.push(entry.name)
+  }
+  return mirrored
+}
 
 export function mirrorEntry(sourcePath: string, targetPath: string): void {
   // Why: lstatSync (not statSync) so that if the user's source dir contains
