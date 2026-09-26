@@ -37,7 +37,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   pendingPtyShutdownIds: {},
   pendingCodexPaneRestartIds: {},
   terminalExitRecordsByLeafId: {},
-  pendingExitedTerminalRestartLeafIds: {},
   codexRestartNoticeByPtyId: {},
   directSshPaneRetryByTabId: {},
   directSshLivePtyBindingByTabId: {},

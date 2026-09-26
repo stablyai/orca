@@ -177,8 +177,6 @@ export type TerminalActions = {
   queueCodexPaneRestarts: (ptyIds: string[]) => void
   consumePendingCodexPaneRestart: (ptyId: string) => boolean
   replaceTerminalExitRecords: (records: TerminalExitRecord[]) => void
-  requestExitedTerminalRestart: (leafId: string) => void
-  consumeExitedTerminalRestart: (leafId: string) => boolean
   markCodexRestartNotices: (
     notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
       Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {

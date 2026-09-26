@@ -195,10 +195,6 @@ export type UiCommandEventApi = {
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null }) => void
   ) => () => void
-  /** Main asks the desktop pane holding a kept, exited leaf to run its plain-shell restart. */
-  onRestartExitedTerminal: (
-    callback: (data: { tabId: string; worktreeId: string; leafId: string }) => void
-  ) => () => void
   /** Main's exit records for kept leaves, sent whole on every change. */
   onTerminalExitRecordsChanged: (callback: (records: TerminalExitRecord[]) => void) => () => void
   listTerminalExitRecords: () => Promise<TerminalExitRecord[]>

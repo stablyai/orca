@@ -91,13 +91,23 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       : this.listKnownResolvedWorktreesForExplicitTarget(targetWorktreeId, targetWorktree)
   }
 
-  /** The one restart of a leaf main kept after its exit. Always a plain shell, never the tab's agent. */
+  /**
+   * The one restart of a leaf main kept after its exit: a plain shell, never the tab's agent,
+   * spawned here under the leaf's pane key. A desktop pane showing the exit attaches to it when the
+   * reveal binds its leaf, and a later spawn for that pane key reattaches through the stable owner.
+   */
   async restartExitedTerminalSurface(
     worktreeId: string,
     tabId: string,
     leafId: string,
     opts: { activate?: boolean } = {}
   ): Promise<void> {
+    // Why: a repeated tap before the first spawn registers must not start a second shell.
+    const inFlight = this.exitedTerminalRestartsByLeafId.get(leafId)
+    if (inFlight) {
+      return inFlight
+    }
+    const record = this.terminalExitRecords.get(leafId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const tab = snapshot?.tabs.find(
       (candidate) =>
@@ -105,32 +115,33 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         candidate.parentTabId === tabId &&
         candidate.leafId === leafId
     )
-    if (!snapshot || !this.terminalExitRecords.get(leafId) || tab?.type !== 'terminal') {
+    if (!record || !snapshot || tab?.type !== 'terminal') {
       return
     }
-    // Why the renderer graph alone: a desktop pane holds every leaf of a tab the renderer lists,
-    // SSH and serve ones included. The teardown-ownership predicate answers who de-persists a
-    // close, and would send an SSH split pane's restart to a process that pane never attaches to.
-    const heldByDesktopPane = this.notifier?.restartExitedTerminal && this.tabs.has(tab.parentTabId)
-    if (heldByDesktopPane) {
-      // Why: the desktop pane still holds the dead leaf; a runtime spawn would bind a second process
-      // the mounted pane never attaches to.
-      this.notifier.restartExitedTerminal(tabId, worktreeId, leafId)
-      if (opts.activate) {
-        this.notifier.focusTerminal(tabId, worktreeId, leafId)
-      }
-      return
-    }
-    await this.createRuntimeOwnedMobileSessionTerminal(
+    const restart = this.createRuntimeOwnedMobileSessionTerminal(
       worktreeId,
       opts.activate === true,
       undefined,
       {
         identity: { tabId, leafId },
         cwd: tab.startupCwd,
-        targetGroupId: snapshot.tabGroups?.find((group) => group.tabOrder.includes(tabId))?.id
+        targetGroupId: snapshot.tabGroups?.find((group) => group.tabOrder.includes(tabId))?.id,
+        // Why: the shell is what this terminal is; a `serve-` id would reclassify a desktop tab.
+        shellOverride: this.getWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree?.[
+          worktreeId
+        ]?.find((candidate) => candidate.id === tabId)?.shellOverride,
+        serveOwned: this.isServeOwnedPtyId(record.ptyId),
+        surfaceOwner: false
       }
     )
+      .then(() => {
+        if (opts.activate) {
+          this.notifier?.focusTerminal(tabId, worktreeId, leafId)
+        }
+      })
+      .finally(() => this.exitedTerminalRestartsByLeafId.delete(leafId))
+    this.exitedTerminalRestartsByLeafId.set(leafId, restart)
+    return restart
   }
 
   async activateMobileSessionTab(

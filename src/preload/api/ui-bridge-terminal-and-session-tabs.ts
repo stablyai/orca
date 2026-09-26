@@ -154,16 +154,6 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:focusTerminal', listener)
     return () => ipcRenderer.removeListener('ui:focusTerminal', listener)
   },
-  onRestartExitedTerminal: (
-    callback: (data: { tabId: string; worktreeId: string; leafId: string }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { tabId: string; worktreeId: string; leafId: string }
-    ) => callback(data)
-    ipcRenderer.on('ui:restartExitedTerminal', listener)
-    return () => ipcRenderer.removeListener('ui:restartExitedTerminal', listener)
-  },
   onTerminalExitRecordsChanged: (
     callback: (records: TerminalExitRecord[]) => void
   ): (() => void) => {

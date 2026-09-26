@@ -95,8 +95,6 @@ export type RuntimeNotifier = {
   ): void
   renameTerminal(tabId: string, title: string | null): void
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
-  /** Runs the desktop pane's own plain-shell restart for a leaf main kept after its exit. */
-  restartExitedTerminal?(tabId: string, worktreeId: string, leafId: string): void
   terminalExitRecordsChanged?(records: TerminalExitRecord[]): void
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>

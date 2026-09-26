@@ -40,7 +40,6 @@ export type TerminalState = {
   pendingCodexPaneRestartIds: Record<string, true>
   /** Mirror of main's exit records for leaves it kept after their process died. */
   terminalExitRecordsByLeafId: Record<string, TerminalExitRecord>
-  pendingExitedTerminalRestartLeafIds: Record<string, true>
   codexRestartNoticeByPtyId: Record<string, CodexRestartNotice>
   directSshPaneRetryByTabId: Record<string, DirectSshPaneRetryAttempt>
   directSshLivePtyBindingByTabId: Record<string, DirectSshLivePtyBinding>

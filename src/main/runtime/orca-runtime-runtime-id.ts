@@ -245,6 +245,8 @@ export class OrcaRuntimeWithRuntimeId {
   // leave the renderer's intentional sleeping surface available for wake.
   protected intentionalHandlelessPtyStops = new Map<string, string | null>()
 
+  protected exitedTerminalRestartsByLeafId = new Map<string, Promise<void>>()
+
   readonly terminalExitRecords = new TerminalExitRecords({
     onRecordsChanged: () =>
       this.notifier?.terminalExitRecordsChanged?.(this.terminalExitRecords.list()),

@@ -164,8 +164,6 @@ export function registerRuntimeWindowLifecycle(
     renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
-    restartExitedTerminal: (tabId, worktreeId, leafId) =>
-      send('ui:restartExitedTerminal', { tabId, worktreeId, leafId }),
     terminalExitRecordsChanged: (records) => send('terminalExitRecords:changed', records),
     focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
     closeSessionTab: (tabId, worktreeId) =>

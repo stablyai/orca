@@ -4,7 +4,7 @@ import CodexRestartChip from '../CodexRestartChip'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
-import { RoutedExitedTerminalRestart } from './RoutedExitedTerminalRestart'
+import { ExitedPaneProcessAttach } from './ExitedPaneProcessAttach'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { getDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -49,11 +49,13 @@ export function TerminalPaneProcessExitPortals({
   controller: TerminalPaneController
 }): React.JSX.Element {
   const {
+    handleAttachExitedPane,
     handleCloseExitedPane,
     handleRestartExitedPane,
     isActive,
     managedPanes,
-    paneProcessExitsByPaneId
+    paneProcessExitsByPaneId,
+    savedLayout
   } = controller
   return (
     <>
@@ -64,11 +66,10 @@ export function TerminalPaneProcessExitPortals({
         }
         return (
           <Fragment key={`process-exit-${pane.id}`}>
-            {/* Why outside the isActive gate: a routed restart must run in a background tab too.
-                Why no focus: it came from another device; main focuses the pane when asked to. */}
-            <RoutedExitedTerminalRestart
-              leafId={pane.leafId}
-              onRestart={() => handleRestartExitedPane(processExit, { focus: false })}
+            {/* Why outside the isActive gate: a restart from another device lands in background tabs too. */}
+            <ExitedPaneProcessAttach
+              boundPtyId={savedLayout.ptyIdsByLeafId?.[pane.leafId] ?? null}
+              onAttach={() => handleAttachExitedPane(processExit)}
             />
             {isActive
               ? createPortal(

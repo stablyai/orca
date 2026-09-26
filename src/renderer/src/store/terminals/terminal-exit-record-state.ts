@@ -26,63 +26,20 @@ function hasSameExitRecords(
 
 export function createTerminalExitRecordActions(
   set: TerminalStoreSet
-): Pick<
-  TerminalSlice,
-  'replaceTerminalExitRecords' | 'requestExitedTerminalRestart' | 'consumeExitedTerminalRestart'
-> {
+): Pick<TerminalSlice, 'replaceTerminalExitRecords'> {
   return {
     replaceTerminalExitRecords: (records: TerminalExitRecord[]) => {
-      set((s) => {
-        // Why: every store publication visits every pane's listeners, so a push that changes
-        // nothing must publish nothing.
-        const terminalExitRecordsByLeafId = hasSameExitRecords(
-          s.terminalExitRecordsByLeafId,
-          records
-        )
-          ? s.terminalExitRecordsByLeafId
-          : Object.fromEntries(records.map((record) => [record.leafId, record] as const))
-        const pendingLeafIds = Object.keys(s.pendingExitedTerminalRestartLeafIds)
-        // Why: a restart asked for a leaf that no longer has a record has already happened.
-        const keptPendingLeafIds = pendingLeafIds.filter(
-          (leafId) => terminalExitRecordsByLeafId[leafId]
-        )
-        const pendingExitedTerminalRestartLeafIds =
-          keptPendingLeafIds.length === pendingLeafIds.length
-            ? s.pendingExitedTerminalRestartLeafIds
-            : Object.fromEntries(keptPendingLeafIds.map((leafId) => [leafId, true] as const))
-        if (
-          terminalExitRecordsByLeafId === s.terminalExitRecordsByLeafId &&
-          pendingExitedTerminalRestartLeafIds === s.pendingExitedTerminalRestartLeafIds
-        ) {
-          return s
-        }
-        return { terminalExitRecordsByLeafId, pendingExitedTerminalRestartLeafIds }
-      })
-    },
-    requestExitedTerminalRestart: (leafId) => {
+      // Why: every store publication visits every pane's listeners, so a push that changes
+      // nothing must publish nothing.
       set((s) =>
-        s.terminalExitRecordsByLeafId[leafId] && !s.pendingExitedTerminalRestartLeafIds[leafId]
-          ? {
-              pendingExitedTerminalRestartLeafIds: {
-                ...s.pendingExitedTerminalRestartLeafIds,
-                [leafId]: true
-              }
+        hasSameExitRecords(s.terminalExitRecordsByLeafId, records)
+          ? s
+          : {
+              terminalExitRecordsByLeafId: Object.fromEntries(
+                records.map((record) => [record.leafId, record] as const)
+              )
             }
-          : s
       )
-    },
-    consumeExitedTerminalRestart: (leafId) => {
-      let wasRequested = false
-      set((s) => {
-        if (!s.pendingExitedTerminalRestartLeafIds[leafId]) {
-          return s
-        }
-        wasRequested = true
-        const next = { ...s.pendingExitedTerminalRestartLeafIds }
-        delete next[leafId]
-        return { pendingExitedTerminalRestartLeafIds: next }
-      })
-      return wasRequested
     }
   }
 }
