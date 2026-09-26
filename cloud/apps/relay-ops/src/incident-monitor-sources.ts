@@ -195,7 +195,10 @@ async function googleJson(
     },
     signal: AbortSignal.timeout(30_000)
   })
-  if (!response.ok) throw new Error(`Google telemetry returned ${response.status}`)
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new Error(`Google telemetry returned ${response.status}`)
+  }
   return await response.json()
 }
 
