@@ -54,8 +54,8 @@ cache duplication is a remaining opportunity; hourly warming alone cannot
 promise retention. Git's checksum-verified cold-build fallback remains required.
 
 The unit scheduling baseline now comes from every successful Node 24 shard in
-run 36221874572. The importer verified 9,683 measurements against all eight
-assignments. Current discovery selects 9,732 files exactly once, using a 230ms
+run 36221874572. All 9,683 measurements were checked against the eight saved
+assignments before import. Current discovery selects 9,732 files exactly once, using a 230ms
 median for 49 new files. With the same measurements applied to both assignments,
 the largest projected load falls 7.48%; total work is unchanged. See
 [provenance and reproduction](../../config/scripts/ci-shard-timings.md).
