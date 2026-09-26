@@ -3,7 +3,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { sessionFor, userMessage } from './claude-structured-dispatch-test-support'
 
@@ -100,6 +100,7 @@ describe('Claude structured dispatch attachment rejections', () => {
   })
 
   it('rejects an attachment it cannot read with the generic sentence and no path', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const session = sessionFor()
     const path = join(tmpdir(), 'orca-claude-image-missing', 'gone.png')
 
@@ -114,5 +115,11 @@ describe('Claude structured dispatch attachment rejections', () => {
       rejection: { kind: 'attachmentUnreadable' }
     })
     expect(session.connection.send).not.toHaveBeenCalled()
+    // The row drops the error, so the log is the only place left to find why.
+    expect(warn).toHaveBeenCalledWith(
+      '[claude-dispatch] attachment could not be read:',
+      expect.objectContaining({ code: 'ENOENT' })
+    )
+    warn.mockRestore()
   })
 })

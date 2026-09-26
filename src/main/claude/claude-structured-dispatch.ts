@@ -18,8 +18,8 @@ import type {
 } from './claude-structured-session-state'
 import { readClaudeFrameString } from './claude-structured-init-proof'
 import {
-  ClaudeDispatchContentError,
   claudeDispatchContentKey,
+  claudeDispatchContentRejection,
   claudeDispatchInvokesSlashCommand,
   claudeDispatchMessageContent
 } from './claude-structured-dispatch-content'
@@ -30,7 +30,6 @@ import {
   dispatchQueueFullRejection,
   dispatchWriteFailureRejection
 } from '../../shared/structured-agent-session-dispatch-rejection'
-import { agentSessionFailureFact } from '../../shared/agent-session-failure'
 import { agentSessionFailureRejection } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import {
   claudeUnwrittenUserMessageError,
@@ -244,13 +243,7 @@ export async function dispatchClaudeTurn(
   try {
     content = await claudeDispatchMessageContent(input.body)
   } catch (error) {
-    // Orca's own refusal of the content, or an attachment it could not read; never the provider.
-    return {
-      state: 'rejected',
-      ...(error instanceof ClaudeDispatchContentError
-        ? { reason: error.sentence, rejection: agentSessionFailureFact('attachmentInvalid') }
-        : agentSessionFailureRejection(agentSessionFailureFact('attachmentUnreadable')))
-    }
+    return { state: 'rejected', ...claudeDispatchContentRejection(error) }
   }
   if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
     return { state: 'rejected', ...dispatchQueueFullRejection(DISPATCH_REJECTED_QUEUE_FULL) }

@@ -3,6 +3,9 @@ import { open } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
+import { agentSessionFailureFact } from '../../shared/agent-session-failure'
+import type { AgentJournalDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
+import { agentSessionFailureRejection } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { claudeRecord } from './claude-structured-item-translation'
 
 /** Orca refused the message's content, as opposed to failing to read an attachment. */
@@ -15,6 +18,17 @@ export class ClaudeDispatchContentError extends Error {
     this.name = 'ClaudeDispatchContentError'
     this.sentence = sentence
   }
+}
+
+/** Why a message whose content could not be built was not sent: Orca's own refusal of it, in the
+ *  words that refusal carries, or an attachment it could not read. Never the provider. */
+export function claudeDispatchContentRejection(error: unknown): AgentJournalDispatchRejection {
+  if (error instanceof ClaudeDispatchContentError) {
+    return { reason: error.sentence, rejection: agentSessionFailureFact('attachmentInvalid') }
+  }
+  // The row says only that it could not be read; why belongs in the log.
+  console.warn('[claude-dispatch] attachment could not be read:', error)
+  return agentSessionFailureRejection(agentSessionFailureFact('attachmentUnreadable'))
 }
 
 const BYTES_PER_MB = 1024 * 1024
