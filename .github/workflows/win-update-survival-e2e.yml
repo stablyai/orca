@@ -98,16 +98,24 @@ jobs:
         shell: pwsh
         env:
           ORCA_E2E_DIAG_DIR: artifacts/diag
+          ORCA_BACKGROUND_LAUNCH: '1'
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           $exe = "dist/orca-windows-setup.exe"
           if (-not (Test-Path $exe)) { throw "Installer not found at $exe" }
           $log = "artifacts/survival-output.log"
+          # Replay the x86 installer's probe without changing its process execution policy.
+          $probeExe = Join-Path $env:SystemRoot 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
+          & $probeExe -C 'if (Get-Command Get-CimInstance -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }'
+          $availabilityCode = $LASTEXITCODE
+          & $probeExe -C "if ((Get-ExecutionPolicy -Scope Process) -eq 'Restricted') { exit 1 } else { exit 0 }"
+          $policyCode = $LASTEXITCODE
+          "installer probe replay: availability=$availabilityCode policy=$policyCode inheritedPolicy=$env:PSExecutionPolicyPreference" | Tee-Object -FilePath $log
           node tests/tools/win-update-e2e/run.mjs `
             --from "$exe" `
             --to "$exe" `
             --expect "$env:EXPECT" `
-            --soak-seconds 60 2>&1 | Tee-Object -FilePath $log
+            --soak-seconds 60 2>&1 | Tee-Object -FilePath $log -Append
           exit $LASTEXITCODE
 
       - name: Upload survival output

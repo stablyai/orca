@@ -241,6 +241,15 @@ async function runProof(ctx, args) {
   // uninstalls THAT and never scan-discovers the developer's real install.
   ctx.installedExePath = updated.exePath
   log('update', `installed ${updated.exePath} (version ${updated.version})`)
+  log(
+    'post-install-before-relaunch',
+    JSON.stringify({
+      daemonPid: preDaemon.pid,
+      daemonAlive: preDaemon.pid == null ? null : isPidAlive(preDaemon.pid),
+      markerPid: created.markerPid,
+      markerAlive: created.markerPid == null ? null : isPidAlive(created.markerPid)
+    })
+  )
 
   // --- Relaunch and gather post-update evidence ---
   session = await launchInstalledApp({ exePath: updated.exePath, userDataDir })
