@@ -543,7 +543,9 @@ describe('OrcaRuntimeService', () => {
       const paste = buildAgentPromptPasteBytes('the brief')
       expect(writes).toEqual([
         typesLead ? `${ORCA_DISPATCH_PROMPT_LEAD_LINE} ${paste}` : paste,
-        '\r'
+        '\r',
+        // Codex also gets its one cold-boot retry Enter.
+        ...(agent === 'codex' ? ['\r'] : [])
       ])
     } finally {
       vi.useRealTimers()
@@ -613,11 +615,15 @@ describe('OrcaRuntimeService', () => {
         await vi.advanceTimersByTimeAsync(1_748)
         expect(writes).not.toContain('\r')
         await vi.advanceTimersByTimeAsync(1)
-        await sendPromise
-        expect(prematureEnters).toBe(0)
-        expect(submissions).toBe(1)
         expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-        expect(assertAuthority).toHaveBeenCalledTimes(2)
+        await vi.runAllTimersAsync()
+        await sendPromise
+        // Codex's retry Enter re-runs the caller's write guard.
+        const enters = agent === 'codex' ? 2 : 1
+        expect(prematureEnters).toBe(0)
+        expect(submissions).toBe(enters)
+        expect(writes.filter((data) => data === '\r')).toHaveLength(enters)
+        expect(assertAuthority).toHaveBeenCalledTimes(enters + 1)
       } finally {
         vi.useRealTimers()
       }

@@ -27,6 +27,9 @@ vi.mock('../../git/worktree', () => ({
   ])
 }))
 
+// Codex gets one retry Enter after the first; a duplicate would be a third Enter or a re-paste.
+const CODEX_ENTERS_PER_PROMPT = 2
+
 function request(
   terminal: string,
   promptRequestId: string,
@@ -117,7 +120,9 @@ describe('durable terminal prompt delivery receipts', () => {
           }
         }
       })
-      expect(harness.writes.filter((data) => data === '\r')).toHaveLength(1)
+      expect(harness.writes.filter((data) => data === '\r')).toHaveLength(
+        agent === 'codex' ? CODEX_ENTERS_PER_PROMPT : 1
+      )
       harness.db.close()
     }
   )
@@ -142,7 +147,9 @@ describe('durable terminal prompt delivery receipts', () => {
         }
       })
     }
-    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(16)
+    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(
+      16 * CODEX_ENTERS_PER_PROMPT
+    )
     harness.db.close()
   })
 
@@ -216,7 +223,7 @@ describe('durable terminal prompt delivery receipts', () => {
 
     expect(first).toMatchObject({ ok: false, error: { message: 'terminal_not_writable' } })
     expect(retry).toMatchObject({ ok: true, result: { mutation: { replayed: false } } })
-    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(1)
+    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(CODEX_ENTERS_PER_PROMPT)
     harness.db.close()
   })
 
@@ -385,7 +392,7 @@ describe('durable terminal prompt delivery receipts', () => {
         mutation: { replayed: true }
       }
     })
-    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(1)
+    expect(harness.writes.filter((data) => data === '\r')).toHaveLength(CODEX_ENTERS_PER_PROMPT)
     harness.db.close()
   })
 

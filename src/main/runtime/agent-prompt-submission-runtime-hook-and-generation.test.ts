@@ -180,11 +180,15 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     expect(first.prompt?.stages).toEqual(['input_accepted'])
 
     const firstObserved = runtime.observeTerminalAgentPrompt(handle, first.prompt!, 20_000)
+    let draftPending = false
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
       write: (_ptyId, data) => {
         writes.push(data)
-        if (data === '\r') {
+        draftPending ||= data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)
+        // Codex's retry Enter lands on an empty composer and starts nothing.
+        if (data === '\r' && draftPending) {
+          draftPending = false
           hook.stateStartedAt = Date.now()
         }
         return true
