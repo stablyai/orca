@@ -5,24 +5,19 @@ import {
 } from './secret-sentinel-substitution'
 import type { ProfileStateDomainReplacement } from './profile-state-authority'
 
-export function buildProfileStateDomainReplacements(
-  payload: Buffer,
+export function serializeSelectiveProfileStateDomains(
+  state: Record<string, unknown>,
   dirtyDomains: ReadonlySet<string>
 ): ProfileStateDomainReplacement[] {
-  const parsed: unknown = JSON.parse(payload.toString('utf8'))
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Profile state payload must be a JSON object')
+  const payloads = new Map<string, string>()
+  for (const [domain, value] of Object.entries(state)) {
+    const fragment = serializeProfileStateDomainFragment(domain, value)
+    if (fragment !== '{}') {
+      payloads.set(domain, extractProfileStateDomainPayload(domain, fragment))
+    }
   }
-  const entries = new Map(Object.entries(parsed))
   return [...dirtyDomains].map((domain) => {
-    if (!entries.has(domain)) {
-      return { domain, payload: null }
-    }
-    const serialized = JSON.stringify(entries.get(domain))
-    if (serialized === undefined) {
-      throw new Error(`Profile state domain payload is not serializable: ${domain}`)
-    }
-    return { domain, payload: serialized }
+    return { domain, payload: payloads.get(domain) ?? null }
   })
 }
 
@@ -34,8 +29,7 @@ export function serializeCompleteProfileStateDomains(
   const domains: ProfileStateDomainReplacement[] = []
   const hash = createHash('sha1').update(degradedPrefix)
   for (const [domain, value] of Object.entries(state)) {
-    // The wrapper preserves the original property name passed to a value's toJSON.
-    const fragment = JSON.stringify({ [domain]: value })
+    const fragment = serializeProfileStateDomainFragment(domain, value)
     if (fragment === '{}') {
       continue
     }
@@ -43,7 +37,7 @@ export function serializeCompleteProfileStateDomains(
     hash.update(serialized.stateHash)
     domains.push({
       domain,
-      payload: serialized.payload.slice(JSON.stringify(domain).length + 2, -1)
+      payload: extractProfileStateDomainPayload(domain, serialized.payload)
     })
   }
   return {
@@ -56,4 +50,13 @@ export function serializeCompleteProfileStateDomains(
       )
     }
   }
+}
+
+function serializeProfileStateDomainFragment(domain: string, value: unknown): string {
+  // The wrapper preserves the original property name passed to a value's toJSON.
+  return JSON.stringify({ [domain]: value })
+}
+
+function extractProfileStateDomainPayload(domain: string, fragment: string): string {
+  return fragment.slice(JSON.stringify(domain).length + 2, -1)
 }

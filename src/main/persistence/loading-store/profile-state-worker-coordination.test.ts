@@ -107,6 +107,39 @@ describe('worker-owned Store writes', () => {
     expect(publish).toHaveBeenCalledOnce()
   })
 
+  it('retains selective write intent when a toJSON hook changes the captured generation', async () => {
+    const { store, authority, readState } = await fixture()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const selective = vi.spyOn(authority, 'writeSerializedDomains')
+    const serialize = vi.fn((key: string) => {
+      expect(key).toBe('workspaceSession')
+      store.updateSettings({ theme: 'light' })
+      return { ...store.getWorkspaceSession() }
+    })
+    try {
+      await expect(
+        store.runDurableMutation(() => {
+          store.patchWorkspaceSession({ activeTabId: 'captured-tab' })
+          Object.defineProperty(store.getWorkspaceSession(), 'toJSON', {
+            configurable: true,
+            value: serialize
+          })
+          return { value: undefined }
+        })
+      ).rejects.toThrow('changed while preparing its durable snapshot')
+      expect(serialize).toHaveBeenCalledOnce()
+      expect(selective).not.toHaveBeenCalled()
+    } finally {
+      Reflect.deleteProperty(store.getWorkspaceSession(), 'toJSON')
+    }
+    await store.flushPendingOrThrowAsync()
+    expect(readState()).toMatchObject({
+      settings: { theme: 'light' },
+      workspaceSession: { activeTabId: 'captured-tab' }
+    })
+    expect(selective).toHaveBeenCalledOnce()
+  })
+
   it('retains a newer edit after an older write is acknowledged', async () => {
     const { store, authority, readState } = await fixture()
     const gate = authority.pause()
