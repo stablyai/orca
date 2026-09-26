@@ -256,6 +256,8 @@ describe('GrokHookService', () => {
         'Stop',
         'StopCancelled',
         'StopFailure',
+        'SubagentStart',
+        'SubagentStop',
         'UserPromptSubmit'
       ].sort()
     )
@@ -270,6 +272,9 @@ describe('GrokHookService', () => {
     expect(config.hooks.StopCancelled[0].matcher).toBeUndefined()
     expect(config.hooks.StopFailure[0].matcher).toBeUndefined()
     expect(config.hooks.Notification[0].matcher).toBeUndefined()
+    // Why: a Subagent matcher tests the subagent type; the inventory needs every one.
+    expect(config.hooks.SubagentStart[0].matcher).toBeUndefined()
+    expect(config.hooks.SubagentStop[0].matcher).toBeUndefined()
     // Why: assert the shipped helper still matches what install wrote (regression
     // guard if GROK_TOOL_EVENT_MATCHER drifts from install).
     expect(getGrokToolEventMatcherForTests()).toBe('.*')

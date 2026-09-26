@@ -15,6 +15,10 @@ export const GROK_EVENTS = [
   { eventName: 'StopCancelled', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why: the background-task inventory needs a subagent's start and end; a cancelled turn's
+  // stop_cancelled carries no inventory, and a killed subagent's only other trace is SessionEnd.
+  { eventName: 'SubagentStart', definition: { hooks: [{ type: 'command', command: '' }] } },
+  { eventName: 'SubagentStop', definition: { hooks: [{ type: 'command', command: '' }] } },
   {
     // Why: Orca needs the pre-event to show in-flight tools and detect ask_user_question waits;
     // PostToolUse arrives only after both states have ended.

@@ -1,5 +1,9 @@
-import type { AgentMainAgentStatus } from '../agent-status-types'
-import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
+import type { AgentChildWorkKind } from '../agent-status-child-work'
+import type {
+  ClaudeLeadTurnState,
+  CodexLeadTurnState,
+  GrokMainAgentTurnState
+} from './main-agent-turn-state'
 
 export type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 import {
@@ -56,7 +60,14 @@ export type HookListenerState = {
   /** Newest Grok turn per pane, used to reject end reports that arrive after a replacement prompt. */
   grokActiveTurnByPaneKey: Map<string, GrokActiveTurn>
   /** The Grok main agent's own state as last published, so its clock keeps continuity across events. */
-  grokMainAgentStatusByPaneKey: Map<string, AgentMainAgentStatus>
+  grokMainAgentStatusByPaneKey: Map<string, GrokMainAgentTurnState>
+  /** Grok's background-task inventory per pane (task id -> kind): a turn end carrying
+   *  `backgroundTasks` restates it whole; a shell's BackgroundTaskStarted result or a SubagentStart
+   *  adds an entry, and its own task_complete, SubagentStop or child SessionEnd drops it; a session
+   *  boundary or pane close clears it. Kept because Grok's own cancel hook (`stop_cancelled`)
+   *  carries no inventory and a cancel suppresses the follow-up turn whose `stop` would restate it
+   *  (measured, 1.0.41: src/shared/__fixtures__/grok-cancel-subagent-dialog-hooks.jsonl). */
+  grokBackgroundTasksByPaneKey: Map<string, Map<string, AgentChildWorkKind>>
   /** Muse child-session filter and session-log cursor per pane. */
   musePaneStateByPaneKey: Map<string, MusePaneState>
   /**
@@ -117,6 +128,7 @@ export function createHookListenerState(
     codexLeadStateByPaneKey: new Map(),
     grokActiveTurnByPaneKey: new Map(),
     grokMainAgentStatusByPaneKey: new Map(),
+    grokBackgroundTasksByPaneKey: new Map(),
     musePaneStateByPaneKey: new Map(),
     opencodeSessionPaneBySessionId: new Map(),
     lastLaunchTokenByPaneKey: new Map()
@@ -207,6 +219,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.codexLeadStateByPaneKey.delete(paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
+  state.grokBackgroundTasksByPaneKey.delete(paneKey)
   state.musePaneStateByPaneKey.delete(paneKey)
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
@@ -285,6 +298,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokActiveTurnByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokMainAgentStatusByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.grokBackgroundTasksByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.musePaneStateByPaneKey, fromPaneKey, toPaneKey)
   moveOpenCodeSessionBindings(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
@@ -297,6 +311,7 @@ export function clearPaneTurnCacheState(state: HookListenerState, paneKey: strin
   state.ampCompletedCacheKeys.delete(paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
+  state.grokBackgroundTasksByPaneKey.delete(paneKey)
 }
 
 export function deletePaneScopedCacheEntry(map: Map<string, unknown>, paneKey: string): void {
@@ -339,6 +354,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.codexLeadStateByPaneKey.clear()
   state.grokActiveTurnByPaneKey.clear()
   state.grokMainAgentStatusByPaneKey.clear()
+  state.grokBackgroundTasksByPaneKey.clear()
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
 }

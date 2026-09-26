@@ -58,87 +58,90 @@ function pinStateStartedAt(
   }
 }
 
-describe('Claude background-turn completion notifications', () => {
-  beforeEach(() => {
-    vi.resetModules()
-    vi.useFakeTimers()
-    vi.setSystemTime(1_700_000_000_000)
-    dispatchTerminalNotification.mockClear()
-    dispatchAgentHookTerminalLifecycle.mockClear()
-    mockStoreState = {
-      settings: {
-        experimentalTerminalAttention: false,
-        notifications: {
-          enabled: true,
-          agentTaskComplete: true
-        }
-      },
-      ptyIdsByTabId: {
-        'tab-1': ['pty-1']
-      },
-      suppressedPtyExitIds: {},
-      tabsByWorktree: {
-        [WORKTREE_ID]: [{ id: 'tab-1', ptyId: 'pty-1' }]
-      },
-      terminalLayoutsByTabId: {},
-      agentLaunchConfigByPaneKey: {},
-      agentStatusByPaneKey: {},
-      getAgentLaunchConfigForStatusEntry: () => undefined
-    }
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  async function play(events: { at: number; payload: Record<string, unknown> }[]): Promise<{
-    banners: { at: number; body: string | undefined; stateStartedAt: number | undefined }[]
-    rows: HookRow[]
-  }> {
-    const { observeAgentHookCompletionForNotification } =
-      await import('./agent-hook-completion-notifications')
-    const listener = createHookListenerState()
-    const rows: HookRow[] = []
-    let previous: HookRow | undefined
-    const banners: {
-      at: number
-      body: string | undefined
-      stateStartedAt: number | undefined
-    }[] = []
-
-    dispatchTerminalNotification.mockImplementation((_worktreeId, event) => {
-      banners.push({
-        at: Date.now(),
-        body: event.agentStatusSnapshot?.lastAssistantMessage,
-        stateStartedAt: event.agentStatusSnapshot?.stateStartedAt
-      })
-    })
-
-    for (const event of events) {
-      vi.setSystemTime(event.at)
-      const normalized = normalizeHookPayload(
-        listener,
-        'claude',
-        { paneKey: PANE_KEY, payload: event.payload },
-        'production'
-      )
-      if (!normalized) {
-        continue
+beforeEach(() => {
+  vi.resetModules()
+  vi.useFakeTimers()
+  vi.setSystemTime(1_700_000_000_000)
+  dispatchTerminalNotification.mockClear()
+  dispatchAgentHookTerminalLifecycle.mockClear()
+  mockStoreState = {
+    settings: {
+      experimentalTerminalAttention: false,
+      notifications: {
+        enabled: true,
+        agentTaskComplete: true
       }
-      const row = pinStateStartedAt(previous, normalized.payload, event.at)
-      previous = row
-      rows.push(row)
-      observeAgentHookCompletionForNotification({
-        paneKey: PANE_KEY,
-        worktreeId: WORKTREE_ID,
-        payload: row
-      })
-      vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
-    }
+    },
+    ptyIdsByTabId: {
+      'tab-1': ['pty-1']
+    },
+    suppressedPtyExitIds: {},
+    tabsByWorktree: {
+      [WORKTREE_ID]: [{ id: 'tab-1', ptyId: 'pty-1' }]
+    },
+    terminalLayoutsByTabId: {},
+    agentLaunchConfigByPaneKey: {},
+    agentStatusByPaneKey: {},
+    getAgentLaunchConfigForStatusEntry: () => undefined
+  }
+})
 
-    return { banners, rows }
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+async function play(
+  events: { at: number; payload: Record<string, unknown> }[],
+  source: 'claude' | 'grok' = 'claude'
+): Promise<{
+  banners: { at: number; body: string | undefined; stateStartedAt: number | undefined }[]
+  rows: HookRow[]
+}> {
+  const { observeAgentHookCompletionForNotification } =
+    await import('./agent-hook-completion-notifications')
+  const listener = createHookListenerState()
+  const rows: HookRow[] = []
+  let previous: HookRow | undefined
+  const banners: {
+    at: number
+    body: string | undefined
+    stateStartedAt: number | undefined
+  }[] = []
+
+  dispatchTerminalNotification.mockImplementation((_worktreeId, event) => {
+    banners.push({
+      at: Date.now(),
+      body: event.agentStatusSnapshot?.lastAssistantMessage,
+      stateStartedAt: event.agentStatusSnapshot?.stateStartedAt
+    })
+  })
+
+  for (const event of events) {
+    vi.setSystemTime(event.at)
+    const normalized = normalizeHookPayload(
+      listener,
+      source,
+      { paneKey: PANE_KEY, payload: event.payload },
+      'production'
+    )
+    if (!normalized) {
+      continue
+    }
+    const row = pinStateStartedAt(previous, normalized.payload, event.at)
+    previous = row
+    rows.push(row)
+    observeAgentHookCompletionForNotification({
+      paneKey: PANE_KEY,
+      worktreeId: WORKTREE_ID,
+      payload: row
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
   }
 
+  return { banners, rows }
+}
+
+describe('Claude background-turn completion notifications', () => {
   it('announces a subagent turn at Stop with that turn’s text, not when the child later drains', async () => {
     const { banners, rows } = await play([
       {
@@ -265,5 +268,117 @@ describe('Claude background-turn completion notifications', () => {
       'Third done.'
     ])
     expect(new Set(banners.map((banner) => banner.stateStartedAt)).size).toBe(3)
+  })
+})
+
+describe('Grok background-turn completion notifications', () => {
+  const T0 = 1_700_000_000_000
+  const prompt = (at: number, promptId: string) => ({
+    at,
+    payload: { hookEventName: 'user_prompt_submit', sessionId: 's-1', promptId, prompt: 'go' }
+  })
+  const shellStarted = (at: number, taskId: string) => ({
+    at,
+    payload: {
+      hookEventName: 'post_tool_use',
+      sessionId: 's-1',
+      toolName: 'run_terminal_cmd',
+      toolResult: { type: 'BackgroundTaskStarted', task_type: 'bash', task_id: taskId }
+    }
+  })
+  const stop = (at: number, promptId: string, text: string, taskIds: string[]) => ({
+    at,
+    payload: {
+      hookEventName: 'stop',
+      sessionId: 's-1',
+      promptId,
+      reason: 'end_turn',
+      lastAssistantMessage: text,
+      backgroundTasks: taskIds.map((id) => ({ id, type: 'shell', status: 'running' }))
+    }
+  })
+  const notification = (at: number, notificationType: string, message = '') => ({
+    at,
+    payload: { hookEventName: 'notification', sessionId: 's-1', notificationType, message }
+  })
+
+  // Grok wakes itself when background work ends and that woken turn announces, so a turn that
+  // leaves work running announces when Grok goes idle with it still running, and only once.
+  it('announces a turn that leaves a shell running once, when Grok goes idle', async () => {
+    const { banners, rows } = await play(
+      [
+        prompt(T0, 'p1'),
+        shellStarted(T0 + 1_000, 'shell-1'),
+        stop(T0 + 5_000, 'p1', 'Dev server is up.', ['shell-1']),
+        // Grok's idle restatement ~60 s later, the shell still running.
+        notification(T0 + 65_000, 'idle_prompt'),
+        notification(T0 + 120_000, 'task_complete', 'Background task completed: shell-1'),
+        notification(T0 + 180_000, 'idle_prompt')
+      ],
+      'grok'
+    )
+
+    expect(rows.slice(2).map((row) => [row.state, row.workingMode, row.turnCompletedAt])).toEqual([
+      ['working', 'monitoring', undefined],
+      ['working', 'monitoring', T0 + 5_000],
+      ['done', undefined, T0 + 5_000],
+      ['done', undefined, T0 + 5_000]
+    ])
+    expect(banners).toEqual([
+      { at: T0 + 65_000, body: 'Dev server is up.', stateStartedAt: T0 + 5_000 }
+    ])
+  })
+
+  it('stamps nothing on a cancelled turn a shell holds open', async () => {
+    const { rows } = await play(
+      [
+        prompt(T0, 'p1'),
+        shellStarted(T0 + 1_000, 'shell-1'),
+        {
+          at: T0 + 5_000,
+          payload: {
+            hookEventName: 'stop_cancelled',
+            sessionId: 's-1',
+            promptId: 'p1',
+            reason: 'user_interrupt'
+          }
+        },
+        notification(T0 + 65_000, 'idle_prompt'),
+        notification(T0 + 120_000, 'task_complete', 'Background task completed: shell-1')
+      ],
+      'grok'
+    )
+
+    expect(rows.slice(2).map((row) => [row.state, row.workingMode, row.interrupted])).toEqual([
+      ['working', 'monitoring', undefined],
+      ['working', 'monitoring', undefined],
+      ['done', undefined, true]
+    ])
+    expect(rows.every((row) => row.turnCompletedAt === undefined)).toBe(true)
+  })
+
+  it('starts each new prompt unstamped, so the next turn announces on its own', async () => {
+    const { banners, rows } = await play(
+      [
+        prompt(T0, 'p1'),
+        shellStarted(T0 + 1_000, 'shell-1'),
+        stop(T0 + 5_000, 'p1', 'Dev server is up.', ['shell-1']),
+        notification(T0 + 20_000, 'idle_prompt'),
+        notification(T0 + 25_000, 'task_complete', 'Background task completed: shell-1'),
+        prompt(T0 + 30_000, 'p2'),
+        stop(T0 + 35_000, 'p2', 'Route added.', [])
+      ],
+      'grok'
+    )
+
+    expect(rows.slice(5).map((row) => [row.state, row.turnCompletedAt])).toEqual([
+      ['working', undefined],
+      ['done', undefined]
+    ])
+    // The unstamped done announces after the hook quiet window; the stamped one at the idle.
+    expect(banners.map((banner) => [banner.body, banner.stateStartedAt])).toEqual([
+      ['Dev server is up.', T0 + 5_000],
+      ['Route added.', T0 + 35_000]
+    ])
   })
 })

@@ -1,4 +1,4 @@
-import type { AgentStatusState } from '../agent-status-types'
+import type { AgentMainAgentStatus, AgentStatusState } from '../agent-status-types'
 import type { AgentJournalTurnOutcome } from '../agent-turn-outcome'
 
 /** The Claude main agent's own turn record, published on every row as `mainAgent`. */
@@ -32,4 +32,10 @@ export type CodexLeadTurnState = {
   /** When `state` first appeared; the root's own clock, published as `mainAgent.stateStartedAt`. */
   stateStartedAt: number
   model?: string
+}
+
+/** The Grok main agent's own record: the `mainAgent` it publishes, plus the same turn stamp Claude's carries. */
+export type GrokMainAgentTurnState = AgentMainAgentStatus & {
+  /** See ClaudeLeadTurnState.turnCompletedAt. Always the stamped done run's own `stateStartedAt`. */
+  turnCompletedAt?: number
 }

@@ -50,9 +50,11 @@ export function normalizeHookPayload(
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
     hookPayloadRecord.hookEventName
-  // Codex child hooks expose the child's session_id on the parent's pane.
+  // Codex and Grok child hooks expose the child's session_id on the parent's pane.
   const providerSession =
-    source === 'codex' && readString(hookPayloadRecord, 'agent_id')
+    (source === 'codex' && readString(hookPayloadRecord, 'agent_id')) ||
+    (source === 'grok' &&
+      readFirstString(hookPayloadRecord, ['subagentType', 'subagent_type']) !== undefined)
       ? null
       : extractAgentProviderSession(source, hookPayloadRecord)
   // Why (#21359): the shared OpenCode server stamps every post with its own
@@ -193,7 +195,19 @@ export function normalizeHookPayload(
     grokPromptBoundary: grokActiveTurn ? true : undefined,
     compactTrigger,
     toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
-    toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
+    toolAgentId:
+      readFirstString(hookPayloadRecord, ['agent_id', 'agentId']) ??
+      // Why: Grok child hooks carry subagentType; their id is subagentId, or the child's own
+      // session id (measured equal on the child's SessionEnd, the only signal a killed one leaves).
+      (source === 'grok' &&
+      readFirstString(hookPayloadRecord, ['subagentType', 'subagent_type']) !== undefined
+        ? readFirstString(hookPayloadRecord, [
+            'subagentId',
+            'subagent_id',
+            'sessionId',
+            'session_id'
+          ])
+        : undefined),
     teammateName:
       source === 'claude' && eventName === 'TeammateIdle'
         ? readString(hookPayloadRecord, 'teammate_name')

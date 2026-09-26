@@ -5,6 +5,7 @@ import {
 import {
   AGENT_INTERRUPT_SETTLE_MS,
   isNavigationEscapeIntent,
+  providerReportsOwnCancel,
   requiresDoubleEscapeInterrupt,
   type AgentInterruptInferenceRequest,
   type AgentInterruptInputIntent
@@ -54,7 +55,9 @@ function shouldIgnoreInterruptIntent(
   agentType: AgentStatusEntry['agentType'],
   intent: AgentInterruptInputIntent
 ): boolean {
-  return agentType === 'droid' && intent === 'ctrl-c'
+  // Why: Droid's Ctrl+C exits the CLI (PTY lifecycle handles it); an agent that reports its own
+  // cancels leaves nothing for a keypress to prove on either intent.
+  return (agentType === 'droid' && intent === 'ctrl-c') || providerReportsOwnCancel(agentType)
 }
 
 /** Why: skip a round-trip main will refuse anyway. Scoped to 'working' so Claude's

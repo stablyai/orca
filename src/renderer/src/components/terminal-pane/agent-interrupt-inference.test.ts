@@ -216,6 +216,27 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
+  // Why: Grok reports its own cancels (stop_cancelled); Esc never cancels and Ctrl+C can open a
+  // dialog that keeps the turn running, so neither keypress may request an inference.
+  it.each(['plain-escape', 'ctrl-c'] as const)('does not infer %s for Grok', (intent) => {
+    vi.useFakeTimers()
+    let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'grok' })
+    const inferInterrupt = vi.fn()
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () => entry,
+      inferInterrupt,
+      now: () => 1_100
+    })
+
+    tracker.observeInputIntent(intent)
+    vi.advanceTimersByTime(500)
+
+    expect(inferInterrupt).not.toHaveBeenCalled()
+    tracker.dispose()
+    entry = undefined
+  })
+
   it.each(['opencode', 'opencode2', 'copilot'] as const)(
     'infers immediately on double Escape for %s',
     (agentType) => {
