@@ -335,6 +335,7 @@ export function claudeStructuredSessionOptionsFrom(
     session.reportedOptions.fastMode ??
     (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
   const support = claudeFastModeSupport(discovered, session.fastModeDisabledReason)
+  const permissionMode = session.options.get('permissionMode')
   const confirmed = [
     ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
@@ -346,8 +347,11 @@ export function claudeStructuredSessionOptionsFrom(
   return {
     models: wireClaudeModels(models),
     ...(support ? { fastModeSupport: support } : {}),
+    // stream-json applies setPermissionMode to a live query, so this session can always change it.
+    permissionModeSupport: { supported: true },
     current: {
       model,
+      ...(permissionMode ? { permissionMode } : {}),
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),

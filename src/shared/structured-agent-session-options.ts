@@ -55,9 +55,31 @@ function fastModeOption(): CatalogOption {
   }
 }
 
+/** Claude's own modes, minus dontAsk, which auto-denies rather than auto-approves. */
+function permissionModeOption(): CatalogOption {
+  return {
+    id: 'permissionMode',
+    label: 'Mode',
+    category: 'mode',
+    kind: {
+      type: 'select',
+      choices: [
+        { value: 'default', label: 'Manual' },
+        { value: 'acceptEdits', label: 'Accept edits' },
+        { value: 'auto', label: 'Auto' },
+        { value: 'plan', label: 'Plan' },
+        { value: 'bypassPermissions', label: 'Bypass permissions' }
+      ],
+      defaultValue: 'default'
+    },
+    apply: {}
+  }
+}
+
 function discoveredModel(
   model: AgentSessionOptionsResult['models'][number],
-  sessionSupportsFastMode: boolean
+  sessionSupportsFastMode: boolean,
+  sessionSupportsPermissionMode: boolean
 ): CatalogModel {
   const effort = effortOption(model)
   return {
@@ -67,7 +89,8 @@ function discoveredModel(
     ...(model.isDefault ? { isDefault: true } : {}),
     options: [
       ...(effort ? [effort] : []),
-      ...(sessionSupportsFastMode && model.supportsFastMode === true ? [fastModeOption()] : [])
+      ...(sessionSupportsFastMode && model.supportsFastMode === true ? [fastModeOption()] : []),
+      ...(sessionSupportsPermissionMode ? [permissionModeOption()] : [])
     ]
   }
 }
@@ -77,7 +100,11 @@ export function structuredAgentSessionOptionCatalog(
   result: AgentSessionOptionsResult
 ): AgentSessionOptionCatalog {
   const models: CatalogModel[] = result.models.map((model) =>
-    discoveredModel(model, result.fastModeSupport?.supported === true)
+    discoveredModel(
+      model,
+      result.fastModeSupport?.supported === true,
+      result.permissionModeSupport?.supported === true
+    )
   )
   if (!models.some((model) => model.id === result.current.model)) {
     models.push({
@@ -182,6 +209,9 @@ export function applyStructuredAgentSessionOptions(
     state.record,
     {
       model: result.current.model,
+      ...(result.current.permissionMode
+        ? { permissionMode: result.current.permissionMode }
+        : {}),
       ...(result.current.effort ? { effort: result.current.effort } : {}),
       ...(result.current.fastMode !== undefined ? { fastMode: result.current.fastMode } : {})
     },

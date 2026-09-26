@@ -418,9 +418,13 @@ export type AgentSessionOptionsResult = {
   models: AgentSessionModelOption[]
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport
+  /** Present only where the host can change this session's permission mode mid-session. */
+  permissionModeSupport?: { supported: boolean }
   current: {
     model: string
     effort?: string
+    /** Absent until the user dispatches one: the child never reports its own mode. */
+    permissionMode?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
     /** Provider-reported effective routing, distinct from the next-turn preference. */
