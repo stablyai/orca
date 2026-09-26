@@ -19,12 +19,14 @@
 
 type MaybeWebglRenderer = {
   renderRows?: (start: number, end: number) => void
+  _isAttached?: boolean
 }
 
 type MaybePausableRenderService = {
   _isPaused?: boolean
   _needsFullRefresh?: boolean
   _pausedResizeTask?: { flush?: () => void } | null
+  _charSizeService?: { width?: number; height?: number }
   refreshRows?: (start: number, end: number, sync?: boolean) => void
   _renderer?: { value?: MaybeWebglRenderer | null } | MaybeWebglRenderer | null
 }
@@ -36,6 +38,7 @@ type PausableRenderService = MaybePausableRenderService & {
 type TerminalWithRenderService = {
   rows?: number
   _core?: {
+    screenElement?: { isConnected?: boolean }
     _renderService?: MaybePausableRenderService
     coreService?: { decPrivateModes?: { synchronizedOutput?: boolean } }
     _coreService?: { decPrivateModes?: { synchronizedOutput?: boolean } }
@@ -52,17 +55,49 @@ type TerminalWithRenderService = {
  * without flushing lets the present below paint the new grid through the old
  * canvas/model geometry (misplaced fragments, stray bars until a user resize).
  */
-function releaseRenderPause(service: PausableRenderService): void {
-  // Why: leave the latch as if the pending full refresh was serviced — we are
-  // about to service it — so the observer's next callback doesn't queue a
-  // redundant second full repaint.
+function releaseRenderPause(service: PausableRenderService, canPaint: boolean): void {
   service._isPaused = false
-  service._needsFullRefresh = false
+  // Why: the latch is xterm's own owed full repaint, and the observer only fires on
+  // a change — so nothing re-owes it. Spending it is only right when the renderer we
+  // are about to drive can actually paint; clearing it in front of a frame the
+  // renderer drops leaves the canvas on pre-reveal pixels until a selection or
+  // resize rebuilds the model. Otherwise we accept one redundant repaint instead.
+  if (canPaint) {
+    service._needsFullRefresh = false
+  }
   try {
     service._pausedResizeTask?.flush?.()
   } catch {
     // Why: a resize that throws mid-dispose must not block the present.
   }
+}
+
+/**
+ * Whether the renderer behind this service would paint a frame driven right now.
+ *
+ * The WebGL renderer returns from `renderRows` without drawing until it is attached,
+ * and it only attaches once the screen element is connected and char metrics are
+ * measured. The DOM renderer has no such gate — it rewrites rows from the buffer —
+ * so an absent `_isAttached` means "paints".
+ */
+function canRendererPaintNow(terminal: unknown, service: PausableRenderService): boolean {
+  const renderer = getRenderer(service)
+  if (!renderer || typeof renderer._isAttached !== 'boolean') {
+    return true
+  }
+  if (renderer._isAttached) {
+    return true
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same unknown-terminal narrowing getRenderService does; every field read below is optional and guarded.
+  const core = (terminal as TerminalWithRenderService | null)?._core
+  const charSize = service._charSizeService
+  return (
+    core?.screenElement?.isConnected === true &&
+    typeof charSize?.width === 'number' &&
+    charSize.width > 0 &&
+    typeof charSize.height === 'number' &&
+    charSize.height > 0
+  )
 }
 
 function getRenderService(terminal: unknown): PausableRenderService | null {
@@ -90,11 +125,14 @@ export function forceRepaintThroughRenderPause(terminal: unknown): boolean {
     return false
   }
 
-  releaseRenderPause(service)
+  const canPaint = canRendererPaintNow(terminal, service)
+  releaseRenderPause(service, canPaint)
   try {
     service.refreshRows(0, rows - 1, true)
-    return true
+    return canPaint
   } catch {
+    // Why: no frame reached the canvas, so hand xterm's owed repaint back.
+    service._needsFullRefresh = true
     return false
   }
 }
@@ -121,14 +159,18 @@ export function requestFullViewportPresent(terminal: unknown): boolean {
     return false
   }
 
+  const canPaint = canRendererPaintNow(terminal, service)
   if (paused) {
-    releaseRenderPause(service)
+    releaseRenderPause(service, canPaint)
   }
 
   try {
     service.refreshRows(0, rows - 1, true)
-    return true
+    // Why: an unattached renderer swallows that frame, so report "not presented"
+    // and let the caller's refresh() fallback try again.
+    return canPaint
   } catch {
+    service._needsFullRefresh = true
     return false
   }
 }
@@ -178,8 +220,9 @@ export function forceFullViewportPresent(terminal: unknown): boolean {
     return false
   }
 
+  const canPaint = canRendererPaintNow(terminal, service)
   if (paused) {
-    releaseRenderPause(service)
+    releaseRenderPause(service, canPaint)
   }
 
   const renderer = getRenderer(service)
@@ -190,14 +233,16 @@ export function forceFullViewportPresent(terminal: unknown): boolean {
     // renderer.renderRows is only for DEC 2026, which swallows refreshRows.
     if (syncHeld && typeof renderer?.renderRows === 'function') {
       renderer.renderRows(0, rows - 1)
-      return true
+      return canPaint
     }
     service.refreshRows(0, rows - 1, true)
-    return true
+    return canPaint
   } catch {
-    // Why: same as forceRepaintThroughRenderPause — leave the latch cleared so
-    // the caller's terminal.refresh() fallback can still paint. Restoring
-    // _isPaused would swallow that refresh until IntersectionObserver fires.
+    // Why: leave _isPaused cleared so the caller's terminal.refresh() fallback can
+    // still paint — restoring it would swallow that refresh until the observer
+    // fires. The full-repaint latch is a different matter: nothing painted, so
+    // xterm must keep owing it.
+    service._needsFullRefresh = true
     return false
   }
 }
