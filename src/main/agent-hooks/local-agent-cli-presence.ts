@@ -11,6 +11,7 @@ import {
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import { mergePersistedWindowsPathAsync, resolvePathEnvKey } from '../pty/windows-environment-path'
 
 export type LocalCliPresenceState = 'found' | 'missing' | 'unknown'
 export type LocalCliPresenceByAgent = Partial<
@@ -157,7 +158,15 @@ export async function detectLocalManagedAgentCliPresence(
   await maybeHydrateShellPath(options)
   const platform = options.platform ?? process.platform
   const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
-  const dirs = pathEntries(options.pathEnv ?? process.env.PATH ?? '', delimiter)
+  const env = { ...process.env }
+  if (platform === 'win32' && options.pathEnv === undefined) {
+    // Newly installed CLIs can be on the registry PATH before this process inherits it.
+    await mergePersistedWindowsPathAsync(env, { forceRefresh: true })
+  }
+  const dirs = pathEntries(
+    options.pathEnv ?? env[resolvePathEnvKey(env, platform)] ?? '',
+    delimiter
+  )
   const homeDir = options.homeDir ?? homedir()
   const fileProbe = options.fileProbe ?? {
     isExecutableFile: (filePath: string) => isExecutableFile(filePath, platform)

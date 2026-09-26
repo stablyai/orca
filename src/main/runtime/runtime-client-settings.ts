@@ -147,6 +147,8 @@ export class RuntimeClientSettingsController {
       this.notifyReposChanged?.()
     }
     if (
+      // An explicit enable is also the CLI's repair operation when hooks went missing.
+      updates.agentStatusHooksEnabled === true ||
       (typeof updates.agentStatusHooksEnabled === 'boolean' &&
         before !== updates.agentStatusHooksEnabled) ||
       (updates.disabledTuiAgents !== undefined &&

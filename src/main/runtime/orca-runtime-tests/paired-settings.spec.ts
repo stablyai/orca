@@ -293,6 +293,24 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('repairs missing hooks when explicitly enabled again', async () => {
+    const settings = { ...store.getSettings(), agentStatusHooksEnabled: true }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => settings,
+      updateSettings: vi.fn()
+    })
+
+    await runtime.updateClientSettings({ agentStatusHooksEnabled: true })
+
+    expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledOnce()
+    expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({ agentStatusHooksEnabled: true }),
+      expect.objectContaining({ shouldContinue: expect.any(Function) })
+    )
+  })
+
   it('serializes paired-client hook reconciliation and reads current settings', async () => {
     let settings = {
       ...store.getSettings(),
