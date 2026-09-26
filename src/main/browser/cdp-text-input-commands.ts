@@ -18,6 +18,13 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
 
       const node = await this.resolveRef(guest, sender, element)
       const refSender = this.senderForRef(guest, node)
+      await this.scrollIntoView(refSender, node.backendDOMNodeId)
+      // Why: fill has no pointer step, so use the center lookup only as a layout-box gate.
+      await this.getElementCenter(refSender, node.backendDOMNodeId, element)
+      await this.assertElementInteractable(refSender, node.backendDOMNodeId, element, {
+        requireEnabled: true,
+        requireEditable: true
+      })
 
       await refSender('DOM.focus', { backendNodeId: node.backendDOMNodeId })
 
