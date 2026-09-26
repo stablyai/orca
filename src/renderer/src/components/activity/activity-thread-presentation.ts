@@ -123,7 +123,7 @@ export type ActivityThreadStatusId = AgentDotState
  *  interrupted predicate is spelled. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
   const paneEntry = paneActivityEntry(thread)
-  const state = threadCurrentState(thread) ?? 'done'
+  const state = threadCurrentState(thread) ?? 'unverifiable'
   const interrupted = paneEntry ? paneEntry.interrupted : thread.latestEvent?.entry.interrupted
   if (!thread.currentAgentState && state === 'done' && interrupted) {
     return 'interrupted'
@@ -141,12 +141,15 @@ function paneActivityEntry(thread: AgentPaneThread): AgentStatusEntry | null {
 function threadCurrentState(
   thread: AgentPaneThread
 ): ActivityLiveAgentState | AgentStatusState | null {
-  return (
-    thread.currentAgentState ??
-    paneActivityEntry(thread)?.state ??
-    thread.latestEvent?.state ??
-    null
-  )
+  if (thread.currentAgentState) {
+    return thread.currentAgentState
+  }
+  // A working row that freshness did not promote is expired or unconfirmed.
+  // Leave it unset so the caller reads unverifiable instead of the old completion.
+  if (thread.paneEntry?.state === 'working') {
+    return null
+  }
+  return paneActivityEntry(thread)?.state ?? thread.latestEvent?.state ?? null
 }
 
 // Interrupted rows deliberately keep the done glyph (#2569).
