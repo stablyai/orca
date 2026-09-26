@@ -17237,6 +17237,7 @@
         "tryAgainCommand": "请重新运行该命令。",
         "notDoneGoal": "目标未更改。",
         "tryAgainGoal": "请重新设置目标。",
+        "restartFailed": "智能体无法重新启动。",
         "ownerUnconfirmed": "Orca 无法确认哪个智能体进程拥有此聊天。",
         "capacity": "Orca 正在为此聊天处理过多请求。",
         "outcomeUnknown": "Orca 无法确认操作是否完成。重试前请先查看聊天。",

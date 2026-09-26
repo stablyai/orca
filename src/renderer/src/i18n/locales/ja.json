@@ -17272,6 +17272,7 @@
         "tryAgainCommand": "もう一度コマンドを実行してください。",
         "notDoneGoal": "目標は変更されませんでした。",
         "tryAgainGoal": "もう一度目標を設定してください。",
+        "restartFailed": "Agent を再起動できませんでした。",
         "ownerUnconfirmed": "Orca はこのチャットを所有する Agent プロセスを確認できませんでした。",
         "capacity": "Orca はこのチャットで処理中のリクエストが多すぎます。",
         "outcomeUnknown": "Orca は処理が完了したか確認できませんでした。もう一度試す前にチャットを確認してください。",

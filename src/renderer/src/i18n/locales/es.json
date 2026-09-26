@@ -14842,6 +14842,7 @@
         "tryAgainCommand": "Vuelva a ejecutar el comando.",
         "notDoneGoal": "El objetivo no se cambió.",
         "tryAgainGoal": "Vuelva a establecer el objetivo.",
+        "restartFailed": "El agente no pudo reiniciarse.",
         "ownerUnconfirmed": "Orca no pudo confirmar qué proceso del agente controla este chat.",
         "capacity": "Orca está procesando demasiadas solicitudes para este chat.",
         "outcomeUnknown": "Orca no pudo confirmar si se completó. Revise el chat antes de volver a intentarlo.",

@@ -19,11 +19,24 @@ const WRITES: AgentSessionWriteKind[] = [
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
 
 describe('agentSessionRefusalNotice', () => {
-  it('never shows the host diagnostic for any code the host words for itself', () => {
+  // Census of host emitters, one per code, that write for a log or carry a marker. One is enough
+  // to rule out showing the host's message for that code:
+  // - every code a planned write settles: "Operation <id> was already refused: <code>."
+  //   (structured-agent-session-replay-outcome.ts; the settlement stores no message)
+  // - operation_conflict / _expired / _invalid / _capacity: "Operation <id> was refused: <code>."
+  //   (agent-session-mutation-envelope.ts, the ledger)
+  // - operation_invalid, operation_unknown: `agent_session_rewind:<reason>` (structured-rewind-refusal.ts)
+  // - operation_unknown: "The outcome of operation <id> is unknown; it was not run again."
+  // - checkpoint_stale, conflict, identity_required, execution_owner_reconciling, unsupported: the
+  //   bare code thrown as the message (lease-release, reservation-admission, tab-table,
+  //   claim-identity, lease-transitions, reveal)
+  // - ownership_unknown: "The session attached without a provider child to write to." (holds)
+  // - item_revision_stale / already_resolved: "Item <id> has moved on." (prompt-state)
+  // - owner_restart_failed: "<agent> couldn't restart: <cause>.", where the cause is the resume's
+  //   own refusal message, including the ledger's (send-preparation, hold-resume)
+  // - journal_unreadable: no emitter on this host; an older or newer one may send it.
+  it('never shows the host message, for any code or write', () => {
     for (const code of AGENT_SESSION_WIRE_REFUSAL_CODES) {
-      if (code === 'agent_session_owner_restart_failed') {
-        continue
-      }
       for (const write of WRITES) {
         const notice = agentSessionRefusalNotice({ code, message: HOST_TEXT }, write)
         expect(notice).not.toContain('fence')
@@ -85,17 +98,18 @@ describe('agentSessionRefusalNotice', () => {
     )
   })
 
-  it("keeps the host's own words for an agent that could not restart", () => {
-    const message = "Claude couldn't restart: not logged in. Start a new chat to continue."
-    expect(
-      agentSessionRefusalNotice({ code: 'agent_session_owner_restart_failed', message }, 'send')
-    ).toBe(message)
+  it('says an agent could not restart without promising a retry will work', () => {
+    // The host words the cause into the chat's status row; some causes need a new chat.
     expect(
       agentSessionRefusalNotice(
-        { code: 'agent_session_owner_restart_failed', message: ' ' },
+        {
+          code: 'agent_session_owner_restart_failed',
+          message:
+            "Claude couldn't restart: Operation 1-a was refused: agent_session_operation_expired."
+        },
         'send'
       )
-    ).toBe('Your message was not sent. Retry to send it again.')
+    ).toBe("The agent couldn't restart. Your message was not sent.")
   })
 
   it('says only what did not happen for a code from a newer host', () => {
@@ -105,7 +119,7 @@ describe('agentSessionRefusalNotice', () => {
 })
 
 describe('parseAgentSessionWriteFailure', () => {
-  it('reads back what was saved, and keeps host words only for a failed restart', () => {
+  it('reads back what was saved, and nothing but the code', () => {
     expect(
       parseAgentSessionWriteFailure(
         JSON.parse(JSON.stringify({ kind: 'refused', code: 'agent_session_conflict' }))
@@ -115,19 +129,8 @@ describe('parseAgentSessionWriteFailure', () => {
     expect(
       parseAgentSessionWriteFailure({
         kind: 'refused',
-        code: 'agent_session_owner_restart_failed',
-        hostMessage: "Claude couldn't restart."
-      })
-    ).toEqual({
-      kind: 'refused',
-      code: 'agent_session_owner_restart_failed',
-      hostMessage: "Claude couldn't restart."
-    })
-    expect(
-      parseAgentSessionWriteFailure({
-        kind: 'refused',
         code: 'agent_session_conflict',
-        hostMessage: HOST_TEXT
+        message: HOST_TEXT
       })
     ).toEqual({ kind: 'refused', code: 'agent_session_conflict' })
   })
@@ -137,7 +140,6 @@ describe('parseAgentSessionWriteFailure', () => {
     'The agent was restarting.',
     { kind: 'refused' },
     { kind: 'refused', code: 'agent_session_from_the_future' },
-    { kind: 'refused', code: 'agent_session_owner_restart_failed', hostMessage: 3 },
     { kind: 'something-else' }
   ])('drops %j instead of guessing', (value) => {
     expect(parseAgentSessionWriteFailure(value)).toBeUndefined()

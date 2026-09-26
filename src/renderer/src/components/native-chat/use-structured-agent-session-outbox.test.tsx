@@ -531,7 +531,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     ).toBe(firstId)
   })
 
-  it('stops on a host that could not restart the agent and shows its message', async () => {
+  it('stops on a host that could not restart the agent and keeps its refusal on the message', async () => {
     const message = "Claude couldn't restart: Not logged in. Please run /login."
     mocks.call.mockResolvedValue({
       ok: false,
@@ -550,8 +550,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() =>
       expect(result.current.outbox[0]?.lastFailure).toEqual({
         kind: 'refused',
-        code: 'agent_session_owner_restart_failed',
-        hostMessage: message
+        code: 'agent_session_owner_restart_failed'
       })
     )
     expect(result.current.error).toBeNull()

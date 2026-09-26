@@ -2730,6 +2730,7 @@
         "questionChanged": "This question was already answered or has changed.",
         "rejectedInternal": "Orca could not send your message — Retry to send it again.",
         "rejectedUnreachable": "Couldn't reach the agent. Your message was not sent — Retry to send it again.",
+        "restartFailed": "The agent couldn't restart.",
         "sessionMissing": "Orca couldn't find this chat's agent session.",
         "tryAgainAnswer": "Answer it again.",
         "tryAgainCommand": "Run the command again.",

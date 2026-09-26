@@ -17471,6 +17471,7 @@
         "tryAgainCommand": "Run the command again.",
         "notDoneGoal": "The goal wasn't changed.",
         "tryAgainGoal": "Set the goal again.",
+        "restartFailed": "The agent couldn't restart.",
         "ownerUnconfirmed": "Orca couldn't confirm which agent process owns this chat.",
         "capacity": "Orca is handling too many requests for this chat.",
         "outcomeUnknown": "Orca couldn't confirm whether that went through. Check the chat before trying again.",

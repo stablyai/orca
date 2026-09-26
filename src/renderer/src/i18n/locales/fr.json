@@ -17336,6 +17336,7 @@
         "tryAgainCommand": "Exécutez de nouveau la commande.",
         "notDoneGoal": "L'objectif n'a pas été modifié.",
         "tryAgainGoal": "Définissez de nouveau l'objectif.",
+        "restartFailed": "L'agent n'a pas pu redémarrer.",
         "ownerUnconfirmed": "Orca n'a pas pu confirmer quel processus d'agent gère ce chat.",
         "capacity": "Orca traite trop de requêtes pour ce chat.",
         "outcomeUnknown": "Orca n'a pas pu confirmer si l'action a abouti. Vérifiez le chat avant de réessayer.",

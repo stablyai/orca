@@ -1,9 +1,9 @@
 // The one way a chat surface puts a write that did not happen into words.
 //
-// A refusal's `message` is written for whoever debugs the host ("Expected runtime fence 1; the
-// session is at 3."), so it is never shown. The code says what happened and the write says what
-// the person can do next; together they pick the copy. Surfaces keep the fact and choose the words
-// when they show it, so nothing saved carries copy.
+// A refusal's `message` is never shown. Every code has at least one host emitter whose message is
+// written for a log or carries a marker (the census is pinned in the test), so the code and the
+// write pick the copy, and it names a next step only where one works for every emitter. Surfaces
+// keep the fact and choose the words when they show it, so nothing saved carries copy.
 
 import {
   isAgentSessionWireRefusalCode,
@@ -42,21 +42,16 @@ export function agentSessionWriteKindForMethod(fingerprintMethod: string): Agent
   return 'command'
 }
 
-/** Why a write did not happen. The host's message is kept only for the one code the host words
- *  for people. */
+/** Why a write did not happen. */
 export type AgentSessionWriteFailure =
-  | { kind: 'refused'; code: AgentSessionWireRefusalCode; hostMessage?: string }
+  | { kind: 'refused'; code: AgentSessionWireRefusalCode }
   /** The request failed without a refusal, so nothing is known about the host's view of it. */
   | { kind: 'unreachable' }
 
 export function agentSessionRefusalFailure(
-  refusal: Pick<AgentSessionWireRefusal, 'code' | 'message'>
+  refusal: Pick<AgentSessionWireRefusal, 'code'>
 ): AgentSessionWriteFailure {
-  const hostMessage =
-    refusal.code === 'agent_session_owner_restart_failed' ? refusal.message.trim() : ''
-  return hostMessage
-    ? { kind: 'refused', code: refusal.code, hostMessage }
-    : { kind: 'refused', code: refusal.code }
+  return { kind: 'refused', code: refusal.code }
 }
 
 /** A saved failure, or undefined when it is not one this build wrote. */
@@ -69,16 +64,8 @@ export function parseAgentSessionWriteFailure(
   if (value.kind === 'unreachable') {
     return { kind: 'unreachable' }
   }
-  if (
-    value.kind !== 'refused' ||
-    !('code' in value) ||
-    !isAgentSessionWireRefusalCode(value.code)
-  ) {
-    return undefined
-  }
-  const hostMessage = 'hostMessage' in value ? value.hostMessage : ''
-  return typeof hostMessage === 'string'
-    ? agentSessionRefusalFailure({ code: value.code, message: hostMessage })
+  return value.kind === 'refused' && 'code' in value && isAgentSessionWireRefusalCode(value.code)
+    ? { kind: 'refused', code: value.code }
     : undefined
 }
 
@@ -98,6 +85,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   tryAgainCommand: 'Run the command again.',
   notDoneGoal: "The goal wasn't changed.",
   tryAgainGoal: 'Set the goal again.',
+  restartFailed: "The agent couldn't restart.",
   ownerUnconfirmed: "Orca couldn't confirm which agent process owns this chat.",
   capacity: 'Orca is handling too many requests for this chat.',
   outcomeUnknown:
@@ -114,7 +102,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
 } as const
 
 export type AgentSessionWriteNoticeSentence = keyof typeof AGENT_SESSION_WRITE_NOTICE_COPY
-/** A notice as whole sentences, each translated on its own; `text` is shown in its author's words. */
+/** A notice as whole sentences, each translated on its own; `text` is a provider's own words. */
 export type AgentSessionWriteNoticePart = AgentSessionWriteNoticeSentence | { text: string }
 
 const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> = {
@@ -147,9 +135,10 @@ export function agentSessionWriteNoticeParts(
     return ['unreachable', tryAgain]
   }
   switch (failure.code) {
-    // The one refusal the host words for people, next step included: the agent's start failure.
+    // The cause is in the chat's own status row. Some restarts can be retried and some need a new
+    // chat, and the code does not say which.
     case 'agent_session_owner_restart_failed':
-      return failure.hostMessage ? [{ text: failure.hostMessage }] : [notDone, tryAgain]
+      return ['restartFailed', notDone]
     case 'agent_session_checkpoint_stale':
     case 'agent_session_conflict':
     case 'agent_session_ownership_unknown':
@@ -188,7 +177,8 @@ export function agentSessionWriteNoticeEnglish(
     .join(' ')
 }
 
-/** English, for a surface without translations. */
+/** English, for a surface without translations. Takes the refusal as the wire gives it; its
+ *  message is not read. */
 export function agentSessionRefusalNotice(
   refusal: Pick<AgentSessionWireRefusal, 'code' | 'message'>,
   write: AgentSessionWriteKind

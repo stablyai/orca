@@ -35,6 +35,8 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
   notDoneGoal: () => translate('components.native-chat.writeNotice.notDoneGoal', COPY.notDoneGoal),
   tryAgainGoal: () =>
     translate('components.native-chat.writeNotice.tryAgainGoal', COPY.tryAgainGoal),
+  restartFailed: () =>
+    translate('components.native-chat.writeNotice.restartFailed', COPY.restartFailed),
   ownerUnconfirmed: () =>
     translate('components.native-chat.writeNotice.ownerUnconfirmed', COPY.ownerUnconfirmed),
   capacity: () => translate('components.native-chat.writeNotice.capacity', COPY.capacity),

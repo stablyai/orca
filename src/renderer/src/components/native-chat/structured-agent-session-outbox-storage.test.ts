@@ -115,11 +115,6 @@ describe("a saved message's last failure", () => {
 
   it.each<StructuredAgentSessionAttemptFailure>([
     { kind: 'refused', code: 'agent_session_checkpoint_stale' },
-    {
-      kind: 'refused',
-      code: 'agent_session_owner_restart_failed',
-      hostMessage: 'Claude could not restart.'
-    },
     { kind: 'rejected', reason: 'Claude messages support at most 20 images' },
     { kind: 'rejected', reason: null },
     { kind: 'unreachable' }
