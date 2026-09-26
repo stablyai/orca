@@ -78,6 +78,9 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected headlessGraphFallbackAvailable = false
 
+  // Why: unlike headlessGraphFallbackAvailable, this never clears on promotion -- a serve runtime keeps headless as its fallback for the runtime's lifetime.
+  protected headlessServeRuntime = false
+
   protected pendingHeadlessPromotionWindowId: number | null = null
 
   protected rendererGeneration: string | null = null
