@@ -8,6 +8,7 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session-jour
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import type * as WaitCap from '../orchestration/session-caller-wait-cap'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
   ADDRESS_X,
   createSessionCallerHarness,
@@ -206,6 +207,19 @@ describe('dispatch --inject to a chat', () => {
     h.runtime.onStructuredSessionStatusForMail({ sessionId: SESSION_Z, status: 'idle' })
     await vi.waitFor(() => expect(turns).toEqual([{ sessionId: SESSION_Z, text: preamble }]))
     expect(h.db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
+  })
+
+  it("re-derives a preamble still owed after a restart, at the chat's next idle edge", async () => {
+    busy.add(SESSION_Z)
+    const { preamble } = await injectToChat()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    // A restarted runtime over the same database: nothing parked survived.
+    const restarted = new OrcaRuntimeService()
+    restarted.setOrchestrationDb(h.db)
+
+    busy.delete(SESSION_Z)
+    restarted.onStructuredSessionStatusForMail({ sessionId: SESSION_Z, status: 'idle' })
+    await vi.waitFor(() => expect(turns).toEqual([{ sessionId: SESSION_Z, text: preamble }]))
   })
 
   it('never delivers the preamble of a Dispatch stopped before the chat could take it', async () => {
