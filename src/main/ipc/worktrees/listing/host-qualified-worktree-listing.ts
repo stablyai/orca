@@ -1,3 +1,7 @@
+import {
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost
+} from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import { PROVIDER_REQUEST_ID_MAX_UTF8_BYTES } from '../../../../shared/detected-worktree-provider-contract'
 import type {
@@ -63,9 +67,10 @@ export async function listHostQualifiedDetectedWorktrees(
   if (!repo) {
     return rejected('ambiguous-owner')
   }
+  const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
   if (
-    (parsedHost.kind === 'local' && repo.connectionId) ||
-    (parsedHost.kind === 'ssh' && repo.connectionId !== parsedHost.targetId)
+    (parsedHost.kind === 'local' && connectionId) ||
+    (parsedHost.kind === 'ssh' && connectionId !== parsedHost.targetId)
   ) {
     return rejected('rejected')
   }
@@ -75,8 +80,8 @@ export async function listHostQualifiedDetectedWorktrees(
       return false
     }
     if (
-      (parsedHost.kind === 'local' && repo.connectionId) ||
-      (parsedHost.kind === 'ssh' && repo.connectionId !== parsedHost.targetId)
+      (parsedHost.kind === 'local' && connectionId) ||
+      (parsedHost.kind === 'ssh' && connectionId !== parsedHost.targetId)
     ) {
       return false
     }

@@ -11,6 +11,96 @@
   },
   "gates": [
     {
+      "id": "worktree-listing.execution-host-ownership",
+      "title": "Worktree listings keep canonical SSH ownership and mutation fencing",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "worktree-listing",
+      "layer": "main-unit",
+      "surfaces": [
+        "detected worktree listing",
+        "known worktree catalog",
+        "worktree list and listAll"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "ssh",
+        "wsl",
+        "remote-runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [],
+      "coverageNotes": "Actual handlers, hydration, ownership, scan cache and provider authority with mocked providers/Git/store/IPC. Independent controls use real lineage pruning and an in-memory map. No physical SSH or native Git.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/ipc/worktrees/listing/register-worktree-catalog-handlers.ts"
+      ],
+      "invariant": "Canonical SSH listings use the owning provider and cannot register remote roots locally or reuse local cache authority. A listing overtaken by a mutation or root revision cannot prune newer lineage.",
+      "oracle": "Both SSH owner spellings reach five read forms without local Git/root registration; disconnection and authority rotation invalidate detected answers. Both catalog channels suppress side effects after mutation/root revision. Two direct canonical scans require two provider listings instead of one cached listing.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktrees-canonical-ssh-listing.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ipc/worktrees-canonical-ssh-listing.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/worktrees-canonical-ssh-listing.test.ts",
+          "assertions": [
+            "keeps %s on the direct SSH boundary",
+            "reports disconnection without replaying an authoritative local-cache answer",
+            "preserves lineage when %s is overtaken by a %s"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktrees-canonical-ssh-listing.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.884,
+          "summary": "26 permanent cases pass on isolated current main. Separate independent run40pass;8current-main related suites61pass. Author64scoped pass on shared checkout. Original permanent13fail/13controls. Initial candidate lineage regression repaired and revalidated."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "Focused mocked-provider unit suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local author/independent/current-main validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Original permanent13fail13controls; repaired26pass. Initial candidate lost actual lineage in2independent races; repaired40pass includes these controls."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No added polling or concurrency; listAll remains bounded at8. Canonical SSH roots avoid local cache/registration. Trade-off:2connected direct scans use2provider listings instead of1cached result. No CPU/latency/heap improvement claim."
+      },
+      "knownGaps": [
+        "CI soak pending.",
+        "Local and daemon PTY, terminal output and mobile wire are unaffected.",
+        "Native Linux/Windows, live SSH/WSL and paired runtime-host integrations not executed. Generic runtime rows retain refusal.",
+        "Catalog list/listAll may still return a superseded plain-array snapshot; this gate prevents stale lineage side effects, not all response staleness.",
+        "Canonical forgetRemovedForExecutionHost remains outside scope; no new destructive authorization.",
+        "Filesystem classifier and registry defects are separate repairs; this gate only prevents listing-induced local-root admission.",
+        "Canonical SSH bypasses the improper5second local cache, increasing provider calls. No replacement cache or physical cancellation claim."
+      ],
+      "promotionCriteria": [
+        "Retain exact-owner, no-local-I/O, cache-admission and overtaken-lineage controls; collect CI soak and real provider coverage."
+      ],
+      "demotionRule": "Keep experimental until soak; investigate host/lineage regressions without weakening ownership assertions or adding blind retries."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",
