@@ -537,6 +537,15 @@ export async function closeApp(app, timeoutMs = 10_000, { allowForceKill = true 
             })) ?? []
         }
       }
+      // A surviving daemon can keep the launcher's pipes open after both app processes exit.
+      if (
+        closeStatus === 'pending' &&
+        evidence.main.state === 'exited' &&
+        evidence.launcher.state === 'exited'
+      ) {
+        console.log(`[win-update-e2e] close-verified-by-pids: ${JSON.stringify(evidence)}`)
+        return
+      }
       console.error(`[win-update-e2e] strict-close-failed: ${JSON.stringify(evidence)}`)
       throw error
     }

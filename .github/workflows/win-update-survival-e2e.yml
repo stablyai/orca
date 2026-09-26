@@ -62,18 +62,19 @@ jobs:
         with:
           install: false
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       # Why: cache the built installer keyed on the inputs that affect it, so a
       # harness-only edit skips the ~20 min electron-builder build. The daemon
       # relocation code lives under src/, so changing it correctly rebuilds.
+      # Hash before installation creates native build artifacts under native/.
       - name: Cache branch installer
         id: cache-installer
         uses: actions/cache/restore@v4
         with:
           path: dist/orca-windows-setup.exe
-          key: branch-installer-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/win32/**', 'package.json', 'pnpm-lock.yaml') }}
+          key: branch-installer-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/**', 'mobile/**', 'patches/**', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules. Gated with the

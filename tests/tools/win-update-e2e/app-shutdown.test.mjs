@@ -13,6 +13,7 @@ vi.mock('node:child_process', async (importOriginal) => ({
 afterEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()
+  vi.mocked(isPidAlive).mockReturnValue(true)
 })
 
 describe('update-survival shutdown', () => {
@@ -60,4 +61,50 @@ describe('update-survival shutdown', () => {
     expect(isPidAlive).toHaveBeenCalledWith(123)
     expect(execFileSync).not.toHaveBeenCalled()
   })
+
+  it('accepts verified main and launcher exit while inherited pipes keep close pending', async () => {
+    vi.useFakeTimers()
+    vi.mocked(isPidAlive).mockReturnValue(false)
+    const app = {
+      evaluate: vi.fn().mockResolvedValue(123),
+      process: () => ({ pid: 124, exitCode: 0, stdio: [{ readableEnded: false }] }),
+      close: vi.fn(() => new Promise(() => {}))
+    }
+    const closed = expect(closeApp(app, 45_000, { allowForceKill: false })).resolves.toBeUndefined()
+
+    await vi.advanceTimersByTimeAsync(45_000)
+    await closed
+    expect(isPidAlive).toHaveBeenCalledWith(123)
+    expect(isPidAlive).toHaveBeenCalledWith(124)
+    expect(execFileSync).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each(['live', 'unverifiable'])(
+    'rejects a %s launcher even when the main exited',
+    async (state) => {
+      vi.useFakeTimers()
+      vi.mocked(isPidAlive).mockImplementation((pid) => {
+        if (pid === 123) {
+          return false
+        }
+        if (state === 'unverifiable') {
+          throw new Error('process query failed')
+        }
+        return true
+      })
+      const app = {
+        evaluate: vi.fn().mockResolvedValue(123),
+        process: () => ({ pid: 124, stdio: [] }),
+        close: vi.fn(() => new Promise(() => {}))
+      }
+      const closed = expect(closeApp(app, 45_000, { allowForceKill: false })).rejects.toThrow(
+        'close timeout'
+      )
+
+      await vi.advanceTimersByTimeAsync(45_000)
+      await closed
+      expect(execFileSync).not.toHaveBeenCalled()
+    }
+  )
 })
