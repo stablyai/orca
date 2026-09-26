@@ -113,6 +113,7 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   protected async closeTerminalSurface(
     worktreeId: string,
     target: TerminalSurfaceCloseTarget,
+    // closedByLayoutOwner goes away with D1, once main owns the terminal layout.
     options: { allowMissing?: boolean; force?: boolean; closedByLayoutOwner?: boolean } = {}
   ): Promise<string[]> {
     const store = this.store
