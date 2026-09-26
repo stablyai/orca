@@ -5,7 +5,7 @@ import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-instal
 import { isAppImageExtractedLauncherPath } from './appimage-extracted-root'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from './cli-install-constants'
 import { buildWindowsForwarder, extractManagedUnixLauncherTarget } from './cli-dev-launcher'
-import { isMissingError } from './cli-install-errors'
+import { isMissingError, isPermissionError } from './cli-install-errors'
 import { CliInstallLocation } from './cli-install-location'
 import { isPathInsideOrEqual, samePathEntry } from './cli-install-path-format'
 import { extractLegacyAppImageCliWrapperTarget } from './legacy-appimage-cli-wrapper'
@@ -20,9 +20,12 @@ export class CliCommandInspection extends CliInstallLocation {
     commandPath: string,
     launcherPath: string
   ): Promise<CliInstallStatus> {
+    // Why tracked: the catch below must only recover a readlink of a confirmed symlink.
+    let confirmedSymlink = false
     try {
       const stats = await lstat(commandPath)
-      if (!stats.isSymbolicLink()) {
+      confirmedSymlink = stats.isSymbolicLink()
+      if (!confirmedSymlink) {
         if (stats.isFile()) {
           const currentContent = await readFile(commandPath, 'utf8')
           const managedTarget =
@@ -83,6 +86,19 @@ export class CliCommandInspection extends CliInstallLocation {
           state: 'not_installed',
           currentTarget: null,
           detail: `Register ${commandPath} to use Orca from the terminal.`
+        })
+      }
+      // Why not a throw: lstat succeeded, so the entry's own mode denied the read — macOS enforces a
+      // symlink's mode on readlink, and an older shim is 0700. Stale lets Settings recover.
+      if (confirmedSymlink && isPermissionError(error)) {
+        return this.buildStatus({
+          commandPath,
+          launcherPath,
+          installMethod: 'symlink',
+          supported: true,
+          state: 'stale',
+          currentTarget: null,
+          detail: `${commandPath} exists but cannot be read. Re-register to replace it.`
         })
       }
       throw error
