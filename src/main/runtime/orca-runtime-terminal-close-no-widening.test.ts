@@ -26,6 +26,7 @@ type Condition =
   | 'pinned'
   | 'no-saved-layout'
   | 'no-live-pty'
+  | 'kill-fails'
 
 /** The desktop renderer's split tab as it publishes it, with the given PTY bindings. */
 function syncRendererSplit(
@@ -105,6 +106,9 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
   if (entry === 'cli-pty') {
     // Graph without the leaf: the handle resolves through the PTY, as for a runtime-owned pane.
     harness.syncFixtureTabWithoutLeaf()
+  }
+  if (condition === 'kill-fails') {
+    harness.kill.mockReturnValue(false)
   }
   if (condition === 'stop-unconfirmed') {
     harness.setVerifiedStopResult(false)
@@ -189,8 +193,10 @@ const rows: [Entry, Condition][] = [
   ['phone-desktop', 'no-saved-layout'],
   // A pane with no live process record once sent a tab-level close notice.
   ['phone-desktop', 'no-live-pty'],
+  ['phone-desktop', 'kill-fails'],
   // A host with no desktop window once closed the whole tab for one pane.
   ['phone-headless', 'normal'],
+  ['phone-headless', 'kill-fails'],
   ['phone-headless', 'leaf-already-retired'],
   ['phone-headless', 'pinned'],
   ['phone-headless', 'no-saved-layout']

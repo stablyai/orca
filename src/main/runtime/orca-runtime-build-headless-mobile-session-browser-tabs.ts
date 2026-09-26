@@ -174,11 +174,11 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
   ): void {
+    // Why best-effort, as for a tab: a failed kill must not keep a pane the user closed.
     const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
-    if (pty && this.ptyController?.kill(pty.ptyId) !== true) {
-      throw new Error('terminal_close_failed')
-    }
-    if (!pty && !this.tabs.has(tab.parentTabId) && tab.ptyId && parseAppSshPtyId(tab.ptyId)) {
+    if (pty) {
+      this.ptyController?.kill(pty.ptyId)
+    } else if (!this.tabs.has(tab.parentTabId) && tab.ptyId && parseAppSshPtyId(tab.ptyId)) {
       // Why: with no renderer to own the kill, a dormant SSH pane's durable id is its stop order.
       this.ptyController?.kill(tab.ptyId)
     }
