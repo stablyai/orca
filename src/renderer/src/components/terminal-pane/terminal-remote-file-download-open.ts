@@ -10,7 +10,8 @@ import { downloadRuntimeFile, type RuntimeFileOperationArgs } from '@/runtime/ru
  */
 export async function downloadAndOpenRemoteTerminalFile(
   fileContext: RuntimeFileOperationArgs,
-  filePath: string
+  filePath: string,
+  isRequestCurrent?: () => boolean
 ): Promise<void> {
   const name = basename(filePath) || filePath
   try {
@@ -19,6 +20,10 @@ export async function downloadAndOpenRemoteTerminalFile(
       : await downloadRuntimeFile(fileContext, filePath, name)
     // Why: cancelling the native save dialog is a deliberate no-op, not a failure.
     if (result.canceled) {
+      return
+    }
+    // Why: a newer link click during the download supersedes this one.
+    if (isRequestCurrent && !isRequestCurrent()) {
       return
     }
     await window.api.shell.openFilePath(result.destinationPath)
