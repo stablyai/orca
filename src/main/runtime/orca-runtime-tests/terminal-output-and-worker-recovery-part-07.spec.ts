@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
 import {
@@ -108,7 +109,9 @@ describe('OrcaRuntimeService', () => {
       terminalTopologyRevisionByRepoId: { [TEST_REPO_ID]: 7 }
     }
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -148,7 +151,9 @@ describe('OrcaRuntimeService', () => {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     })
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     const writes: [string, string][] = []
     runtime.setPtyController({
       write: (ptyId: string, data: string) => {
@@ -190,7 +195,9 @@ describe('OrcaRuntimeService', () => {
         ...getDefaultWorkspaceSession(),
         tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
       })
-      return new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+      return new OrcaRuntimeService(
+        withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+      )
     }
     const ownerMismatch = makeRuntime()
     ownerMismatch.registerPty('pty-wrong-owner', TEST_WORKTREE_ID, 'ssh-other-host')
@@ -282,25 +289,27 @@ describe('OrcaRuntimeService', () => {
           ...getDefaultWorkspaceSession(),
           tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
         })
-        const wsl = new OrcaRuntimeService({
-          ...runtimeStore,
-          flushOrThrow: vi.fn(),
-          getProjects: () => [
-            {
-              id: 'project-wsl',
-              displayName: 'WSL',
-              badgeColor: 'blue',
-              sourceRepoIds: [TEST_REPO_ID],
-              localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-              createdAt: 1,
-              updatedAt: 1
-            }
-          ],
-          getSettings: () => ({
-            ...store.getSettings(),
-            localWindowsRuntimeDefault: { kind: 'windows-host' }
+        const wsl = new OrcaRuntimeService(
+          withDurableRuntimeStore({
+            ...runtimeStore,
+            flushOrThrow: vi.fn(),
+            getProjects: () => [
+              {
+                id: 'project-wsl',
+                displayName: 'WSL',
+                badgeColor: 'blue',
+                sourceRepoIds: [TEST_REPO_ID],
+                localWindowsRuntimePreference: { kind: 'wsl' as const, distro: 'Ubuntu' },
+                createdAt: 1,
+                updatedAt: 1
+              }
+            ],
+            getSettings: () => ({
+              ...store.getSettings(),
+              localWindowsRuntimeDefault: { kind: 'windows-host' as const }
+            })
           })
-        } as never)
+        )
         wsl.registerPty('pty-wsl', TEST_WORKTREE_ID, null, undefined, true)
         wsl.onPtySpawned('pty-wsl', 'inc-wsl', { awaitsRegistration: false })
         wsl.setPtyController({
@@ -356,7 +365,9 @@ describe('OrcaRuntimeService', () => {
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
     }
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow: vi.fn() } as never)
+    const runtime = new OrcaRuntimeService(
+      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() })
+    )
     const processes = [
       ['pty-left', 'inc-left', 'term_left'],
       ['pty-right', 'inc-right', 'term_right'],

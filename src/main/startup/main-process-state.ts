@@ -45,6 +45,25 @@ import {
 } from '../crash-reporting/gpu-crash-fallback-decision'
 import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
 import { createWebContentsTimedFlag } from './web-contents-timed-flag'
+import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
+import type { ProfileStateStoreAuthorityMode } from '../persistence/profile-state/profile-state-store-factory'
+import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+
+export type ProfileStateStartupMetadata = {
+  backend: 'json' | 'sqlite'
+  classification: ProfileStateStorageClassification
+  authorityMode: ProfileStateStoreAuthorityMode
+  runtime: 'desktop' | 'orcad'
+  migrated: boolean
+}
+
+function createInitialProfileStateStartup(): ProfileStateStartupMetadata | null {
+  return null
+}
+
+function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | undefined {
+  return undefined
+}
 
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 export const mainProcessState = {
@@ -52,6 +71,8 @@ export const mainProcessState = {
   /** Whether a manual app.quit() (Cmd+Q) is in progress; lets the close handler skip the running-process confirmation and go straight to close. */
   isQuitting: false,
   store: null as Store | null,
+  profileStateStartup: createInitialProfileStateStartup(),
+  profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,
   claudeUsage: null as ClaudeUsageStore | null,
   codexUsage: null as CodexUsageStore | null,

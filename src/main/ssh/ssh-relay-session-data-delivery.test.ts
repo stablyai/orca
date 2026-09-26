@@ -344,7 +344,8 @@ describe('SshRelaySession data delivery', () => {
       })
     )
     session.dispose()
-    expect(mockStore.removeSshPtyConsumerRecovery).toHaveBeenCalledWith(targetId)
+    const removeRecovery = mockStore.removeSshPtyConsumerRecovery
+    expect(removeRecovery).toHaveBeenCalledWith(targetId, 'persisted-client')
   })
 
   it('voids checkpoints for a fresh claim without a second owner request', async () => {

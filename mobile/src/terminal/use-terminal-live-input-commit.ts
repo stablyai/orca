@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
+import { reportedLiveInputComposing } from '../platform/live-input-composing-range'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
@@ -25,16 +26,6 @@ type TerminalLiveInputChangeEvent = {
     readonly text: string
     readonly isComposing?: boolean
   }
-}
-
-/** Android keyboards compose every Latin word; report no range, as native Android does. */
-function reportedLiveInputComposing(
-  nativeEvent: TerminalLiveInputChangeEvent['nativeEvent']
-): boolean | undefined {
-  if (globalThis.navigator?.userAgent?.includes('Android')) {
-    return undefined
-  }
-  return nativeEvent.isComposing
 }
 
 type TerminalLiveInputCommitOptions<TTabType extends string> = {
@@ -158,7 +149,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       void applyLiveInputMirror(
         activeHandle,
         normalizeTerminalTextInput(nativeEvent.text),
-        reportedLiveInputComposing(nativeEvent)
+        reportedLiveInputComposing(nativeEvent.isComposing)
       )
     },
     [

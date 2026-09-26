@@ -168,9 +168,10 @@ describe('AgentStatusStore applied in place', () => {
         for (const parent of parents) {
           expect(store.getChildren(parent)).toEqual(oracle.getChildren(parent))
         }
-        for (const id of CHILD_IDS) {
-          expect(store.getAliasesForChild(id)).toEqual(oracle.getAliasesForChild(id))
-        }
+        // Keep every child-id read in CHILD_IDS order while comparing one aggregate.
+        const aliasesByChildInIdOrder = CHILD_IDS.map((id) => store.getAliasesForChild(id))
+        const oracleAliasesByChildInIdOrder = CHILD_IDS.map((id) => oracle.getAliasesForChild(id))
+        expect(aliasesByChildInIdOrder).toEqual(oracleAliasesByChildInIdOrder)
         mostAliases = Math.max(mostAliases, oracle.state().aliases.size)
         const probe = mutation.aliases ?? []
         expect(store.resolveChildAliases(probe)).toEqual(oracle.resolveChildAliases(probe))
