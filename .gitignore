@@ -116,6 +116,7 @@ docs/**
 !docs/audits/crashpad-read-limit/source-hashes.json
 !docs/agent-skill-sharing-implementation-checklist.md
 !docs/mobile-terminal-shortcut-bar.md
+!docs/local-multi-host-test-modes.md
 !docs/reference/
 !docs/reference/agent-pty-transcript-capture.md
 !docs/reference/agent-session-search-query-tuning.md
