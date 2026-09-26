@@ -47,6 +47,7 @@ import { buildQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import { resolveLaunchClaudeAccountId } from '@/lib/claude-launch-account'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -126,6 +127,9 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
         resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
 
+      // The composer's account prompt sets this in a later change.
+      const composerClaudeAccountId: string | undefined = undefined
+
       const {
         startupPlan,
         backendStartup,
@@ -139,7 +143,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         platform: selectedRepoAgentLaunchPlatform,
         shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote,
-        telemetrySource
+        telemetrySource,
+        claudeAccountId: resolveLaunchClaudeAccountId(selectedRepo, composerClaudeAccountId)
       })
 
       const startupPolicySettlement = await settleComposerSubmit(
@@ -208,7 +213,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
             },
             prompt: quickDraftPrompt ?? quickPrompt,
             promptDelivery,
-            initialSessionOptions: startupPlan?.sessionOptions
+            initialSessionOptions: startupPlan?.sessionOptions,
+            claudeAccountId: composerClaudeAccountId
           }).route
         : 'terminal-tui'
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'

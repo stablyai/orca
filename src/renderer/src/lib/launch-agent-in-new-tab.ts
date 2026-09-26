@@ -28,6 +28,11 @@ import { launchAgentInStructuredNewTab } from '@/lib/launch-agent-in-new-tab-str
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import {
+  findLaunchRepo,
+  resolveLaunchClaudeAccountId,
+  withClaudeLaunchAccount
+} from '@/lib/claude-launch-account'
+import {
   planAgentSessionLaunch,
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session-launch-plan'
@@ -65,6 +70,8 @@ export type LaunchAgentInNewTabArgs = {
    * activation.
    */
   activate?: boolean
+  /** A one-time Claude account choice; the project's saved account applies when omitted. */
+  claudeAccountId?: string
   /** Keeps a preflighted route authoritative across workspace creation. */
   agentSessionLaunchPlan?: AgentSessionLaunchPlan
   /** Lets a workspace reveal itself before the selected surface opens. */
@@ -122,7 +129,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     onPromptDeliveryUnconfirmed,
     agentSessionLaunchPlan,
     beforeSurfaceOpen,
-    activate
+    activate,
+    claudeAccountId
   } = args
   const store = useAppStore.getState()
   const { worktreeSshConnectionId, resolvedLaunchPlatform, isRemote, queuedShell } =
@@ -214,7 +222,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       promptDelivery: viewModePromptDelivery,
       tuiCustomization: { cwd: initialCwd },
       initialSessionOptions: startupPlan.sessionOptions,
-      onPromptDelivered
+      onPromptDelivered,
+      ...(claudeAccountId ? { claudeAccountId } : {})
     })
   if (plan?.route === 'structured-native-chat') {
     const structured = launchAgentInStructuredNewTab({
@@ -264,7 +273,13 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
-    launchConfig: startupPlan.launchConfig,
+    launchConfig:
+      agent === 'claude'
+        ? withClaudeLaunchAccount(
+            startupPlan.launchConfig,
+            resolveLaunchClaudeAccountId(findLaunchRepo(store, { worktreeId }), claudeAccountId)
+          )
+        : startupPlan.launchConfig,
     launchAgent: agent,
     ...(agentArgs !== undefined ? { agentArgsOverride: agentArgs } : {}),
     ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),

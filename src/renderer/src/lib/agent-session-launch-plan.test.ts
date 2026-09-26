@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentLaunchRouteStore } from './agent-launch-route-input'
+import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchRouteInput: vi.fn(),
@@ -157,6 +158,48 @@ describe('planAgentSessionLaunch', () => {
 
     await expect(plan.launch(hooks)).rejects.toThrow(/workspace/)
     expect(mocks.beginStructuredAgentLaunchSettlement).not.toHaveBeenCalled()
+  })
+})
+
+describe('planAgentSessionLaunch with a pinned Claude account', () => {
+  const pinnedStoreFixture = {
+    settings: {},
+    repos: [{ id: 'repo-1', agentAccounts: { claude: { mode: 'account', accountId: 'acct-1' } } }]
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the planner reads only settings and repos off the store, and routing inputs are mocked.
+  const pinnedStore = pinnedStoreFixture as unknown as AgentLaunchRouteStore
+  const workspace = { kind: 'git-worktree' as const, worktreeId: 'repo-1::/repo/wt' }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.buildAgentLaunchRouteInput.mockReturnValue(ROUTE_INPUT)
+    mocks.resolveAgentLaunchRoute.mockReturnValue('structured-native-chat')
+  })
+
+  it("downgrades Claude to the terminal on the project's saved account or an explicit one", () => {
+    expect(planAgentSessionLaunch(pinnedStore, { agent: 'claude', workspace }).route).toBe(
+      'terminal-tui'
+    )
+    expect(
+      planAgentSessionLaunch(store, {
+        agent: 'claude',
+        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
+        claudeAccountId: 'acct-2'
+      }).route
+    ).toBe('terminal-tui')
+  })
+
+  it('keeps the structured route for the active-account choice and for other agents', () => {
+    expect(
+      planAgentSessionLaunch(pinnedStore, {
+        agent: 'claude',
+        workspace,
+        claudeAccountId: ACTIVE_CLAUDE_ACCOUNT
+      }).route
+    ).toBe('structured-native-chat')
+    expect(planAgentSessionLaunch(pinnedStore, { agent: 'codex', workspace }).route).toBe(
+      'structured-native-chat'
+    )
   })
 })
 
