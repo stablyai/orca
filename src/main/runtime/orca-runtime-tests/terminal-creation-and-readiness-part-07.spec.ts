@@ -6,6 +6,7 @@ import {
   resolveAgentPromptSubmitDelayForAgent
 } from '../../../shared/agent-prompt-injection'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { ORCA_DISPATCH_PROMPT_LEAD_LINE } from '../../../shared/orca-dispatch-status-prompt'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { acknowledgeAgentPromptSubmit } from '../orca-runtime-test-mocks.spec'
@@ -504,6 +505,46 @@ describe('OrcaRuntimeService', () => {
         bytesWritten: Buffer.byteLength(`${pasted}\r`, 'utf8')
       })
       expect(writes).toEqual([pasted, '\r'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    ['claude', true],
+    ['an unknown agent', true],
+    ['codex', false]
+  ] as const)('types the lead line for %s: %s', async (agent, typesLead) => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(
+        `path:${TEST_WORKTREE_PATH}`,
+        agent === 'an unknown agent' ? undefined : { launchAgent: agent }
+      )
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'the brief', {
+        leadLine: ORCA_DISPATCH_PROMPT_LEAD_LINE
+      })
+      await vi.runAllTimersAsync()
+      await sendPromise
+
+      const paste = buildAgentPromptPasteBytes('the brief')
+      expect(writes).toEqual([
+        typesLead ? `${ORCA_DISPATCH_PROMPT_LEAD_LINE} ${paste}` : paste,
+        '\r'
+      ])
     } finally {
       vi.useRealTimers()
     }

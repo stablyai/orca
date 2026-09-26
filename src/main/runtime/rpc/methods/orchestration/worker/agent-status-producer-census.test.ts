@@ -150,11 +150,6 @@ const CENSUS: readonly CensusRow[] = [
     role: 'prompt-submission serialization, matched on pane key'
   },
   {
-    path: 'main/runtime/orca-runtime-resolve-recovered-structured-tui-transcript.ts',
-    kind: 'consumes',
-    role: 'recovered transcript resolution from provider-session rows, matched on pane key'
-  },
-  {
     path: 'main/runtime/orca-runtime-prune-mobile-session-tab-group-layout.ts',
     kind: 'consumes',
     role: 'mobile tab-group pruning and its live agent row, plus the pane identity accessors'

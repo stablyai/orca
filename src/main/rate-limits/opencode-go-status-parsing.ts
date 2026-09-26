@@ -55,6 +55,51 @@ function meterToWindow(meter: unknown, windowMinutes: number): RateLimitWindow |
   }
 }
 
+// `GET /zen/go/v1/usage` reports each window as
+// `{ status: "ok" | "rate-limited", percent: 0-100, resetsAt: <ISO> }`
+// (console `routes/zen/go/v1/usage.ts` + `Subscription.analyze*Usage`).
+function percentMeterToWindow(meter: unknown, windowMinutes: number): RateLimitWindow | null {
+  if (!isRecord(meter) || typeof meter.percent !== 'number' || !Number.isFinite(meter.percent)) {
+    return null
+  }
+  return {
+    usedPercent: Math.min(100, Math.max(0, meter.percent)),
+    windowMinutes,
+    resetsAt: parseResetsAt(meter.resetsAt),
+    resetDescription: null
+  }
+}
+
+/**
+ * Parse the OpenCode Go usage API body into Orca's usage windows.
+ * @param text - Raw response body from `GET /zen/go/v1/usage`.
+ * @returns The mapped windows, or null when the body is not a usage payload.
+ */
+export function parseOpenCodeGoUsageApiPayload(text: string): OpenCodeGoUsageWindows | null {
+  if (!text || text.length > MAX_STATUS_PAYLOAD_CHARS) {
+    return null
+  }
+  let payload: unknown
+  try {
+    payload = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (!isRecord(payload) || !isRecord(payload.usage)) {
+    return null
+  }
+  const session = percentMeterToWindow(payload.usage.rolling, SESSION_WINDOW_MINUTES)
+  const weekly = percentMeterToWindow(payload.usage.weekly, WEEKLY_WINDOW_MINUTES)
+  if (!session || !weekly) {
+    return null
+  }
+  return {
+    session,
+    weekly,
+    monthly: percentMeterToWindow(payload.usage.monthly, MONTHLY_WINDOW_MINUTES)
+  }
+}
+
 export function parseOpenCodeGoStatusPayload(text: string): OpenCodeGoUsageWindows | null {
   if (!text || text.length > MAX_STATUS_PAYLOAD_CHARS) {
     return null

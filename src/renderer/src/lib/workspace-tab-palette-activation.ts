@@ -133,7 +133,7 @@ export function activateWorkspaceTabPaletteResult(
       })
     }
     state.setActiveTab(result.entityId)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', result.worktreeId)
     focusTerminalTabSurface(result.entityId)
     return { status: 'activated' }
   }
@@ -141,6 +141,6 @@ export function activateWorkspaceTabPaletteResult(
   state.setActiveFile(result.entityId)
   // setActiveFile may pick an editor tab for the same entity instead of this diff.
   state.activateTab(result.tabId, { worktreeId: result.worktreeId })
-  state.setActiveTabType('editor')
+  state.setActiveTabType('editor', result.worktreeId)
   return { status: 'activated' }
 }

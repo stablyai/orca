@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
+import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
+import type { CreateWorktreeResult } from '../../../../../../shared/worktree/create-types'
+import { applyCreatedWorktree } from '../create/created-worktree-state-merge'
+import { worktreeCatalogVersionKey } from './worktree-catalog-version-state'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
+import type { WorktreeListingMergeOutcome } from './detected-worktree-refresh-admission'
 import {
   TEST_REPO,
   createTestStore,
@@ -113,7 +118,11 @@ function seedCreatedWorkspaceWithPendingLaunch(
   })
 }
 
-function applyListing(store: ReturnType<typeof createTestStore>, rows: Worktree[]): boolean {
+function applyListing(
+  store: ReturnType<typeof createTestStore>,
+  rows: Worktree[],
+  catalogVersion?: WorktreeCatalogVersion
+): WorktreeListingMergeOutcome {
   return mergeFetchedWorktrees(store.setState, {
     repoId: REPO_ID,
     hostId: 'local',
@@ -126,7 +135,8 @@ function applyListing(store: ReturnType<typeof createTestStore>, rows: Worktree[
         repoId: REPO_ID,
         authoritative: true,
         source: 'git',
-        worktrees: rows.map(detected)
+        worktrees: rows.map(detected),
+        ...(catalogVersion ? { catalogVersion } : {})
       }
     }
   })
@@ -146,7 +156,7 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     seedCreatedWorkspaceWithPendingLaunch(store, true)
     const existingRow = store.getState().worktreesByRepo[REPO_ID]![0]!
 
-    expect(applyListing(store, [existingRow])).toBe(true)
+    expect(applyListing(store, [existingRow])).toBe('applied')
 
     const state = store.getState()
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
@@ -161,7 +171,7 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     expect(store.getState().hasHydratedWorktreePurge).toBe(false)
     const existingRow = store.getState().worktreesByRepo[REPO_ID]![0]!
 
-    expect(applyListing(store, [existingRow])).toBe(true)
+    expect(applyListing(store, [existingRow])).toBe('applied')
 
     const state = store.getState()
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
@@ -174,11 +184,104 @@ describe('an authoritative listing that omits a just-created worktree', () => {
     seedCreatedWorkspaceWithPendingLaunch(store, true)
     const rows = store.getState().worktreesByRepo[REPO_ID]!
 
-    expect(applyListing(store, [...rows])).toBe(true)
+    expect(applyListing(store, [...rows])).toBe('applied')
 
     const state = store.getState()
     expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(false)
     expect(state.activeWorktreeId).toBe(CREATED_ID)
     expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
+  })
+})
+
+// Why this suite exists: the host stamps every listing with the catalog version its scan began
+// at and every create reply with the version the create produced. A listing that predates an
+// applied create is not applied at all, whatever delayed it -- host post-scan work, a coalesced
+// joiner, or the pre-merge terminal teardown -- so it can neither purge the new worktree nor
+// replace the host's rows with a list that lacks it.
+describe('a listing versioned before an applied create', () => {
+  const HOST = 'host-epoch-1'
+  const before = { epoch: HOST, sequence: 6 }
+  const createReply = { epoch: HOST, sequence: 7 }
+  const after = { epoch: HOST, sequence: 8 }
+
+  beforeEach(() => {
+    resetStructuredAgentLaunchPersistenceForTests()
+    resetStructuredAgentLaunchRegistryForTests()
+  })
+
+  function seedWithAppliedCreate(store: ReturnType<typeof createTestStore>) {
+    seedCreatedWorkspaceWithPendingLaunch(store, true)
+    const created = store.getState().worktreesByRepo[REPO_ID]![1]!
+    applyCreatedWorktree(store.setState, REPO_ID, {
+      worktree: created,
+      catalogVersion: createReply
+    } satisfies CreateWorktreeResult)
+    expect(
+      store.getState().worktreeCatalogVersionByRepoHost[worktreeCatalogVersionKey(REPO_ID, 'local')]
+    ).toEqual(createReply)
+  }
+
+  it('is not applied: no purge, no tombstone, rows and selection untouched', () => {
+    const store = createTestStore()
+    seedWithAppliedCreate(store)
+    const existingRow = store.getState().worktreesByRepo[REPO_ID]![0]!
+
+    expect(applyListing(store, [existingRow], before)).toBe('superseded')
+
+    const state = store.getState()
+    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(false)
+    expect(state.activeWorktreeId).toBe(CREATED_ID)
+    expect(state.unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
+    expect(state.worktreesByRepo[REPO_ID]!.map((w) => w.id)).toEqual([EXISTING_ID, CREATED_ID])
+    expect(state.detectedWorktreesByRepo[REPO_ID]!.worktrees.map((w) => w.id)).toContain(CREATED_ID)
+  })
+
+  it('reports a listing whose repo owner went away as not-current, even when also older', () => {
+    const store = createTestStore()
+    seedWithAppliedCreate(store)
+    store.setState({ repos: [] })
+    const existingRow = store.getState().worktreesByRepo[REPO_ID]![0]!
+
+    expect(applyListing(store, [existingRow], before)).toBe('not-current')
+
+    expect(store.getState().unifiedTabsByWorktree[CREATED_ID]).toHaveLength(2)
+  })
+
+  it('a later listing that includes the worktree applies and advances the version', () => {
+    const store = createTestStore()
+    seedWithAppliedCreate(store)
+    const rows = store.getState().worktreesByRepo[REPO_ID]!
+
+    expect(applyListing(store, [...rows], after)).toBe('applied')
+
+    const state = store.getState()
+    expect(state.activeWorktreeId).toBe(CREATED_ID)
+    expect(
+      state.worktreeCatalogVersionByRepoHost[worktreeCatalogVersionKey(REPO_ID, 'local')]
+    ).toEqual(after)
+  })
+
+  it('a listing from a restarted host is a new catalog, not an older one', () => {
+    const store = createTestStore()
+    seedWithAppliedCreate(store)
+    const rows = store.getState().worktreesByRepo[REPO_ID]!
+    const restarted = { epoch: 'host-epoch-2', sequence: 1 }
+
+    expect(applyListing(store, [...rows], restarted)).toBe('applied')
+
+    expect(
+      store.getState().worktreeCatalogVersionByRepoHost[worktreeCatalogVersionKey(REPO_ID, 'local')]
+    ).toEqual(restarted)
+  })
+
+  it('an unstamped listing from an older host keeps the pre-stamp behavior', () => {
+    const store = createTestStore()
+    seedWithAppliedCreate(store)
+    const existingRow = store.getState().worktreesByRepo[REPO_ID]![0]!
+
+    expect(applyListing(store, [existingRow])).toBe('applied')
+
+    expect(hasStructuredAgentSessionLaunchCancellationTombstone(CREATED_ID, SESSION_ID)).toBe(true)
+    expect(store.getState().activeWorktreeId).toBeNull()
   })
 })

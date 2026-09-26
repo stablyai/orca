@@ -23,6 +23,7 @@ import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transf
 import { deployOrcad, type OrcadDeployOptions } from './orcad-remote-deploy'
 import { emptyOrcadActivationRecord, withActivatedVersion } from './orcad-activation-record'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import { finalizeInstall } from './ssh-relay-versioned-install'
 import type { SshConnection } from './ssh-connection'
 
 const mockExec = vi.mocked(execCommand)
@@ -148,6 +149,55 @@ describe('deployOrcad', () => {
       `/home/u/.orca-remote/orcad-${NEW_VERSION}`
     )
     expect(vi.mocked(uploadRelayDirectory).mock.calls[0][2]).toContain(`orcad-${NEW_VERSION}`)
+  })
+
+  it.each(['linux-arm64', 'darwin-x64'] as const)(
+    'marks the %s search binary executable before completing the install',
+    async (platform) => {
+      scriptHost({ activationRecord: '', readiness: {}, log: [] })
+      await deployOrcad(
+        options({
+          host: getRemoteHostPlatform(platform),
+          census: { liveSessions: 1, startedSinceActivation: 0 }
+        })
+      )
+      const chmod = mockExec.mock.calls.findIndex(([, command]) =>
+        String(command).startsWith('chmod 755 ')
+      )
+      expect(chmod).toBeGreaterThanOrEqual(0)
+      expect(mockExec.mock.calls[chmod]?.[1]).toContain(`/ripgrep/${platform}/rg'`)
+      expect(vi.mocked(uploadRelayDirectory).mock.invocationCallOrder[0]).toBeLessThan(
+        mockExec.mock.invocationCallOrder[chmod]
+      )
+      expect(mockExec.mock.invocationCallOrder[chmod]).toBeLessThan(
+        vi.mocked(finalizeInstall).mock.invocationCallOrder[0]
+      )
+    }
+  )
+
+  it('does not run chmod on a Windows remote', async () => {
+    scriptHost({ activationRecord: '', readiness: {}, log: [] })
+    await deployOrcad(
+      options({
+        host: getRemoteHostPlatform('win32-x64'),
+        remoteHome: 'C:/Users/u',
+        census: { liveSessions: 1, startedSinceActivation: 0 }
+      })
+    )
+    expect(mockExec.mock.calls.some(([, command]) => String(command).startsWith('chmod '))).toBe(
+      false
+    )
+  })
+
+  it('leaves an upload incomplete when the remote cannot make search executable', async () => {
+    mockExec.mockImplementation(async (_conn, command) => {
+      if (String(command).startsWith('chmod 755 ')) {
+        throw new Error('chmod failed')
+      }
+      return ''
+    })
+    await expect(deployOrcad(options())).rejects.toThrow('chmod failed')
+    expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
   })
 
   it('activates a healthy candidate and records the outgoing version as the rollback target', async () => {

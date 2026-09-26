@@ -56,6 +56,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           }
           expandSignal={context.expandSignal}
           activeTurnIsWorking={slot.activeTurnIsWorking}
+          trailingRun={slot.trailingRun}
           onScrollMessageToTop={context.onScrollMessageToTop}
           onLinkClick={context.onLinkClick}
           allowFileUriLinks={context.allowFileUriLinks}

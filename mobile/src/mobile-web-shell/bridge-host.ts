@@ -19,6 +19,7 @@ import { createBridgeHostFrames } from './bridge-host-frames'
 import { createBridgeHostBack, type BridgeSessionBack } from './bridge-host-back'
 import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
+import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeHostOptions } from './bridge-host-contract'
 
 // Re-exported so a caller reaches the host and what it reports through one module.
@@ -39,6 +40,8 @@ export type BridgeHost = {
    * applied.
    */
   publishRoute: (next: BridgeInitRoute) => void
+  /** Hands this session moved safe-area insets over the same re-sent `init` a route update takes. */
+  publishSafeAreaInsets: (next: BridgeSafeAreaInsets) => void
   /**
    * Hands the page one Back press. False when this document never said it takes one, which is
    * every page older than the frame; the caller then leaves the key to the navigator.
@@ -83,7 +86,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     sendInit: () => {
       sendInit()
     },
-    onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue })
+    onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue }),
+    ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets })
   })
   let closed = false
   // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
@@ -158,6 +162,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           buildId,
           connection: snapshot(),
           route,
+          safeAreaInsets: routes.safeAreaInsets(),
           pageRoutes,
           ...(parsedRouteGrants?.success === true
             ? { pageRouteGrants: parsedRouteGrants.data }
@@ -204,11 +209,13 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     report: (diagnostic) => options.onDiagnostic?.(diagnostic)
   })
 
+  // The same three the outbound frames are gated on, read here as well: the Back caller spends the
+  // answer on a hardware key, and a `true` for a frame that never left is a dead press.
+  const deliverable = (): boolean => !closed && serving && initSent
+
   const back = createBridgeHostBack({
     send,
-    // The same three the outbound frames are gated on, read here as well: the caller spends the
-    // answer on a hardware key, and a `true` for a frame that never left is a dead press.
-    deliverable: () => !closed && serving && initSent,
+    deliverable,
     onClaim: (claimed) => options.onPageBackClaim(claimed),
     ...(options.sessionBack === undefined ? {} : { established: options.sessionBack })
   })
@@ -251,7 +258,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       // Forwarded verbatim, including a name this shell has never implemented: what each report
       // means is the caller's, and this host's job is that the list belongs to the document that
       // just spoke rather than to the one before it.
-      options.onPageReady(message.reports ?? [])
+      options.onPageReady({ reports: message.reports ?? [], accepts: message.accepts ?? [] })
       return
     }
     if (!serving) {
@@ -326,6 +333,9 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     },
     publishRoute: (next) => {
       routes.publish(next, serving && initSent)
+    },
+    publishSafeAreaInsets: (next) => {
+      routes.publishSafeAreaInsets(next, deliverable())
     },
     sendBack: back.send,
     readSessionBack: back.read,

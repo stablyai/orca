@@ -95,7 +95,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       if (!next) {
         next = new Map(snapshot)
       }
-      const { hostExecutionOwned: _owned, ...retained } = summary
+      const { hostExecutionOwned: _owned, hostExecutionPhase: _phase, ...retained } = summary
       next.set(sessionId, retained)
     }
     if (next) {

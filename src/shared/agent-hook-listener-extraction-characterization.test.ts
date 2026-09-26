@@ -213,8 +213,8 @@ describe('agent hook extraction boundaries', () => {
     state.ampCompletedCacheKeys.add(PANE)
     state.ampCompletedCacheKeys.add(scoped)
     state.ampCompletedCacheKeys.add(sibling)
-    state.claudeLeadStateByPaneKey.set(PANE, { state: 'working' })
-    state.codexLeadStateByPaneKey.set(PANE, { state: 'working' })
+    state.claudeLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
+    state.codexLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
 
     clearPaneCacheState(state, PANE)
@@ -264,7 +264,7 @@ describe('agent hook extraction boundaries', () => {
     state.warnedEnvs.add('development->production')
     state.lastPromptByPaneKey.set(PANE, 'prompt')
     state.claudeRunningNonAgentTaskPaneKeys.add(PANE)
-    state.codexLeadStateByPaneKey.set(PANE, { state: 'working' })
+    state.codexLeadStateByPaneKey.set(PANE, { state: 'working', stateStartedAt: 1 })
     state.grokActiveTurnByPaneKey.set(PANE, { promptId: 'prompt-1' })
 
     clearAllListenerCaches(state)

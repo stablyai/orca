@@ -1,21 +1,14 @@
-import { execFile as execFileCallback, spawn, type SpawnOptions } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type * as GitRunner from '../git/runner'
-import type * as GitFallback from './filesystem-list-files-git-fallback'
 import {
   pathMatchesFileNameFilterTokens,
   splitFileNameFilterTokens
 } from '../../shared/file-name-filter-tokens'
 
-const { wslAwareSpawnMock, listFilesWithGitSpy } = vi.hoisted(() => ({
-  wslAwareSpawnMock: vi.fn(),
-  listFilesWithGitSpy: vi.fn()
+const { wslAwareSpawnMock } = vi.hoisted(() => ({
+  wslAwareSpawnMock: vi.fn()
 }))
 
 vi.mock('../git/runner', async (importOriginal) => ({
@@ -23,15 +16,7 @@ vi.mock('../git/runner', async (importOriginal) => ({
   wslAwareSpawn: wslAwareSpawnMock
 }))
 
-vi.mock('./filesystem-list-files-git-fallback', async (importOriginal) => {
-  const actual = await importOriginal<typeof GitFallback>()
-  listFilesWithGitSpy.mockImplementation(actual.listFilesWithGit)
-  return { ...actual, listFilesWithGit: listFilesWithGitSpy }
-})
-
 import { listQuickOpenFiles } from './filesystem-list-files'
-
-const execFile = promisify(execFileCallback)
 
 function makeStore(repoPath: string): Store {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: listing only reads registered repos and settings.
@@ -48,14 +33,11 @@ function nameFilter(query: string): (relativePath: string) => boolean {
   return (relativePath) => pathMatchesFileNameFilterTokens(relativePath, tokens)
 }
 
-function spawnMissingRipgrep(): void {
-  wslAwareSpawnMock.mockImplementation(
-    (_command: string, _args: string[], options: SpawnOptions & { cwd?: string }) =>
-      spawn('orca-definitely-missing-rg', [], { cwd: options.cwd, stdio: options.stdio })
-  )
-}
-
-function fakeRipgrep(output: string, killSignal: NodeJS.Signals | null = null): EventEmitter {
+function fakeRipgrep(
+  output: string,
+  killSignal: NodeJS.Signals | null = null,
+  exitCode = 0
+): EventEmitter {
   const child = new EventEmitter()
   const stdout = Object.assign(new EventEmitter(), { setEncoding: vi.fn() })
   Object.assign(child, {
@@ -68,19 +50,13 @@ function fakeRipgrep(output: string, killSignal: NodeJS.Signals | null = null): 
   })
   setTimeout(() => {
     stdout.emit('data', output)
-    child.emit('close', killSignal ? null : 0, killSignal)
+    child.emit('close', killSignal ? null : exitCode, killSignal)
   }, 0)
   return child
 }
 
 describe('listQuickOpenFiles name filter', () => {
-  let tempDir: string | null = null
-
-  afterEach(async () => {
-    if (tempDir) {
-      await rm(tempDir, { recursive: true, force: true })
-      tempDir = null
-    }
+  afterEach(() => {
     vi.clearAllMocks()
   })
 
@@ -102,44 +78,22 @@ describe('listQuickOpenFiles name filter', () => {
     expect(files).toEqual(['ios/AppDelegate.swift'])
   })
 
-  it('filters the whole git listing when ripgrep is missing', async () => {
-    spawnMissingRipgrep()
-    tempDir = await mkdtemp(join(tmpdir(), 'orca-name-filter-'))
-    const repoPath = join(tempDir, 'repo')
-    await execFile('git', ['init', '-q', repoPath])
-    for (const relPath of ['a.ts', 'b.ts', 'zz/Notion Web Clipper/AppDelegate.swift']) {
-      await mkdir(dirname(join(repoPath, relPath)), { recursive: true })
-      await writeFile(join(repoPath, relPath), 'x')
-    }
-    await execFile('git', ['add', '.'], { cwd: repoPath })
-    const store = makeStore(repoPath)
-
-    await expect(listQuickOpenFiles(repoPath, store, undefined, undefined, 2)).resolves.toEqual([
-      'a.ts',
-      'b.ts'
-    ])
-    await expect(
-      listQuickOpenFiles(repoPath, store, undefined, undefined, 2, undefined, nameFilter('appdel'))
-    ).resolves.toEqual(['zz/Notion Web Clipper/AppDelegate.swift'])
-  })
-
-  it('rejects an over-budget filtered walk so the renderer keeps its capped listing', async () => {
-    spawnMissingRipgrep()
-    listFilesWithGitSpy.mockRejectedValueOnce(new Error('File listing exceeded 20001 files'))
+  it('rejects with the bundled-ripgrep error when the filtered ignored pass cannot start', async () => {
+    wslAwareSpawnMock
+      .mockImplementationOnce(() => fakeRipgrep('ios/AppDelegate.swift\n'))
+      .mockImplementationOnce(() => fakeRipgrep('', null, -2))
 
     await expect(
       listQuickOpenFiles(
-        '/folder',
-        makeStore('/folder'),
+        '/repo',
+        makeStore('/repo'),
         undefined,
         undefined,
         5,
         undefined,
-        nameFilter('target')
+        nameFilter('appdelegate')
       )
-    ).rejects.toThrow()
-    expect(listFilesWithGitSpy).toHaveBeenCalledTimes(1)
-    expect(listFilesWithGitSpy.mock.calls[0][4]).toBeUndefined()
+    ).rejects.toThrow("Orca's bundled search tool (ripgrep) could not start")
   })
 
   it('keeps primary matches when the ignored-file pass fails during a filtered scan', async () => {

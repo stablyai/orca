@@ -13,6 +13,7 @@ import {
   type BridgeInitRoute
 } from './bridge-envelope'
 import type { BridgeErrorCapture } from './bridge-error-capture'
+import type { BridgeSafeAreaInsets } from './bridge-safe-area-insets'
 import {
   createBridgeRpcClient,
   type BridgeRpcClient,
@@ -103,6 +104,7 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   clientIdentity?: string | null
   /** Replaces the verb handler, for the arms where the shell refuses rather than answers. */
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
+  safeAreaInsets?: BridgeSafeAreaInsets
 }
 
 type Lane = {
@@ -226,6 +228,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     buildId: options.buildId ?? 'build-a',
     sessionId: options.sessionId ?? 'session-a',
     route: options.route ?? { pathname: '/h/host-a' },
+    ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
     readClientIdentity: () =>
       options.clientIdentity === undefined ? PORT_PAIR_CLIENT_IDENTITY : options.clientIdentity,
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
@@ -251,7 +254,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     }),
     onStorageWrite: (key, value) => storageWrites.push({ key, value }),
     onPageFault: (error) => pageFaults.push(error),
-    onPageReady: (reports) => {
+    onPageReady: ({ reports }) => {
       pageReadies += 1
       pageReports.push(reports)
     },

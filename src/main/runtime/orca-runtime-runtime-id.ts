@@ -24,7 +24,6 @@ import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   RuntimeGraphReloadLifecycle
 } from './runtime-graph-reload-lifecycle'
-import { RendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import { ClientHostedPageReconciliationWindow } from './client-hosted-page-reconciliation-window'
 import { ClientSessionTabSelectionStore } from './client-session-tab-selection'
 import { WorktreeTerminalMutationLock } from './worktree-terminal-mutation-lock'
@@ -92,9 +91,6 @@ export class OrcaRuntimeWithRuntimeId {
     },
     onTimeout: (_revision, windowId) => this.handleGraphReloadTimeout(windowId)
   })
-
-  // Why: paired graph transactions need foreground timer cadence only until their publication settles.
-  protected readonly rendererPublicationThrottle = new RendererPublicationThrottle()
 
   protected tabs = new Map<string, RuntimeSyncedTab>()
 

@@ -9,7 +9,6 @@ export type AgentSessionCreatePhase =
   | 'acquire_owner'
   | 'auth_settle'
   | 'spawn'
-  | 'init'
   | 'restore_options'
   | 'publish'
 

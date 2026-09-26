@@ -104,6 +104,9 @@
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-background: var(--status-warning-background);
+  --color-status-warning-border: var(--status-warning-border);
   --color-workspace-status-done: var(--workspace-status-done);
   --color-workspace-status-review: var(--workspace-status-review);
   --color-workspace-status-progress: var(--workspace-status-progress);
@@ -185,6 +188,11 @@
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Needs-attention state that is not an error: a resume that did not carry on, an update that
+     failed. Yellow, so it stays apart from destructive red and from the orange working state. */
+  --status-warning: #ca8a04;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
      identity when the theme flips. */
   --workspace-status-done: #c7a594;
@@ -299,6 +307,9 @@
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  --status-warning: #eab308;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -399,6 +410,11 @@
 [data-sonner-toaster] {
   font-family: var(--font-sans);
   z-index: 40 !important;
+}
+
+/* Keep errors above standard modal backdrops at the existing popover tier. */
+body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner-toaster] {
+  z-index: 60 !important;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
@@ -2215,6 +2231,18 @@ html.native-shell .app-layout {
   justify-content: center !important;
   width: 100% !important;
   height: 100% !important;
+}
+
+/* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */
+.ipynb-code-surface .monaco-editor,
+.ipynb-code-surface .monaco-editor-background,
+.ipynb-code-surface .monaco-editor .margin {
+  background-color: transparent;
+}
+
+/* Why: bracket-pair colouring is a global Monaco model option; notebook cells neutralise it locally to match their preview. */
+.ipynb-code-surface .monaco-editor [class*='bracket-highlighting-'] {
+  color: inherit;
 }
 
 .monaco-editor .monaco-search-result-highlight {

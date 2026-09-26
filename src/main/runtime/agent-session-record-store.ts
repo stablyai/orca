@@ -1,17 +1,18 @@
-import { setVisibleSessionId } from './agent-session-visible-tab-index'
 import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 /** Durable single-writer session records and their operation ledger. */
 
-import type {
-  AgentSessionOperationClaim,
-  AgentSessionOperationDecision,
-  AgentSessionOperationOutcome,
-  AgentSessionOperationRow
+import {
+  agentSessionOperationKey,
+  type AgentSessionOperationClaim,
+  type AgentSessionOperationDecision,
+  type AgentSessionOperationOutcome,
+  type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
   admitAgentSessionGlobalOperationInto,
   admitAgentSessionMutationOperation,
+  evaluateAgentSessionMutationOperation,
   admitAgentSessionOperationInto,
   claimAgentSessionOperationInto,
   settleAgentSessionOperationInto,
@@ -69,6 +70,7 @@ import {
   agentSessionStorePath,
   type AgentSessionStoreState
 } from './agent-session-record-store-file'
+import { setAgentSessionTabVisibility } from './agent-session-tab-table'
 import { loadProtectedAgentSessionStore } from './agent-session-record-store-security'
 import {
   AgentSessionStoreTransactionQueue,
@@ -87,11 +89,14 @@ export class AgentSessionRecordStore {
     // Why: every persisted lease is unreconciled until this host adjudicates it, so a restart
     // grants no writer on the strength of what the previous process wrote.
     const diskRevision = agentSessionStoreRevision(loaded.state)
+    // The normalized legacy leases reach disk with this store's first transaction rather than a
+    // write here: a rewrite at open would read as an external change to any other holder of the
+    // file mid-restart.
     markAgentSessionStoreLeasesUnreconciled(loaded.state)
     const transactions = AgentSessionStoreTransactionQueue.fromLoadedStore(
       filePath,
       args.hostId,
-      loaded,
+      { ...loaded, needsRewrite: loaded.needsRewrite || loaded.legacyHandoffLeasesNormalized },
       diskRevision
     )
     if (loaded.needsRewrite && !loaded.readOnly && !loaded.recoveredFromBackup) {
@@ -122,16 +127,25 @@ export class AgentSessionRecordStore {
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
   listVisibleSessionIds = (): string[] =>
-    [...this.state.visibleSessionIds].filter((sessionId) => this.state.records.has(sessionId))
+    (this.state.sessionTabs?.sessionIds() ?? []).filter((sessionId) =>
+      this.state.records.has(sessionId)
+    )
 
   getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } => ({
-    present: this.state.visibleSessionIdsIndexPresent,
+    present: this.state.sessionTabs !== null,
     sessionIds: this.listVisibleSessionIds()
   })
 
-  /** Persist the user-visible tab reference separately from the rollback-sensitive profile tabs. */
-  setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
-    return this.transact(() => setVisibleSessionId(this.state, sessionId, visible))
+  /** The id of the chat tab showing this conversation, if one does. */
+  getSessionTabId = (sessionId: string): string | null =>
+    this.state.sessionTabs?.tabIdFor(sessionId) ?? null
+
+  /**
+   * Persist the user-visible tab reference separately from the rollback-sensitive profile tabs.
+   * Showing keeps a tab the session already has; `tabId` puts a hidden one back under its old id.
+   */
+  setSessionTabVisibility(sessionId: string, visible: boolean, tabId?: string): Promise<void> {
+    return this.transact(() => setAgentSessionTabVisibility(this.state, sessionId, visible, tabId))
   }
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
@@ -162,6 +176,9 @@ export class AgentSessionRecordStore {
   }
 
   listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
+
+  getOperationRow = (callerKey: string, operationId: string): AgentSessionOperationRow | null =>
+    this.state.operations.get(agentSessionOperationKey(callerKey, operationId)) ?? null
 
   isClaimKeyVerifiable = (keyId: string, now: number): boolean =>
     isAgentSessionClaimKeyVerifiable(this.state, keyId, now)
@@ -286,6 +303,10 @@ export class AgentSessionRecordStore {
 
   admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
     this.transact(() => admitAgentSessionMutationOperation(this.state, args))
+
+  /** The ledger's answer alone, placing nothing; `admitMutationOperation` is the transaction. */
+  evaluateMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
+    evaluateAgentSessionMutationOperation(this.state, args)
 
   /** Durable compare-and-swap for the right to run an admitted operation's effect: two replays both
    *  read `pending`, and only a conditional swap tells the one that may run from the one that must

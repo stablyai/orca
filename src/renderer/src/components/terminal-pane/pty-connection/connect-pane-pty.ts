@@ -94,7 +94,6 @@ export function connectPanePty(
   session.terminalBellNotificationTimer = null
   session.pendingTerminalBellNotification = false
   session.reattachIdleAgentCursorResetTimer = null
-  session.alternateScreenBackgroundRepaintTimer = null
   session.shiftEnterReconfirmTimer = null
   session.synchronizedForegroundOutputActive = false
   // Why: carries up to one marker-length-1 of trailing bytes so a ConPTY-split DEC 2026 marker is still detected (#8754).
@@ -150,6 +149,15 @@ export function connectPanePty(
   // mutation does not propagate back.
   session.paneStartup = session.deps.startup ?? null
   session.deps.startup = undefined
+  // Why the session holds it until a spawn request carries it: the pane already dropped every other
+  // reference to this PTY, so the stop is owed until main takes it or dispose kills it.
+  session.pendingReplacedPtyId = session.deps.replacesPtyId ?? null
+  session.deps.replacesPtyId = undefined
+  session.claimPendingReplacedPtyId = (): string | null => {
+    const ptyId: string | null = session.pendingReplacedPtyId
+    session.pendingReplacedPtyId = null
+    return ptyId
+  }
 
   // Why: paneKey crosses PTY env, hook IPC, retained rows, and reload/replay.
   // Use the stable layout leaf UUID, not the renderer-local numeric pane id.

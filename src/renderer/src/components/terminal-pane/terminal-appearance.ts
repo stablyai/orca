@@ -8,7 +8,7 @@ import {
   resolvePaneStyleOptions,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal-theme'
-import { buildFontFamily } from './layout-serialization'
+import { buildFontFamily } from '@/lib/monospace-font-family'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { canApplyPaneMetricOptions } from '@/lib/pane-manager/pane-fit'
 import {

@@ -8,7 +8,9 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
-import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { fetchCursorRateLimits } from './cursor-fetcher'
+import { readCursorAuthSession } from './cursor-auth'
+import { fetchOpenCodeGoUsage } from './opencode-go-usage-source-selection'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 
 export type Deferred<T> = {
@@ -85,17 +87,18 @@ export function unavailableProvider(
 export function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 24))
   vi.mocked(fetchGeminiRateLimits).mockImplementation(async () => okProvider('gemini', 0))
-  vi.mocked(fetchOpenCodeGoRateLimits).mockImplementation(async () => okProvider('opencode-go', 0))
+  vi.mocked(fetchOpenCodeGoUsage).mockImplementation(async () => okProvider('opencode-go', 0))
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
   vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
+  vi.mocked(fetchCursorRateLimits).mockImplementation(async () => unavailableProvider('cursor'))
 }
 
 /** Shared `beforeEach` body: healthy stubs for every provider the service polls. */
 export function resetRateLimitProviderMocks(): void {
   vi.clearAllMocks()
   vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
-  vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
+  vi.mocked(fetchOpenCodeGoUsage).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
   vi.mocked(fetchKimiRateLimits).mockResolvedValue(okProvider('kimi', 0, Date.now()))
   vi.mocked(fetchMiniMaxRateLimits).mockResolvedValue(okProvider('minimax', 0, Date.now()))
   vi.mocked(fetchGrokRateLimits).mockResolvedValue({
@@ -106,8 +109,10 @@ export function resetRateLimitProviderMocks(): void {
     error: null,
     status: 'unavailable'
   })
+  vi.mocked(fetchCursorRateLimits).mockResolvedValue(unavailableProvider('cursor'))
   vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
   vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
+  vi.mocked(readCursorAuthSession).mockResolvedValue({ status: 'missing' })
 }
 
 type RateLimitWindow = Parameters<RateLimitService['attach']>[0]

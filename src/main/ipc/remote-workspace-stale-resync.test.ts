@@ -63,7 +63,10 @@ describe('workspace.stale resync', () => {
         send: (_channel: string, event: RemoteWorkspaceChangedEvent) => sent.push(event)
       }
     }
-    registerRemoteWorkspaceHandlers(store, () => win as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the window fake exposes only the webContents.send the handlers call.
+    registerRemoteWorkspaceHandlers(store, () => win as never, {
+      readMachineName: () => 'Build server'
+    })
   })
 
   it('re-reads the snapshot through workspace.get and publishes it to the renderer', async () => {

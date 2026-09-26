@@ -165,6 +165,9 @@ export type PtyTransport = {
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
+    /** Taken only as the spawn request is sent; main stops the returned PTY before resolving the
+     *  pane's owner. Never taken on a session reattach, so the caller still holds it. */
+    claimReplacedPtyId?: () => string | null
     /** Reject a stale restored identity before this transport can publish global PTY handlers. */
     admitPtyId?: (ptyId: string) => boolean
     /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */

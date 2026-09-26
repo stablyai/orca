@@ -382,7 +382,10 @@ describe('settled attach retry', () => {
   it('records proven acquisition cleanup as durable death evidence', async () => {
     acquire.mockRejectedValueOnce(new Error('resume rejected'))
 
-    await expect(host.attach(CALLER, hostTestAttachParams(null))).rejects.toThrow('resume rejected')
+    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+      ok: false,
+      refusal: { message: 'resume rejected', ownerVerdict: 'exited' }
+    })
 
     expect(releaseAcquisition).toHaveBeenCalledTimes(1)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({

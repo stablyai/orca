@@ -14,6 +14,7 @@
  */
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { shellEscape } from './ssh-connection-utils'
 import { ORCAD_INSTALL_MODEL } from './remote-install-model'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
@@ -128,6 +129,12 @@ async function installOrcadBundle(
     await uploadRelayDirectory(options.conn, options.localOrcadDir, remoteDir, options.host, {
       signal: options.signal
     })
+    const { host } = options
+    if (host.os !== 'win32') {
+      // SFTP creates uploaded files with 0644 even when the source binary is executable.
+      const binaryPath = joinRemotePath(host, remoteDir, 'ripgrep', host.relayPlatform, 'rg')
+      await exec(options, `chmod 755 ${shellEscape(binaryPath)}`)
+    }
     await writeRelayFile(
       options.conn,
       options.host,

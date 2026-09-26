@@ -1,11 +1,16 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import {
   runningTurnLifecycleRevisions,
   settleStaleSessionStateOnAcquire,
-  turnVerdictFromDeathEvidence
+  turnVerdictFromDeathEvidence,
+  UNVERIFIABLE_TURN_VERDICT
 } from './structured-agent-session-stale-turn-verdict'
 
 const THREAD = 'thread-1'
@@ -113,6 +118,50 @@ describe('running turn lifecycle revisions', () => {
     ])
   })
 
+  it('keeps every field it does not own when the host settles a running row', () => {
+    const contextUsage = {
+      used: {
+        kind: 'estimate' as const,
+        usage: {
+          inputTokens: 1,
+          cacheCreationInputTokens: 0,
+          cacheReadInputTokens: 90_000,
+          outputTokens: 5
+        },
+        capturedAt: 35
+      }
+    }
+    const running = lifecycleItem('turn-2', 'running', 2, { startedAt: 30 })
+    const body = {
+      ...running.body,
+      requestedAt: 29,
+      userItemId: 'user-2',
+      contextUsage,
+      // A field a newer build wrote: the verdict does not own it, so it survives.
+      laterField: { kept: true },
+      outcome: 'success' as const,
+      durationMs: 7
+    }
+    const items: AgentJournalRenderItem[] = [{ ...running, body }]
+    const kept = {
+      kind: 'turn',
+      turnId: 'turn-2',
+      startedAt: 30,
+      requestedAt: 29,
+      userItemId: 'user-2',
+      contextUsage,
+      laterField: { kept: true }
+    }
+    expect(
+      runningTurnLifecycleRevisions(items, { state: 'interrupted', completedAt: 40 })[0]
+    ).toMatchObject({ body: { ...kept, state: 'interrupted', completedAt: 40 } })
+    const unverifiable = runningTurnLifecycleRevisions(items, UNVERIFIABLE_TURN_VERDICT)[0]
+    expect(unverifiable?.kind === 'item' ? unverifiable.body : null).toEqual({
+      ...kept,
+      state: 'unverifiable'
+    })
+  })
+
   it('revises a legacy status-form running row from an older host into a typed turn', () => {
     expect(
       runningTurnLifecycleRevisions([legacyLifecycleItem('turn-2', 30)], { state: 'unverifiable' })
@@ -210,6 +259,52 @@ describe('stale session state on a cold acquire', () => {
         }
       ]
     })
+  })
+
+  it("cancels a subagent's lost prompt as the subagent's, and the session's own as its own", async () => {
+    // The sweep names no producer, so each cancelled row keeps the one it had.
+    const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
+    const journals = createTrackedJournalOpener()
+    try {
+      const journal = await journals.open({
+        identity: {
+          sessionId: 'session-1',
+          workspaceId: 'workspace-1',
+          hostId: 'local',
+          agent: 'codex',
+          providerHandle: { kind: 'codex', threadId: THREAD }
+        },
+        journalDir: root,
+        now: () => 1_000
+      })
+      const child = { agentId: 'thread-child', producerKind: 'agent' as const }
+      const { body } = promptItem('pending', 1)
+      const prompt = (threadId: string) => ({
+        provider: 'codex' as const,
+        threadId,
+        turnId: 'turn-1',
+        ordinal: 1
+      })
+      await journal.appendItem(prompt('thread-child'), body, { fence: 1, ...child })
+      await journal.appendItem(prompt(THREAD), body, { fence: 1 })
+
+      await settleStaleSessionStateOnAcquire({
+        journal,
+        sessionId: 'session-1',
+        fence: 2,
+        acquisitionGeneration: 'generation-2'
+      })
+
+      expect(
+        journal.snapshot().items.map((item) => [item.body.kind, item.revision, item.agentId])
+      ).toEqual([
+        ['approval', 2, 'thread-child'],
+        ['approval', 2, undefined]
+      ])
+    } finally {
+      await journals.closeAll()
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('writes nothing when no turn is running and keys on the journal position without a generation', async () => {

@@ -181,6 +181,20 @@ export function agentSessionOperationExpiry(
   )
 }
 
+/** The unexpired row a globally scoped id already holds, under whichever caller admitted it. */
+export function findAgentSessionGlobalOperationRow(
+  rows: ReadonlyMap<string, AgentSessionOperationRow>,
+  operationId: string,
+  now: number
+): AgentSessionOperationRow | undefined {
+  for (const row of rows.values()) {
+    if (row.expiresAt > now && row.operationId === operationId) {
+      return row
+    }
+  }
+  return undefined
+}
+
 export function pruneAgentSessionOperationRows(
   rows: ReadonlyMap<string, AgentSessionOperationRow>,
   now: number
