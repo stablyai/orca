@@ -1,7 +1,8 @@
-import type { TaskProvider } from '../../../shared/task-providers'
+import type { WorkspaceLinkedItem } from '../../../shared/worktree/types'
+type LinkedWorkItemProvider = WorkspaceLinkedItem['provider']
 
 export type LinkedWorkItemContext = {
-  provider: TaskProvider
+  provider: LinkedWorkItemProvider
   version: 1
   renderedText: string
 }
@@ -59,7 +60,7 @@ function formatDraftContextBlock(value: string): string {
 }
 
 export type LinearLaunchContextArgs = {
-  provider?: TaskProvider
+  provider?: LinkedWorkItemProvider
   identifier: string | undefined
   title?: string
   url?: string
@@ -68,7 +69,7 @@ export type LinearLaunchContextArgs = {
 function isLinearWorkItemReference(
   args:
     | {
-        provider?: TaskProvider
+        provider?: LinkedWorkItemProvider
         linearIdentifier?: string
         linkedContext?: LinkedWorkItemContext
       }
@@ -153,7 +154,12 @@ function capLinkedContextSourceLines(args: { sourceLines: string; fixedChars: nu
 export function getLinkedWorkItemPromptContext(
   linkedWorkItem:
     | (Pick<
-        { provider?: TaskProvider; url: string; title?: string; linearIdentifier?: string },
+        {
+          provider?: LinkedWorkItemProvider
+          url: string
+          title?: string
+          linearIdentifier?: string
+        },
         'provider' | 'url' | 'title' | 'linearIdentifier'
       > & { linkedContext?: LinkedWorkItemContext })
     | null
@@ -177,7 +183,7 @@ export function getLinkedWorkItemPromptContext(
 }
 
 export function getLaunchableWorkItemDraftContent(args: {
-  provider?: TaskProvider
+  provider?: LinkedWorkItemProvider
   pasteContent?: string
   url: string
   title?: string
@@ -203,7 +209,7 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
   linkedWorkItem:
     | (Pick<
         {
-          provider?: TaskProvider
+          provider?: LinkedWorkItemProvider
           number: number
           url: string
           title?: string

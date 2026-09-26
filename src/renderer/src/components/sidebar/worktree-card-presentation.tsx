@@ -1,3 +1,4 @@
+import { KaneoTaskDetails } from './KaneoTaskDetails'
 import React from 'react'
 
 import {
@@ -127,8 +128,10 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       ? trimmedVisibleCardTitle
       : undefined
   const hasHoverIdentity = Boolean(hoverWorkspaceTitle || hoverBranchName)
+  const hasKaneoTask = worktree.linkedWorkItem?.provider === 'kaneo'
+  const usesParentDetailsHover = newCardStyle || hasKaneoTask
   const hasHoverDetails =
-    newCardStyle &&
+    usesParentDetailsHover &&
     (hasWorktreeCardDetails({
       issue: hoverIssue,
       linearIssue: hoverLinearIssue,
@@ -138,10 +141,11 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       automationProvenance: metaAutomationProvenance,
       cliProvenance: metaCliProvenance
     }) ||
+      hasKaneoTask ||
       workspacePorts.length > 0 ||
       hasHoverIdentity)
   // Why: the parent row owns metadata hover; don't stack the title's truncation tooltip on the details popover.
-  const titleWrapper = newCardStyle
+  const titleWrapper = usesParentDetailsHover
     ? hasHoverDetails
       ? (title: React.ReactElement): React.ReactElement => title
       : undefined
@@ -158,7 +162,12 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
             branchName={showBranchIdentityHover ? branch : undefined}
             workspaceTitle={worktree.displayName}
             identityOrder="branch-first"
-            detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+            detailsAfter={
+              <>
+                <KaneoTaskDetails item={worktree.linkedWorkItem} />
+                {hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+              </>
+            }
             openDelay={100}
             // Why: compact mode also renders the plug/badge hover root; sharing one open-state made hovering the
             // plug force-open the wider title card and race it closed (#9304), so let this title hover own its state.
@@ -230,7 +239,12 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
         comment={metaComment}
         automationProvenance={metaAutomationProvenance}
         cliProvenance={metaCliProvenance}
-        detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+        detailsAfter={
+          <>
+            <KaneoTaskDetails item={worktree.linkedWorkItem} />
+            {hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+          </>
+        }
         hoverControl={detailsHoverControl}
         onEditIssue={affiliateListMode ? undefined : handleEditIssue}
         onEditComment={affiliateListMode ? undefined : handleEditComment}

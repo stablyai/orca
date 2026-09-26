@@ -573,8 +573,8 @@ describe('useComposerState host-context boundaries', () => {
 
   it('gates every submit path on the derived source intent', () => {
     // Why: derived from name+mode, so the submitted name and the gate can never disagree.
-    expect(COMPOSER_SOURCE.workspaceIdentity).toContain(
-      'const sourceIntentBlocksCreate = !linkedWorkItem && isBlockingJiraUrlIntent(smartNameMode, name)'
+    expect(COMPOSER_SOURCE.workspaceIdentity.replace(/\s+/g, ' ')).toContain(
+      "const sourceIntentBlocksCreate = !linkedWorkItem && (isBlockingJiraUrlIntent(smartNameMode, name) || (smartNameMode === 'smart' && parseKaneoTaskUrl(name) !== null))"
     )
     const submitSections = [
       COMPOSER_SOURCE.navigation,

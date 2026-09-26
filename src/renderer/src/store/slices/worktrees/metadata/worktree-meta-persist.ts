@@ -7,7 +7,8 @@ import {
 import {
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
-  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  KANEO_TASK_LINK_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
@@ -93,6 +94,13 @@ async function persistWorktreeMetaUntracked(
     })
     return
   }
+  if (target.kind === 'environment' && updates.linkedWorkItem?.provider === 'kaneo') {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      KANEO_TASK_LINK_RUNTIME_CAPABILITY,
+      'Update the remote runtime to link Kaneo tasks'
+    )
+  }
   // Why: `worktree.set` parses in strip mode, so an older runtime drops the key
   // and applies the rest. Both gates key off presence, not value — a dropped
   // *clear* strands a stale link that the Issue row then hides.
@@ -103,10 +111,12 @@ async function persistWorktreeMetaUntracked(
     await assertRuntimeEnvironmentCapability(
       target.environmentId,
       WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-      translate(
-        'auto.store.slices.worktrees.metadata.worktree.meta.persist.877e3638d8',
-        'Update the remote runtime to change this workspace’s linked issue'
-      )
+      updates.linkedWorkItem?.provider === 'kaneo'
+        ? 'Update the remote runtime to link Kaneo tasks'
+        : translate(
+            'auto.store.slices.worktrees.metadata.worktree.meta.persist.877e3638d8',
+            'Update the remote runtime to change this workspace’s linked issue'
+          )
     )
   }
   // task-source-context.v1 is a sound proxy for the Linear keys: #5322 added them

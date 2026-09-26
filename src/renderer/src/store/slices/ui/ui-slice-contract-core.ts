@@ -78,7 +78,7 @@ export type NewWorkspaceDraft = {
   note: string
   attachments: string[]
   linkedWorkItem: {
-    provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+    provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'kaneo'
     type: 'issue' | 'pr' | 'mr'
     number: number
     title: string

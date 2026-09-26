@@ -9,6 +9,7 @@ import type {
   RepoBackedSearchTarget
 } from './smart-workspace-name-field-model'
 import { useJiraSourceConnection } from './use-jira-source-connection'
+import { useKaneoUrlSource } from './use-kaneo-url-source'
 import { useJiraUrlSource } from './use-jira-url-source'
 import { useSmartWorkspaceFieldAvailability } from './use-smart-workspace-field-availability'
 import { useSmartWorkspaceNameFieldState } from './use-smart-workspace-name-field-state'
@@ -137,6 +138,15 @@ export function useSmartWorkspaceNameFieldFoundation(
     [selectedRepo]
   )
   const state = useSmartWorkspaceNameFieldState(textOnly, value)
+  const kaneoSource = useKaneoUrlSource(
+    value,
+    !disabled &&
+      !textOnly &&
+      state.mode === 'smart' &&
+      selectedSource === null &&
+      Boolean(props.onKaneoTaskSelect),
+    settings
+  )
   const jiraConnection = useJiraSourceConnection({
     enabled: !disabled && !textOnly && jiraSourceContext !== null,
     sourceContext: jiraSourceContext
@@ -157,6 +167,7 @@ export function useSmartWorkspaceNameFieldFoundation(
     state.mode === 'jira' && jiraConnectionStatus?.selectedSiteId === 'all'
   const jiraStatusId = React.useId()
   const linearStatusId = React.useId()
+  const kaneoStatusId = React.useId()
   const availability = useSmartWorkspaceFieldAvailability({
     props,
     state,
@@ -193,9 +204,11 @@ export function useSmartWorkspaceNameFieldFoundation(
     linearSourceContext,
     jiraConnectionStatus,
     jiraSource,
+    kaneoSource,
     jiraSourceConnected,
     showJiraSiteContext,
     jiraStatusId,
-    linearStatusId
+    linearStatusId,
+    kaneoStatusId
   }
 }

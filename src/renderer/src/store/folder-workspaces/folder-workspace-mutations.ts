@@ -1,7 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  KANEO_TASK_LINK_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
@@ -67,12 +70,22 @@ export function createFolderWorkspaceMutationActions(
         if (
           target.kind === 'environment' &&
           (args.linkedTask?.provider === 'jira' ||
+            args.linkedTask?.provider === 'kaneo' ||
             args.linkedTaskSourceContext?.provider === 'jira')
         ) {
           await assertRuntimeEnvironmentCapability(
             target.environmentId,
             WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-            'Update the remote runtime to link Jira'
+            args.linkedTask?.provider === 'kaneo'
+              ? 'Update the remote runtime to link Kaneo tasks'
+              : 'Update the remote runtime to link Jira'
+          )
+        }
+        if (target.kind === 'environment' && args.linkedTask?.provider === 'kaneo') {
+          await assertRuntimeEnvironmentCapability(
+            target.environmentId,
+            KANEO_TASK_LINK_RUNTIME_CAPABILITY,
+            'Update the remote runtime to link Kaneo tasks'
           )
         }
         const workspace =
@@ -111,7 +124,8 @@ export function createFolderWorkspaceMutationActions(
         (state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
           ? (state.activeWorkspaceExecutionHostId ?? undefined)
           : undefined)
-      if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
+      const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
+      if (!folderWorkspace) {
         return false
       }
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
@@ -123,16 +137,30 @@ export function createFolderWorkspaceMutationActions(
       const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
       const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
       const updateIdentity = getFolderWorkspaceUpdateIdentity(ownerHostId, folderWorkspaceId)
-      // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
+      const changesKaneoLink =
+        updates.linkedTask !== undefined &&
+        (updates.linkedTask?.provider === 'kaneo' ||
+          folderWorkspace.linkedTask?.provider === 'kaneo')
+      // Why: same gate as folderWorkspace.create — an older paired runtime would drop the link silently.
       if (
         target.kind === 'environment' &&
         (updates.linkedTask?.provider === 'jira' ||
+          changesKaneoLink ||
           updates.linkedTaskSourceContext?.provider === 'jira')
       ) {
         await assertRuntimeEnvironmentCapability(
           target.environmentId,
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          'Update the remote runtime to link Jira'
+          changesKaneoLink
+            ? 'Update the remote runtime to link Kaneo tasks'
+            : 'Update the remote runtime to link Jira'
+        )
+      }
+      if (target.kind === 'environment' && changesKaneoLink) {
+        await assertRuntimeEnvironmentCapability(
+          target.environmentId,
+          KANEO_TASK_LINK_RUNTIME_CAPABILITY,
+          'Update the remote runtime to link Kaneo tasks'
         )
       }
       const updateTicket = folderWorkspaceUpdates.begin(

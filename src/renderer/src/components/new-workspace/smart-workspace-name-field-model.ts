@@ -1,3 +1,4 @@
+import type { KaneoTask } from '../../../../shared/kaneo-types'
 import type React from 'react'
 import type { useAppStore } from '@/store'
 import type { parseGitHubIssueOrPRLink, RepoSlug } from '@/lib/github-links'
@@ -21,6 +22,7 @@ export type SmartWorkspaceNameFieldProps = {
   /** Optional; when omitted, GitLab paste-URL detection is silently skipped. */
   onGitLabItemSelect?: (item: GitLabWorkItem) => void
   onBranchSelect: (refName: string, localBranchName: string) => void
+  onKaneoTaskSelect?: (task: KaneoTask) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
   onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
@@ -63,12 +65,21 @@ export type NormalizedSmartWorkspaceNameFieldProps = Omit<
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
+  kind:
+    | 'github-pr'
+    | 'github-issue'
+    | 'gitlab-mr'
+    | 'gitlab-issue'
+    | 'branch'
+    | 'linear'
+    | 'jira'
+    | 'kaneo'
   label: string
   url?: string
 }
 
 export type RowEntry =
+  | { kind: 'kaneo'; value: string; task: KaneoTask }
   | SmartWorkspaceSourceRow
   | { kind: 'jira-account'; value: string; site: JiraSite }
 

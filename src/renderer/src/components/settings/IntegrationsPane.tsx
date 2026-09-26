@@ -6,6 +6,7 @@ import {
   GitLabIntegrationCard
 } from './source-control-integration-cards'
 import { JiraIntegrationCard, LinearIntegrationCard } from './task-tracker-integration-cards'
+import { KaneoIntegrationCard } from './kaneo-integration-card'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
 import { translate } from '@/i18n/i18n'
 export { getIntegrationsPaneSearchEntries } from './integrations-search'
@@ -43,14 +44,15 @@ export function IntegrationsPane(): React.JSX.Element {
           </h3>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.IntegrationsPane.3ba07f933b',
-              'Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.'
+              'kaneo.taskProvidersDescription',
+              'Connect issue trackers to start workspaces with linked task context.'
             )}
           </p>
         </div>
         <div className="space-y-3">
           <LinearIntegrationCard />
           <JiraIntegrationCard />
+          <KaneoIntegrationCard />
         </div>
       </section>
     </div>

@@ -18,7 +18,7 @@ export type ComposerBaseState = {
 // superset): the one work item a Smart selection pins the workspace to. Linear
 // items carry the workspace/org routing the runtime needs to relink the issue.
 export type MobileLinkedWorkItem = Omit<WorkspaceSourceLinkedItem, 'provider'> & {
-  provider: Exclude<WorkspaceSourceLinkedItem['provider'], 'jira'>
+  provider: Exclude<WorkspaceSourceLinkedItem['provider'], 'jira' | 'kaneo'>
 }
 
 export type SmartNameSelectionKind =

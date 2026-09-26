@@ -221,5 +221,18 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
         'disconnect'
       )
     ]
+  },
+  {
+    title: translate('kaneo.integration.searchTitle', 'Kaneo Integration'),
+    description: translate(
+      'kaneo.integration.description',
+      'Paste a Kaneo task URL to start a workspace with linked task context.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('kaneo.search.name', 'kaneo'),
+      ...translateSearchKeyword('kaneo.search.task', 'task'),
+      ...translateSearchKeyword('kaneo.search.apiKey', 'api key'),
+      ...translateSearchKeyword('kaneo.search.selfHosted', 'self-hosted')
+    ]
   }
 ])

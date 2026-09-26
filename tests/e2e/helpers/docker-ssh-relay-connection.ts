@@ -28,7 +28,7 @@ type DockerSshRelayConnectionOptions = {
 
 export async function connectDockerSshRelayTarget(
   page: Page,
-  target: DockerSshRelayTarget,
+  target: Pick<DockerSshRelayTarget, 'host' | 'port' | 'identityFile'>,
   options: DockerSshRelayConnectionOptions = {}
 ): Promise<ConnectedDockerSshRelayTarget> {
   const viaProxyJump = options.viaProxyJump ?? false
