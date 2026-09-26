@@ -5,6 +5,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import type { TerminalExitRecord } from '../../shared/terminal-surface-exit'
+import { toAppSshPtyId } from '../../shared/ssh-pty-id'
 import { dropRetirementProofsForLiveSurfaces } from '../../shared/terminal-retirement-proof-ledger'
 import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventory'
 
@@ -435,6 +436,45 @@ describe('terminal exit records', () => {
       HEADLESS_LEAF_ID
     )
     expect(notifier.focusTerminal).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('routes the restart of an SSH split pane the desktop holds to that desktop pane', async () => {
+    const siblingSshPtyId = toAppSshPtyId('ssh-target', 'relay-pty-sibling')
+    const parentLayout = {
+      root: {
+        type: 'split' as const,
+        direction: 'vertical' as const,
+        first: { type: 'leaf' as const, leafId: HEADLESS_LEAF_ID },
+        second: { type: 'leaf' as const, leafId: SIBLING_LEAF_ID }
+      },
+      activeLeafId: SIBLING_LEAF_ID,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [SIBLING_LEAF_ID]: siblingSshPtyId }
+    }
+    const base = rendererSnapshot([
+      { tabId: TAB_ID, leafId: HEADLESS_LEAF_ID },
+      { tabId: TAB_ID, leafId: SIBLING_LEAF_ID, ptyId: siblingSshPtyId }
+    ])
+    const snapshot = {
+      ...base,
+      tabs: base.tabs.map((tab) => (tab.type === 'terminal' ? { ...tab, parentLayout } : tab))
+    }
+    const { runtime, spawn, notifier } = makeRendererRuntime(snapshot)
+    publishDesktopGraph(runtime, snapshot)
+    runtime.terminalExitRecords.record(exitRecord())
+
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, TAB_ID, HEADLESS_LEAF_ID, {
+      notifyClients: false,
+      intent: 'user'
+    })
+
+    // Why: a runtime spawn would bind a second process the mounted SSH pane never attaches to.
+    expect(notifier.restartExitedTerminal).toHaveBeenCalledWith(
+      TAB_ID,
+      TEST_WORKTREE_ID,
+      HEADLESS_LEAF_ID
+    )
     expect(spawn).not.toHaveBeenCalled()
   })
 

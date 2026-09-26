@@ -108,10 +108,10 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     if (!snapshot || !this.terminalExitRecords.get(leafId) || tab?.type !== 'terminal') {
       return
     }
-    // Why the renderer-graph test, not the publication: a runtime-owned tab can sit inside a
-    // desktop-published snapshot, and no desktop pane would run its restart.
-    const heldByDesktopPane =
-      this.notifier?.restartExitedTerminal && !this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)
+    // Why the renderer graph alone: a desktop pane holds every leaf of a tab the renderer lists,
+    // SSH and serve ones included. The teardown-ownership predicate answers who de-persists a
+    // close, and would send an SSH split pane's restart to a process that pane never attaches to.
+    const heldByDesktopPane = this.notifier?.restartExitedTerminal && this.tabs.has(tab.parentTabId)
     if (heldByDesktopPane) {
       // Why: the desktop pane still holds the dead leaf; a runtime spawn would bind a second process
       // the mounted pane never attaches to.
