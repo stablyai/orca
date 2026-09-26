@@ -49,6 +49,32 @@ describe('notice rows', () => {
       'text-sm',
       'text-foreground'
     )
+    expect(screen.getByRole('heading', { name: 'Steps' }).parentElement).toHaveClass('tabular-nums')
+  })
+  it('renders inline plan code under the wrapper carrying the numeral reset', () => {
+    renderStatus({
+      kind: 'status',
+      text: 'Run `foo()` first.',
+      presentation: 'plan-document'
+    })
+    const codeEl = screen.getByText('foo()')
+    expect(codeEl.tagName).toBe('CODE')
+    const bodyRoot = codeEl.closest('.tabular-nums')
+    expect(bodyRoot).toHaveClass('tabular-nums', '[&_code]:[font-variant-numeric:normal]')
+    expect(bodyRoot).toContainElement(codeEl)
+  })
+  it('renders fenced plan code through the default <pre> path under the numeral reset', () => {
+    renderStatus({
+      kind: 'status',
+      text: '```ts\nconst answer = 42\n```',
+      presentation: 'plan-document'
+    })
+    const card = screen.getByText('Plan').closest('[data-slot="card"]')!
+    const bodyRoot = card.querySelector('.tabular-nums')!
+    expect(bodyRoot).toHaveClass('tabular-nums', '[&_code]:[font-variant-numeric:normal]')
+    const codeEl = bodyRoot.querySelector('pre code')
+    expect(codeEl).toBeInTheDocument()
+    expect(codeEl).toHaveTextContent('const answer = 42')
   })
   it('shows provider notice text once while retaining its diagnostic disclosure', () => {
     renderStatus({
