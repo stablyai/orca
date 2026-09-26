@@ -109,6 +109,7 @@ describe('Electron Vite output contract', () => {
     }
 
     for (const name of [
+      'orca-profiles/profile-index-store',
       'persistence/profile-state/profile-state-access',
       'persistence/profile-state/profile-state-active-location',
       'persistence/profile-state/profile-state-backup-path',
