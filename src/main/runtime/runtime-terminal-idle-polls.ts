@@ -1,13 +1,9 @@
-import { isShellProcess, type AgentStatus } from '../../shared/agent-detection'
+import { isShellProcess } from '../../shared/agent-detection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
 } from '../../shared/runtime-types'
-import {
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview,
-  isMuseReadyPromptPreview
-} from './terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult,
@@ -16,11 +12,12 @@ import {
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import {
-  isTuiIdleSatisfied,
-  quietForegroundProcessProvesTuiIdle,
-  type FirstPartyAgentStatus
+  evaluateTuiIdle,
+  leafTuiIdleEvidence,
+  ptyTuiIdleEvidence,
+  type TuiIdleEvidenceSource,
+  type TuiIdleVerdict
 } from './tui-idle-evidence'
-import type { TuiAgent } from '../../shared/tui-agent'
 
 /**
  * Why null counts as quiet: a record with no output timestamp has produced nothing the
@@ -37,36 +34,32 @@ function isQuietForQuiescence(lastOutputAt: number | null, quiescenceMs: number)
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
-type RuntimeTerminalIdlePollDependencies = {
+type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   intervalMs: number
-  quiescenceMs: number
-  getTabTitle(tabId: string): string | null
   getForegroundProcess(ptyId: string): Promise<string | null> | null
-  getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
-  getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
-  getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
   /** The pane's rendered viewport, or null when the runtime holds no screen model for it. */
   readVisibleScreen(ptyId: string): Promise<string | null> | null
-  /** Re-read the record the waiter registered against; see `liveLeaf` below. */
+  /** Re-read the record the waiter registered against; see `sample` below. */
   getLiveLeaf(leaf: RuntimeLeafRecord): RuntimeLeafRecord
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
 }
 
-type IdlePollEntry =
-  | {
-      kind: 'leaf'
-      waiter: TerminalWaiter
-      leaf: RuntimeLeafRecord
-      foregroundPollInFlight: boolean
-      screenReadInFlight: boolean
-    }
-  | {
-      kind: 'pty'
-      waiter: TerminalWaiter
-      pty: RuntimePtyWorktreeRecord
-      foregroundPollInFlight: boolean
-      screenReadInFlight: boolean
-    }
+type IdlePollEntry = {
+  waiter: TerminalWaiter
+  foregroundPollInFlight: boolean
+  screenReadInFlight: boolean
+} & ({ kind: 'leaf'; leaf: RuntimeLeafRecord } | { kind: 'pty'; pty: RuntimePtyWorktreeRecord })
+
+/** One reading of a waiter's pane, and the results it would settle with. */
+type IdlePollSample = {
+  verdict: TuiIdleVerdict
+  ptyId: string | null
+  ready(): RuntimeTerminalWait
+  blocked(reason: RuntimeTerminalWaitBlockedReason): RuntimeTerminalWait
+  isQuiet(): boolean
+}
+
+const IDLE_ENTRY_FLAGS = { foregroundPollInFlight: false, screenReadInFlight: false }
 
 export class RuntimeTerminalIdlePolls {
   private readonly entries = new Set<IdlePollEntry>()
@@ -74,24 +67,13 @@ export class RuntimeTerminalIdlePolls {
 
   constructor(private readonly deps: RuntimeTerminalIdlePollDependencies) {}
 
-  startLeaf(waiter: TerminalWaiter, leaf: RuntimeLeafRecord): void {
-    this.start({
-      kind: 'leaf',
-      waiter,
-      leaf,
-      foregroundPollInFlight: false,
-      screenReadInFlight: false
-    })
+  /** `verdict` is what the caller just evaluated; weak ready is checked at once, not a sweep later. */
+  startLeaf(waiter: TerminalWaiter, leaf: RuntimeLeafRecord, verdict?: TuiIdleVerdict): void {
+    this.start({ kind: 'leaf', waiter, leaf, ...IDLE_ENTRY_FLAGS }, verdict)
   }
 
-  startPty(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord): void {
-    this.start({
-      kind: 'pty',
-      waiter,
-      pty,
-      foregroundPollInFlight: false,
-      screenReadInFlight: false
-    })
+  startPty(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord, verdict?: TuiIdleVerdict): void {
+    this.start({ kind: 'pty', waiter, pty, ...IDLE_ENTRY_FLAGS }, verdict)
   }
 
   /** Test/diagnostic seam: live sweep handles, which must stay at most one. */
@@ -99,7 +81,7 @@ export class RuntimeTerminalIdlePolls {
     return this.sweepTimer ? 1 : 0
   }
 
-  private start(entry: IdlePollEntry): void {
+  private start(entry: IdlePollEntry, verdict: TuiIdleVerdict | undefined): void {
     this.entries.add(entry)
     entry.waiter.cancelIdlePoll = () => this.stop(entry)
     // Why one shared timer for every waiter: a per-waiter interval multiplied idle
@@ -107,6 +89,11 @@ export class RuntimeTerminalIdlePolls {
     // whether any terminal produced output. Same shape as the synthetic-title spinner.
     if (!this.sweepTimer) {
       this.sweepTimer = setInterval(() => this.sweep(), this.deps.intervalMs)
+    }
+    // Why: the evidence is already in hand and only needs its screen read; a probe that
+    // times out under one interval (the automation start probe) would otherwise never see it.
+    if (verdict?.kind === 'ready-weak') {
+      void this.tick(entry)
     }
   }
 
@@ -116,172 +103,90 @@ export class RuntimeTerminalIdlePolls {
     // slow `ps` must never delay another waiter's checks, and a waiter registered by a
     // resolve inside this sweep must wait for the next tick, as a fresh interval would.
     for (const entry of Array.from(this.entries)) {
-      void (entry.kind === 'leaf' ? this.tickLeaf(entry) : this.tickPty(entry))
+      void this.tick(entry)
     }
   }
 
-  private async tickLeaf(entry: IdlePollEntry & { kind: 'leaf' }): Promise<void> {
-    if (!this.entries.has(entry)) {
-      return
+  private sample(entry: IdlePollEntry): IdlePollSample {
+    const { handle } = entry.waiter
+    if (entry.kind === 'pty') {
+      // Why no re-read here: `ptysById` has a single create-once `set` site, so PTY
+      // records are mutated in place rather than swapped, and a capture stays live.
+      const { pty } = entry
+      const readWaitText = () =>
+        buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+      return {
+        verdict: evaluateTuiIdle(ptyTuiIdleEvidence(this.deps, pty, readWaitText)),
+        ptyId: pty.ptyId,
+        ready: () => buildPtyTerminalWaitResult(handle, 'tui-idle', pty),
+        blocked: (reason) => buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, reason),
+        isQuiet: () => isQuietForQuiescence(pty.lastOutputAt, this.deps.quiescenceMs)
+      }
     }
-    const { waiter } = entry
     // Why re-read: `syncWindowGraph` rebuilds `this.leaves` with fresh objects on every
     // renderer publish, so the record captured at registration stops advancing. Its
-    // `lastOutputAt` freezes, the quiescence gate below then reads an ever-growing
-    // elapsed time, and the waiter settles while the pane is in fact still streaming.
+    // `lastOutputAt` freezes, the quiescence gate then reads an ever-growing elapsed
+    // time, and the waiter settles while the pane is in fact still streaming.
     const leaf = this.deps.getLiveLeaf(entry.leaf)
-    const agent = this.deps.getPaneAgent(leaf.ptyId)
-    let startedForegroundPoll = false
-    try {
-      const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-      const blockedReason = detectTerminalWaitBlockedReason(waitText)
-      if (blockedReason) {
-        this.stop(entry)
-        this.deps.resolve(
-          waiter,
-          buildTerminalWaitBlockedResult(waiter.handle, 'tui-idle', leaf, blockedReason)
-        )
-        return
-      }
-      if (
-        isTuiIdleSatisfied({
-          record: leaf,
-          rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
-          readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText),
-          readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText),
-          agent,
-          firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
-          quiescenceMs: this.deps.quiescenceMs
-        })
-      ) {
-        this.stop(entry)
-        this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
-        return
-      }
-      const screenCheck = leaf.ptyId
-        ? this.readScreenBlockedReason(entry, leaf.ptyId, leaf.lastAgentStatus)
-        : null
-      if (screenCheck) {
-        const screenBlockedReason = await screenCheck
-        if (!this.entries.has(entry)) {
-          return
-        }
-        if (screenBlockedReason) {
-          this.stop(entry)
-          this.deps.resolve(
-            waiter,
-            buildTerminalWaitBlockedResult(
-              waiter.handle,
-              'tui-idle',
-              this.deps.getLiveLeaf(entry.leaf),
-              screenBlockedReason
-            )
-          )
-          return
-        }
-      }
-      if (
-        leaf.lastAgentStatus === null &&
-        quietForegroundProcessProvesTuiIdle(agent) &&
-        leaf.ptyId &&
-        !entry.foregroundPollInFlight
-      ) {
-        const foregroundRead = this.deps.getForegroundProcess(leaf.ptyId)
-        if (!foregroundRead) {
-          return
-        }
-        entry.foregroundPollInFlight = true
-        startedForegroundPoll = true
-        const foreground = await foregroundRead
-        const live = this.deps.getLiveLeaf(entry.leaf)
-        if (
-          foreground &&
-          !isShellProcess(foreground) &&
-          isQuietForQuiescence(live.lastOutputAt, this.deps.quiescenceMs)
-        ) {
-          this.stop(entry)
-          this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', live))
-        }
-      }
-    } catch {
-      // Transient process inspection errors do not retire the waiter.
-    } finally {
-      if (startedForegroundPoll) {
-        entry.foregroundPollInFlight = false
-      }
+    const readWaitText = () =>
+      buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+    const live = () => this.deps.getLiveLeaf(entry.leaf)
+    return {
+      verdict: evaluateTuiIdle(leafTuiIdleEvidence(this.deps, leaf, readWaitText)),
+      ptyId: leaf.ptyId,
+      ready: () => buildTerminalWaitResult(handle, 'tui-idle', live()),
+      blocked: (reason) => buildTerminalWaitBlockedResult(handle, 'tui-idle', live(), reason),
+      isQuiet: () => isQuietForQuiescence(live().lastOutputAt, this.deps.quiescenceMs)
     }
   }
 
-  private async tickPty(entry: IdlePollEntry & { kind: 'pty' }): Promise<void> {
+  private async tick(entry: IdlePollEntry): Promise<void> {
     if (!this.entries.has(entry)) {
       return
     }
-    const { waiter, pty } = entry
-    // Why no re-read here: `ptysById` has a single create-once `set` site, so PTY
-    // records are mutated in place rather than swapped, and a capture stays live.
-    const agent = this.deps.getPaneAgent(pty.ptyId)
     let startedForegroundPoll = false
     try {
-      const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-      const blockedReason = detectTerminalWaitBlockedReason(waitText)
-      if (blockedReason) {
-        this.stop(entry)
-        this.deps.resolve(
-          waiter,
-          buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, blockedReason)
-        )
+      const sample = this.sample(entry)
+      const { verdict, ptyId } = sample
+      if (verdict.kind === 'blocked') {
+        this.settle(entry, sample.blocked(verdict.reason))
         return
       }
-      if (
-        isTuiIdleSatisfied({
-          record: pty,
-          readPositiveBodyEvidence: () =>
-            this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
-            isKnownReadyPromptPreview(waitText),
-          readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText),
-          agent,
-          firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
-          quiescenceMs: this.deps.quiescenceMs
-        })
-      ) {
-        this.stop(entry)
-        this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
+      // Why strong ready outranks the screen: the detector is not scoped to a region, so dialog
+      // wording anywhere on a finished agent's screen would otherwise read as blocked.
+      if (verdict.kind === 'ready-strong') {
+        this.settle(entry, sample.ready())
         return
       }
-      const screenCheck = this.readScreenBlockedReason(entry, pty.ptyId, pty.lastAgentStatus)
-      if (screenCheck) {
-        const screenBlockedReason = await screenCheck
-        if (!this.entries.has(entry)) {
-          return
-        }
-        if (screenBlockedReason) {
-          this.stop(entry)
-          this.deps.resolve(
-            waiter,
-            buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, screenBlockedReason)
-          )
-          return
-        }
+      // Why no screen read while working: its output can quote dialog wording (a diff of this
+      // detector), and the dialogs only the screen shows are start-up ones, painted before any title.
+      if (verdict.kind === 'working' || entry.screenReadInFlight) {
+        return
       }
-      if (
-        pty.lastAgentStatus === null &&
-        quietForegroundProcessProvesTuiIdle(agent) &&
-        !entry.foregroundPollInFlight
-      ) {
-        const foregroundRead = this.deps.getForegroundProcess(pty.ptyId)
+      const screenRead = ptyId ? this.readScreenBlockedReason(entry, ptyId) : null
+      // Why await only a real read: a pane with no screen model keeps its tick synchronous.
+      const screenBlockedReason = screenRead ? await screenRead : null
+      if (!this.entries.has(entry)) {
+        return
+      }
+      if (screenBlockedReason) {
+        this.settle(entry, sample.blocked(screenBlockedReason))
+        return
+      }
+      if (verdict.kind === 'ready-weak') {
+        this.settle(entry, sample.ready())
+        return
+      }
+      if (verdict.quietForeground && ptyId && !entry.foregroundPollInFlight) {
+        const foregroundRead = this.deps.getForegroundProcess(ptyId)
         if (!foregroundRead) {
           return
         }
         entry.foregroundPollInFlight = true
         startedForegroundPoll = true
         const foreground = await foregroundRead
-        if (
-          foreground &&
-          !isShellProcess(foreground) &&
-          isQuietForQuiescence(pty.lastOutputAt, this.deps.quiescenceMs)
-        ) {
-          this.stop(entry)
-          this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
+        if (foreground && !isShellProcess(foreground) && sample.isQuiet()) {
+          this.settle(entry, sample.ready())
         }
       }
     } catch {
@@ -297,14 +202,8 @@ export class RuntimeTerminalIdlePolls {
    *  workspace trust) loses those rows from the line tail; the rendered screen still has them. */
   private readScreenBlockedReason(
     entry: IdlePollEntry,
-    ptyId: string,
-    agentStatus: AgentStatus | null
+    ptyId: string
   ): Promise<RuntimeTerminalWaitBlockedReason | null> | null {
-    // Why not while working: a working agent's screen can quote dialog wording (a diff of this
-    // detector), and the dialogs only the screen shows are start-up ones, painted before any title.
-    if (entry.screenReadInFlight || agentStatus === 'working') {
-      return null
-    }
     const screenRead = this.deps.readVisibleScreen(ptyId)
     if (!screenRead) {
       return null
@@ -315,6 +214,11 @@ export class RuntimeTerminalIdlePolls {
       .finally(() => {
         entry.screenReadInFlight = false
       })
+  }
+
+  private settle(entry: IdlePollEntry, result: RuntimeTerminalWait): void {
+    this.stop(entry)
+    this.deps.resolve(entry.waiter, result)
   }
 
   private stop(entry: IdlePollEntry): void {

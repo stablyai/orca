@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
 
 function readCapture(name: string): { data: string; size: { cols: number; rows: number } } {
@@ -98,5 +98,145 @@ describe("Claude's workspace trust dialog, from captured transcripts", () => {
         timeoutMs: 6_500
       })
     ).rejects.toThrow('timeout')
+  })
+})
+
+// A shell auto-title names Claude before Claude paints anything: oh-my-zsh sends the command
+// line as OSC 2 and then `claude` as OSC 1; fish's default is `claude <cwd>`. That bare name is
+// not a rest signal, so it must never let a launch type into the dialog below it.
+const OH_MY_ZSH_TITLES = ['\x1b]2;claude --dangerously-skip-permissions\x07', '\x1b]1;claude\x07']
+const FISH_TITLE = '\x1b]0;claude ~/p/repo\x07'
+// eslint-disable-next-line no-control-regex -- OSC title sequences are control characters
+const OSC_0_TITLE = /\x1b\]0;[^\x07]*\x07/g
+const POLL_INTERVAL_MS = 2_000
+const QUIESCENCE_MS = 3_000
+
+describe("Claude's trust dialog under a shell auto-title", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function createPane(name = 'claude-dialog-trust-workspace') {
+    const { data, size } = readCapture(name)
+    const pane = await createTranscriptPane({
+      paneTitle: 'claude',
+      foregroundProcess: 'claude',
+      launchAgent: 'claude',
+      size,
+      data: ''
+    })
+    // Why after creation: the pane's own set-up awaits real timers.
+    vi.useFakeTimers()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both resolvers are protected methods on the runtime; the spies only count calls.
+    const internals = pane.runtime as unknown as {
+      resolveTuiIdleWaiters: (...args: unknown[]) => void
+      resolvePtyTuiIdleWaiters: (...args: unknown[]) => void
+    }
+    const titleResolves = [
+      vi.spyOn(internals, 'resolveTuiIdleWaiters'),
+      vi.spyOn(internals, 'resolvePtyTuiIdleWaiters')
+    ]
+    const write = (chunk: string) =>
+      pane.runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, chunk, Date.now())
+    const paint = (bytes = data) => {
+      const encoded = Buffer.from(bytes, 'utf8')
+      const decoder = new TextDecoder()
+      for (let offset = 0; offset < encoded.length; offset += 1024) {
+        write(decoder.decode(encoded.subarray(offset, offset + 1024), { stream: true }))
+      }
+    }
+    const wait = () => {
+      const settled = vi.fn()
+      const promise = pane.runtime.waitForTerminal(pane.handle, {
+        condition: 'tui-idle',
+        timeoutMs: 60_000
+      })
+      promise.then(settled, () => {})
+      return { promise, settled }
+    }
+    const titleResolveCount = () =>
+      titleResolves.reduce((sum, spy) => sum + spy.mock.calls.length, 0)
+    return { data, write, paint, wait, titleResolveCount }
+  }
+
+  it('reports the dialog to a wait registered after the pane has gone quiet', async () => {
+    const pane = await createPane()
+    OH_MY_ZSH_TITLES.forEach(pane.write)
+    pane.paint()
+    await vi.advanceTimersByTimeAsync(QUIESCENCE_MS + 500)
+
+    const { promise } = pane.wait()
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(promise).resolves.toMatchObject({
+      satisfied: false,
+      blockedReason: 'agent-trust-workspace'
+    })
+  })
+
+  // Why the resolver differs: the command-line title reads as `permission`, and a
+  // permission-to-idle step is not offered to waiters, so oh-my-zsh reaches the poll instead.
+  it.each([
+    ['oh-my-zsh', OH_MY_ZSH_TITLES, false],
+    ['fish', [FISH_TITLE], true]
+  ])(
+    'does not settle ready when the %s title arrives before the dialog paints',
+    async (_, titles, offered) => {
+      const pane = await createPane()
+      const { promise, settled } = pane.wait()
+      titles.forEach(pane.write)
+      expect(pane.titleResolveCount() > 0).toBe(offered)
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      expect(settled).not.toHaveBeenCalled()
+
+      pane.paint()
+      await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+      await expect(promise).resolves.toMatchObject({
+        satisfied: false,
+        blockedReason: 'agent-trust-workspace'
+      })
+    }
+  )
+
+  it('does not settle ready when the exit probe restores the name-only title', async () => {
+    const pane = await createPane()
+    const { promise, settled } = pane.wait()
+    pane.write('\x1b]1;claude\x07')
+    const resolvesBeforeRestore = pane.titleResolveCount()
+    // A neutral title reads as the agent exiting; the probe finds `claude` still in front and
+    // restores the idle status, offering it to the waiters again.
+    pane.write('\x1b]0;~/p/repo\x07')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pane.titleResolveCount()).toBeGreaterThan(resolvesBeforeRestore)
+    expect(settled).not.toHaveBeenCalled()
+
+    pane.paint()
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS)
+    await expect(promise).resolves.toMatchObject({
+      satisfied: false,
+      blockedReason: 'agent-trust-workspace'
+    })
+  })
+
+  it("reports ready at once when Claude's own idle title follows the answer", async () => {
+    const pane = await createPane('claude-dialog-trust-workspace-answered')
+    OH_MY_ZSH_TITLES.forEach(pane.write)
+    pane.paint()
+    const { promise } = pane.wait()
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(promise).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it('reports ready after the quiet window when Claude paints no title of its own', async () => {
+    const pane = await createPane('claude-dialog-trust-workspace-answered')
+    OH_MY_ZSH_TITLES.forEach(pane.write)
+    pane.paint(pane.data.replace(OSC_0_TITLE, ''))
+    const { promise, settled } = pane.wait()
+    await vi.advanceTimersByTimeAsync(QUIESCENCE_MS - 500)
+    expect(settled).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 2)
+    const wait = await promise
+    expect(wait).toMatchObject({ satisfied: true })
+    expect(wait).not.toHaveProperty('blockedReason')
   })
 })

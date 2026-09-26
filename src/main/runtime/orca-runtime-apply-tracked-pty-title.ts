@@ -62,10 +62,9 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       // parked on its poll, so the later explicit idle is an idle→idle step that still has
       // to be offered. The resolve helper re-ranks and returns early when it is not yet
       // satisfying evidence, which is what the old edge guard was really protecting.
-      // Why also gated on a change: re-ranking an unchanged idle title cannot reach a
-      // different verdict. Tier 1 and 2 depend only on the title and the status; tier 3
-      // needs the stream to go quiet, which cannot happen on the frame that just wrote to
-      // it. Repainted frames would otherwise re-scan the pane tail for nothing.
+      // Why also gated on a change: the resolver settles only a blocked tail or strong
+      // ready, and the poll catches either between title changes; repainted frames would
+      // otherwise re-scan the pane tail for nothing.
       if (agentStatus === 'idle' && prevStatus !== 'permission' && ptyRecordChanged) {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
       }
@@ -123,8 +122,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       // which isn't a task-completion signal.
       // Why not `prevStatus !== 'idle'`: see the pty branch — the resolve helper re-ranks,
       // so an idle→idle step that upgrades weak evidence to explicit must still be offered.
-      // Why the change gate: see the pty branch — an unchanged idle title re-ranks to the
-      // same verdict, so repainted frames must not re-scan the tail.
+      // Why the change gate: see the pty branch — repainted frames must not re-scan the tail.
       if (
         agentStatus === 'idle' &&
         prevStatus !== 'permission' &&
