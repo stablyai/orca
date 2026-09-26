@@ -107,10 +107,9 @@ export class RuntimeClientSettingsController {
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
       visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
       defaultRepoSelection: settings.defaultRepoSelection ?? null,
-      // Why: a host store can hold a non-array here (0a2b6e7f); a paired client
-      // must never receive a shape the contract does not promise.
+      // Persisted settings can violate the paired client's string-array contract.
       defaultLinearTeamSelection: Array.isArray(settings.defaultLinearTeamSelection)
-        ? settings.defaultLinearTeamSelection
+        ? settings.defaultLinearTeamSelection.filter((id): id is string => typeof id === 'string')
         : null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,

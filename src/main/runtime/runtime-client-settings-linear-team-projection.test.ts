@@ -32,6 +32,13 @@ describe('RuntimeClientSettingsController Linear team selection projection', () 
     ).toBeNull()
   })
 
+  it('publishes only string team IDs from a malformed array', () => {
+    expect(
+      projectionOf(hostSettings({ defaultLinearTeamSelection: ['t1', 7, null, {}, 't2'] }))
+        .defaultLinearTeamSelection
+    ).toEqual(['t1', 't2'])
+  })
+
   it('publishes null when the host store holds a string or an object', () => {
     expect(
       projectionOf(hostSettings({ defaultLinearTeamSelection: 't1' })).defaultLinearTeamSelection
