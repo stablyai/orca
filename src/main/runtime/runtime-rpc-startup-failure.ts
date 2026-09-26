@@ -163,3 +163,36 @@ export async function showRuntimeRpcStartupFailureDialog(
     console.error('[runtime] Failed to show RPC startup failure dialog:', dialogError)
   }
 }
+
+// Why a dialog and not only a log: the pin exists for an operator-fixed forwarder, and a silent failure
+// there looks like a network problem on the client side.
+export async function showPinnedWebSocketBindFailureDialog(
+  parentWindow: BrowserWindow,
+  error: unknown,
+  configFile: string
+): Promise<void> {
+  if (!(await waitForWindowToShow(parentWindow))) {
+    return
+  }
+  try {
+    await dialog.showMessageBox(parentWindow, {
+      type: 'error',
+      buttons: [translateMain('runtimeRpc.pinnedBindFailure.continueButton', 'Continue')],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+      title: translateMain('runtimeRpc.pinnedBindFailure.title', 'Orca remote access unavailable'),
+      message: translateMain(
+        'runtimeRpc.pinnedBindFailure.message',
+        "Orca couldn't start its remote listener on the pinned address."
+      ),
+      detail: translateMain(
+        'runtimeRpc.pinnedBindFailure.detail',
+        "Paired devices and remote clients can't connect for this session. Orca did not fall back to another port or network interface.\n\nFix {{file}} in Orca's data folder or free the port, then restart Orca.\n\nCause: {{cause}}",
+        { cause: describeRuntimeRpcStartFailure(error), file: configFile }
+      )
+    })
+  } catch (dialogError) {
+    console.error('[runtime] Failed to show pinned WebSocket bind failure dialog:', dialogError)
+  }
+}

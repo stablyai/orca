@@ -32,6 +32,7 @@ import {
   recordRuntimeRpcStartFailure,
   showRuntimeRpcStartupFailureDialog
 } from '../runtime/runtime-rpc-startup-failure'
+import { desktopPinnedWsBindOptions, surfacePinnedWsBindFailure } from './desktop-pinned-ws-bind'
 import { CliInstaller } from '../cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from '../cli/linux-bare-orca-dispatcher'
 import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
@@ -91,6 +92,8 @@ function installRuntimeRpc(
           preferPinnedWsPort: true
         }
       : {}),
+    // Why last: an operator pin (runtime-ws-bind.json) outranks the dev port too.
+    ...desktopPinnedWsBindOptions(Boolean(serveOptions) || isE2E),
     webClientRoot: getBundledWebClientRoot()
   })
   state.runtimeRpc = runtimeRpc
@@ -244,6 +247,8 @@ async function launchDesktopMode(
     void state.mainProcessI18nReady.then(() =>
       showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
     )
+  } else {
+    surfacePinnedWsBindFailure(win, runtimeRpc)
   }
   // Why after the window and not before it: the default-session request guard already holds every
   // fetcher until the persisted proxy lands, so this only has to keep the launch phase itself

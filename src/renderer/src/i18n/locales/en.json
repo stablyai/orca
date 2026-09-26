@@ -18227,6 +18227,12 @@
         "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
         "unknown": "Restart Orca to try again."
       }
+    },
+    "pinnedBindFailure": {
+      "continueButton": "Continue",
+      "title": "Orca remote access unavailable",
+      "message": "Orca couldn't start its remote listener on the pinned address.",
+      "detail": "Paired devices and remote clients can't connect for this session. Orca did not fall back to another port or network interface.\n\nFix {{file}} in Orca's data folder or free the port, then restart Orca.\n\nCause: {{cause}}"
     }
   },
   "featureTips": {
