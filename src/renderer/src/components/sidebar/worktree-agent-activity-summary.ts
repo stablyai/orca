@@ -23,6 +23,8 @@ export type WorktreeAgentActivitySummary = {
   hasInterrupted: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  /** A departed agent's failure; unlike `hasFailed` it yields to live work. */
+  hasRetainedFailed: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
   /** Stale rows suppress generated permission labels while preserving native title fallback. */
   stalePaneIdsByTabId: Record<string, ReadonlySet<string>>
@@ -38,6 +40,7 @@ const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasInterrupted: false,
   hasLiveDone: false,
   hasRetainedDone: false,
+  hasRetainedFailed: false,
   agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID,
   stalePaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
 }
@@ -153,7 +156,7 @@ function getWorktreeAgentActivitySummaries(
     const summary = summaryForWorktree(retained.worktreeId)
     // Why: a failed agent is retained so its failure stays visible, not so it reads done.
     if (agentVerdictDisplayMark(retained.entry) === 'failed') {
-      summary.hasFailed = true
+      summary.hasRetainedFailed = true
     } else {
       summary.hasRetainedDone = true
     }
@@ -203,6 +206,7 @@ function summariesEqual(
     previous.hasInterrupted === next.hasInterrupted &&
     previous.hasLiveDone === next.hasLiveDone &&
     previous.hasRetainedDone === next.hasRetainedDone &&
+    previous.hasRetainedFailed === next.hasRetainedFailed &&
     agentStatusPaneIdsByTabIdEqual(
       previous.agentStatusPaneIdsByTabId,
       next.agentStatusPaneIdsByTabId

@@ -282,34 +282,75 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summaryFor('waiting', 'failure')).toMatchObject({ hasFailed: true, hasPermission: true })
   })
 
-  it('reads a retained failed agent as failed after its pane goes away, not done', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(2_000)
-    const retainedTab = makeTab('tab-2', 'repo::/wt-2')
-    const summary = selectWorktreeAgentActivitySummary(
-      {
-        tabsByWorktree: { 'repo::/wt-2': [retainedTab] },
-        agentStatusEpoch: 4,
-        agentStatusByPaneKey: {},
-        migrationUnsupportedByPtyId: {},
-        runtimeAgentOrchestrationByPaneKey: {},
-        retainedAgentsByPaneKey: {
-          'tab-2:0': {
-            entry: makeAgentStatusEntry({
-              paneKey: 'tab-2:0',
-              state: 'done',
-              mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1_000 }
-            }),
-            worktreeId: 'repo::/wt-2',
-            tab: retainedTab,
-            agentType: 'claude',
-            startedAt: 1_000
-          }
-        }
-      },
-      'repo::/wt-2'
-    )
+  describe('a failed agent on the worktree card', () => {
+    const worktreeId = 'repo::/wt-2'
+    const liveTab = makeTab('tab-1', worktreeId)
+    const retainedTab = makeTab('tab-2', worktreeId)
+    const failure = { state: 'done', outcome: 'failure', stateStartedAt: 1_000 } as const
+    const workingKey = makePaneKey('tab-1', LEAF_ID)
+    const failedKey = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
+    const working = makeAgentStatusEntry({ paneKey: workingKey, state: 'working' })
+    const retainedFailure = {
+      'tab-2:0': {
+        entry: makeAgentStatusEntry({ paneKey: 'tab-2:0', state: 'done', mainAgent: failure }),
+        worktreeId,
+        tab: retainedTab,
+        agentType: 'claude' as const,
+        startedAt: 1_000
+      }
+    }
+    let epoch = 100
+    const cardFor = (
+      agentStatusByPaneKey: AgentActivityInput['agentStatusByPaneKey'],
+      retainedAgentsByPaneKey: AgentActivityInput['retainedAgentsByPaneKey']
+    ) => {
+      vi.spyOn(Date, 'now').mockReturnValue(2_000)
+      const summary = selectWorktreeAgentActivitySummary(
+        {
+          tabsByWorktree: { [worktreeId]: [liveTab, retainedTab] },
+          agentStatusEpoch: epoch++,
+          agentStatusByPaneKey,
+          migrationUnsupportedByPtyId: {},
+          runtimeAgentOrchestrationByPaneKey: {},
+          retainedAgentsByPaneKey
+        },
+        worktreeId
+      )
+      return {
+        summary,
+        status: resolveWorktreeStatus({ tabs: [], browserTabs: [], ptyIdsByTabId: {}, ...summary })
+      }
+    }
 
-    expect(summary).toMatchObject({ hasFailed: true, hasRetainedDone: false })
+    it('reads a retained failure as failed once nothing else is live, not done', () => {
+      const { summary, status } = cardFor({}, retainedFailure)
+
+      expect(summary).toMatchObject({ hasRetainedFailed: true, hasRetainedDone: false })
+      expect(status).toBe('failed')
+    })
+
+    it('lets live work outrank a departed agent that failed', () => {
+      const { summary, status } = cardFor({ [workingKey]: working }, retainedFailure)
+
+      expect(summary).toMatchObject({ hasFailed: false, hasRetainedFailed: true })
+      expect(status).toBe('working')
+    })
+
+    it('keeps a live failure above live work', () => {
+      const { status } = cardFor(
+        {
+          [workingKey]: working,
+          [failedKey]: makeAgentStatusEntry({
+            paneKey: failedKey,
+            state: 'done',
+            mainAgent: failure
+          })
+        },
+        {}
+      )
+
+      expect(status).toBe('failed')
+    })
   })
 
   it('lets an unconfirmed restored row suppress only its pane title', () => {

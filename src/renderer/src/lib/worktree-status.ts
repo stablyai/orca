@@ -169,7 +169,7 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  *
  * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
  * `hasLiveDone` are fresh hook entries ({blocked,waiting} / {working} / {done});
- * `hasRetainedDone` is a retained-agent snapshot scoped to this worktreeId.
+ * `hasRetainedDone`/`hasRetainedFailed` are retained-agent snapshots scoped to this worktreeId.
  */
 export function resolveWorktreeStatus(args: {
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
@@ -187,6 +187,7 @@ export function resolveWorktreeStatus(args: {
   hasInterrupted?: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  hasRetainedFailed?: boolean
 }): WorktreeStatus {
   const heuristic = getWorktreeStatus(
     args.tabs,
@@ -218,6 +219,10 @@ export function resolveWorktreeStatus(args: {
   }
   if (args.hasLiveMonitoring || heuristic === 'monitoring') {
     return 'monitoring'
+  }
+  // Why: a departed agent's failure has no expiry, so it must not pin the card over live work.
+  if (args.hasRetainedFailed) {
+    return 'failed'
   }
   // A stop follows live states, but must not collapse into success.
   if (args.hasInterrupted) {
