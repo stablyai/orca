@@ -74,6 +74,8 @@ export async function runP4(
     program,
     args,
     cwd: options.cwd,
+    // Why: p4 resolves relative paths and P4CONFIG from $PWD, not the process cwd, so an inherited PWD would point it at the wrong directory.
+    env: { ...process.env, PWD: options.cwd },
     input: options.input,
     signal: options.signal,
     timeoutMs: options.timeoutMs ?? P4_TIMEOUT_MS,

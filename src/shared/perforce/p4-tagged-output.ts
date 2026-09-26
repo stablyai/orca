@@ -5,6 +5,7 @@ export function parseTaggedOutput(stdout: string): P4Record[] {
   const records: P4Record[] = []
   let current: P4Record = {}
   let lastKey: string | null = null
+  let firstKey: string | null = null
   let pendingBlankLines = 0
   const flush = (): void => {
     if (Object.keys(current).length > 0) {
@@ -12,6 +13,7 @@ export function parseTaggedOutput(stdout: string): P4Record[] {
     }
     current = {}
     lastKey = null
+    firstKey = null
     pendingBlankLines = 0
   }
   for (const line of stdout.split(/\r?\n/)) {
@@ -20,20 +22,18 @@ export function parseTaggedOutput(stdout: string): P4Record[] {
       continue
     }
     if (line.startsWith('... ')) {
-      // Why: a blank line only ends a record when a new tagged field follows it;
-      // otherwise it is part of a multi-line value such as a description.
-      if (pendingBlankLines > 0) {
-        flush()
-      }
       const body = line.slice(4)
       const space = body.indexOf(' ')
       const key = space === -1 ? body : body.slice(0, space)
-      // Records without blank separators repeat their first key to start the next one.
+      // Why: a repeated field starts the next record. A blank line alone does not, because multi-line
+      // values (descriptions) are followed by one before the record's remaining fields.
       if (key in current && !/\d$/.test(key)) {
         flush()
       }
+      firstKey ??= key
       current[key] = space === -1 ? '' : body.slice(space + 1)
       lastKey = key
+      pendingBlankLines = 0
     } else if (lastKey !== null) {
       current[lastKey] += `${'\n'.repeat(pendingBlankLines + 1)}${line}`
       pendingBlankLines = 0

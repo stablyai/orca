@@ -101,8 +101,12 @@ export function PerforceChangelistHeader({
         <Button
           variant="ghost"
           size="icon-xs"
-          title="Submit change"
-          disabled={busy || fileCount === 0}
+          title={
+            shelved > 0
+              ? 'Delete the shelf first: Perforce cannot submit a changelist that has shelved files'
+              : 'Submit change'
+          }
+          disabled={busy || fileCount === 0 || shelved > 0}
           onClick={actions.onSubmit}
         >
           <Send />
