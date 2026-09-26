@@ -38,7 +38,7 @@ import {
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const TERMINAL_COUNT = 6
-const RECONNECT_CYCLES = 5
+const RECONNECT_CYCLES = 20
 
 type RemoteResourceSample = {
   ptsCount: number
@@ -121,6 +121,10 @@ async function recordReconnectOwnership(
     return {
       connection: state.sshConnectionStates.get(targetId),
       workspaceSessionReady: state.workspaceSessionReady,
+      sync: state.remoteWorkspaceSyncStatusByTargetId[targetId],
+      retry: state.directSshPaneRetryByTabId,
+      bindings: state.directSshLivePtyBindingByTabId,
+      retryHistory: state.directSshPaneRetryHistoryByTabId,
       tabs: (state.tabsByWorktree[worktreeId] ?? []).map((tab) => ({
         tab,
         layout: state.terminalLayoutsByTabId[tab.id],
@@ -219,10 +223,16 @@ test.describe('Docker SSH relay resource accumulation', () => {
       await recordReconnectOwnership(orcaPage, target, remote, 'before', testInfo)
       for (let cycle = 0; cycle < RECONNECT_CYCLES; cycle += 1) {
         await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
+        // Exercise both overlapping hydration and completed attachment between reconnects.
+        await orcaPage.waitForTimeout([0, 250, 750, 1500][cycle % 4]!)
         reconnectSamples.push(sampleRemoteResources(target))
         await recordReconnectOwnership(orcaPage, target, remote, String(cycle + 1), testInfo)
       }
       console.log(`[resource-accumulation] reconnects ${JSON.stringify(reconnectSamples)}`)
+      await execInTerminal(orcaPage, firstPtyId, `echo RECONNECT_READY_${runId}`)
+      await waitForTerminalOutput(orcaPage, `RECONNECT_READY_${runId}`, 60_000)
+      await recordReconnectOwnership(orcaPage, target, remote, 'attached', testInfo)
+      console.log(`[resource-accumulation] attached ${JSON.stringify(sampleRemoteResources(target))}`)
 
       const first = reconnectSamples[0]
       const last = reconnectSamples.at(-1)!
