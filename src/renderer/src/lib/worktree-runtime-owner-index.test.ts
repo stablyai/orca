@@ -1,7 +1,23 @@
-import { describe, expect, it } from 'vitest'
-import { findIndexedWorktreeOwnerForHost } from './worktree-runtime-owner-index'
+import { describe, expect, expectTypeOf, it } from 'vitest'
+import {
+  findIndexedProjectGroupOwner,
+  findIndexedWorktreeOwnerForHost,
+  isProjectGroupIdAmbiguous
+} from './worktree-runtime-owner-index'
 
 describe('worktree runtime owner index', () => {
+  it('preserves full project-group records while resolving host-qualified ids', () => {
+    const local = { id: 'group-1', name: 'Local group', executionHostId: 'local' }
+    const remote = { id: 'group-1', name: 'Remote group', executionHostId: 'ssh:target' }
+    const groups = [local, remote]
+
+    expect(isProjectGroupIdAmbiguous(groups, 'group-1')).toBe(true)
+    expect(findIndexedProjectGroupOwner(groups, 'group-1')).toBeNull()
+    const owner = findIndexedProjectGroupOwner(groups, 'group-1', 'ssh:target')
+    expect(owner).toBe(remote)
+    expectTypeOf(owner).toEqualTypeOf<typeof remote | null>()
+  })
+
   it('indexes paired worktrees by both runtime owner and physical host', () => {
     const paired = {
       id: 'repo-1::same-id',
