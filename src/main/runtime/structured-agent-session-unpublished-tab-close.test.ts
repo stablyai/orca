@@ -36,7 +36,7 @@ function runtimeInstallingHost(listed: readonly string[]) {
               : null
         }
       },
-      getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [...listed] }),
+      listVisibleSessionIds: () => [...listed],
       setSessionTabVisibility,
       close
     } as never)

@@ -18,6 +18,7 @@ import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../agent-hooks/fi
 import { firstWorkRenameDeps } from '../agent-hooks/first-work-rename-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 import { buildWorktreeListingPage } from './worktree-listing-host-scope'
 import { structuredWorkerHasOpenDispatch } from './structured-worker-identity'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
@@ -141,6 +142,10 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
     await installStructuredAgentSessionHost({
       stateDirectory: getProfileUserDataPath(),
       hostId: LOCAL_EXECUTION_HOST_ID,
+      savedTabSessionIds: () =>
+        collectSavedStructuredAgentSessionIds(
+          this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
+        ),
       claimKeyId: this.agentSessionClaimSigner.keyId,
       // Resolves folder workspaces as well as git worktrees, so a chat session
       // in a plain folder lands in the folder rather than failing to resolve.

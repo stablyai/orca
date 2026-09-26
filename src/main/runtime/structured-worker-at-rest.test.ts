@@ -52,7 +52,7 @@ function installHost(current: AgentSessionRecord | null, tabs: string[]) {
   const host = {
     deps: { store: { getRecord: () => current } },
     hasSession: () => false,
-    getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: tabs }),
+    listVisibleSessionIds: () => tabs,
     setSessionTabVisibility: vi.fn(async (_id: string, visible: boolean) => {
       tabs.splice(0, tabs.length, ...(visible ? [SESSION] : []))
     }),

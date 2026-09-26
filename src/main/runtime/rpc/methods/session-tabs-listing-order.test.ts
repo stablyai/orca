@@ -40,7 +40,7 @@ function restartedRuntime() {
     setStructuredAgentSessionHost({
       reconcileRestartLeases: async () => undefined,
       restoreStartupSessions: async () => undefined,
-      getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: ['listed-chat'] }),
+      listVisibleSessionIds: () => ['listed-chat'],
       listPersistedSessionTabs: () => [
         { sessionId: 'listed-chat', workspaceId: 'workspace-1', agent: 'codex' }
       ]

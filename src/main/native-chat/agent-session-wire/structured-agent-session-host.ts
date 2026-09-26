@@ -208,7 +208,7 @@ export class StructuredAgentSessionHost {
   /** The tabs the durable index lists, from records alone: no journal is read. */
   listPersistedSessionTabs = (sessionIds: readonly string[]) =>
     sessionTabs.listPersistedStructuredAgentSessionTabs(this.deps, sessionIds)
-  getPersistedVisibleSessionTabIndex = () => this.deps.store.getVisibleSessionTabIndex()
+  listVisibleSessionIds = (): string[] => this.deps.store.listVisibleSessionIds()
   getSessionTabId = (sessionId: string): string | null => this.deps.store.getSessionTabId(sessionId)
 
   setSessionTabVisibility = async (

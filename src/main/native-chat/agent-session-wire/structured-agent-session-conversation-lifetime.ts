@@ -48,11 +48,8 @@ export function createStructuredAgentSessionConversationLifetime(host: {
     closeStructuredAgentSessionConversationUnderSerialize(
       {
         sessions,
-        closeStatus: (id) => {
-          const tabs = deps().store.getVisibleSessionTabIndex()
-          // A legacy store cannot say, so the row stays; restart is the boundary that forgets.
-          host.closeStatus(id, { listed: !tabs.present || tabs.sessionIds.includes(id) })
-        }
+        closeStatus: (id) =>
+          host.closeStatus(id, { listed: deps().store.listVisibleSessionIds().includes(id) })
       },
       sessionId
     )

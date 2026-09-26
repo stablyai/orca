@@ -3,8 +3,6 @@ import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './orca-ru
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
-import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRepoSearchRefs
@@ -59,7 +57,6 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       })
     }
     const host = getStructuredAgentSessionHost()
-    await this.adoptLegacyStructuredAgentSessionTabs(host)
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
@@ -73,35 +70,17 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     this.publishListedStructuredAgentSessionTabs(host)
   }
 
-  /** A store that predates the tab index lists its chats only in the saved workspace session. Each
-   *  is written into the index, as the per-tab publish always did, so the first other write to the
-   *  index cannot leave it holding one chat. */
-  private async adoptLegacyStructuredAgentSessionTabs(host): Promise<void> {
-    if (typeof host?.getPersistedVisibleSessionTabIndex !== 'function') {
-      return
-    }
-    if (host.getPersistedVisibleSessionTabIndex().present) {
-      return
-    }
-    const saved = this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
-    for (const sessionId of collectSavedStructuredAgentSessionIds(saved)) {
-      await host.setSessionTabVisibility(sessionId, true).catch(() => undefined)
-    }
-  }
-
   /** Every listed chat in one store write per workspace, from the index and the records alone.
    *  Synchronous from the index read to the last store, so a close lands wholly before or after. */
   private publishListedStructuredAgentSessionTabs(host): void {
     if (
-      typeof host?.getPersistedVisibleSessionTabIndex !== 'function' ||
+      typeof host?.listVisibleSessionIds !== 'function' ||
       typeof host.listPersistedSessionTabs !== 'function'
     ) {
       return
     }
     const byWorkspace = new Map<string, StructuredAgentSessionTabToAppend[]>()
-    for (const tab of host.listPersistedSessionTabs(
-      host.getPersistedVisibleSessionTabIndex().sessionIds
-    )) {
+    for (const tab of host.listPersistedSessionTabs(host.listVisibleSessionIds())) {
       if (tab.agent !== 'codex' && tab.agent !== 'claude') {
         continue
       }

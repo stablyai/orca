@@ -130,6 +130,28 @@ export function setAgentSessionTabVisibility(
   }
 }
 
+/**
+ * A store written before any tab index lists its chats only in the saved workspace session. The
+ * table is seeded from that session once, at open, so no later single write can create a table
+ * holding one chat and drop the rest. True when it seeded.
+ */
+export function seedAgentSessionTabTable(
+  state: AgentSessionStoreState,
+  savedTabSessionIds: readonly string[]
+): boolean {
+  if (state.sessionTabs !== null) {
+    return false
+  }
+  const table = new AgentSessionTabTable()
+  for (const sessionId of savedTabSessionIds) {
+    if (state.records.has(sessionId)) {
+      table.show(sessionId)
+    }
+  }
+  state.sessionTabs = table
+  return true
+}
+
 export type PersistedAgentSessionTab = { tabId: string; sessionId: string }
 
 export function serializeAgentSessionTabTable(table: AgentSessionTabTable): {

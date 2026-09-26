@@ -75,6 +75,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   hostId: string
   /** Key id this host's claims are minted under. */
   claimKeyId: string
+  /** The saved workspace session's chat tabs; seeds a store that predates any tab index. */
+  savedTabSessionIds?: () => readonly string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   resolveCodexCommand?: (options?: { pathEnv?: string | null; homePath?: string }) => string
   resolveClaudeCommand?: () => string
@@ -198,7 +200,8 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   const { resolveCodexEnvironment, resolveClaudeInheritedEnv } = envResolvers
   const store = await AgentSessionRecordStore.open({
     directory: join(deps.stateDirectory, RECORD_STORE_DIR_NAME),
-    hostId: deps.hostId
+    hostId: deps.hostId,
+    ...(deps.savedTabSessionIds ? { savedTabSessionIds: deps.savedTabSessionIds } : {})
   })
   // Why: only the durable store can identify a provider child lost before record publication.
   void (deps.reapOrphanChildren ?? stopOrphanAgentSessionChildren)({ store }).catch((error) => {

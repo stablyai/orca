@@ -53,7 +53,7 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
       // Only a chat the index still lists, in the workspace the close names; anything else is unknown.
       if (
         record?.location?.workspaceId === args.worktreeId &&
-        host.getPersistedVisibleSessionTabIndex?.().sessionIds.includes(sessionId) === true
+        host.listVisibleSessionIds?.().includes(sessionId) === true
       ) {
         await this.closeStructuredAgentSessionTab({
           type: 'agent-session',
