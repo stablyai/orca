@@ -5,8 +5,8 @@
 // stage the evidence now permits. And it owes a READABLE session: the journal open, history
 // answerable, the tab restorable.
 //
-// It does not owe a provider child. This used to resume every record whose lease was `released`
-// with no handoff in flight, which is the normal end state of a chat the user closed cleanly — so a
+// It does not owe a provider child. This used to resume every record whose lease was `released`,
+// which is the normal end state of a chat the user closed cleanly — so a
 // healthy profile started an app-server per session it had ever used, in parallel, at every launch,
 // with no client attached and nothing on screen. A child now exists because a surface asked for the
 // session (see `structured-agent-session-holds`), not because a record survived on disk.
@@ -30,11 +30,11 @@ export type StructuredAgentSessionReadRestoreDeps = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   hasSession: (sessionId: string) => boolean
   onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
-  retrySettlement: (
+  /** Settles what a previous generation left running. Best effort: the next acquire re-derives it. */
+  settleStaleState: (
     sessionId: string,
-    params: RestoredStructuredAgentSessionRead['params']
-  ) => Promise<boolean>
-  restoreHandoff: (sessionId: string) => Promise<void>
+    restored: RestoredStructuredAgentSessionRead
+  ) => Promise<void>
 }
 
 /**
@@ -63,13 +63,12 @@ export async function restoreOneStructuredAgentSessionRead(
 export async function restoreOneStructuredAgentSessionReadUnderSerialize(
   input: Pick<
     StructuredAgentSessionReadRestoreDeps,
-    'store' | 'journalRoot' | 'hasSession' | 'onReadable' | 'retrySettlement' | 'restoreHandoff'
+    'store' | 'journalRoot' | 'hasSession' | 'onReadable' | 'settleStaleState'
   >,
   sessionId: string
 ): Promise<void> {
   if (input.hasSession(sessionId)) {
     // A surface that took a hold mid-restore already attached this one.
-    await input.restoreHandoff(sessionId)
     return
   }
   const restored = await restoreStructuredAgentSessionRead(
@@ -80,9 +79,10 @@ export async function restoreOneStructuredAgentSessionReadUnderSerialize(
   if (!restored) {
     return
   }
+  // No child in this process writes to a journal with no map entry, so anything it shows running
+  // belongs to a generation that is gone. Settled before it is published, so no reader sees it run.
+  await input.settleStaleState(sessionId, restored)
   input.onReadable(sessionId, restored)
-  await input.retrySettlement(sessionId, restored.params)
-  await input.restoreHandoff(sessionId)
 }
 
 export async function restoreStructuredAgentSessionsOnRestart(

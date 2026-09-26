@@ -22,6 +22,7 @@ import type {
   AgentSessionThreadGoalResult
 } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionHolds } from './structured-agent-session-holds'
+import type { AgentSessionPromptRequest } from './structured-agent-session-turns-prompt'
 import { threadGoalPlan } from './structured-agent-session-thread-goal'
 import {
   admitAndRunAgentSessionMutation,
@@ -136,13 +137,7 @@ export function cancelStructuredAgentSessionTurn(
 export function respondToStructuredAgentSessionPrompt(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: {
-    envelope: AgentSessionMutationEnvelope
-    kind: 'approval' | 'question'
-    itemId: string
-    expectedRevision: number
-    optionId: string
-  }
+  params: AgentSessionPromptRequest & { envelope: AgentSessionMutationEnvelope }
 ): Promise<AgentSessionMutationResult<AgentSessionPromptResult>> {
   return mutate(context, caller, params.envelope, promptPlan(params))
 }
@@ -224,7 +219,6 @@ export async function settleStructuredAgentSessionLateDispatch(
           fence: session.fence
         }
   )
-  context.publish(input.sessionId, session.journal)
 }
 
 /**
@@ -240,7 +234,7 @@ export async function settleStructuredAgentSessionLateDispatch(
  * it never makes a send re-deliverable, because the provider may well have run it.
  */
 export async function releaseStructuredAgentSessionUnansweredDispatches(
-  context: Pick<StructuredAgentSessionMutationContext, 'sessions' | 'publish'>,
+  context: Pick<StructuredAgentSessionMutationContext, 'sessions'>,
   input: { sessionId: string; reason: string }
 ): Promise<void> {
   const session = context.sessions.get(input.sessionId)
@@ -263,7 +257,6 @@ export async function releaseStructuredAgentSessionUnansweredDispatches(
       recovered: true
     })
   }
-  context.publish(input.sessionId, session.journal)
 }
 
 /** The host's thin mutation surface. Each call re-reads the context, so a session

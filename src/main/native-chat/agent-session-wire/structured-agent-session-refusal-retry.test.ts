@@ -26,7 +26,6 @@ import {
   hostTestAttachParams,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-import type { StructuredAgentSessionHandoffTransport } from './structured-agent-session-handoff-types'
 
 const CALLER = { callerKey: 'client-1' }
 const METHODS = ['agentSession.setOption', 'agentSession.send'] as const
@@ -55,23 +54,7 @@ function operationId(timestamp = NOW): string {
   return `${timestamp}-${operationSequence.toString(16).padStart(32, '0')}`
 }
 
-function handoffTransport(): StructuredAgentSessionHandoffTransport {
-  const unused = async (): Promise<never> => {
-    throw new Error('unused handoff transport')
-  }
-  return {
-    hostLabel: 'test-host',
-    launchTui: unused,
-    reproveTuiOwner: unused,
-    recoverTuiOwner: unused,
-    stopRecoveredOwner: async () => undefined,
-    waitForTuiExit: unused,
-    waitForTuiIdleOrExit: unused,
-    tuiStatus: () => 'idle'
-  }
-}
-
-async function createHarness(options: { attached?: boolean; transport?: boolean } = {}) {
+async function createHarness(options: { attached?: boolean } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'orca-refusal-oracle-'))
   const store = await AgentSessionRecordStore.open({
     directory: join(root, 'store'),
@@ -110,8 +93,7 @@ async function createHarness(options: { attached?: boolean; transport?: boolean 
     journalRoot: root,
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
-    now: () => NOW,
-    ...(options.transport ? { handoffTransport: handoffTransport() } : {})
+    now: () => NOW
   })
   const harness = { root, store, host, setOption }
   harnesses.push(harness)
@@ -206,9 +188,7 @@ async function assertHostAgreement(
   } else {
     oracle = 'settled-rejected'
   }
-  expect(agentSessionRefusalOperationState(spec.method, code), `${spec.method}:${code}`).toBe(
-    oracle
-  )
+  expect(agentSessionRefusalOperationState(code), `${spec.method}:${code}`).toBe(oracle)
   return `${spec.method}:${code}`
 }
 
@@ -233,7 +213,7 @@ async function fillOperationLedger(harness: Harness): Promise<void> {
   }
 }
 
-// sendPlan and setOptionPlan have no unsupported branch; only handoff checked transport.
+// sendPlan and setOptionPlan have no unsupported branch.
 const UNREACHABLE = new Set<Pair>([
   'agentSession.send:structured_agent_session_unsupported',
   'agentSession.setOption:structured_agent_session_unsupported',
@@ -251,7 +231,10 @@ const UNREACHABLE = new Set<Pair>([
   // Send reconstructs doubt from its global tombstone instead of refusing it.
   'agentSession.send:agent_session_operation_unknown',
   // Only a send restarts a lost owner.
-  'agentSession.setOption:agent_session_owner_restart_failed'
+  'agentSession.setOption:agent_session_owner_restart_failed',
+  // A write names its target, not an owner generation; only an attach compares fences.
+  'agentSession.setOption:agent_session_checkpoint_stale',
+  'agentSession.send:agent_session_checkpoint_stale'
 ])
 
 describe('agentSessionRefusalOperationState host oracle', () => {
@@ -262,35 +245,23 @@ describe('agentSessionRefusalOperationState host oracle', () => {
 
     const stale = await createHarness()
     for (const method of METHODS) {
-      const spec = {
-        method,
-        operationId: operationId(),
-        expectedRuntimeFence: 99
-      }
-      record(
-        await assertHostAgreement(stale, spec, 'agent_session_checkpoint_stale', async () => ({
-          harness: stale,
-          spec: {
-            ...spec,
-            expectedRuntimeFence: stale.store.getRecord(SESSION)?.lease.runtimeFence ?? 1
-          }
-        }))
-      )
+      const spec = { method, operationId: operationId(), expectedRuntimeFence: 99 }
+      await expect(invoke(stale, spec), method).resolves.toMatchObject({ ok: true })
     }
     expect(stale.setOption).toHaveBeenCalledTimes(1)
 
-    const conflict = await createHarness({ transport: true })
+    const conflict = await createHarness()
     for (const method of ['agentSession.setOption', 'agentSession.send'] as const) {
       await setLease(conflict, (current) => ({
         ...current,
-        lease: { ...current.lease, runtimeKind: 'tui' }
+        lease: { ...current.lease, handoffStage: 'new-owner-proving' }
       }))
       const spec = { method, operationId: operationId() }
       record(
         await assertHostAgreement(conflict, spec, 'agent_session_conflict', async () => {
           await setLease(conflict, (current) => ({
             ...current,
-            lease: { ...current.lease, runtimeKind: 'native' }
+            lease: { ...current.lease, handoffStage: null }
           }))
           return { harness: conflict, spec }
         })

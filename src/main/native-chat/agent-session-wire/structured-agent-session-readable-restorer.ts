@@ -21,11 +21,10 @@ export class StructuredAgentSessionReadableRestorer {
       serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
       hasSession: (sessionId: string) => boolean
       onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
-      retrySettlement: (
+      settleStaleState: (
         sessionId: string,
-        params: RestoredStructuredAgentSessionRead['params']
-      ) => Promise<boolean>
-      restoreHandoff: (sessionId: string) => Promise<void>
+        restored: RestoredStructuredAgentSessionRead
+      ) => Promise<void>
     }
   ) {}
 

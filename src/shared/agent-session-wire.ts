@@ -28,45 +28,21 @@ import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
   type AgentSessionHandoffStage,
-  type AgentSessionOwnerRuntimeKind,
   type AgentSessionRecord
 } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
-export type AgentSessionHandoffDirection = 'to-tui' | 'to-native'
-export type AgentSessionHandoffMode = 'now' | 'after-turn' | 'stop-turn'
-export type AgentSessionHandoffAction = 'start' | 'cancel-queued' | 'retry' | 'recover'
-
+/** `agentSession.handoffStatus`. Named for the removed terminal handoff; released desktop clients
+ *  still read `owner`. Clients parse the reply as unknown, since older hosts sent more fields. */
 export type AgentSessionHandoffStatus = {
-  owner: AgentSessionOwnerRuntimeKind | 'none'
-  direction: AgentSessionHandoffDirection | null
-  phase: 'idle' | 'queued' | 'switching' | 'waiting-for-exit' | 'failed'
+  owner: 'native' | 'none'
+  direction: 'to-native' | null
+  phase: 'idle' | 'switching' | 'failed'
   stage: AgentSessionHandoffStage | null
   operationId: string | null
-  hostLabel?: string
-  terminal?: {
-    handle: string
-    tabId: string
-    paneKey: string
-    ptyId?: string
-  }
-  error?: {
-    message: string
-    details?: string
-    recoverableOwner: AgentSessionOwnerRuntimeKind | 'none'
-    canRetryProof?: boolean
-  }
+  error?: { message: string; recoverableOwner: 'none' }
 }
-
-export type AgentSessionHandoffRequest = {
-  envelope: AgentSessionMutationEnvelope
-  direction: AgentSessionHandoffDirection
-  mode: AgentSessionHandoffMode
-  action?: AgentSessionHandoffAction
-}
-
-export type AgentSessionHandoffResult = { status: AgentSessionHandoffStatus }
 
 export type {
   AgentSessionBackgroundTask,
@@ -163,7 +139,6 @@ export type AgentSessionSubscribeEvent =
       sessionId: string
       page: AgentSessionHistoryPage
       fence: number
-      handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
@@ -174,9 +149,8 @@ export type AgentSessionSubscribeEvent =
       type: 'batch'
       sessionId: string
       batch: AgentSessionJournalBatch
-      /** Added with handoff state so mixed-version cursors retain the ownership fence. */
+      /** Optional so mixed-version cursors retain the ownership fence. */
       fence?: number
-      handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
@@ -189,7 +163,6 @@ export type AgentSessionSubscribeEvent =
       reset: AgentJournalResetReason
       page: AgentSessionHistoryPage
       fence: number
-      handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
@@ -324,7 +297,7 @@ export type AgentSessionAttachResult = {
   page: AgentSessionHistoryPage
   /** Submissions the crash boundary settled as `unknown` while attaching. */
   unconfirmedClientMessageIds: string[]
-  /** The host-owned id of the tab that shows this chat. Absent from hosts that predate it. */
+  /** The host-owned id of the tab showing this chat, when it has one. Absent from older hosts. */
   tabId?: string
 }
 

@@ -91,6 +91,17 @@ describe('writeFileToClipboard', () => {
     expect(args.join(' ')).toContain("Set-Clipboard -LiteralPath '/repo/o''brien.png'")
   })
 
+  it('doubles typographic single quotes, which PowerShell also treats as delimiters', async () => {
+    const runCommand = vi.fn(async (_command: string, _args: string[]) => {})
+    await writeFileToClipboard(
+      '/repo/o\u2019brien.png',
+      makeDeps({ platform: 'win32', runCommand })
+    )
+    expect(runCommand.mock.calls[0][1].join(' ')).toContain(
+      "Set-Clipboard -LiteralPath '/repo/o\u2019\u2019brien.png'"
+    )
+  })
+
   it('reports a failure (never throws) when PowerShell rejects on Windows', async () => {
     const runCommand = vi.fn(async (_command: string, _args: string[]) => {
       throw new Error('powershell.exe not found')

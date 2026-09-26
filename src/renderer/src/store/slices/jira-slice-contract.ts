@@ -16,7 +16,8 @@ export type JiraReadOptions = {
   siteId?: JiraSiteSelection | null
 }
 
-export type JiraSearchOptions = JiraReadOptions & { signal?: AbortSignal }
+export type JiraCollectionReadOptions = JiraReadOptions & { force?: boolean }
+export type JiraSearchOptions = JiraCollectionReadOptions & { signal?: AbortSignal }
 export type JiraPatchOptions = { sourceContext?: TaskSourceContext | null }
 export type JiraIssueSummaryLookupOptions = { force?: boolean; signal?: AbortSignal }
 
@@ -61,7 +62,7 @@ export type JiraSlice = {
   listJiraIssues: (
     filter?: JiraIssueFilter,
     limit?: number,
-    options?: JiraReadOptions
+    options?: JiraCollectionReadOptions
   ) => Promise<JiraIssue[]>
   patchJiraIssue: (issueKey: string, patch: Partial<JiraIssue>, options?: JiraPatchOptions) => void
 }

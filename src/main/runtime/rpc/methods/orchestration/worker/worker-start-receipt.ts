@@ -3,8 +3,6 @@ import { isAgentPromptStalledError } from '../../../../agent-prompt-submission-v
 import { isUnknownWorkerStartOutcome, type WorkerSetupReceipt } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
-import { isAgentSessionPtyWriteRefusedError } from '../../../../../../shared/agent-session-pty-write-admission'
-import { structuredChatPtyWriteRefusalCopy } from '../../../../../../shared/agent-session-pty-write-refusal-copy'
 import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
 
 export function failWorkerStartWithReceipt(args: {
@@ -18,13 +16,7 @@ export function failWorkerStartWithReceipt(args: {
   launch: OrchestrationWorkerLaunchReceipt
   mode: WorkerStartModeReceipt
 }): unknown {
-  const agentSessionRefusal = isAgentSessionPtyWriteRefusedError(args.error)
-    ? args.error.refusal
-    : undefined
-  const reason =
-    (agentSessionRefusal &&
-      structuredChatPtyWriteRefusalCopy(agentSessionRefusal, 'worker-start')) ??
-    (args.error instanceof Error ? args.error.message : String(args.error))
+  const reason = args.error instanceof Error ? args.error.message : String(args.error)
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
@@ -52,7 +44,6 @@ export function failWorkerStartWithReceipt(args: {
     mode: args.mode,
     effects: JSON.parse(worker.effects) as unknown[],
     residualResources: JSON.parse(worker.residual_resources) as unknown[],
-    ...(agentSessionRefusal ? { agentSessionRefusal } : {}),
     ...(releasable
       ? {
           recovery: `This start created a terminal that never ran the Task. Close it with: orca orchestration worker-release --dispatch ${args.dispatchId}`

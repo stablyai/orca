@@ -167,7 +167,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(30)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(29)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -696,21 +696,6 @@ describe('method routing', () => {
     expect(response).toMatchObject({ ok: true })
     expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
   })
-
-  it('routes the structured handoff mutation through the host', async () => {
-    const response = await call('agentSession.requestHandoff', {
-      envelope: envelope(),
-      direction: 'to-tui',
-      mode: 'now',
-      action: 'start'
-    })
-
-    expect(response).toMatchObject({ ok: true })
-    expect(hostCalls.requestHandoff).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ direction: 'to-tui', mode: 'now', action: 'start' })
-    )
-  })
 })
 
 describe('parameter validation', () => {
@@ -795,41 +780,6 @@ describe('parameter validation', () => {
       envelope: envelope(),
       itemId: 'item-1',
       optionId: 'allow'
-    })
-  })
-
-  it('accepts the maximum fully encoded Claude choice group and retains a finite bound', async () => {
-    const maximumSelections = Array.from({ length: 4 }, (_, questionIndex) => ({
-      questionId: `q${questionIndex + 1}`,
-      optionIds: Array.from(
-        { length: 4 },
-        (_, optionIndex) => `q${questionIndex + 1}:choice-${optionIndex + 1}`
-      )
-    }))
-    const optionId = `question-group:${encodeURIComponent(JSON.stringify(maximumSelections))}`
-    expect(optionId.length).toBe(610)
-
-    const response = await call(
-      'agentSession.respondToQuestion',
-      {
-        envelope: envelope(),
-        itemId: 'item-1',
-        expectedRevision: 1,
-        optionId
-      },
-      STRUCTURED_CLIENT
-    )
-    expect(response).toMatchObject({ ok: true })
-    expect(hostCalls.respondToPrompt).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ optionId })
-    )
-
-    await rejects('agentSession.respondToQuestion', {
-      envelope: envelope(),
-      itemId: 'item-1',
-      expectedRevision: 1,
-      optionId: 'x'.repeat(1025)
     })
   })
 

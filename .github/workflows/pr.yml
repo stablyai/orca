@@ -1,4 +1,5 @@
 name: PR Checks
+run-name: 'PR ${{ github.event.pull_request.number }} | source ${{ github.sha }} | workflow ${{ github.workflow_sha }}'
 
 on:
   pull_request:
@@ -23,25 +24,32 @@ jobs:
   # Per-job outputs also skip git-compat/xterm/packaging/shell when those
   # inputs are unchanged; empty diffs fail closed and run everything.
   code_paths:
-    name: detect code-relevant changes
-    runs-on: ubuntu-latest
+    name: detect changes and check repository guards
+    # Reuse one lightweight checkout for detection and the always-required guards.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
-      native_cache_changed: ${{ steps.filter.outputs.native_cache_changed }}
+      reused_run_id: ${{ steps.readiness.outputs.run_id }}
+      # A proven success masks required work only; advisory routing still uses the full diff.
+      native_cache_changed: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.native_cache_changed }}
       mobile_dependencies: ${{ steps.filter.outputs.mobile_dependencies }}
-      mobile_web_app: ${{ steps.filter.outputs.mobile_web_app }}
-      static_analysis: ${{ steps.filter.outputs.static_analysis }}
-      typecheck: ${{ steps.filter.outputs.typecheck }}
-      git_compatibility: ${{ steps.filter.outputs.git_compatibility }}
-      codex_index_heal_contract: ${{ steps.filter.outputs.codex_index_heal_contract }}
-      xterm_patch_sync: ${{ steps.filter.outputs.xterm_patch_sync }}
-      shell_contracts: ${{ steps.filter.outputs.shell_contracts }}
-      test: ${{ steps.filter.outputs.test }}
-      orcad_browser: ${{ steps.filter.outputs.orcad_browser }}
-      cross-version-wire: ${{ steps.filter.outputs.cross-version-wire }}
-      managed_hook_node18: ${{ steps.filter.outputs.managed_hook_node18 }}
-      package: ${{ steps.filter.outputs.package }}
-      package_windows: ${{ steps.filter.outputs.package_windows }}
+      mobile_web_app: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.mobile_web_app }}
+      static_analysis: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.static_analysis }}
+      typecheck: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.typecheck }}
+      git_compatibility: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.git_compatibility }}
+      codex_index_heal_contract: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.codex_index_heal_contract }}
+      xterm_patch_sync: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.xterm_patch_sync }}
+      shell_contracts: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.shell_contracts }}
+      test: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.test }}
+      orcad_browser: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.orcad_browser }}
+      cross-version-wire: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.cross-version-wire }}
+      managed_hook_node18: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.managed_hook_node18 }}
+      package: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package }}
+      package_windows: ${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.package_windows }}
       e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
       ssh_source_changed: ${{ steps.e2e_filter.outputs.ssh_source_changed }}
@@ -56,7 +64,36 @@ jobs:
           # few this job actually reads on demand.
           fetch-depth: 0
           filter: blob:none
+          sparse-checkout: |
+            /package.json
+            /README.md
+            /docs/readme/
+            /.github/scripts/check-root-directory-entries.mjs
+            /config/scripts/check-readme-local-links.mjs
+            /config/scripts/pr-code-change-scope.mjs
+            /config/scripts/pr-e2e-source-routing.mjs
+            /config/scripts/pr-ready-check-reuse.mjs
+          sparse-checkout-cone-mode: false
           persist-credentials: false
+
+      - name: Reject new root-level files and folders
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
+
+      # The full Git index retains link targets outside the sparse working tree.
+      - name: Check README local links
+        run: node config/scripts/check-readme-local-links.mjs
+
+      # Readiness changes eligibility for advisory tests, not the already-tested source.
+      - name: Find identical successful required checks
+        id: readiness
+        if: github.event.action == 'ready_for_review'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_CHECK_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: node config/scripts/pr-ready-check-reuse.mjs
 
       - name: Classify changed paths
         id: filter
@@ -249,37 +286,11 @@ jobs:
       - name: Verify macOS entitlements
         run: pnpm verify:macos-entitlements
 
-  root_directory_guard:
-    name: root directory guard
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          # Why blob:none: full history is needed for the merge-base diff, but historical
-          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
-          # few this job actually reads on demand.
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-
-      - name: Reject new root-level files and folders
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
-
-      # Why here: the READMEs embed media owned by docs/site and resources/onboarding,
-      # and the classifier skips static_analysis for docs-only diffs. This job runs
-      # on every PR and needs no install.
-      - name: Check README local links
-        run: node config/scripts/check-readme-local-links.mjs
-
   typecheck:
     needs: [code_paths]
     if: needs.code_paths.outputs.typecheck == 'true'
-    runs-on: ubuntu-latest
+    # Typechecking uses no native runtime, so it can use the free public ARM runner.
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -317,39 +328,7 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
-      # Why: the 2.25.5 lane is a source build of a pinned tarball, so it produced the
-      # same binary on every PR for minutes of runner time. The key carries the version
-      # because that is the only input; the sha256 assertion below still guards the
-      # tarball on the miss path that actually builds. Only this PR's own later pushes
-      # can restore it — GitHub scopes a cache written from a pull_request run to that
-      # ref — so a first push always takes the build path below.
-      - name: Cache baseline Git build
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/orca-git-compat/git-2.25.5
-          key: git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5
-
-      # Why its own step: this is `make -j$(nproc)` on every core, and the lanes below
-      # spend their wall clock waiting on container starts, not on Git. Sharing a runner
-      # with the build stretched one ~1.5s boundary case past Vitest's 30s timeout, so
-      # the build has to finish before anything timed starts.
-      - name: Build the baseline Git binary
-        run: |
-          archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
-          source="$HOME/.cache/orca-git-compat/git-2.25.5"
-          if [ -x "$source/git" ]; then
-            exit 0
-          fi
-          curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
-          echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
-            | sha256sum --check
-          mkdir -p "$source"
-          tar -xzf "$archive" -C "$source" --strip-components=1
-          make -C "$source" -j"$(nproc)" \
-            NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
-          # Why: the linked binaries are what the next run needs; the objects that
-          # produced them are most of the tree and would bloat the cache entry.
-          find "$source" -name '*.o' -delete
+      - uses: ./.github/actions/prepare-git-compatibility
 
       - name: Verify Git binary compatibility matrix
         run: |
@@ -603,8 +582,9 @@ jobs:
 
   test:
     needs: [code_paths, test_native_cache]
+    # Honor cancellation while allowing the optional native-cache primer to skip.
     if: >-
-      always() &&
+      !cancelled() &&
       needs.code_paths.outputs.test == 'true' &&
       (needs.test_native_cache.result == 'success' || needs.test_native_cache.result == 'skipped')
     uses: ./.github/workflows/unit-tests.yml
@@ -757,6 +737,7 @@ jobs:
           tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-worktree-identity-downgrade.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-session-tabs-retirement-proof.unit.test.ts
+          tests/e2e/cross-version-wire/agent-session-unproven-release-downgrade.unit.test.ts
 
   managed_hook_node18:
     name: managed hooks on Node 18
@@ -1088,11 +1069,10 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
 
   verify:
-    if: always()
+    if: ${{ !cancelled() }}
     needs:
       - code_paths
       - static_analysis
-      - root_directory_guard
       - typecheck
       - git_compatibility
       - codex_index_heal_contract
@@ -1105,7 +1085,9 @@ jobs:
       - managed_hook_node18
       - package
       - package_windows
-    runs-on: ubuntu-latest
+    # Evaluating job results only needs the lightweight container runner.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
 
     steps:
       # Why: e2e is deliberately absent from needs. The suite is currently red on
@@ -1122,7 +1104,6 @@ jobs:
           SHOULD_RUN: ${{ needs.code_paths.outputs.should_run }}
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
           STATIC_ANALYSIS_SHOULD_RUN: ${{ needs.code_paths.outputs.static_analysis }}
-          ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           TYPECHECK_SHOULD_RUN: ${{ needs.code_paths.outputs.typecheck }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
@@ -1149,9 +1130,6 @@ jobs:
           PACKAGE_WINDOWS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows }}
         run: |
           if [ "$CODE_PATHS" != "success" ]; then
-            exit 1
-          fi
-          if [ "$ROOT_DIRECTORY_GUARD" != "success" ]; then
             exit 1
           fi
           if [ "$SHOULD_RUN" != "true" ]; then

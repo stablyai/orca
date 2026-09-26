@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { deserialize, serialize } from 'node:v8'
 import { describe, expect, it } from 'vitest'
 import {
   MOBILE_WEB_APP_NATIVE_PARITY_STYLE,
@@ -74,6 +75,25 @@ async function withScratch(run) {
   }
 }
 
+// Snapshots preserve Buffer methods and give each assertion its own mutable copy.
+let appBundleSnapshot
+let writtenBundleSnapshot
+
+async function readAppBundle() {
+  appBundleSnapshot ??= bundleMobileWebApp().then(serialize)
+  // Deserialized Buffers alias their snapshot, so copy it before exposing them.
+  return deserialize(Buffer.from(await appBundleSnapshot))
+}
+
+async function readWrittenBundle() {
+  writtenBundleSnapshot ??= withScratch(async (scratch) => {
+    const { outDir, ...result } = await buildMobileWebAppBundle({ outDir: join(scratch, 'bundle') })
+    const html = await readFile(join(outDir, 'index.html'), 'utf8')
+    return serialize({ ...result, html })
+  })
+  return deserialize(await writtenBundleSnapshot)
+}
+
 describe('the CRLF pin', () => {
   it('exempts the same extensions in .gitattributes as the CRLF scan skips', async () => {
     const attributes = await readFile(join(projectDir, '.gitattributes'), 'utf8')
@@ -91,8 +111,23 @@ describe('the CRLF pin', () => {
 })
 
 describeBundling('the app bundle', () => {
+  it('isolates read-only fixture consumers from mutations in another assertion', async () => {
+    const first = await readAppBundle()
+    const original = first.script[0]
+    first.script[0] ^= 255
+    first.chunks.length = 0
+    first.routeKeys.length = 0
+    const next = await readAppBundle()
+    expect(next.script[0]).toBe(original)
+    expect(next.chunks.length).toBeGreaterThan(0)
+    expect(next.routeKeys.length).toBeGreaterThan(0)
+    const written = await readWrittenBundle()
+    written.manifest.assets.length = 0
+    expect((await readWrittenBundle()).manifest.assets.length).toBeGreaterThan(0)
+  }, 120_000)
+
   it('resolves react-native to react-native-web and leaves no require.context', async () => {
-    const sources = allScriptSource(await bundleMobileWebApp())
+    const sources = allScriptSource(await readAppBundle())
     for (const source of sources) {
       expect(source).not.toContain('require.context')
     }
@@ -101,7 +136,7 @@ describeBundling('the app bundle', () => {
   }, 120_000)
 
   it('cuts the routes into chunks the entry does not load', async () => {
-    const { script, chunks, entryStaticBytes } = await bundleMobileWebApp()
+    const { script, chunks, entryStaticBytes } = await readAppBundle()
     expect(chunks.length).toBeGreaterThan(1)
     // The entry's own bytes plus the chunks it imports statically, which is what the browser
     // parses before any route paints. Every route chunk is outside it.
@@ -112,7 +147,7 @@ describeBundling('the app bundle', () => {
   }, 120_000)
 
   it('names the chunk each route lands in', async () => {
-    const { chunks, routeChunks, routeKeys } = await bundleMobileWebApp()
+    const { chunks, routeChunks, routeKeys } = await readAppBundle()
     expect(Object.keys(routeChunks).sort()).toEqual([...routeKeys].sort())
     const emitted = new Set(chunks.map((chunk) => chunk.name))
     for (const [key, name] of Object.entries(routeChunks)) {
@@ -202,7 +237,7 @@ describeBundling('the app bundle', () => {
   )
 
   it('bundles every route module', async () => {
-    const { routeKeys } = await bundleMobileWebApp()
+    const { routeKeys } = await readAppBundle()
     expect(routeKeys).toEqual(await collectMobileWebAppRouteKeys(appDir))
   }, 120_000)
 
@@ -274,7 +309,7 @@ describeBundling('the app bundle', () => {
   }, 240_000)
 
   it("names an output the same way the manifest's own asset hash does", async () => {
-    const { script, chunks } = await bundleMobileWebApp()
+    const { script, chunks } = await readAppBundle()
     // The name is embedded in the importer, so it cannot be recomputed later; this is what says
     // the name inside the bytes and the manifest's sha256 of those bytes are the same string.
     expect(hashedAsset(script, 'js').path).toBe(`assets/${sha256Hex(script)}.js`)
@@ -330,7 +365,7 @@ describeBundling('the app bundle', () => {
     // once per call. The file explorer calls triggerSelection on every row tap, and C1.9 already
     // traced a swallowed long press on the worktree list to that stray click. `haptics.web.ts` is
     // what keeps the whole shim out of the bundle, so this reads the bytes rather than the import.
-    for (const source of allScriptSource(await bundleMobileWebApp())) {
+    for (const source of allScriptSource(await readAppBundle())) {
       // The shim's own fingerprint, not `navigator.vibrate`: react-native-web's Vibration export
       // calls that too, and it touches no DOM until something invokes it.
       expect(source).not.toContain('ariaHidden')
@@ -340,7 +375,7 @@ describeBundling('the app bundle', () => {
   }, 120_000)
 
   it("ships react-native-web's hairline at one device pixel, whichever of its builds resolves", async () => {
-    const sources = allScriptSource(await bundleMobileWebApp())
+    const sources = allScriptSource(await readAppBundle())
     // Minified, so the assignment reads `<name>.hairlineWidth=`; RNW's own value is the literal 1.
     const assignments = sources.flatMap(
       (source) => source.match(/\.hairlineWidth=[^;]{0,120}/g) ?? []
@@ -354,7 +389,7 @@ describeBundling('the app bundle', () => {
   it('embeds no absolute path from this checkout', async () => {
     // Every chunk, not only the entry: the route manifest names each route by absolute path, and
     // the chunk that import resolves to is where such a path would survive.
-    for (const source of allScriptSource(await bundleMobileWebApp())) {
+    for (const source of allScriptSource(await readAppBundle())) {
       expect(source).not.toContain(projectDir)
     }
   }, 120_000)
@@ -370,76 +405,56 @@ describeBundling('the app bundle', () => {
   }, 120_000)
 
   it('loads the entry as a module, so its route imports resolve', async () => {
-    await withScratch(async (scratch) => {
-      const outDir = join(scratch, 'module-tag')
-      const { manifest } = await buildMobileWebAppBundle({ outDir })
-      const html = await readFile(join(outDir, 'index.html'), 'utf8')
-      // import() in a classic script is a syntax error, so the tag and the format are one fact.
-      expect(html).toContain('<script type="module" src="/assets/')
-      const entry = html.match(/src="\/(assets\/[^"]+)"/)?.[1]
-      expect(manifest.assets.map((asset) => asset.path)).toContain(entry)
-    })
+    const { manifest, html } = await readWrittenBundle()
+    // import() in a classic script is a syntax error, so the tag and the format are one fact.
+    expect(html).toContain('<script type="module" src="/assets/')
+    const entry = html.match(/src="\/(assets\/[^"]+)"/)?.[1]
+    expect(manifest.assets.map((asset) => asset.path)).toContain(entry)
   }, 120_000)
 
   it('declares an icon, so no browser asks the shell for one', async () => {
-    await withScratch(async (scratch) => {
-      const outDir = join(scratch, 'icon')
-      const { manifest } = await buildMobileWebAppBundle({ outDir })
-      const html = await readFile(join(outDir, 'index.html'), 'utf8')
-      // Undeclared, a browser asks the origin for /favicon.ico on its own, and the shell's asset
-      // server answers 403 because the path is in no manifest — repeatedly, on the emulator run.
-      expect(html).toContain('<link rel="icon" href="data:," />')
-      // And the empty URI rather than an asset: the bundle carries no icon, so a declaration
-      // naming one would point at a route image whose name changes with its bytes.
-      expect(manifest.assets.map((asset) => asset.path)).not.toContain('favicon.ico')
-    })
+    const { manifest, html } = await readWrittenBundle()
+    // Undeclared, a browser asks the origin for /favicon.ico on its own, and the shell's asset
+    // server answers 403 because the path is in no manifest — repeatedly, on the emulator run.
+    expect(html).toContain('<link rel="icon" href="data:," />')
+    // And the empty URI rather than an asset: the bundle carries no icon, so a declaration
+    // naming one would point at a route image whose name changes with its bytes.
+    expect(manifest.assets.map((asset) => asset.path)).not.toContain('favicon.ico')
   }, 120_000)
 
   it('declares no viewport-fit, because the shell owns the safe area', async () => {
-    await withScratch(async (scratch) => {
-      const outDir = join(scratch, 'viewport')
-      await buildMobileWebAppBundle({ outDir })
-      const html = await readFile(join(outDir, 'index.html'), 'utf8')
-      // The shell pads the WebView out of the system bars, so the page has nothing to extend
-      // under; asking to would invite a second pad from every page-side SafeAreaView.
-      expect(html).toContain(
-        '<meta name="viewport" content="width=device-width, initial-scale=1" />'
-      )
-      expect(html).not.toContain('viewport-fit')
-    })
+    const { html } = await readWrittenBundle()
+    // The shell pads the WebView out of the system bars, so the page has nothing to extend
+    // under; asking to would invite a second pad from every page-side SafeAreaView.
+    expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1" />')
+    expect(html).not.toContain('viewport-fit')
   }, 120_000)
 
   it('carries the root reset, so the mounted tree has a height to be 1 of', async () => {
-    await withScratch(async (scratch) => {
-      const outDir = join(scratch, 'root-reset')
-      await buildMobileWebAppBundle({ outDir })
-      const html = await readFile(join(outDir, 'index.html'), 'utf8')
-      expect(html).toContain(MOBILE_WEB_APP_ROOT_RESET)
-      expect(html).toContain(MOBILE_WEB_APP_NATIVE_PARITY_STYLE)
-      // Literals rather than substrings taken off the constant, which would read it back against
-      // itself and follow any rule dropped from it. Every rule, because the chain is only as
-      // definite as its weakest link: a height on #root alone resolves against a body that has
-      // none, and percent of auto is auto. Named one by one so a failure says which rule went.
-      for (const rule of [
-        'html,body{height:100%}',
-        'body{overflow:hidden}',
-        '#root{display:flex;height:100%;flex:1}'
-      ]) {
-        expect(MOBILE_WEB_APP_ROOT_RESET, rule).toContain(rule)
-      }
-      // The id travels with the rules: it is what marks this block as the template's reset rather
-      // than something the page grew its own copy of.
-      expect(MOBILE_WEB_APP_ROOT_RESET).toContain('<style id="expo-reset">')
-      // In the document itself, not a linked asset: the CSP that allows it is the one already
-      // relaxed for react-native-web's runtime sheet.
-      expect(html).not.toContain('<link rel="stylesheet"')
-    })
+    const { html } = await readWrittenBundle()
+    expect(html).toContain(MOBILE_WEB_APP_ROOT_RESET)
+    expect(html).toContain(MOBILE_WEB_APP_NATIVE_PARITY_STYLE)
+    // Literals rather than substrings taken off the constant, which would read it back against
+    // itself and follow any rule dropped from it. Every rule, because the chain is only as
+    // definite as its weakest link: a height on #root alone resolves against a body that has
+    // none, and percent of auto is auto. Named one by one so a failure says which rule went.
+    for (const rule of [
+      'html,body{height:100%}',
+      'body{overflow:hidden}',
+      '#root{display:flex;height:100%;flex:1}'
+    ]) {
+      expect(MOBILE_WEB_APP_ROOT_RESET, rule).toContain(rule)
+    }
+    // The id travels with the rules: it is what marks this block as the template's reset rather
+    // than something the page grew its own copy of.
+    expect(MOBILE_WEB_APP_ROOT_RESET).toContain('<style id="expo-reset">')
+    // In the document itself, not a linked asset: the CSP that allows it is the one already
+    // relaxed for react-native-web's runtime sheet.
+    expect(html).not.toContain('<link rel="stylesheet"')
   }, 120_000)
 
   it('writes the manifest shape the packaging contract reads', async () => {
-    const { manifest } = await withScratch((scratch) =>
-      buildMobileWebAppBundle({ outDir: join(scratch, 'c') })
-    )
+    const { manifest } = await readWrittenBundle()
     expect(manifest.schemaVersion).toBe(1)
     expect(manifest.entrypoint).toBe('index.html')
     expect(manifest.assets.map((asset) => asset.path)).toContain('index.html')
@@ -457,9 +472,8 @@ describe('the Phase C budget', () => {
   itBundling(
     'is not already exceeded by the current bundle',
     async () => {
-      const { manifest, chunkCount, entryStaticBytes, imageCount, routeKeys } = await withScratch(
-        (scratch) => buildMobileWebAppBundle({ outDir: join(scratch, 'd') })
-      )
+      const { manifest, chunkCount, entryStaticBytes, imageCount, routeKeys } =
+        await readWrittenBundle()
       expect(manifest.totalBytes).toBeLessThanOrEqual(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)
       expect(manifest.assets.length).toBeLessThanOrEqual(
         mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
@@ -596,9 +610,7 @@ describe('the Phase C budget', () => {
   itBundling(
     'keeps the derived ceiling under the map the phone actually holds',
     async () => {
-      const { manifest, routeKeys, imageCount } = await withScratch((scratch) =>
-        buildMobileWebAppBundle({ outDir: join(scratch, 'e') })
-      )
+      const { manifest, routeKeys, imageCount } = await readWrittenBundle()
       const ceiling = mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
       expect(manifest.assets.length).toBeLessThanOrEqual(ceiling)
       // The native side refuses a manifest past this, so the derived ceiling has to stay inside it.

@@ -25,6 +25,7 @@ import {
   structuredAgentSessionTabId
 } from '../../shared/structured-agent-session-projection'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import { isOrcaSessionId, type OrcaSessionId } from '../../shared/orca-session-address'
 import {
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
@@ -57,12 +58,13 @@ export function mintStructuredWorkerHandle(): string {
 /**
  * A RANDOM leaf, minted once per worker and persisted with the rest of the identity.
  *
- * Emphatically not `structuredAgentSessionPaneKey`, which is a sha256 of the session id. A pane
- * key is an identity credential on its own: `orchestration.check` is identity-gated, not
- * capability-gated, and accepts a caller-supplied `terminalPaneKey` that `getActiveDispatchForIdentity`
- * matches by leaf suffix. A derivable pane key would therefore let anyone who learns a session id —
- * which the tab id embeds in plain text — read and consume that worker's mailbox with no token.
- * PTY pane keys are safe only because their leaf UUID is random; this one has to be too.
+ * Emphatically not `structuredAgentSessionPaneKey`, which is a sha256 of the session id. A request
+ * that names no session — a PTY agent's, or any on the paired-client route, which refuses session
+ * ids — identifies its caller by pane: `orchestration.check` accepts a caller-supplied
+ * `terminalPaneKey` that `getActiveDispatchForIdentity` matches by leaf suffix. A pane key derivable
+ * from the session id, which the tab id embeds in plain text, would let such a request read and
+ * consume this worker's mailbox. On the same-host socket route the session id itself names the
+ * worker with no token, by design; the pane key is no credential there and must not become one.
  *
  * Restart stability comes from persisting the minted key, not from re-deriving it.
  */
@@ -122,6 +124,14 @@ export function sessionIdFromStructuredWorkerIncarnation(
   return sessionId.length > 0 ? sessionId : null
 }
 
+/** The Orca session id a `structured:<sessionId>` incarnation names; null for any other. */
+export function structuredWorkerOrcaSessionIdForIncarnation(
+  processIncarnation: string | null | undefined
+): OrcaSessionId | null {
+  const sessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
+  return sessionId !== null && isOrcaSessionId(sessionId) ? sessionId : null
+}
+
 /** Structured sessions can only exist local and outside WSL; anything else is not our authority. */
 export function structuredWorkerHostScope(
   location: AgentSessionExecutionLocation
@@ -137,7 +147,8 @@ export function structuredWorkerRecordIsCurrent(
 ): boolean {
   return Boolean(
     record &&
-    record.lease.runtimeKind === 'native' &&
+    // Why: a conflicted claim may name a terminal an older build recorded as owner, not this worker.
+    record.lease.claimStatus !== 'conflicted' &&
     record.lease.claimStatus !== 'released' &&
     structuredWorkerHostScope(record.location)
   )

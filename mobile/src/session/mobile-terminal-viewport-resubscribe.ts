@@ -173,7 +173,7 @@ export class TerminalViewportResubscribeBudget {
   }
 }
 
-type MutableRef<T> = { current: T }
+export type MutableRef<T> = { current: T }
 
 type TerminalFitWebView = {
   awaitReady: () => Promise<unknown>
@@ -185,6 +185,8 @@ export type TerminalViewportFitPassArgs = {
   seq: number
   hostCols: number | null
   hostRows: number | null
+  /** The viewport this subscribe carried; null when it went without one. */
+  sentViewport: TerminalViewportDims | null
   budget: TerminalViewportResubscribeBudget
   diagnostics: Pick<
     MobileTerminalDiagnostics,
@@ -230,7 +232,8 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     }
     return
   }
-  const viewportWasMeasured = args.viewportMeasuredRef.current
+  // Why: a subscribe that carried a viewport already told the host one; a fresh measure that matches it needs no round trip.
+  const viewportWasMeasured = args.viewportMeasuredRef.current || args.sentViewport != null
   void (async () => {
     // Why: wait for init()'s rAF chain before measuring, else the measure races ahead and returns null (log dump 2026-05-06).
     await args.getTerminalRef(handle)?.awaitReady()

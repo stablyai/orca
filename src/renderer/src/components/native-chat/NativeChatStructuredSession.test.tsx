@@ -2,7 +2,6 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { decodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { useAppStore } from '@/store'
 import {
@@ -293,7 +292,10 @@ describe('NativeChatStructuredSession', () => {
     expect(document.querySelector('[data-native-chat-background-tasks="true"]')).not.toBeNull()
 
     act(() => mocks.approvalCardProps?.onChoose('allow'))
-    expect(mocks.respond).toHaveBeenCalledWith(approvalItems[0], 'allow')
+    expect(mocks.respond).toHaveBeenCalledWith(approvalItems[0], {
+      kind: 'option',
+      optionId: 'allow'
+    })
     expect(mocks.messageListProps?.showLiveTurnActivity).toBe(false)
 
     act(() => mocks.approvalCardProps?.onCancel?.())
@@ -535,14 +537,16 @@ describe('NativeChatStructuredSession', () => {
       { indices: [0, 1], other: '' },
       { indices: [], other: 'SSH host' }
     ])
-    const encoded = mocks.respond.mock.calls[0]?.[1]
-    expect(decodeAgentSessionQuestionAnswers(encoded)).toEqual([
-      { questionId: 'q1', optionIds: ['target-web', 'target-mobile'] },
-      { questionId: 'q2', optionIds: [], other: 'SSH host' }
-    ])
+    expect(mocks.respond).toHaveBeenCalledWith(mocks.promptItems[0], {
+      kind: 'answers',
+      answers: [
+        { questionId: 'q1', optionIds: ['target-web', 'target-mobile'] },
+        { questionId: 'q2', optionIds: [], other: 'SSH host' }
+      ]
+    })
   })
 
-  it('keeps legacy single-question option ids and free text behavior', () => {
+  it('answers a single-question item as its one question', () => {
     mocks.promptItems = legacySingleQuestionPromptItems
 
     render(
@@ -568,6 +572,14 @@ describe('NativeChatStructuredSession', () => {
       }
     ])
     card.onAnswer([{ indices: [1], other: '' }])
-    expect(mocks.respond).toHaveBeenCalledWith(mocks.promptItems[0], 'q1:choice-2')
+    expect(mocks.respond).toHaveBeenLastCalledWith(mocks.promptItems[0], {
+      kind: 'answers',
+      answers: [{ questionId: 'q1', optionIds: ['q1:choice-2'] }]
+    })
+    card.onAnswer([{ indices: [], other: ' Svelte ' }])
+    expect(mocks.respond).toHaveBeenLastCalledWith(mocks.promptItems[0], {
+      kind: 'answers',
+      answers: [{ questionId: 'q1', optionIds: [], other: 'Svelte' }]
+    })
   })
 })

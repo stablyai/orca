@@ -91,7 +91,6 @@ function sessionState(): StructuredAgentSessionState {
     hasOlder: true,
     status: 'error',
     error: 'cached transport error',
-    handoff: null,
     commands: [{ name: 'provider-command', kind: 'command' }]
   }
 }

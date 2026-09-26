@@ -71,17 +71,22 @@ const DESCRIBE_MASTER_FD_HOLDERS = [
   'done'
 ].join('\n')
 
+function readRelayFdCount(target: DockerSshRelayTarget, relayPid: number): number {
+  const raw = execDockerSshRelayTargetCommand(
+    target,
+    `set -o pipefail\nls /proc/${relayPid}/fd | wc -l`
+  )
+  return Number(raw.trim())
+}
+
 function sampleRemoteResources(target: DockerSshRelayTarget): RemoteResourceSample {
   const groups = readDockerSshRelayProcessSnapshots(target)
   // Why: fd growth is only meaningful against the relay that owns the PTYs, so read
   // the table of every relay group and sum, rather than assuming a single relay.
-  const relayFdCount = groups.reduce((total, group) => {
-    const raw = execDockerSshRelayTargetCommand(
-      target,
-      `ls /proc/${group.relayPid}/fd 2>/dev/null | wc -l`
-    )
-    return total + Number(raw.trim() || '0')
-  }, 0)
+  const relayFdCount = groups.reduce(
+    (total, group) => total + readRelayFdCount(target, group.relayPid),
+    0
+  )
   const ptsCount = Number(
     execDockerSshRelayTargetCommand(target, 'ls /dev/pts | grep -c "^[0-9]" || true').trim() || '0'
   )
@@ -192,7 +197,36 @@ test.describe('Docker SSH relay resource accumulation', () => {
       // Why: the interesting failure is monotonic growth across cycles, not the
       // absolute count, so compare the last cycle against the first.
       expect(last.ptsCount).toBeLessThanOrEqual(first.ptsCount)
-      expect(last.relayFdCount).toBeLessThanOrEqual(first.relayFdCount + 4)
+      let settledFdCount = last.relayFdCount
+      if (settledFdCount > first.relayFdCount + 4) {
+        const groups = readDockerSshRelayProcessSnapshots(target)
+        expect(groups).toHaveLength(1)
+        const relayPid = groups[0]!.relayPid
+        const diagnostics = execDockerSshRelayTargetCommand(
+          target,
+          [`ls -l /proc/${relayPid}/fd || true`, 'ps -eo pid,ppid,stat,tty,args'].join('\n')
+        )
+        console.log(`[resource-accumulation] over-budget relay fds\n${diagnostics}`)
+        await testInfo.attach('relay-fd-over-budget', {
+          body: diagnostics,
+          contentType: 'text/plain'
+        })
+        // Background inventory reads can overlap this sample; allow 10s for their FDs to close.
+        await expect
+          .poll(
+            () => {
+              expect(
+                readDockerSshRelayProcessSnapshots(captured).map((group) => group.relayPid)
+              ).toEqual([relayPid])
+              settledFdCount = readRelayFdCount(captured, relayPid)
+              console.log(`[resource-accumulation] settling relay fds ${settledFdCount}`)
+              return settledFdCount
+            },
+            { timeout: 10_000, intervals: [100, 250, 500] }
+          )
+          .toBeLessThanOrEqual(first.relayFdCount + 4)
+      }
+      expect(settledFdCount).toBeLessThanOrEqual(first.relayFdCount + 4)
       expect(last.nodeProcessCount).toBeLessThanOrEqual(first.nodeProcessCount)
       expect(last.leakedMasterFdCount).toBeLessThanOrEqual(first.leakedMasterFdCount)
     } finally {

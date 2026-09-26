@@ -195,12 +195,25 @@ function installWillQuitHandler(): void {
     browserManager.setBrowserGuestStateChangedListener(null)
     const emulatorShutdown =
       state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
-    // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
+    // Why immediately before the final store flush with no await in between: beginSshShutdown() marks every
     // active SSH lease detached in memory synchronously, and that flush is what persists it.
     const sshShutdown = beginSshShutdown()
     killAllPty()
     const watcherShutdown = shutdownWatchersOnce()
-    const storeFlush = state.store?.flushAsync() ?? Promise.resolve()
+    const finalStore = state.store
+    const storeFlush = (async () => {
+      if (!finalStore) {
+        return
+      }
+      try {
+        await finalStore.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
+        await finalStore.freezeWritesAsync()
+        state.profileStateAdmission?.release()
+        state.profileStateAdmission = undefined
+      } catch (error) {
+        console.error('[persistence] Failed to finalize profile state:', error)
+      }
+    })()
     // Why: usage-cache writes are queued off the main thread, so a quit right after setEnabled or a
     // scan completion would drop the final snapshot. Captured before any await; joins the barrier below.
     const usageCacheFlush = Promise.all([

@@ -75,7 +75,6 @@ function sessionState(fence: number | null): StructuredAgentSessionState {
     retainedItemLimit: 1_024,
     hasOlder: false,
     status: 'ready',
-    handoff: null,
     commands: []
   }
 }
