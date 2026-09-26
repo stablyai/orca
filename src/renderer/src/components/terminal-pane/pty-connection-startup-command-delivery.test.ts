@@ -643,4 +643,43 @@ describe('connectPanePty', () => {
       globalThis.setTimeout = originalSetTimeout
     }
   })
+
+  it('relaunches local Codex startup after the Codex updater exits to the shell', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    const transport = createMockTransport('pty-local-1')
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-local-1'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      repos: [{ id: 'repo1', connectionId: null }]
+    }
+    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('zsh')
+
+    const deps = createDeps({ startup: { command: 'codex' } })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
+    const args = [createPane(1), createManager(1), deps] as unknown as Parameters<
+      typeof connectPanePty
+    >
+    connectPanePty(...args)
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    vi.useFakeTimers()
+    try {
+      capturedDataCallback.current?.('Update ran successfully! Please restart Codex.')
+      await vi.advanceTimersByTimeAsync(250)
+      await flushAsyncTicks()
+
+      expect(window.api.pty.getForegroundProcess).toHaveBeenCalledWith('pty-local-1')
+      // Why: the accepted path pins the PTY the send was issued for.
+      expect(transport.sendInputAccepted).toHaveBeenCalledWith('codex\r')
+      expect(transport.sendInput).toHaveBeenCalledWith('codex\r')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

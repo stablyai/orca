@@ -67,6 +67,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     if (codexBackfillNotice) {
       session.reportError(codexBackfillNotice)
     }
+    session.codexAutoRelaunchAfterUpdate.observeOutput(data)
     // Why: split panes have visible-but-inactive panes the user watches; throttle only when the pane or whole document is hidden.
     const foreground =
       shouldWritePtyOutputForeground(session.deps.isVisibleRef.current) && meta?.background !== true

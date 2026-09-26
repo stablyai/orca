@@ -246,6 +246,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         clearTimeout(session.shiftEnterReconfirmTimer)
         session.shiftEnterReconfirmTimer = null
       }
+      session.codexAutoRelaunchAfterUpdate.dispose()
       // Why: resolve in-flight passphrase-gate waits so their zustand subscribers + async IIFEs don't hang when the pane is torn down before SSH state changes.
       while (session.waitTeardowns.length > 0) {
         const teardown = session.waitTeardowns.pop()

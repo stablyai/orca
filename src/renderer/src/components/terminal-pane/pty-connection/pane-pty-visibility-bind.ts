@@ -4,7 +4,9 @@ import { useAppStore } from '@/store'
 // actually attached — nothing is inspectable while the session hydrates.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
 import { createTerminalGitHubPRLinkDetector } from '../../../../../shared/terminal-github-pr-link-detector'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 import { setRendererPtyVisibilityClaim } from '../pty-renderer-delivery-claims'
+import { createCodexAutoRelaunchAfterUpdate } from '../codex-auto-relaunch-after-update'
 import { AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS } from '../agent-task-complete-policy'
 
 import {
@@ -27,6 +29,23 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     }
     setRendererPtyVisibilityClaim(session.transport, ptyId, visible)
   }
+  session.codexAutoRelaunchAfterUpdate = createCodexAutoRelaunchAfterUpdate({
+    startupCommand: session.paneStartup?.command,
+    getPtyId: () => session.transport.getPtyId(),
+    inspectForegroundProcess: async (ptyId) => {
+      const inspection = await inspectRuntimeTerminalProcess(useAppStore.getState().settings, ptyId)
+      // Why: an unverifiable read is not proof Codex exited; throwing makes the relauncher retry.
+      if (inspection.verdict === 'unverifiable') {
+        throw new Error(`Terminal inspection unverifiable: ${inspection.reason}`)
+      }
+      return inspection.foregroundProcess
+    },
+    // Why: remote sendInput debounces and resolves the handle at flush, so a rebind could retarget
+    // it; the accepted path pins the handle it was called with. Transports without it bind at call.
+    sendInput: (data) =>
+      session.transport.sendInputAccepted?.(data) ?? session.transport.sendInput(data),
+    isDisposed: () => session.disposed
+  })
   session.bindActivePanePty = (
     ptyId: string,
     options: {
@@ -205,6 +224,7 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       return
     }
     session.remotePtyIncarnationId = incarnationId ?? null
+    session.codexAutoRelaunchAfterUpdate.cancelPendingRelaunch()
     // Why: provider handle rotation keeps the existing pane/session generation;
     // replace its stale store identity without fresh-spawn exit semantics.
     session.bindActivePanePty(ptyId, { replacePtyId: replacedPtyId })
