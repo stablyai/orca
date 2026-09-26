@@ -79,10 +79,6 @@ export function dispatchTerminalShortcutAction(
     event.stopImmediatePropagation()
     return
   }
-  if (event.repeat) {
-    return
-  }
-
   if (action.type === 'copySelection') {
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
     if (!pane || !pane.terminal.getSelection()) {
@@ -90,10 +86,16 @@ export function dispatchTerminalShortcutAction(
     }
     event.preventDefault()
     event.stopImmediatePropagation()
-    void copyTerminalSelection({
-      terminal: pane.terminal,
-      writeClipboardText: window.api.ui.writeTerminalClipboardText
-    }).catch(() => {})
+    if (!event.repeat) {
+      armNativeOnlyShortcut(event)
+      void copyTerminalSelection({
+        terminal: pane.terminal,
+        writeClipboardText: window.api.ui.writeTerminalClipboardText
+      }).catch(() => {})
+    }
+    return
+  }
+  if (event.repeat) {
     return
   }
   if (action.type === 'toggleSearch') {

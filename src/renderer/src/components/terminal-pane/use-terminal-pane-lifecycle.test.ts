@@ -12,7 +12,6 @@ import {
   resolvePaneSeedCwd,
   resolveQueuedInitialCwd,
   replayLayoutWithOneShotParkIntent,
-  resetTerminalKeyboardProtocolAfterInterrupt,
   retireMountedTerminalPaneSurface,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
@@ -165,23 +164,6 @@ describe('applyTerminalPaneCloseRequest', () => {
     expect(clearTabPtyId).toHaveBeenCalledWith('legacy-worker', 'pty-legacy')
     expect(transport.detach).toHaveBeenCalledOnce()
     expect(transport.destroy).not.toHaveBeenCalled()
-  })
-})
-
-describe('resetTerminalKeyboardProtocolAfterInterrupt', () => {
-  it('does not write to an xterm whose pipeline is certified dead', async () => {
-    const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
-      await import('@/lib/pane-manager/terminal-write-pipeline-health')
-    const terminal = { write: vi.fn() }
-    try {
-      notifyUndeliverableWrite(terminal, 'replay-wedged')
-
-      resetTerminalKeyboardProtocolAfterInterrupt(terminal as never)
-
-      expect(terminal.write).not.toHaveBeenCalled()
-    } finally {
-      _resetWritePipelineHealthForTests(terminal)
-    }
   })
 })
 

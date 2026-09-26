@@ -6,17 +6,7 @@ import {
   isTerminalImeCandidateSelectionKeyEvent
 } from './terminal-ime-candidate-key-release-guard'
 
-// Why: when a CLI activates kitty progressive enhancement (CSI > N u), xterm's
-// KittyKeyboard encoder turns every modifier chord — including plain Cmd+C —
-// into a CSI-u sequence with `cancel: true`, which calls preventDefault() on
-// the keydown. That preventDefault suppresses Chromium's native `copy` event,
-// so xterm's own `copy` listener on its container never fires and the
-// selection is never written to the clipboard.
-//
-// Fix: intercept in `attachCustomKeyEventHandler` and return `false` for chords
-// that should bubble to the browser / host (clipboard, native menu). Returning
-// `false` makes xterm bail *before* the kitty encoder runs, so the browser's
-// copy pipeline and the OS-level keybinding both fire normally.
+// Native clipboard chords bypass encoding; an application can own copy when xterm has no selection.
 
 export type XtermBypassEvent = {
   type: string
@@ -360,8 +350,10 @@ export function shouldBypassXtermKeyboardEvent(
     // Why: window-level handlers already consume other Cmd chords before xterm
     // sees them in Electron. Web clients still need paste to bubble to
     // Chromium's native paste event instead of xterm's Kitty encoder.
+    // Unselected Cmd+C belongs to an app that negotiated Kitty keyboard reporting.
+    const appOwnsCopy = !hasSelection && (options.kittyKeyboardFlags ?? 0) !== 0
     return (
-      matchesClipboardBinding('Mod+C', event, 'darwin') ||
+      (matchesClipboardBinding('Mod+C', event, 'darwin') && !appOwnsCopy) ||
       matchesClipboardBinding('Mod+V', event, 'darwin')
     )
   }
