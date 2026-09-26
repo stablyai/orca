@@ -20,6 +20,7 @@ import type { UpdateStatus } from '../../../shared/update-status-types'
 import { useLazyModalMounts } from './use-lazy-modal-mounts'
 import {
   selectAppRootSurfacePetEnabled,
+  selectAppRootSurfaceSleepyModeAutoStart,
   selectAppRootSurfaceTelemetryOptedIn,
   selectAppRootSurfaceVoiceEnabled
 } from './app-root-surface-settings'
@@ -85,6 +86,7 @@ const FloatingTerminalPanel = lazy(() =>
 )
 // Why: lazy so the WebP asset + overlay module aren't fetched unless the experimental flag is on.
 const PetOverlay = lazy(() => import('../components/pet/PetOverlay'))
+const SleepyModeOverlay = lazy(() => import('../components/sleepy-mode/SleepyModeOverlay'))
 // Why: lazy so onboarding's step modules + assets aren't fetched for users past first-launch.
 const OnboardingFlow = lazy(() => import('../components/onboarding/OnboardingFlow'))
 
@@ -142,6 +144,8 @@ export function AppRootSurfaces(props: {
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const petVisible = useAppStore((s) => s.petVisible)
+  const sleepyModeActive = useAppStore((s) => s.sleepyModeActive)
+  const sleepyModeAutoStart = useAppStore(selectAppRootSurfaceSleepyModeAutoStart)
   const dictationState = useAppStore((s) => s.dictationState)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
@@ -151,6 +155,7 @@ export function AppRootSurfaces(props: {
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const shouldMountDictationController = voiceEnabled || dictationState !== 'idle'
   const renderPetOverlay = shouldRenderPetOverlay({ persistedUIReady, petEnabled, petVisible })
+  const shouldMountSleepyMode = sleepyModeAutoStart || sleepyModeActive
 
   return (
     <>
@@ -270,6 +275,14 @@ export function AppRootSurfaces(props: {
       {activeContextualTourId !== null ? (
         <Suspense fallback={null}>
           <ContextualTourOverlay />
+        </Suspense>
+      ) : null}
+      {/* Why: the scene owns its own idle timer, so it stays mounted (rendering null) whenever auto-start is configured. */}
+      {shouldMountSleepyMode ? (
+        <Suspense fallback={null}>
+          <OverlayBoundary boundaryId="overlay.sleepy-mode" resetKey={sleepyModeActive}>
+            <SleepyModeOverlay />
+          </OverlayBoundary>
         </Suspense>
       ) : null}
       {/* Why: mount only after UI hydration, else a hidden pet flashes while the store still holds default visibility. */}

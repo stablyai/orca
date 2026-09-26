@@ -12204,6 +12204,23 @@
           "usageLabel": "Usage",
           "noAllowance": "Cursor reported no usage allowance for this account.",
           "staleUsage": "Last known usage — the latest refresh failed: {{reason}}"
+        },
+        "sleepy-mode-copy": {
+          "title": "Sleepy Mode",
+          "description": "After this long with no input, cover the window with a clock and what the fleet is doing. Any key wakes it. This is a screen cover, not a lock — display sleep still follows Keep computer awake.",
+          "start": "Start Sleepy Mode",
+          "never": "Never",
+          "minutes": "{{count}} min"
+        },
+        "sleepy-mode": {
+          "search": {
+            "sleepy": "sleepy",
+            "screensaver": "screensaver",
+            "idle": "idle",
+            "clock": "clock",
+            "overnight": "overnight",
+            "privacy": "privacy"
+          }
         }
       },
       "right": {
@@ -17350,6 +17367,16 @@
           "cursorAccounts": {
             "hostOnly": "Cursor sign-in details are only readable on the computer running Orca."
           }
+        }
+      },
+      "sleepy-mode": {
+        "SleepyModeOverlay": {
+          "label": "Sleepy Mode",
+          "working": "{{count}} working",
+          "waiting": "{{count}} waiting",
+          "done": "{{count}} done",
+          "quiet": "No agents working",
+          "dismissHint": "Press any key to wake"
         }
       }
     },

@@ -1764,6 +1764,16 @@
           "refreshLinks": "Refresh",
           "showButton": "Show Skills button"
         },
+        "sleepy-mode": {
+          "search": {
+            "clock": "clock",
+            "idle": "idle",
+            "overnight": "overnight",
+            "privacy": "privacy",
+            "screensaver": "screensaver",
+            "sleepy": "sleepy"
+          }
+        },
         "ssh": {
           "search": {
             "62826efbe9": "Add a new remote SSH target.",

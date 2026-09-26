@@ -112,7 +112,9 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
           active: false
         }
       },
-      onChanged: () => noopUnsubscribe
+      onChanged: () => noopUnsubscribe,
+      // Why: a paired web client cannot read the desktop's input clock; unknown, not idle.
+      getSystemIdleSeconds: async () => null
     }
   }
 }

@@ -880,6 +880,25 @@ html.native-shell .app-layout {
   height: calc(var(--browser-page-viewport-height) / var(--ui-zoom-factor, 1));
 }
 
+/* Why: the Sleepy Mode scene needs depth without color — a pale pool behind the
+   clock fading outward. Direction flips per theme: light mode can't go brighter
+   than #fff, so it vignettes the edges instead of lighting the middle. */
+.sleepy-mode-scene {
+  background: radial-gradient(
+    125% 85% at 50% 42%,
+    var(--background) 0%,
+    color-mix(in srgb, var(--foreground) 6%, var(--background)) 100%
+  );
+}
+
+.dark .sleepy-mode-scene {
+  background: radial-gradient(
+    125% 85% at 50% 42%,
+    color-mix(in srgb, var(--foreground) 8%, var(--background)) 0%,
+    var(--background) 70%
+  );
+}
+
 /* Why: small identity anchor on desktop custom titlebars where native window
    chrome is hidden. Sized to sit comfortably in the 36px titlebar with a
    little horizontal breathing room. The SVG fill is white; light mode inverts

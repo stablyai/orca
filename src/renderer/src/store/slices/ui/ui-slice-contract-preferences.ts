@@ -122,6 +122,9 @@ export type UISliceSurfaces = {
   ) => void
   setWorkspacePortScanForKey: (key: string, result: WorkspacePortScanResult | null) => void
   setWorkspacePortScanRefreshing: (refreshing: boolean) => void
+  /** Whether the Sleepy Mode resting screen is covering the window. Transient — a restart should never come back asleep. */
+  sleepyModeActive: boolean
+  setSleepyModeActive: (active: boolean) => void
   /** Whether the pet overlay is currently visible. Persisted so "Hide pet" survives reload. Independent of the experimentalPet flag (which gates whether it can render at all). */
   petVisible: boolean
   setPetVisible: (v: boolean) => void

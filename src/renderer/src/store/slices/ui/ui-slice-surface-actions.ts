@@ -87,6 +87,10 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
           : { workspacePortScanRefreshing: refreshing }
       ),
 
+    sleepyModeActive: false,
+    setSleepyModeActive: (active) =>
+      set((state) => (state.sleepyModeActive === active ? state : { sleepyModeActive: active })),
+
     // Why: default true so enabling experimentalPet shows the pet immediately (persisted; "Hide pet" flips it false).
     petVisible: true,
     setPetVisible: (v) => {
