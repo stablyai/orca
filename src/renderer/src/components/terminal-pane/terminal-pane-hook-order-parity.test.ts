@@ -24,8 +24,9 @@ const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
 // (the confirmed-close continuation) (212 hooks, still 8 useMemo).
 // Then the dead adopted-structured-session portal went with its local target `useMemo`
 // in projection (211 hooks, 7 useMemo).
+// Persisting current chat ownership (#23049) added useRef/useLayoutEffect/useEffect (214 hooks).
 const PRE_REFACTOR_HOOK_ORDER_SHA256 =
-  '8293793dd40900d869b110ddbe8b4412080f8f505da0baeb4337102147886053'
+  '3736b71c612bb28b9b5298c7704ee1b32c7afc0254e75d0072ff4df870ec3be9'
 
 const sourceFiles = readdirSync(__dirname)
   .filter((name) => TERMINAL_PANE_HOOK_SOURCE_PATTERN.test(name))
@@ -90,7 +91,7 @@ function readFlattenedHookOrder(): string[] {
 describe('TerminalPane refactor hook parity', () => {
   it('preserves the recursively flattened render hook order', () => {
     const hooks = readFlattenedHookOrder()
-    expect(hooks).toHaveLength(211)
+    expect(hooks).toHaveLength(214)
     expect(hooks.filter((hook) => hook === 'useMemo')).toHaveLength(7)
     expect(createHash('sha256').update(hooks.join('\n')).digest('hex')).toBe(
       PRE_REFACTOR_HOOK_ORDER_SHA256
