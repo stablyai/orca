@@ -176,7 +176,8 @@ describe('send', () => {
     dispatch
       .mockImplementationOnce(async () => ({
         state: 'rejected' as const,
-        reason: 'provider_write_failed: broken pipe'
+        reason: 'provider_write_failed: broken pipe',
+        rejection: { kind: 'writeFailed' as const }
       }))
       .mockImplementationOnce(async () => accepted())
     const body = hostTestMessage('never written')

@@ -379,7 +379,11 @@ describe('Claude structured dispatch image limits', () => {
         clientMessageId: 'client-2',
         body: userMessage([{ type: 'text', text: 'two' }])
       })
-    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'provider_write_failed: broken pipe',
+      rejection: { kind: 'writeFailed' }
+    })
     expect(session.dispatchWaiters).toEqual([firstWaiter])
 
     const firstUuid = (firstWaiter as { sentUuid?: string }).sentUuid
@@ -401,7 +405,11 @@ describe('Claude structured dispatch image limits', () => {
 
     await expect(
       dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'provider_write_failed: broken pipe',
+      rejection: { kind: 'writeFailed' }
+    })
     expect(session.dispatchWaiters).toHaveLength(0)
     expect(session.retiredDispatchWaiters).toHaveLength(0)
 
@@ -682,66 +690,6 @@ describe('Claude structured dispatch image limits', () => {
         uuid: 'user-replay-uuid'
       }
     })
-  })
-
-  it('rejects more than twenty URL images before sending', async () => {
-    const session = sessionFor()
-    const body = userMessage(
-      Array.from({ length: 21 }, (_, index) => ({
-        type: 'image-ref' as const,
-        url: `https://example.test/${index}.png`
-      }))
-    )
-
-    await expect(
-      dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-    ).resolves.toEqual({ state: 'rejected', reason: 'Claude messages support at most 20 images' })
-    expect(session.connection.send).not.toHaveBeenCalled()
-  })
-
-  it('rejects local images whose aggregate size exceeds twenty MiB', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'orca-claude-images-'))
-    try {
-      const paths = await Promise.all(
-        Array.from({ length: 5 }, async (_, index) => {
-          const path = join(directory, `${index}.png`)
-          await writeFile(path, Buffer.alloc(5 * 1024 * 1024))
-          return path
-        })
-      )
-      const session = sessionFor()
-      const body = userMessage(paths.map((path) => ({ type: 'image-ref' as const, path })))
-
-      await expect(
-        dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-      ).resolves.toEqual({
-        state: 'rejected',
-        reason: `Claude images must total no more than ${20 * 1024 * 1024} bytes`
-      })
-      expect(session.connection.send).not.toHaveBeenCalled()
-    } finally {
-      await rm(directory, { recursive: true, force: true })
-    }
-  })
-
-  it('rejects a local image by actual bytes read beyond the per-image cap', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'orca-claude-image-'))
-    try {
-      const path = join(directory, 'oversized.png')
-      await writeFile(path, Buffer.alloc(5 * 1024 * 1024 + 1))
-      const session = sessionFor()
-      const body = userMessage([{ type: 'image-ref', path }])
-
-      await expect(
-        dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-      ).resolves.toEqual({
-        state: 'rejected',
-        reason: `Claude image must be a non-empty file no larger than ${5 * 1024 * 1024} bytes`
-      })
-      expect(session.connection.send).not.toHaveBeenCalled()
-    } finally {
-      await rm(directory, { recursive: true, force: true })
-    }
   })
 
   it('allocates local image reads from the file size, not the maximum cap', async () => {

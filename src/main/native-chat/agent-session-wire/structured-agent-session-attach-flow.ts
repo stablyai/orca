@@ -1,3 +1,4 @@
+import { refuse } from '../../../shared/agent-session-wire-refusals'
 import { settlePostAcquisitionAttachFailure } from './structured-agent-session-attach-failure'
 import {
   failedAcquisitionRefusal,
@@ -80,10 +81,11 @@ export async function performAttach(
   const { params, store } = input
   const unsupported = (): AgentSessionMutationResult<AgentSessionAttachResult> => ({
     ok: false,
-    refusal: {
-      code: 'structured_agent_session_unsupported',
-      message: 'This execution host cannot create the requested structured agent session.'
-    }
+    refusal: refuse(
+      'structured_agent_session_unsupported',
+      'hostUnsupported',
+      'This execution host cannot create the requested structured agent session.'
+    )
   })
   const sessionId = params.envelope.sessionId
   const admitted = admitAttachOrRefuse(params)
@@ -282,6 +284,7 @@ async function settleUnsupportedReservation(
       outcome: {
         status: 'failed',
         code: 'structured_agent_session_unsupported',
+        cause: 'hostUnsupported',
         message: 'Structured session support changed before the provider could start.'
       },
       exitProof: 'processless',

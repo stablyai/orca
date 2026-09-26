@@ -424,12 +424,16 @@ describe('a send with no live owner', () => {
     await loseOwner()
     acquire.mockRejectedValue(new Error('Not signed in. Run codex login'))
     const params = sendParams('while signed out')
-    const cause =
-      'The provider stopped before it finished starting: Not signed in. Run codex login.'
+    // The acquire's error is Orca's wrapper, not the provider's words: it goes to the log.
+    const cause = 'The provider stopped before it finished starting.'
 
     const id = await accept(params)
 
-    expect(await settled(id)).toMatchObject({ dispatchState: 'rejected', reason: cause })
+    expect(await settled(id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: cause,
+      rejection: { kind: 'providerStartFailed' }
+    })
     expect(dispatch).not.toHaveBeenCalled()
     // Accepted, so the ledger answers a resend with the rejection rather than a second attempt.
     expect(
@@ -491,8 +495,11 @@ describe('a send with no live owner', () => {
 
     expect(unresumable).toMatchObject({
       dispatchState: 'rejected',
-      reason:
-        "Codex couldn't restart: This execution host cannot resume the requested structured agent session. Start a new chat to continue."
+      reason: "Codex couldn't restart. Start a new chat to continue.",
+      rejection: {
+        kind: 'restartFailed',
+        refusal: { code: 'structured_agent_session_unsupported', cause: 'hostUnsupported' }
+      }
     })
   })
 
@@ -508,8 +515,13 @@ describe('a send with no live owner', () => {
 
     const id = await accept(sendParams('owner being settled'))
 
-    const cause = "Codex couldn't restart: Another runtime is still adjudicating this lease."
-    expect(await settled(id)).toMatchObject({ dispatchState: 'rejected', reason: cause })
+    // The refusal's prose stays out of the chat; its code rides in the fact.
+    const cause = "Codex couldn't restart."
+    expect(await settled(id)).toMatchObject({
+      dispatchState: 'rejected',
+      reason: cause,
+      rejection: { kind: 'restartFailed', refusal: { code: 'execution_owner_reconciling' } }
+    })
     expect(acquire).not.toHaveBeenCalled()
     expect(errorStatuses()).toEqual([cause])
   })
@@ -522,9 +534,11 @@ describe('a send with no live owner', () => {
 
     const id = await accept(sendParams('bookkeeping failed'))
 
+    // Orca's own fault: reported to the log, and the chat says only that Orca failed.
     expect(await settled(id)).toMatchObject({
       dispatchState: 'rejected',
-      reason: "Codex couldn't restart: spawn-token mint failed."
+      reason: "Orca ran into a problem, so this didn't go through. Try again.",
+      rejection: { kind: 'hostFault' }
     })
     expect(hostErrors).toContainEqual(
       expect.objectContaining({ message: 'spawn-token mint failed' })
@@ -715,7 +729,7 @@ describe('a write fenced to an owner the pane has not seen replaced', () => {
 
     expect(await settled(id)).toMatchObject({
       dispatchState: 'rejected',
-      reason: expect.stringContaining('Not signed in')
+      rejection: { kind: 'providerStartFailed' }
     })
     expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(seenFence + 1)
     const published = frames.slice(subscribed)

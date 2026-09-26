@@ -332,6 +332,41 @@ describe('optional notice metadata', () => {
   })
 })
 
+describe('typed failure facts', () => {
+  it('admits a status row and a submission with a fact, and the same rows without one', () => {
+    const failure = {
+      kind: 'providerStartFailed',
+      detail: { text: 'exit status 1', audience: 'log' }
+    }
+    expect(isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Stopped.', failure })).toBe(
+      true
+    )
+    expect(isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Stopped.' })).toBe(true)
+    const submission = {
+      clientMessageId: 'cm-1',
+      fence: 1,
+      payloadFingerprint: 'fp',
+      dispatchState: 'rejected',
+      providerItemId: null,
+      reason: 'Not sent.',
+      submittedAt: 1,
+      resolvedAt: 2
+    }
+    expect(isAdmissibleAgentJournalSubmission(submission)).toBe(true)
+    expect(isAdmissibleAgentJournalSubmission({ ...submission, rejection: failure })).toBe(true)
+  })
+
+  it('keeps a kind or audience a newer host writes admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Stopped.',
+        failure: { kind: 'futureKind', detail: { text: 'x', audience: 'future' } }
+      })
+    ).toBe(true)
+  })
+})
+
 describe('optional tool annotations', () => {
   const body = { kind: 'tool-call', name: 'shell', input: null, state: 'completed' }
   it('admits old rows and rows with optional annotations without a new kind', () => {

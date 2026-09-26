@@ -1,10 +1,32 @@
+import { providerDiagnostic, type ProviderDiagnostic } from '../../../shared/agent-session-failure'
+
+/** How a compaction ended. `unconfirmed`: the provider never said whether it compacted, so it may
+ *  have. `detail` is the provider's own words for a failure, when it gave any. */
+export type StructuredSessionCompactionResult =
+  | { outcome: 'compacted' }
+  | { outcome: 'failed'; detail?: ProviderDiagnostic }
+  | { outcome: 'unconfirmed' }
+
+/** A compaction that never began: refused before it was sent, or by the provider at the request. */
+export type StructuredSessionCompactionRefusal = Extract<
+  StructuredSessionCompactionResult,
+  { outcome: 'failed' }
+>
+
+function compactionFailed(
+  detail: ProviderDiagnostic | undefined
+): StructuredSessionCompactionRefusal {
+  return { outcome: 'failed', ...(detail ? { detail } : {}) }
+}
+
 type PendingCompaction = {
   identity: string
   commandTurnId?: string
   turnId?: string
-  error?: string
+  /** The provider reported the compaction failed, with its words when it gave any. */
+  failed?: { detail?: ProviderDiagnostic }
   compacted: boolean
-  finish: (result: { error?: string }) => void
+  finish: (result: StructuredSessionCompactionResult) => void
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -26,17 +48,17 @@ export class StructuredSessionCompaction {
   async run(
     sessionId: string,
     identity: string,
-    invoke: () => Promise<unknown>,
-    onLateResult?: (result: { error?: string }) => Promise<void>,
+    invoke: () => Promise<StructuredSessionCompactionRefusal | undefined>,
+    onLateResult?: (result: StructuredSessionCompactionResult) => Promise<void>,
     commandTurnId?: string
-  ): Promise<{ error?: string }> {
+  ): Promise<StructuredSessionCompactionResult> {
     if (this.pending.has(sessionId)) {
       throw new Error('Compaction is already running.')
     }
     let timer: ReturnType<typeof setTimeout>
     let expired = false
-    const completion = new Promise<{ error?: string }>((resolve, reject) => {
-      const finish = (result: { error?: string }) => {
+    const completion = new Promise<StructuredSessionCompactionResult>((resolve, reject) => {
+      const finish = (result: StructuredSessionCompactionResult) => {
         this.pending.delete(sessionId)
         if (expired && onLateResult) {
           void onLateResult(result).catch((error) =>
@@ -60,9 +82,9 @@ export class StructuredSessionCompaction {
     // Observe rejection even while invoke is waiting for its own receipt.
     void completion.catch(() => {})
     try {
-      const admission = record(await invoke())
-      if (typeof admission.error === 'string') {
-        this.pending.get(sessionId)?.finish({ error: admission.error })
+      const refusal = await invoke()
+      if (refusal) {
+        this.pending.get(sessionId)?.finish(compactionFailed(refusal.detail))
       }
       return await completion
     } catch (error) {
@@ -89,7 +111,8 @@ export class StructuredSessionCompaction {
   }
 
   ended(sessionId: string): void {
-    this.pending.get(sessionId)?.finish({ error: 'The provider exited during compaction.' })
+    // It may have compacted before it exited.
+    this.pending.get(sessionId)?.finish({ outcome: 'unconfirmed' })
   }
 
   codex(sessionId: string, method: string, value: unknown): void {
@@ -108,9 +131,11 @@ export class StructuredSessionCompaction {
     if (method === 'turn/completed' && turn.id === pending.turnId) {
       const error = record(turn.error).message
       pending.finish(
-        turn.status === 'completed' && pending.compacted
-          ? {}
-          : { error: typeof error === 'string' ? error : 'Compaction did not complete.' }
+        turn.status !== 'completed'
+          ? compactionFailed(
+              typeof error === 'string' ? providerDiagnostic(error, 'person') : undefined
+            )
+          : { outcome: pending.compacted ? 'compacted' : 'unconfirmed' }
       )
     }
   }
@@ -121,8 +146,12 @@ export class StructuredSessionCompaction {
       return
     }
     if (message.compact_result === 'failed') {
-      pending.error =
-        typeof message.compact_error === 'string' ? message.compact_error : 'Compaction failed.'
+      pending.failed = {
+        detail:
+          typeof message.compact_error === 'string'
+            ? providerDiagnostic(message.compact_error, 'person')
+            : undefined
+      }
     }
     if (message.compact_result === 'success' || message.subtype === 'compact_boundary') {
       pending.compacted = true
@@ -132,12 +161,13 @@ export class StructuredSessionCompaction {
         message.is_error === true ||
         (typeof message.subtype === 'string' && message.subtype.startsWith('error'))
       ) {
-        pending.error ??= 'Compaction did not complete.'
+        pending.failed ??= {}
       }
-      const error =
-        pending.error ??
-        (pending.compacted ? undefined : 'Compaction was not confirmed by the provider.')
-      pending.finish(error ? { error } : {})
+      pending.finish(
+        pending.failed
+          ? compactionFailed(pending.failed.detail)
+          : { outcome: pending.compacted ? 'compacted' : 'unconfirmed' }
+      )
     }
   }
 }

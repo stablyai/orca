@@ -1,7 +1,10 @@
-import type {
-  AgentSessionAttachResult,
-  AgentSessionMutationResult,
-  AgentSessionWireRefusal
+import {
+  isAgentSessionRefusalError,
+  refuse,
+  type AgentSessionAttachResult,
+  type AgentSessionMutationResult,
+  type AgentSessionRefusalCause,
+  type AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
 import type {
   AgentSessionOperationOutcome,
@@ -24,7 +27,11 @@ export function failedAcquisitionSettlement(error: unknown): {
   outcome: Extract<AgentSessionOperationOutcome, { status: 'failed' }>
 } {
   if (error instanceof AgentSessionAcquisitionExitUnprovenError) {
-    const outcome = { code: 'agent_session_ownership_unknown', message: error.message }
+    const outcome = {
+      code: 'agent_session_ownership_unknown',
+      cause: 'exitUnproven' as const,
+      message: error.message
+    }
     return { exitProof: 'unproven', outcome: { status: 'failed', ...outcome } }
   }
   const exitProof = isAgentSessionPreSpawnError(error)
@@ -35,7 +42,25 @@ export function failedAcquisitionSettlement(error: unknown): {
   const message = error instanceof Error ? error.message : String(error)
   const code =
     error instanceof AgentSessionAcquisitionRefusal ? error.code : 'agent_session_operation_invalid'
-  return { exitProof, outcome: { status: 'failed', code, message } }
+  return {
+    exitProof,
+    outcome: { status: 'failed', code, cause: failedAcquisitionCause(error), message }
+  }
+}
+
+/** The situation a failed acquisition stands for: what the adapter typed, a provider that died
+ *  starting, a store refusal the error carried, or Orca's own fault. */
+function failedAcquisitionCause(error: unknown): AgentSessionRefusalCause {
+  if (error instanceof AgentSessionAcquisitionRefusal) {
+    return error.refusalCause ?? 'providerStartFailed'
+  }
+  if (
+    error instanceof AgentSessionAcquisitionRootExitObservedError ||
+    error instanceof AgentSessionAcquisitionExitProvenError
+  ) {
+    return 'providerStartFailed'
+  }
+  return (isAgentSessionRefusalError(error) && error.refusal.cause) || 'hostFault'
 }
 
 /** A failed acquisition answered as a refusal on the first call, in the shape its replay takes;
@@ -44,7 +69,10 @@ export function failedAcquisitionRefusal(
   error: unknown
 ): { ok: false; refusal: AgentSessionWireRefusal } | null {
   if (error instanceof AgentSessionAcquisitionRefusal) {
-    return { ok: false, refusal: { code: error.code, message: error.message } }
+    return {
+      ok: false,
+      refusal: refuse(error.code, failedAcquisitionCause(error), error.message)
+    }
   }
   // A proven exit is a settled fact; its message is the provider's own diagnostic.
   if (
@@ -53,7 +81,7 @@ export function failedAcquisitionRefusal(
   ) {
     return {
       ok: false,
-      refusal: { code: 'agent_session_operation_invalid', message: error.message }
+      refusal: refuse('agent_session_operation_invalid', 'providerStartFailed', error.message)
     }
   }
   return null

@@ -64,7 +64,8 @@ describe('operation admission', () => {
     admit(rows)
     expect(evaluate(rows, { fingerprint: 'fp-2' })).toEqual({
       decision: 'refused',
-      code: 'agent_session_operation_conflict'
+      code: 'agent_session_operation_conflict',
+      cause: 'operationIdReused'
     })
   })
 
@@ -78,14 +79,19 @@ describe('operation admission', () => {
     const rows = new Map<string, AgentSessionOperationRow>()
     expect(evaluate(rows, { operationId: 'not-an-operation-id' })).toEqual({
       decision: 'refused',
-      code: 'agent_session_operation_invalid'
+      code: 'agent_session_operation_invalid',
+      cause: 'operationIdInvalid'
     })
     // Why: a future-dated id would look new again after its own tombstone is collected.
     expect(
       evaluate(rows, {
         operationId: operationId(NOW + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS + 1)
       })
-    ).toEqual({ decision: 'refused', code: 'agent_session_operation_invalid' })
+    ).toEqual({
+      decision: 'refused',
+      code: 'agent_session_operation_invalid',
+      cause: 'operationIdInvalid'
+    })
     expect(
       evaluate(rows, { operationId: operationId(NOW + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS) })
         .decision
@@ -97,7 +103,8 @@ describe('operation admission', () => {
     const stale = operationId(NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS - 1)
     expect(evaluate(rows, { operationId: stale })).toEqual({
       decision: 'refused',
-      code: 'agent_session_operation_expired'
+      code: 'agent_session_operation_expired',
+      cause: 'operationExpired'
     })
     expect(
       evaluate(rows, { operationId: operationId(NOW - AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) })
@@ -110,12 +117,14 @@ describe('operation admission', () => {
     admit(rows, { operationId: operationId(NOW, 'b'.repeat(32)) })
     expect(evaluate(rows, { perClientLimit: 1 })).toEqual({
       decision: 'refused',
-      code: 'agent_session_operation_capacity'
+      code: 'agent_session_operation_capacity',
+      cause: 'operationCapacity'
     })
     // A different caller is still refused once the global cap is reached.
     expect(evaluate(rows, { callerKey: 'client-2', globalLimit: 1 })).toEqual({
       decision: 'refused',
-      code: 'agent_session_operation_capacity'
+      code: 'agent_session_operation_capacity',
+      cause: 'operationCapacity'
     })
     expect(evaluate(rows, { callerKey: 'client-2', perClientLimit: 1 }).decision).toBe('admit')
   })

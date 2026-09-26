@@ -140,7 +140,12 @@ describe('codex dispatch admission', () => {
     const { CodexAppServerRequestError } = await import('./codex-app-server-connection')
     const codex = fakeCodexAppServer({
       'turn/start': () => {
-        throw new CodexAppServerRequestError('turn/start', -32602, 'thread not found')
+        throw new CodexAppServerRequestError(
+          'turn/start',
+          -32602,
+          'codex app-server turn/start failed: thread not found',
+          'thread not found'
+        )
       }
     })
     const settlements: LateSettlement[] = []
@@ -148,9 +153,14 @@ describe('codex dispatch admission', () => {
     const connection = codex.connections[0]!
     startTurn(connection, 'turn-1')
 
+    // Codex's own words reach the sentence and the fact; Orca's prefix reaches neither.
     expect(await send(adapter, 'client-1')).toEqual({
       state: 'rejected',
-      reason: 'thread not found'
+      reason: 'The provider did not accept this message: thread not found.',
+      rejection: {
+        kind: 'providerRejected',
+        detail: { text: 'thread not found', audience: 'person' }
+      }
     })
 
     // A refused write is disarmed, so a later echo of that id settles nothing.
@@ -347,7 +357,8 @@ describe('codex dispatch admission', () => {
     }
     expect(await send(adapter, 'client-overflow')).toEqual({
       state: 'rejected',
-      reason: 'codex structured dispatch queue is full'
+      reason: 'codex structured dispatch queue is full',
+      rejection: { kind: 'queueFull' }
     })
 
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u0', clientId: 'client-0' })

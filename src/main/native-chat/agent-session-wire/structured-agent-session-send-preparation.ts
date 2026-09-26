@@ -5,45 +5,19 @@
 // or a journal that cannot be opened.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionWireRefusal
-} from '../../../shared/agent-session-wire'
-import type { AgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
 import {
-  ownerRestartFailedOutcome,
-  providerStartupFailureOutcome
-} from './structured-agent-session-dead-generation-settlement'
+  refuse,
+  type AgentSessionMutationEnvelope,
+  type AgentSessionWireRefusal
+} from '../../../shared/agent-session-wire'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../shared/tui-agent-display-names'
+import type { AgentSessionFailureTextContext } from './structured-agent-session-failure-text'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import {
   AGENT_SESSION_NOT_ATTACHED,
   type AgentSessionMutationSessionPreparation
 } from './structured-agent-session-mutation-admission'
 import { rewindRefusal } from './structured-rewind-refusal'
-
-/**
- * Whether a refused start leaves the chat anything to start again from. `unresumable`: this host
- * has nothing to restart it from — no record, or none it can run — so only a new chat continues.
- * A new wire code does not compile until it is classified here.
- */
-const START_REFUSAL_RESUMABLE: Record<AgentSessionWireRefusalCode, boolean> = {
-  execution_owner_reconciling: true,
-  agent_session_conflict: true,
-  agent_session_checkpoint_stale: true,
-  agent_session_ownership_unknown: true,
-  agent_session_operation_capacity: true,
-  structured_agent_session_unsupported: false,
-  agent_session_operation_conflict: true,
-  agent_session_operation_expired: true,
-  agent_session_operation_invalid: true,
-  agent_session_operation_unknown: true,
-  agent_session_item_revision_stale: true,
-  agent_session_already_resolved: true,
-  agent_session_identity_required: false,
-  agent_session_journal_unreadable: true,
-  agent_session_owner_restart_failed: true
-}
 
 /** Why the record refuses any send right now, whoever owns it; null when a send may run. */
 export function structuredAgentSessionSendBlock(
@@ -61,12 +35,17 @@ export function structuredAgentSessionSendBlock(
   ) {
     return {
       ok: false,
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        message: command.replacementSessionId
-          ? 'This conversation has been cleared. Use the current conversation.'
-          : 'The conversation operation is unconfirmed.'
-      }
+      refusal: command.replacementSessionId
+        ? refuse(
+            'agent_session_operation_invalid',
+            'conversationCleared',
+            'This conversation has been cleared. Use the current conversation.'
+          )
+        : refuse(
+            'agent_session_operation_invalid',
+            'conversationCommandUnconfirmed',
+            'The conversation operation is unconfirmed.'
+          )
     }
   }
   return null
@@ -85,28 +64,20 @@ export async function openConversationForWrite(
   } catch (error) {
     return {
       ok: false,
-      refusal: {
-        code: 'agent_session_journal_unreadable',
-        message: `The conversation could not be opened: ${
+      refusal: refuse(
+        'agent_session_journal_unreadable',
+        'journalUnreadable',
+        `The conversation could not be opened: ${
           error instanceof Error ? error.message : String(error)
         }`
-      }
+      )
     }
   }
 }
 
-/** What the chat says, in its row and on every message it rejects, when the delivery loop could
- *  not make the session ready. A child that died starting reads as any start that died does. */
-export function structuredAgentSessionStartFailureText(
-  record: AgentSessionRecord | null,
-  cause: AgentSessionWireRefusal
-): string {
-  if (cause.ownerVerdict === 'exited') {
-    return providerStartupFailureOutcome(cause.message)
-  }
-  return ownerRestartFailedOutcome({
-    agentName: record ? TUI_AGENT_DISPLAY_NAMES[record.provider] : 'The agent',
-    reason: cause.message,
-    resumable: START_REFUSAL_RESUMABLE[cause.code]
-  })
+/** Who a failure sentence names: the chat's agent, when the record says. */
+export function structuredAgentSessionFailureTextContext(
+  record: AgentSessionRecord | null
+): AgentSessionFailureTextContext {
+  return record ? { agentName: TUI_AGENT_DISPLAY_NAMES[record.provider] } : {}
 }

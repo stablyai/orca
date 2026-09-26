@@ -5,6 +5,7 @@
 // UNREADABLE, not skippable: the caller must degrade to read-only rather than
 // render a partial timeline or compact past a row it cannot interpret.
 
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import {
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
   type AgentJournalDispatchState,
@@ -89,6 +90,9 @@ export type JournalDispatchRow = JournalRowBase & {
   /** Provider item identity adopted on accept. */
   providerItemId: string | null
   reason: string | null
+  /** On `rejected`: why, typed. Older readers keep the key and ignore it; a malformed one is
+   *  dropped when read, never the row. */
+  rejection?: AgentSessionFailureFact
 }
 
 /** An item mutation may name its own producer, because one batch can CREATE

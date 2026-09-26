@@ -1,3 +1,5 @@
+import type { AgentJournalDispatchRejection } from '../../shared/structured-agent-session-dispatch-rejection'
+import type { AgentSessionFailureFact } from '../../shared/agent-session-failure'
 import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
@@ -66,6 +68,7 @@ export type ClaudeStructuredSessionEvent =
       type: 'ended'
       sessionId: string
       reason: string
+      failure?: AgentSessionFailureFact
       /** Present for first-hand child exits so the host can fence recovery. */
       cause?: 'unexpected-exit' | 'requested-close'
       fence?: number
@@ -82,7 +85,7 @@ export type ClaudeLateDispatchOutcome =
       clientMessageId: string
       providerIdentity: AgentJournalItemIdentity
     }
-  | { clientMessageId: string; state: 'rejected'; reason: string }
+  | ({ clientMessageId: string; state: 'rejected' } & AgentJournalDispatchRejection)
 
 export type ClaudeStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {

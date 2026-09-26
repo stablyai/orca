@@ -4,11 +4,14 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { dispatchRejectionReasonIsInternal } from '../../../shared/structured-agent-session-dispatch-rejection'
+import {
+  agentSessionFailureFact,
+  MAX_PROVIDER_DIAGNOSTIC_CHARS,
+  providerDiagnostic
+} from '../../../shared/agent-session-failure'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   captureUnfinishedStructuredAgentSessionWork,
-  MAX_UNEXPECTED_EXIT_REASON_CHARS,
   settleStructuredAgentSessionDeadGeneration,
   UNEXPECTED_PROVIDER_EXIT_OUTCOME,
   unfinishedStructuredAgentSessionWorkWasInterrupted
@@ -143,7 +146,7 @@ describe('dead structured-session generation settlement', () => {
     ).toHaveLength(1)
   })
 
-  it('keeps the actionable tail when the provider dumps a stderr wall into its exit reason', async () => {
+  it('keeps a stderr wall out of the sentence, as a bounded detail for a log', async () => {
     await seedUnfinishedWork()
 
     await expect(
@@ -155,19 +158,20 @@ describe('dead structured-session generation settlement', () => {
         pendingSubmissionReason: 'provider_exited_before_acknowledgement',
         verdict: { state: 'interrupted', completedAt: 1_000 },
         showUnexpectedExitOutcome: true,
-        unexpectedExitReason: 'stack frame '.repeat(4_000)
+        exitFailure: agentSessionFailureFact('providerExited', {
+          detail: providerDiagnostic('stack frame '.repeat(4_000), 'log')
+        })
       })
     ).resolves.toBe(true)
 
     const statuses = journal
       .snapshot()
-      .items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
+      .items.flatMap((item) => (item.body.kind === 'status' ? [item.body] : []))
     expect(statuses).toHaveLength(1)
-    // The cause is bounded before composing, so the row never reaches the byte cap that would
-    // truncate the sentence telling the user the conversation is still usable.
-    expect(statuses[0]).toContain('stack frame')
-    expect(statuses[0]).toMatch(/You can continue in this conversation\.$/)
-    expect(statuses[0]?.length).toBeLessThan(MAX_UNEXPECTED_EXIT_REASON_CHARS * 2)
+    expect(statuses[0]?.text).toBe(UNEXPECTED_PROVIDER_EXIT_OUTCOME)
+    expect(statuses[0]?.failure?.kind).toBe('providerExited')
+    expect(statuses[0]?.failure?.detail?.audience).toBe('log')
+    expect(statuses[0]?.failure?.detail?.text.length).toBe(MAX_PROVIDER_DIAGNOSTIC_CHARS)
   })
 
   it('retries an already settled expected close without writing through a closed journal gate', async () => {
@@ -276,16 +280,24 @@ describe('dead structured-session generation settlement', () => {
       settlementId: `provider-exit:${SESSION}:7:generation-1`,
       pendingSubmissionReason: 'provider_closed_before_acknowledgement',
       verdict: { state: 'interrupted', completedAt: 1_000 },
-      unexpectedExitReason: 'claude stream-json exited (code 1): not signed in',
+      exitFailure: agentSessionFailureFact('providerExited', {
+        detail: providerDiagnostic('code 1\nnot signed in', 'log')
+      }),
       exitedDuringStartup: { generation: 'generation-1' }
     })
 
-    const reason =
-      'The provider stopped before it finished starting: claude stream-json exited (code 1): not signed in.'
+    // The sentence is Orca's; the stderr the exit carried rides as a log detail only.
     expect(journal.submissions()).toEqual([
-      expect.objectContaining({ clientMessageId: 'client-held', dispatchState: 'rejected', reason })
+      expect.objectContaining({
+        clientMessageId: 'client-held',
+        dispatchState: 'rejected',
+        reason: 'The provider stopped before it finished starting.',
+        rejection: {
+          kind: 'providerStartFailed',
+          detail: { text: 'code 1\nnot signed in', audience: 'log' }
+        }
+      })
     ])
-    expect(dispatchRejectionReasonIsInternal(reason)).toBe(false)
   })
 
   it("keeps a subagent's settled rows the subagent's, in one batch and after a reopen", async () => {

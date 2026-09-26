@@ -1,3 +1,4 @@
+import type { AgentSessionFailureFact } from '../../shared/agent-session-failure'
 import { compactClaudeSession, observeClaudeCompaction } from './claude-structured-compaction'
 import type {
   AgentSessionAcquisition,
@@ -13,7 +14,7 @@ import { supportsClaudeStructuredLocation } from './claude-structured-location-s
 import { setClaudeStructuredSessionOption } from './claude-structured-options'
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
 import {
-  claudeStartupFailureReason,
+  claudeStartupFailureFact,
   claudeStartupSettledWithin
 } from './claude-structured-session-startup-state'
 import { CLAUDE_DEFAULT_REQUEST_TIMEOUT_MS } from './claude-agent-sdk-control-requests'
@@ -120,13 +121,13 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
 
   /** Resolves once a published session's startup has landed, faulted, or been ended by a close;
    *  with the reason when it did not land. */
-  awaitStarted = async (sessionId: string): Promise<void | string> => {
+  awaitStarted = async (sessionId: string): Promise<void | AgentSessionFailureFact> => {
     const session = this.sessions.get(sessionId)
     if (!session) {
       return
     }
     await session.startup.settled
-    return claudeStartupFailureReason(session) ?? undefined
+    return claudeStartupFailureFact(session) ?? undefined
   }
 
   /** Restart reconciliation reads the transcript a resume replays; these maps track liveness. */

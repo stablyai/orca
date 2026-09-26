@@ -25,6 +25,8 @@ import type {
 } from '../../../shared/agent-session-record'
 import {
   AGENT_SESSION_WIRE_REFUSAL_CODES,
+  AgentSessionRefusalError,
+  refuse,
   type AgentSessionMutationEnvelope,
   type AgentSessionWireRefusal,
   type AgentSessionWireRefusalCode
@@ -118,10 +120,11 @@ export function admitAttachOrRefuse(
   if (params.providerHandle && params.providerHandle.kind !== params.provider) {
     return {
       ok: false,
-      refusal: {
-        code: 'agent_session_operation_invalid',
-        message: `A ${params.provider} session requires a ${params.provider} provider handle.`
-      }
+      refusal: refuse(
+        'agent_session_operation_invalid',
+        'requestMalformed',
+        `A ${params.provider} session requires a ${params.provider} provider handle.`
+      )
     }
   }
   const fingerprint = computeAgentSessionPayloadFingerprint({
@@ -335,12 +338,14 @@ export function classifyStoreFailure(
     throw error
   }
   const code = rawCode as AgentSessionWireRefusalCode
+  const emitted = error instanceof AgentSessionRefusalError ? error.refusal.cause : undefined
+  // Why: a latched session is exactly where a bare store code strands the user.
+  const told = structuredAgentSessionRefusalMessage(code, emitted, record)
+  const cause = told?.cause ?? emitted
   return {
     code,
-    // Why: a latched session is exactly where a bare store code strands the user.
-    message:
-      structuredAgentSessionRefusalMessage(code, record) ??
-      `The session store refused this call: ${code}.`,
+    ...(cause ? { cause } : {}),
+    message: told?.message ?? `The session store refused this call: ${code}.`,
     ...(code === 'agent_session_checkpoint_stale' && currentFence !== null ? { currentFence } : {})
   }
 }

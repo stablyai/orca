@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { OrcaRuntimeWithGetWorktreePs } from './orca-runtime-get-worktree-ps'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
@@ -156,7 +157,7 @@ export class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaR
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
     if (!support.supported) {
-      throw new Error('structured_agent_session_unsupported')
+      throw agentSessionRefusalError('structured_agent_session_unsupported', 'hostUnsupported')
     }
     const settings = this.requireStore().getSettings()
     const launchEnv = resolveTuiAgentLaunchEnv(input.agent, settings.agentDefaultEnv)

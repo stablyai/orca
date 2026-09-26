@@ -4,7 +4,6 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
-import { providerStartupFailureOutcome } from './structured-agent-session-dead-generation-settlement'
 import {
   settleUnexpectedStructuredAgentSessionExit,
   type StructuredAgentSessionUnexpectedExitContext,
@@ -13,7 +12,8 @@ import {
 
 const SESSION = 'session-1'
 const GENERATION = 'generation-1'
-const REASON = 'Claude Code is not signed in. Sign in with the Claude CLI'
+const REASON = 'claude stream-json exited (code 1): session limit reached'
+const STARTUP_TEXT = 'The provider stopped before it finished starting.'
 
 function startedSession(): StructuredAgentSessionUnexpectedExitSession & {
   journal: { appendLifecycleBatch: ReturnType<typeof vi.fn> }
@@ -77,6 +77,8 @@ describe('a provider that ends before it finished starting', () => {
 
     const ticket = await settleUnexpectedStructuredAgentSessionExit(contextFor(session), {
       ...ended,
+      // The adapter typed the start's own failure; the host keeps it rather than reword it.
+      failure: { kind: 'notSignedIn' },
       startupUnproven: true
     })
 
@@ -87,12 +89,16 @@ describe('a provider that ends before it finished starting', () => {
           expect.objectContaining({
             // The same row the delivery loop writes for a failed start: an error, keyed by it.
             identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
-            body: { kind: 'status', text: providerStartupFailureOutcome(REASON), tone: 'error' }
+            body: {
+              kind: 'status',
+              text: 'Claude is not signed in for the selected account. Sign in, then send your message again.',
+              tone: 'error',
+              failure: { kind: 'notSignedIn' }
+            }
           })
         ]
       })
     )
-    expect(providerStartupFailureOutcome(REASON)).toContain('not signed in')
   })
 
   it('keeps an ordinary idle exit silent and resumable', async () => {
@@ -110,7 +116,10 @@ describe('a provider that ends before it finished starting', () => {
       child: { generation: GENERATION, fence: 7, phase: 'starting' as const }
     }
 
-    const ticket = await settleUnexpectedStructuredAgentSessionExit(contextFor(session), ended)
+    const ticket = await settleUnexpectedStructuredAgentSessionExit(contextFor(session), {
+      ...ended,
+      failure: { kind: 'providerExited', detail: { text: REASON, audience: 'log' } }
+    })
 
     expect(ticket).toBeNull()
     expect(session.journal.appendLifecycleBatch).toHaveBeenCalledWith(
@@ -119,7 +128,16 @@ describe('a provider that ends before it finished starting', () => {
           expect.objectContaining({
             // The same row the delivery loop writes for a failed start: an error, keyed by it.
             identity: { provider: 'orca', clientMessageId: `start-failure:${GENERATION}` },
-            body: { kind: 'status', text: providerStartupFailureOutcome(REASON), tone: 'error' }
+            // The exit's stderr stays out of the sentence, as a log detail beside it.
+            body: {
+              kind: 'status',
+              text: STARTUP_TEXT,
+              tone: 'error',
+              failure: {
+                kind: 'providerStartFailed',
+                detail: { text: REASON, audience: 'log' }
+              }
+            }
           })
         ]
       })

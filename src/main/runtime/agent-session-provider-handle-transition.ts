@@ -1,3 +1,4 @@
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import {
   agentSessionProviderHandleChainHead,
   appendAgentSessionProviderHandleLink,
@@ -20,7 +21,7 @@ export function recordAgentSessionProviderHandle(args: {
     throw new Error('agent_session_provider_handle_invalid')
   }
   if (record.lease.claimStatus !== 'live' && record.lease.handoffStage !== 'new-owner-proving') {
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', 'leaseMoved')
   }
   const providerHandleChain = appendAgentSessionProviderHandleLink(
     record.providerHandleChain,

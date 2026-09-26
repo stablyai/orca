@@ -378,11 +378,11 @@ describe('a structured Claude session over agentSession.*', () => {
     await waitForStructuredAgentSessionRecovery()
 
     const guidance = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
+    // The adapter typed the refusal, so the row names the situation rather than quoting Orca.
     expect(guidance?.body).toMatchObject({
       kind: 'status',
-      text: expect.stringMatching(
-        /stopped before it finished starting: .*not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s
-      )
+      text: 'Claude is not signed in for the selected account. Sign in, then send your message again.',
+      failure: { kind: 'notSignedIn' }
     })
     expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
     // A failed start is not auto-resumed into the same failure.

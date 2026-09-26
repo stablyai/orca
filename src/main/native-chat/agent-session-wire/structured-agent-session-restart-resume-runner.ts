@@ -9,6 +9,10 @@
 // Codex's thread id — which is native continuation. Nothing re-sends the user's prompt: that is
 // what makes an agent redo work it already finished.
 
+import {
+  isAgentSessionRefusalError,
+  type AgentSessionRefusalCause
+} from '../../../shared/agent-session-wire-refusals'
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { StructuredAgentSessionResumeCandidate } from './structured-agent-session-restart-resume-set'
 
@@ -27,6 +31,8 @@ export type StructuredAgentSessionResumeOutcome = {
   outcome: 'resumed' | 'refused'
   /** Refusal code; `agent_session_resume_already_in_progress` names the live owner in `owner`. */
   reason?: string
+  /** A thrown refusal's situation, kept apart so `reason` stays the code readers match. */
+  cause?: AgentSessionRefusalCause
   owner?: string
 }
 
@@ -123,10 +129,12 @@ async function resumeOne(
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     const owner = resumeAdmissionOwner(error)
+    const cause = isAgentSessionRefusalError(error) ? error.refusal.cause : undefined
     return {
       sessionId,
       outcome: 'refused',
       reason,
+      ...(cause ? { cause } : {}),
       ...(owner === null ? {} : { owner })
     }
   }

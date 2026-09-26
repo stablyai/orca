@@ -7,7 +7,7 @@ import {
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
-import { unexpectedProviderExitOutcome } from './structured-agent-session-dead-generation-settlement'
+import { UNEXPECTED_PROVIDER_EXIT_OUTCOME } from './structured-agent-session-dead-generation-settlement'
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import {
   isStructuredAgentSessionRecoveryTicketCurrent,
@@ -268,7 +268,11 @@ describe('provider-exit recovery tickets', () => {
             provider: 'orca',
             clientMessageId: `provider-exit:${SESSION}:7:${GENERATION}`
           },
-          body: { kind: 'status', text: unexpectedProviderExitOutcome('provider exited') }
+          body: {
+            kind: 'status',
+            text: UNEXPECTED_PROVIDER_EXIT_OUTCOME,
+            failure: { kind: 'providerExited' }
+          }
         },
         {
           kind: 'item',
@@ -357,7 +361,8 @@ describe('provider-exit recovery tickets', () => {
           expect.objectContaining({
             body: {
               kind: 'status',
-              text: unexpectedProviderExitOutcome('provider exited after completing the turn')
+              text: UNEXPECTED_PROVIDER_EXIT_OUTCOME,
+              failure: { kind: 'providerExited' }
             }
           })
         ])
@@ -406,7 +411,11 @@ describe('provider-exit recovery tickets', () => {
       expect.objectContaining({
         mutations: [
           expect.objectContaining({
-            body: { kind: 'status', text: unexpectedProviderExitOutcome('provider exited') }
+            body: {
+              kind: 'status',
+              text: UNEXPECTED_PROVIDER_EXIT_OUTCOME,
+              failure: { kind: 'providerExited' }
+            }
           })
         ]
       })

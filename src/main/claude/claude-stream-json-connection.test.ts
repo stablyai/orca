@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { providerDiagnosticOf } from '../../shared/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess, type SpawnedProcess } from '../../shared/child-process/run-process'
 import { hasLiveClaudePtys } from '../claude-accounts/live-pty-gate'
@@ -592,6 +593,11 @@ describe('Claude stream-json connection', () => {
     await until(() => exit, 'the exit error')
     // The status and stderr are the only diagnostic a refused start leaves behind.
     expect((exit as unknown as Error).message).toMatch(/exited \(code 1\): claude: not signed in/)
+    // Kept apart from Orca's wording where it is composed, and marked as log text.
+    expect(providerDiagnosticOf(exit)).toEqual({
+      text: expect.stringMatching(/^\(code 1\)\n.*claude: not signed in/s),
+      audience: 'log'
+    })
     expect(connection.closed).toBe(true)
     // Stderr-triggered capture can win or lose the race with this real child's exit.
     const closed = await connection.close()

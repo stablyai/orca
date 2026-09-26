@@ -8,6 +8,7 @@
 // The fence still moves, so the next owner is a new generation: an attach or settlement still
 // holding the stopped owner's fence is refused as stale rather than acting on its successor.
 
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
 import { assertFence, withLease } from './agent-session-lease-transitions'
@@ -36,7 +37,7 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
   if (!isSurfaceReleasableAgentSessionRecord(record)) {
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', 'leaseMoved')
   }
   return withLease(record, {
     ...record.lease,

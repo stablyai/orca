@@ -33,6 +33,7 @@ import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 // transcript that failed to load; the two must never drift apart.
 export const AGENT_SESSION_NOT_ATTACHED: AgentSessionWireRefusal = {
   code: AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
+  cause: 'sessionNotAttached',
   message: 'This host holds no attached session by that id.'
 }
 

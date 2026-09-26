@@ -9,7 +9,10 @@
 // reads its own record and answers with that record's workspace and provider, so a client knowing
 // only a session id cannot aim the publication somewhere else.
 
-import { isAgentSessionWireRefusalCode } from '../../../../shared/agent-session-wire'
+import {
+  isAgentSessionRefusalError,
+  isAgentSessionWireRefusalCode
+} from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionReveal } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import { refuseAgentSessionMutation } from '../../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { defineMethod } from '../core'
@@ -39,6 +42,9 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         }
         return refuseAgentSessionMutation({
           code,
+          ...(isAgentSessionRefusalError(error) && error.refusal.cause
+            ? { cause: error.refusal.cause }
+            : {}),
           message:
             code === 'structured_agent_session_unsupported'
               ? 'This host cannot open that chat.'

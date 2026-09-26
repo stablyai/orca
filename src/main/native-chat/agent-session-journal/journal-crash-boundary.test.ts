@@ -16,7 +16,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
-import { dispatchWriteFailureReason } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { dispatchWriteFailureRejection } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { digestPayload } from './journal-payload-bounds'
 import {
   reconcileSubmissions,
@@ -180,7 +180,7 @@ describe('crash between provider accept and journal commit', () => {
     await journal.resolveDispatch({
       clientMessageId: 'cm_write_failed',
       state: 'rejected',
-      reason: dispatchWriteFailureReason(new Error('broken pipe')),
+      ...dispatchWriteFailureRejection(new Error('broken pipe')),
       fence: 1
     })
 
@@ -251,6 +251,7 @@ describe('crash between provider accept and journal commit', () => {
       clientMessageId: 'cm_1',
       state: 'rejected',
       reason: 'not_delivered',
+      rejection: { kind: 'notDelivered' },
       fence: 2,
       recovered: true
     })

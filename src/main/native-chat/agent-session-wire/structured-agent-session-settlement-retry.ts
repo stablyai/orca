@@ -77,9 +77,7 @@ export async function retryLoadedStructuredAgentSessionSettlement(input: {
         journal,
         verdict.completedAt
       ),
-    ...(record.lease.deathEvidence?.detail
-      ? { unexpectedExitReason: record.lease.deathEvidence.detail }
-      : {}),
+    // The lease's death evidence is Orca's probe text, so the row records the exit with no detail.
     onError
   })
   if (!ok) {

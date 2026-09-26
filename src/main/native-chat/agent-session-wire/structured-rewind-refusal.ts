@@ -17,6 +17,7 @@ export function rewindRefusal(reason: AgentSessionRewindReason): {
         knownReason === 'outcome-unknown'
           ? 'agent_session_operation_unknown'
           : 'agent_session_operation_invalid',
+      cause: knownReason === 'outcome-unknown' ? 'rewindUnconfirmed' : 'rewindRefused',
       message: `agent_session_rewind:${knownReason}`,
       rewindReason: knownReason
     }

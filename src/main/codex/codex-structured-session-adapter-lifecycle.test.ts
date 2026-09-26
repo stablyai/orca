@@ -181,6 +181,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
       type: 'ended',
       sessionId: 'session-1',
       reason: 'codex app-server connection ended',
+      failure: { kind: 'providerExited' },
       cause: 'unexpected-exit',
       fence: 7,
       acquisitionGeneration: 'generation-1',

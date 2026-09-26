@@ -285,6 +285,60 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.get('cm_2')?.providerItemId).toBe('claude:session-1:user-1')
   })
 
+  it("copies a rejection's typed fact onto the submission, and only on `rejected`", () => {
+    const rejection = { kind: 'providerRejected', detail: { text: 'Too long', audience: 'person' } }
+    const state = fold([
+      submission,
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'rejected',
+        providerItemId: null,
+        reason: 'The provider did not accept this message.',
+        rejection: { kind: 'providerRejected', detail: { text: 'Too long', audience: 'person' } },
+        ...base(2)
+      }
+    ])
+    expect(state.submissions.get('cm_1')).toMatchObject({
+      dispatchState: 'rejected',
+      reason: 'The provider did not accept this message.',
+      rejection
+    })
+
+    const doubt = fold([
+      { ...submission, clientMessageId: 'cm_2' },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_2',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_exited_before_acknowledgement',
+        rejection: { kind: 'writeFailed' },
+        ...base(2)
+      }
+    ])
+    expect(doubt.submissions.get('cm_2')).not.toHaveProperty('rejection')
+  })
+
+  it('drops a rejection fact it cannot place but keeps the row', () => {
+    const rejected: JournalRow = {
+      kind: 'dispatch',
+      clientMessageId: 'cm_1',
+      state: 'rejected',
+      providerItemId: null,
+      reason: 'Not sent.',
+      ...base(2)
+    }
+    // A newer host's kind, as a row read from disk would carry it.
+    Object.assign(rejected, { rejection: { kind: 'futureKind' } })
+    const state = fold([submission, rejected])
+    expect(state.submissions.get('cm_1')).toMatchObject({
+      dispatchState: 'rejected',
+      reason: 'Not sent.'
+    })
+    expect(state.submissions.get('cm_1')).not.toHaveProperty('rejection')
+  })
+
   it('does not give a newer identical echo to a legacy unknown write failure', () => {
     const body = userText('same message')
     const state = fold([

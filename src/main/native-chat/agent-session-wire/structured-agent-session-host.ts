@@ -6,7 +6,7 @@ import { StructuredConversationCommandController } from './structured-conversati
 
 import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type * as SessionWire from '../../../shared/agent-session-wire'
+import * as SessionWire from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { createRestartReconciler } from './structured-agent-session-restart-reconcile'
@@ -342,7 +342,7 @@ export class StructuredAgentSessionHost {
   private requireSession(sessionId: string): StructuredAgentSessionHostSession {
     const session = this.sessions.get(sessionId)
     if (!session) {
-      throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
+      throw new SessionWire.AgentSessionRefusalError(AGENT_SESSION_NOT_ATTACHED)
     }
     return session
   }

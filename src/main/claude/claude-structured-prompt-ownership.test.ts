@@ -269,7 +269,8 @@ describe('Claude live prompt ownership', () => {
       sessionId: 'session-1',
       clientMessageId: 'queued-message',
       state: 'rejected',
-      reason: 'provider_cancelled_before_start'
+      reason: 'provider_cancelled_before_start',
+      rejection: { kind: 'cancelled' }
     })
   })
 

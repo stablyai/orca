@@ -1,3 +1,8 @@
+import {
+  agentSessionFailureFact,
+  MAX_PROVIDER_DIAGNOSTIC_CHARS,
+  type AgentSessionFailureFact
+} from '../../../shared/agent-session-failure'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
@@ -6,11 +11,12 @@ import type {
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
-import {
-  boundJournalStatusText,
-  cancelledJournalPromptBody
-} from '../agent-session-journal/journal-prompt-body-bounds'
+import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import {
+  structuredAgentSessionStartFailure,
+  type AgentSessionFailureTextContext
+} from './structured-agent-session-failure-text'
 import { structuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row'
 import {
   runningTurnLifecycleRevisions,
@@ -20,64 +26,9 @@ import {
 export const UNEXPECTED_PROVIDER_EXIT_OUTCOME =
   'The provider stopped while this response was in progress. You can continue in this conversation.'
 
-/** A provider may put a whole stderr dump in its exit reason; unbounded it would push the
- *  actionable tail past the row's byte cap and lose it to truncation. */
-export const MAX_UNEXPECTED_EXIT_REASON_CHARS = 512
-
-/** The cause is the only thing separating an auth failure from an OOM kill, so it is carried
- *  into the copy rather than left in the durable record nothing renders. */
-export function unexpectedProviderExitOutcome(reason?: string): string {
-  const detail = exitReasonDetail(reason)
-  return detail
-    ? `The provider stopped while this response was in progress: ${detail}. You can continue in this conversation.`
-    : UNEXPECTED_PROVIDER_EXIT_OUTCOME
-}
-
-/** A restart that produced no child, answered to the send that asked for it; its cause is the
- *  whole story, and nothing is remembered, so the next try is a fresh one. A new chat is offered
- *  only when the host holds nothing this chat could restart from. */
-export function ownerRestartFailedOutcome(input: {
-  agentName: string
-  reason?: string
-  resumable: boolean
-}): string {
-  const detail = exitReasonDetail(input.reason)
-  const failed = detail
-    ? `${input.agentName} couldn't restart: ${detail}.`
-    : `${input.agentName} couldn't restart.`
-  return input.resumable ? failed : `${failed} Start a new chat to continue.`
-}
-
-/** A start that never finished has no response to interrupt; its cause is the whole story. */
-export function providerStartupFailureOutcome(reason?: string): string {
-  const detail = exitReasonDetail(reason)
-  return detail
-    ? `The provider stopped before it finished starting: ${detail}.`
-    : 'The provider stopped before it finished starting.'
-}
-
-/** Why a message accepted but not yet handed over was rejected when its child exited. */
-export function providerExitBeforeDeliveryRejection(reason?: string): string {
-  const detail = exitReasonDetail(reason)
-  return detail
-    ? `The provider stopped before this message was sent: ${detail}.`
-    : 'The provider stopped before this message was sent.'
-}
-
-/** Why a send a child that never started left unwritten was rejected. The child's own diagnostic is
- *  the cause the user can act on, so it is the reason, in the words the chat row uses. */
-export function providerStartupFailureRejection(cause?: unknown): string {
-  return providerStartupFailureOutcome(
-    cause === undefined ? undefined : cause instanceof Error ? cause.message : String(cause)
-  )
-}
-
-function exitReasonDetail(reason: string | undefined): string | undefined {
-  return reason
-    ?.slice(0, MAX_UNEXPECTED_EXIT_REASON_CHARS)
-    .trim()
-    .replace(/[.\s]+$/, '')
-}
+/** Bounds the exit reason a settlement retry keeps as the lease's log evidence; a provider
+ *  diagnostic is held to the same cap. */
+export const MAX_UNEXPECTED_EXIT_REASON_CHARS = MAX_PROVIDER_DIAGNOSTIC_CHARS
 
 type DeadGenerationSubmission = Pick<
   ReturnType<AgentSessionJournal['submissions']>[number],
@@ -149,8 +100,10 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
   verdict: StructuredAgentSessionTurnVerdict
   pendingSubmissionReason: string
   showUnexpectedExitOutcome?: boolean
-  /** Why the provider stopped, when the host has it. Rendered with the outcome copy. */
-  unexpectedExitReason?: string
+  /** Why the provider stopped, as the adapter told it: recorded beside the row, never in its text. */
+  exitFailure?: AgentSessionFailureFact
+  /** Who a failed start's sentence names. */
+  failureTextContext?: AgentSessionFailureTextContext
   /** The provider never finished starting: the start that failed, keyed by the child's
    *  generation. Its row is the one the delivery loop writes for the same start. */
   exitedDuringStartup?: { generation: string | null }
@@ -166,20 +119,23 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     // child that never proved its start accepted nothing either — input is written only after it
     // initializes — so every send it was handed is rejected with the child's own diagnostic. A
     // proven child's handed-over sends stay in doubt.
-    await (input.exitedDuringStartup
-      ? input.journal.rejectPendingSubmissions(
-          input.fence,
-          providerStartupFailureRejection(input.unexpectedExitReason)
-        )
+    const startupFailure = input.exitedDuringStartup
+      ? structuredAgentSessionStartFailure({ exit: input.exitFailure }, input.failureTextContext)
+      : null
+    await (startupFailure
+      ? input.journal.rejectPendingSubmissions(input.fence, {
+          reason: startupFailure.text,
+          rejection: startupFailure.failure
+        })
       : input.journal.markPendingSubmissionsUnknown(input.fence, input.pendingSubmissionReason))
     const items = input.journal.snapshot().items
     const mutations: JournalLifecycleMutationInput[] = []
-    if (showUnexpectedExitOutcome && input.exitedDuringStartup) {
+    if (showUnexpectedExitOutcome && input.exitedDuringStartup && startupFailure) {
       // Until views stop starting children, a start can die with nothing queued for the loop.
       mutations.push(
         structuredAgentSessionStartFailureRow(
           input.exitedDuringStartup.generation ?? input.settlementId,
-          providerStartupFailureOutcome(input.unexpectedExitReason)
+          startupFailure
         )
       )
     } else if (showUnexpectedExitOutcome) {
@@ -188,7 +144,8 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
         identity: { provider: 'orca', clientMessageId: input.settlementId },
         body: {
           kind: 'status',
-          text: boundJournalStatusText(unexpectedProviderExitOutcome(input.unexpectedExitReason))
+          text: UNEXPECTED_PROVIDER_EXIT_OUTCOME,
+          failure: input.exitFailure ?? agentSessionFailureFact('providerExited')
         }
       })
     }

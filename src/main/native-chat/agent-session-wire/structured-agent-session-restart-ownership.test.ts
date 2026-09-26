@@ -125,7 +125,7 @@ it('still continues a chat whose last send acquisition proves was never delivere
   const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(host.journalSnapshot(SESSION).submissions[0]).toMatchObject({
     dispatchState: 'rejected',
-    reason: 'not_delivered'
+    rejection: { kind: 'notDelivered' }
   })
   expect(acquire).toHaveBeenCalledTimes(1)
   expect(dispatch).toHaveBeenCalledTimes(1)
@@ -455,7 +455,11 @@ it('retains acquisition through slow continuation settlement, then releases it',
   await vi.advanceTimersByTimeAsync(GRACE * 2)
   expect(host.isHeld(SESSION)).toBe(true)
   expect(closeSession).not.toHaveBeenCalled()
-  settlement.resolve({ state: 'rejected', reason: 'provider refused' })
+  settlement.resolve({
+    state: 'rejected',
+    reason: 'provider refused',
+    rejection: { kind: 'providerRejected' }
+  })
   expect((await continuing).continued).toMatchObject([{ outcome: 'refused' }])
   expect(host.isHeld(SESSION)).toBe(false)
   await vi.advanceTimersByTimeAsync(GRACE)
@@ -708,4 +712,22 @@ it('logs teardown capsule publication failure and still releases the provider', 
   expect(previous.store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
   warning.mockRestore()
   await rm(capsulePath, { recursive: true })
+})
+
+// The resume ledger's reason stays the refusal code, which is what every renderer's guidance keys
+// on; the cause is filed beside it, never in its place.
+it('files a restart refused by a conflicted claim under its code, with its cause beside it', async () => {
+  const { host, store } = await interruptedRestart()
+  await store.transitionHandoff(SESSION, (record) => ({
+    ...record,
+    lease: { ...record.lease, claimStatus: 'conflicted' }
+  }))
+
+  await host.restartResume.continueAfterRestart([SESSION], 'modal')
+
+  await vi.waitFor(async () =>
+    expect(await host.restartResume.listFailures()).toMatchObject([
+      { reason: 'agent_session_conflict', cause: 'claimConflicted' }
+    ])
+  )
 })

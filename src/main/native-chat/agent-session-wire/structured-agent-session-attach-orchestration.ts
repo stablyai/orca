@@ -1,3 +1,5 @@
+import { refuse } from '../../../shared/agent-session-wire-refusals'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
 import { recoverInterruptedCompaction } from './structured-compaction-recovery'
 // The host's attach, lifted out of the host class.
@@ -132,10 +134,13 @@ async function runAttach(
     })
   )
   if (!settled) {
-    return refuseAgentSessionMutation({
-      code: 'agent_session_ownership_unknown',
-      message: 'The provider-exit terminal journal settlement is still pending; retry attach.'
-    })
+    return refuseAgentSessionMutation(
+      refuse(
+        'agent_session_ownership_unknown',
+        'settlementPending',
+        'The provider-exit terminal journal settlement is still pending; retry attach.'
+      )
+    )
   }
   const probe = await withAgentSessionCreatePhase('probe_owner', recordPhase, () =>
     context.runtimeState.probeOwner(sessionId)
@@ -264,6 +269,8 @@ function endReleasedChild(
       fence: child.fence,
       cause: 'attach-failed',
       reason: cause instanceof Error ? cause.message : String(cause),
+      // Orca failed to attach; the provider said nothing.
+      failure: agentSessionFailureFact('hostFault'),
       duringStartup: child.phase === 'starting',
       ...verdict
     })

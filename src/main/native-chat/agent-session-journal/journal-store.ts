@@ -1,5 +1,6 @@
 // Append-only journal store for one agent session.
 
+import type { AgentJournalDispatchRejection } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { randomUUID } from 'node:crypto'
 import type {
   AgentJournalAcceptanceReceipt,
@@ -319,17 +320,20 @@ export class AgentSessionJournal {
   }
 
   /** Reject unanswered sends after an owner that never proved its start ended: none was written. */
-  async rejectPendingSubmissions(fence: number, reason: string): Promise<string[]> {
-    return rejectJournalPendingSubmissions(this, fence, reason)
+  async rejectPendingSubmissions(
+    fence: number,
+    rejection: AgentJournalDispatchRejection
+  ): Promise<string[]> {
+    return rejectJournalPendingSubmissions(this, fence, rejection)
   }
 
   /** Reject sends accepted but never handed over, optionally only those `which` names. */
   async rejectQueuedSubmissions(
     fence: number,
-    reason: string,
+    rejection: AgentJournalDispatchRejection,
     which?: (submission: AgentJournalSubmission) => boolean
   ): Promise<string[]> {
-    return rejectJournalQueuedSubmissions(this, fence, reason, which)
+    return rejectJournalQueuedSubmissions(this, fence, rejection, which)
   }
 
   /** The escape hatch for corruption, an unreconcilable prefix, a forked handle,

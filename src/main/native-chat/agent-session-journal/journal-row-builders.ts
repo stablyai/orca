@@ -1,3 +1,4 @@
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type {
   AgentJournalDispatchState,
   AgentJournalItemBody,
@@ -85,6 +86,7 @@ export function journalDispatchRowBuilder(
       dispatchState: input.state,
       providerItemId,
       reason: boundedDispatchReason(input),
+      rejection: input.state === 'rejected' ? input.rejection : undefined,
       seq,
       fence: input.fence,
       ts,
@@ -94,7 +96,7 @@ export function journalDispatchRowBuilder(
 
 /** `reason` is the only unbounded field written by Orca's own code: a provider error is
  *  arbitrary text, and a multi-megabyte one reached the row verbatim. Bounded head-first,
- *  because `dispatchRejectionWasTransportWriteFailure` prefix-matches the value. Rows
+ *  because `isWriteFailureSubmission` prefix-matches the value. Rows
  *  written before this keep their full text, so readers still meet unbounded ones. */
 function boundedDispatchReason(input: ResolveDispatchInput): string | null {
   if (input.state === 'accepted' || input.state === 'pending' || !input.reason) {
@@ -287,6 +289,7 @@ export function buildJournalDispatchRow(input: {
   dispatchState: AgentJournalDispatchState
   providerItemId: string | null
   reason: string | null
+  rejection?: AgentSessionFailureFact
   seq: number
   fence: number
   ts: number
@@ -298,6 +301,7 @@ export function buildJournalDispatchRow(input: {
     state: input.dispatchState,
     providerItemId: input.providerItemId,
     reason: input.reason,
+    ...(input.rejection ? { rejection: input.rejection } : {}),
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
     ...(input.recovered ? { recovered: input.recovered } : {})
   }

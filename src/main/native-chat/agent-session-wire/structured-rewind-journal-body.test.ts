@@ -2,6 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { AgentSessionRewindRecordSchema } from '../../../shared/agent-session-rewind'
 import { restoreRewindJournalBody } from './structured-rewind-journal-body'
 
+/** A row this build cannot place: still a row, never its stored JSON. */
+const UNPLACEABLE = {
+  kind: 'status',
+  text: 'Orca could not show this item after the rewind.',
+  failure: { kind: 'hostFault' }
+}
+
 describe('rewind recovery of newer durable records', () => {
   it('keeps an unknown message role and block readable without discarding the row', () => {
     expect(
@@ -43,16 +50,13 @@ describe('rewind recovery of newer durable records', () => {
       input: { path: 'file' },
       state: 'paused-by-provider'
     }
-    expect(restoreRewindJournalBody(body)).toEqual({ kind: 'status', text: JSON.stringify(body) })
+    expect(restoreRewindJournalBody(body)).toEqual(UNPLACEABLE)
     const status = {
       kind: 'status' as const,
       text: 'state',
       turnLifecycle: { turnId: 'turn', state: 'future-state' }
     }
-    expect(restoreRewindJournalBody(status)).toEqual({
-      kind: 'status',
-      text: JSON.stringify(status)
-    })
+    expect(restoreRewindJournalBody(status)).toEqual(UNPLACEABLE)
   })
   it.each(['interrupted', 'unverifiable'] as const)(
     'keeps a %s turn and its recorded endpoints',
@@ -82,10 +86,7 @@ describe('rewind recovery of newer durable records', () => {
     }
     expect(restoreRewindJournalBody(turn)).toEqual(turn)
     const unknown = { ...turn, state: 'future-state' }
-    expect(restoreRewindJournalBody(unknown)).toEqual({
-      kind: 'status',
-      text: JSON.stringify(unknown)
-    })
+    expect(restoreRewindJournalBody(unknown)).toEqual(UNPLACEABLE)
   })
   it('keeps a known turn outcome across rewind recovery in both journal shapes', () => {
     const turn = {

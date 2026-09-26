@@ -417,6 +417,7 @@ describe('ClaudeStructuredSessionAdapter close and exit recovery', () => {
         type: 'ended',
         sessionId: 'session-1',
         reason: 'crashed before replacement',
+        failure: { kind: 'providerExited' },
         cause: 'unexpected-exit',
         fence: 7,
         acquisitionGeneration: firstAcquisition.acquisitionGeneration,

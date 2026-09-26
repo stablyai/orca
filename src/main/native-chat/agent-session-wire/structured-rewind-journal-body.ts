@@ -1,3 +1,4 @@
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isAdmissibleAgentJournalItemBody } from '../../../shared/agent-session-journal-schemas'
 import {
   AGENT_JOURNAL_TURN_LIFECYCLE_STATES,
@@ -9,10 +10,15 @@ import { NATIVE_CHAT_ROLES } from '../../../shared/native-chat-types'
 
 type StoredBody = AgentSessionRewindRecord['retained'][number]['body']
 
-/** Unknown future values remain visible evidence, never invented turn or prompt state. */
+/** A row this build cannot place stays visible as a row, never invented turn or prompt state —
+ *  and never as its stored JSON, which is Orca's record, not something a person reads. */
 export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody {
   let normalized: unknown = body
-  const fallback = () => ({ kind: 'status', text: JSON.stringify(body) })
+  const fallback = () => ({
+    kind: 'status',
+    text: 'Orca could not show this item after the rewind.',
+    failure: agentSessionFailureFact('hostFault')
+  })
   if (body.kind === 'message') {
     normalized = {
       ...body,

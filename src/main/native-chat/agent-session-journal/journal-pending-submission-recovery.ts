@@ -1,3 +1,4 @@
+import type { AgentJournalDispatchRejection } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { DISPATCH_DOUBT_HOST_RESTARTED } from './journal-dispatch-doubt-reasons'
@@ -40,7 +41,7 @@ export async function markJournalPendingSubmissionsUnknown(
 export async function rejectJournalPendingSubmissions(
   journal: AgentSessionJournal,
   fence: number,
-  reason: string
+  rejection: AgentJournalDispatchRejection
 ): Promise<string[]> {
   const unwritten = journal
     .submissions()
@@ -54,7 +55,7 @@ export async function rejectJournalPendingSubmissions(
     await journal.resolveDispatch({
       clientMessageId: entry.clientMessageId,
       state: 'rejected',
-      reason,
+      ...rejection,
       fence,
       recovered: true
     })
@@ -66,7 +67,7 @@ export async function rejectJournalPendingSubmissions(
 export async function rejectJournalQueuedSubmissions(
   journal: AgentSessionJournal,
   fence: number,
-  reason: string,
+  rejection: AgentJournalDispatchRejection,
   which: (submission: AgentJournalSubmission) => boolean = () => true
 ): Promise<string[]> {
   const queued = journal
@@ -76,7 +77,7 @@ export async function rejectJournalQueuedSubmissions(
     await journal.resolveDispatch({
       clientMessageId: entry.clientMessageId,
       state: 'rejected',
-      reason,
+      ...rejection,
       fence,
       recovered: true
     })

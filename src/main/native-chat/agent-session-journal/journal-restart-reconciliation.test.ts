@@ -1,6 +1,7 @@
 // Wiring the restart reconciler: what provider history is allowed to decide
 // about a submission the crash boundary could only doubt.
 
+import { DISPATCH_REJECTION_NOT_DELIVERED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -122,7 +123,9 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     expect(settled).toEqual(['cm_1'])
     const submission = journal.submissions()[0]
     expect(submission?.dispatchState).toBe('rejected')
-    expect(submission?.reason).toBe('not_delivered')
+    // A sentence, since released clients print the reason as it is, and the fact beside it.
+    expect(submission?.reason).toBe(DISPATCH_REJECTION_NOT_DELIVERED.reason)
+    expect(submission?.rejection).toEqual({ kind: 'notDelivered' })
   })
 
   it('leaves a submission unknown while the provider reports a turn in flight', async () => {
@@ -254,7 +257,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
       'accepted',
       'rejected'
     ])
-    expect(restarted.submissions()[1]?.reason).toBe('not_delivered')
+    expect(restarted.submissions()[1]?.rejection).toEqual({ kind: 'notDelivered' })
   })
 
   it('leaves two identical unsettled sends unknown rather than guessing between them', async () => {

@@ -30,16 +30,23 @@ import type {
   AgentSessionThreadGoalChange,
   AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire'
-import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
+import {
+  isAgentSessionWireRefusalCode,
+  type AgentSessionRefusalCause
+} from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import type { StructuredSessionCompactionResult } from './structured-session-compaction'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 
 export class AgentSessionAcquisitionRefusal extends Error {
   constructor(
     message: string,
-    readonly code: AgentSessionWireRefusalCode = 'agent_session_operation_invalid'
+    readonly code: AgentSessionWireRefusalCode = 'agent_session_operation_invalid',
+    /** The situation, so the chat can say what to do; the message is Orca's log wording. */
+    readonly refusalCause?: AgentSessionRefusalCause
   ) {
     super(message)
     this.name = 'AgentSessionAcquisitionRefusal'
@@ -125,14 +132,18 @@ export type AgentSessionDispatchOutcome =
    * anything and never promotes this to `unknown`.
    */
   | { state: 'admitted' }
-  | { state: 'rejected'; reason: string }
+  | { state: 'rejected'; reason: string; rejection: AgentSessionFailureFact }
   /** The call did not settle. Never re-send on the user's behalf. */
   | { state: 'unknown'; reason: string }
 
 export type StructuredAgentSessionEndedEvent = {
   type: 'ended'
   sessionId: string
+  /** Log text only; the chat's words come from `failure`. */
   reason: string
+  /** Why it ended, as the adapter knows it: the provider's exit with its own diagnostic, or an
+   *  Orca fault. Absent reads as a provider exit with nothing to add. */
+  failure?: AgentSessionFailureFact
   cause: 'unexpected-exit' | 'requested-close'
   fence: number
   acquisitionGeneration: string
@@ -233,8 +244,8 @@ export type StructuredAgentSessionAdapter = {
     turnId: string
     sessionId: string
     fence: number
-    onLateResult?: (result: { error?: string }) => Promise<void>
-  }): Promise<{ error?: string }>
+    onLateResult?: (result: StructuredSessionCompactionResult) => Promise<void>
+  }): Promise<StructuredSessionCompactionResult>
   /** Cancels one turn, not the session: a session-wide interrupt would also kill
    *  a turn the client never asked to stop. */
   cancelTurn(input: {
@@ -291,7 +302,7 @@ export type StructuredAgentSessionAdapter = {
   /** Resolves once a session published before it proved its start has proven it, failed, or been
    *  closed; at once for any other. A start that did not land resolves with the chat's words for
    *  why. Never rejects. */
-  awaitStarted?(sessionId: string): Promise<void | string>
+  awaitStarted?(sessionId: string): Promise<void | AgentSessionFailureFact>
   readOptions?(input: { sessionId: string; fence: number }): Promise<AgentSessionOptionsResult>
   /** Option keys skipped after a provider rejected their persisted restore value. */
   readOptionRestoreFailures?(sessionId: string): readonly string[]

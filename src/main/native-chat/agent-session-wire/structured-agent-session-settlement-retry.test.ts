@@ -13,6 +13,7 @@ import { agentSessionRecordFixture } from '../../../shared/agent-session-record.
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionLeaseStore } from './structured-agent-session-lease-release'
+import { UNEXPECTED_PROVIDER_EXIT_OUTCOME } from './structured-agent-session-dead-generation-settlement'
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 
 const SESSION = 'session-alpha-1'
@@ -174,7 +175,30 @@ describe('pending settlement retry', () => {
     expect(statusTexts()).toEqual([])
   })
 
-  it('writes user-facing copy carrying the cause when the exit was observed', async () => {
+  // The lease's evidence is Orca's probe text ("observed process exit"), never the provider's.
+  it.each(['transport closed', 'observed process exit'])(
+    'writes user-facing copy without the lease evidence %j when the exit was observed',
+    async (detail) => {
+      await seedRunningTurn()
+
+      await expect(
+        retry(`provider-exit:${SESSION}:${FENCE}:generation-1`, {
+          kind: 'exit-observed',
+          detail,
+          observedAt: 1_500
+        })
+      ).resolves.toBe(true)
+
+      expect(statusTexts()).toEqual([UNEXPECTED_PROVIDER_EXIT_OUTCOME])
+      expect(journal.snapshot().items.map((item) => item.body)).toContainEqual({
+        kind: 'status',
+        text: UNEXPECTED_PROVIDER_EXIT_OUTCOME,
+        failure: { kind: 'providerExited' }
+      })
+    }
+  )
+
+  it('marks the running turn interrupted at the observed exit', async () => {
     await seedRunningTurn()
 
     await expect(
@@ -185,9 +209,6 @@ describe('pending settlement retry', () => {
       })
     ).resolves.toBe(true)
 
-    expect(statusTexts()).toEqual([
-      'The provider stopped while this response was in progress: transport closed. You can continue in this conversation.'
-    ])
     expect(journal.snapshot().items.map((item) => item.body)).toContainEqual(
       expect.objectContaining({ kind: 'turn', state: 'interrupted', completedAt: 1_500 })
     )

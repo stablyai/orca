@@ -5,6 +5,7 @@
 // journal, and a call site written there would compile however wrong it was. The runtime hands over
 // the facts it owns — the account homes it recognises, the records it holds — and this decides.
 
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionOperationRow } from '../../shared/agent-session-operation-ledger'
 import type { AgentSessionProviderHandle } from '../../shared/agent-session-journal-types'
 import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
@@ -106,10 +107,11 @@ export function findConflictingStructuredAdoption(input: {
 export function structuredAdoptionConflictError(
   ownership: StructuredAgentSessionAdoptionOwnership
 ): Error {
-  return new Error(
+  return agentSessionRefusalError(
     agentSessionLeaseAdmitsWriter(ownership.lease)
       ? 'agent_session_conflict'
-      : 'agent_session_ownership_unknown'
+      : 'agent_session_ownership_unknown',
+    'conversationHeldElsewhere'
   )
 }
 
@@ -152,5 +154,5 @@ export async function resolveStructuredAgentSessionAdoption(input: {
   }
   // Refuse rather than fall back to the default home. Resuming under a home that does not hold the
   // conversation is how a "resume" silently becomes a blank chat wearing the old chat's name.
-  throw new Error('agent_session_identity_required')
+  throw agentSessionRefusalError('agent_session_identity_required', 'transcriptNotFound')
 }

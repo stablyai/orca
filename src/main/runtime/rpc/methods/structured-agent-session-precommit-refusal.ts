@@ -12,6 +12,7 @@
 
 import {
   AGENT_SESSION_WIRE_REFUSAL_CODES,
+  isAgentSessionRefusalError,
   type AgentSessionWireRefusal,
   type AgentSessionWireRefusalCode
 } from '../../../../shared/agent-session-wire'
@@ -43,7 +44,11 @@ function wireRefusalCode(error: unknown): AgentSessionWireRefusalCode | null {
 function precommitRefusal(error: unknown): AgentSessionWireRefusal {
   const code = wireRefusalCode(error)
   if (code) {
-    return { code, message: 'Orca cannot open a structured agent chat for this workspace.' }
+    return {
+      code,
+      cause: (isAgentSessionRefusalError(error) && error.refusal.cause) || 'hostUnsupported',
+      message: 'Orca cannot open a structured agent chat for this workspace.'
+    }
   }
   const message = error instanceof Error ? error.message : String(error)
   // A code-less failure here is often a defect, not a policy answer; the refusal keeps the user
@@ -51,6 +56,7 @@ function precommitRefusal(error: unknown): AgentSessionWireRefusal {
   console.warn('[agent-session] create refused before it committed anything', error)
   return {
     code: UNCODED_PRECOMMIT_REFUSAL_CODE,
+    cause: 'hostFault',
     message: `Orca could not prepare a structured agent chat for this workspace: ${message}`
   }
 }

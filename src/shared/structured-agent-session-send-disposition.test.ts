@@ -4,6 +4,7 @@
 // which is the whole reason it was split out.
 
 import { describe, expect, it } from 'vitest'
+import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentSessionMutationResult, AgentSessionSendResult } from './agent-session-wire'
 import {
@@ -26,7 +27,10 @@ const entry: StructuredAgentSessionOutboxEntry = createStructuredAgentSessionOut
   queuedAt: 1
 })
 
-function rejectedWith(reason: string | null): AgentSessionMutationResult<AgentSessionSendResult> {
+function rejectedWith(
+  reason: string | null,
+  extra: { rejection?: AgentSessionFailureFact; replayed?: boolean } = {}
+): AgentSessionMutationResult<AgentSessionSendResult> {
   const submission: AgentJournalSubmission = {
     clientMessageId: 'client-1',
     fence: 1,
@@ -35,15 +39,16 @@ function rejectedWith(reason: string | null): AgentSessionMutationResult<AgentSe
     providerItemId: null,
     reason,
     submittedAt: 10,
-    resolvedAt: 10
+    resolvedAt: 10,
+    ...(extra.rejection ? { rejection: extra.rejection } : {})
   }
   return {
     ok: true,
-    replayed: false,
+    replayed: extra.replayed ?? false,
     fence: 1,
     cursor: { epoch: 'epoch-1', sequence: 10 },
     value: { clientMessageId: 'client-1', submission }
-  } as AgentSessionMutationResult<AgentSessionSendResult>
+  }
 }
 
 function notice(reason: string | null): string | null {
@@ -84,11 +89,54 @@ describe('what a rejection shows the user', () => {
     )
   })
 
-  it('names the cause of a start that died before it could take the message', () => {
-    // The host words this reason for the user: the child's own diagnostic, nothing internal.
-    const reason =
-      'The provider stopped before it finished starting: claude stream-json exited (code 1): claude: not signed in.'
+  it('shows the sentence a host wrote for the person reading it', () => {
+    const reason = 'The provider stopped before it finished starting.'
     expect(notice(reason)).toBe(reason)
+  })
+
+  it('never puts the legacy not_delivered marker on screen', () => {
+    // Released clients printed it as it was; it is a marker, not a sentence.
+    expect(notice('not_delivered')).toBe(
+      'Orca could not send your message — Retry to send it again.'
+    )
+  })
+
+  it.each([
+    ['the legacy marker alone', undefined],
+    ['the marker and its typed fact', { kind: 'cancelled' as const }]
+  ])('fails nothing for a Stop-withdrawn send, first reply or replay: %s', (_label, rejection) => {
+    for (const replayed of [false, true]) {
+      const disposition = disposeStructuredAgentSessionSendResult({
+        entries: [entry],
+        entry,
+        blockedClientMessageId: null,
+        result: rejectedWith(DISPATCH_REJECTED_CANCELLED, { rejection, replayed }),
+        createOperationId: () => 'unused'
+      })
+      expect(disposition).toEqual({
+        entries: [],
+        error: null,
+        blockedClientMessageId: null,
+        retryWithFreshClientMessageId: null
+      })
+    }
+  })
+
+  it('reads a withdrawal off the typed fact whatever the reason says', () => {
+    const result = rejectedWith('Withdrawn.', { rejection: { kind: 'cancelled' } })
+    if (!result.ok) {
+      throw new Error('expected rejected submission fixture')
+    }
+    expect(reconcileStructuredAgentSessionOutbox([entry], [result.value.submission])).toEqual([])
+    expect(
+      disposeStructuredAgentSessionSendResult({
+        entries: [entry],
+        entry,
+        blockedClientMessageId: null,
+        result,
+        createOperationId: () => 'unused'
+      }).error
+    ).toBeNull()
   })
 
   it('claims no cause when the rejection names none', () => {

@@ -1,3 +1,5 @@
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
+import { agentSessionFailureText } from './structured-agent-session-failure-text'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
   agentSessionPromptQuestions,
@@ -12,7 +14,11 @@ import type {
   AgentJournalQuestionItem,
   AgentJournalResolution
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResult } from '../../../shared/agent-session-wire'
+import {
+  refuse,
+  type AgentSessionPromptResult,
+  type AgentSessionRefusalCause
+} from '../../../shared/agent-session-wire'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
@@ -29,8 +35,8 @@ export type AgentSessionPromptRequest = {
   answers?: AgentSessionQuestionAnswer[]
 }
 
-function invalid(message: string): TurnOutcome<never> {
-  return { ok: false, refusal: { code: 'agent_session_operation_invalid', message } }
+function invalid(cause: AgentSessionRefusalCause, message: string): TurnOutcome<never> {
+  return { ok: false, refusal: refuse('agent_session_operation_invalid', cause, message) }
 }
 
 /** The one place a client's choice is read; an answer an older client packed into `optionId` is unpacked here, once. */
@@ -73,6 +79,7 @@ export async function performPrompt(
   const choice = readPromptChoice(prompt, input)
   if (!choice) {
     return invalid(
+      'optionRejected',
       input.optionId !== undefined
         ? `Option ${input.optionId} is not offered by item ${input.itemId}.`
         : `The answers do not match the questions on item ${input.itemId}.`
@@ -81,7 +88,7 @@ export async function performPrompt(
   const { response } = choice
   const identity = parseAgentJournalItemKey(input.itemId)
   if (!identity) {
-    return invalid(`Item id ${input.itemId} is not a well-formed item key.`)
+    return invalid('requestMalformed', `Item id ${input.itemId} is not a well-formed item key.`)
   }
 
   const resolution: AgentJournalResolution = {
@@ -110,24 +117,20 @@ export async function performPrompt(
       }
     })
   } catch (error) {
-    if (
-      !committed.item &&
-      (error instanceof AgentSessionPromptUnavailableError ||
-        error instanceof AgentSessionPromptAnswerRejectedError)
-    ) {
-      return invalid(error.message)
+    if (!committed.item && error instanceof AgentSessionPromptUnavailableError) {
+      return invalid('promptGone', error.message)
+    }
+    if (!committed.item && error instanceof AgentSessionPromptAnswerRejectedError) {
+      return invalid('optionRejected', error.message)
     }
     if (!committed.item) {
       throw error
     }
+    // The adapter's error is Orca's; the row says only what the user needs to know.
+    const failure = agentSessionFailureFact('answerUnconfirmed')
     await ctx.journal.appendItem(
       { provider: 'orca', clientMessageId: `${input.itemId}#delivery` },
-      {
-        kind: 'status',
-        text: `Your answer was recorded but the agent did not confirm it: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      },
+      { kind: 'status', text: agentSessionFailureText(failure), failure },
       { fence: ctx.fence }
     )
   }

@@ -1,6 +1,7 @@
 // A structured-session runtime whose Claude children are scripted: the production runtime,
 // adapter, record store and host, with only the CLI process replaced.
 
+import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,6 +21,10 @@ import {
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
 
+/** The error a real CLI's exit reaches the adapter as: Orca's message, the stderr as a log detail. */
+export function scriptedClaudeExitError(diagnostic: string): Error {
+  return withProviderDiagnostic(new Error(diagnostic), providerDiagnostic(diagnostic, 'log'))
+}
 export type ScriptedClaudeBehavior = {
   /** Initialize never answers; only the child's exit settles it. */
   initHangs?: boolean
@@ -175,7 +180,7 @@ export function createScriptedClaudeRuntime(sessionIds: readonly string[]) {
   }
   const exitAtSpawn = (child: ScriptedClaudeChild, diagnostic: string): void => {
     child.connection.closed = true
-    child.exit(new Error(diagnostic))
+    child.exit(scriptedClaudeExitError(diagnostic))
   }
   /** A pid whose process is gone has no start time to read. */
   const readProcessStartTime = async (pid: number): Promise<number | null> => {

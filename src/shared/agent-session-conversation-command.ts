@@ -1,10 +1,15 @@
+import type { AgentSessionFailureFact } from './agent-session-failure'
+
 export type AgentSessionConversationCommand = 'clear' | 'compact'
 
 export type AgentSessionConversationCommandResult = {
   command: AgentSessionConversationCommand
   state: 'completed' | 'unknown'
   replacementSessionId?: string
+  /** A sentence for a person; released clients print it as it is. */
   error?: string
+  /** What failed, typed; absent from older hosts. */
+  failure?: AgentSessionFailureFact
 }
 
 export type AgentSessionConversationCommandRecord = AgentSessionConversationCommandResult & {

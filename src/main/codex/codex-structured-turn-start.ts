@@ -1,3 +1,5 @@
+import { agentSessionFailureFact, providerDiagnosticOf } from '../../shared/agent-session-failure'
+import { agentSessionFailureRejection } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -7,7 +9,10 @@ import {
 } from './codex-app-server-connection'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
-import { DISPATCH_REJECTED_CODEX_QUEUE_FULL } from '../../shared/structured-agent-session-dispatch-rejection'
+import {
+  DISPATCH_REJECTED_CODEX_QUEUE_FULL,
+  dispatchQueueFullRejection
+} from '../../shared/structured-agent-session-dispatch-rejection'
 import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 // Writing a Codex turn and learning which message landed where, which are not
@@ -128,13 +133,22 @@ export async function dispatchCodexTurn(
 ): Promise<AgentSessionDispatchOutcome> {
   try {
     if (!(await startCodexTurn(session, { ...input, timeoutMs }))) {
-      return { state: 'rejected', reason: DISPATCH_REJECTED_CODEX_QUEUE_FULL }
+      return {
+        state: 'rejected',
+        ...dispatchQueueFullRejection(DISPATCH_REJECTED_CODEX_QUEUE_FULL)
+      }
     }
   } catch (error) {
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       // Codex answered and declined, so no echo for this write can arrive.
       session.dispatchEchoes.disarm(input.clientMessageId)
-      return { state: 'rejected', reason: (error as Error).message }
+      // Codex's own words, when it gave any, are the one part of the error a person can use.
+      return {
+        state: 'rejected',
+        ...agentSessionFailureRejection(
+          agentSessionFailureFact('providerRejected', { detail: providerDiagnosticOf(error) })
+        )
+      }
     }
     // A timeout or transport failure can happen after the frame was written.
     // Keep the correlation armed so a later echo can prove delivery.

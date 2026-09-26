@@ -14,6 +14,7 @@ import type {
 import { agentSessionLeaseAdmitsWriter } from './agent-session-lease-adjudication'
 import type { AgentSessionLease } from './agent-session-record'
 import type { AgentSessionMutationEnvelope, AgentSessionWireRefusal } from './agent-session-wire'
+import { refuse } from './agent-session-wire-refusals'
 
 /**
  * Stable digest over the fields that define what this call DOES. Keys are
@@ -63,11 +64,11 @@ export function agentSessionFingerprintConflict(
 ): AgentSessionWireRefusal | null {
   return envelope.payloadFingerprint === hostFingerprint
     ? null
-    : {
-        code: 'agent_session_operation_conflict',
-        message:
-          'The payload does not match the fingerprint the client declared for this operation.'
-      }
+    : refuse(
+        'agent_session_operation_conflict',
+        'fingerprintMismatch',
+        'The payload does not match the fingerprint the client declared for this operation.'
+      )
 }
 
 export type AgentSessionMutationAdmission =
@@ -103,10 +104,11 @@ export function admitAgentSessionMutation(input: {
   if (ledger.decision === 'refused') {
     return {
       decision: 'refused',
-      refusal: {
-        code: ledger.code,
-        message: `Operation ${envelope.clientOperationId} was refused: ${ledger.code}.`
-      }
+      refusal: refuse(
+        ledger.code,
+        ledger.cause,
+        `Operation ${envelope.clientOperationId} was refused: ${ledger.code}.`
+      )
     }
   }
   if (ledger.decision === 'replay') {
@@ -129,22 +131,24 @@ function refuseUnlessWriterAdmitted(lease: AgentSessionLease): AgentSessionWireR
     return null
   }
   if (lease.unreconciled) {
-    return {
-      code: 'execution_owner_reconciling',
-      message: 'This host has not yet adjudicated the session lease.'
-    }
+    return refuse(
+      'execution_owner_reconciling',
+      'hostReconciling',
+      'This host has not yet adjudicated the session lease.'
+    )
   }
   if (lease.handoffStage !== null) {
-    return {
-      code: 'agent_session_conflict',
-      message:
-        lease.handoffStage === 'new-owner-proving'
-          ? 'The chat is still starting.'
-          : "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
-    }
+    return lease.handoffStage === 'new-owner-proving'
+      ? refuse('agent_session_conflict', 'chatStarting', 'The chat is still starting.')
+      : refuse(
+          'agent_session_conflict',
+          'ownerUnproven',
+          "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
+        )
   }
-  return {
-    code: 'agent_session_ownership_unknown',
-    message: 'The session has no live owner to accept writes.'
-  }
+  return refuse(
+    'agent_session_ownership_unknown',
+    'noLiveOwner',
+    'The session has no live owner to accept writes.'
+  )
 }

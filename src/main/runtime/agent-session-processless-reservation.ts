@@ -1,3 +1,4 @@
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 
 export type AgentSessionReservationProcesslessProof = {
@@ -12,13 +13,13 @@ function assertReservation(
   args: AgentSessionReservationProcesslessProof
 ): void {
   if (record.lease.runtimeFence !== args.fence || record.lease.unreconciled) {
-    throw new Error('agent_session_checkpoint_stale')
+    throw agentSessionRefusalError('agent_session_checkpoint_stale', 'leaseMoved')
   }
   if (
     record.lease.claimStatus !== 'reserved' ||
     record.lease.reservedSpawnToken !== args.spawnToken
   ) {
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', 'leaseMoved')
   }
 }
 
@@ -34,7 +35,7 @@ export function setAgentSessionReservationProcesslessProof(
     return record
   }
   if (record.lease.ownerProcess !== null) {
-    throw new Error('agent_session_ownership_unknown')
+    throw agentSessionRefusalError('agent_session_ownership_unknown', 'leaseMoved')
   }
   return {
     ...record,

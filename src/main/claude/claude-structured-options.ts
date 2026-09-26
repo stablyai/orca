@@ -51,7 +51,8 @@ export function setClaudeStructuredSessionOption(
   if (session.startup.state !== 'proven') {
     return Promise.reject(
       new AgentSessionOptionRejectedError(
-        'Claude is still starting; options can be changed once it is ready.'
+        'Claude is still starting; options can be changed once it is ready.',
+        'providerStarting'
       )
     )
   }
