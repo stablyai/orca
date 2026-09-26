@@ -4,7 +4,7 @@ import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
 describe('createIpcPtyTransport: user input provenance', () => {
-  const originalWindow = (globalThis as { window?: typeof window }).window
+  const originalWindow: typeof window | undefined = globalThis.window
 
   beforeEach(() => {
     vi.resetModules()
@@ -56,8 +56,8 @@ describe('createIpcPtyTransport: user input provenance', () => {
   })
 
   it('keeps the tag on input typed before the spawn connects and across a remount handoff', async () => {
-    const spawn = createDeferred<{ id: string }>()
-    vi.mocked(window.api.pty.spawn).mockReturnValue(spawn.promise as never)
+    const spawn = createDeferred<Awaited<ReturnType<typeof window.api.pty.spawn>>>()
+    vi.mocked(window.api.pty.spawn).mockReturnValue(spawn.promise)
     const { createIpcPtyTransport } = await import('./pty-transport')
     const captured: PtyPreconnectInputEntry[] = []
     const predecessor = createIpcPtyTransport({
