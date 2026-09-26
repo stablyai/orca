@@ -57,8 +57,11 @@ export const createProjectActions = (
       }
     }
 
-    const existing = inflightProjectViewRequests.get(requestKey)
-    if (existing) {
+    for (;;) {
+      const existing = inflightProjectViewRequests.get(requestKey)
+      if (!existing) {
+        break
+      }
       // Why: a forcing caller must not dedupe to a non-forcing in-flight request; wait for it to settle, then issue a fresh forced call (mirrors fetchWorkItems).
       if (options?.force && !existing.force) {
         await existing.promise.catch(() => {})
@@ -119,9 +122,12 @@ export const createProjectActions = (
         }
       } finally {
         releaseWorkItemSlot()
+      }
+    })().finally(() => {
+      if (inflightProjectViewRequests.get(requestKey)?.promise === request) {
         inflightProjectViewRequests.delete(requestKey)
       }
-    })()
+    })
 
     inflightProjectViewRequests.set(requestKey, {
       promise: request,

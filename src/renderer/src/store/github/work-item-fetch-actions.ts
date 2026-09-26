@@ -109,8 +109,11 @@ export const createWorkItemFetchActions = (
       options?.sourceContext
     )
     const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
-    const existing = inflightWorkItemsRequests.get(inflightKey)
-    if (existing) {
+    for (;;) {
+      const existing = inflightWorkItemsRequests.get(inflightKey)
+      if (!existing) {
+        break
+      }
       // Why: a forcing/noCache caller must not dedupe to a weaker in-flight fetch (noCache is stricter — it must bypass gh api's cache too).
       if (
         (options?.force && !existing.force) ||
@@ -220,9 +223,12 @@ export const createWorkItemFetchActions = (
         throw err
       } finally {
         releaseWorkItemSlot()
+      }
+    })().finally(() => {
+      if (inflightWorkItemsRequests.get(inflightKey)?.promise === request) {
         inflightWorkItemsRequests.delete(inflightKey)
       }
-    })()
+    })
 
     inflightWorkItemsRequests.set(inflightKey, {
       promise: request,
