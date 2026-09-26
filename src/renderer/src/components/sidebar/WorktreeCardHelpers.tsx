@@ -17,6 +17,9 @@ export function checksLabel(status: CheckStatus): string {
       return 'Failing'
     case 'pending':
       return 'Pending'
+    case 'cancelled':
+      // Why: muted wording, not "Failing" — a deliberate cancellation is not a defect (#15847).
+      return 'Cancelled'
     case 'neutral':
       return ''
   }
