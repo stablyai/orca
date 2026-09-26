@@ -12,13 +12,17 @@ import zh from './locales/zh.json'
 
 const catalogs = { fr, ja, ko, zh } as const
 
+function isStringRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function getByPath(node: unknown, path: string): string | undefined {
   let current: unknown = node
   for (const key of path.split('.')) {
-    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+    if (!isStringRecord(current)) {
       return undefined
     }
-    current = (current as Record<string, unknown>)[key]
+    current = current[key]
   }
   return typeof current === 'string' ? current : undefined
 }
