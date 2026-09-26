@@ -10,6 +10,7 @@ import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSecti
 import {
   getGeneralCliSearchEntries,
   getGeneralEditorSearchEntries,
+  AUTO_HIDE_SINGLE_TAB_STRIP_SEARCH_ENTRY,
   getGeneralNavigationSearchEntries,
   getGeneralPaneSearchEntries,
   getGeneralSupportSearchEntries,
@@ -62,17 +63,22 @@ export function shouldShowProjectRuntimeSection(
   )
 }
 
+// Why: the row's own filter must match the same localized terms as the catalog that reveals the
+// section, or a non-English query shows the Navigation section with this row filtered out of it.
+function flattenNavigationSearchEntry(entry: GeneralSearchEntry | undefined): string[] {
+  return entry ? [entry.title, entry.description ?? '', ...(entry.keywords ?? [])] : []
+}
+
 export function getTabOrderControlSearchKeywords(
   navigationEntries: GeneralSearchEntry[] = getGeneralNavigationSearchEntries()
 ): string[] {
-  const tabOrderSearchEntry = navigationEntries[0]
-  return tabOrderSearchEntry
-    ? [
-        tabOrderSearchEntry.title,
-        tabOrderSearchEntry.description ?? '',
-        ...(tabOrderSearchEntry.keywords ?? [])
-      ]
-    : []
+  return flattenNavigationSearchEntry(navigationEntries[0])
+}
+
+export function getAutoHideSingleTabStripSearchKeywords(
+  entry: GeneralSearchEntry = AUTO_HIDE_SINGLE_TAB_STRIP_SEARCH_ENTRY()
+): string[] {
+  return flattenNavigationSearchEntry(entry)
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -117,6 +123,7 @@ export function GeneralPane({
       activeRuntimeTarget.environmentId === sourceDefaultsSupportedRuntimeEnvironmentId)
   const generalNavigationSearchEntries = getGeneralNavigationSearchEntries()
   const tabOrderKeywords = getTabOrderControlSearchKeywords(generalNavigationSearchEntries)
+  const autoHideStripKeywords = getAutoHideSingleTabStripSearchKeywords()
   const projectRuntimeSearchEntries = wslSupportedPlatform
     ? getGeneralProjectRuntimeSearchEntries()
     : []
@@ -212,6 +219,32 @@ export function GeneralPane({
                 skipCloseTerminalWithRunningProcessConfirm:
                   !settings.skipCloseTerminalWithRunningProcessConfirm
               })
+            }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GeneralPane.autoHideSingleTabStrip',
+            'Hide the tab bar when a pane has one tab'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.autoHideSingleTabStripDescription',
+            'Collapse the tab bar until you hover the top edge of the pane.'
+          )}
+          keywords={autoHideStripKeywords}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.GeneralPane.autoHideSingleTabStrip',
+              'Hide the tab bar when a pane has one tab'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralPane.autoHideSingleTabStripDescription',
+              'Collapse the tab bar until you hover the top edge of the pane.'
+            )}
+            checked={settings.autoHideSingleTabStrip === true}
+            onChange={() =>
+              updateSettings({ autoHideSingleTabStrip: settings.autoHideSingleTabStrip !== true })
             }
           />
         </SearchableSetting>
