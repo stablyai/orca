@@ -4,6 +4,10 @@ import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'
 import { getPaneOwnedActiveHelperTextarea } from './regular-terminal-focus-ownership'
+import {
+  clearTerminalFontSizeOverride,
+  setTerminalFontSizeOverride
+} from './terminal-font-size-overrides'
 
 type FontZoomDeps = {
   isActive: boolean
@@ -49,12 +53,15 @@ export function useTerminalFontZoom({
       if (direction === 'reset') {
         nextSize = globalSize
         paneFontSizesRef.current.delete(pane.id)
+        clearTerminalFontSizeOverride(pane.leafId)
       } else if (direction === 'in') {
         nextSize = Math.min(MAX_FONT_SIZE, currentSize + FONT_SIZE_STEP)
         paneFontSizesRef.current.set(pane.id, nextSize)
+        setTerminalFontSizeOverride(pane.leafId, nextSize)
       } else {
         nextSize = Math.max(MIN_FONT_SIZE, currentSize - FONT_SIZE_STEP)
         paneFontSizesRef.current.set(pane.id, nextSize)
+        setTerminalFontSizeOverride(pane.leafId, nextSize)
       }
 
       pane.terminal.options.fontSize = nextSize
