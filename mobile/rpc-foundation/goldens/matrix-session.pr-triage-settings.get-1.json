@@ -3,28 +3,167 @@
   "family": "session.pr-triage",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "13126cd667e93b748e8464170877e1790e83bc47",
-  "lockfileSha256": "1327605e77b3fed83c7410635d39fdab40c49380e5cbf483ec6ff1b404b4e1d1",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "5f65c5b318f4764b0f58a5e7b593333759a9cfa799db45b11190ac26f4083335",
-  "scenarioSha256": "39923c0faa941865cc9aead881fef91ce5db117120033fe73665356a61a2ecc6",
+  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
+  "scenarioSha256": "a288e105a0af6dbbd9657b84f7c4860826184fb7f50dabc6e31b114a70d7ca44",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "02188f091419": {
-      "name": "settings.get#1",
-      "ordinal": 2,
+    "0fddcb81d17c": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "terminal.send"
         },
         {
           "name": "params",
           "value": {
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
             "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "1953443d1eef": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "The host sent a reply this app could not read (terminal.send)",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "280ce0d6f832": {
+      "name": "terminal.send#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}"
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "5093e98ba369": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tab": {
+              "id": "tab-1",
+              "terminal": "term-1",
+              "title": "Agent",
+              "type": "terminal"
+            }
+          }
+        }
+      }
+    },
+    "5101a111b6fc": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "52f741886b88": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
           }
         },
         {
@@ -42,26 +181,138 @@
           "id": "frame-2",
           "ok": true,
           "result": {
-            "settings": {
-              "defaultTuiAgent": "codex",
-              "disabledTuiAgents": []
-            }
+            "error": "refused"
           }
         }
       }
     },
-    "0ba58e9fadf7": {
-      "name": "settings.get#1",
-      "ordinal": 2,
+    "6ccc8bb71fd9": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "terminal.send"
         },
         {
           "name": "params",
           "value": {
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
             "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "75252c821440": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "94d38f1838f6": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    },
+    "94fd7b6e1923": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "9d6948ff3085": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
           }
         },
         {
@@ -85,18 +336,33 @@
         }
       }
     },
-    "0ca529648be4": {
-      "name": "settings.get#1",
-      "ordinal": 2,
+    "a21f478354cc": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Failed to send prompt",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "a4273b38df83": {
+      "launched": "unlaunched"
+    },
+    "a89e0dd4a790": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "terminal.send"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
           }
         },
         {
@@ -107,39 +373,53 @@
         }
       ],
       "settlement": {
-        "status": "rejected",
+        "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
         }
       }
     },
-    "1963ee2edae9": {
-      "launched": {
-        "kind": "not-started",
-        "message": "Unknown method"
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
       }
     },
-    "1c2564f1daca": {
-      "name": "settings.get#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
     },
-    "1c5359ea3f7d": {
-      "name": "settings.get#1",
-      "ordinal": 2,
+    "bccc77511918": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "terminal.send"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
           }
         },
         {
@@ -165,29 +445,20 @@
         }
       }
     },
-    "28339abecf78": {
-      "name": "agent.launchReplay#1",
-      "ordinal": 8,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"codex\",\"operationId\":\"1767225600000-00000000000040008000000000000001\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:repo-9::/w\"},\"prompt\":{\"text\":\"Fix the failing checks\",\"delivery\":\"submit\"},\"launchSource\":\"task_page\"}}"
-    },
-    "331b3596787f": {
-      "launched": {
-        "kind": "not-started",
-        "message": "outer refused"
-      }
-    },
-    "34f3a5b8bd78": {
-      "name": "settings.get#1",
-      "ordinal": 2,
+    "bf156998a035": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "terminal.send"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
           }
         },
         {
@@ -211,387 +482,14 @@
         }
       }
     },
-    "35f85fe3b71c": {
-      "name": "repo.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "3e6a0417d2ee": {
-      "name": "repo.list#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "repos": [
-              {
-                "id": "repo-9"
-              }
-            ]
-          }
-        }
-      }
-    },
-    "51d4cb56be85": {
-      "name": "settings.get#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "566d8202b582": {
-      "name": "settings.get#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "69518e60477b": {
-      "name": "settings.get#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "753cc167886c": {
-      "launched": {
-        "kind": "not-started",
-        "message": "Cannot read properties of null (reading 'settings')"
-      }
-    },
-    "86798e4821d1": {
-      "name": "settings.get#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "98bd3a5fda2b": {
-      "name": "settings.get#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true
-        }
-      }
-    },
-    "9b538e8b95f3": {
-      "launched": {
-        "kind": "not-started",
-        "message": "Cannot read properties of undefined (reading 'settings')"
-      }
-    },
-    "9c16efc31903": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": ["codex"]
-        }
-      }
-    },
-    "a4273b38df83": {
-      "launched": "unlaunched"
-    },
-    "b13ddf18a62e": {
-      "launched": {
-        "kind": "not-started",
-        "message": "Could not load the available agents."
-      }
-    },
-    "ba3fac1eb199": {
-      "name": "agent.launchReplay#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "agent.launchReplay"
-        },
-        {
-          "name": "params",
-          "value": {
-            "agent": "codex",
-            "launchSource": "task_page",
-            "operationId": "1767225600000-00000000000040008000000000000001",
-            "prompt": {
-              "delivery": "submit",
-              "text": "Fix the failing checks"
-            },
-            "target": {
-              "kind": "existing",
-              "worktree": "id:repo-9::/w"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 90000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "outcome": {
-              "handle": "term-1",
-              "kind": "terminal"
-            },
-            "prompt": {
-              "delivery": "submit",
-              "outcome": "handed-to-terminal"
-            },
-            "receipt": {
-              "detail": "Started a terminal agent, the default for new agent tabs in your settings.",
-              "mode": "terminal",
-              "preferred": "terminal",
-              "reason": "user_default"
-            },
-            "worktreeId": "repo-9::/w"
-          }
-        }
-      }
-    },
-    "ceb5fe72c101": {
-      "name": "settings.get#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-2",
-          "ok": false
-        }
-      }
-    },
-    "e0eef7c9fafe": {
-      "name": "repo.list#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "e35d7003f64c": {
-      "launched": {
-        "kind": "not-started",
-        "message": "transport failure"
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
       }
     },
     "eb79a9b3682a": {
@@ -602,28 +500,52 @@
         "$rpc": "undefined"
       }
     },
-    "eb8d47f90956": {
-      "launched": {
-        "kind": "sent"
-      }
-    },
-    "f49d184679d1": {
-      "name": "preflight.detectAgents#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
-    },
-    "fb9f08890f70": {
-      "name": "settings.get#1",
-      "ordinal": 2,
+    "f9b284ac2424": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "session.tabs.createTerminal"
         },
         {
           "name": "params",
           "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
             "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "fe1fe746e77a": {
+      "launched": "sent"
+    },
+    "fe53d3bce307": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "term-1",
+            "text": "Fix the failing checks"
           }
         },
         {
@@ -641,20 +563,22 @@
           "id": "frame-2",
           "ok": true,
           "result": {
-            "error": "refused"
+            "send": {
+              "accepted": true
+            }
           }
         }
       }
     }
   },
   "recording": {
-    "scenario": "matrix-session.pr-triage-settings.get-1",
+    "scenario": "matrix-session.pr-triage-terminal.send-1",
     "checkpoints": [
       {
         "id": "pr-triage-launch.prelude:pending",
         "observation": {
-          "sender": ["35f85fe3b71c", "51d4cb56be85"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca"],
+          "sender": ["f9b284ac2424"],
+          "payloads": ["94d38f1838f6"],
           "settlements": {
             "launch": "9270aeb7d9c6"
           },
@@ -665,132 +589,132 @@
       {
         "id": "pr-triage-launch.normal:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "ba3fac1eb199"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["5093e98ba369", "fe53d3bce307"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "eb8d47f90956",
+          "state": "fe1fe746e77a",
           "effects": []
         }
       },
       {
         "id": "pr-triage-launch.result-absent:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "98bd3a5fda2b", "9c16efc31903"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["5093e98ba369", "5101a111b6fc"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
-            "launch": "eb79a9b3682a"
+            "launch": "1953443d1eef"
           },
-          "state": "9b538e8b95f3",
+          "state": "a4273b38df83",
           "effects": []
         }
       },
       {
         "id": "pr-triage-launch.result-null:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "69518e60477b", "9c16efc31903"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["5093e98ba369", "75252c821440"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
-            "launch": "eb79a9b3682a"
+            "launch": "1953443d1eef"
           },
-          "state": "753cc167886c",
+          "state": "a4273b38df83",
           "effects": []
         }
       },
       {
         "id": "pr-triage-launch.inner-ok-missing:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "fb9f08890f70", "9c16efc31903", "ba3fac1eb199"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["5093e98ba369", "52f741886b88"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "eb8d47f90956",
+          "state": "fe1fe746e77a",
           "effects": []
         }
       },
       {
         "id": "pr-triage-launch.inner-false-string-error:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "86798e4821d1", "9c16efc31903", "ba3fac1eb199"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["5093e98ba369", "a89e0dd4a790"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "eb8d47f90956",
+          "state": "fe1fe746e77a",
           "effects": []
         }
       },
       {
         "id": "pr-triage-launch.inner-false-object-error:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "1c5359ea3f7d", "9c16efc31903", "ba3fac1eb199"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
+          "sender": ["5093e98ba369", "bccc77511918"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "eb8d47f90956",
+          "state": "fe1fe746e77a",
           "effects": []
         }
       },
       {
         "id": "pr-triage-launch.outer-refused:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "ceb5fe72c101", "9c16efc31903"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["5093e98ba369", "0fddcb81d17c"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
-            "launch": "eb79a9b3682a"
+            "launch": "32a7c0ae7918"
           },
-          "state": "331b3596787f",
+          "state": "a4273b38df83",
           "effects": []
         }
       },
       {
         "id": "pr-triage-launch.outer-refused-no-message:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "34f3a5b8bd78", "9c16efc31903"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["5093e98ba369", "bf156998a035"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
-            "launch": "eb79a9b3682a"
+            "launch": "a21f478354cc"
           },
-          "state": "b13ddf18a62e",
+          "state": "a4273b38df83",
           "effects": []
         }
       },
       {
         "id": "pr-triage-launch.method-not-found:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "0ba58e9fadf7", "9c16efc31903"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["5093e98ba369", "9d6948ff3085"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
-            "launch": "eb79a9b3682a"
+            "launch": "b948e8307e81"
           },
-          "state": "1963ee2edae9",
+          "state": "a4273b38df83",
           "effects": []
         }
       },
       {
         "id": "pr-triage-launch.transport-rejection:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "566d8202b582", "9c16efc31903"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["5093e98ba369", "6ccc8bb71fd9"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
-            "launch": "eb79a9b3682a"
+            "launch": "a947768bc0ed"
           },
-          "state": "e35d7003f64c",
+          "state": "a4273b38df83",
           "effects": []
         }
       },
       {
         "id": "pr-triage-launch.transport-rejection-no-message:launched",
         "observation": {
-          "sender": ["3e6a0417d2ee", "0ca529648be4", "9c16efc31903"],
-          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1"],
+          "sender": ["5093e98ba369", "94fd7b6e1923"],
+          "payloads": ["94d38f1838f6", "280ce0d6f832"],
           "settlements": {
-            "launch": "eb79a9b3682a"
+            "launch": "c7584e82c72f"
           },
-          "state": "b13ddf18a62e",
+          "state": "a4273b38df83",
           "effects": []
         }
       }

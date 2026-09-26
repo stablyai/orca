@@ -70,7 +70,6 @@ export type ClaudeStructuredSessionEvent =
       cause?: 'unexpected-exit' | 'requested-close'
       fence?: number
       acquisitionGeneration?: string
-      settlementRetryRequired?: boolean
       /** Host clock when the end was observed. */
       observedAt?: number
       /** The child ended before proving startup, so reacquiring would repeat the same start. */
@@ -210,7 +209,7 @@ export function mintClaudeAcquisitionGeneration(deps: ClaudeStructuredSessionAda
  */
 export type ClaudeSessionExit = {
   connection: ClaudeStreamJsonConnection
-  /** Full session identity retained until its child tree is proven gone. */
+  /** Full session identity retained until the exit settles. */
   session: ClaudeSession
   error: Error
   /** The exit path's first proof attempt; retries must observe this result. */

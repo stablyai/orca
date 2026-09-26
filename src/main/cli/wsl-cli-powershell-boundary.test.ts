@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process'
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { runProcessSync } from '../../shared/child-process/run-process'
 import { buildWslBridgeScript, buildWslLauncher } from './wsl-cli-scripts'
 
 const FORWARDED_ARGS = [
@@ -32,6 +33,58 @@ const FORWARDED_ARGS = [
 ]
 
 describe('WSL CLI PowerShell boundary', () => {
+  it.skipIf(process.platform === 'win32')(
+    'forwards the distro as one argument and omits it when absent',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-wsl-launcher-argv-'))
+      try {
+        const launcherPath = join(root, 'launcher.sh')
+        const expectedCwd = await realpath(root)
+        await writeFile(launcherPath, buildWslLauncher('C:\\Orca\\orca.exe', '/bridge.ps1'))
+        await writeFile(join(root, 'wslpath'), '#!/bin/bash\nprintf "%s" "$2"\n', {
+          mode: 0o700
+        })
+        await writeFile(join(root, 'powershell.exe'), '#!/bin/bash\nprintf "%s\\0" "$@"\n', {
+          mode: 0o700
+        })
+        for (const distro of [undefined, '', 'Ubuntu Work']) {
+          const env: NodeJS.ProcessEnv = {
+            ...process.env,
+            PATH: `${root}:${process.env.PATH ?? ''}`
+          }
+          delete env.WSL_DISTRO_NAME
+          if (distro !== undefined) {
+            env.WSL_DISTRO_NAME = distro
+          }
+          const result = runProcessSync({
+            program: '/bin/bash',
+            args: [launcherPath, 'account', 'add', '--agent', 'codex'],
+            env,
+            cwd: root
+          })
+          expect(result.code).toBe(0)
+          expect(result.stdout.split('\0').slice(0, -1)).toEqual([
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            '/bridge.ps1',
+            'C:\\Orca\\orca.exe',
+            '-WslCwd',
+            expectedCwd,
+            ...(distro ? ['-WslDistro', distro] : []),
+            'account',
+            'add',
+            '--agent',
+            'codex'
+          ])
+        }
+      } finally {
+        await removeTree(root)
+      }
+    }
+  )
+
   it('keeps forwarded argv outside PowerShell parsing', () => {
     const launcher = buildWslLauncher('C:\\Program Files\\Orca\\orca.exe')
     const bridge = buildWslBridgeScript()
@@ -58,21 +111,33 @@ describe('WSL CLI PowerShell boundary', () => {
         await writeFile(bridgePath, buildWslBridgeScript(), 'utf8')
         await writeFile(
           targetPath,
-          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.ORCA_CLI_CWD ?? null }))\n',
+          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.ORCA_CLI_CWD ?? null, distro: process.env.ORCA_CLI_WSL_DISTRO ?? null }))\n',
           'utf8'
         )
         const invocations = [
           {
+            bridgeArgs: [
+              process.execPath,
+              '-WslCwd',
+              wslCwd,
+              '-WslDistro',
+              'Ubuntu Work',
+              targetPath,
+              ...FORWARDED_ARGS
+            ],
+            expected: { argv: FORWARDED_ARGS, cwd: wslCwd, distro: 'Ubuntu Work' }
+          },
+          {
             bridgeArgs: [process.execPath, '-WslCwd', wslCwd, targetPath, ...FORWARDED_ARGS],
-            expected: { argv: FORWARDED_ARGS, cwd: wslCwd }
+            expected: { argv: FORWARDED_ARGS, cwd: wslCwd, distro: null }
           },
           {
             bridgeArgs: [process.execPath, '-WslCwd', wslCwd, targetPath],
-            expected: { argv: [], cwd: wslCwd }
+            expected: { argv: [], cwd: wslCwd, distro: null }
           },
           {
             bridgeArgs: [process.execPath, targetPath, ...FORWARDED_ARGS],
-            expected: { argv: FORWARDED_ARGS, cwd: null }
+            expected: { argv: FORWARDED_ARGS, cwd: null, distro: null }
           }
         ]
         for (const { bridgeArgs, expected } of invocations) {
@@ -87,7 +152,15 @@ describe('WSL CLI PowerShell boundary', () => {
               bridgePath,
               ...bridgeArgs
             ],
-            { encoding: 'utf8', env: { ...process.env, ORCA_CLI_CWD: 'stale' } }
+            {
+              encoding: 'utf8',
+              env: {
+                ...process.env,
+                ORCA_CLI_CWD: 'stale',
+                ORCA_CLI_WSL_DISTRO: 'stale-distro',
+                WSL_DISTRO_NAME: 'wrong-distro'
+              }
+            }
           )
 
           expect(result.error).toBeUndefined()

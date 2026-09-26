@@ -49,7 +49,7 @@ describe('restart journal restoration', () => {
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
       onReadable: () => undefined,
-      retrySettlement: async () => true
+      settleStaleState: async () => undefined
     })
 
     await vi.waitFor(() => expect(active).toBe(4))
@@ -61,7 +61,7 @@ describe('restart journal restoration', () => {
     expect(peak).toBe(4)
   })
 
-  it('runs pending settlement retry after recovery resolution', async () => {
+  it('settles what a gone generation left running after recovery resolution, before publishing', async () => {
     const calls: string[] = []
     const params: AgentSessionAttachParams = {
       envelope: {
@@ -81,13 +81,14 @@ describe('restart journal restoration', () => {
       accountHome: { variable: 'CODEX_HOME', path: '/tmp/codex' },
       runtimeKind: 'native'
     }
-    restoreRead.mockResolvedValue({
+    const restored = {
       journal: {},
       params,
       fence: 4,
       hasProviderChild: false,
       acquisitionGeneration: null
-    })
+    }
+    restoreRead.mockResolvedValue(restored)
 
     await restoreOneStructuredAgentSessionRead(
       {
@@ -102,21 +103,18 @@ describe('restart journal restoration', () => {
         onReadable: () => {
           calls.push('onReadable')
         },
-        retrySettlement: async (_sessionId, restoredParams) => {
-          calls.push(
-            restoredParams === params ? 'retrySettlement:restored-params' : 'retrySettlement'
-          )
-          return true
+        settleStaleState: async (_sessionId, settled) => {
+          calls.push(settled === restored ? 'settleStaleState:restored' : 'settleStaleState')
         }
       },
       'session-1'
     )
 
-    expect(calls).toEqual(['resolveRecovery', 'onReadable', 'retrySettlement:restored-params'])
+    expect(calls).toEqual(['resolveRecovery', 'settleStaleState:restored', 'onReadable'])
   })
 
-  it('does not rerun settlement retry when a second restore finds the session already open', async () => {
-    const retrySettlement = vi.fn(async () => true)
+  it('does not settle again when a second restore finds the session already open', async () => {
+    const settleStaleState = vi.fn(async () => undefined)
     restoreRead.mockResolvedValue({
       journal: {},
       params: {},
@@ -134,11 +132,11 @@ describe('restart journal restoration', () => {
         serialize: async (_sessionId, task) => task(),
         hasSession: () => true,
         onReadable: () => undefined,
-        retrySettlement
+        settleStaleState
       },
       'session-1'
     )
 
-    expect(retrySettlement).not.toHaveBeenCalled()
+    expect(settleStaleState).not.toHaveBeenCalled()
   })
 })

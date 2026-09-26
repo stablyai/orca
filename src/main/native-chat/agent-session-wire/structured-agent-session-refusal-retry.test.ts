@@ -231,7 +231,10 @@ const UNREACHABLE = new Set<Pair>([
   // Send reconstructs doubt from its global tombstone instead of refusing it.
   'agentSession.send:agent_session_operation_unknown',
   // Only a send restarts a lost owner.
-  'agentSession.setOption:agent_session_owner_restart_failed'
+  'agentSession.setOption:agent_session_owner_restart_failed',
+  // A write names its target, not an owner generation; only an attach compares fences.
+  'agentSession.setOption:agent_session_checkpoint_stale',
+  'agentSession.send:agent_session_checkpoint_stale'
 ])
 
 describe('agentSessionRefusalOperationState host oracle', () => {
@@ -242,20 +245,8 @@ describe('agentSessionRefusalOperationState host oracle', () => {
 
     const stale = await createHarness()
     for (const method of METHODS) {
-      const spec = {
-        method,
-        operationId: operationId(),
-        expectedRuntimeFence: 99
-      }
-      record(
-        await assertHostAgreement(stale, spec, 'agent_session_checkpoint_stale', async () => ({
-          harness: stale,
-          spec: {
-            ...spec,
-            expectedRuntimeFence: stale.store.getRecord(SESSION)?.lease.runtimeFence ?? 1
-          }
-        }))
-      )
+      const spec = { method, operationId: operationId(), expectedRuntimeFence: 99 }
+      await expect(invoke(stale, spec), method).resolves.toMatchObject({ ok: true })
     }
     expect(stale.setOption).toHaveBeenCalledTimes(1)
 
