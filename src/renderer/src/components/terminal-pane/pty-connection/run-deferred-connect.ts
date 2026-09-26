@@ -22,6 +22,10 @@ import { bindSerializeHiddenOutputSnapshot } from './hidden-output-snapshot-seri
 import { bindSettlePaneSerializer } from './pane-serializer-settle'
 
 import { bindDeferredColdRestoreAndSnapshot } from './deferred-cold-restore-and-snapshot'
+import {
+  holdsDormantRecoveryConnect,
+  waitForDormantRecoveryRelease
+} from './dormant-recovery-connect-gate'
 import { bindHiddenOutputSeqAndSkip } from './hidden-output-seq-and-skip'
 import { bindHiddenRestoreStateAndSshProbe } from './hidden-restore-state-and-ssh-probe'
 import { bindParkRevealSnapshotVerdictActions } from './park-reveal-snapshot-verdict'
@@ -31,6 +35,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
   let cwdPromiseSettled = cwdPromise === undefined
   let cwdPromiseWaitStarted = false
   let wakeWaitStarted = false
+  let dormantRecoveryWaitStarted = false
 
   session.runDeferredConnect = (): void => {
     if (session.connectStarted) {
@@ -69,6 +74,21 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
         })
         // Why: disposal unsubscribes so a torn-down pane never connects on a later wake.
         session.waitTeardowns.push(unsubscribe)
+      }
+      return
+    }
+    if (holdsDormantRecoveryConnect(session)) {
+      session.cancelScheduledConnectFrame()
+      if (session.connectFallbackTimer !== null) {
+        clearTimeout(session.connectFallbackTimer)
+        session.connectFallbackTimer = null
+      }
+      if (!dormantRecoveryWaitStarted) {
+        dormantRecoveryWaitStarted = true
+        waitForDormantRecoveryRelease(session, () => {
+          dormantRecoveryWaitStarted = false
+          session.runDeferredConnect()
+        })
       }
       return
     }

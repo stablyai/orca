@@ -4,12 +4,14 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import { isTerminalLeafId, type TerminalLeafId } from '../../../../shared/stable-pane-id'
+import { onDormantRecoveryPaneShellRelease } from '@/lib/dormant-recovery-shell-release'
 import { useAppStore } from '@/store'
 import { RecoveredSessionResumePortals } from './RecoveredSessionResumePortals'
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn() } }))
 
 const LEAF = '3c2b1a00-0000-4000-8000-000000000001'
+const BINDING = { agent: 'claude', key: 'session_id', id: 'session-1' }
 
 function terminalLeaf(): TerminalLeafId {
   if (!isTerminalLeafId(LEAF)) {
@@ -38,15 +40,19 @@ function recoveryRecord(origin: SleepingAgentSessionRecord['origin']): SleepingA
 
 describe('RecoveredSessionResumePortals', () => {
   const resumeLocal = vi.fn()
+  const releaseLocal = vi.fn()
 
   beforeEach(() => {
+    releaseLocal.mockReset().mockResolvedValue({ released: BINDING })
     resumeLocal.mockReset().mockResolvedValue({
       terminalHandle: 'h',
       disposition: 'created',
       localPaneKey: `tab-1:${LEAF}`
     })
     Object.assign(window, {
-      api: { crossMachineRecovery: { resumeLocal, onApply: vi.fn(), reply: vi.fn() } }
+      api: {
+        crossMachineRecovery: { resumeLocal, releaseLocal, onApply: vi.fn(), reply: vi.fn() }
+      }
     })
   })
   afterEach(cleanup)
@@ -74,10 +80,34 @@ describe('RecoveredSessionResumePortals', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
 
     expect(resumeLocal).toHaveBeenCalledTimes(1)
-    expect(resumeLocal).toHaveBeenCalledWith({
-      worktreeId: 'repo::/wt',
-      providerSessionId: 'session-1'
-    })
+    expect(resumeLocal).toHaveBeenCalledWith({ worktreeId: 'repo::/wt', binding: BINDING })
+  })
+
+  it('releases the binding, then its pane, on Start shell instead', async () => {
+    const paneReleased = vi.fn()
+    const stopListening = onDormantRecoveryPaneShellRelease(`tab-1:${LEAF}`, paneReleased)
+    renderPortals('recovery')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start shell instead' }))
+
+    expect(releaseLocal).toHaveBeenCalledWith({ worktreeId: 'repo::/wt', binding: BINDING })
+    await vi.waitFor(() => expect(paneReleased).toHaveBeenCalledTimes(1))
+    expect(resumeLocal).not.toHaveBeenCalled()
+    stopListening()
+  })
+
+  it('keeps the pane held when the release fails', async () => {
+    releaseLocal.mockRejectedValue(new Error('recovery_binding_not_found'))
+    const paneReleased = vi.fn()
+    const stopListening = onDormantRecoveryPaneShellRelease(`tab-1:${LEAF}`, paneReleased)
+    renderPortals('recovery')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start shell instead' }))
+
+    await vi.waitFor(() => expect(releaseLocal).toHaveBeenCalledTimes(1))
+    await Promise.resolve()
+    expect(paneReleased).not.toHaveBeenCalled()
+    stopListening()
   })
 
   it('offers no Resume for ordinary sleeping records', () => {

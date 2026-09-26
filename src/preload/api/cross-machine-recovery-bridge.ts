@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import {
   CROSS_MACHINE_RECOVERY_APPLY_CHANNEL,
   CROSS_MACHINE_RECOVERY_APPLY_REPLY_CHANNEL,
+  CROSS_MACHINE_RECOVERY_RELEASE_LOCAL_CHANNEL,
   CROSS_MACHINE_RECOVERY_RESUME_LOCAL_CHANNEL,
   type CrossMachineRecoveryApplyRequest
 } from '../../shared/cross-machine-recovery-session-ops'
@@ -52,5 +53,6 @@ export const crossMachineRecoveryApi = {
     return () => ipcRenderer.removeListener(CROSS_MACHINE_RECOVERY_APPLY_CHANNEL, listener)
   },
   reply: (reply) => ipcRenderer.send(CROSS_MACHINE_RECOVERY_APPLY_REPLY_CHANNEL, reply),
-  resumeLocal: (args) => ipcRenderer.invoke(CROSS_MACHINE_RECOVERY_RESUME_LOCAL_CHANNEL, args)
+  resumeLocal: (args) => ipcRenderer.invoke(CROSS_MACHINE_RECOVERY_RESUME_LOCAL_CHANNEL, args),
+  releaseLocal: (args) => ipcRenderer.invoke(CROSS_MACHINE_RECOVERY_RELEASE_LOCAL_CHANNEL, args)
 } satisfies PreloadApi['crossMachineRecovery']

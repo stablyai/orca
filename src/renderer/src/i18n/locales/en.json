@@ -18507,6 +18507,9 @@
   "crossMachineRecovery": {
     "recoveredSession": "Recovered session",
     "resume": "Resume",
-    "resumeFailed": "Couldn't resume the recovered session"
+    "resumeFailed": "Couldn't resume the recovered session",
+    "shellStarted": "Started a shell; released recovered {{agent}} session {{session}}",
+    "startShellFailed": "Couldn't start a shell for the recovered session",
+    "startShellInstead": "Start shell instead"
   }
 }

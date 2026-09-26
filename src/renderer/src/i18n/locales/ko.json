@@ -18504,6 +18504,9 @@
   "crossMachineRecovery": {
     "recoveredSession": "복구된 세션",
     "resume": "재개",
-    "resumeFailed": "복구된 세션을 재개할 수 없습니다"
+    "resumeFailed": "복구된 세션을 재개할 수 없습니다",
+    "shellStarted": "셸을 시작했습니다. 복구된 {{agent}} 세션 {{session}}을(를) 해제했습니다",
+    "startShellFailed": "복구된 세션의 셸을 시작할 수 없습니다",
+    "startShellInstead": "대신 셸 시작"
   }
 }

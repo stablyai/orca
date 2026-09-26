@@ -18504,6 +18504,9 @@
   "crossMachineRecovery": {
     "recoveredSession": "復元されたセッション",
     "resume": "再開",
-    "resumeFailed": "復元されたセッションを再開できませんでした"
+    "resumeFailed": "復元されたセッションを再開できませんでした",
+    "shellStarted": "シェルを起動しました。復元された {{agent}} セッション {{session}} を解放しました",
+    "startShellFailed": "復元されたセッションのシェルを起動できませんでした",
+    "startShellInstead": "代わりにシェルを起動"
   }
 }

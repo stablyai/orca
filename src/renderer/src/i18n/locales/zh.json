@@ -18504,6 +18504,9 @@
   "crossMachineRecovery": {
     "recoveredSession": "已恢复的会话",
     "resume": "继续",
-    "resumeFailed": "无法继续已恢复的会话"
+    "resumeFailed": "无法继续已恢复的会话",
+    "shellStarted": "已启动 shell；已释放已恢复的 {{agent}} 会话 {{session}}",
+    "startShellFailed": "无法为已恢复的会话启动 shell",
+    "startShellInstead": "改为启动 shell"
   }
 }

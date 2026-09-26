@@ -24,7 +24,7 @@ export type RecoveryResumeParams = {
   presentation?: 'focused' | 'background'
 }
 
-async function claimRecoveryRecord(
+export async function claimRecoveryRecord(
   host: CrossMachineRecoveryHost,
   worktreeId: string,
   binding: RecoveryBindingKey

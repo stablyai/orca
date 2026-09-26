@@ -12,10 +12,16 @@ import type { PersistedOpenFile, WorkspaceSessionState } from './workspace-sessi
 export const CROSS_MACHINE_RECOVERY_APPLY_CHANNEL = 'crossMachineRecovery:apply'
 export const CROSS_MACHINE_RECOVERY_APPLY_REPLY_CHANNEL = 'crossMachineRecovery:applyReply'
 export const CROSS_MACHINE_RECOVERY_RESUME_LOCAL_CHANNEL = 'crossMachineRecovery:resumeLocal'
+export const CROSS_MACHINE_RECOVERY_RELEASE_LOCAL_CHANNEL = 'crossMachineRecovery:releaseLocal'
 
 export type CrossMachineRecoveryResumeLocalArgs = {
   worktreeId: string
   binding: RecoveryBindingKey
+}
+
+/** The dormant binding "Start shell instead" consumed; provenance keeps it as consumed. */
+export type CrossMachineRecoveryReleaseLocalResult = {
+  released: RecoveryBindingKey
 }
 
 /** One recovered workspace's session slices, already re-keyed to local ids and paths. */

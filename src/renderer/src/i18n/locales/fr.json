@@ -18504,6 +18504,9 @@
   "crossMachineRecovery": {
     "recoveredSession": "Session récupérée",
     "resume": "Reprendre",
-    "resumeFailed": "Impossible de reprendre la session récupérée"
+    "resumeFailed": "Impossible de reprendre la session récupérée",
+    "shellStarted": "Shell démarré ; session {{agent}} récupérée {{session}} libérée",
+    "startShellFailed": "Impossible de démarrer un shell pour la session récupérée",
+    "startShellInstead": "Démarrer un shell à la place"
   }
 }

@@ -15,6 +15,7 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { navigationTargetsHost } from '../../shared/runtime-navigation'
 import { isAutomaticTabActivation } from '../../shared/tab-activation-intent'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import { isDormantRecoveryPane } from './mobile-session-dormant-recovery-pane'
 
 export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
   protected async performMobileSessionPtyRecordsRefresh(
@@ -145,6 +146,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         // (#11598), so only a background probe may be refused for one.
         (!isAutomaticTabActivation(opts.intent) ||
           !this.isDeliberatelyParkedPane(worktreeId, tab)) &&
+        !isDormantRecoveryPane(this.getWorkspaceSessionForWorktree(worktreeId), tab) &&
         (!targetsHost ||
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))

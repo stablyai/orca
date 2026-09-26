@@ -42,6 +42,7 @@ export function createWebCrossMachineRecoveryApi(): CrossMachineRecoveryApi {
     // Why: recovery imports target this computer's desktop runtime; the web client never hosts one.
     onApply: () => () => {},
     reply: () => {},
-    resumeLocal: () => Promise.reject(new Error('recovery_unsupported'))
+    resumeLocal: () => Promise.reject(new Error('recovery_unsupported')),
+    releaseLocal: () => Promise.reject(new Error('recovery_unsupported'))
   }
 }
