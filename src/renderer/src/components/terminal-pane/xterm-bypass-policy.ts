@@ -1,4 +1,9 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
+import {
+  KITTY_DISAMBIGUATE_ESCAPE_CODES,
+  KITTY_REPORT_ALL_KEYS_AS_ESCAPE_CODES,
+  KITTY_REPORT_EVENT_TYPES
+} from '../../../../shared/terminal-kitty-keyboard-flags'
 import { isHangulJamoKeyText } from './hangul-jamo-key'
 import { getLayoutBaseCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
 import {
@@ -13,10 +18,8 @@ import {
 // so xterm's own `copy` listener on its container never fires and the
 // selection is never written to the clipboard.
 //
-// Fix: intercept in `attachCustomKeyEventHandler` and return `false` for chords
-// that should bubble to the browser / host (clipboard, native menu). Returning
-// `false` makes xterm bail *before* the kitty encoder runs, so the browser's
-// copy pipeline and the OS-level keybinding both fire normally.
+// Fix: bypass xterm when native selection needs the browser copy pipeline;
+// otherwise let a negotiated Kitty encoder forward the original Cmd+C chord.
 
 export type XtermBypassEvent = {
   type: string
@@ -360,10 +363,18 @@ export function shouldBypassXtermKeyboardEvent(
     // Why: window-level handlers already consume other Cmd chords before xterm
     // sees them in Electron. Web clients still need paste to bubble to
     // Chromium's native paste event instead of xterm's Kitty encoder.
-    return (
-      matchesClipboardBinding('Mod+C', event, 'darwin') ||
-      matchesClipboardBinding('Mod+V', event, 'darwin')
-    )
+    if (matchesClipboardBinding('Mod+C', event, 'darwin')) {
+      // xterm cannot encode Super+C with only alternate-key or associated-text flags.
+      return (
+        hasSelection ||
+        ((options.kittyKeyboardFlags ?? 0) &
+          (KITTY_DISAMBIGUATE_ESCAPE_CODES |
+            KITTY_REPORT_EVENT_TYPES |
+            KITTY_REPORT_ALL_KEYS_AS_ESCAPE_CODES)) ===
+          0
+      )
+    }
+    return matchesClipboardBinding('Mod+V', event, 'darwin')
   }
 
   // Windows/Linux: standard clipboard bindings bubble; Ctrl+C only bubbles
