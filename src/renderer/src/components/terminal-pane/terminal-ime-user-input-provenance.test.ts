@@ -93,12 +93,17 @@ describe('IME and Hangul commits reach the PTY as user input', () => {
       ['userAgent', originalUserAgent],
       ['maxTouchPoints', originalMaxTouchPoints]
     ] as const) {
+      // Why delete: with no own descriptor the real value lives on the prototype, which the stub shadows.
       if (descriptor) {
         Object.defineProperty(navigator, property, descriptor)
+      } else {
+        Reflect.deleteProperty(navigator, property)
       }
     }
     if (originalGetContext) {
       Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', originalGetContext)
+    } else {
+      Reflect.deleteProperty(HTMLCanvasElement.prototype, 'getContext')
     }
     document.body.replaceChildren()
   })
