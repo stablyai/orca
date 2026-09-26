@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bootstrapProfileStateAuthority } from './profile-state-authority-bootstrap'
 import { migrateProfileStateToSqlite } from './profile-state-migration'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
-import { profileStateJsonExportPath } from './profile-state-export-path'
+import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
 import type { ProfileStateAuthority } from '../loading-store/profile-state-authority'
 import { formatProfileStateStartupFailure } from './profile-state-startup-failure'
 

@@ -90,7 +90,7 @@ function gate() {
 }
 
 describe('SQLite profile state during an update quit', () => {
-  it('exports final SSH shutdown writes and reloads them in a JSON-only Store', async () => {
+  it('exports final SSH shutdown writes and reloads them through the frozen JSON importer', async () => {
     const { store, dataFile, databasePath } = await fixture()
     store.markSshRemotePtyLeasesForShutdown(TARGET_ID, 'detached')
 
@@ -103,7 +103,7 @@ describe('SQLite profile state during an update quit', () => {
       jsonHash: hashProfileStateJson(json),
       acceptedRevision: snapshot.revision
     })
-    const legacy = new Store({ dataFile })
+    const legacy = new Store({ dataFile, serializedState: json })
     try {
       expect(legacy.getSshRemotePtyLeases(TARGET_ID)).toEqual([
         expect.objectContaining({ state: 'detached', lastDetachedAt: expect.any(Number) })
@@ -122,7 +122,7 @@ describe('SQLite profile state during an update quit', () => {
 
     const json = readFileSync(dataFile, 'utf8')
     expect(json).toBe(persistedState(databasePath).json)
-    const legacy = new Store({ dataFile })
+    const legacy = new Store({ dataFile, serializedState: json })
     try {
       expect(legacy.getSettings().theme).toBe('dark')
       expect(legacy.getSshRemotePtyLeases(TARGET_ID)[0]?.state).toBe('detached')
@@ -228,8 +228,7 @@ describe('SQLite profile state during an update quit', () => {
     const reopened = createProfileStateStore({
       dataFile,
       databaseFile: databasePath,
-      profileId: PROFILE_ID,
-      authorityMode: 'sqlite-established'
+      profileId: PROFILE_ID
     })
     try {
       expect(reopened.backend).toBe('sqlite')

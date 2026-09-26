@@ -1,10 +1,8 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname } from 'node:path'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
-import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
 import { profileStateJsonMatchesAcceptance } from './profile-state-documents'
 import { isRecord, parseProfileStateRoot } from './profile-state-document-validation'
 import {
@@ -19,6 +17,7 @@ import {
 import { writeProfileStateDomain } from './profile-state-domain-writes'
 import { assertProfileStateCanInitialize } from './profile-state-recovery-required'
 import { classifyProfileStateStorage } from './profile-state-storage-classification'
+import { migrateProfileStateToSqlite } from './profile-state-migration'
 
 export type ProfileStateOfflineLocation = {
   dataFile: string
@@ -98,31 +97,33 @@ export function updateAgentHookSettingsInProfileState(
   }
 }
 
-/** Update the active profile through its classified backend without exposing that choice to CLI callers. */
+/** The caller holds maintenance ownership through import and the fenced settings write. */
 export function updateAgentHookSettingsFromProfileState(
   location: ProfileStateOfflineLocation,
   enabled: boolean
 ): AgentHookSettingsUpdate {
   const classification = classifyProfileStateStorage(location.dataFile, location.databaseFile)
-  if (classification === 'sqlite-only' || classification === 'both') {
-    return updateAgentHookSettingsInProfileState(location, enabled)
+  if (classification === 'json-only' || classification === 'neither') {
+    assertProfileStateCanInitialize(location)
+    assertOfflineProfileStateMutationRuntime()
+    const rawJson = existsSync(location.dataFile)
+      ? readFileSync(location.dataFile, 'utf8')
+      : undefined
+    const migrated = migrateProfileStateToSqlite({
+      ...location,
+      expectedLegacyJson: rawJson,
+      serializedState: rawJson ?? JSON.stringify(getDefaultPersistedState(homedir()))
+    })
+    migrated.authority.close()
   }
+  return updateAgentHookSettingsInProfileState(location, enabled)
+}
 
-  assertProfileStateCanInitialize(location)
-  const state = existsSync(location.dataFile)
-    ? parseProfileStateRoot(readFileSync(location.dataFile, 'utf8'))
-    : structuredClone(getDefaultPersistedState(homedir()))
-  const persistedSettings = isRecord(state.settings) ? state.settings : {}
-  const settings = {
-    ...getDefaultPersistedState(homedir()).settings,
-    ...persistedSettings,
-    agentStatusHooksEnabled: enabled
-  }
-  state.settings = settings
-  writeJsonProfileState(location.dataFile, state)
-  return {
-    settingsPath: location.dataFile,
-    settings: projectAgentHookSettings(settings)
+export function assertOfflineProfileStateMutationRuntime(): void {
+  if (!isProfileStateSqliteAvailable()) {
+    throw new Error(
+      'Changing agent hooks offline requires the bundled Orca CLI. Run that launcher, or start Orca and retry this command.'
+    )
   }
 }
 
@@ -186,13 +187,4 @@ function readAgentHookSettingsFromSettingsValue(value: unknown): AgentHookSettin
     agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
     disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents)
   }
-}
-
-function writeJsonProfileState(dataFile: string, state: Record<string, unknown>): void {
-  mkdirSync(dirname(dataFile), { recursive: true })
-  writeFileDurableSync(
-    durableWriteTempPath(dataFile),
-    dataFile,
-    `${JSON.stringify(state, null, 2)}\n`
-  )
 }

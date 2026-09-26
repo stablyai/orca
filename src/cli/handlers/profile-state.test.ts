@@ -19,7 +19,7 @@ import {
   profileStateDatabaseBackupPath
 } from '../../main/persistence/profile-state/profile-state-backup-path'
 import { writeProfileStateDatabaseSnapshotAsync } from '../../main/persistence/profile-state/profile-state-database-snapshot'
-import { profileStateJsonExportPath } from '../../main/persistence/profile-state/profile-state-export-path'
+import { profileStateJsonExportPath } from '../../main/persistence/profile-state/legacy-json/profile-state-export-path'
 import { main } from '../index'
 
 const { getCliStatusMock, getDefaultUserDataPathMock, runtimeClientConstructorMock } = vi.hoisted(
