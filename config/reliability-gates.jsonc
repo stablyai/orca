@@ -11,6 +11,87 @@
   },
   "gates": [
     {
+      "id": "terminal-provider.workspace-hydration-readiness",
+      "title": "Remote workspace hydration readiness releases wait resources and preserves caller authority",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit-and-caller-contract",
+      "surfaces": [
+        "direct SSH remote workspace snapshot readiness",
+        "startup session hydration",
+        "remote workspace upload suppression"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh"],
+      "coverageNotes": "Actual readiness helper and snapshot/coordinator/upload-suppression modules with synthetic local readiness and SSH authority on macOS. Production construction passes the real Zustand useAppStore; normal reconnect and degraded startup publish readiness. Live SSH/WSL, native Windows/Linux and rendered startup are unproved. PTY execution/liveness and wire formats are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/renderer/src/hooks/remote-workspace-session-readiness.ts"
+      ],
+      "invariant": "A pending subscribable readiness wait retains at most one subscription and one deadline, and readiness, abort or timeout releases both and its abort listener. Current arrival and preparation authority remain mandatory before remote requests and snapshot mutation, including when readiness was observed immediately before stop or supersession.",
+      "oracle": "Keep readiness false for ten seconds and require one scheduled timer and false settlement, then publish at 37ms and require immediate true settlement with no timer/listener. Force readiness/abort during subscription registration and after timeout. Require no remote request for a stale/stopped caller and no obsolete snapshot mutation; retain placement/upload-suppression contracts.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/remote-workspace-session-readiness.test.ts src/renderer/src/hooks/remote-workspace-snapshot-arrival-coordinator.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/app-shell/remote-workspace-unplaced-upload-suppression.test.tsx --reporter=verbose"
+      ],
+      "testFiles": [
+        "src/renderer/src/hooks/remote-workspace-session-readiness.test.ts",
+        "src/renderer/src/hooks/remote-workspace-snapshot-arrival-coordinator.test.ts",
+        "src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
+        "src/renderer/src/app-shell/remote-workspace-unplaced-upload-suppression.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/hooks/remote-workspace-session-readiness.test.ts",
+          "assertions": [
+            "uses one deadline timer for ten seconds of unchanged readiness",
+            "resumes at a readiness publication between polling boundaries",
+            "cleans a subscription that reports readiness before returning its disposer",
+            "cleans a subscription when canceled while its disposer is being installed",
+            "does not restart the deadline on unrelated publications",
+            "starts no remote request when readiness is followed by a %s owner"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/remote-workspace-session-readiness.test.ts src/renderer/src/hooks/remote-workspace-snapshot-arrival-coordinator.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/app-shell/remote-workspace-unplaced-upload-suppression.test.tsx --reporter=verbose",
+          "result": "passed",
+          "durationSeconds": 2.34,
+          "summary": "Independent rerun: 42 tests across four suites pass. Seven additional ignored adverse review cases pass: 64 waiters through production census, one-hour wall-clock steps both directions, post-timeout events, repeated registration callbacks, newer same-target arrival and stopped unsolicited apply."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "Focused renderer/caller unit suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Permanent acceptance suite run against original helper via Vite substitution:7 fail/6 pass. Candidate passes all13 readiness cases and42 combined focused tests. Deterministic unchanged-readiness wait:100→1 scheduled/fired timers,101→3 state reads; publication at37ms is observed at37ms instead of100ms."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Trade-off candidate: pending subscribable waits replace100 polling wakeups/10s with one deadline but add one O(1) readiness callback per active wait per store publication. Independent64-waiter/256-write probe counts16,384 callbacks, then32 listeners/timers after half abort and zero after ready. Paired timing delta+0.0197ms/1,000 publications may include noise; no throughput/startup/frame gain claimed. Earlier ready-then-abort observation can retain true; installed timer uses elapsed time instead of repeated wall-clock checks. Caller authority remains separately checked. GetState-only legacy callers retain polling."
+      },
+      "knownGaps": [
+        "No live SSH/WSL or native Windows/Linux execution, rendered first-paint/frame measurement, or CI soak.",
+        "Real sleep/background timer throttling is unproved; synthetic±1h wall-clock changes confirm elapsed cutoff after timer installation.",
+        "This narrow gate does not claim the full terminal-provider.ssh-remote-reattach-contract or the separate reconnect candidate."
+      ],
+      "promotionCriteria": [
+        "Retain timer/resource counts and current-caller authority assertions, gather CI soak and cross-platform/rendered startup evidence."
+      ],
+      "demotionRule": "Keep experimental until soak evidence; investigate cleanup or caller-authority failures without weakening assertions or hiding unexplained flakes."
+    },
+    {
       "id": "agent-session.journal-streaming-replay",
       "title": "Journal replay bounds obsolete revision memory without changing recovery",
       "maturity": "experimental",
