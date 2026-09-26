@@ -24,6 +24,7 @@ import {
 } from '../mobile-relay-credential-contract'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
+import { PortForwardAttachParams } from '../port-forward-protocol'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
@@ -973,6 +974,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
+  'network.portForward': PortForwardAttachParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.registerPush': NotificationRegisterPushParams,
   'notifications.subscribe': NotificationsSubscribeParams,

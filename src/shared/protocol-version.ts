@@ -97,6 +97,9 @@ export const BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY =
 export const BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY = 'network.browserTunnel.v1' as const
 export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
   'network.browserTunnel.executionHosts.v1' as const
+// Why: a host without this never advertises network.portForward, so a client keeps
+// today's behaviour instead of opening a listener whose traffic nothing answers.
+export const PORT_FORWARD_RUNTIME_CAPABILITY = 'network.portForward.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops
 // unknown keys), so a mobile xterm query reply would land as ordinary
 // floor-taking input. Mobile must not forward replies unless advertised.
@@ -340,6 +343,7 @@ export const RUNTIME_CAPABILITIES = [
   BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
+  PORT_FORWARD_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',
   'terminal.multiplex.v1',
   'workspace-ports.v1',
