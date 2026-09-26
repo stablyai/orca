@@ -85,6 +85,7 @@ export function launchSleepingAgentSession(
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
+    ...(launchConfig?.claudeAccountId ? { claudeAccountId: launchConfig.claudeAccountId } : {}),
     platform: resumeTarget.platform,
     shell: resumeTarget.shell
   })

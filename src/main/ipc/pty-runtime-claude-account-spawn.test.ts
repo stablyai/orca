@@ -10,7 +10,11 @@ import {
 } from '../claude-accounts/claude-pinned-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import type { Store } from '../persistence'
-import type { ProjectClaudeAccountPreference } from '../../shared/claude/project-claude-account-preference'
+import {
+  ACTIVE_CLAUDE_ACCOUNT,
+  type ProjectClaudeAccountPreference
+} from '../../shared/claude/project-claude-account-preference'
+import { terminalCreateClaudeAccountIdField } from '../runtime/runtime-agent-launch-resolution'
 import { resolveRuntimeSpawnClaudeAccount } from './pty/runtime/spawn-claude-account'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './pty/runtime/spawn-state'
 import type { PtyRuntimeControllerDeps } from './pty/runtime/controller-deps'
@@ -330,5 +334,26 @@ describe('resolveRuntimeSpawnClaudeAccount: project account fallback', () => {
     expect(resolveRuntimeSpawnClaudeAccount(sshCtx)).toBeUndefined()
     expect(() => resolveRuntimeSpawnClaudeAccount(nonClaudeCtx)).not.toThrow()
     expect(resolveRuntimeSpawnClaudeAccount(nonClaudeCtx)).toBeUndefined()
+  })
+
+  it('honors the launch config account over the project default, including "active this time"', () => {
+    const store = storeWithRepo({ mode: 'account', accountId: 'acct-1' })
+    const resolveFor = (launchConfigClaudeAccountId: string) =>
+      resolveRuntimeSpawnClaudeAccount(
+        runtimeCtx({
+          args: {
+            command: 'claude --resume s-1',
+            launchAgent: 'claude',
+            worktreeId,
+            ...terminalCreateClaudeAccountIdField({
+              launchConfig: { claudeAccountId: launchConfigClaudeAccountId }
+            })
+          },
+          deps: { store }
+        })
+      )
+
+    expect(resolveFor(ACTIVE_CLAUDE_ACCOUNT)).toBeUndefined()
+    expect(resolveFor('acct-2')).toBe('acct-2')
   })
 })

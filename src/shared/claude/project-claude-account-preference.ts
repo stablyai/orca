@@ -19,6 +19,11 @@ export function isPinnableClaudeAccountId(value: unknown): value is string {
   )
 }
 
+/** A value `launchConfig.claudeAccountId` may carry: a pinnable id or the "active this time" sentinel. */
+export function isLaunchConfigClaudeAccountId(value: unknown): value is string {
+  return value === ACTIVE_CLAUDE_ACCOUNT || isPinnableClaudeAccountId(value)
+}
+
 function normalizeClaudePreference(value: unknown): ProjectClaudeAccountPreference | null {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
     return null

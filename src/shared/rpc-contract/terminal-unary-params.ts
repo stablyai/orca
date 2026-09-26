@@ -7,6 +7,7 @@ import {
   listSupportedWindowsShellOverrides
 } from '../windows-terminal-shell'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../feature-education-telemetry'
+import { launchConfigClaudeAccountIdSchema } from '../workspace-session-sleeping-agents'
 
 export const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle'),
@@ -161,7 +162,8 @@ export const TerminalCreateParams = z.object({
         .string()
         .min(1)
         .max(32 * 1024)
-        .optional()
+        .optional(),
+      claudeAccountId: launchConfigClaudeAccountIdSchema
     })
     .optional(),
   resumeProviderSession: z
