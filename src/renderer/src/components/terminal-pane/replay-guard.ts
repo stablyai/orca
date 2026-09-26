@@ -1,7 +1,6 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-foreground-render-settle'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
-import { hashCrashBreadcrumbId } from '@/lib/crash-breadcrumb-id-hash'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import {
   captureTerminalParseProgressGeneration,
@@ -40,19 +39,28 @@ type ReplayGuardBreadcrumbData = {
   ptyId?: string
 }
 
+function hashReplayIdentity(value: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
 function replayGuardBreadcrumbData(
   pane: ManagedPane,
   identity: ReplayTerminalOptions['breadcrumbIdentity']
 ): ReplayGuardBreadcrumbData {
   const data: ReplayGuardBreadcrumbData = { paneId: pane.id }
   if (pane.leafId) {
-    data.leafIdHash = hashCrashBreadcrumbId(pane.leafId)
+    data.leafIdHash = hashReplayIdentity(pane.leafId)
   }
   if (identity?.tabId) {
-    data.tabIdHash = hashCrashBreadcrumbId(identity.tabId)
+    data.tabIdHash = hashReplayIdentity(identity.tabId)
   }
   if (identity?.worktreeId) {
-    data.worktreeIdHash = hashCrashBreadcrumbId(identity.worktreeId)
+    data.worktreeIdHash = hashReplayIdentity(identity.worktreeId)
   }
   if (identity?.ptyId) {
     data.ptyId = redactPtyIdForDiagnostics(identity.ptyId)

@@ -1,11 +1,12 @@
 import { memo, useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store'
+import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import type { ActivityTerminalPortalTarget } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
-import { handleTerminalTabPtyExit } from '../terminal/terminal-tab-pty-exit'
+import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
 
 type TerminalOverlaySlotProps = {
   terminalTabId: string
@@ -60,15 +61,27 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       isVisible={isVisible || activityTerminalPortal !== null}
       isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
-      onPtyExit={(ptyId, exitCode) =>
-        handleTerminalTabPtyExit({
-          tabId: terminalTabId,
-          ptyId,
-          exitCode,
-          consumeSuppressedPtyExit,
+      onPtyExit={(ptyId, exitCode) => {
+        if (consumeSuppressedPtyExit(ptyId)) {
+          return
+        }
+        // A synthetic host-loss exit is not evidence that the user closed the tab.
+        if (exitCode !== undefined && !isProvenProcessExit(exitCode)) {
+          useAppStore.getState().markUnverifiedPtyLoss(terminalTabId)
+          return
+        }
+        // Why: a parked multi-leaf tab has no PaneManager to promote split
+        // siblings, so closing the tab here would kill them; the reveal
+        // remount handles dead PTYs per leaf instead.
+        if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
+          return
+        }
+        closeTerminalTab(terminalTabId, {
+          reason: 'pty-exit',
+          lifecyclePtyId: ptyId,
           onClosed: leaveWorktreeIfEmpty
         })
-      }
+      }}
       onCloseTab={() => {
         // Why: route through closeTerminalTab (not the raw store closeTab) so a
         // pinned tab hits the confirmation guard. The overlay's direct

@@ -1,21 +1,24 @@
 import type { AppState } from '@/store/types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
 import { collectLeafIdsInOrder } from '../terminal-layout-leaf-ids'
 
-/**
- * Whether a PTY spawned by a pane disposed before it bound should be kept for the pane's successor.
- *
- * A pane remounted mid-spawn spawns again under the same pane key, and main's pane-spawn reservation
- * hands the successor the SAME PTY; killing it from the disposed transport kills the successor's
- * shell. The PTY is ownerless only when the tab is gone, the leaf left the layout, or the worktree
- * is being deleted (teardown kills from the bound-id ledger, which never saw this id).
- */
+// Main can give a remounted pane the same PTY, so disposal alone does not make it ownerless.
 export function shouldRetainDisposedPaneSpawn(
   state: Pick<AppState, 'tabsByWorktree' | 'terminalLayoutsByTabId' | 'deleteStateByWorktreeId'>,
   worktreeId: string,
   tabId: string,
-  leafId: string
+  leafId: string,
+  executionHostId?: ExecutionHostId
 ): boolean {
-  if (state.deleteStateByWorktreeId?.[worktreeId]?.isDeleting) {
+  const deleteState =
+    (executionHostId
+      ? state.deleteStateByWorktreeId?.[composeWorktreeHostIdentity(executionHostId, worktreeId)]
+      : undefined) ?? state.deleteStateByWorktreeId?.[worktreeId]
+  if (
+    deleteState?.isDeleting &&
+    (!deleteState.executionHostId || deleteState.executionHostId === executionHostId)
+  ) {
     return false
   }
   const tabPresent = Object.values(state.tabsByWorktree).some((tabs) =>

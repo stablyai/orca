@@ -2,7 +2,6 @@ import { useEffect } from 'react'
 import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveRepairedActiveTerminalTabId } from './active-terminal-repair'
-import { recordActiveTerminalTabAutoMoveBreadcrumb } from '@/lib/terminal-tab-lifecycle-breadcrumbs'
 
 type ActiveTerminalRepairInput = {
   activeTabType: WorkspaceVisibleTabType
@@ -35,13 +34,6 @@ export function repairActiveTerminalTab({
   if (!repairedTabId) {
     return false
   }
-  recordActiveTerminalTabAutoMoveBreadcrumb({
-    reason: 'active-terminal-repair',
-    fallback: repairedTabId === rememberedTabId ? 'remembered' : 'first-tab',
-    fromTabId: activeTabId,
-    toTabId: repairedTabId,
-    tabCount: tabs.length
-  })
   setActiveTab(repairedTabId)
   return true
 }

@@ -129,30 +129,17 @@ the renderer retries.
 The SSH e2e lane must be green and triggering on **source** changes before any of this is attempted.
 It was skipping for 15 specs; four regressions reached a user during that window.
 
-## RESOLVED (one cause): a new tab's shell killed by its own disposed spawn
+## Resolved: a disposed pane killed its successor's new shell
 
-First diagnosed in #19386 on the Docker-SSH lane: a tab opened right after a reconnect failed 4-5
-rounds in 10, either deleted outright or kept bound to a shell that never answered input. Scan-22
-reproduced the same kill from a macOS SSH report with no reconnect in it ("the 2nd tab is
-automatically killed", or focus flips back to tab 1).
+A pane rebuilt during its first spawn uses the same reservation key, so main can return the
+same PTY to both transports (#19386, #22578). The disposed transport must keep that shell
+while its tab and layout leaf remain and its execution host's workspace is not being deleted.
+A live transport refusing the id still retires it (#11003). This applies to local, WSL and SSH
+IPC terminals; the remote-runtime transport has no corresponding kill.
 
-Mechanism: anything that remounts a pane while its first spawn is in flight (the reconnect ledger's
-`tab.generation` bump, recovery, a park flip) makes the remounted pane spawn under the same pane key,
-and main's pane-spawn reservation (`spawn-begin.ts`) hands it the SAME PTY. The disposed first
-transport then killed that PTY as an orphan in `ipc-pty-connect.ts`. A proven exit closed the tab on
-`pty-exit` and active-terminal repair moved focus to tab 1; a synthetic `-1` left the tab bound to a
-dead shell.
-
-Fix: a transport destroyed mid-spawn asks `disposed-spawn-retention.ts` first and keeps the PTY while
-the tab exists, the worktree is not being deleted, and any layout still names the leaf
-(leak-over-kill, per `ssh-execution-boundary.md`). A LIVE transport that refuses the id via
-`admitPtyId` is the pane's only transport and still kills unconditionally (#11003). Scope:
-`createIpcPtyTransport` (local, WSL, SSH); the remote-runtime transport has no disposed-spawn kill.
-
-Breadcrumbs for the next report: `terminal_fresh_spawn_retired` (killed vs retained, path, spawn wait),
-`terminal_tab_pty_exit` (host kind, ms since spawn, synthetic), and `terminal_active_tab_auto_move`
-(active-terminal repair or the `createTab` orphan sweep). Still unknown: what remounts a brand-new
-tab mid-spawn when no reconnect happened.
+The remount trigger in the Scan-22 user report remains unknown. A retained shell can outlive
+its tab if the tab closes before a successor binds it; keeping potentially owned work follows
+the SSH execution boundary.
 
 ## Open: the pane behind a preserved tab does not always rebind
 

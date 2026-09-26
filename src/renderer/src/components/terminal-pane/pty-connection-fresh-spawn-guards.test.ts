@@ -248,6 +248,11 @@ describe('connectPanePty', () => {
     expect(retain()).toBe(false)
     mockStoreState = {
       ...mockStoreState,
+      deleteStateByWorktreeId: { 'local|wt-1': { isDeleting: true, phase: 'deleting' } }
+    }
+    expect(retain()).toBe(false)
+    mockStoreState = {
+      ...mockStoreState,
       deleteStateByWorktreeId: {},
       tabsByWorktree: { 'wt-1': [] }
     }

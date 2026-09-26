@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../../shared/terminal-tab-types'
 import type { WorktreeDeleteState } from '@/store/slices/worktree-delete-state-types'
 import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
@@ -79,6 +80,36 @@ describe('shouldRetainDisposedPaneSpawn', () => {
     expect(
       shouldRetainDisposedPaneSpawn(state({ deleting: { other: deleting } }), WT, TAB, LEAF)
     ).toBe(true)
+  })
+
+  it.each(['local', 'ssh:target', 'runtime:paired'] as const)(
+    'retires a disposed spawn when its %s workspace is being deleted',
+    (executionHostId) => {
+      const deletingState = state({
+        deleting: { [composeWorktreeHostIdentity(executionHostId, WT)]: deleting }
+      })
+
+      expect(shouldRetainDisposedPaneSpawn(deletingState, WT, TAB, LEAF, executionHostId)).toBe(
+        false
+      )
+      expect(shouldRetainDisposedPaneSpawn(deletingState, WT, TAB, LEAF, 'ssh:other-target')).toBe(
+        true
+      )
+    }
+  )
+
+  it('keeps legacy deletion entries scoped to their recorded execution host', () => {
+    const deletingState = state({
+      deleting: { [WT]: { ...deleting, executionHostId: 'ssh:target' } }
+    })
+
+    expect(shouldRetainDisposedPaneSpawn(deletingState, WT, TAB, LEAF, 'ssh:target')).toBe(false)
+    expect(shouldRetainDisposedPaneSpawn(deletingState, WT, TAB, LEAF, 'ssh:other-target')).toBe(
+      true
+    )
+    expect(
+      shouldRetainDisposedPaneSpawn(state({ deleting: { [WT]: deleting } }), WT, TAB, LEAF, 'local')
+    ).toBe(false)
   })
 
   it('finds the tab under a worktree other than the one it was opened in', () => {

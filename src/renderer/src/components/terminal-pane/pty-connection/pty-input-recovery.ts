@@ -118,7 +118,8 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
         useAppStore.getState(),
         session.deps.worktreeId,
         session.deps.tabId,
-        session.pane.leafId
+        session.pane.leafId,
+        session.executionHostId
       ),
     ...(session.mainSideEffectAuthority
       ? {}
