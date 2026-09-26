@@ -73,7 +73,7 @@ describe('agentDotState', () => {
   })
 
   // The shared accessor cannot be imported by app code here, so this mirror must not drift from it.
-  it('agrees with the desktop verdict accessor on every row shape', () => {
+  it('agrees with the desktop verdict accessor on every row', () => {
     const states = ['working', 'blocked', 'waiting', 'done'] as const
     const mainAgents = [
       undefined,
@@ -88,10 +88,12 @@ describe('agentDotState', () => {
     for (const state of states) {
       for (const mainAgent of mainAgents) {
         for (const interrupted of [false, true]) {
-          const shape = { state, interrupted, ...(mainAgent ? { mainAgent } : {}) }
-          expect(agentRowVerdict(shape), JSON.stringify(shape)).toBe(agentMainAgentVerdict(shape))
-          expect(agentRowVerdictMark(shape), JSON.stringify(shape)).toBe(
-            agentVerdictDisplayMark(shape)
+          const agentRow = { state, interrupted, ...(mainAgent ? { mainAgent } : {}) }
+          expect(agentRowVerdict(agentRow), JSON.stringify(agentRow)).toBe(
+            agentMainAgentVerdict(agentRow)
+          )
+          expect(agentRowVerdictMark(agentRow), JSON.stringify(agentRow)).toBe(
+            agentVerdictDisplayMark(agentRow)
           )
         }
       }
