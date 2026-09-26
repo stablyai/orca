@@ -72,12 +72,6 @@ export async function prepareRuntimePtySpawn(
   if (freshSpawnRecovery) {
     await freshSpawnRecovery
   }
-  const pinnedClaudeAccountId = resolveRuntimeSpawnClaudeAccount(ctx)
-  ctx.isClaudeLaunch = isRuntimeClaudeLaunch(ctx, pinnedClaudeAccountId)
-  // Why exempt: a switch never touches a pinned account; preparation re-reads it in the switch's queue.
-  if (ctx.isClaudeLaunch && !pinnedClaudeAccountId && isClaudeAuthSwitchInProgress()) {
-    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
-  }
   // Why: runtime-created terminals carry no renderer-computed projectRuntime; resolve from worktreeId to honor the project's Windows runtime.
   // `args.shellOverride` is the per-request pick (`terminal create --shell`), read here the way
   // the renderer twin (ipc/spawn-preflight.ts) reads a tab's override. Without it a runtime create
@@ -135,6 +129,12 @@ export async function prepareRuntimePtySpawn(
     ctx.cwd,
     ctx.expectedWslDistro
   )
+  const pinnedClaudeAccountId = resolveRuntimeSpawnClaudeAccount(ctx)
+  ctx.isClaudeLaunch = isRuntimeClaudeLaunch(ctx, pinnedClaudeAccountId)
+  // Why exempt: a switch never touches a pinned account; preparation re-reads it in the switch's queue.
+  if (ctx.isClaudeLaunch && !pinnedClaudeAccountId && isClaudeAuthSwitchInProgress()) {
+    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
+  }
   const codexResumePreparation = ctx.preAdoptedStablePane
     ? null
     : ctx.deps.prepareCodexResumeHome({

@@ -10,8 +10,8 @@ import type { RuntimePtySpawnState } from './spawn-state'
 /**
  * The `--account` a fresh runtime spawn must run on, refused where a pinned launch cannot run.
  * With no explicit `--account`, falls back to the launch config's recorded choice, then the
- * project's saved default; that fallback never throws, since it never applies to SSH or non-Claude
- * launches.
+ * project's saved default; that fallback never throws, since it never applies to SSH, WSL or
+ * non-Claude launches. Call after `ctx.codexSelectionTarget` is set.
  */
 export function resolveRuntimeSpawnClaudeAccount(ctx: RuntimePtySpawnState): string | undefined {
   if (ctx.preAdoptedStablePane) {
@@ -38,7 +38,8 @@ export function resolveRuntimeSpawnClaudeAccount(ctx: RuntimePtySpawnState): str
   return resolveProjectClaudeAccount({
     getRepo: (repoId) => ctx.deps.store?.getRepo?.(repoId),
     worktreeId: ctx.args.worktreeId,
-    launchConfigAccountId: ctx.args.launchConfigClaudeAccountId
+    launchConfigAccountId: ctx.args.launchConfigClaudeAccountId,
+    target: ctx.codexSelectionTarget
   })
 }
 

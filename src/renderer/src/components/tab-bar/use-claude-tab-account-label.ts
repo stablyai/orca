@@ -5,6 +5,7 @@ import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-acc
 import { claudeTabAccountLabel } from '@/lib/claude-tab-account-label'
 import { findLaunchRepo } from '@/lib/claude-launch-account'
 import { fetchProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
 import { useAppStore } from '../../store'
 
 /**
@@ -26,9 +27,7 @@ export function useClaudeTabAccountLabel(tab: TerminalTab): {
   const launchConfig = useAppStore((s) =>
     paneKey ? s.agentLaunchConfigByPaneKey?.[paneKey]?.launchConfig : undefined
   )
-  const isSshRepo = useAppStore((s) =>
-    Boolean(findLaunchRepo(s, { worktreeId: tab.worktreeId })?.connectionId)
-  )
+  const repo = useAppStore((s) => findLaunchRepo(s, { worktreeId: tab.worktreeId }))
   const settings = useAppStore((s) => s.settings)
 
   const [accounts, setAccounts] = useState<ClaudeManagedAccountSummary[]>([])
@@ -40,17 +39,19 @@ export function useClaudeTabAccountLabel(tab: TerminalTab): {
         return
       }
       fetchedRef.current = true
-      fetchProviderAccountsSnapshot(settings)
+      fetchProviderAccountsSnapshot(getRepoOwnerRoutedSettings(settings, repo))
         .then((snapshot) => setAccounts(snapshot.claude.accounts))
         .catch(() => {
           fetchedRef.current = false
         })
     },
-    [settings]
+    [settings, repo]
   )
 
   return {
-    label: claudeTabAccountLabel({ statusAccountId, launchConfig }, accounts, { isSshRepo }),
+    label: claudeTabAccountLabel({ statusAccountId, launchConfig }, accounts, {
+      isSshRepo: Boolean(repo?.connectionId)
+    }),
     onTooltipOpenChange
   }
 }

@@ -32,6 +32,25 @@ describe('resolveProjectClaudeAccount', () => {
     ).toBeUndefined()
   })
 
+  it('keeps an explicit active sentinel off the project account', () => {
+    const getRepo = () => repo({ claude: { mode: 'account', accountId: 'saved' } })
+    expect(
+      resolveProjectClaudeAccount({ getRepo, worktreeId, explicitAccountId: ACTIVE_CLAUDE_ACCOUNT })
+    ).toBeUndefined()
+  })
+
+  it('applies only an explicit account to a WSL terminal', () => {
+    const getRepo = () => repo({ claude: { mode: 'account', accountId: 'saved' } })
+    const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
+    expect(resolveProjectClaudeAccount({ getRepo, worktreeId, target })).toBeUndefined()
+    expect(
+      resolveProjectClaudeAccount({ getRepo, worktreeId, target, launchConfigAccountId: 'resume' })
+    ).toBeUndefined()
+    expect(
+      resolveProjectClaudeAccount({ getRepo, worktreeId, target, explicitAccountId: 'cli' })
+    ).toBe('cli')
+  })
+
   it('returns nothing for ask, no preference, or unknown repos', () => {
     expect(
       resolveProjectClaudeAccount({ getRepo: () => repo({ claude: { mode: 'ask' } }), worktreeId })
