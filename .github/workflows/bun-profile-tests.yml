@@ -40,6 +40,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: ${{ runner.os == 'Windows' && 'node' || 'none' }}
       - name: Build the native Windows process reader
         if: runner.os == 'Windows'
         run: node config/scripts/build-windows-process-tree-relay-addon.mjs
