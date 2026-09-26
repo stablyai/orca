@@ -6,7 +6,14 @@
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
 
-export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
+export const MOBILE_GROUP_MODES = [
+  'none',
+  'workspaceStatus',
+  'repo',
+  'projectGroup',
+  'prStatus'
+] as const
+export type MobileGroupMode = (typeof MOBILE_GROUP_MODES)[number]
 // Desktop sort adds 'manual'; mobile renders it but sorts by server order.
 export type MobileSortMode = 'smart' | 'name' | 'recent' | 'repo' | 'manual'
 
@@ -26,7 +33,9 @@ const GROUP_TO_DESKTOP: Record<MobileGroupMode, NonNullable<WorkspaceViewSetting
   none: 'none',
   workspaceStatus: 'workspace-status',
   repo: 'repo',
-  prStatus: 'pr-status'
+  prStatus: 'pr-status',
+  // Desktop has no separate enum: groupBy 'repo' already nests project groups.
+  projectGroup: 'repo'
 }
 
 const GROUP_FROM_DESKTOP: Record<NonNullable<WorkspaceViewSettings['groupBy']>, MobileGroupMode> = {
@@ -116,7 +125,13 @@ export function applyDesktopViewSettings(
   current: MobileViewState,
   settings: WorkspaceViewSettings
 ): MobileViewState {
-  const groupMode = groupModeFromDesktop(settings.groupBy)
+  const mappedGroupMode = groupModeFromDesktop(settings.groupBy)
+  // Why: desktop `repo` is both mobile Repository and Project Group; keep the
+  // more specific phone mode so a Project Group choice survives ui.get.
+  const groupMode =
+    mappedGroupMode === 'repo' && current.groupMode === 'projectGroup'
+      ? 'projectGroup'
+      : mappedGroupMode
   const sortMode = sortModeFromDesktop(settings.sortBy)
   // Why: a partially hydrated desktop settings payload may carry an empty
   // status catalog; mobile must keep renderable groups instead of hiding rows.

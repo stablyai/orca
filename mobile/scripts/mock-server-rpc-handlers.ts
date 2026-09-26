@@ -165,6 +165,10 @@ export function handleRequest(
       respond(success(request.id, { repos: FAKE_REPOS }))
       break
 
+    case 'projectGroup.list':
+      respond(success(request.id, { groups: [] }))
+      break
+
     case 'settings.get':
       respond(
         success(request.id, {

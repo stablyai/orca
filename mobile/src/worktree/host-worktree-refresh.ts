@@ -11,12 +11,14 @@ type HostWorktreeRefreshArgs = {
   client: RpcClient
   fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<void>
   fetchRepoMetadata: (options?: RepoRefreshOptions) => Promise<void>
+  fetchProjectGroups?: (options?: RepoRefreshOptions) => Promise<void>
 }
 
 export function startHostWorktreeRefresh({
   client,
   fetchWorktrees,
-  fetchRepoMetadata
+  fetchRepoMetadata,
+  fetchProjectGroups
 }: HostWorktreeRefreshArgs): () => void {
   let stale = false
   let eventStreamReady = false
@@ -27,6 +29,7 @@ export function startHostWorktreeRefresh({
     }
     void fetchWorktrees({ allowDuringModal: true })
     void fetchRepoMetadata({ queueIfInFlight: true })
+    void fetchProjectGroups?.({ queueIfInFlight: true })
   }
 
   const appStateSubscription = AppState.addEventListener('change', (state) => {
@@ -45,6 +48,7 @@ export function startHostWorktreeRefresh({
     // (60s), so this is ~1 request/min while foregrounded — the AppState gate is what removes
     // the waste (both stop while backgrounded).
     void fetchRepoMetadata()
+    void fetchProjectGroups?.()
   }, WORKTREE_REFRESH_MS)
   const unsubscribe = client.subscribe(
     'runtime.clientEvents.subscribe',
@@ -61,6 +65,7 @@ export function startHostWorktreeRefresh({
           // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
           void fetchWorktrees()
           void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+          void fetchProjectGroups?.({ force: true, queueIfInFlight: true })
         }
         return
       }
@@ -72,6 +77,7 @@ export function startHostWorktreeRefresh({
         // Why: folder workspace mutations publish reposChanged, and worktree.ps owns this catalog.
         void fetchWorktrees()
         void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+        void fetchProjectGroups?.({ force: true, queueIfInFlight: true })
       } else if (event.type === 'worktreesChanged') {
         void fetchWorktrees()
       }
@@ -80,6 +86,7 @@ export function startHostWorktreeRefresh({
 
   void fetchWorktrees()
   void fetchRepoMetadata({ force: true, queueIfInFlight: true })
+  void fetchProjectGroups?.({ force: true, queueIfInFlight: true })
 
   return () => {
     stale = true

@@ -18,5 +18,10 @@ export const WORKSPACE_GROUP_OPTIONS: PickerOption<MobileGroupMode>[] = [
   { value: 'none', label: 'No Grouping' },
   { value: 'workspaceStatus', label: 'Status' },
   { value: 'repo', label: 'Repository' },
+  {
+    value: 'projectGroup',
+    label: 'Project Group',
+    subtitle: 'Desktop sidebar groups, then repositories'
+  },
   { value: 'prStatus', label: 'PR Status' }
 ]
