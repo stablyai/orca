@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Pressable, Text, TextInput, View } from 'react-native'
 import { Check, Copy, FileText, Plus, Send, Trash2, X } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { colors } from '../theme/mobile-theme'
@@ -10,6 +10,7 @@ import { ConfirmModal } from './ConfirmModal'
 import { mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { hostOs } from '../platform/host-os'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
@@ -164,7 +165,7 @@ function NoteComposerDrawer({ controller }: Props) {
   const composer = controller.composer
   return (
     <BottomDrawer visible={composer !== null} onClose={controller.closeComposer}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView behavior={hostOs() === 'ios' ? 'padding' : undefined}>
         <View style={styles.composerHeader}>
           <View>
             <Text style={styles.drawerTitle}>

@@ -19,6 +19,7 @@ import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
 import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
 import type { HostProfile } from '../../../src/transport/types'
+import { hostOs } from '../../../src/platform/host-os'
 
 export default function EditHostScreen() {
   const router = useRouter()
@@ -181,7 +182,7 @@ export default function EditHostScreen() {
       ) : (
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={hostOs() === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
             contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + spacing.xl }]}

@@ -1,13 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import {
-  ActivityIndicator,
-  Linking,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View
-} from 'react-native'
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useNavigation, useRouter } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
@@ -42,6 +34,7 @@ import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
 import { shellKeyboardGeometry } from './page-keyboard-inset'
+import { hostOs } from '../platform/host-os'
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
   switch (reason) {
@@ -212,7 +205,7 @@ export function MobileWebShellScreen({
   const { keyboardInset, viewShortenedBy } = shellKeyboardGeometry({
     keyboardHeight: useKeyboardOcclusion(),
     bottomInset: insets.bottom,
-    platform: Platform.OS,
+    platform: hostOs(),
     pageReadsKeyboardInset
   })
   const pageInsets = pageSafeAreaInsets({

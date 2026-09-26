@@ -7,8 +7,8 @@ import { join } from 'node:path'
  * checkable here is that the view installs the fix, and the simulator proof measures its effect.
  *
  * iPhone 17 simulator, measured: WKWebView's form accessory bar (up, down, done) rides on the
- * keyboard, and the keyboard event's height counts it, so the page's dock lifted 379 pt against
- * native's 277 and stood 52 pt above the bar.
+ * keyboard, and the keyboard event's height counts it, so the page's terminal lifted 376 pt against
+ * native's 274 and its dock stood 52 pt above the bar.
  */
 const SHELL = join(import.meta.dirname, '..', '..', 'modules', 'orca-mobile-web-shell', 'ios')
 

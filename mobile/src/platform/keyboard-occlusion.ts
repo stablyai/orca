@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Keyboard, Platform } from 'react-native'
+import { Keyboard } from 'react-native'
+import { hostOs } from './host-os'
 
 /** How much of the bottom of the layout viewport it covers, and whether it is open at all. */
 export type SoftKeyboardState = { readonly height: number; readonly visible: boolean }
@@ -44,8 +45,8 @@ export function subscribeSoftKeyboard(
   onShow: (height: number, duration: number) => void,
   onHide: (duration: number) => void
 ): () => void {
-  const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-  const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+  const showEvent = hostOs() === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+  const hideEvent = hostOs() === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
   const show = Keyboard.addListener(showEvent, (event) =>
     onShow(event.endCoordinates.height, event.duration)
   )

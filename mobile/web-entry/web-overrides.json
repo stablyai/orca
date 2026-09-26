@@ -30,6 +30,10 @@
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
     {
+      "file": "src/platform/host-os.web.ts",
+      "reason": "Platform.OS is web inside the shell's page, but the keyboard the page lifts over is the phone's, reported in that OS's own terms: iOS counts the home indicator. Keyboard and inset arithmetic branches on the host OS, so this answers the phone's OS from the WebView's user agent, and the page computes what the native screen computes."
+    },
+    {
       "file": "app/_layout.web.tsx",
       "reason": "The page's route tree starts at app/h, so without a root layout expo-router mounts DefaultNavigator, an all-edges SafeAreaView that would pad every screen a second time. The native root owns pairing and push and cannot reach the page. This one adds no padding and feeds the insets the shell sent in init to react-native-safe-area-context, whose web provider reads env(safe-area-inset-*) as 0 in both WebViews."
     },
