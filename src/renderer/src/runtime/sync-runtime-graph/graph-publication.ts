@@ -82,6 +82,8 @@ export async function syncRuntimeGraph(): Promise<void> {
       tabId: registeredTab.tabId,
       worktreeId: registeredTab.worktreeId,
       title: resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled),
+      // Why: mirrors the persisted rename so main's projection can survive a restart without the tab being mounted.
+      customTitle: tab.customTitle ?? null,
       activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root)
     })
@@ -156,6 +158,7 @@ export async function syncRuntimeGraph(): Promise<void> {
         tabId: tab.id,
         worktreeId,
         title,
+        customTitle: tab.customTitle ?? null,
         activeLeafId:
           savedActiveLeafId && publishedLeafIds.has(savedActiveLeafId)
             ? savedActiveLeafId

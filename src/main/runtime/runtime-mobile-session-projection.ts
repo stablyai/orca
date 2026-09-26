@@ -173,11 +173,17 @@ export function projectRuntimeMobileSessionTabs(
     const ownerAgent =
       ownerRecord?.agent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
     const ownerOptions = { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
-    const title = normalizeCompatibleAgentTitleForOwner(
-      trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
-      ownerAgent,
-      ownerOptions
-    )
+    // Why: a persisted manual rename outranks every OSC/agent observation; without
+    // this the fresh leaf title masks the rename after a browser reload (#serve).
+    // Raw, never normalized — the user typed exactly this.
+    const persistedCustomTitle = tab.customTitle ?? syncedTab?.customTitle ?? null
+    const title =
+      persistedCustomTitle ??
+      normalizeCompatibleAgentTitleForOwner(
+        trackerOnlyTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
+        ownerAgent,
+        ownerOptions
+      )
     const liveTitleEvidence = leafTitle ?? ptyTitle
     // Why: renderer status can precede hook session identity, leaving native chat with no transcript address.
     const rendererStatusAgent =
@@ -290,6 +296,7 @@ export function projectRuntimeMobileSessionTabs(
       leafId: tab.leafId,
       title,
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
+      ...(persistedCustomTitle ? { customTitle: persistedCustomTitle } : {}),
       ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...clientAgentStatus,
