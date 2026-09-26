@@ -1,5 +1,14 @@
 /** Per-command flag help, kept out of the shared help chain it would crowd. */
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'agent-context': {
+    command: '--command <path>      Return one exact canonical command or alias',
+    compact: '--compact             Emit single-line JSON',
+    full: '--full                Expand --prefix/--search matches to full definitions',
+    limit: '--limit <n>            Limit --search results (default 20, max 50)',
+    prefix: '--prefix <path>       Match canonical or alias path tokens',
+    roots: '--roots               List canonical command roots and counts',
+    search: '--search <terms>      Search command metadata using AND terms'
+  },
   'skills get': {
     full: '--full                 Print the full guide with bundled references',
     reference: '--reference <name>     Print one bundled reference by name',
