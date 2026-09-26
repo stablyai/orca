@@ -41,12 +41,14 @@ export function useWorktreeSidebarScrollSuppression(
   const suppressMeasurementAdjustmentUntilRef = useRef(0)
   const directScrollInputUntilRef = useRef(0)
   const pendingRevealScrollRef = useRef<PendingRevealScroll | null>(null)
+  const revealInterruptedRef = useRef(false)
 
   const markScrollMovement = useCallback(() => {
     suppressMeasurementAdjustmentUntilRef.current =
       window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
   }, [])
   const markDirectScrollInput = useCallback(() => {
+    revealInterruptedRef.current = true
     const suppressUntil = window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
     suppressMeasurementAdjustmentUntilRef.current = suppressUntil
     directScrollInputUntilRef.current = suppressUntil
@@ -56,6 +58,7 @@ export function useWorktreeSidebarScrollSuppression(
     []
   )
   const markRevealScroll = useCallback((targetTop: number) => {
+    revealInterruptedRef.current = false
     pendingRevealScrollRef.current = createPendingRevealScroll(targetTop, window.performance.now())
   }, [])
   const isRevealScrollSettlingNow = useCallback(() => {
@@ -69,6 +72,7 @@ export function useWorktreeSidebarScrollSuppression(
     }
     return settling
   }, [scrollRef])
+  const wasRevealScrollInterrupted = useCallback(() => revealInterruptedRef.current, [])
   // Why: programmatic scrolls keep measurement correction quiet, but only direct input blocks anchor-restore retries.
   // A reveal's smooth scroll is the exception: restoring the anchor mid-animation cancels it a few pixels in.
   const shouldSkipScrollAnchorRestore = useCallback(
@@ -96,6 +100,8 @@ export function useWorktreeSidebarScrollSuppression(
     markDirectScrollInput,
     hasDirectScrollInput,
     markRevealScroll,
+    isRevealScrollSettling: isRevealScrollSettlingNow,
+    wasRevealScrollInterrupted,
     shouldSkipScrollAnchorRestore
   }
 }

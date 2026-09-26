@@ -83,7 +83,8 @@ export function useLineageVirtualizer(args: {
   }, [measuredHeights, scrollRef, tree, virtualizer])
 
   const virtualItems = virtualizer.getVirtualItems()
-  useLayoutEffect(measureRows, [measureRows, groupStart, virtualItems])
+  // Reveal and interaction retention can mount rows without changing the virtual range.
+  useLayoutEffect(measureRows)
   useLayoutEffect(() => {
     const container = childrenRef.current
     if (!container) {
@@ -95,7 +96,7 @@ export function useLineageVirtualizer(args: {
       observer.observe(element)
     }
     return () => observer.disconnect()
-  }, [measureRows, virtualItems])
+  })
 
   return { childrenRef, virtualItems, measurements }
 }

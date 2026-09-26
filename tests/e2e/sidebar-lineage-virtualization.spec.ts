@@ -3,6 +3,7 @@ import { test, expect } from './helpers/orca-app'
 import { seedWorkspaceAgentStatus } from './worktree-lineage-state'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { worktreeRow } from './worktree-row-locators'
+import { seedVirtualLineage } from './sidebar-lineage-virtualization-state'
 
 for (const newCardStyle of [false, true]) {
   test(`virtualizes 500 lineage children with ${newCardStyle ? 'new' : 'legacy'} card surfaces`, async ({
@@ -10,75 +11,7 @@ for (const newCardStyle of [false, true]) {
   }, testInfo) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
-    const { parentId, targetId } = await orcaPage.evaluate((newCardStyle) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('Store unavailable')
-      }
-      const state = store.getState()
-      const worktrees = Object.values(state.worktreesByRepo).flat()
-      const parent = worktrees[0]
-      const template = worktrees[1]
-      if (!parent?.instanceId || !template) {
-        throw new Error('Lineage fixtures unavailable')
-      }
-      state.setActiveView('terminal')
-      state.setSidebarOpen(true)
-      state.setGroupBy('none')
-      state.setSortBy('manual')
-      state.setShowActiveOnly(false)
-      state.setShowSleepingWorkspaces(true)
-      state.setHideDefaultBranchWorkspace(false)
-      state.setFilterRepoIds([])
-      state.setWorktreeCardProperties(['status', 'branch', 'inline-agents'])
-      const children = Array.from({ length: 500 }, (_, index) => {
-        const id = `e2e-virtual-child-${index}`
-        const instanceId = `e2e-virtual-instance-${index}`
-        const nestedParent = index === 400 || index === 401 ? index - 1 : null
-        const parentWorktreeId =
-          nestedParent === null ? parent.id : `e2e-virtual-child-${nestedParent}`
-        const parentInstanceId =
-          nestedParent === null ? parent.instanceId : `e2e-virtual-instance-${nestedParent}`
-        return {
-          ...template,
-          id,
-          instanceId,
-          repoId: parent.repoId,
-          hostId: parent.hostId,
-          displayName: `Virtual child ${index}`,
-          isPinned: false,
-          isMainWorktree: false,
-          sortOrder: 500 - index,
-          parentWorktreeId,
-          childWorktreeIds: [],
-          lineage: {
-            worktreeId: id,
-            worktreeInstanceId: instanceId,
-            parentWorktreeId,
-            parentWorktreeInstanceId: parentInstanceId,
-            origin: 'manual' as const,
-            capture: { source: 'manual-action' as const, confidence: 'explicit' as const },
-            createdAt: 1
-          }
-        }
-      })
-      store.setState((current) => ({
-        settings: current.settings
-          ? { ...current.settings, experimentalNewWorktreeCardStyle: newCardStyle }
-          : current.settings,
-        worktreesByRepo: {
-          [parent.repoId]: [
-            { ...parent, displayName: 'Virtual lineage parent', isPinned: false, sortOrder: 0 },
-            ...children
-          ]
-        },
-        worktreeLineageById: Object.fromEntries(children.map((child) => [child.id, child.lineage])),
-        collapsedGroups: new Set(),
-        agentActivityDisplayMode: 'full'
-      }))
-      store.getState().setActiveWorktree(parent.id)
-      return { parentId: parent.id, targetId: children[400]!.id }
-    }, newCardStyle)
+    const { parentId, targetId } = await seedVirtualLineage(orcaPage, newCardStyle)
 
     const childCards = orcaPage.locator('[data-lineage-virtual-item]')
     await expect(worktreeRow(orcaPage, 'e2e-virtual-child-0')).toBeVisible()
@@ -127,11 +60,20 @@ for (const newCardStyle of [false, true]) {
       contentType: 'application/json'
     })
 
-    const targetTop = (await worktreeRow(orcaPage, targetId).boundingBox())!.y
-    const above = worktreeRow(orcaPage, 'e2e-virtual-child-390')
-    const previousHeight = (await above.boundingBox())!.height
+    // Nearest-edge reveal may land at the bottom; anchor growth requires an above-fold row.
+    await worktreeRow(orcaPage, targetId).evaluate((element) => {
+      const scroller = element.closest<HTMLElement>('[data-worktree-sidebar]')!
+      scroller.scrollTop +=
+        element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 40
+    })
     // The existing sidebar policy suppresses corrections for 500 ms after scroll movement.
     await orcaPage.waitForTimeout(650)
+    const targetTop = (await worktreeRow(orcaPage, targetId).boundingBox())!.y
+    const above = worktreeRow(orcaPage, 'e2e-virtual-child-390')
+    const aboveBounds = (await above.boundingBox())!
+    const previousHeight = aboveBounds.height
+    const sidebarTop = (await orcaPage.locator('[data-worktree-sidebar]').boundingBox())!.y
+    expect(aboveBounds.y + aboveBounds.height).toBeLessThanOrEqual(sidebarTop)
     await seedWorkspaceAgentStatus(orcaPage, 'e2e-virtual-child-390', 'HEIGHT')
     await expect
       .poll(async () => (await above.boundingBox())?.height ?? 0)

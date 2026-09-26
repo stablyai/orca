@@ -117,8 +117,10 @@ export function useVirtualRowMeasurementSync(args: {
     getRowKey: getRenderRowKey,
     itemElementSelector: '[data-worktree-virtual-row]',
     rekeyedRowKeys: lineageRowRekeys,
-    // Measurement corrections belong to the virtualizers, including descendants inside a lineage.
-    restoreSignal: rowOrderSignal,
+    // Only lineage anchors delegate within-group measurement corrections to descendants.
+    restoreSignal: scrollAnchorRef.current?.key.startsWith('lineage-group:')
+      ? rowOrderSignal
+      : undefined,
     rows: renderRows,
     scrollElementRef: scrollRef,
     scrollOffsetRef,

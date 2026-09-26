@@ -8,6 +8,9 @@ import { VirtualizedLineageDescendants } from './VirtualizedLineageDescendants'
 import { clearWorktreeAgentExpansionStateForTests } from '../../worktree-card-agents-expansion-state'
 
 const windowState = vi.hoisted(() => ({ start: 0, count: 20 }))
+const storeState = vi.hoisted<{
+  renamingWorktreeId: { worktreeId: string; rowKey?: string } | null
+}>(() => ({ renamingWorktreeId: null }))
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
     getVirtualItems: () =>
@@ -20,7 +23,7 @@ vi.mock('@tanstack/react-virtual', () => ({
   })
 }))
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) => selector({ renamingWorktreeId: null })
+  useAppStore: (selector: (state: typeof storeState) => unknown) => selector(storeState)
 }))
 vi.mock('../../WorktreeCard', async () => {
   const { useWorktreeAgentExpansionState } =
@@ -55,6 +58,7 @@ vi.mock('../../WorktreeCard', async () => {
 let container: HTMLDivElement
 let root: Root
 beforeEach(() => {
+  storeState.renamingWorktreeId = null
   windowState.start = 0
   windowState.count = 20
   clearWorktreeAgentExpansionStateForTests()
@@ -195,4 +199,41 @@ describe('lineage card virtualization', () => {
     await renderRows([rows[0]!, { ...rows[1]!, lineageCollapsed: true }, rows[3]!])
     expect(mountedIds()).toEqual(['parent', 'next'])
   })
+
+  it('retains active and renamed rows by host and row identity outside the window', async () => {
+    const rows = wideRows()
+    rows[401]!.worktree.hostId = 'ssh:remote'
+    rows[402]!.worktree = { ...rows[402]!.worktree, id: 'child-400', hostId: 'local' }
+    const ctx = lineageContext()
+    ctx.activeWorktreeId = 'child-400'
+    await renderRows(rows, ctx)
+    expect(container.querySelector('[data-lineage-virtual-item="all:|child-400"]')).toBeNull()
+    expect(container.querySelector('[data-lineage-virtual-item="all:|child-401"]')).not.toBeNull()
+
+    storeState.renamingWorktreeId = { worktreeId: 'child-400', rowKey: 'all:|child-400' }
+    await renderRows(rows, ctx)
+    expect(container.querySelector('[data-lineage-virtual-item="all:|child-400"]')).not.toBeNull()
+    expect(mountedIds()).toHaveLength(22)
+    storeState.renamingWorktreeId = null
+    ctx.activeWorktreeId = 'root'
+    await renderRows(rows, ctx)
+    expect(mountedIds()).toHaveLength(20)
+  })
+
+  it.each(['focusin', 'contextmenu'])(
+    'keeps the %s owner mounted while scrolling through descendants',
+    async (eventName) => {
+      const rows = wideRows()
+      await renderRows(rows)
+      await act(async () => {
+        container
+          .querySelector('[data-mounted-card="child-0"] button')!
+          .dispatchEvent(new Event(eventName, { bubbles: true }))
+      })
+      windowState.start = 240
+      await renderRows(rows)
+      expect(mountedIds()).toContain('child-0')
+      expect(mountedIds()).toHaveLength(21)
+    }
+  )
 })
