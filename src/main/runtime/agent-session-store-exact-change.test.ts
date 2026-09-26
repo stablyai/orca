@@ -209,6 +209,22 @@ describe('what a transaction writes is exactly what a load reads back', () => {
     expect(reopened.isSessionUnreadable('session-alpha')).toBe(false)
     expect(reopened.getRecord('session-alpha')?.lease.provenHandleLinkId).toBe('link-session-alpha')
   })
+
+  it('checks a row as written, so a member JSON drops cannot refuse the write', async () => {
+    const store = await openStore()
+    await makeLive(store, 'session-alpha')
+    const options: Record<string, string> = { model: 'gpt-5' }
+    // Enumerable but undefined: an in-memory check sees it, the written file has no such key.
+    Object.defineProperty(options, 'effort', { value: undefined, enumerable: true })
+    const fence = store.getRecord('session-alpha')?.lease.runtimeFence ?? -1
+
+    await store.replaceSessionOptions({ sessionId: 'session-alpha', fence, options, now: NOW })
+
+    const reopened = await openStore()
+    expect(reopened.isSessionUnreadable('session-alpha')).toBe(false)
+    expect(reopened.getRecord('session-alpha')?.options).toStrictEqual({ model: 'gpt-5' })
+    expect(await diskRoundTrips()).toBe(true)
+  })
 })
 
 describe('changes another writer made', () => {
@@ -274,9 +290,14 @@ describe('a primary whose rows were salvaged from the backup', () => {
     const store = await openStore()
     await store.setConversationName('session-alpha', 'salvaged')
     await copyFile(storePath, `${storePath}.bak`)
+    const parse = vi.spyOn(JSON, 'parse')
 
     await store.setSessionTabVisibility('session-beta', false)
 
+    // Its own write is the exact primary again, so the refresh no longer re-reads either file.
+    const storeParses = parse.mock.calls.filter(([text]) => text.includes('"records"')).length
+    parse.mockRestore()
+    expect(storeParses).toBe(0)
     expect(store.getRecord('session-alpha')?.conversationName).toBe('salvaged')
     expect((await openStore()).getRecord('session-alpha')?.conversationName).toBe('salvaged')
   })

@@ -77,10 +77,16 @@ export function agentSessionStoreDraftChanges(
   }
 }
 
+/** A row as a load parses it back: JSON drops `undefined` members that an in-memory check sees. */
+function asWritten(row: unknown): unknown {
+  const text = JSON.stringify(row)
+  return text === undefined ? undefined : JSON.parse(text)
+}
+
 /**
  * Rejects a draft holding a changed row that a load would refuse. Loads skip the bytes this build
  * wrote, so a row that fails here would otherwise live in memory while every other reader of the
- * file quarantines it.
+ * file quarantines it. Each row is checked as written, so this refuses exactly what a load would.
  */
 export function assertAgentSessionStoreDraftReadable(
   draft: AgentSessionStoreState,
@@ -88,16 +94,18 @@ export function assertAgentSessionStoreDraftReadable(
 ): void {
   const readable =
     changes.records.every((sessionId) =>
-      isReadableAgentSessionStoreRecord(sessionId, draft.records.get(sessionId))
+      isReadableAgentSessionStoreRecord(sessionId, asWritten(draft.records.get(sessionId)))
     ) &&
     changes.operations.every((key) =>
-      isReadableAgentSessionStoreOperation(key, draft.operations.get(key))
+      isReadableAgentSessionStoreOperation(key, asWritten(draft.operations.get(key)))
     ) &&
     changes.unreadableRecords.every((sessionId) =>
-      isReadableAgentSessionStoreUnusableRecord(draft.unreadableRecords.get(sessionId))
+      isReadableAgentSessionStoreUnusableRecord(asWritten(draft.unreadableRecords.get(sessionId)))
     ) &&
     (!changes.retiredClaimKeys ||
-      draft.retiredClaimKeys.every(isReadableRetiredAgentSessionClaimKey)) &&
+      draft.retiredClaimKeys.every((entry) =>
+        isReadableRetiredAgentSessionClaimKey(asWritten(entry))
+      )) &&
     (!changes.sessionTabs ||
       (draft.sessionTabs?.entries() ?? []).every(([tabId, sessionId]) =>
         isReadableAgentSessionStoreTab({ tabId, sessionId })
