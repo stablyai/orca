@@ -18,7 +18,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import {
   NativeChatSkill,
   promptTextContent,
-  promptTextMap,
+  getPromptTextMap,
   promptTextOffset
 } from './native-chat-prompt-document'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
@@ -105,11 +105,7 @@ export function NativeChatPromptEditor({
       },
       onTransaction: ({ editor: current, transaction }) => {
         if (scopeKey && transaction.docChanged) {
-          writeNativeChatDraftDocument(
-            scopeKey,
-            promptTextMap(current.state.doc).text,
-            current.getJSON()
-          )
+          writeNativeChatDraftDocument(scopeKey, getPromptTextMap(current).text, current.getJSON())
         }
       },
       onUpdate: () => {
@@ -135,10 +131,10 @@ export function NativeChatPromptEditor({
       editor
         ? {
             get value() {
-              return promptTextMap(editor.state.doc).text
+              return getPromptTextMap(editor).text
             },
             set value(value: string) {
-              const old = promptTextMap(editor.state.doc)
+              const old = getPromptTextMap(editor)
               if (old.text === value) {
                 return
               }
@@ -192,10 +188,10 @@ export function NativeChatPromptEditor({
               editor.setEditable(!value)
             },
             get selectionStart() {
-              return promptTextOffset(editor.state.doc, editor.state.selection.from)
+              return promptTextOffset(editor, editor.state.selection.from)
             },
             get selectionEnd() {
-              return promptTextOffset(editor.state.doc, editor.state.selection.to)
+              return promptTextOffset(editor, editor.state.selection.to)
             },
             focus: () => {
               editor.view.dom.focus()
@@ -205,14 +201,14 @@ export function NativeChatPromptEditor({
               editor.commands.selectAll()
             },
             setSelectionRange: (from, to) => {
-              const { positions } = promptTextMap(editor.state.doc)
+              const { positions } = getPromptTextMap(editor)
               editor.commands.setTextSelection({
                 from: positions[Math.min(from ?? 0, positions.length - 1)],
                 to: positions[Math.min(to ?? 0, positions.length - 1)]
               })
             },
             insertSkill: (from, to, token) => {
-              const { positions } = promptTextMap(editor.state.doc)
+              const { positions } = getPromptTextMap(editor)
               editor.view.dispatch(closeHistory(editor.state.tr))
               editor
                 .chain()
