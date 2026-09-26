@@ -14,7 +14,7 @@ import { useAgentRowConversationName } from '@/components/dashboard/use-agent-ro
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
-import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -29,11 +29,11 @@ export function getCompactAgentSecondary(
   now: number,
   lastAssistantMessageOverride?: string
 ): string {
-  const verdict = agentMainAgentVerdict(agent.entry)
-  if (verdict === 'cancellation') {
+  const verdictMark = agentVerdictDisplayMark(agent.entry)
+  if (verdictMark === 'interrupted') {
     return 'Interrupted by user'
   }
-  if (verdict === 'failure') {
+  if (verdictMark === 'failed') {
     return 'Failed'
   }
   // Why: the only honest thing to say about a pane Orca still holds but no longer hears

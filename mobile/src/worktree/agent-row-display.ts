@@ -20,15 +20,24 @@ export type AgentDotState =
   | 'interrupted'
   | 'failed'
 
-// Mirrors desktop agentMainAgentVerdict (src/shared/agent-main-agent-verdict.ts) for the row's
-// two fidelities; a desktop parity test runs both over one table. An old host sends no `outcome`.
+// Mirrors desktop agentMainAgentVerdict and agentVerdictDisplayMark
+// (src/shared/agent-main-agent-verdict.ts); a parity test runs both over one table. `outcome` is the
+// main agent's own verdict, sent also while subagents hold the row working; an old host sends none.
 export function agentRowVerdict(
   row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'outcome'>
 ): AgentJournalTurnOutcome | null {
-  if (row.state !== 'done') {
-    return null
+  return row.outcome ?? (row.state === 'done' && row.interrupted ? 'cancellation' : null)
+}
+
+// A failure outranks every state; a stop marks only a row that is itself done.
+export function agentRowVerdictMark(
+  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'outcome'>
+): 'failed' | 'interrupted' | null {
+  const verdict = agentRowVerdict(row)
+  if (verdict === 'failure') {
+    return 'failed'
   }
-  return row.outcome ?? (row.interrupted ? 'cancellation' : null)
+  return verdict === 'cancellation' && row.state === 'done' ? 'interrupted' : null
 }
 
 export function agentDotState(
@@ -38,12 +47,9 @@ export function agentDotState(
   >,
   now: number
 ): AgentDotState {
-  const verdict = agentRowVerdict(row)
-  if (verdict === 'failure') {
-    return 'failed'
-  }
-  if (verdict === 'cancellation') {
-    return 'interrupted'
+  const mark = agentRowVerdictMark(row)
+  if (mark) {
+    return mark
   }
   switch (row.state) {
     case 'blocked':

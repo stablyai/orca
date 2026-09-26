@@ -22,6 +22,10 @@ export type ClearCompletedActivityPlan = {
  *  with no fresh live working/monitoring/blocked/waiting state. */
 export function isClearableActivityThread(thread: AgentPaneThread): boolean {
   const id = activityThreadStatusId(thread)
+  // Why: a failed main agent reads failed while its subagents still run; that thread is still live.
+  if (thread.currentAgentState) {
+    return false
+  }
   return id === 'done' || id === 'failed' || id === 'interrupted'
 }
 

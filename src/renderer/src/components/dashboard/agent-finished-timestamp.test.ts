@@ -64,6 +64,18 @@ describe('lastEnteredDoneAt shares the Smart Sort completion clock', () => {
     expect(lastEnteredDoneAt(row(verdictDone('cancellation')))).toBe(2_000)
   })
 
+  it('dates a main agent that failed while its subagents run by when it failed', () => {
+    const held = (outcome: 'failure' | 'cancellation') =>
+      doneEntry({
+        state: 'working',
+        stateStartedAt: 3_000,
+        mainAgent: { state: 'done', outcome, stateStartedAt: 2_500 }
+      })
+    expect(agentEntryCompletionAt(held('failure'))).toBeNull()
+    expect(lastEnteredDoneAt(row(held('failure')))).toBe(2_500)
+    expect(lastEnteredDoneAt(row(held('cancellation')))).toBeNull()
+  })
+
   it('reads the verdict history carries when a boundary displaced the completion', () => {
     const history = { state: 'done' as const, prompt: '', startedAt: 1_500 }
     const boundary = (outcome?: 'failure' | 'cancellation') =>

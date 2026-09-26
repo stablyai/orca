@@ -96,13 +96,16 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.lastAssistantMessageIsToolOutput !== existing.lastAssistantMessageIsToolOutput ||
       entry.orchestration !== existing.orchestration ||
       entry.subagents !== existing.subagents ||
-      entry.providerSession !== existing.providerSession ||
-      // A failure ranks like a completion, so success -> failure leaves the completion clock as it was.
-      agentMainAgentVerdict(entry) !== agentMainAgentVerdict(existing))
+      entry.providerSession !== existing.providerSession)
+  // A verdict moves no clock: a failure keeps a done's completion time, and a main agent that fails
+  // while its subagents keep the row working leaves the row's state and start as they were.
+  const verdictChanged =
+    !!existing && agentMainAgentVerdict(entry) !== agentMainAgentVerdict(existing)
   const retentionRelevantChange =
     sortRelevantChange ||
     attributionChanged ||
     existing?.workingMode !== entry.workingMode ||
+    verdictChanged ||
     doneRetentionFieldsChanged
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
   const liveRecoveryWorktreeId =

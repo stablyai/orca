@@ -9,7 +9,10 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
+import {
+  applyAgentPaneActivityFlags,
+  type AgentPaneActivityFlags
+} from '@/lib/agent-pane-activity-flags'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Why: a terminal tab is a container of panes, exactly like a worktree card is
@@ -18,16 +21,8 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 // skip the card's retained-done promotion — see resolveTerminalTabActivityStatus).
 export type TerminalTabActivityStatus = WorktreeStatus
 
-// Per-tab live-hook flags, mirroring applyLiveAgentState in
-// worktree-agent-activity-summary.ts. blocked/waiting collapse to permission,
-// matching every other status surface in the app.
-type TerminalTabActivityFlags = {
-  hasPermission: boolean
-  hasLiveWorking: boolean
-  hasLiveMonitoring: boolean
-  hasFailed: boolean
-  hasInterrupted: boolean
-  hasLiveDone: boolean
+// Per-tab live-hook flags, folded by the same applyAgentPaneActivityFlags as the worktree card.
+type TerminalTabActivityFlags = AgentPaneActivityFlags & {
   paneIds: Set<string>
   /** Panes whose row went stale; suppress generated permission labels only. */
   stalePaneIds: Set<string>
@@ -86,22 +81,7 @@ function getTerminalTabActivityFlags(
 
     const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
     flags.paneIds.add(identity.paneId)
-    if (entry.state === 'blocked' || entry.state === 'waiting') {
-      flags.hasPermission = true
-    } else if (entry.state === 'working') {
-      if (entry.workingMode === 'monitoring') {
-        flags.hasLiveMonitoring = true
-      } else {
-        flags.hasLiveWorking = true
-      }
-    } else if (agentMainAgentVerdict(entry) === 'failure') {
-      // A stop or a failure is encoded as done, so it must be checked first.
-      flags.hasFailed = true
-    } else if (agentMainAgentVerdict(entry) === 'cancellation') {
-      flags.hasInterrupted = true
-    } else if (entry.state === 'done') {
-      flags.hasLiveDone = true
-    }
+    applyAgentPaneActivityFlags(flags, entry)
   }
 
   flagsCache = { agentStatusByPaneKey, agentStatusEpoch, flagsByTabId }

@@ -207,6 +207,11 @@ export function resolveWorktreeStatus(args: {
   if (heuristic === 'permission') {
     return 'permission'
   }
+  // Why: a failure is news, so it outranks live work (a failed main agent's subagents may still
+  // run); only a pending question comes first.
+  if (args.hasFailed) {
+    return 'failed'
+  }
   // Why: restored cards get the hook snapshot before panes mount; trust the explicit working row so they stay yellow on restart.
   if (args.hasLiveWorking || heuristic === 'working') {
     return 'working'
@@ -214,10 +219,7 @@ export function resolveWorktreeStatus(args: {
   if (args.hasLiveMonitoring || heuristic === 'monitoring') {
     return 'monitoring'
   }
-  // Terminal outcomes follow live states, but an unclean outcome must not collapse into success.
-  if (args.hasFailed) {
-    return 'failed'
-  }
+  // A stop follows live states, but must not collapse into success.
   if (args.hasInterrupted) {
     return 'interrupted'
   }

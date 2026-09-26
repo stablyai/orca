@@ -160,6 +160,26 @@ describe('a request that failed reads as failed through the feed, the ingest and
     expect(ps).toMatchObject({ outcome: 'cancellation', interrupted: true })
   })
 
+  it('publishes a main agent that failed while its subagent runs, on the row that still works', async () => {
+    const journal = await openJournal()
+    await journal.appendItem(
+      TURN_IDENTITY,
+      { kind: 'turn', turnId: 'turn-1', state: 'completed', outcome: 'failure', completedAt: 5 },
+      { fence: 1 }
+    )
+    const summary: AgentSessionStatusSummary = {
+      ...publishedSummary(journal),
+      backgroundTasks: [{ id: 'child-1', kind: 'agent', state: 'working' }]
+    }
+
+    const { status, ps } = ingest(summary)
+    expect(status).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done', outcome: 'failure' }
+    })
+    expect(ps).toMatchObject({ state: 'working', outcome: 'failure', interrupted: false })
+  })
+
   it('lists nothing for a chat whose only send the user withdrew', async () => {
     const journal = await openJournal()
     await journal.appendSubmission({

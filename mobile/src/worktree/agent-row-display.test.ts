@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { agentMainAgentVerdict } from '../../../src/shared/agent-main-agent-verdict'
+import {
+  agentMainAgentVerdict,
+  agentVerdictDisplayMark
+} from '../../../src/shared/agent-main-agent-verdict'
 import { AGENT_JOURNAL_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -8,6 +11,7 @@ import {
   agentDotState,
   agentIdentityLabel,
   agentRowVerdict,
+  agentRowVerdictMark,
   formatTimeAgo
 } from './agent-row-display'
 
@@ -49,6 +53,16 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'done', outcome: 'success' }), 0)).toBe('done')
   })
 
+  it('shows a main agent that failed while its subagents still run as failed', () => {
+    expect(agentDotState(row({ state: 'working', outcome: 'failure' }), 0)).toBe('failed')
+    expect(agentDotState(row({ state: 'waiting', outcome: 'failure' }), 0)).toBe('failed')
+    // Only a failure outranks live work; a success or a stop with live subagents reads working.
+    expect(agentDotState(row({ state: 'working', outcome: 'success' }), 0)).toBe('working')
+    expect(
+      agentDotState(row({ state: 'working', outcome: 'cancellation', interrupted: true }), 0)
+    ).toBe('working')
+  })
+
   // The shared accessor cannot be imported by app code here, so this mirror must not drift from it.
   it('agrees with the desktop verdict accessor on every row shape', () => {
     for (const state of ['working', 'blocked', 'waiting', 'done'] as const) {
@@ -56,6 +70,9 @@ describe('agentDotState', () => {
         for (const interrupted of [false, true]) {
           const shape = { state, interrupted, ...(outcome ? { outcome } : {}) }
           expect(agentRowVerdict(shape), JSON.stringify(shape)).toBe(agentMainAgentVerdict(shape))
+          expect(agentRowVerdictMark(shape), JSON.stringify(shape)).toBe(
+            agentVerdictDisplayMark(shape)
+          )
         }
       }
     }

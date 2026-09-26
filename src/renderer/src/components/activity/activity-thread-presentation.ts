@@ -2,8 +2,10 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
-import { agentVerdictDotState } from '@/lib/agent-row-dot-state'
-import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
+import {
+  agentMainAgentVerdict,
+  agentVerdictDisplayMark
+} from '../../../../shared/agent-main-agent-verdict'
 import {
   getActivityThreadTaskTitle,
   getActivityThreadWorkspaceTitle,
@@ -134,10 +136,14 @@ export type ActivityThreadStatusId = AgentDotState
 /** Single classifier behind grouping, labels, and clear-completed; the only place the
  *  verdict predicate is spelled. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
+  // Why: a failed main agent outranks the subagent work still holding its row live.
+  if (thread.currentAgentEntry && agentVerdictDisplayMark(thread.currentAgentEntry) === 'failed') {
+    return 'failed'
+  }
   const paneEntry = paneActivityEntry(thread)
   const state = threadCurrentState(thread) ?? 'done'
   const verdictEntry = paneEntry ?? thread.latestEvent?.entry
-  const verdictDot = verdictEntry ? agentVerdictDotState(verdictEntry) : null
+  const verdictDot = verdictEntry ? agentVerdictDisplayMark(verdictEntry) : null
   if (!thread.currentAgentState && state === 'done' && verdictDot) {
     return verdictDot
   }

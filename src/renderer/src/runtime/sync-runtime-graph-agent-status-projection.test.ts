@@ -161,4 +161,20 @@ describe('mobile agent-status projection equivalence', () => {
     expect(project('failure', 'success')).not.toBe(project('success', 'success'))
     expect(project('success', 'failure')).not.toBe(project('success', 'success'))
   })
+
+  it('republishes a main agent failing while its subagents keep the row working', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const project = (outcome?: 'failure'): string =>
+      buildRuntimeMobileAgentStatusProjectionForTests({
+        'tab-0:leaf-0': makeEntry(0, {
+          state: 'working',
+          mainAgent: {
+            state: 'done',
+            ...(outcome ? { outcome } : {}),
+            stateStartedAt: 1740000000000
+          }
+        })
+      })
+    expect(project('failure')).not.toBe(project())
+  })
 })

@@ -131,6 +131,12 @@ describe('a failed done keeps its verdict in every copy', () => {
     expect(facts(withVerdict('failure'), withVerdict('failure')).retentionRelevantChange).toBe(
       false
     )
+    // A main agent failing while its subagents keep the row working is a verdict change too.
+    const held = (outcome: 'success' | 'failure'): AgentStatusEntry => ({
+      ...withVerdict(outcome),
+      state: 'working'
+    })
+    expect(facts(held('success'), held('failure')).retentionRelevantChange).toBe(true)
   })
 
   it('treats a verdict change as a different record even when interrupted did not move', () => {

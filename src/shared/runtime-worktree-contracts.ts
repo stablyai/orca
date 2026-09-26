@@ -23,8 +23,9 @@ export type RuntimeWorktreeAgentRow = {
   toolName: string | null
   toolInput: string | null
   interrupted: boolean
-  /** The main agent's verdict on this `done`. Optional on the wire: old hosts never send it, and
-   *  a reader falls back to `interrupted`. */
+  /** The main agent's own verdict, sent also on a row its subagents hold `working`. Optional on
+   *  the wire: old hosts never send it (a reader falls back to `interrupted`), and they send it
+   *  only on a `done` row. */
   outcome?: AgentJournalTurnOutcome
   stateStartedAt: number
   updatedAt: number

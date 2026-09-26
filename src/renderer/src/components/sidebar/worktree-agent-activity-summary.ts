@@ -8,16 +8,16 @@ import {
 } from '@/lib/agent-status-worktree-attribution'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
-import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-main-agent-verdict'
+import { applyAgentPaneActivityFlags } from '@/lib/agent-pane-activity-flags'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring: boolean
-  /** Fresh failed completion, kept separate from clean done outcomes. */
+  /** A fresh failed main agent, also while its subagents run; kept apart from clean done. */
   hasFailed: boolean
   /** Fresh interrupted completion, kept separate from clean done outcomes. */
   hasInterrupted: boolean
@@ -138,7 +138,7 @@ function getWorktreeAgentActivitySummaries(
     if (entry.state === 'done') {
       addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)
     }
-    applyLiveAgentState(summary, entry)
+    applyAgentPaneActivityFlags(summary, entry)
   }
 
   for (const unsupported of Object.values(state.migrationUnsupportedByPtyId ?? {})) {
@@ -152,7 +152,7 @@ function getWorktreeAgentActivitySummaries(
   for (const retained of Object.values(state.retainedAgentsByPaneKey ?? {})) {
     const summary = summaryForWorktree(retained.worktreeId)
     // Why: a failed agent is retained so its failure stays visible, not so it reads done.
-    if (agentMainAgentVerdict(retained.entry) === 'failure') {
+    if (agentVerdictDisplayMark(retained.entry) === 'failed') {
       summary.hasFailed = true
     } else {
       summary.hasRetainedDone = true
@@ -235,29 +235,6 @@ function agentStatusPaneIdsByTabIdEqual(
     }
   }
   return true
-}
-
-function applyLiveAgentState(
-  summary: WorktreeAgentActivitySummary,
-  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted' | 'mainAgent'>
-): void {
-  const verdict = agentMainAgentVerdict(entry)
-  if (entry.state === 'blocked' || entry.state === 'waiting') {
-    summary.hasPermission = true
-  } else if (verdict === 'failure') {
-    // A stop or a failure is encoded as done, so it must be checked first.
-    summary.hasFailed = true
-  } else if (verdict === 'cancellation') {
-    summary.hasInterrupted = true
-  } else if (entry.state === 'working') {
-    if (entry.workingMode === 'monitoring') {
-      summary.hasLiveMonitoring = true
-    } else {
-      summary.hasLiveWorking = true
-    }
-  } else if (entry.state === 'done') {
-    summary.hasLiveDone = true
-  }
 }
 
 function addAgentStatusPaneId(
