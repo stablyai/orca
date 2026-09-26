@@ -8,10 +8,9 @@ import {
   triggerError,
   triggerEdgeBump
 } from '../platform/haptics'
-import {
-  sameTerminalKeyboardAvoidanceMetrics,
-  type TerminalKeyboardAvoidanceMetrics,
-  type TerminalModes
+import type {
+  TerminalKeyboardAvoidanceMetrics,
+  TerminalModes
 } from '../terminal/terminal-webview-contract'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { clearTerminalLiveInputFocusTimer } from '../terminal/terminal-live-input'
@@ -166,7 +165,13 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => {
       setTerminalKeyboardMetrics((prev) => {
         const current = prev.get(handle)
-        if (current && sameTerminalKeyboardAvoidanceMetrics(current, metrics)) {
+        if (
+          current &&
+          current.cursorY === metrics.cursorY &&
+          current.contentBottomRow === metrics.contentBottomRow &&
+          current.rows === metrics.rows &&
+          current.altScreen === metrics.altScreen
+        ) {
           return prev
         }
         return new Map(prev).set(handle, metrics)

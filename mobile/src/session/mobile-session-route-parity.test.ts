@@ -115,8 +115,7 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // the other's body. The hook and string counts are C7.2's and stand.
 // Refreshed once more for the two dictation failure handlers, which now both call
 // `reportDictationFailure` instead of each choosing between the setup sheet and a toast.
-// Moved when the metrics handler compared every field, the row pitch included.
-const HEAD_CALLBACK_BODY_SHA256 = '65f5c1274967cecef39660430169dcfde81b362e8aa5878833b9f20bc8e43a6a'
+const HEAD_CALLBACK_BODY_SHA256 = '2ccbfb5ee57e7dfeb07dafaee6fa592b95862b3bc898a5ac2995e7c69913bfc4'
 // Refreshed for the startup effect: both `worktree.activate` sends became `worktreeActivate`, and
 // the sleeping-agent check reads that operation's verdict instead of the reply envelope. Refreshed
 // again when the reporter took the reply and interpreted it itself, retiring the hand-built

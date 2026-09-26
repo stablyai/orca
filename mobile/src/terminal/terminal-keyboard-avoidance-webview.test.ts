@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { Terminal } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
@@ -14,12 +13,11 @@ import { parseTerminalKeyboardAvoidanceMetrics } from './terminal-webview-contra
  * it is handed, so a case builds one with its own terminal double and reads the notifications back
  * out of the seam it passed in.
  */
-function runMetricsOver(term: unknown, fitScale = 1): Record<string, unknown>[] {
+function runMetricsOver(term: unknown): Record<string, unknown>[] {
   const notifications: Record<string, unknown>[] = []
   const scope = createTerminalDocumentScope({
     postToHost: (message) => notifications.push(message)
   })
-  scope.currentScale = fitScale
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each case's double implements the buffer members the scan reads, which is what the assertions check.
   scope.term = term as typeof scope.term
   emitKeyboardAvoidanceMetrics(scope)
@@ -215,33 +213,5 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
       expect(emitAt, `${module} does not emit metrics`).toBeGreaterThanOrEqual(0)
       expect(emitAt, `${module} emits before it resizes`).toBeGreaterThan(geometryAt)
     }
-  })
-
-  it('reports the row pitch as drawn, fit scale included, and none before a cell is measured', () => {
-    // Desktop display mode keeps the desktop's rows and the fit shrinks the grid by width.
-    const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }
-    const measuredTerm = {
-      buffer: { active: buffer },
-      cols: 10,
-      rows: 47,
-      _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } }
-    }
-    const phone = runMetricsOver(measuredTerm)[0]
-    const desktop = runMetricsOver(measuredTerm, 0.5)[0]
-    const unmeasured = runMetricsOver({ buffer: { active: buffer }, cols: 10, rows: 47 })[0]
-    expect({
-      phone: phone?.rowPitch,
-      desktop: desktop?.rowPitch,
-      unmeasured: unmeasured?.rowPitch
-    }).toEqual({ phone: 15, desktop: 7.5, unmeasured: 0 })
-  })
-
-  it('reports again when a fit commits a new scale', () => {
-    const fit = readFileSync(new URL('./document/fit-scale.ts', import.meta.url), 'utf8')
-    const commit = fit.slice(fit.indexOf('export function commitFitScale('))
-    const body = commit.slice(0, commit.indexOf('\n}\n'))
-    expect(body.indexOf('emitKeyboardAvoidanceMetrics(scope)')).toBeGreaterThan(
-      body.indexOf('scope.currentScale = 1')
-    )
   })
 })
