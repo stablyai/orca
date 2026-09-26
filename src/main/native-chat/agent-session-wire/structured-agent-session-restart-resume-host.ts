@@ -45,7 +45,6 @@ import { createStructuredAgentSessionRestartWitnesses } from './structured-agent
 type LiveSession = { journal: AgentSessionJournal; hasProviderChild: boolean; fence: number }
 
 export type StructuredAgentSessionRestartResumeSurfaces = {
-  publish: (sessionId: string, journal: AgentSessionJournal) => void
   revealSession: (sessionId: string) => Promise<{ readable: boolean }>
   hold: (sessionId: string, holderId: string) => Promise<void>
   release: (sessionId: string, holderId: string) => void

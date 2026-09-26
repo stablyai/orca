@@ -280,7 +280,7 @@ describe('a chat that closes', () => {
     expect(host.hasSession(SESSION)).toBe(true)
   })
 
-  it('releases a compatibility wait when the session is evicted', async () => {
+  it('answers a compatibility wait with what eviction recorded', async () => {
     await attach()
     dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const body = hostTestMessage('pending until close')
@@ -299,7 +299,12 @@ describe('a chat that closes', () => {
 
     await host.close(SESSION)
 
-    await expect(settlement).resolves.toBeUndefined()
+    // Eviction's settlement is a journal write, so the wait sees it rather than timing out.
+    await expect(settlement).resolves.toMatchObject({
+      value: {
+        submission: { dispatchState: 'unknown', reason: 'provider_closed_before_acknowledgement' }
+      }
+    })
   })
 
   it('retries teardown after journal close loses its result', async () => {

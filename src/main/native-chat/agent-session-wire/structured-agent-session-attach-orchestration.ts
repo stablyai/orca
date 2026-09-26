@@ -21,7 +21,6 @@ import {
   pinnedAgentSessionLaunchEnv
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
-import { isResumableStructuredAgentSessionRecord } from './structured-agent-session-resume-eligibility'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { forgetStructuredAgentSession } from './structured-agent-session-host-lifetime'
@@ -117,16 +116,9 @@ async function runAttach(
   // attach makes it the session's; any other exit closes it with whatever the child queued.
   const attemptSink = context.runtimeState.mintEventSink(sessionId)
   let attemptSinkAdopted = false
-  // A lease handed back cleanly is what a resume replaces. A writer current as of that owner is
-  // rebased onto the fence this attach publishes, since the restart is the only thing that moved it.
-  const released = context.deps.store.getRecord(sessionId)
-  const resumedFromFence =
-    released && isResumableStructuredAgentSessionRecord(released)
-      ? released.lease.runtimeFence
-      : undefined
   // Read before the reserve clears it: how the previous generation ended decides how whatever it
   // left running is settled.
-  const priorDeathEvidence = released?.lease.deathEvidence ?? null
+  const priorDeathEvidence = context.deps.store.getRecord(sessionId)?.lease.deathEvidence ?? null
   const attached = stampFailedCreateOwnerVerdict(
     context.deps.store,
     callerKey,
@@ -213,8 +205,7 @@ async function runAttach(
           providerChildPhase: acquiredOwner
             ? providerChildPhase
             : (previous?.providerChildPhase ?? 'ready'),
-          acquisitionGeneration: acquisitionGeneration ?? previous?.acquisitionGeneration ?? null,
-          resumedFromFence: acquiredOwner ? resumedFromFence : previous?.resumedFromFence
+          acquisitionGeneration: acquisitionGeneration ?? previous?.acquisitionGeneration ?? null
         })
         await recoverStructuredRewind(
           context.deps.store,

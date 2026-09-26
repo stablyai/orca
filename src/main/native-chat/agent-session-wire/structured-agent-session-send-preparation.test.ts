@@ -6,7 +6,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentSessionRefusalOperationState } from '../../../shared/agent-session-refusal-retry'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionSubscribeEvent
+} from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -317,7 +320,7 @@ describe('a send with no live owner', () => {
     expect(dispatch).not.toHaveBeenCalled()
   })
 
-  it('rebases a send that arrives after the restart has already claimed the lease', async () => {
+  it('admits a send that arrives after the restart has already claimed the lease', async () => {
     await loseOwner()
     const lostFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     let claimed = () => {}
@@ -674,5 +677,90 @@ describe('a send with no live owner', () => {
       refusal: { code: 'agent_session_ownership_unknown' }
     })
     expect(acquire).not.toHaveBeenCalled()
+  })
+})
+
+// A pane keeps the fence of the last frame it read. An idle release and the restart after it
+// each move the lease, so that fence can be several generations behind the one a write lands on.
+describe('a write fenced to an owner the pane has not seen replaced', () => {
+  it('delivers a send fenced to the owner an idle release retired', async () => {
+    const seenFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+    await loseOwner()
+    const params = sendParams('after the release')
+    params.envelope.expectedRuntimeFence = seenFence
+
+    expect(await host.send(CALLER, params)).toMatchObject({
+      ok: true,
+      replayed: false,
+      value: { submission: { dispatchState: 'accepted' } }
+    })
+
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(dispatch).toHaveBeenCalledOnce()
+    expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(seenFence + 1)
+  })
+
+  // Clients resend a refused message when the fence they hold moves, and a refused restart leaves
+  // no ledger row, so a frame carrying each failed attempt's fence would resend it forever.
+  it("keeps the pane's fence on the row a failed restart publishes", async () => {
+    const seenFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+    const frames: AgentSessionSubscribeEvent[] = []
+    host.subscribe({ id: 'pane', sessionId: SESSION, emit: (event) => frames.push(event) })
+    await loseOwner()
+    acquire.mockRejectedValueOnce(new Error('Not signed in'))
+    const subscribed = frames.length
+
+    expect(await host.send(CALLER, sendParams('while signed out'))).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_owner_restart_failed' }
+    })
+
+    expect(store.getRecord(SESSION)?.lease.runtimeFence).toBeGreaterThan(seenFence + 1)
+    const published = frames.slice(subscribed)
+    expect(published.length).toBeGreaterThan(0)
+    for (const frame of published) {
+      expect(frame).toMatchObject({ fence: seenFence })
+    }
+  })
+
+  it('admits a Stop and a send queued behind the cold start that replaced their owner', async () => {
+    await loseOwner()
+    const lostFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+    let claimed = () => {}
+    let release = () => {}
+    const claim = new Promise<void>((resolve) => (claimed = resolve))
+    const spawn = new Promise<void>((resolve) => (release = resolve))
+    acquire.mockImplementationOnce(async (input) => {
+      claimed()
+      await spawn
+      return spawnChild(input)
+    })
+
+    const first = host.send(CALLER, sendParams('starts the agent'))
+    await claim
+    const cancelFields = { turnId: 'turn-1' }
+    const stop = host.cancel(CALLER, {
+      envelope: {
+        sessionId: SESSION,
+        clientOperationId: hostTestOperationId(),
+        expectedRuntimeFence: lostFence,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.cancel',
+          sessionId: SESSION,
+          fields: cancelFields
+        })
+      },
+      ...cancelFields
+    })
+    const late = sendParams('typed during the start')
+    late.envelope.expectedRuntimeFence = lostFence - 1
+    const second = host.send(CALLER, late)
+    release()
+
+    expect(await first).toMatchObject({ ok: true })
+    expect(await stop).toMatchObject({ ok: true, replayed: false })
+    expect(await second).toMatchObject({ ok: true, replayed: false })
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(dispatch).toHaveBeenCalledTimes(2)
   })
 })

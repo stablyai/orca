@@ -27,7 +27,8 @@ export type StructuredAgentSessionReveal = {
 }
 
 export type StructuredAgentSessionHostSession = {
-  journal: AgentSessionJournal
+  /** Readonly: a new handle enters only through the session map's `set`, which binds its delivery. */
+  readonly journal: AgentSessionJournal
   params: AgentSessionAttachParams
   fence: number
   /** Whether THIS host generation is running the provider process behind the session. A journal
@@ -44,10 +45,6 @@ export type StructuredAgentSessionHostSession = {
   owesProviderChildWindDown?: boolean
   /** Exact adapter acquisition behind `hasProviderChild`; retained after exit to fence recovery. */
   acquisitionGeneration: string | null
-  /** The fence of the released owner this child replaced, when it was resumed into a lease handed
-   *  back cleanly. A writer current as of that owner is admitted at `fence`: the restart is the
-   *  only thing that moved it. Absent for a create or a journal restored for reading. */
-  resumedFromFence?: number
 }
 
 export type StructuredAgentSessionHostDeps = {

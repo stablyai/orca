@@ -5,8 +5,8 @@
 // lease-owning provider root through the adapter. Its observed exit is sufficient because the
 // lease follows that root, even when descendants remain `unverifiable`.
 //
-// The fence still moves. A released lease at the old fence would let a mutation a client queued
-// against the dead generation land on the next one.
+// The fence still moves, so the next owner is a new generation: an attach or settlement still
+// holding the stopped owner's fence is refused as stale rather than acting on its successor.
 
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { nextAgentSessionFence } from '../../shared/agent-session-next-fence'
