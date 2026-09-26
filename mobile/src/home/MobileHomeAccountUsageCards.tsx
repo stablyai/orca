@@ -11,6 +11,7 @@ import {
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import type { HostProfile } from '../transport/types'
 
+/** Renders account usage summaries for connected hosts on the mobile home screen. */
 export function MobileHomeAccountUsageCards(props: {
   items: { host: HostProfile; snapshot: AccountsSnapshot }[]
   onOpen: (hostId: string) => void
@@ -51,6 +52,10 @@ export function MobileHomeAccountUsageCards(props: {
               }
               const sessionBar = getUsageBarState(limits, 'session')
               const weeklyBar = getUsageBarState(limits, 'weekly')
+              const fableWeeklyBar =
+                provider === 'claude' && limits?.fableWeekly
+                  ? getUsageBarState(limits, 'fableWeekly')
+                  : null
               return (
                 <View key={provider} style={styles.row}>
                   <View style={styles.icon}>
@@ -77,6 +82,14 @@ export function MobileHomeAccountUsageCards(props: {
                         unavailable={weeklyBar.unavailable}
                         loading={weeklyBar.loading}
                       />
+                      {fableWeeklyBar ? (
+                        <UsageBar
+                          label="F"
+                          usedPercent={fableWeeklyBar.usedPercent}
+                          unavailable={fableWeeklyBar.unavailable}
+                          loading={fableWeeklyBar.loading}
+                        />
+                      ) : null}
                     </View>
                   </View>
                 </View>
