@@ -15,6 +15,11 @@ class MockWebContents extends EventEmitter {
     this.id = id
   }
 
+  /** 0 is Electron's answer when no OS process backs the WebContents, which is the truth here. */
+  getOSProcessId(): number {
+    return 0
+  }
+
   loadURL(): Promise<void> {
     if (mocks.finishLoads) {
       queueMicrotask(() => this.emit('did-finish-load'))
@@ -323,8 +328,11 @@ describe('OffscreenBrowserBackend lifecycle', () => {
           })
         })
     )
+    // Why the explicit cap: this test needs more open pages than the retirement concurrency to see
+    // the bound, and that is above the tab cap a headless host defaults to.
     const backend = new OffscreenBrowserBackend(browserManager as never, {
-      getAgentBrowserBridge: () => ({ onPageClosed })
+      getAgentBrowserBridge: () => ({ onPageClosed }),
+      maxTabs: 6
     })
 
     for (let index = 0; index < 6; index++) {
