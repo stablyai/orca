@@ -5,6 +5,7 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'
 import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
+import { PREFERRED_PORT_RETRY_MS, listenWithPortRetry } from './ws-preferred-port-retry'
 
 const MAX_WS_MESSAGE_BYTES = 1024 * 1024
 // Why: one desktop remote-host client can hold many concurrent streams, so keep the cap high enough that stale streams don't starve control RPCs.
@@ -41,6 +42,8 @@ export type WebSocketTransportOptions = {
   fallbackPort?: number
   // Why: serve --port clients dial the pinned port; prefer it first so a stale fallback can't steal the pin (issue #8535). Default keeps fallback-first (STA-1511).
   preferPinnedPort?: boolean
+  // Why: test-only override. Production uses PREFERRED_PORT_RETRY_MS.
+  preferredPortRetryWindowMs?: number
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -53,6 +56,7 @@ export class WebSocketTransport implements RpcTransport {
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
   private readonly preferPinnedPort: boolean
+  private readonly preferredPortRetryWindowMs: number
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private messageHandler: WebSocketMessageHandler | null = null
@@ -74,7 +78,8 @@ export class WebSocketTransport implements RpcTransport {
     preAuthTimeoutMs,
     staticRoot,
     fallbackPort,
-    preferPinnedPort
+    preferPinnedPort,
+    preferredPortRetryWindowMs
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -89,6 +94,7 @@ export class WebSocketTransport implements RpcTransport {
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
     this.preferPinnedPort = preferPinnedPort === true
+    this.preferredPortRetryWindowMs = preferredPortRetryWindowMs ?? PREFERRED_PORT_RETRY_MS
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -149,9 +155,11 @@ export class WebSocketTransport implements RpcTransport {
         : this.preferPinnedPort
           ? [this.port, persistedFallbackPort]
           : [persistedFallbackPort, this.port]
+    // Why: a persisted fallback may already have devices paired to it, so only the sole-candidate preferred port is worth waiting for.
+    const retryWindowMs = persistedFallbackPort === undefined ? this.preferredPortRetryWindowMs : 0
     for (const port of candidatePorts) {
       try {
-        await this.tryListen(port)
+        await listenWithPortRetry(() => this.tryListen(port), port, retryWindowMs)
         return
       } catch (error: unknown) {
         // Why: a persisted fallback may fail for any reason, while configured ports fall through only when their listen is occupied or denied.

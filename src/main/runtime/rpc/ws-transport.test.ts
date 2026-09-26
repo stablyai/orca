@@ -500,7 +500,9 @@ describe('WebSocketTransport', () => {
       host: '127.0.0.1',
       port: occupiedPort,
       tlsCert: tls.cert,
-      tlsKey: tls.key
+      tlsKey: tls.key,
+      // Why: the holder never exits here, so skip the restart-race retry window and assert the fallback directly.
+      preferredPortRetryWindowMs: 0
     })
     transports.push(second)
 
@@ -620,6 +622,68 @@ describe('WebSocketTransport', () => {
       await scratch.stop()
       return port
     }
+
+    it('waits for a relaunching predecessor to release the preferred port', async () => {
+      // Why: an app update starts the new instance while the old one is still
+      // exiting. Treating that moment as a permanent conflict persists an
+      // OS-assigned port, and every device paired to ws://ip:<preferred> goes
+      // dead until the user re-pairs.
+      const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      await holder.start()
+      const preferredPort = holder.resolvedPort
+      setTimeout(() => void holder.stop(), 300)
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredPort
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).toBe(preferredPort)
+    })
+
+    it('gives up on the preferred port once the retry window closes', async () => {
+      // Why: a genuine second instance holds the port for its lifetime. The
+      // wait is bounded so that case still reaches an OS-assigned port.
+      const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(holder)
+      await holder.start()
+      const preferredPort = holder.resolvedPort
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredPort,
+        preferredPortRetryWindowMs: 50
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).not.toBe(preferredPort)
+      expect(transport.resolvedPort).toBeGreaterThan(0)
+    })
+
+    it('does not retry the preferred port once a fallback is persisted', async () => {
+      // Why: a persisted fallback means devices may already be paired to it,
+      // so startup must bind it immediately rather than contend for the pin.
+      // preferPinnedPort puts the occupied preferred port first, so the elapsed
+      // time actually observes whether the retry window was skipped.
+      const holder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(holder)
+      await holder.start()
+      const preferredPort = holder.resolvedPort
+      const fallbackPort = await reserveFreePort()
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredPort,
+        fallbackPort,
+        preferPinnedPort: true
+      })
+      transports.push(transport)
+      const startedAt = Date.now()
+      await transport.start()
+      expect(transport.resolvedPort).toBe(fallbackPort)
+      expect(Date.now() - startedAt).toBeLessThan(1_000)
+    })
 
     it('binds the persisted fallback port even when the preferred port is free', async () => {
       // Why: regression for the STA-1511 follow-up — devices paired while the
