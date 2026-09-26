@@ -53,7 +53,7 @@ export class WriteFlushBarrierOperations {
     }
     if (runtime.profileStateAuthority?.asynchronous) {
       runtime.writeGeneration++
-      void flushCurrentStateAsync(this, false, undefined, false).catch((error) =>
+      void flushCurrentStateAsync(this, { drainToStableGeneration: false }).catch((error) =>
         console.error('[persistence] Failed to flush state:', error)
       )
       return
@@ -100,7 +100,7 @@ export class WriteFlushBarrierOperations {
           ...runtime.pendingProfileFlushes,
           runtime.profileStateAuthority?.drainBackups?.(true)
         ])
-        await flushCurrentStateAsync(this, true)
+        await flushCurrentStateAsync(this, { final: true })
         if (options.exportJsonCompatibility) {
           await runtime.profileStateAuthority?.writeJsonCompatibilityExportAsync?.(runtime.dataFile)
         }
@@ -120,7 +120,7 @@ export class WriteFlushBarrierOperations {
       return Promise.resolve()
     }
     // Best-effort callers must not livelock while the live app keeps mutating state.
-    return flushCurrentStateAsync(this, false, undefined, false).catch(() => {})
+    return flushCurrentStateAsync(this, { drainToStableGeneration: false }).catch(() => {})
   }
 
   flushPendingOrThrowAsync(
@@ -130,13 +130,11 @@ export class WriteFlushBarrierOperations {
     if (runtime.writesFrozen || runtime.profileMaintenancePending || runtime.quitFlushStarted) {
       return Promise.reject(new Error('Cannot flush while persistence is finalized'))
     }
-    return flushCurrentStateAsync(
-      this,
-      false,
-      options.signal,
-      options.drainToStableGeneration,
-      true
-    )
+    return flushCurrentStateAsync(this, {
+      signal: options.signal,
+      drainToStableGeneration: options.drainToStableGeneration,
+      requireInitialGenerationDurable: true
+    })
   }
 }
 
@@ -165,11 +163,19 @@ export async function flushDurableStateOrThrowAsync(
 
 export async function flushCurrentStateAsync(
   owner: WriteFlushBarrierOperations,
-  final: boolean,
-  signal?: AbortSignal,
-  drainToStableGeneration = true,
-  requireInitialGenerationDurable = false,
-  fullCheckpoint = final
+  {
+    final = false,
+    signal,
+    drainToStableGeneration = true,
+    requireInitialGenerationDurable = false,
+    fullCheckpoint = final
+  }: {
+    final?: boolean
+    signal?: AbortSignal
+    drainToStableGeneration?: boolean
+    requireInitialGenerationDurable?: boolean
+    fullCheckpoint?: boolean
+  }
 ): Promise<void> {
   const { runtime, writes } = owner[writeFlushBarrierOperationsContext]
   return runProfileStateFlush(runtime, async () => {

@@ -45,9 +45,20 @@ export function createProfileStateStore(
   options: ProfileStateStoreFactoryOptions
 ): ProfileStateStoreFactoryResult {
   const { initialState, ...prepared } = prepareProfileStateStore(options)
-  return {
-    ...prepared,
-    store: initialState ? createSqliteStore(options, initialState) : createLegacyStore(options)
+  try {
+    return {
+      ...prepared,
+      store: new Store({
+        dataFile: options.dataFile,
+        storageAuthority: options.storageAuthority,
+        profileStateAuthority: initialState?.authority,
+        initialAuthorityState: initialState
+      })
+    }
+  } catch (error) {
+    // Store construction owns the authority only after its load boundary succeeds.
+    initialState?.authority.close?.()
+    throw error
   }
 }
 
@@ -106,34 +117,5 @@ export function prepareProfileStateStore(
     backend: 'sqlite',
     classification: bootstrap.classification,
     migrated: bootstrap.migrated
-  }
-}
-
-function createLegacyStore(options: ProfileStateStoreFactoryOptions): Store {
-  return new Store({
-    dataFile: options.dataFile,
-    ...(options.storageAuthority === undefined
-      ? {}
-      : { storageAuthority: options.storageAuthority })
-  })
-}
-
-function createSqliteStore(
-  options: ProfileStateStoreFactoryOptions,
-  initialState: ProfileStateAuthorityInitialState
-): Store {
-  try {
-    return new Store({
-      dataFile: options.dataFile,
-      profileStateAuthority: initialState.authority,
-      initialAuthorityState: initialState,
-      ...(options.storageAuthority === undefined
-        ? {}
-        : { storageAuthority: options.storageAuthority })
-    })
-  } catch (error) {
-    // Store construction owns the authority only after its load boundary succeeds.
-    initialState.authority.close?.()
-    throw error
   }
 }

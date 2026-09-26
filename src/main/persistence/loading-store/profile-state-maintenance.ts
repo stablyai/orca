@@ -138,7 +138,10 @@ async function pauseProfileState(
   signal?.throwIfAborted()
   if (flush) {
     // Cancel between commands so a dispatched commit retains a known outcome.
-    await flushCurrentStateAsync(domains.flushBarriers, false, undefined, true, true, true)
+    await flushCurrentStateAsync(domains.flushBarriers, {
+      requireInitialGenerationDurable: true,
+      fullCheckpoint: true
+    })
     signal?.throwIfAborted()
     await authority?.writeJsonCompatibilityExportAsync?.(runtime.dataFile)
   }

@@ -110,7 +110,6 @@ function applyIncomingAutomationRuns(
     existingRows.set(parsed.id, parsed)
   }
 
-  const incomingIds = new Set<string>()
   const upsert = db.prepare(
     `INSERT INTO ${PROFILE_STATE_AUTOMATION_RUNS_TABLE}
      (run_id, ordinal, payload, content_hash, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?)
@@ -120,8 +119,8 @@ function applyIncomingAutomationRuns(
   )
   if (incoming.presence === AUTOMATION_RUNS_ARRAY) {
     for (const run of incoming.runs) {
-      incomingIds.add(run.id)
       const existing = existingRows.get(run.id)
+      existingRows.delete(run.id)
       if (existing?.ordinal === run.ordinal && existing.contentHash === run.contentHash) {
         continue
       }
@@ -130,9 +129,7 @@ function applyIncomingAutomationRuns(
   }
   const remove = db.prepare(`DELETE FROM ${PROFILE_STATE_AUTOMATION_RUNS_TABLE} WHERE run_id = ?`)
   for (const id of existingRows.keys()) {
-    if (!incomingIds.has(id)) {
-      remove.run(id)
-    }
+    remove.run(id)
   }
 
   db.prepare(
