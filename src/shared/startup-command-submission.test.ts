@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  STARTUP_COMMAND_SUBMIT_BYTE,
   buildStartupCommandSubmission,
   isBracketedPasteSafeShell
 } from './startup-command-submission'
@@ -45,6 +46,42 @@ describe('buildStartupCommandSubmission', () => {
     expect(
       buildStartupCommandSubmission(command, { submit: '\n', bracketedPasteSafe: false })
     ).toBe(`${command}\n`)
+  })
+})
+
+// Why: every production call site now omits `submit`, so these are the real
+// bytes Orca writes. A default that drifted back to LF reopens the bug: LF is
+// `^J`, a key the user's keymap owns, not a submit byte.
+describe('STARTUP_COMMAND_SUBMIT_BYTE', () => {
+  it('is CR, the byte Enter sends', () => {
+    expect(STARTUP_COMMAND_SUBMIT_BYTE).toBe('\r')
+  })
+
+  it('is appended to a single-line command when the caller names no submit byte', () => {
+    expect(buildStartupCommandSubmission('claude', { bracketedPasteSafe: true })).toBe('claude\r')
+  })
+
+  it('ends a bracketed-paste multiline command when the caller names no submit byte', () => {
+    const command = "claude 'first\nsecond'"
+    expect(buildStartupCommandSubmission(command, { bracketedPasteSafe: true })).toBe(
+      `\x1b[200~${command}\x1b[201~\r`
+    )
+  })
+
+  it('ends a raw multiline command when bracketed paste is unsafe', () => {
+    const command = 'echo one\necho two'
+    expect(buildStartupCommandSubmission(command, { bracketedPasteSafe: false })).toBe(
+      `${command}\r`
+    )
+  })
+
+  it('is also what the SSH path spells out for the remote shell it drives', () => {
+    expect(
+      buildStartupCommandSubmission('claude', {
+        submit: STARTUP_COMMAND_SUBMIT_BYTE,
+        bracketedPasteSafe: true
+      })
+    ).toBe('claude\r')
   })
 })
 
