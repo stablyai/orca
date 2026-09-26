@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   registerPersistentWebview,
   unregisterPersistentWebview
@@ -670,5 +671,64 @@ describe('setWorktreesPinnedAndReveal', () => {
     expect(reveal).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
+  })
+
+  describe('host-qualified targets (issue #21706)', () => {
+    const RUNTIME_HOST: ExecutionHostId = 'runtime:env-1'
+
+    it('resolves the runtime-host worktree, not the local one, when its Worktree.id collides', () => {
+      const store = createTestStore()
+      // Differential fixture: ONLY the runtime worktree starts pinned. A caller wrongly
+      // resolving against the local one (isPinned already false, same as the unpin target)
+      // would hit the no-op skip and never call updateWorktreesMeta at all — unlike the
+      // previous version of this test, the assertion below can't pass by merely echoing
+      // the caller's own executionHostId input back out.
+      const local = makeWorktree({
+        id: 'shared-id',
+        repoId: 'repo1',
+        path: '/local',
+        isPinned: false,
+        hostId: 'local'
+      })
+      const runtime = makeWorktree({
+        id: 'shared-id',
+        repoId: 'repo1',
+        path: '/runtime',
+        isPinned: true,
+        hostId: RUNTIME_HOST
+      })
+      const updateWorktreesMeta = vi.fn().mockResolvedValue(undefined)
+      store.setState({
+        worktreesByRepo: { repo1: [local, runtime] },
+        activeWorktreeId: null,
+        revealWorktreeInSidebar: vi.fn(),
+        updateWorktreesMeta
+      } as Partial<AppState>)
+
+      store
+        .getState()
+        .setWorktreesPinnedAndReveal(
+          [{ worktreeId: 'shared-id', executionHostId: RUNTIME_HOST }],
+          false
+        )
+
+      expect(updateWorktreesMeta).toHaveBeenCalledWith([
+        { worktreeId: 'shared-id', updates: { isPinned: false }, executionHostId: RUNTIME_HOST }
+      ])
+    })
+
+    it('a bare id (legacy call shape) still compiles and applies without throwing', () => {
+      const store = createTestStore()
+      const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: false })
+      store.setState({
+        worktreesByRepo: { repo1: [wt] },
+        activeWorktreeId: null,
+        revealWorktreeInSidebar: vi.fn()
+      } as Partial<AppState>)
+
+      store.getState().setWorktreesPinnedAndReveal([wt.id], true)
+
+      expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
+    })
   })
 })
