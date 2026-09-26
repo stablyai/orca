@@ -17,11 +17,13 @@ export type NestedRepoScanFilesystem = {
 
 type IgnoreRule = {
   pattern: string
-  segmentPatterns: (string | RegExp)[]
+  segmentPatterns: GlobSegment[]
   negate: boolean
   basenameOnly: boolean
   baseSegments: string[]
 }
+
+type GlobSegment = string | { pattern: string }
 
 export type TraversalFolder = {
   path: string
@@ -83,22 +85,45 @@ function shouldSkipDirectory(name: string, depth: number): boolean {
   return depth > 0 && name.startsWith('.')
 }
 
-function compileGlobSegment(pattern: string): string | RegExp {
+function compileGlobSegment(pattern: string): GlobSegment {
   if (!pattern.includes('*') && !pattern.includes('?')) {
     return pattern
   }
-  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(`^${escaped.replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]')}$`)
+  return { pattern }
 }
 
-function globSegmentMatches(pattern: string | RegExp, value: string): boolean {
-  return typeof pattern === 'string' ? pattern === value : pattern.test(value)
+function globSegmentMatches(segment: GlobSegment, value: string): boolean {
+  if (typeof segment === 'string') {
+    return segment === value
+  }
+  const { pattern } = segment
+  let patternIndex = 0
+  let valueIndex = 0
+  let starIndex = -1
+  let starMatchIndex = 0
+  // Retry only the latest star, avoiding combinatorial regular-expression backtracking.
+  while (valueIndex < value.length) {
+    const token = pattern[patternIndex]
+    if (token === '*') {
+      starIndex = patternIndex++
+      starMatchIndex = valueIndex
+    } else if (token === value[valueIndex] || (token === '?' && value[valueIndex] !== '/')) {
+      patternIndex++
+      valueIndex++
+    } else if (starIndex !== -1 && value[starMatchIndex] !== '/') {
+      patternIndex = starIndex + 1
+      valueIndex = ++starMatchIndex
+    } else {
+      return false
+    }
+  }
+  while (pattern[patternIndex] === '*') {
+    patternIndex++
+  }
+  return patternIndex === pattern.length
 }
 
-function pathSegmentsMatch(
-  patternSegments: (string | RegExp)[],
-  candidateSegments: string[]
-): boolean {
+function pathSegmentsMatch(patternSegments: GlobSegment[], candidateSegments: string[]): boolean {
   const matchFrom = (patternIndex: number, candidateIndex: number): boolean => {
     if (patternIndex >= patternSegments.length) {
       return candidateIndex >= candidateSegments.length
