@@ -252,6 +252,42 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
+  it('probes before opening when a next-row prompt offers a glued path guess', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(window.api.shell.pathExists).mockImplementation(
+      async (path: string) => path === '/root/.claude/settings.json'
+    )
+    const pathExistsCache = new Map<string, boolean>()
+
+    const opened = openFilePathLinkAtBufferPosition(
+      makeBuffer([
+        makeBufferLine('/root/.claude/settings.json'),
+        makeBufferLine('root@ubuntu:/mnt/data/sniper_eco_paper_final# ')
+      ]),
+      { x: 8, y: 1 },
+      80,
+      {
+        startupCwd: '/mnt/data/sniper_eco_paper_final',
+        worktreeId: 'wt-1',
+        worktreePath: '/mnt/data/sniper_eco_paper_final',
+        runtimeEnvironmentId: null,
+        pathExistsCache
+      }
+    )
+    await flushAsyncWork()
+
+    expect(opened).toBe(true)
+    expect(window.api.shell.pathExists).toHaveBeenCalledWith(
+      '/root/.claude/settings.jsonroot@ubuntu'
+    )
+    expect(openFileMock).toHaveBeenCalledTimes(1)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/root/.claude/settings.json' }),
+      { forceContentReload: true }
+    )
+    expect(pathExistsCache.get('active\0/root/.claude/settings.jsonroot@ubuntu')).toBe(false)
+  })
+
   it('does not open an unknown trailing-slash directory from direct fallback', async () => {
     setPlatform('Macintosh')
 
