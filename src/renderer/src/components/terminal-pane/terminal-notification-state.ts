@@ -19,6 +19,10 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import {
+  getWorkspaceNotificationOrigin,
+  type WorkspaceNotificationOrigin
+} from '../../../../shared/workspace-notification-policy'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -214,7 +218,7 @@ export function getNotificationWorkspaceLabels(
   state: StoreSnapshot,
   workspaceId: string,
   terminalTitle?: string
-): { repoLabel?: string; worktreeLabel: string } {
+): { repoLabel?: string; worktreeLabel: string; workspaceOrigin?: WorkspaceNotificationOrigin } {
   const scope = parseWorkspaceKey(workspaceId)
   const fallback = terminalTitle?.trim() || 'workspace'
   if (scope?.type === 'folder') {
@@ -234,8 +238,10 @@ export function getNotificationWorkspaceLabels(
   const repo = worktree
     ? findNotificationRepo(state, worktreeId, worktree.repoId, hostId)
     : undefined
+  const workspaceOrigin = getWorkspaceNotificationOrigin(worktree)
   return {
     repoLabel: repo?.displayName,
+    ...(workspaceOrigin !== 'other' ? { workspaceOrigin } : {}),
     worktreeLabel: worktree?.displayName || worktree?.branch || fallback
   }
 }

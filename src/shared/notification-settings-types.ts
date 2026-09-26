@@ -1,8 +1,11 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { WorkspaceNotificationOrigin } from './workspace-notification-policy'
 
 export type NotificationSettings = {
   enabled: boolean
   agentTaskComplete: boolean
+  cliWorktreeTaskComplete?: boolean
+  automationWorktreeTaskComplete?: boolean
   terminalBell: boolean
   suppressWhenFocused: boolean
   customSoundId:
@@ -29,6 +32,8 @@ export type NotificationDispatchRequest = {
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
+  /** Optional for older senders; resolved from the workspace on its owning host. */
+  workspaceOrigin?: WorkspaceNotificationOrigin
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
   repoLabel?: string

@@ -1,5 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { NotificationSettings } from './notification-settings-types'
+import { getDefaultNotificationSettings } from './notification-settings-defaults'
 import type { OnboardingChecklistState, OnboardingState } from './onboarding-state-types'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
@@ -19,6 +19,7 @@ import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
+export { getDefaultNotificationSettings } from './notification-settings-defaults'
 export {
   COMPACT_WORKTREE_CARD_PROPERTIES,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
@@ -117,18 +118,6 @@ export const REPO_COLORS = [
 ] as const
 
 export const DEFAULT_REPO_BADGE_COLOR = REPO_COLORS[0]
-
-export function getDefaultNotificationSettings(): NotificationSettings {
-  return {
-    enabled: true,
-    agentTaskComplete: true,
-    terminalBell: false,
-    suppressWhenFocused: true,
-    customSoundId: 'system',
-    customSoundPath: null,
-    customSoundVolume: 100
-  }
-}
 
 export function getDefaultOnboardingState(): OnboardingState {
   return {

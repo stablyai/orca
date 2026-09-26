@@ -142,6 +142,7 @@ export type Worktree = {
   diffComments?: DiffComment[]
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
+  orcaCreationSource?: 'desktop' | 'runtime' | 'cli' | 'ssh'
   cliProvenance?: CliWorkspaceProvenance
 } & GitWorktreeInfo
 

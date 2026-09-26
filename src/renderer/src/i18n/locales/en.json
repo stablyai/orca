@@ -207,6 +207,12 @@
         "restartRequired": "Restart required",
         "unavailable": "Browser identity is unavailable."
       }
+    },
+    "notifications": {
+      "cliWorktrees": "CLI-created Worktrees",
+      "cliWorktreesDescription": "Agent completion banners and phone pushes for worktrees created from the CLI.",
+      "automationWorktrees": "Automation-created Worktrees",
+      "automationWorktreesDescription": "Agent completion banners and phone pushes for worktrees created by automations."
     }
   },
   "menu": {

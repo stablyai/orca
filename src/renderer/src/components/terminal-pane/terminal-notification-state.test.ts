@@ -29,6 +29,28 @@ function stateWithWorkspace() {
 }
 
 describe('notification workspace labels', () => {
+  it.each(['local', 'ssh:server', 'runtime:server'] as const)(
+    'carries provenance for worktrees on %s',
+    (hostId) => {
+      const state = stateWithWorkspace()
+      state.worktreesByRepo.repo = [
+        makeWorktree({
+          id: 'wt',
+          repoId: 'repo',
+          hostId,
+          cliProvenance: { kind: 'created-by-cli', createdAt: 1 }
+        })
+      ]
+      expect(getNotificationWorkspaceLabels(state, 'worktree:wt')).toMatchObject({
+        workspaceOrigin: 'cli'
+      })
+      state.worktreesByRepo.repo = [
+        makeWorktree({ id: 'wt', repoId: 'repo', hostId, orcaCreationSource: 'cli' })
+      ]
+      expect(getNotificationWorkspaceLabels(state, 'wt')).toMatchObject({ workspaceOrigin: 'cli' })
+    }
+  )
+
   it('includes the only project without reading agent inventories', () => {
     const state = stateWithWorkspace()
     Object.defineProperty(state, 'agentStatusByPaneKey', {
@@ -281,6 +303,24 @@ describe('notification workspace labels', () => {
           repoLabel: HOSTS[hostId].repo.displayName,
           worktreeLabel: HOSTS[hostId].row.displayName
         })
+      }
+    )
+
+    it.each(['local', 'ssh:build-box'] as const)(
+      'uses provenance only from the owning %s row',
+      (hostId) => {
+        const state = stateWithCollidingHosts(hostId === 'local' ? 'ssh:build-box' : 'local')
+        state.worktreesByRepo.repo1 = state.worktreesByRepo.repo1.map((row) => ({
+          ...row,
+          ...(row.hostId === 'ssh:build-box'
+            ? { cliProvenance: { kind: 'created-by-cli' as const, createdAt: 1 } }
+            : {})
+        }))
+        state.activeWorktreeId = COLLIDING_ID
+        state.activeWorkspaceExecutionHostId = hostId
+        expect(getNotificationWorkspaceLabels(state, COLLIDING_ID).workspaceOrigin).toBe(
+          hostId === 'ssh:build-box' ? 'cli' : undefined
+        )
       }
     )
 

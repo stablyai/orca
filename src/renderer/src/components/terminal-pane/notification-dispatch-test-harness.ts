@@ -2,6 +2,10 @@ import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type {
+  CliWorkspaceProvenance,
+  AutomationWorkspaceProvenance
+} from '../../../../shared/worktree/types'
 
 // Why: the mocked store state lives here so each split suite's hoisted `vi.mock` factory can
 // reach it through a lazy dynamic import (hoisted factories cannot close over imports).
@@ -29,6 +33,8 @@ export type NotificationDispatchMockState = {
       displayName?: string
       branch?: string
       workspaceStatus?: string
+      cliProvenance?: CliWorkspaceProvenance
+      automationProvenance?: AutomationWorkspaceProvenance
     }[]
   >
   repos: { id: string; displayName?: string; connectionId?: string | null }[]
@@ -37,6 +43,8 @@ export type NotificationDispatchMockState = {
     notifications?: {
       enabled?: boolean
       agentTaskComplete?: boolean
+      cliWorktreeTaskComplete?: boolean
+      automationWorktreeTaskComplete?: boolean
       customSoundPath?: string | null
       customSoundId?: string | null
     }
