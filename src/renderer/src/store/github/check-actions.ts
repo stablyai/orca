@@ -87,8 +87,11 @@ export const createCheckActions = (
       return cachedChecks
     }
 
-    const inflightRequest = inflightChecksRequests.get(inflightKey)
-    if (inflightRequest) {
+    for (;;) {
+      const inflightRequest = inflightChecksRequests.get(inflightKey)
+      if (!inflightRequest) {
+        break
+      }
       if (
         (options?.force && !inflightRequest.force) ||
         (options?.noCache && !inflightRequest.noCache)
@@ -168,10 +171,12 @@ export const createCheckActions = (
           return latestCached.data
         }
         return []
-      } finally {
+      }
+    })().finally(() => {
+      if (inflightChecksRequests.get(inflightKey)?.promise === request) {
         inflightChecksRequests.delete(inflightKey)
       }
-    })()
+    })
 
     inflightChecksRequests.set(inflightKey, {
       promise: request,
