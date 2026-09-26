@@ -128,7 +128,7 @@ export const MessageRow = memo(function MessageRow({
       <div ref={rowRef} className="group relative flex flex-col items-end gap-0.5">
         {/* User turns get a distinct muted fill (not the card/canvas color) so
             the prompt reads apart from the assistant's body copy. */}
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
+        <div className="max-w-[85%] select-text rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground selection:bg-[Highlight] selection:text-[HighlightText]">
           {markdown ? (
             <>
               <NativeChatImageAttachments
@@ -187,7 +187,7 @@ export const MessageRow = memo(function MessageRow({
     <div
       ref={rowRef}
       className={cn(
-        'group relative max-w-full select-text text-sm leading-relaxed text-foreground',
+        'group relative max-w-full select-text text-sm leading-relaxed text-foreground selection:bg-[Highlight] selection:text-[HighlightText]',
         // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
         isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
         isSystem && 'text-xs text-muted-foreground'
