@@ -35,6 +35,7 @@ import {
   resolveWorkerStartReadinessTimeoutMs
 } from '../../shared/orchestration-timing-budgets'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import { callWithWorkerReportCustody, isWorkerReport } from './worker-report-custody'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
@@ -82,6 +83,23 @@ export class RuntimeClient {
   }
 
   async call<TResult>(
+    method: string,
+    params?: unknown,
+    options?: Parameters<RuntimeClient['callOnce']>[2]
+  ): Promise<RuntimeRpcSuccess<TResult>> {
+    if (isWorkerReport(method, params, options)) {
+      return callWithWorkerReportCustody({
+        userDataPath: this.userDataPath,
+        pairing: this.remotePairing,
+        params,
+        options,
+        send: (envelope) => this.callOnce<TResult>(method, params, { ...options, ...envelope })
+      })
+    }
+    return this.callOnce<TResult>(method, params, options)
+  }
+
+  private async callOnce<TResult>(
     method: string,
     params?: unknown,
     options?: {

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import type { WorkerReportRecoveryService } from '../../../shared/worker-report-recovery-service'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from '../rpc/dispatcher'
@@ -65,6 +66,7 @@ export class RuntimeRpcState {
   protected activeTransports: RpcTransport[] = []
   protected transports: RuntimeTransportMetadata[] = []
   protected metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
+  protected workerReportRecovery: WorkerReportRecoveryService | null = null
   protected mobileSocketWiring: MobileSocketWiring | null = null
   // Why: detaches the current WebSocketTransport from the session wiring so a pairing rebind can swap
   // transports under the SAME wiring (see ensureMobileSocketWiring) instead of orphaning relay sockets.
