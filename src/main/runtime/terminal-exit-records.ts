@@ -1,5 +1,5 @@
+import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import type { TerminalExitRecord } from '../../shared/terminal-surface-exit'
-import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 
 type TerminalExitRecordListeners = {
   /** The desktop renderer's mirror, sent whole on every change. */
@@ -8,10 +8,12 @@ type TerminalExitRecordListeners = {
   onWorktreeChanged: (worktreeId: string) => void
 }
 
+type SnapshotTabs = RuntimeMobileSessionTabsSnapshot['tabs']
+
 /**
  * Main's in-memory exit record per kept leaf. Deliberately not persisted: after a relaunch a kept
- * leaf spawns a fresh shell. A record dies when its leaf binds a new process, when the surface is
- * closed, when its worktree is removed, or with main.
+ * leaf spawns a fresh shell. A record dies when its leaf binds a new process, when its leaf leaves
+ * its worktree's stored session-tabs snapshot, or with main.
  */
 export class TerminalExitRecords {
   private readonly byLeafId = new Map<string, TerminalExitRecord>()
@@ -43,26 +45,27 @@ export class TerminalExitRecords {
   }
 
   /**
-   * Ends the records of leaves a close removed. The close's own publication carries the cleared
-   * record with the removal; republishing here would first show the closed leaf without its exit.
+   * Ends the records of leaves in `previous` that `next` no longer lists (a deleted snapshot lists
+   * none). Why a diff and not presence: a leaf not published yet must keep its record. Only the
+   * mirror is told, because the frame being stored is the publication that removes the leaf.
    */
-  clearClosedLeaves(leafIds: Iterable<string>): void {
-    let changed = false
-    for (const leafId of leafIds) {
-      changed = this.byLeafId.delete(leafId) || changed
+  releaseDepartedLeaves(previous: SnapshotTabs | undefined, next: SnapshotTabs | undefined): void {
+    if (this.byLeafId.size === 0 || !previous) {
+      return
     }
-    if (changed) {
-      this.listeners.onRecordsChanged()
+    const recordedLeafIds = previous.flatMap((tab) =>
+      tab.type === 'terminal' && this.byLeafId.has(tab.leafId) ? [tab.leafId] : []
+    )
+    if (recordedLeafIds.length === 0) {
+      return
     }
-  }
-
-  /** Ends every record of a removed worktree; its removal is the only publication clients need. */
-  clearWorktree(worktreeId: string): void {
+    const remaining = new Set(
+      (next ?? []).flatMap((tab) => (tab.type === 'terminal' ? [tab.leafId] : []))
+    )
     let changed = false
-    for (const [leafId, record] of this.byLeafId) {
-      if (runtimeWorktreeIdsEqual(record.worktreeId, worktreeId)) {
-        this.byLeafId.delete(leafId)
-        changed = true
+    for (const leafId of recordedLeafIds) {
+      if (!remaining.has(leafId)) {
+        changed = this.byLeafId.delete(leafId) || changed
       }
     }
     if (changed) {

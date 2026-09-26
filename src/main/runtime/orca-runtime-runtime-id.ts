@@ -113,7 +113,15 @@ export class OrcaRuntimeWithRuntimeId {
     const stamped =
       snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
     this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
+    this.terminalExitRecords.releaseDepartedLeaves(existing?.tabs, stamped.tabs)
     return stamped
+  }
+
+  /** The only other change to a stored snapshot; its leaves depart with it. */
+  protected deleteMobileSessionSnapshot(worktreeId: string): void {
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    this.mobileSessionTabsByWorktree.delete(worktreeId)
+    this.terminalExitRecords.releaseDepartedLeaves(existing?.tabs, undefined)
   }
 
   protected structuredAgentSessionTabRestorePromise: Promise<void> | null = null

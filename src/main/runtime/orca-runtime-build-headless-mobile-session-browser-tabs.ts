@@ -14,7 +14,6 @@ import {
   resolveTerminalCloseTarget,
   type PaneCloseResolution
 } from './terminal-surface-close'
-import { collectPersistedTerminalLeafIds } from './mobile-session-layout-projection'
 import type {
   TerminalPaneCloseTarget,
   TerminalSurfaceCloseTarget
@@ -112,12 +111,6 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
       return []
     }
     this.setWorkspaceSessionForWorktree(worktreeId, result.session)
-    // Why: a committed pane close removed only its pane; a last-pane close arrives as a tab close.
-    this.terminalExitRecords.clearClosedLeaves(
-      target.kind === 'pane'
-        ? [target.leafId]
-        : collectPersistedTerminalLeafIds(session.terminalLayoutsByTabId[target.tabId])
-    )
     try {
       this.store.flushOrThrow()
     } catch (error) {
