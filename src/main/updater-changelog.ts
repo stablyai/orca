@@ -1,4 +1,5 @@
 import { net } from 'electron'
+import { cancelUnreadResponseBody } from './lib/unread-response-body'
 import type { ChangelogData } from '../shared/update-status-types'
 import { compareVersions } from './updater-fallback'
 
@@ -46,6 +47,7 @@ export async function fetchChangelog(
     signal: AbortSignal.timeout(5000)
   })
   if (!res.ok) {
+    await cancelUnreadResponseBody(res)
     return null
   }
   const json: unknown = await res.json()
