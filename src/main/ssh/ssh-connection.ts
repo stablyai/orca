@@ -934,11 +934,16 @@ export class SshConnection {
                 '(unknown)'
               const val = await this.requestCredential('passphrase', detail, connectGeneration)
               if (val) {
-                this.cachedPassphrase = val
-                keyConfig.passphrase = val
-                this.respawnProxy(keyConfig, effectiveProxy)
-                await this.doSsh2Connect(keyConfig, connectGeneration)
-                return
+                const passphraseError = await this.retryWithPassphrase(
+                  keyConfig,
+                  val,
+                  effectiveProxy,
+                  connectGeneration
+                )
+                if (!passphraseError) {
+                  return
+                }
+                authError = passphraseError
               }
             }
           }
@@ -984,31 +989,74 @@ export class SshConnection {
           '(unknown)'
         const val = await this.requestCredential('passphrase', detail, connectGeneration)
         if (val) {
-          this.cachedPassphrase = val
-          credentialRetryConfig.passphrase = val
-          this.respawnProxy(credentialRetryConfig, effectiveProxy)
-          await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
-          return
+          const passphraseError = await this.retryWithPassphrase(
+            credentialRetryConfig,
+            val,
+            effectiveProxy,
+            connectGeneration
+          )
+          if (!passphraseError) {
+            return
+          }
+          authError = passphraseError
         }
       }
-      // Why: an agent socket failure can still be recovered by password auth, but the retry must use the no-agent config selected above.
-      if (isAgentFallbackError(authError) && !this.cachedPassword) {
+      // Why: password auth must not parse the failed key or revisit the failed agent first.
+      if (
+        (isAgentFallbackError(authError) || isPassphraseError(authError)) &&
+        !this.cachedPassword
+      ) {
         const val = await this.requestCredential(
           'password',
           config.host || this.target.label,
           connectGeneration
         )
         if (val) {
+          const passwordConfig = buildConnectConfig(this.target, resolved, {
+            includeAgent: false,
+            includePrivateKey: false
+          })
+          passwordConfig.password = val
+          this.respawnProxy(passwordConfig, effectiveProxy)
+          await this.doSsh2Connect(passwordConfig, connectGeneration)
           this.cachedPassword = val
-          credentialRetryConfig.password = val
-          this.respawnProxy(credentialRetryConfig, effectiveProxy)
-          await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
           return
         }
       }
       this.proxyProcess?.kill()
       this.proxyProcess = null
       throw authError
+    }
+  }
+
+  private async retryWithPassphrase(
+    config: ConnectConfig,
+    passphrase: string,
+    effectiveProxy: ReturnType<typeof resolveEffectiveProxy>,
+    connectGeneration: number
+  ): Promise<Error | null> {
+    config.passphrase = passphrase
+    this.respawnProxy(config, effectiveProxy)
+    try {
+      await this.doSsh2Connect(config, connectGeneration)
+      this.cachedPassphrase = passphrase
+      return null
+    } catch (err) {
+      delete config.passphrase
+      if (
+        !(err instanceof Error) ||
+        this.disposed ||
+        !this.isCurrentConnectAttempt(connectGeneration) ||
+        isHostKeyVerificationError(err)
+      ) {
+        throw err
+      }
+      if (isPassphraseError(err)) {
+        return err
+      }
+      // A different failure means ssh2 decrypted the key, so retain the accepted passphrase for connection retries.
+      this.cachedPassphrase = passphrase
+      throw err
     }
   }
 

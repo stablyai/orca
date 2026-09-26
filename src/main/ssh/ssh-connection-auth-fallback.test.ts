@@ -9,9 +9,10 @@ import {
   resetSshConnectionMocks,
   ssh2Mock
 } from './ssh-connection-test-harness'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
+import { createCallbacks, createResolvedConfig, createTarget } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
+import { HostKeyVerificationError } from './ssh-host-key-decision'
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
 vi.mock('./system-ssh-binary', async () =>
@@ -183,7 +184,7 @@ describe('SshConnection', () => {
     )
   })
 
-  it('retries password auth with the no-agent key config after direct key fallback fails', async () => {
+  it('retries password auth with a clean config after direct key fallback fails', async () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
     const keyPath = join(tempDir, 'id_ed25519')
@@ -208,16 +209,12 @@ describe('SshConnection', () => {
         agent?: unknown
         privateKey?: Buffer
       }
-      const passwordRetryConfig = clientInstances[2].lastConnectConfig as {
-        agent?: unknown
-        password?: string
-        privateKey?: Buffer
-      }
       expect(keyRetryConfig.agent).toBeUndefined()
       expect(keyRetryConfig.privateKey).toEqual(Buffer.from('test-key'))
-      expect(passwordRetryConfig.agent).toBeUndefined()
-      expect(passwordRetryConfig.privateKey).toEqual(Buffer.from('test-key'))
-      expect(passwordRetryConfig.password).toBe('password-123')
+      expect(clientInstances[2].lastConnectConfig).toMatchObject({ password: 'password-123' })
+      expect(clientInstances[2].lastConnectConfig).not.toHaveProperty('agent')
+      expect(clientInstances[2].lastConnectConfig).not.toHaveProperty('privateKey')
+      expect(clientInstances[2].lastConnectConfig).not.toHaveProperty('passphrase')
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -382,7 +379,7 @@ describe('SshConnection', () => {
     }
   })
 
-  it('does not prompt twice when post-agent private key passphrase is cancelled', async () => {
+  it('falls back from an agent through an encrypted key to password auth', async () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
     const keyPath = join(tempDir, 'id_ed25519')
@@ -391,7 +388,11 @@ describe('SshConnection', () => {
       new Error('All configured authentication methods failed'),
       new Error('Encrypted private OpenSSH key detected, but no passphrase given')
     ]
-    const onCredentialRequest = vi.fn(async () => null)
+    ssh2Mock.connectSequence.push('ready')
+    const onCredentialRequest = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce('password-123')
 
     try {
       const conn = new SshConnection(
@@ -399,12 +400,251 @@ describe('SshConnection', () => {
         createCallbacks({ onCredentialRequest })
       )
 
-      await expect(conn.connect()).rejects.toThrow('Encrypted private OpenSSH key detected')
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(3)
+      expect(clientInstances[0].lastConnectConfig).toMatchObject({
+        agent: '/tmp/agent.sock'
+      })
+      expect(clientInstances[0].lastConnectConfig).not.toHaveProperty('privateKey')
+      expect(clientInstances[1].lastConnectConfig).toMatchObject({
+        privateKey: Buffer.from('test-key')
+      })
+      expect(clientInstances[1].lastConnectConfig).not.toHaveProperty('agent')
+      expect(clientInstances[2].lastConnectConfig).toMatchObject({ password: 'password-123' })
+      expect(clientInstances[2].lastConnectConfig).not.toHaveProperty('agent')
+      expect(clientInstances[2].lastConnectConfig).not.toHaveProperty('privateKey')
+      expect(clientInstances[2].lastConnectConfig).not.toHaveProperty('passphrase')
+      expect(onCredentialRequest).toHaveBeenNthCalledWith(
+        1,
+        'target-1',
+        'passphrase',
+        keyPath,
+        expect.any(AbortSignal)
+      )
+      expect(onCredentialRequest).toHaveBeenNthCalledWith(
+        2,
+        'target-1',
+        'password',
+        'example.com',
+        expect.any(AbortSignal)
+      )
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('uses password-only auth when an auto-detected encrypted key passphrase is cancelled', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'encrypted-key')
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ identityFile: [keyPath], proxyUseFdpass: false })
+    )
+    ssh2Mock.connectSequence = [
+      new Error('Encrypted private OpenSSH key detected, but no passphrase given'),
+      'ready'
+    ]
+    const onCredentialRequest = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce('password-123')
+
+    try {
+      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(2)
+      expect(clientInstances[1].lastConnectConfig).toMatchObject({ password: 'password-123' })
+      expect(clientInstances[1].lastConnectConfig).not.toHaveProperty('agent')
+      expect(clientInstances[1].lastConnectConfig).not.toHaveProperty('privateKey')
+      expect(clientInstances[1].lastConnectConfig).not.toHaveProperty('passphrase')
+      expect(onCredentialRequest.mock.calls.map((call) => call[1])).toEqual([
+        'passphrase',
+        'password'
+      ])
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to password after an invalid passphrase without caching it', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'encrypted-key')
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ identityFile: [keyPath], proxyUseFdpass: false })
+    )
+    ssh2Mock.connectSequence = [
+      new Error('Encrypted private OpenSSH key detected, but no passphrase given'),
+      new Error('Cannot parse privateKey: OpenSSH key integrity check failed -- bad passphrase?'),
+      'ready'
+    ]
+    const onCredentialRequest = vi
+      .fn()
+      .mockResolvedValueOnce('wrong-passphrase')
+      .mockResolvedValueOnce('password-123')
+
+    try {
+      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(3)
+      expect(clientInstances[1].lastConnectConfig).toMatchObject({
+        privateKey: Buffer.from('encrypted-key'),
+        passphrase: 'wrong-passphrase'
+      })
+      expect(clientInstances[2].lastConnectConfig).toMatchObject({ password: 'password-123' })
+      expect(clientInstances[2].lastConnectConfig).not.toHaveProperty('agent')
+      expect(clientInstances[2].lastConnectConfig).not.toHaveProperty('privateKey')
+      expect(clientInstances[2].lastConnectConfig).not.toHaveProperty('passphrase')
+
+      ssh2Mock.connectSequence = ['ready']
+      await conn.connect()
+      expect(clientInstances[3].lastConnectConfig).toMatchObject({ password: 'password-123' })
+      expect(clientInstances[3].lastConnectConfig).not.toHaveProperty('passphrase')
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('uses an explicitly selected encrypted key when its passphrase is correct', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'selected-key')
+    writeFileSync(keyPath, 'encrypted-key')
+    ssh2Mock.connectSequence = [
+      new Error('Encrypted private OpenSSH key detected, but no passphrase given'),
+      'ready'
+    ]
+    const onCredentialRequest = vi.fn(async () => 'correct-passphrase')
+
+    try {
+      const conn = new SshConnection(
+        createTarget({ identityFile: keyPath }),
+        createCallbacks({ onCredentialRequest })
+      )
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(2)
+      expect(clientInstances[1].lastConnectConfig).toMatchObject({
+        privateKey: Buffer.from('encrypted-key'),
+        passphrase: 'correct-passphrase'
+      })
       expect(onCredentialRequest).toHaveBeenCalledTimes(1)
       expect(onCredentialRequest).toHaveBeenCalledWith(
         'target-1',
         'passphrase',
         keyPath,
+        expect.any(AbortSignal)
+      )
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('reuses an accepted passphrase after a transient connection failure', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'selected-key')
+    writeFileSync(keyPath, 'encrypted-key')
+    ssh2Mock.connectSequence = [
+      new Error('Encrypted private OpenSSH key detected, but no passphrase given'),
+      new Error('read ECONNRESET'),
+      'ready'
+    ]
+    const onCredentialRequest = vi.fn(async () => 'correct-passphrase')
+
+    try {
+      const conn = new SshConnection(
+        createTarget({ identityFile: keyPath }),
+        createCallbacks({ onCredentialRequest })
+      )
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(3)
+      expect(clientInstances[2].lastConnectConfig).toMatchObject({
+        privateKey: Buffer.from('encrypted-key'),
+        passphrase: 'correct-passphrase'
+      })
+      expect(onCredentialRequest).toHaveBeenCalledTimes(1)
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not request a password when host-key verification rejects the passphrase retry', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'encrypted-key')
+    ssh2Mock.connectSequence = [
+      new Error('Encrypted private OpenSSH key detected, but no passphrase given'),
+      new HostKeyVerificationError('Host key verification failed', 'mismatch')
+    ]
+    const onCredentialRequest = vi.fn(async () => 'passphrase')
+
+    try {
+      const conn = new SshConnection(
+        createTarget({ identityFile: keyPath }),
+        createCallbacks({ onCredentialRequest })
+      )
+
+      await expect(conn.connect()).rejects.toThrow('Host key verification failed')
+      expect(onCredentialRequest).toHaveBeenCalledTimes(1)
+      expect(onCredentialRequest).toHaveBeenCalledWith(
+        'target-1',
+        'passphrase',
+        keyPath,
+        expect.any(AbortSignal)
+      )
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('stops after one password failure without caching the rejected password', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const keyPath = join(tempDir, 'id_ed25519')
+    writeFileSync(keyPath, 'encrypted-key')
+    ssh2Mock.connectSequence = [
+      new Error('Encrypted private OpenSSH key detected, but no passphrase given'),
+      new Error('All configured authentication methods failed')
+    ]
+    const onCredentialRequest = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce('wrong-password')
+
+    try {
+      const conn = new SshConnection(
+        createTarget({ identityFile: keyPath }),
+        createCallbacks({ onCredentialRequest })
+      )
+
+      await expect(conn.connect()).rejects.toThrow('All configured authentication methods failed')
+      expect(conn.getState().status).toBe('auth-failed')
+      expect(clientInstances).toHaveLength(2)
+      expect(onCredentialRequest).toHaveBeenCalledTimes(2)
+
+      ssh2Mock.connectSequence = [
+        new Error('Encrypted private OpenSSH key detected, but no passphrase given'),
+        'ready'
+      ]
+      onCredentialRequest.mockResolvedValueOnce(null).mockResolvedValueOnce('correct-password')
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(4)
+      expect(clientInstances[3].lastConnectConfig).toMatchObject({
+        password: 'correct-password'
+      })
+      expect(onCredentialRequest).toHaveBeenNthCalledWith(
+        4,
+        'target-1',
+        'password',
+        'example.com',
         expect.any(AbortSignal)
       )
     } finally {
