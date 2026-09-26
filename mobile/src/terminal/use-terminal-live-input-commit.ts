@@ -27,11 +27,7 @@ type TerminalLiveInputChangeEvent = {
   }
 }
 
-/**
- * The composing report the preedit mirror is owed. An Android WebView marks the keyboard's
- * composing region, which Latin keyboards keep over every word; native Android reports no range,
- * so on Android the page must not either. Native Android has no user agent and reports none anyway.
- */
+/** Android keyboards compose every Latin word; report no range, as native Android does. */
 function reportedLiveInputComposing(
   nativeEvent: TerminalLiveInputChangeEvent['nativeEvent']
 ): boolean | undefined {
