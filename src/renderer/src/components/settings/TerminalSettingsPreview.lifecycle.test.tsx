@@ -168,12 +168,13 @@ function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   } as GlobalSettings
 }
 
-function renderPreview(settings = makeSettings()): void {
+function renderPreview(settings = makeSettings(), previewRows?: number): void {
   TerminalSettingsPreview({
     title: 'Preview',
     description: 'Preview description',
     settings,
-    systemPrefersDark: true
+    systemPrefersDark: true,
+    ...(previewRows === undefined ? {} : { previewRows })
   })
 }
 
@@ -203,6 +204,7 @@ describe('TerminalSettingsPreview terminal lifecycle', () => {
     expect(terminal.open).toHaveBeenCalledOnce()
     expect(terminal.open).toHaveBeenCalledWith(mockReactRuntime.container)
     expect(terminal.write).toHaveBeenCalledOnce()
+    expect(terminal.write).toHaveBeenCalledWith(expect.stringContaining('你好 世界 123'))
     expect(terminal.reset).not.toHaveBeenCalled()
     expect(terminal.options).toMatchObject({
       allowTransparency: false,
@@ -223,6 +225,12 @@ describe('TerminalSettingsPreview terminal lifecycle', () => {
 
     runCleanups()
     expect(terminal.dispose).toHaveBeenCalledOnce()
+  })
+
+  it('uses the requested preview row count', () => {
+    renderPreview(makeSettings(), 13)
+
+    expect(mockXterm.instances[0]?.options.rows).toBe(13)
   })
 
   it('does not pass a persisted sub-minimum line height to xterm', () => {

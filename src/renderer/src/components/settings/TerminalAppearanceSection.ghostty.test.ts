@@ -111,6 +111,12 @@ vi.mock('./TerminalThemeSections', () => ({
   }
 }))
 
+vi.mock('./TerminalSettingsPreview', () => ({
+  TerminalSettingsPreview: function TerminalSettingsPreview() {
+    return null
+  }
+}))
+
 vi.mock('./TerminalWindowSection', () => ({
   TerminalWindowSection: function TerminalWindowSection() {
     return null
@@ -505,6 +511,32 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
 
     expect(findComponentByTypeName(element, 'TerminalAdvancedTypographyControls')).not.toBeNull()
     expect(findComponentByTypeName(element, 'TerminalFontSizeSetting')).not.toBeNull()
+  })
+
+  it('shows a compact terminal preview beside primary typography settings', () => {
+    const settings = {
+      terminalFontFamily: 'JetBrains Mono',
+      terminalFontSize: 15
+    } as never
+
+    const element = TerminalAppearanceSection({
+      settings,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      ghostty: ghosttyMock,
+      warpThemes: warpThemesMock
+    })
+
+    const preview = findComponentByTypeName(element, 'TerminalSettingsPreview')
+    expect(preview).not.toBeNull()
+    expect(preview?.props.title).toBe('Terminal preview')
+    expect(preview?.props.description).toBe('Updates as you change terminal font settings.')
+    expect(preview?.props.settings).toBe(settings)
+    expect(preview?.props.systemPrefersDark).toBe(true)
+    expect(preview?.props.previewRows).toBe(13)
+    expect(preview?.props.previewSize).toBe('compact')
+    expect(preview?.props.showPaneDividerToggle).toBe(false)
   })
 
   it('hides the theme import affordance on paired web clients', () => {
