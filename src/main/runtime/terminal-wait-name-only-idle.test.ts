@@ -226,6 +226,46 @@ describe('tui-idle evidence ranking', () => {
     expect(settled).toHaveBeenCalledWith({ ok: expect.objectContaining({ satisfied: true }) })
   })
 
+  it('settles a DeepSeek Build splash once the composer is up', async () => {
+    const pty = makeTuiIdlePty({
+      lastAgentStatus: null,
+      lastOscTitle: 'DeepSeek Build',
+      tailBuffer: ['DeepSeek Build  6.0.0', '  ❯', 'Logged in with API key']
+    })
+    const { wait } = createWait({ pty, agent: 'dsb' })
+    await expect(
+      wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 })
+    ).resolves.toMatchObject({ satisfied: true })
+  })
+
+  it('does not settle DeepSeek Build while its title says it is waiting', async () => {
+    const pty = makeTuiIdlePty({
+      lastAgentStatus: null,
+      lastOscTitle: '⠼ - Waiting for response… - DeepSeek Build',
+      tailBuffer: ['DeepSeek Build  6.0.0', '  ❯', 'Thinking…']
+    })
+    const { wait } = createWait({ pty, agent: 'dsb' })
+    const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
+    await advanceWhileStreaming(pty, 2)
+    expect(settled).not.toHaveBeenCalled()
+  })
+
+  it('does not settle DeepSeek Build from a done status while the title is still working', async () => {
+    const pty = makeTuiIdlePty({
+      lastAgentStatus: null,
+      lastOscTitle: '⠼ - Waiting for response… - DeepSeek Build',
+      tailBuffer: ['DeepSeek Build  6.0.0', '  ❯', 'pong']
+    })
+    const { wait } = createWait({
+      pty,
+      agent: 'dsb',
+      firstPartyStatus: { state: 'done', updatedAt: Date.now() }
+    })
+    const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
+    await advanceWhileStreaming(pty, 2)
+    expect(settled).not.toHaveBeenCalled()
+  })
+
   it('never settles another agent quoting Muse in its scrollback', async () => {
     const pty = makeTuiIdlePty({
       lastAgentStatus: null,

@@ -52,7 +52,9 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   // Why: Orca detects trae by `traecli`, an alias only TRAE CN ships.
   trae: 'trae-cn',
   muse: null,
-  zcode: 'zcode'
+  zcode: 'zcode',
+  // Why: DeepSeek Build has its own skill index. The shared skills CLI has no dsb key.
+  dsb: null
 } satisfies Record<TuiAgent, string | null>
 
 /**

@@ -135,6 +135,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://zcode.z.ai/en/docs'
   },
   {
+    id: 'dsb',
+    label: translate('auto.lib.agent.catalog.dsb_label', 'DeepSeek Build'),
+    cmd: 'dsb',
+    searchAliases: ['deepseek-build', 'deepseek build'],
+    homepageUrl: 'https://www.npmjs.com/package/@innocarpe/deepseek-build'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',

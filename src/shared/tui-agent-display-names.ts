@@ -15,6 +15,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   trae: 'Trae',
   muse: 'Muse',
   zcode: 'ZCode',
+  dsb: 'DeepSeek Build',
   autohand: 'Autohand Code',
   opencode: 'OpenCode',
   opencode2: 'OpenCode 2',

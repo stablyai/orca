@@ -39,4 +39,5 @@ export type TuiAgent =
   | 'trae' // Trae CLI
   | 'muse' // Muse (Meta `muse` CLI)
   | 'zcode' // ZCode (Z.ai `zcode` CLI)
+  | 'dsb' // DeepSeek Build (`dsb` / `deepseek-build`)
   | 'prime-agent' // Prime Agent (Prime Intellect)

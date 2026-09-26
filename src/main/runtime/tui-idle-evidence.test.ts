@@ -65,6 +65,115 @@ describe('hasQuietMuseReadyPrompt', () => {
   })
 })
 
+describe('isTuiIdleSatisfied deepseek build lane', () => {
+  const ready = () => true
+  const workingTitle = '⠼ - Waiting for response… - DeepSeek Build'
+
+  it('settles a resting composer', () => {
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          agent: 'dsb',
+          record: record({ lastOscTitle: 'DeepSeek Build' }),
+          readDsbReadyBodyEvidence: ready,
+          readMuseReadyBodyEvidence: () => false
+        })
+      )
+    ).toBe(true)
+  })
+
+  it('does not treat a shared ready hit as a DeepSeek Build composer', () => {
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          agent: 'dsb',
+          record: record({ lastOscTitle: 'DeepSeek Build' }),
+          readPositiveBodyEvidence: ready,
+          readMuseReadyBodyEvidence: () => false
+        })
+      )
+    ).toBe(false)
+  })
+
+  it('vetoes when either title is still working, including a fresh done status', () => {
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          agent: 'dsb',
+          rendererTitle: 'DeepSeek Build',
+          record: record({ lastOscTitle: workingTitle }),
+          readDsbReadyBodyEvidence: ready,
+          firstPartyStatus: { state: 'done', updatedAt: Date.now() }
+        })
+      )
+    ).toBe(false)
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          agent: 'dsb',
+          rendererTitle: workingTitle,
+          record: record({ lastOscTitle: 'DeepSeek Build' }),
+          readDsbReadyBodyEvidence: ready,
+          firstPartyStatus: { state: 'done', updatedAt: Date.now() }
+        })
+      )
+    ).toBe(false)
+  })
+
+  it('lets a done newer than the OSC title settle a lagging working title', () => {
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          agent: 'dsb',
+          record: record({ lastOscTitle: workingTitle, lastOscTitleEpochMs: 1_000 }),
+          readDsbReadyBodyEvidence: ready,
+          firstPartyStatus: { state: 'done', updatedAt: 2_000 }
+        })
+      )
+    ).toBe(true)
+  })
+
+  it('keeps a working renderer title in front of an older OSC clock', () => {
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          agent: 'dsb',
+          rendererTitle: workingTitle,
+          record: record({ lastOscTitle: workingTitle, lastOscTitleEpochMs: 1_000 }),
+          readDsbReadyBodyEvidence: ready,
+          firstPartyStatus: { state: 'done', updatedAt: 2_000 }
+        })
+      )
+    ).toBe(false)
+  })
+
+  it('keeps the veto when the working title is newer than done', () => {
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          agent: 'dsb',
+          record: record({ lastOscTitle: workingTitle, lastOscTitleEpochMs: 3_000 }),
+          readDsbReadyBodyEvidence: ready,
+          firstPartyStatus: { state: 'done', updatedAt: 2_000 }
+        })
+      )
+    ).toBe(false)
+  })
+
+  it('does not let an empty renderer title hide a working OSC title', () => {
+    expect(
+      isTuiIdleSatisfied(
+        input({
+          agent: 'dsb',
+          rendererTitle: '',
+          record: record({ lastOscTitle: workingTitle }),
+          readDsbReadyBodyEvidence: ready
+        })
+      )
+    ).toBe(false)
+  })
+})
+
 describe('isTuiIdleSatisfied muse lane', () => {
   it('settles a quiet Muse pane with no title signal at all', () => {
     expect(isTuiIdleSatisfied(input())).toBe(true)

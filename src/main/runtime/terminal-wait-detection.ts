@@ -6,6 +6,7 @@ import {
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
 import { findAntigravityReadyPromptIndex } from './antigravity-terminal-readiness'
+import { findDsbReadyPromptIndex } from './dsb-terminal-readiness'
 import { startOfLastLines, startOfLastNonBlankLines } from './terminal-wait-tail-window'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
@@ -42,16 +43,27 @@ export const detectExplicitIdleStatusFromTitle: (title: string) => AgentStatus |
   memoizeTitleClassification(computeExplicitIdleStatusFromTitle)
 
 export function isKnownReadyPromptPreview(preview: string): boolean {
+  return readyPromptSurvivesBlockedSignal(preview, findKnownReadyPromptIndex)
+}
+
+// Why not inside isKnownReadyPromptPreview: a DeepSeek Build banner stays in
+// the scrollback after the process exits, and a later shell ❯ would then
+// satisfy every agent. Only a pane that is still dsb may use this match.
+export function isDsbReadyPromptPreview(preview: string): boolean {
+  return readyPromptSurvivesBlockedSignal(preview, findDsbReadyPromptIndex)
+}
+
+function readyPromptSurvivesBlockedSignal(
+  preview: string,
+  findReadyIndex: (normalized: string) => number | null
+): boolean {
   const normalized = preview.toLowerCase()
-  const readyIndex = findKnownReadyPromptIndex(normalized)
+  const readyIndex = findReadyIndex(normalized)
   if (readyIndex === null) {
     return false
   }
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
-  if (blockedSignal !== null && blockedSignal.index > readyIndex) {
-    return false
-  }
-  return true
+  return blockedSignal === null || blockedSignal.index <= readyIndex
 }
 
 // Why separate from isKnownReadyPromptPreview: that one settles tier 1 immediately, while

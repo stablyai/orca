@@ -11,6 +11,7 @@ import {
   isPiAgentTitle,
   titleHasAgentName
 } from './agent-title-core'
+import { isDeepSeekBuildTerminalTitle } from './dsb-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
@@ -32,6 +33,10 @@ function computeIsClaudeAgent(title: string): boolean {
   }
   if (title.startsWith('. ') || title.startsWith('* ')) {
     return true
+  }
+  // Why: a working DeepSeek Build title uses Claude's braille frame.
+  if (isDeepSeekBuildTerminalTitle(title)) {
+    return false
   }
   if (containsAgentSpinnerGlyph(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
@@ -122,6 +127,11 @@ function computeAgentLabel(title: string): string | null {
   }
   if (HERMES_AGENT_NAME_RE.test(title)) {
     return 'Hermes'
+  }
+  // Why: the renderer copy must agree with terminal-title-agent-type, or a
+  // working dsb pane is labeled Claude and takes Claude-only side effects.
+  if (isDeepSeekBuildTerminalTitle(title)) {
+    return 'DeepSeek Build'
   }
   if (isClaudeAgent(title)) {
     return 'Claude Code'

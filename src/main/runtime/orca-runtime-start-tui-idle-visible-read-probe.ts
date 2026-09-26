@@ -11,6 +11,7 @@ import {
 import { withTimeout } from './runtime-async-boundaries'
 import {
   detectTerminalWaitBlockedReason,
+  isDsbReadyPromptPreview,
   isKnownReadyPromptPreview
 } from './terminal-wait-detection'
 import type {
@@ -80,7 +81,9 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         const ready =
           agent === 'antigravity'
             ? isAntigravityReadyPromptSnapshot(snapshotText)
-            : isKnownReadyPromptPreview(snapshotText)
+            : agent === 'dsb'
+              ? isDsbReadyPromptPreview(snapshotText)
+              : isKnownReadyPromptPreview(snapshotText)
         if (!blockedReason && !ready) {
           return
         }

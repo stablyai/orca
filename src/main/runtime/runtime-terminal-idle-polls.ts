@@ -2,6 +2,7 @@ import { isShellProcess, type AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWait } from '../../shared/runtime-types'
 import {
   detectTerminalWaitBlockedReason,
+  isDsbReadyPromptPreview,
   isKnownReadyPromptPreview,
   isMuseReadyPromptPreview
 } from './terminal-wait-detection'
@@ -129,6 +130,7 @@ export class RuntimeTerminalIdlePolls {
           record: leaf,
           rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
           readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText),
+          readDsbReadyBodyEvidence: () => isDsbReadyPromptPreview(waitText),
           readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText),
           agent,
           firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
@@ -197,6 +199,7 @@ export class RuntimeTerminalIdlePolls {
           readPositiveBodyEvidence: () =>
             this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
             isKnownReadyPromptPreview(waitText),
+          readDsbReadyBodyEvidence: () => isDsbReadyPromptPreview(waitText),
           readMuseReadyBodyEvidence: () => isMuseReadyPromptPreview(waitText),
           agent,
           firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),

@@ -335,6 +335,21 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // window never settles; its composer box corner is the real "input is live" signal.
     draftPasteReadySignal: 'zcode-composer-prompt'
   },
+  dsb: {
+    detectCmd: 'dsb',
+    detectCmdAliases: ['deepseek-build'],
+    // Why: the npm bin is a node shim that re-execs ~/.deepseek-build/bin/dsb. The
+    // foreground name is that binary, not `node`. `deepseek-build-agent` is the
+    // runtime child; recognition maps it separately.
+    expectedProcess: 'dsb',
+    // Why: `dsb run` exits after one message. The hosted session is the full-screen
+    // TUI, which has no prompt flag, so the first message is pasted into ❯.
+    promptInjectionMode: 'stdin-after-start',
+    // Why: the splash keeps an update line on screen, so a quiet window never
+    // settles. ❯ is drawn after the alt-screen switch — the same bytes grok uses.
+    // A shell ❯ stays in the normal buffer, before that switch.
+    draftPasteReadySignal: 'grok-composer-prompt'
+  },
   devin: {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.

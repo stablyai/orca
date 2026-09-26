@@ -23,6 +23,8 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   muse: '--yolo',
   // Why: ZCode gates tools by collaboration mode; `yolo` is its bypass-everything mode.
   zcode: '--mode yolo',
+  // Why: `dsb --dogfood` is the trusted local profile (workspace write + bash).
+  dsb: '--dogfood',
   'mistral-vibe': '--agent auto-approve',
   'qwen-code': '--approval-mode yolo',
   rovo: '--yolo',

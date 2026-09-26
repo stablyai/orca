@@ -44,6 +44,28 @@ function makeSingleLayout(leafId: string): TerminalLayoutSnapshot {
 }
 
 describe('buildTitleDerivedAgentRows', () => {
+  it('labels a working DeepSeek Build title as dsb and does not claim a Claude mention', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: '⠼ - Waiting for response… - DeepSeek Build',
+          2: '⠋ Review DeepSeek Build integration'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+      now: 2000
+    })
+
+    // Why the mention produces no row: a braille task title is not Claude unless
+    // it names Claude, and it is not DeepSeek Build unless the product is the
+    // final title segment.
+    expect(rows.map((row) => [row.agentType, row.state])).toEqual([['dsb', 'working']])
+  })
+
   it('adds title-derived rows for live agent panes that have no hook status yet', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],

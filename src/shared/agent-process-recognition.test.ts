@@ -11,6 +11,29 @@ import {
 } from './agent-process-recognition'
 
 describe('agent process recognition', () => {
+  it('recognizes DeepSeek Build by binary name and its npm shim', () => {
+    expect(recognizeAgentProcess('dsb')).toEqual({ agent: 'dsb', processName: 'dsb' })
+    expect(recognizeAgentProcess('deepseek-build')).toEqual({
+      agent: 'dsb',
+      processName: 'deepseek-build'
+    })
+    expect(recognizeAgentProcess('deepseek-build-agent')).toEqual({
+      agent: 'dsb',
+      processName: 'deepseek-build-agent'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js'
+      )
+    ).toEqual({ agent: 'dsb', processName: 'dsb' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /usr/lib/node_modules/@innocarpe/deepseek-build/npm/bin/dsb.js run "explain this"'
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('dsb run "explain this"')).toBeNull()
+  })
+
   it('recognizes packaged Codex foreground process names', () => {
     expect(recognizeAgentProcess('codex-aarch64-ap')).toEqual({
       agent: 'codex',

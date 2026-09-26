@@ -40,7 +40,9 @@ const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
   gemini: ['node_modules/@google/gemini-cli/'],
   // Why: ZCode's npm bin is `dist/zcode.cjs`, so a package install runs as `node …zcode.cjs`
   // and never shows `zcode` as the foreground name (a SEA build still matches by name).
-  zcode: ['node_modules/@zcode/cli/']
+  zcode: ['node_modules/@zcode/cli/'],
+  // Why: `dsb` on PATH is `node …/@innocarpe/deepseek-build/npm/bin/dsb.js`.
+  dsb: ['node_modules/@innocarpe/deepseek-build/']
 }
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
@@ -87,6 +89,10 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   // comm-truncated rows (`muse-bin-1.0.3-R`) without matching unrelated `muse-*` tools.
   if (normalized.startsWith('muse-bin-')) {
     return PROCESS_TO_AGENT.get('muse')
+  }
+  // Why: the native runtime binary is `deepseek-build-agent`, spawned by the `dsb` shim.
+  if (normalized === 'deepseek-build-agent') {
+    return PROCESS_TO_AGENT.get('dsb')
   }
   return undefined
 }

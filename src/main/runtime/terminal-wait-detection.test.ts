@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { isDsbWorkingTitle } from './dsb-terminal-readiness'
 import {
   detectTerminalWaitBlockedReason,
+  isDsbReadyPromptPreview,
   isKnownReadyPromptPreview,
   isMuseReadyPromptPreview
 } from './terminal-wait-detection'
@@ -574,6 +576,22 @@ describe('isMuseReadyPromptPreview', () => {
     const waitText = waitTextFor([...MUSE_TRUST_DIALOG, ...MUSE_READY_SCREEN_META])
     expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
     expect(isMuseReadyPromptPreview(waitText)).toBe(true)
+  })
+
+  it('accepts a DeepSeek Build splash only while the pane is still that agent', () => {
+    const splash = waitTextFor([
+      'DeepSeek Build  6.0.0',
+      'New worktree',
+      '  ❯',
+      'DeepSeek V4.1 Flash (공식) (max)'
+    ])
+    const retainedShell = waitTextFor(['DeepSeek Build  6.0.0', '  ❯', '$', '❯'])
+    expect(isDsbReadyPromptPreview(splash)).toBe(true)
+    expect(isKnownReadyPromptPreview(splash)).toBe(false)
+    expect(isKnownReadyPromptPreview(retainedShell)).toBe(false)
+    expect(isKnownReadyPromptPreview(waitTextFor(['$ dsb', '❯']))).toBe(false)
+    expect(isDsbWorkingTitle('⠼ - Waiting for response… - DeepSeek Build')).toBe(true)
+    expect(isDsbWorkingTitle('DeepSeek Build')).toBe(false)
   })
 
   it('refuses a ready screen once a blocked dialog opens below it', () => {
