@@ -239,6 +239,7 @@ describe('runTerminalViewportFitPass', () => {
     viewportMeasured?: boolean
     viewport?: { cols: number; rows: number } | null
     measured?: { cols: number; rows: number } | null
+    sentViewport?: { cols: number; rows: number } | null
     budget?: TerminalViewportResubscribeBudget
   }) {
     const budget = overrides.budget ?? new TerminalViewportResubscribeBudget()
@@ -266,6 +267,7 @@ describe('runTerminalViewportFitPass', () => {
       seq: 1,
       hostCols: overrides.hostCols ?? null,
       hostRows: overrides.hostRows ?? null,
+      sentViewport: overrides.sentViewport ?? null,
       budget,
       diagnostics,
       viewportRef: { current: overrides.viewport ?? null },
@@ -311,6 +313,21 @@ describe('runTerminalViewportFitPass', () => {
     expect(h.args.viewportRef.current).toEqual(PHONE)
     expect(h.args.viewportMeasuredRef.current).toBe(true)
     expect(h.budget.attempts(HANDLE)).toBe(1)
+  })
+
+  it('converges on the viewport the subscribe carried, even after a refit cleared the measured flag', async () => {
+    const h = makeHarness({
+      hostCols: PHONE.cols,
+      hostRows: PHONE.rows,
+      viewportMeasured: false,
+      viewport: PHONE,
+      sentViewport: PHONE
+    })
+    runTerminalViewportFitPass(h.args)
+    await settle()
+    expect(h.unsubscribeTerminal).not.toHaveBeenCalled()
+    expect(h.subscribeToTerminal).not.toHaveBeenCalled()
+    expect(h.budget.attempts(HANDLE)).toBe(0)
   })
 
   it('treats an equal fresh measure as convergence instead of resubscribing', async () => {

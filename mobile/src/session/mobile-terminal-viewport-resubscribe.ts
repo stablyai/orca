@@ -185,6 +185,8 @@ export type TerminalViewportFitPassArgs = {
   seq: number
   hostCols: number | null
   hostRows: number | null
+  /** The viewport this subscribe carried; null when it went without one. */
+  sentViewport: TerminalViewportDims | null
   budget: TerminalViewportResubscribeBudget
   diagnostics: Pick<
     MobileTerminalDiagnostics,
@@ -208,11 +210,14 @@ export type TerminalViewportFitPassArgs = {
 export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): void {
   const { handle, seq, hostCols, hostRows, budget, diagnostics } = args
   const retryGeneration = budget.retryGeneration(handle)
+  // Why: a refit can clear the measured flag after this subscribe already told the host its viewport.
+  const viewportMeasured = args.viewportMeasuredRef.current
+  const viewportKnown = viewportMeasured || args.sentViewport != null
   const decision = resolveTerminalViewportResubscribe({
     hostCols,
     hostRows,
-    viewportMeasured: args.viewportMeasuredRef.current,
-    viewport: args.viewportRef.current,
+    viewportMeasured: viewportKnown,
+    viewport: viewportMeasured ? args.viewportRef.current : args.sentViewport,
     attempts: budget.attempts(handle)
   })
   if (decision.kind === 'converged') {
@@ -230,7 +235,7 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     }
     return
   }
-  const viewportWasMeasured = args.viewportMeasuredRef.current
+  const viewportWasMeasured = viewportKnown
   void (async () => {
     // Why: wait for init()'s rAF chain before measuring, else the measure races ahead and returns null (log dump 2026-05-06).
     await args.getTerminalRef(handle)?.awaitReady()
