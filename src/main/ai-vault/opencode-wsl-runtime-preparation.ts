@@ -102,6 +102,8 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
   const hasDatabase = await run({
     script: [
       'data="${XDG_DATA_HOME:-$HOME/.local/share}/opencode"',
+      // WSL discovery still enumerates the default data root independently of guest overrides.
+      'for db in "$HOME/.local/share/opencode"/opencode.db "$HOME/.local/share/opencode"/opencode-*.db; do if [ -f "$db" ]; then printf present; exit 0; fi; done',
       'case "${OPENCODE_DB-}" in',
       '  :memory:) exit 0 ;;',
       '  /*) [ ! -f "$OPENCODE_DB" ] || printf present ;;',

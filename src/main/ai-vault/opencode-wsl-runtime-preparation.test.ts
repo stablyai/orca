@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { ORCAD_BUN_RELEASE_ASSETS } from '../../shared/orcad-bun-runtime'
+import { runProcess } from '../../shared/child-process/run-process'
 import type * as preparationModule from './opencode-wsl-runtime-preparation'
 
 const mocks = vi.hoisted(() => ({
@@ -226,4 +230,31 @@ describe('WSL SQLite runtime preparation', () => {
     expect((await prepared())[0]?.executable).toBe('/usr/bin/node')
     expect(mocks.running).toHaveBeenCalledWith(expect.any(Array), { requireConfirmed: true })
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps the discovery default visible when guest overrides point elsewhere',
+    async () => {
+      await prepared()
+      const script = mocks.run.mock.calls[0]?.[0].script
+      const directory = await mkdtemp(join(tmpdir(), 'orca-wsl-presence-'))
+      try {
+        const data = join(directory, '.local', 'share', 'opencode')
+        await mkdir(data, { recursive: true })
+        await writeFile(join(data, 'opencode.db'), '')
+        const result = await runProcess({
+          program: '/bin/sh',
+          args: ['-c', script],
+          env: {
+            HOME: directory,
+            XDG_DATA_HOME: join(directory, 'empty'),
+            OPENCODE_DB: ':memory:'
+          }
+        })
+        expect(result.code).toBe(0)
+        expect(result.stdout).toBe('present')
+      } finally {
+        await rm(directory, { recursive: true, force: true })
+      }
+    }
+  )
 })

@@ -82,16 +82,17 @@ describe('SQLite process launch admission', () => {
     await expect(refused.parse(args)).rejects.toThrow('Running state unavailable')
     expect(mocked.spawn).not.toHaveBeenCalled()
     let finish = () => {}
-    const waiting = reader(
+    const admit = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finish = resolve
         })
     )
+    const waiting = reader(admit)
     const cancellation = new AbortController()
     const pending = waiting.parse({ ...args, signal: cancellation.signal })
     const rejected = expect(pending).rejects.toThrow('cancelled')
-    await Promise.resolve()
+    await vi.waitFor(() => expect(admit).toHaveBeenCalledOnce())
     cancellation.abort(new Error('cancelled'))
     await rejected
     finish()
