@@ -7,15 +7,20 @@ import { claudeRecord } from './claude-structured-item-translation'
 
 /** Orca refused the message's content, as opposed to failing to read an attachment. */
 export class ClaudeDispatchContentError extends Error {
-  constructor(message: string) {
+  /** What the person reads on the rejected message; `message` stays for logs. */
+  readonly sentence: string
+
+  constructor(message: string, sentence: string) {
     super(message)
     this.name = 'ClaudeDispatchContentError'
+    this.sentence = sentence
   }
 }
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const BYTES_PER_MB = 1024 * 1024
+const MAX_IMAGE_BYTES = 5 * BYTES_PER_MB
 const MAX_IMAGE_COUNT = 20
-const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024
+const MAX_TOTAL_IMAGE_BYTES = 20 * BYTES_PER_MB
 const MAX_REPLAY_CONTENT_KEY_BYTES = 256
 
 type ImageBudget = {
@@ -28,11 +33,15 @@ export async function readClaudeImage(path: string, openImpl: typeof open = open
   try {
     const invalidImage = (): Error =>
       new ClaudeDispatchContentError(
-        `Claude image must be a non-empty file no larger than ${MAX_IMAGE_BYTES} bytes`
+        `Claude image must be a non-empty file no larger than ${MAX_IMAGE_BYTES} bytes`,
+        `An image on this message is empty or larger than ${MAX_IMAGE_BYTES / BYTES_PER_MB} MB, so the message was not sent.`
       )
     const info = await file.stat()
     if (!info.isFile()) {
-      throw new ClaudeDispatchContentError('Claude image must be a file')
+      throw new ClaudeDispatchContentError(
+        'Claude image must be a file',
+        "An image on this message isn't a file, so the message was not sent."
+      )
     }
     if (info.size > MAX_IMAGE_BYTES) {
       throw invalidImage()
@@ -73,26 +82,32 @@ async function imageContent(
   budget.count += 1
   if (budget.count > MAX_IMAGE_COUNT) {
     throw new ClaudeDispatchContentError(
-      `Claude messages support at most ${MAX_IMAGE_COUNT} images`
+      `Claude messages support at most ${MAX_IMAGE_COUNT} images`,
+      `Claude accepts at most ${MAX_IMAGE_COUNT} images in one message, so this message was not sent.`
     )
   }
   if (block.url) {
     return { type: 'image', source: { type: 'url', url: block.url } }
   }
   if (!block.path) {
-    throw new ClaudeDispatchContentError('image reference has neither a path nor a URL')
+    throw new ClaudeDispatchContentError(
+      'image reference has neither a path nor a URL',
+      'An image on this message has no file to send, so the message was not sent.'
+    )
   }
   const data = await readClaudeImage(block.path)
   budget.localBytes += data.byteLength
   if (budget.localBytes > MAX_TOTAL_IMAGE_BYTES) {
     throw new ClaudeDispatchContentError(
-      `Claude images must total no more than ${MAX_TOTAL_IMAGE_BYTES} bytes`
+      `Claude images must total no more than ${MAX_TOTAL_IMAGE_BYTES} bytes`,
+      `The images on this message add up to more than ${MAX_TOTAL_IMAGE_BYTES / BYTES_PER_MB} MB, so the message was not sent.`
     )
   }
   const mediaType = IMAGE_MIME_BY_EXTENSION[extname(block.path).toLowerCase()]
   if (!mediaType) {
     throw new ClaudeDispatchContentError(
-      `Claude does not support the image type ${extname(block.path)}`
+      `Claude does not support the image type ${extname(block.path)}`,
+      'Claude accepts only PNG, JPEG, GIF, and WebP images, so this message was not sent.'
     )
   }
   return {
@@ -115,7 +130,10 @@ export async function claudeDispatchMessageContent(
   body: AgentJournalMessageItem
 ): Promise<unknown[]> {
   if (body.role !== 'user') {
-    throw new ClaudeDispatchContentError('Claude dispatch accepts only user messages')
+    throw new ClaudeDispatchContentError(
+      'Claude dispatch accepts only user messages',
+      "This message can't be sent to the agent."
+    )
   }
   const images: unknown[] = []
   const texts: string[] = []
@@ -131,7 +149,10 @@ export async function claudeDispatchMessageContent(
   // text blocks would silently discard every one but the last.
   const content = texts.length > 0 ? [...images, { type: 'text', text: texts.join('\n') }] : images
   if (content.length === 0) {
-    throw new ClaudeDispatchContentError('Claude dispatch requires text or an image')
+    throw new ClaudeDispatchContentError(
+      'Claude dispatch requires text or an image',
+      'This message is empty, so it was not sent.'
+    )
   }
   return content
 }

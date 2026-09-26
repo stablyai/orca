@@ -247,11 +247,9 @@ export async function dispatchClaudeTurn(
     // Orca's own refusal of the content, or an attachment it could not read; never the provider.
     return {
       state: 'rejected',
-      ...agentSessionFailureRejection(
-        agentSessionFailureFact(
-          error instanceof ClaudeDispatchContentError ? 'attachmentInvalid' : 'attachmentUnreadable'
-        )
-      )
+      ...(error instanceof ClaudeDispatchContentError
+        ? { reason: error.sentence, rejection: agentSessionFailureFact('attachmentInvalid') }
+        : agentSessionFailureRejection(agentSessionFailureFact('attachmentUnreadable')))
     }
   }
   if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
