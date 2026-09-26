@@ -776,3 +776,79 @@ describe('terminal create --shell', () => {
     expect(call).not.toHaveBeenCalled()
   })
 })
+
+describe('terminal set-pane-title CLI', () => {
+  it('sends the trimmed contract through the pane-scoped RPC', async () => {
+    const parsed = parseArgs(['terminal', 'set-pane-title', '--terminal', 'term-1', '--title', 'x'])
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        paneTitle: { handle: 'term-1', tabId: 'tab-1', leafId: 'leaf-1', title: 'RUNNER' }
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal set-pane-title']({
+      flags: parsed.flags,
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.setPaneTitle', {
+      terminal: 'term-1',
+      title: 'x'
+    })
+  })
+
+  // An empty string is the documented clear signal, so it must survive flag parsing as a value
+  // rather than collapsing to "missing" the way an optional-value accessor would.
+  it('accepts an explicitly empty --title as the clear signal', async () => {
+    const parsed = parseArgs(['terminal', 'set-pane-title', '--terminal', 'term-1', '--title', ''])
+    const call = vi.fn().mockResolvedValue({
+      result: { paneTitle: { handle: 'term-1', tabId: 'tab-1', leafId: 'leaf-1', title: null } }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal set-pane-title']({
+      flags: parsed.flags,
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.setPaneTitle', {
+      terminal: 'term-1',
+      title: ''
+    })
+  })
+
+  it('refuses a missing --title instead of guessing a title', async () => {
+    const parsed = parseArgs(['terminal', 'set-pane-title', '--terminal', 'term-1'])
+    const call = vi.fn()
+
+    await expect(
+      TERMINAL_HANDLERS['terminal set-pane-title']({
+        flags: parsed.flags,
+        client: { call } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('refuses a valueless --title rather than clearing the pane by accident', async () => {
+    const parsed = parseArgs(['terminal', 'set-pane-title', '--terminal', 'term-1', '--title'])
+    const call = vi.fn()
+
+    await expect(
+      TERMINAL_HANDLERS['terminal set-pane-title']({
+        flags: parsed.flags,
+        client: { call } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(call).not.toHaveBeenCalled()
+  })
+})

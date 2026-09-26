@@ -88,6 +88,10 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
   }
+  // Why: the shared --title help says "terminal tab" — correct for `rename`, wrong for one pane.
+  if (command === 'terminal set-pane-title' && flag === 'title') {
+    return '--title <text>         Custom title for one pane (omit or pass "" to reset)'
+  }
   if (command === 'linear issue' && flag === 'id') {
     return '--id <id>             Linear issue key, id, or URL'
   }

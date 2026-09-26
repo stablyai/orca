@@ -11,7 +11,8 @@ import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
 import { closeClientHostedBrowserPagesForWorktree } from './worktree-browser-client-page-close'
 import type { ForceDeleteWorktreeBranchResult } from '../../shared/worktree/create-types'
-import type { RuntimeTerminalRename } from '../../shared/runtime-types'
+import type { RuntimeTerminalRename, RuntimeTerminalSetPaneTitle } from '../../shared/runtime-types'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
@@ -145,6 +146,53 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
+  }
+
+  async setPaneTitle(handle: string, title: string | null): Promise<RuntimeTerminalSetPaneTitle> {
+    const trimmed = title?.trim() || null
+    if (this.getAvailableAuthoritativeWindow()) {
+      // Renderer authoritative: the graph is the authority and owns stale-handle detection.
+      const { leaf } = this.getLiveLeafForHandle(handle)
+      this.notifier?.setPaneTitle?.(leaf.tabId, leaf.leafId, trimmed)
+      return { handle, tabId: leaf.tabId, leafId: leaf.leafId, title: trimmed }
+    }
+    // Headless has no renderer graph (`leaves` is empty), so the handle record is the authority.
+    const record = this.handles.get(handle)
+    if (
+      !record ||
+      record.runtimeId !== this.runtimeId ||
+      record.rendererGraphEpoch !== this.rendererGraphEpoch
+    ) {
+      throw new Error('terminal_handle_stale')
+    }
+    const pty = this.getLivePtyForHandle(handle)?.pty ?? null
+    // Why: a runtime-minted handle's tabId/leafId are the placeholder `pty:<id>`; the pane identity lives on the PTY.
+    const paneKey = parsePaneKey(pty?.paneKey ?? '')
+    const tabId = paneKey?.tabId ?? (record.tabId.startsWith('pty:') ? null : record.tabId)
+    const leafId = paneKey?.leafId ?? (record.leafId.startsWith('pty:') ? null : record.leafId)
+    if (tabId === null || leafId === null) {
+      throw new Error('terminal_handle_stale')
+    }
+    const worktreeId = pty?.worktreeId ?? record.worktreeId
+    this.notifier?.setPaneTitle?.(tabId, leafId, trimmed)
+    // Why: a renderer-authoritative host republishes pane titles, so only a headless host persists them.
+    const existing =
+      this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[tabId]
+    if (existing) {
+      const titlesByLeafId = { ...existing.titlesByLeafId }
+      if (trimmed === null) {
+        delete titlesByLeafId[leafId]
+      } else {
+        titlesByLeafId[leafId] = trimmed
+      }
+      this.persistHeadlessTerminalPaneLayout(worktreeId, {
+        tabId,
+        root: existing.root,
+        expandedLeafId: existing.expandedLeafId,
+        titlesByLeafId
+      })
+    }
+    return { handle, tabId, leafId, title: trimmed }
   }
 
   protected async resolveAgentTerminalCreateOptions(

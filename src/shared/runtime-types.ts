@@ -140,7 +140,8 @@ export type {
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult,
-  RuntimeTerminalDriverState
+  RuntimeTerminalDriverState,
+  RuntimeTerminalSetPaneTitle
 } from './runtime-session-contracts'
 export type {
   RuntimeTerminalAgentStatus,

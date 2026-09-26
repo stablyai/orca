@@ -122,6 +122,8 @@ export type UseTerminalPaneLifecycleDeps = {
   persistLayoutSnapshot: () => void
   setPaneTitles: React.Dispatch<React.SetStateAction<Record<number, string>>>
   paneTitlesRef: React.RefObject<Record<number, string>>
+  removePaneTitle: (paneId: number) => void
+  removedTitleLeafIdsRef: React.RefObject<Set<string>>
   setRenamingPaneId: React.Dispatch<React.SetStateAction<number | null>>
   // Why: managerRef.getPanes() isn't reactive, so this dispatcher ticks effects when panes split/close.
   setPaneCount: React.Dispatch<React.SetStateAction<number>>
