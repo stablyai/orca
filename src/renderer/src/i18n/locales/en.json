@@ -17462,6 +17462,8 @@
         "notDoneSend": "Your message was not sent.",
         "tryAgainComposerSend": "Send it again.",
         "notDoneStop": "The agent wasn't stopped.",
+        "notDoneStopTask": "The background task wasn't stopped.",
+        "notDoneStopTasks": "The background tasks weren't stopped.",
         "notDoneAnswer": "Your answer was not sent.",
         "notDoneOption": "The setting wasn't changed.",
         "notDoneCommand": "The command didn't run.",

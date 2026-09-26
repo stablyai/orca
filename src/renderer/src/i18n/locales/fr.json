@@ -17327,6 +17327,8 @@
         "notDoneSend": "Votre message n'a pas été envoyé.",
         "tryAgainComposerSend": "Renvoyez-le.",
         "notDoneStop": "L'agent n'a pas été arrêté.",
+        "notDoneStopTask": "La tâche en arrière-plan n'a pas été arrêtée.",
+        "notDoneStopTasks": "Les tâches en arrière-plan n'ont pas été arrêtées.",
         "notDoneAnswer": "Votre réponse n'a pas été envoyée.",
         "notDoneOption": "Le paramètre n'a pas été modifié.",
         "notDoneCommand": "La commande n'a pas été exécutée.",

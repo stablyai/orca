@@ -7,6 +7,7 @@ import {
   agentSessionRefusalNotice,
   agentSessionRpcErrorFailure,
   agentSessionWriteFailureNotice,
+  agentSessionWriteKindForMethod,
   agentSessionWriteNoticeEnglish,
   agentSessionWriteNoticeParts,
   parseAgentSessionWriteFailure,
@@ -24,6 +25,8 @@ const WRITES: AgentSessionWriteKind[] = [
   'send',
   'composer-send',
   'stop',
+  'stop-task',
+  'stop-tasks',
   'answer',
   'option',
   'command',
@@ -177,6 +180,21 @@ describe('agentSessionRefusalNotice', () => {
         'send'
       )
     ).toBe("The agent couldn't restart. Your message was not sent.")
+  })
+
+  it('names a background-task stop as that, not as stopping the agent', () => {
+    const stop = (fields: Record<string, unknown>): string =>
+      agentSessionRefusalNotice(
+        { code: 'agent_session_checkpoint_stale', message: HOST_TEXT },
+        agentSessionWriteKindForMethod('agentSession.cancel', fields)
+      )
+    expect(stop({ turnId: 't1' })).toBe("The agent wasn't stopped.")
+    expect(stop({ turnId: 'background-tasks', scope: 'background-tasks', taskId: 'b1' })).toBe(
+      "The background task wasn't stopped."
+    )
+    expect(stop({ turnId: 'background-tasks', scope: 'background-tasks' })).toBe(
+      "The background tasks weren't stopped."
+    )
   })
 
   it('says only what did not happen for a code from a newer host', () => {

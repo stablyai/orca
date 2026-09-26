@@ -101,7 +101,7 @@ export function useStructuredAgentSessionMutate(args: {
                 agentSessionRpcErrorFailure(
                   error instanceof RuntimeRpcCallError ? error.code : undefined
                 ),
-                writeKind(fingerprintMethod)
+                writeKind(fingerprintMethod, fields)
               )
             }
           : { kind: 'dropped' }
@@ -115,7 +115,7 @@ export function useStructuredAgentSessionMutate(args: {
               kind: 'not-done',
               notice: agentSessionWriteFailureText(
                 agentSessionRefusalFailure(result.refusal),
-                writeKind(fingerprintMethod)
+                writeKind(fingerprintMethod, fields)
               )
             }
           : { kind: 'dropped' }

@@ -14833,6 +14833,8 @@
         "notDoneSend": "Su mensaje no se envió.",
         "tryAgainComposerSend": "Vuelva a enviarlo.",
         "notDoneStop": "El agente no se detuvo.",
+        "notDoneStopTask": "La tarea en segundo plano no se detuvo.",
+        "notDoneStopTasks": "Las tareas en segundo plano no se detuvieron.",
         "notDoneAnswer": "Su respuesta no se envió.",
         "notDoneOption": "La configuración no se cambió.",
         "notDoneCommand": "El comando no se ejecutó.",

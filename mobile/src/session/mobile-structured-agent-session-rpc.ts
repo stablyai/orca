@@ -118,8 +118,11 @@ export function timeoutForDeadline(deadline: number | undefined): number | null 
 }
 
 /** A refused phone send goes back into the composer; there is no Retry control. */
-function phoneWriteKind(fingerprintMethod: string): AgentSessionWriteKind {
-  const write = agentSessionWriteKindForMethod(fingerprintMethod)
+function phoneWriteKind(
+  fingerprintMethod: string,
+  fields: Record<string, unknown>
+): AgentSessionWriteKind {
+  const write = agentSessionWriteKindForMethod(fingerprintMethod, fields)
   return write === 'send' ? 'composer-send' : write
 }
 
@@ -174,7 +177,10 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       : {
           status: 'refused',
           code: result.refusal.code,
-          message: agentSessionRefusalNotice(result.refusal, phoneWriteKind(fingerprintMethod))
+          message: agentSessionRefusalNotice(
+            result.refusal,
+            phoneWriteKind(fingerprintMethod, fields)
+          )
         }
   } catch (error) {
     const answered =
@@ -184,7 +190,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       return {
         status: 'failed',
         message: agentSessionWriteNoticeEnglish(
-          agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod))
+          agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields))
         )
       }
     }
@@ -197,7 +203,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     }
     return {
       status: 'failed',
-      message: agentSessionWriteFailureNotice(phoneWriteKind(fingerprintMethod))
+      message: agentSessionWriteFailureNotice(phoneWriteKind(fingerprintMethod, fields))
     }
   }
 }

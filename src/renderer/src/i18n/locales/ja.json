@@ -17263,6 +17263,8 @@
         "notDoneSend": "メッセージは送信されませんでした。",
         "tryAgainComposerSend": "もう一度送信してください。",
         "notDoneStop": "Agent は停止されませんでした。",
+        "notDoneStopTask": "バックグラウンドタスクは停止されませんでした。",
+        "notDoneStopTasks": "バックグラウンドタスクは停止されませんでした。",
         "notDoneAnswer": "回答は送信されませんでした。",
         "notDoneOption": "設定は変更されませんでした。",
         "notDoneCommand": "コマンドは実行されませんでした。",

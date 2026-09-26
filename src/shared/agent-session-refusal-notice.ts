@@ -20,18 +20,27 @@ export type AgentSessionWriteKind =
   | 'send'
   | 'composer-send'
   | 'stop'
+  | 'stop-task'
+  | 'stop-tasks'
   | 'answer'
   | 'option'
   | 'command'
   | 'goal'
 
-/** The kind of write an `agentSession.*` fingerprint method stands for. */
-export function agentSessionWriteKindForMethod(fingerprintMethod: string): AgentSessionWriteKind {
+/** The kind of write an `agentSession.*` call stands for. */
+export function agentSessionWriteKindForMethod(
+  fingerprintMethod: string,
+  fields: Record<string, unknown>
+): AgentSessionWriteKind {
   if (fingerprintMethod === 'agentSession.send') {
     return 'send'
   }
   if (fingerprintMethod === 'agentSession.cancel') {
-    return 'stop'
+    // A background-task stop never asked the agent to stop.
+    if (fields.scope !== 'background-tasks') {
+      return 'stop'
+    }
+    return typeof fields.taskId === 'string' ? 'stop-task' : 'stop-tasks'
   }
   if (fingerprintMethod.startsWith('agentSession.respondTo')) {
     return 'answer'
@@ -93,6 +102,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   notDoneSend: 'Your message was not sent.',
   tryAgainComposerSend: 'Send it again.',
   notDoneStop: "The agent wasn't stopped.",
+  notDoneStopTask: "The background task wasn't stopped.",
+  notDoneStopTasks: "The background tasks weren't stopped.",
   notDoneAnswer: 'Your answer was not sent.',
   notDoneOption: "The setting wasn't changed.",
   notDoneCommand: "The command didn't run.",
@@ -114,6 +125,8 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   send: 'notDoneSend',
   'composer-send': 'notDoneSend',
   stop: 'notDoneStop',
+  'stop-task': 'notDoneStopTask',
+  'stop-tasks': 'notDoneStopTasks',
   answer: 'notDoneAnswer',
   option: 'notDoneOption',
   command: 'notDoneCommand',

@@ -17263,6 +17263,8 @@
         "notDoneSend": "메시지가 전송되지 않았습니다.",
         "tryAgainComposerSend": "다시 보내세요.",
         "notDoneStop": "에이전트가 중지되지 않았습니다.",
+        "notDoneStopTask": "백그라운드 작업이 중지되지 않았습니다.",
+        "notDoneStopTasks": "백그라운드 작업이 중지되지 않았습니다.",
         "notDoneAnswer": "답변이 전송되지 않았습니다.",
         "notDoneOption": "설정이 변경되지 않았습니다.",
         "notDoneCommand": "명령이 실행되지 않았습니다.",

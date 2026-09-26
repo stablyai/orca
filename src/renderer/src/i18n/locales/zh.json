@@ -17228,6 +17228,8 @@
         "notDoneSend": "您的消息未发送。",
         "tryAgainComposerSend": "请重新发送。",
         "notDoneStop": "智能体未停止。",
+        "notDoneStopTask": "后台任务未停止。",
+        "notDoneStopTasks": "后台任务未停止。",
         "notDoneAnswer": "您的回答未发送。",
         "notDoneOption": "设置未更改。",
         "notDoneCommand": "命令未运行。",
