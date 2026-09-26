@@ -91,6 +91,59 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       : this.listKnownResolvedWorktreesForExplicitTarget(targetWorktreeId, targetWorktree)
   }
 
+  /**
+   * The one restart of a leaf main kept after its exit: a plain shell, never the tab's agent,
+   * spawned here under the leaf's pane key. A desktop pane showing the exit attaches to it when the
+   * reveal binds its leaf, and a later spawn for that pane key reattaches through the stable owner.
+   */
+  async restartExitedTerminalSurface(
+    worktreeId: string,
+    tabId: string,
+    leafId: string,
+    opts: { activate?: boolean } = {}
+  ): Promise<void> {
+    // Why: a repeated tap before the first spawn registers must not start a second shell.
+    const inFlight = this.exitedTerminalRestartsByLeafId.get(leafId)
+    if (inFlight) {
+      return inFlight
+    }
+    const record = this.terminalExitRecords.get(leafId)
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const tab = snapshot?.tabs.find(
+      (candidate) =>
+        candidate.type === 'terminal' &&
+        candidate.parentTabId === tabId &&
+        candidate.leafId === leafId
+    )
+    if (!record || !snapshot || tab?.type !== 'terminal') {
+      return
+    }
+    const restart = this.createRuntimeOwnedMobileSessionTerminal(
+      worktreeId,
+      opts.activate === true,
+      undefined,
+      {
+        identity: { tabId, leafId },
+        cwd: tab.startupCwd,
+        targetGroupId: snapshot.tabGroups?.find((group) => group.tabOrder.includes(tabId))?.id,
+        // Why: the shell is what this terminal is; a `serve-` id would reclassify a desktop tab.
+        shellOverride: this.getWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree?.[
+          worktreeId
+        ]?.find((candidate) => candidate.id === tabId)?.shellOverride,
+        serveOwned: this.isServeOwnedPtyId(record.ptyId),
+        surfaceOwner: false
+      }
+    )
+      .then(() => {
+        if (opts.activate) {
+          this.notifier?.focusTerminal(tabId, worktreeId, leafId)
+        }
+      })
+      .finally(() => this.exitedTerminalRestartsByLeafId.delete(leafId))
+    this.exitedTerminalRestartsByLeafId.set(leafId, restart)
+    return restart
+  }
+
   async activateMobileSessionTab(
     worktreeSelector: string,
     tabId: string,
@@ -131,6 +184,21 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     }
 
     if (tab.type === 'terminal') {
+      // Why ahead of both branches: materialize would spawn the tab's agent into a leaf main kept
+      // after its exit, and focus would open a pane with no process; neither is a restart.
+      if (this.terminalExitRecords.get(tab.leafId)) {
+        if (!isAutomaticTabActivation(opts.intent)) {
+          await this.restartExitedTerminalSurface(worktreeId, tab.parentTabId, tab.leafId, {
+            activate: targetsHost
+          })
+        }
+        return this.applyMobileSessionTabNavigation(
+          this.getMobileSessionTabsForWorktree(worktreeId),
+          tab.id,
+          navigation,
+          opts.clientNavigationId
+        )
+      }
       const publicTab = this.toMobileSessionTabsResult(snapshot!).tabs.find(
         (candidate) => candidate.type === 'terminal' && candidate.id === tab.id
       )

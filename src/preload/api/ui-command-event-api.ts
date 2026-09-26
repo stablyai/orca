@@ -1,6 +1,7 @@
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalExitRecord } from '../../shared/terminal-surface-exit'
 import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -194,6 +195,9 @@ export type UiCommandEventApi = {
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null }) => void
   ) => () => void
+  /** Main's exit records for kept leaves, sent whole on every change. */
+  onTerminalExitRecordsChanged: (callback: (records: TerminalExitRecord[]) => void) => () => void
+  listTerminalExitRecords: () => Promise<TerminalExitRecord[]>
   onFocusTerminal: (
     callback: (data: {
       tabId: string

@@ -61,7 +61,8 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const handleRestartCodexPane = useCallback(
     (
       paneId: number,
-      restartStartup: PtyConnectionDeps['startup'] = CODEX_ACCOUNT_RESTART_STARTUP
+      restartStartup: PtyConnectionDeps['startup'] = CODEX_ACCOUNT_RESTART_STARTUP,
+      focus = true
     ) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
@@ -124,7 +125,9 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         clearExitedPanePtyLayoutBinding
       })
       panePtyBindingsRef.current.set(paneId, newPaneBinding)
-      manager.setActivePane(paneId, { focus: true })
+      if (focus) {
+        manager.setActivePane(paneId, { focus: true })
+      }
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [
@@ -183,11 +186,14 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   )
 
   const handleRestartExitedPane = useCallback(
-    (processExit: PaneProcessExit) => {
+    (processExit: PaneProcessExit, opts: { attach?: boolean } = {}) => {
       clearPaneProcessExit(processExit.paneId)
+      // Why no startup and no focus for an attach: main already started this leaf's process for
+      // another device, so the pane's spawn resolves main's stable owner and leaves focus alone.
       handleRestartCodexPane(
         processExit.paneId,
-        resolveTerminalProcessExitRestartStartup(processExit)
+        opts.attach ? null : resolveTerminalProcessExitRestartStartup(processExit),
+        !opts.attach
       )
     },
     [clearPaneProcessExit, handleRestartCodexPane]

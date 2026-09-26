@@ -3,6 +3,7 @@ import type { BrowserCertificateFailure, BrowserLoadError } from './browser-work
 import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalLayoutSnapshot } from './terminal-tab-types'
+import type { TerminalSurfaceExit } from './terminal-surface-exit'
 import type { TuiAgent } from './tui-agent'
 
 export type RuntimeMobileSessionTerminalTab = {
@@ -28,6 +29,8 @@ export type RuntimeMobileSessionTerminalTab = {
   launchDraft?: string
   launchDraftCreatedAt?: number
   isActive: boolean
+  /** Set only for a client that negotiated the terminal exit-state capability. */
+  exited?: TerminalSurfaceExit
 }
 
 export type RuntimeMobileTerminalTheme = {

@@ -56,6 +56,8 @@ export function buildWindowApi(args: {
         onSplitTerminal: () => () => {},
         onRenameTerminal: () => () => {},
         onFocusTerminal: () => () => {},
+        onTerminalExitRecordsChanged: () => () => {},
+        listTerminalExitRecords: async () => [],
         onFocusEditorTab: () => () => {},
         onCloseSessionTab: () => () => {},
         onSessionTabCloseRequest: () => () => {},

@@ -1,8 +1,10 @@
+import { Fragment } from 'react'
 import { createPortal } from 'react-dom'
 import CodexRestartChip from '../CodexRestartChip'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
+import { ExitedPaneProcessAttach } from './ExitedPaneProcessAttach'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { getDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -45,17 +47,15 @@ export function TerminalPaneProcessExitPortals({
   controller
 }: {
   controller: TerminalPaneController
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const {
     handleCloseExitedPane,
     handleRestartExitedPane,
     isActive,
     managedPanes,
-    paneProcessExitsByPaneId
+    paneProcessExitsByPaneId,
+    savedLayout
   } = controller
-  if (!isActive) {
-    return null
-  }
   return (
     <>
       {managedPanes.map((pane) => {
@@ -63,14 +63,25 @@ export function TerminalPaneProcessExitPortals({
         if (!processExit) {
           return null
         }
-        return createPortal(
-          <TerminalProcessExitOverlay
-            processExit={processExit}
-            onRestart={() => handleRestartExitedPane(processExit)}
-            onClose={() => handleCloseExitedPane(pane.id)}
-          />,
-          pane.container,
-          `process-exit-${pane.id}`
+        return (
+          <Fragment key={`process-exit-${pane.id}`}>
+            {/* Why outside the isActive gate: a restart from another device lands in background tabs too. */}
+            <ExitedPaneProcessAttach
+              boundPtyId={savedLayout.ptyIdsByLeafId?.[pane.leafId] ?? null}
+              onAttach={() => handleRestartExitedPane(processExit, { attach: true })}
+            />
+            {isActive
+              ? createPortal(
+                  <TerminalProcessExitOverlay
+                    processExit={processExit}
+                    onRestart={() => handleRestartExitedPane(processExit)}
+                    onClose={() => handleCloseExitedPane(pane.id)}
+                  />,
+                  pane.container,
+                  `process-exit-${pane.id}`
+                )
+              : null}
+          </Fragment>
         )
       })}
     </>

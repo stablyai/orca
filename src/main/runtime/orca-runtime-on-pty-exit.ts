@@ -216,8 +216,20 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
     }
+    // Why: a leaf main kept after this process died stays listed; a later exit notice for the same
+    // process (a failed reattach while it restarts) must not retire it.
+    const keptLeafIds = new Set(
+      this.terminalExitRecords
+        .list()
+        .flatMap((record) => (record.ptyId === ptyId ? [record.leafId] : []))
+    )
+    const retirableSurfaces = exactSurfaces.filter((surface) => !keptLeafIds.has(surface.leafId))
     let retirement: Promise<void> | undefined
-    if (preservesIntentionalHandlelessSurface || preservesAbnormalSshSurface) {
+    if (
+      preservesIntentionalHandlelessSurface ||
+      preservesAbnormalSshSurface ||
+      (keptLeafIds.size > 0 && retirableSurfaces.length === 0)
+    ) {
       // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
       this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
     } else {
@@ -225,7 +237,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       // Retire before publishing so paired clients never persist a ghost.
       const pendingRetirement = {}
       this.pendingPtySurfaceRetirementsByPtyId.set(ptyId, pendingRetirement)
-      retirement = this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
+      retirement = this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, retirableSurfaces)
         .catch((error) => {
           console.error('[runtime] failed to publish terminal retirement:', error)
         })

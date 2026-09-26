@@ -18,6 +18,7 @@ import { createTerminalPaneHibernationActions } from '../terminals/terminal-pane
 import { createDirectSshTerminalBindingActions } from '../terminals/direct-ssh-terminal-bindings'
 import { createTerminalShutdownActions } from '../terminals/terminal-shutdown'
 import { createTerminalRestartActions } from '../terminals/terminal-restart-state'
+import { createTerminalExitRecordActions } from '../terminals/terminal-exit-record-state'
 import { createTerminalLayoutActions } from '../terminals/terminal-layout-state'
 import { createTerminalStartupQueueActions } from '../terminals/terminal-startup-queues'
 import { createWorkspaceTerminalHydrationActions } from '../terminals/workspace-terminal-hydration'
@@ -35,6 +36,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   suppressedPtyExitIds: {},
   pendingPtyShutdownIds: {},
   pendingCodexPaneRestartIds: {},
+  terminalExitRecordsByLeafId: {},
   codexRestartNoticeByPtyId: {},
   directSshPaneRetryByTabId: {},
   directSshLivePtyBindingByTabId: {},
@@ -91,6 +93,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   ...createDirectSshTerminalBindingActions(set, get),
   ...createTerminalShutdownActions(set, get),
   ...createTerminalRestartActions(set, get),
+  ...createTerminalExitRecordActions(set),
   ...createTerminalLayoutActions(set, get),
   ...createTerminalStartupQueueActions(set, get),
   ...createWorkspaceTerminalHydrationActions(set, get),

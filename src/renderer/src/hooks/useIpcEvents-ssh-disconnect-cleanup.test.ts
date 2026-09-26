@@ -154,6 +154,8 @@ describe('useIpcEvents updater integration', () => {
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
           onFocusTerminal: () => () => {},
+          onTerminalExitRecordsChanged: () => () => {},
+          listTerminalExitRecords: async () => [],
           onFocusEditorTab: () => () => {},
           onCloseSessionTab: () => () => {},
           onSessionTabCloseRequest: () => () => {},
