@@ -35,6 +35,15 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+C'])
   },
   {
+    id: 'editor.commandPalette',
+    title: 'Command Palette',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'command', 'palette', 'f1', 'action'],
+    defaultBindings: platformBindings(['F1']),
+    allowBareKeybindings: true
+  },
+  {
     id: 'editor.find',
     title: 'Find in editor',
     group: 'Editors',

@@ -19,11 +19,14 @@ vi.mock('@/store', () => ({
 
 import {
   installEditorAddReviewNoteShortcut,
+  installEditorCommandPaletteShortcut,
   installEditorFindShortcut,
   installMonacoDiffChangeNavigationShortcut,
+  installMonacoEditorCommandPaletteShortcut,
   installMonacoEditorFindShortcut,
   installOpenDraftAddReviewNoteGuard
 } from './editor-shortcuts'
+import { installMonacoDiffCommandPaletteShortcuts } from './monaco-diff-command-palette-shortcuts'
 
 type ShortcutFixture = {
   container: HTMLDivElement
@@ -394,5 +397,158 @@ describe('installMonacoDiffChangeNavigationShortcut', () => {
     expect(disposedEvent.defaultPrevented).toBe(false)
     expect(fixture.goToDiff).toHaveBeenCalledTimes(1)
     expect(fixture.goToDiff).toHaveBeenCalledWith('next')
+  })
+})
+
+describe('installEditorCommandPaletteShortcut', () => {
+  function createCommandPaletteFixture(): {
+    container: HTMLDivElement
+    dispose: () => void
+    input: HTMLTextAreaElement
+    onCommandPalette: ReturnType<typeof vi.fn>
+    onDownstreamKeyDown: ReturnType<typeof vi.fn>
+  } {
+    const container = document.createElement('div')
+    const input = document.createElement('textarea')
+    const onCommandPalette = vi.fn()
+    const onDownstreamKeyDown = vi.fn()
+    container.appendChild(input)
+    document.body.appendChild(container)
+    input.addEventListener('keydown', onDownstreamKeyDown)
+
+    return {
+      container,
+      dispose: installEditorCommandPaletteShortcut(container, onCommandPalette),
+      input,
+      onCommandPalette,
+      onDownstreamKeyDown
+    }
+  }
+
+  it('triggers on default F1 keydown', () => {
+    const fixture = createCommandPaletteFixture()
+
+    const event = dispatchKeyDown(fixture.input, { key: 'F1', code: 'F1' })
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(fixture.onCommandPalette).toHaveBeenCalledTimes(1)
+    expect(fixture.onDownstreamKeyDown).not.toHaveBeenCalled()
+    fixture.dispose()
+  })
+
+  it('consumes matched repeats without invoking command palette again', () => {
+    const fixture = createCommandPaletteFixture()
+
+    const initialEvent = dispatchKeyDown(fixture.input, { key: 'F1', code: 'F1' })
+    const repeatEvent = dispatchKeyDown(fixture.input, { key: 'F1', code: 'F1', repeat: true })
+
+    expect(initialEvent.defaultPrevented).toBe(true)
+    expect(repeatEvent.defaultPrevented).toBe(true)
+    expect(fixture.onCommandPalette).toHaveBeenCalledTimes(1)
+    expect(fixture.onDownstreamKeyDown).not.toHaveBeenCalled()
+    fixture.dispose()
+  })
+
+  it('honors a custom binding and consumes the old Monaco default', () => {
+    shortcutState.keybindings = { 'editor.commandPalette': ['Mod+Shift+P'] }
+    const fixture = createCommandPaletteFixture()
+
+    const defaultEvent = dispatchKeyDown(fixture.input, { key: 'F1', code: 'F1' })
+    const customEvent = dispatchKeyDown(fixture.input, {
+      key: 'p',
+      code: 'KeyP',
+      metaKey: true,
+      shiftKey: true
+    })
+
+    expect(defaultEvent.defaultPrevented).toBe(true)
+    expect(customEvent.defaultPrevented).toBe(true)
+    expect(fixture.onCommandPalette).toHaveBeenCalledTimes(1)
+    expect(fixture.onDownstreamKeyDown).not.toHaveBeenCalled()
+    fixture.dispose()
+  })
+
+  it('consumes F1 without opening the palette when the action is disabled', () => {
+    shortcutState.keybindings = { 'editor.commandPalette': [] }
+    const fixture = createCommandPaletteFixture()
+
+    const event = dispatchKeyDown(fixture.input, { key: 'F1', code: 'F1' })
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(fixture.onCommandPalette).not.toHaveBeenCalled()
+    expect(fixture.onDownstreamKeyDown).not.toHaveBeenCalled()
+    fixture.dispose()
+  })
+
+  it('removes the listener when disposed', () => {
+    const fixture = createCommandPaletteFixture()
+    fixture.dispose()
+
+    const event = dispatchKeyDown(fixture.input, { key: 'F1', code: 'F1' })
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(fixture.onCommandPalette).not.toHaveBeenCalled()
+    expect(fixture.onDownstreamKeyDown).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs Monaco existing quickCommand action through the shared bridge', () => {
+    const container = document.createElement('div')
+    const input = document.createElement('textarea')
+    const run = vi.fn()
+    const getAction = vi.fn((_id: string) => ({ run }))
+    container.appendChild(input)
+    document.body.appendChild(container)
+    const dispose = installMonacoEditorCommandPaletteShortcut({
+      getAction,
+      getContainerDomNode: () => container
+    })
+
+    dispatchKeyDown(input, { key: 'F1', code: 'F1' })
+
+    expect(getAction).toHaveBeenCalledWith('editor.action.quickCommand')
+    expect(run).toHaveBeenCalledTimes(1)
+    dispose()
+  })
+})
+
+describe('installMonacoDiffCommandPaletteShortcuts', () => {
+  it('installs and disposes the command palette bridge on both panes', () => {
+    const createEditor = () => {
+      const container = document.createElement('div')
+      const input = document.createElement('textarea')
+      const run = vi.fn()
+      container.appendChild(input)
+      document.body.appendChild(container)
+      return {
+        editor: {
+          getAction: vi.fn((_id: string) => ({ run })),
+          getContainerDomNode: () => container
+        },
+        input,
+        run
+      }
+    }
+    const original = createEditor()
+    const modified = createEditor()
+    const dispose = installMonacoDiffCommandPaletteShortcuts({
+      getOriginalEditor: () => original.editor,
+      getModifiedEditor: () => modified.editor
+    })
+
+    dispatchKeyDown(original.input, { key: 'F1', code: 'F1' })
+    dispatchKeyDown(modified.input, { key: 'F1', code: 'F1' })
+
+    expect(original.editor.getAction).toHaveBeenCalledWith('editor.action.quickCommand')
+    expect(modified.editor.getAction).toHaveBeenCalledWith('editor.action.quickCommand')
+    expect(original.run).toHaveBeenCalledTimes(1)
+    expect(modified.run).toHaveBeenCalledTimes(1)
+
+    dispose()
+    const disposedEvent = dispatchKeyDown(original.input, { key: 'F1', code: 'F1' })
+    const modifiedDisposedEvent = dispatchKeyDown(modified.input, { key: 'F1', code: 'F1' })
+    expect(disposedEvent.defaultPrevented).toBe(false)
+    expect(modifiedDisposedEvent.defaultPrevented).toBe(false)
+    expect(original.run).toHaveBeenCalledTimes(1)
+    expect(modified.run).toHaveBeenCalledTimes(1)
   })
 })

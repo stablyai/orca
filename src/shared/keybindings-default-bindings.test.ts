@@ -20,6 +20,28 @@ describe('keybindings', () => {
   })
 
   it.each(['darwin', 'linux', 'win32'] as const)(
+    'binds editor command palette to F1 on %s',
+    (platform) => {
+      expect(getEffectiveKeybindingsForAction('editor.commandPalette', platform)).toEqual(['F1'])
+      expect(formatKeybindingList(['F1'], platform)).toBe('F1')
+      expect(
+        keybindingMatchesAction(
+          'editor.commandPalette',
+          {
+            key: 'F1',
+            code: 'F1',
+            meta: false,
+            control: false,
+            alt: false,
+            shift: false
+          },
+          platform
+        )
+      ).toBe(true)
+    }
+  )
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
     'binds editor word wrap to Alt+Z on %s',
     (platform) => {
       expect(getEffectiveKeybindingsForAction('editor.toggleWordWrap', platform)).toEqual(['Alt+Z'])
