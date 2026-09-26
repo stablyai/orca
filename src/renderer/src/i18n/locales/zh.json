@@ -5314,6 +5314,7 @@
           "otherClientsAria": "隐藏共享远程服务器上其他 Orca 客户端创建的工作区"
         },
         "SidebarWorkspaceOptionsMenu": {
+          "newProjectGroup": "新建分组...",
           "95c9754653": "智能体活动布局",
           "3d4b9c4997": "悬停",
           "ba87080fb7": "显示属性",
@@ -5546,6 +5547,7 @@
           "deleteWithDescendants": "与后代一起删除..."
         },
         "WorktreeList": {
+          "standaloneGroupDescription": "创建一个空分组，稍后可将项目移入其中。",
           "d880ea0744": "创建一个组并将该项目移入其中。",
           "bc1460beb3": "更新侧栏中显示的组名称。",
           "13757c053c": "新项目组",

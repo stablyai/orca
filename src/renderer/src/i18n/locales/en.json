@@ -5512,6 +5512,7 @@
           "backToAll": "All hosts"
         },
         "SidebarWorkspaceOptionsMenu": {
+          "newProjectGroup": "New group...",
           "hosts": "Hosts",
           "showSection": "Show",
           "allHostsDetail": "Show every host",
@@ -5747,6 +5748,7 @@
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
           "hostDisconnected": "Disconnected",
+          "standaloneGroupDescription": "Create an empty group. Move projects into it later.",
           "d880ea0744": "Create a group and move this project into it.",
           "bc1460beb3": "Update the group name shown in the sidebar.",
           "13757c053c": "New Project Group",
