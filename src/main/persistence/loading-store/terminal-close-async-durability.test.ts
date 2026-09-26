@@ -177,3 +177,36 @@ it('commits nothing for a pane that restarted while its close waited for the wri
 
   expect(liveLeafIds()).toEqual([binding.leafId, siblingLeafId])
 })
+
+it('commits a renderer tab close whose split pane bound while the close waited for the writer', async () => {
+  const { authority, store, runtime, persistedLeafIds, liveLeafIds } = await closeFixture()
+  const gate = authority.pause()
+  const session = store.getWorkspaceSession()
+  store.setWorkspaceSession({ ...session, activeTabIdByWorktree: { [binding.worktreeId]: null } })
+  const earlierWrite = store.flushPendingOrThrowAsync()
+  await gate.started.promise
+  // The split's binding is queued first, so it grows the tab after the close was asked.
+  const split = store.persistPtyBinding({
+    ...binding,
+    leafId: siblingLeafId,
+    ptyId: 'sibling-pty',
+    incarnationId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    expectedSourceBinding: binding
+  })
+  const closing = runtime.closeTerminalSurfaceFromRenderer(binding.worktreeId, {
+    kind: 'tab',
+    tabId: binding.tabId
+  })
+  gate.finish.resolve()
+  await earlierWrite
+  await expect(split).resolves.toBe(true)
+  await expect(closing).resolves.toBeUndefined()
+
+  expect(persistedLeafIds()).toEqual([])
+  expect(liveLeafIds()).toEqual([])
+  expect(
+    store
+      .getWorkspaceSession()
+      .tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)
+  ).toBe(false)
+})
