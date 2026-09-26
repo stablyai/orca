@@ -49,7 +49,7 @@ afterEach(() => {
 /** A real store and runtime with one bound pane, and main's exit delivery to a renderer stub.
  *  `lateProviderExit`: the kill's reply overtakes the exit, so main synthesizes one and the
  *  provider's own exit arrives later through its listener. */
-function createHarness(opts: { lateProviderExit?: boolean } = {}) {
+function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-intentional-stop-'))
   directories.push(directory)
   const store = new Store({ dataFile: join(directory, 'orca-data.json') })
@@ -58,7 +58,9 @@ function createHarness(opts: { lateProviderExit?: boolean } = {}) {
     path: WORKTREE_PATH,
     displayName: 'Fixture',
     badgeColor: 'gray',
-    addedAt: 1
+    addedAt: 1,
+    // Why: a folder workspace resolves without git, which the sleep transaction needs.
+    ...(opts.folder ? { kind: 'folder' as const } : {})
   })
   store.setWorkspaceSession(advanceTerminalTopologyRevision(makeSession(), WORKTREE_ID))
   store.flushOrThrow()
@@ -224,5 +226,25 @@ describe('intentional stops keep the pane through the exit', () => {
     vi.advanceTimersByTime(1)
 
     expect(harness.runtime.intentionalPtyStops.claimExit(PTY_ID, INCARNATION_ID)).toBeNull()
+  })
+
+  it('keeps the tab and its wake binding when the runtime puts the worktree to sleep', async () => {
+    const harness = createHarness({ folder: true })
+    const inventories = [[{ id: PTY_ID, worktreeId: WORKTREE_ID, cwd: WORKTREE_PATH, title: 'a' }]]
+    harness.runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      stopAndWait: async (ptyId) => {
+        harness.runtime.onPtyExit(ptyId, -1, INCARNATION_ID, { providerExitObserved: true })
+        return true
+      },
+      getForegroundProcess: async () => null,
+      listProcesses: async () => inventories.shift() ?? []
+    })
+
+    await harness.runtime.sleepTerminalsForWorktree(`id:${WORKTREE_ID}`)
+
+    expect(harness.tabIds()).toEqual([TAB_ID])
+    expect(harness.boundPtyId()).toBe(PTY_ID)
   })
 })
