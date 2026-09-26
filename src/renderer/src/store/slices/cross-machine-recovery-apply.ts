@@ -23,25 +23,41 @@ import {
   rollbackFailedRecoveryApply
 } from './cross-machine-recovery-apply-rollback'
 import type { OpenFile } from './editor'
-import { buildOwnedEditorFileId } from './editor/file-ids/editor-file-ids'
+import { resolveEditorFileIdForOwner } from './editor/file-ids/editor-file-ids'
+import {
+  addEditorFileIdMigration,
+  migrateEditorFileId,
+  migrateHydratedEditorTabsAndGroups
+} from './editor/file-ids/hydrated-editor-file-ids'
 
 type RecoveryStore = Pick<StoreApi<AppState>, 'getState' | 'setState'>
 type RecoveryPreloadApi = Pick<PreloadApi, 'crossMachineRecovery' | 'session'>
 
-function importedEditorAndBrowserState(
+type DestinationEditors = { fragment: RecoveryWorkspaceFragment; openFiles: OpenFile[] }
+
+// Why: a path another owner already holds gets a scoped file id, so the tabs, groups and
+// selections that name the file by path must move to that id before hydration.
+function withDestinationEditorIds(
   s: AppState,
   fragment: RecoveryWorkspaceFragment
-): Partial<AppState> {
+): DestinationEditors {
   const worktreeId = fragment.worktreeId
-  const usedFileIds = new Set(s.openFiles.map((file) => file.id))
-  const fileIdByPath = new Map<string, string>()
-  const openFiles: OpenFile[] = fragment.openFiles.map((file) => {
-    const id = usedFileIds.has(file.filePath)
-      ? buildOwnedEditorFileId(file.filePath, worktreeId, undefined)
-      : file.filePath
-    usedFileIds.add(id)
-    fileIdByPath.set(file.filePath, id)
-    return {
+  const pool: OpenFile[] = [...s.openFiles]
+  const openFiles: OpenFile[] = []
+  const migrations: Record<string, Map<string, string>> = {}
+  for (const file of fragment.openFiles) {
+    const id = resolveEditorFileIdForOwner(
+      { openFiles: pool },
+      file.filePath,
+      worktreeId,
+      undefined,
+      ['edit']
+    )
+    if (openFiles.some((opened) => opened.id === id)) {
+      continue
+    }
+    addEditorFileIdMigration(migrations, worktreeId, file.filePath, id)
+    const openFile: OpenFile = {
       id,
       filePath: file.filePath,
       relativePath: file.relativePath,
@@ -52,12 +68,41 @@ function importedEditorAndBrowserState(
       ...(file.readOnly ? { readOnly: true } : {}),
       mode: 'edit'
     }
-  })
+    pool.push(openFile)
+    openFiles.push(openFile)
+  }
+  if (!migrations[worktreeId]) {
+    return { fragment, openFiles }
+  }
+  const migrated = migrateHydratedEditorTabsAndGroups(
+    {
+      unifiedTabsByWorktree: { [worktreeId]: fragment.unifiedTabs },
+      groupsByWorktree: { [worktreeId]: fragment.tabGroups }
+    },
+    migrations
+  )
+  return {
+    openFiles,
+    fragment: {
+      ...fragment,
+      unifiedTabs: migrated.unifiedTabsByWorktree?.[worktreeId] ?? fragment.unifiedTabs,
+      tabGroups: migrated.groupsByWorktree?.[worktreeId] ?? fragment.tabGroups,
+      activeFileId: migrateEditorFileId(migrations, worktreeId, fragment.activeFileId),
+      activeTabId: migrateEditorFileId(migrations, worktreeId, fragment.activeTabId)
+    }
+  }
+}
+
+function importedEditorAndBrowserState(
+  s: AppState,
+  { fragment, openFiles }: DestinationEditors
+): Partial<AppState> {
+  const worktreeId = fragment.worktreeId
   return {
     openFiles: [...s.openFiles, ...openFiles],
     activeFileIdByWorktree: {
       ...s.activeFileIdByWorktree,
-      [worktreeId]: fragment.activeFileId ? (fileIdByPath.get(fragment.activeFileId) ?? null) : null
+      [worktreeId]: fragment.activeFileId
     },
     browserTabsByWorktree: { ...s.browserTabsByWorktree, [worktreeId]: fragment.browserWorkspaces },
     browserPagesByWorkspace: { ...s.browserPagesByWorkspace, ...fragment.browserPagesByWorkspace },
@@ -97,15 +142,19 @@ export function applyCrossMachineRecoveryOpToStore(
     store.setState({ sleepingAgentSessionsByPaneKey: session.sleepingAgentSessionsByPaneKey ?? {} })
     return outcome
   }
+  const destination = withDestinationEditorIds(state, op.fragment)
   // Why: the not-empty check must see live tabs the debounced writer has not persisted yet.
-  const { session, outcome } = applyCrossMachineRecoveryOp(buildWorkspaceSessionPayload(state), op)
+  const { session, outcome } = applyCrossMachineRecoveryOp(buildWorkspaceSessionPayload(state), {
+    ...op,
+    fragment: destination.fragment
+  })
   if (!outcome.ok || outcome.alreadyApplied) {
     return outcome
   }
   const replaceWorkspaceKeys = [op.fragment.worktreeId]
   state.hydrateWorkspaceSession(session, { replaceWorkspaceKeys })
   state.hydrateTabsSession(session, { replaceWorkspaceKeys })
-  store.setState((s) => importedEditorAndBrowserState(s, op.fragment))
+  store.setState((s) => importedEditorAndBrowserState(s, destination))
   return outcome
 }
 
@@ -151,8 +200,11 @@ export async function handleCrossMachineRecoveryApplyRequest(
         // Why: the host treats this reply as the durability boundary before resuming or reporting.
         await persistWorkspaceSessionByHost(api.session, buildWorkspaceSessionPayload(state), state)
       } catch (error) {
-        // Why: main never receives a record claimed here, so only this rollback can restore it.
-        rollbackFailedRecoveryApply(store, request.op, snapshot, stagedRecords)
+        // Why: main never receives a record claimed here, so only this rollback can restore it;
+        // a replay applied nothing, so rolling back would erase tabs opened since the import.
+        if (!outcome.alreadyApplied) {
+          rollbackFailedRecoveryApply(store, request.op, snapshot, stagedRecords)
+        }
         throw error
       }
     }

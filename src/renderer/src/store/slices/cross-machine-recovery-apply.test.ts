@@ -6,10 +6,12 @@ import type {
   RecoveryWorkspaceFragment
 } from '../../../../shared/cross-machine-recovery-session-ops'
 import { handleCrossMachineRecoveryApplyRequest } from './cross-machine-recovery-apply'
+import { buildOwnedEditorFileId } from './editor/file-ids/editor-file-ids'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 import {
   createTestStore,
   makeLayout,
+  makeOpenFile,
   makeTab,
   makeTabGroup,
   makeUnifiedTab,
@@ -247,6 +249,110 @@ describe('cross-machine recovery renderer apply', () => {
     expect(state.activeFileIdByWorktree[WT]).toBeUndefined()
     expect(state.defaultTerminalTabsAppliedByWorktreeId[WT]).toBeUndefined()
     expect(state.recoveryImportKeyByWorktreeId[WT]).toBeUndefined()
+  })
+
+  it('keeps tabs opened while a replayed import fails to persist', async () => {
+    const { store, session, apply } = setup()
+    await apply(importOp())
+    session.flush.mockImplementationOnce(async () => {
+      store.setState((s) => ({
+        tabsByWorktree: {
+          ...s.tabsByWorktree,
+          [WT]: [...(s.tabsByWorktree[WT] ?? []), makeTab({ id: 'user-new', worktreeId: WT })]
+        }
+      }))
+      throw new Error('disk full')
+    })
+
+    const reply = await apply(importOp())
+
+    expect(reply).toEqual({ requestId: 'r1', error: 'disk full' })
+    const state = store.getState()
+    expect(state.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-new', 'user-new'])
+    expect(state.unifiedTabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-new'])
+    expect(state.openFiles.map((file) => file.id)).toEqual(['/repo1/wt/src/a.ts'])
+    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
+    expect(state.recoveryImportKeyByWorktreeId[WT]).toBe('key')
+  })
+
+  it('binds an imported editor tab to its own file when another owner holds the path id', async () => {
+    const { store, session, apply } = setup()
+    const filePath = '/repo1/wt/src/a.ts'
+    store.setState({
+      openFiles: [
+        makeOpenFile({
+          id: filePath,
+          worktreeId: 'repo2::/other',
+          runtimeEnvironmentId: 'env-remote',
+          relativePath: 'src/a.ts'
+        })
+      ]
+    })
+    const base = fragment()
+    const op: CrossMachineRecoveryApplyOp = {
+      kind: 'import',
+      importKey: 'key',
+      records: [record],
+      fragment: {
+        ...base,
+        unifiedTabs: [
+          ...base.unifiedTabs,
+          makeUnifiedTab({
+            id: filePath,
+            entityId: filePath,
+            worktreeId: WT,
+            groupId: 'group-new',
+            contentType: 'editor',
+            label: 'a.ts'
+          })
+        ],
+        tabGroups: [
+          makeTabGroup({
+            id: 'group-new',
+            worktreeId: WT,
+            activeTabId: filePath,
+            tabOrder: ['tab-new', filePath],
+            recentTabIds: ['tab-new', filePath]
+          })
+        ],
+        activeTabType: 'editor',
+        activeTabId: filePath
+      }
+    }
+
+    const reply = await apply(op)
+
+    expect(reply).toEqual({ requestId: 'r1', outcome: { ok: true, claimed: null } })
+    const ownedId = buildOwnedEditorFileId(filePath, WT, undefined)
+    const expectTabModel = (): void => {
+      const state = store.getState()
+      expect(state.openFiles.map((file) => [file.id, file.worktreeId])).toEqual([
+        [filePath, 'repo2::/other'],
+        [ownedId, WT]
+      ])
+      expect(state.unifiedTabsByWorktree[WT]?.map((tab) => [tab.id, tab.entityId])).toEqual([
+        ['tab-new', 'tab-new'],
+        [ownedId, ownedId]
+      ])
+      expect(state.groupsByWorktree[WT]).toEqual([
+        expect.objectContaining({
+          activeTabId: ownedId,
+          tabOrder: ['tab-new', ownedId],
+          recentTabIds: ['tab-new', ownedId]
+        })
+      ])
+      expect(state.activeFileIdByWorktree[WT]).toBe(ownedId)
+      expect(state.activeGroupIdByWorktree[WT]).toBe('group-new')
+    }
+    expectTabModel()
+    store.getState().reconcileWorktreeTabModel(WT)
+    expectTabModel()
+    const persisted = session.set.mock.calls.at(-1)?.[0]
+    expect(persisted.unifiedTabs[WT].map((tab: { entityId: string }) => tab.entityId)).toEqual([
+      'tab-new',
+      ownedId
+    ])
+    expect(persisted.activeFileIdByWorktree[WT]).toBe(ownedId)
   })
 
   it('does not treat a same-id runtime worktree as the local destination', async () => {
