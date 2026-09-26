@@ -81,8 +81,9 @@ export function workerTerminalResourceHasIdentityConflict(
   )
 }
 
-/** Whether a dispatch that has not settled still owns the terminal of this process, read through
- *  the resource row so a transferred terminal answers for its current owner. */
+/** Whether a dispatch that has not settled still addresses this process: the worker-start
+ *  dispatch that owns its terminal, read through the resource row so a transferred terminal
+ *  answers for its current owner, or any task later dispatched to the same incarnation. */
 export function hasOpenWorkerDispatchForProcess(
   this: OrchestrationDb,
   params: { processIncarnation: string; hostScope: string }
@@ -94,10 +95,20 @@ export function hasOpenWorkerDispatchForProcess(
         WHERE process_incarnation = ? AND host_scope IS ? AND ownership_state = 'owned'`
     )
     .all(params.processIncarnation, params.hostScope) as { owner_dispatch_id: string }[]
-  return owners.some((row) =>
-    ['starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown'].includes(
-      this.getWorkerDispatch(row.owner_dispatch_id)?.state ?? ''
-    )
+  return (
+    owners.some((row) =>
+      ['starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown'].includes(
+        this.getWorkerDispatch(row.owner_dispatch_id)?.state ?? ''
+      )
+    ) ||
+    // Only for a process this host owns a worker terminal for; the resource row carries the scope.
+    (owners.length > 0 &&
+      this.db
+        .prepare(
+          `SELECT 1 FROM dispatch_contexts
+            WHERE process_incarnation = ? AND status IN ('pending', 'dispatched') LIMIT 1`
+        )
+        .get(params.processIncarnation) !== undefined)
   )
 }
 

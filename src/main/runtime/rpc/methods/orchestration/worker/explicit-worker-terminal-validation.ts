@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
 
 /**
  * Admits a caller-supplied `--terminal` as this dispatch's worker pane.
@@ -13,18 +14,22 @@ export async function assertExplicitWorkerTerminalUsable(args: {
   runtime: OrcaRuntimeService
   terminal: string
   from: string
-  coordinatorPane: string | null
+  coordinator: OrchestrationCallerIdentity | null
   resolvedWorktreeId: string | undefined
 }): Promise<void> {
-  const { runtime, terminal, from, coordinatorPane, resolvedWorktreeId } = args
+  const { runtime, terminal, from, coordinator, resolvedWorktreeId } = args
   const explicitTerminal = await runtime.showTerminal(terminal)
   const targetPane = runtime.getTerminalPaneKey(terminal)
-  const callerPane = coordinatorPane ?? runtime.getTerminalPaneKey(from)
+  const callerPane = coordinator?.paneKey ?? runtime.getTerminalPaneKey(from)
   // A structured coordinator has no terminal to show, so its own identity is the raw handle plus
-  // the pane key; showing `from` unconditionally would throw for exactly those callers.
-  const coordinatorHandle = isStructuredWorkerHandle(from)
-    ? from
-    : (await runtime.showTerminal(from)).handle
+  // the pane key; showing `from` unconditionally would throw for exactly those callers. A
+  // handle-less session has no terminal at all, so its address is its identity.
+  const coordinatorHandle =
+    coordinator?.terminalHandle === null
+      ? coordinator.address
+      : isStructuredWorkerHandle(from)
+        ? from
+        : (await runtime.showTerminal(from)).handle
   if (
     explicitTerminal.handle === coordinatorHandle ||
     (targetPane !== null && targetPane === callerPane)

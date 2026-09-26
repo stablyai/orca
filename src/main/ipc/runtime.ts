@@ -102,8 +102,9 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       const controller = new AbortController()
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
-      // The controller outlives the handler: most streaming handlers bind and return at once, so
-      // it lives until `runtime:unsubscribe`, a same-id resubscribe, or the sender going away.
+      // The controller outlives the dispatch: most streaming handlers return once set up and
+      // keep streaming until their signal aborts, so `runtime:unsubscribe` or sender retirement
+      // is what ends it, never the handler settling.
       void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreaming(
         {
           id: args.subscriptionId,

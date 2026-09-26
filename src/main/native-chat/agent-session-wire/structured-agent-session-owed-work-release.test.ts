@@ -1,8 +1,12 @@
+// The idle sweep must never stop a provider child that still owes the user work.
+//
 // A Claude chat is published before its CLI answers initialize, and a message sent in that window
 // is accepted and stays queued until it does; the delivery loop hands it over once startup lands.
 // The idle sweep ticks meanwhile. Inside the idle window it must leave that queued message and the
 // starting child alone, and every journal publish — the handover included — starts the window
-// again; only a chat quiet for the whole window loses its agent.
+// again; only a chat quiet for the whole window loses its agent. And a lead whose turn has settled
+// can leave subagents, commands and monitors running inside the child; stopping it then ends them
+// silently.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -40,7 +44,7 @@ let lifecycle: Promise<void>[]
 let clock: number
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-starting-release-'))
+  root = await mkdtemp(join(tmpdir(), 'orca-owed-work-release-'))
   resetHostTestOperationIds()
   claude = fakeClaude()
   lifecycle = []
@@ -229,6 +233,62 @@ describe('a Claude chat whose CLI is still starting', () => {
   it('stops a start that stayed quiet for the whole window when it owes nothing', async () => {
     await attachStarting()
 
+    clock += IDLE_MS
+
+    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+    expect(claude.connections[0].closeCount).toBe(1)
+  })
+})
+
+describe('a chat whose settled lead still has background work running', () => {
+  function frame(message: Record<string, unknown>): void {
+    claude.connections[0].handlers.onMessage?.({ session_id: PROVIDER_SESSION_ID, ...message })
+  }
+
+  async function settleTurnLeavingTask(taskType: string): Promise<void> {
+    await attachStarting()
+    landInit()
+    await adapter.awaitStarted(SESSION)
+    const fanOut = await send('fan out')
+    await vi.waitFor(async () => expect(await dispatchState(fanOut)).toBe('accepted'))
+    frame({
+      type: 'system',
+      subtype: 'task_started',
+      uuid: 'task-start-1',
+      task_id: 'task-1',
+      task_type: taskType,
+      is_backgrounded: true
+    })
+    frame({ type: 'result', subtype: 'success', uuid: 'result-1', is_error: false, result: 'ok' })
+    await host.flushStreamedEvents(SESSION)
+    expect(adapter.backgroundTaskState(SESSION)?.tasks).toEqual([
+      expect.objectContaining({ id: 'task-1' })
+    ])
+  }
+
+  it.each([
+    ['a subagent', 'local_agent'],
+    ['a background command', 'local_bash'],
+    ['a monitor', 'monitor']
+  ])('keeps the agent while %s runs, then stops it once that settles', async (_, type) => {
+    await settleTurnLeavingTask(type)
+
+    clock += IDLE_MS
+    await waitOutSeveralSweeps()
+
+    expect(host.hasSession(SESSION)).toBe(true)
+    expect(claude.connections[0].closeCount).toBe(0)
+
+    frame({
+      type: 'system',
+      subtype: 'task_notification',
+      uuid: 'task-done-1',
+      task_id: 'task-1',
+      status: 'completed'
+    })
+    // A finished background task can wake the lead; that turn is owed too until it settles.
+    frame({ type: 'result', subtype: 'success', uuid: 'result-2', is_error: false, result: 'ok' })
+    await host.flushStreamedEvents(SESSION)
     clock += IDLE_MS
 
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))

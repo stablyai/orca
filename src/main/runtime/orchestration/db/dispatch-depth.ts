@@ -7,6 +7,7 @@ import {
 import { OrchestrationError } from '../orchestration-error'
 import { isEquivalentPaneKey } from './pane-key-match'
 import type { OrchestrationDb } from './orchestration-db'
+import type { OrcaSessionId } from '../../../../shared/orca-session-address'
 import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../types'
 import { potentiallyLiveRemoteAttachmentSql } from './federation/remote-attachment-liveness'
 
@@ -26,17 +27,33 @@ export type DispatchCreator =
       paneKey?: string
       /** Remote attachment matching requires the exact incarnation; local rows do not. */
       processIncarnation?: string
+      /** A structured worker's bare Orca session id, recorded beside its handle. */
+      orcaSessionId?: OrcaSessionId | null
     }
+  /** A structured session with no terminal handle, identified by its Orca session id alone. */
+  | { kind: 'session'; orcaSessionId: OrcaSessionId }
 
 /** Creator identity to persist on a new row, so depth can later tell delegation from bookkeeping. */
 export function recordedCreatorIdentity(creator: DispatchCreator): {
   creatorHandle: string | null
   creatorPaneKey: string | null
+  creatorOrcaSessionId: OrcaSessionId | null
 } {
   if (creator.kind === 'system') {
-    return { creatorHandle: null, creatorPaneKey: null }
+    return { creatorHandle: null, creatorPaneKey: null, creatorOrcaSessionId: null }
   }
-  return { creatorHandle: creator.handle, creatorPaneKey: creator.paneKey ?? null }
+  if (creator.kind === 'session') {
+    return {
+      creatorHandle: null,
+      creatorPaneKey: null,
+      creatorOrcaSessionId: creator.orcaSessionId
+    }
+  }
+  return {
+    creatorHandle: creator.handle,
+    creatorPaneKey: creator.paneKey ?? null,
+    creatorOrcaSessionId: creator.orcaSessionId ?? null
+  }
 }
 
 /**
@@ -84,14 +101,14 @@ export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCrea
   // Local rows match on handle/pane as they always have. process_incarnation is
   // nullable here and context-only dispatch stores null deliberately, so
   // requiring it would drop real parents.
-  const local = this.findActiveDispatchForAssignee(creator.handle, creator.paneKey) as
-    | DispatchContextRow
-    | undefined
+  const local = findActiveDispatchForCreator.call(this, creator)
   if (local && !isSelfCreatedDispatch(local)) {
     depths.push(local.depth)
   }
 
-  for (const attachment of findPotentiallyLiveAttachmentsForCreator.call(this, creator)) {
+  const attachments =
+    creator.kind === 'terminal' ? findPotentiallyLiveAttachmentsForCreator.call(this, creator) : []
+  for (const attachment of attachments) {
     depths.push(attachment.depth)
   }
 
@@ -109,14 +126,34 @@ export function resolveCreatorDispatchId(
   if (creator.kind === 'system') {
     return null
   }
-  const own = this.findActiveDispatchForAssignee(creator.handle, creator.paneKey)
+  const own = findActiveDispatchForCreator.call(this, creator)
   // Why: a self-dispatch is not a parent Attempt, so it must not be stamped as the child's creator.
   const local = own && !isSelfCreatedDispatch(own) ? own : undefined
-  const remote = findPotentiallyLiveAttachmentsForCreator.call(this, creator)
+  const remote =
+    creator.kind === 'terminal' ? findPotentiallyLiveAttachmentsForCreator.call(this, creator) : []
   if ((local ? 1 : 0) + remote.length !== 1) {
     return null
   }
   return local?.id ?? remote[0]?.dispatch_id ?? null
+}
+
+/** The live Dispatch this creator is itself working on, found the way its identity is recorded. */
+function findActiveDispatchForCreator(
+  this: OrchestrationDb,
+  creator: Exclude<DispatchCreator, { kind: 'system' }>
+): DispatchContextRow | undefined {
+  if (creator.kind === 'terminal') {
+    return this.findActiveDispatchForAssignee(creator.handle, creator.paneKey)
+  }
+  const row = this.db
+    .prepare(
+      `SELECT * FROM dispatch_contexts
+       WHERE assignee_orca_session_id = ? AND status IN ('pending', 'dispatched')
+       ORDER BY rowid DESC LIMIT 1`
+    )
+    .get(creator.orcaSessionId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns the row shape its schema and row type define, like every row cast in db/.
+  return row as DispatchContextRow | undefined
 }
 
 /**
