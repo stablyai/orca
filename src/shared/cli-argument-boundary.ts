@@ -25,6 +25,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'index-status',
   'interrupt',
   'json',
+  'latest-json',
   'local',
   'messages',
   'me',

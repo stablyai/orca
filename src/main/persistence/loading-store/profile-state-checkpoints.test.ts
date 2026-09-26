@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -128,25 +128,18 @@ describe('complete profile state checkpoints', () => {
     })
   })
 
-  it.each([false, true])(
-    'captures getter mutations alongside pending settings on quit (compatibility export: %s)',
-    async (exportJsonCompatibility) => {
-      const { store, dataFile, readState } = fixture()
-      mutateThroughGetters(store)
-      store.updateSettings({ theme: 'dark' })
+  it('captures getter mutations alongside pending settings on quit without JSON snapshots', async () => {
+    const { store, dataFile, readState } = fixture()
+    mutateThroughGetters(store)
+    store.updateSettings({ theme: 'dark' })
 
-      await store.flushAsync({ exportJsonCompatibility })
+    await store.flushAsync()
 
-      expect(readState()).toMatchObject(EXPECTED_CHECKPOINT)
-      if (exportJsonCompatibility) {
-        expect(parseProfileStateRoot(readFileSync(dataFile, 'utf8'))).toMatchObject(
-          EXPECTED_CHECKPOINT
-        )
-      }
-    }
-  )
+    expect(readState()).toMatchObject(EXPECTED_CHECKPOINT)
+    expect(existsSync(dataFile)).toBe(false)
+  })
 
-  it.each(['explicit', 'revisioned', 'compatibility'] as const)(
+  it.each(['explicit', 'revisioned'] as const)(
     'includes getter mutations in the %s JSON export',
     (mode) => {
       const { store, directory, dataFile, readState } = fixture()
@@ -156,15 +149,12 @@ describe('complete profile state checkpoints', () => {
 
       if (mode === 'explicit') {
         store.writeProfileStateJsonExport(exportPath)
-      } else if (mode === 'revisioned') {
+      } else {
         const revision = store.writeLatestProfileStateJsonExport()
         if (revision === undefined) {
           throw new Error('Expected a revisioned export')
         }
         exportPath = profileStateJsonExportPath(dataFile, revision)
-      } else {
-        store.writeLatestProfileStateJsonCompatibilityExport()
-        exportPath = dataFile
       }
 
       expect(readState()).toMatchObject(EXPECTED_CHECKPOINT)

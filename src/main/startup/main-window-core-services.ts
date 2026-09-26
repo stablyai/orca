@@ -128,7 +128,7 @@ export function attachMainWindowCoreServices(
       onPtyExit: handlePtyExit,
       onBeforeUpdateQuit: async () => {
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
-        await store.writeLatestProfileStateJsonCompatibilityExportAsync()
+        await store.flushPendingOrThrowAsync()
       },
       onBeforeUpdateQuitFailure: 'abort',
       updateInstallMode: resolveUpdateInstallMode(state.isServeMode),

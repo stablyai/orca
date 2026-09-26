@@ -119,11 +119,20 @@ export const PROFILE_STATE_HANDLERS: Record<string, CommandHandler> = {
 }
 
 function parseSelector(flags: Map<string, string | boolean>): ProfileStateRecoverySelector {
-  if (['revision', 'backup', 'current-json'].filter((flag) => flags.has(flag)).length !== 1) {
+  if (
+    ['revision', 'backup', 'current-json', 'latest-json'].filter((flag) => flags.has(flag))
+      .length !== 1
+  ) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Select exactly one of --revision, --backup, or --current-json.'
+      'Select exactly one of --revision, --backup, --current-json, or --latest-json.'
     )
+  }
+  if (flags.has('latest-json')) {
+    if (flags.get('latest-json') !== true) {
+      throw new RuntimeClientError('invalid_argument', '--latest-json does not take a value.')
+    }
+    return { kind: 'latest-json' }
   }
   if (flags.has('current-json')) {
     if (flags.get('current-json') !== true) {

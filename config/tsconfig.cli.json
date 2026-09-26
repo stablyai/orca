@@ -26,6 +26,7 @@
     "../src/main/orca-profiles/profile-legacy-state-import.ts",
     "../src/main/persistence/profile-state/profile-state-migration.ts",
     "../src/main/persistence/profile-state/profile-state-database-publication.ts",
+    "../src/main/persistence/profile-state/profile-state-authority-marker.ts",
     "../src/main/persistence/profile-state/profile-state-database.ts",
     "../src/main/persistence/profile-state/profile-state-database-errors.ts",
     "../src/main/persistence/profile-state/profile-state-database-validation.ts",

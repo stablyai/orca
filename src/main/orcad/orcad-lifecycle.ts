@@ -127,11 +127,11 @@ export async function startOrcadWithHost<T extends object>(
 }
 
 export async function flushOrcadProfileStoreForShutdown(store: {
-  flushFinalOrThrowAsync(options?: { exportJsonCompatibility?: boolean }): Promise<void>
+  flushFinalOrThrowAsync(): Promise<void>
   freezeWritesAsync(): Promise<void>
 }): Promise<void> {
   try {
-    await store.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
+    await store.flushFinalOrThrowAsync()
   } finally {
     await store.freezeWritesAsync()
   }

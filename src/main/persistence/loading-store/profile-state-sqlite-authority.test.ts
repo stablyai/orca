@@ -13,11 +13,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MAX_AUTOMATION_RUNS_PER_AUTOMATION } from '../../../shared/automation-run-retention'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import {
-  profileStateJsonMatchesAcceptance,
   exportProfileStateJson,
   hashProfileStateJson,
   importProfileStateJson,
-  readProfileStateJsonAcceptance,
   readProfileStateSnapshot
 } from '../profile-state/profile-state-documents'
 import { parseProfileStateRoot } from '../profile-state/profile-state-document-validation'
@@ -56,7 +54,6 @@ vi.mock('../../ssh/ssh-config-parser', () => ({
 }))
 
 const { Store } = await import('./store')
-const { createProfileStateStore } = await import('../profile-state/profile-state-store-factory')
 
 const temporaryDirectories: string[] = []
 const backupAuthorities = new Set<ProfileStateSqliteAuthority>()
@@ -756,47 +753,6 @@ describe('Store with an injected SQLite profile-state authority', () => {
         name.startsWith('orca-data.json.sqlite-export.pending.')
       )
     ).toBe(false)
-    store.freezeWrites()
-  })
-
-  it('publishes canonical JSON for an older build and advances its acceptance marker', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-store-profile-state-compat-export-'))
-    temporaryDirectories.push(directory)
-    const dataFile = join(directory, 'orca-data.json')
-    const databasePath = join(directory, 'profile-state.db')
-    const seed = new Store({ dataFile, serializedState: '{}' })
-    seed.updateSettings({ theme: 'light' })
-    seed.flushOrThrow()
-    const authority = createAuthority(databasePath, 'profile-authority-test')
-    authority.writeSerializedState(Buffer.from(seed.prepareProfileStateExport().json, 'utf8'))
-    seed.freezeWrites()
-
-    const store = new Store({ dataFile, profileStateAuthority: authority })
-    store.updateSettings({ theme: 'dark' })
-    const revision = store.writeLatestProfileStateJsonCompatibilityExport()
-
-    expect(revision).toBe(2)
-    const canonical = readFileSync(dataFile, 'utf8')
-    expect(JSON.parse(canonical).settings.theme).toBe('dark')
-    const opened = openProfileStateDatabaseReadOnly(databasePath, 'profile-authority-test')
-    try {
-      expect(readProfileStateJsonAcceptance(opened.db)).toEqual({
-        jsonHash: hashProfileStateJson(canonical),
-        acceptedRevision: revision
-      })
-      expect(profileStateJsonMatchesAcceptance(opened.db, canonical)).toBe(true)
-    } finally {
-      opened.db.close()
-    }
-    authority.close()
-    const reopened = createProfileStateStore({
-      dataFile,
-      databaseFile: databasePath,
-      profileId: 'profile-authority-test'
-    })
-    expect(reopened.backend).toBe('sqlite')
-    expect(reopened.store.getSettings().theme).toBe('dark')
-    reopened.store.freezeWrites()
     store.freezeWrites()
   })
 

@@ -8,7 +8,6 @@ import { profileStateDatabaseBackups } from './profile-state-backup-path'
 import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
 import { acquireProfileStateMaintenance } from './profile-state-access'
 import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
-import { openProfileStateDatabase } from './profile-state-database'
 import {
   bootstrapProfileStateAuthority,
   ProfileStateAuthorityBootstrapError
@@ -41,7 +40,7 @@ vi.mock('../../ssh/ssh-config-parser', () => ({
   sshConfigHostsToTargets: () => []
 }))
 
-it('can publish an updater JSON export at a reused revision after SQLite rollback', async () => {
+it('can publish an explicit JSON export at a reused revision after SQLite rollback', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-database-rollback-export-'))
   const directory = join(root, 'profiles', 'rollback-export')
   mkdirSync(directory, { recursive: true })
@@ -103,7 +102,7 @@ it('can publish an updater JSON export at a reused revision after SQLite rollbac
   }
 })
 
-it('leaves an explicit rollback path if compatibility publication fails before acceptance', async () => {
+it('leaves an explicit rollback path when stale JSON conflicts with SQLite', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-store-profile-state-compat-failure-'))
   const directory = join(root, 'profiles', 'profile-authority-test')
   mkdirSync(directory, { recursive: true })
@@ -119,19 +118,6 @@ it('leaves an explicit rollback path if compatibility publication fails before a
     const revisionOne = store.writeLatestProfileStateJsonExport()
     expect(revisionOne).toBe(1)
 
-    const opened = openProfileStateDatabase(databasePath, 'profile-authority-test')
-    opened.db.exec(
-      `CREATE TRIGGER fail_compatibility_acceptance
-       BEFORE INSERT ON profile_state_meta
-       WHEN NEW.key = 'legacy_json_acceptance'
-       BEGIN SELECT RAISE(ABORT, 'injected compatibility failure'); END`
-    )
-    opened.db.close()
-
-    store.updateSettings({ theme: 'light' })
-    expect(() => store.writeLatestProfileStateJsonCompatibilityExport()).toThrow(
-      'injected compatibility failure'
-    )
     expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('light')
     expect(() =>
       bootstrapProfileStateAuthority({

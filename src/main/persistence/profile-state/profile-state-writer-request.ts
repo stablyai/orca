@@ -35,7 +35,7 @@ export function isExpectedProfileStateWriterSuccess(
   if (command === 'export-json') {
     return response.exportedRevision !== undefined && response.exportedRevision !== null
   }
-  if (command === 'export-compatibility' || command === 'export-latest') {
+  if (command === 'export-latest') {
     return (
       response.exportedRevision !== undefined &&
       (response.exportedRevision !== null || response.revision === 0)
