@@ -18,7 +18,11 @@ const WRITER_SOURCE = `
     revision += 1
     db.exec('BEGIN IMMEDIATE; UPDATE marker SET revision=' + revision + '; COMMIT')
     Atomics.store(count, 0, revision)
-    if (revision === 1) parentPort.postMessage('writing')
+    if (revision === 1) {
+      parentPort.once('message', commit)
+      parentPort.postMessage('writing')
+      return
+    }
     if (revision < 40) setTimeout(commit, 2)
     else { db.close(true); parentPort.close() }
   }
@@ -59,6 +63,8 @@ it('backs up one complete revision while another thread commits to the WAL', asy
     void writerExit.catch(() => {})
     await firstCommit
     const before = Atomics.load(count, 0)
+    // Keep the writer alive until this thread is ready to start the backup.
+    writer.postMessage('continue')
     await source.backup(target)
     const after = Atomics.load(count, 0)
     expect(after).toBeGreaterThan(before)
