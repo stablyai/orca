@@ -154,8 +154,8 @@ describe('retention force-parking and churn pins', () => {
     )
   })
 
-  it('keeps the burst circuit breaker during force-parking and releases it on expiry', () => {
-    const args = parkingArgs(true)
+  it.each([false, true])('preserves the burst deadline with initial force-parking %s', (forced) => {
+    const args = parkingArgs(forced)
     const { result, rerender } = renderHook(useTerminalTabColdParking, { initialProps: args })
     churn(rerender, args, TERMINAL_TAB_PARK_FLIP_BURST_LIMIT, 10)
     expect(result.current.size).toBe(0)
@@ -164,7 +164,12 @@ describe('retention force-parking and churn pins', () => {
       expect.objectContaining({ trigger: 'burst', pinnedForMs: TERMINAL_TAB_PARK_FLIP_WINDOW_MS })
     )
 
-    act(() => vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_WINDOW_MS))
+    act(() => {
+      vi.advanceTimersByTime(10_000)
+      rerender({ ...args, coldParkTerminalPanes: true, isForceParked: true })
+    })
+    expect(result.current.size).toBe(0)
+    act(() => vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_WINDOW_MS - 10_000))
     expect(result.current).toEqual(new Set([TAB_ID]))
   })
 })
