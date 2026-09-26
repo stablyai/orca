@@ -45,6 +45,7 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 import {
   TERMINAL_TAB_PARK_FLIP_BURST_LIMIT,
+  TERMINAL_TAB_PARK_FLIP_SUSTAINED_PIN_MAX_MS,
   TERMINAL_TAB_PARK_FLIP_WINDOW_MS
 } from './terminal-park-verdict-flip-telemetry'
 
@@ -171,5 +172,49 @@ describe('retention force-parking and churn pins', () => {
     expect(result.current.size).toBe(0)
     act(() => vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_WINDOW_MS - 10_000))
     expect(result.current).toEqual(new Set([TAB_ID]))
+  })
+
+  it('releases an ordinary pane at the eight-minute ceiling without further input changes', () => {
+    const args = parkingArgs()
+    args.terminalTabs = [terminalTab(TAB_ID, 'ssh:host@@session-1')]
+    const { result, rerender, unmount } = renderHook(useTerminalTabColdParking, {
+      initialProps: args
+    })
+    const reachedCeiling = () =>
+      harness.breadcrumb.mock.calls.some(
+        ([, data]) => data?.pinnedForMs === TERMINAL_TAB_PARK_FLIP_SUSTAINED_PIN_MAX_MS
+      )
+    for (let flip = 1; flip <= 600 && !reachedCeiling(); flip += 1) {
+      act(() => {
+        vi.advanceTimersByTime(STEP_MS)
+        rerender({ ...args, coldParkTerminalPanes: flip % 2 === 1 })
+      })
+    }
+    expect(reachedCeiling()).toBe(true)
+    act(() => rerender({ ...args, coldParkTerminalPanes: true }))
+    expect(result.current.size).toBe(0)
+
+    act(() => vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_SUSTAINED_PIN_MAX_MS - 1))
+    expect(result.current.size).toBe(0)
+    act(() => vi.advanceTimersByTime(1))
+    expect(result.current).toEqual(new Set([TAB_ID]))
+    expect(harness.syncWatchers).toHaveBeenLastCalledWith(
+      expect.objectContaining({ parkedTabIds: new Set([TAB_ID]) })
+    )
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears a live sustained-pin timer when its worktree unmounts', () => {
+    const args = parkingArgs()
+    const { rerender, unmount } = renderHook(useTerminalTabColdParking, { initialProps: args })
+    churn(rerender, args)
+    expect(harness.breadcrumb).toHaveBeenCalledWith(
+      'terminal_park_verdict_churn',
+      expect.objectContaining({ trigger: 'window', pinnedForMs: TERMINAL_TAB_PARK_FLIP_WINDOW_MS })
+    )
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
