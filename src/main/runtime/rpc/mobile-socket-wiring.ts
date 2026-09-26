@@ -5,6 +5,7 @@ import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { MobileRelayProvider } from '../../../shared/mobile-relay-provider'
 
 type MobileSocketPayload = string | Uint8Array<ArrayBufferLike>
 
@@ -16,6 +17,7 @@ export type MobileSocketTransportMetadata =
       relayDeviceId: string
       basisConnId: string
       credentialKind: 'invite' | 'resume'
+      relayProvider?: MobileRelayProvider
     }
 
 export type MobileSocketTransport = {
@@ -42,7 +44,7 @@ export type AuthenticatedMobileSocket = {
 }
 
 type MobileSocketWiringOptions = {
-  deviceRegistry: DeviceRegistry
+  deviceRegistry: Pick<DeviceRegistry, 'validateToken' | 'updateLastSeenDeferred'>
   e2eeKeypair: E2EEKeypair
   onText: (
     socket: AuthenticatedMobileSocket,
@@ -66,7 +68,7 @@ function toAuthenticatedDevice(device: DeviceEntry): E2EEAuthenticatedDevice {
 }
 
 export class MobileSocketWiring {
-  private readonly deviceRegistry: DeviceRegistry
+  private readonly deviceRegistry: Pick<DeviceRegistry, 'validateToken' | 'updateLastSeenDeferred'>
   private readonly e2eeKeypair: E2EEKeypair
   private readonly onText: MobileSocketWiringOptions['onText']
   private readonly onBinary: MobileSocketWiringOptions['onBinary']
@@ -155,7 +157,13 @@ export class MobileSocketWiring {
           }
           // Why: outer relay authorization cannot choose the local Orca
           // identity; E2EE must resolve the same device before readiness.
-          if (metadata.transport === 'relay' && metadata.relayDeviceId !== device.deviceId) {
+          if (
+            metadata.transport === 'relay' &&
+            (metadata.relayDeviceId !== device.deviceId ||
+              (device.mobileRelayProvider ?? 'official') !==
+                (metadata.relayProvider ?? 'official') ||
+              device.mobilePairingConnectionMode === 'local-only')
+          ) {
             return null
           }
           return toAuthenticatedDevice(device)

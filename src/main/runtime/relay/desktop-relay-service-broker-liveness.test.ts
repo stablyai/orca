@@ -38,8 +38,11 @@ vi.mock('./relay-session-broker', () => {
 })
 
 import { DesktopRelayService } from './desktop-relay-service'
+import { RelaySessionBroker } from './relay-session-broker'
+import { RELAY_HOST_CLOSE_REASON } from '../../../shared/relay-host-close-reason'
+import type { SelfHostedRelayConfig } from './self-hosted-relay-config'
 
-function service(): DesktopRelayService {
+function service(selfHosted?: SelfHostedRelayConfig): DesktopRelayService {
   fakes.brokers.length = 0
   fakes.readRelayAuthContext.mockResolvedValue({
     identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
@@ -61,6 +64,7 @@ function service(): DesktopRelayService {
     })
   } as unknown as OrcaRuntimeRpcServer
   return new DesktopRelayService({
+    selfHosted,
     authConfig: {
       relayDirectorUrl: 'https://relay.example.test',
       relayTokenEndpoint: 'https://login.example.test/relay-token'
@@ -73,6 +77,35 @@ function service(): DesktopRelayService {
 }
 
 describe('DesktopRelayService broker liveness', () => {
+  it('uses only the self-hosted key and stays live when an unrelated cloud session signs out', async () => {
+    const selfHosted = {
+      relayDirectorUrl: 'https://relay.example.test',
+      relayTokenEndpoint: 'https://relay.example.test/v1/host-token',
+      accessKey: 'self-hosted-key-with-at-least-32-characters'
+    }
+    fakes.readRelayAuthContext.mockClear()
+    const relayService = service(selfHosted)
+    try {
+      await relayService.createPairingRelay('device-1')
+      const options = vi.mocked(RelaySessionBroker.connect).mock.calls.at(-1)![0]
+      expect(options.authConfig).toBe(selfHosted)
+      expect(options.accessToken).toBe(selfHosted.accessKey)
+      expect(options.identity).toEqual({
+        userId: 'self-hosted',
+        profileId: selfHosted.relayDirectorUrl,
+        organizationId: ''
+      })
+      expect(options.measureRegionDecision).toBeUndefined()
+      expect(await options.refreshAccessToken()).toEqual({ accessToken: selfHosted.accessKey })
+      expect(fakes.readRelayAuthContext).not.toHaveBeenCalled()
+      relayService.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
+      expect(fakes.brokers[0]!.live).toBe(true)
+      relayService.fenceAndCloseNow()
+      expect(fakes.brokers[0]!.live).toBe(false)
+    } finally {
+      relayService.stop()
+    }
+  })
   it('pairs through a replacement when the owned broker control died', async () => {
     // Why: ownership stays 'valid' after a control socket dies, so the stale
     // handle otherwise reaches create_pairing_relay and fails the pairing.

@@ -1,15 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { SelfHostedRelaySettingsForm } from './SelfHostedRelaySettingsForm'
+import { useMobileRelayStatus } from '../mobile/use-mobile-relay-status'
+import { useRef } from 'react'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { translate } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { cn } from '@/lib/utils'
-import type {
-  MobileRelayStatus,
-  MobileRelayStatusDetail
-} from '../../../../shared/mobile-relay-status'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayStatus } from '../../../../shared/mobile-relay-status'
+import type { MobilePairingPath } from '../../../../shared/mobile-pairing-path'
 import { MobilePairingPathOption } from './MobilePairingPathOption'
 
 function relayStatusLabel(status: MobileRelayStatus): string {
@@ -57,8 +56,8 @@ export function MobilePairingConnectionOptions({
   relayMintFailed = false,
   relayMintRetrying = false
 }: {
-  value: MobilePairingConnectionMode
-  onChange: (value: MobilePairingConnectionMode) => void
+  value: MobilePairingPath
+  onChange: (value: MobilePairingPath) => void
   compact?: boolean
   /** When true, show Unavailable on the Relay row (mint failed; no QR). */
   relayMintFailed?: boolean
@@ -66,25 +65,25 @@ export function MobilePairingConnectionOptions({
 }): React.JSX.Element {
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
   const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
-  const [relayStatus, setRelayStatus] = useState<MobileRelayStatus>('offline')
-  const [relayCellUrl, setRelayCellUrl] = useState<string | undefined>(undefined)
-  const signedIn = authStatus?.state === 'connected'
+  const { status: relayStatus, cellUrl: relayCellUrl, selfHosted } = useMobileRelayStatus()
+  const relayAuthorized = authStatus?.state === 'connected'
   const reconnectRequired = authStatus?.state === 'reconnect-required'
   // Why: an unconfigured build has no Relay endpoint to sign into, so a Sign in
   // CTA would be dead. Treat that case as unavailable (matching the prior UI)
   // and only offer Sign in when the build can actually reach Relay.
   const configured = authStatus?.configured !== false
-  const needsSignIn = value === 'automatic' && !signedIn && configured
+  const needsSignIn = value === 'automatic' && !relayAuthorized && configured
   // Availability is a property of the build, not of the current selection.
-  const relayUnavailable = !signedIn && !configured
-  const relayDisabled = relayMintRetrying || relayUnavailable
-  const optionRefs = useRef<Record<MobilePairingConnectionMode, HTMLDivElement | null>>({
+  const relayUnavailable = !relayAuthorized && !configured
+  const relayDisabled = (value === 'automatic' && relayMintRetrying) || relayUnavailable
+  const optionRefs = useRef<Record<MobilePairingPath, HTMLDivElement | null>>({
     automatic: null,
+    'self-hosted': null,
     'local-only': null
   })
 
   // Why: ARIA radiogroups move selection with the arrow keys; wrap between the
-  // two options and move focus so keyboard users get standard behavior.
+  // options and move focus so keyboard users get standard behavior.
   // Ignore arrows that originate on nested controls (Sign in) so they do not
   // steal keys from the button or flip the path while focus is outside a radio.
   const handleArrowKeys = (event: React.KeyboardEvent): void => {
@@ -95,12 +94,13 @@ export function MobilePairingConnectionOptions({
     if (!(target instanceof HTMLElement) || target.getAttribute('role') !== 'radio') {
       return
     }
-    if (relayDisabled && value !== 'automatic') {
-      return
-    }
+    const paths: MobilePairingPath[] = relayDisabled
+      ? ['self-hosted', 'local-only']
+      : ['automatic', 'self-hosted', 'local-only']
     event.preventDefault()
-    const next: MobilePairingConnectionMode =
-      relayDisabled || value === 'automatic' ? 'local-only' : 'automatic'
+    const direction = ['ArrowUp', 'ArrowLeft'].includes(event.key) ? -1 : 1
+    const index = paths.indexOf(value)
+    const next = paths[(index + direction + paths.length) % paths.length]!
     onChange(next)
     optionRefs.current[next]?.focus()
   }
@@ -108,33 +108,6 @@ export function MobilePairingConnectionOptions({
   const relayCell = relayCellUrl ? relayCellLabel(relayCellUrl) : null
 
   useOrcaProfileAuthStatusRefresh()
-
-  useEffect(() => {
-    let receivedEvent = false
-    let active = true
-    const apply = (detail: MobileRelayStatusDetail): void => {
-      setRelayStatus(detail.status)
-      setRelayCellUrl(detail.cellUrl)
-    }
-    const unsubscribe = window.api.mobile.onRelayStatusChanged((detail) => {
-      receivedEvent = true
-      if (active) {
-        apply(detail)
-      }
-    })
-    void window.api.mobile
-      .getRelayStatus()
-      .then((detail) => {
-        if (active && !receivedEvent) {
-          apply(detail)
-        }
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-      unsubscribe()
-    }
-  }, [])
 
   return (
     <div className={cn('space-y-2', compact && 'space-y-1.5')}>
@@ -152,7 +125,7 @@ export function MobilePairingConnectionOptions({
           tabIndex={value === 'automatic' && !relayDisabled ? 0 : -1}
           disabled={relayDisabled}
           positionInSet={1}
-          setSize={2}
+          setSize={3}
           optionRef={(el) => {
             optionRefs.current.automatic = el
           }}
@@ -180,7 +153,7 @@ export function MobilePairingConnectionOptions({
                   'Unavailable'
                 )}
               </Badge>
-            ) : signedIn && value === 'automatic' ? (
+            ) : relayAuthorized && value === 'automatic' ? (
               <Badge variant="outline" className="text-[11px]">
                 {relayMintRetrying
                   ? translate(
@@ -256,10 +229,38 @@ export function MobilePairingConnectionOptions({
         ) : null}
         <div className="border-t border-border" />
         <MobilePairingPathOption
-          selected={value === 'local-only'}
-          tabIndex={value === 'local-only' || relayDisabled ? 0 : -1}
+          selected={value === 'self-hosted'}
+          tabIndex={value === 'self-hosted' ? 0 : -1}
           positionInSet={2}
-          setSize={2}
+          setSize={3}
+          optionRef={(el) => {
+            optionRefs.current['self-hosted'] = el
+          }}
+          onSelect={() => onChange('self-hosted')}
+          title={translate('mobile.selfHostedRelay.title', 'Self-hosted Relay')}
+          description={translate(
+            'mobile.selfHostedRelay.description',
+            'Use your own server. No Orca account needed.'
+          )}
+          trailing={
+            selfHosted?.configured && value === 'self-hosted' ? (
+              <Badge variant="outline">
+                {relayMintRetrying
+                  ? translate(
+                      'auto.components.settings.MobilePairingConnectionOptions.retrying',
+                      'Retrying'
+                    )
+                  : relayStatusLabel(relayMintFailed ? 'offline' : selfHosted.status)}
+              </Badge>
+            ) : null
+          }
+        />
+        <div className="border-t border-border" />
+        <MobilePairingPathOption
+          selected={value === 'local-only'}
+          tabIndex={value === 'local-only' || (value === 'automatic' && relayDisabled) ? 0 : -1}
+          positionInSet={3}
+          setSize={3}
           optionRef={(el) => {
             optionRefs.current['local-only'] = el
           }}
@@ -274,6 +275,12 @@ export function MobilePairingConnectionOptions({
           )}
         />
       </div>
+      {value === 'self-hosted' ? (
+        <SelfHostedRelaySettingsForm
+          key={selfHosted?.configurationId ?? 'unconfigured'}
+          status={selfHosted}
+        />
+      ) : null}
     </div>
   )
 }

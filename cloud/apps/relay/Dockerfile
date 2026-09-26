@@ -24,6 +24,7 @@ COPY --from=build /app/packages/relay-contract/dist packages/relay-contract/dist
 COPY --from=build /app/packages/postgres-schema/dist packages/postgres-schema/dist
 COPY --from=build /app/apps/relay/dist apps/relay/dist
 RUN pnpm install --prod --frozen-lockfile --filter @orca-cloud/relay...
+RUN mkdir -p /app/data/relay && chown node:node /app/data/relay
 USER node
 EXPOSE 8080
 CMD ["node", "apps/relay/dist/index.js"]

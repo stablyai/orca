@@ -1,0 +1,31 @@
+services:
+  relay:
+    build:
+      context: ..
+      dockerfile: apps/relay/Dockerfile
+    restart: unless-stopped
+    environment:
+      ORCA_RELAY_PUBLIC_URL: https://${RELAY_DOMAIN:?Set RELAY_DOMAIN}
+      ORCA_RELAY_CELL_URL: https://${RELAY_DOMAIN:?Set RELAY_DOMAIN}
+      ORCA_RELAY_SELF_HOSTED_KEY: ${RELAY_ACCESS_KEY:?Set RELAY_ACCESS_KEY}
+      ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: ${RELAY_SIGNING_KEY:?Set RELAY_SIGNING_KEY}
+    volumes:
+      - relay-data:/app/data/relay
+
+  https:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      RELAY_DOMAIN: ${RELAY_DOMAIN:?Set RELAY_DOMAIN}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  relay-data:
+  caddy-data:
+  caddy-config:

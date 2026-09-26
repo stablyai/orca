@@ -74,6 +74,7 @@ export class RuntimeRpcState {
   protected mobileRelayPairingOfferInFlight: {
     generation: number
     address: string | null
+    relayProvider: string
     rotate: boolean
     request: Promise<MobilePairingOffer>
   } | null = null

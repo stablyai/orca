@@ -2,11 +2,13 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import type { MobileRelayStatusDetail } from '../../../../shared/mobile-relay-status'
+import type { MobileRelayProvider } from '../../../../shared/mobile-relay-provider'
 
 type StoreState = {
   closeMobilePage: () => void
@@ -14,6 +16,7 @@ type StoreState = {
   settings: {
     showMobileButton: boolean
     mobilePairingConnectionMode?: MobilePairingConnectionMode
+    mobilePairingRelayProvider?: MobileRelayProvider
     mobilePairingCustomAddress?: string | null
     mobilePairingCustomAddresses?: string[]
   }
@@ -195,6 +198,54 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Open Android install guide' }))
 
     expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://www.onorca.dev/docs/android-apk')
+  })
+
+  it('rotates a self-hosted code when its saved configuration changes and rejects a late response after removal', async () => {
+    mocks.storeState.orcaProfileAuthStatus = { state: 'local' }
+    mocks.storeState.settings.mobilePairingRelayProvider = 'self-hosted'
+    window.api.mobile.getRelayStatus = vi.fn().mockResolvedValue({
+      status: 'offline',
+      selfHosted: { configured: true, status: 'standby', configurationId: 'first' }
+    })
+    let publish = (_status: MobileRelayStatusDetail): void => {}
+    window.api.mobile.onRelayStatusChanged = (listener) => {
+      publish = listener
+      return vi.fn()
+    }
+    await openPairingStep()
+    await waitFor(() =>
+      expect(getPairingQR).toHaveBeenCalledWith({
+        connectionMode: 'automatic',
+        relayProvider: 'self-hosted'
+      })
+    )
+    await waitFor(() => expect(screen.getByTestId('pairing-url')).toHaveTextContent('orca://pair'))
+    let release = () => {}
+    getPairingQR.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+      return { available: true, qrDataUrl: 'late-qr', pairingUrl: 'orca://late' }
+    })
+    act(() =>
+      publish({
+        status: 'offline',
+        selfHosted: { configured: true, status: 'standby', configurationId: 'second' }
+      })
+    )
+    await waitFor(() =>
+      expect(getPairingQR).toHaveBeenLastCalledWith({
+        connectionMode: 'automatic',
+        relayProvider: 'self-hosted',
+        rotate: true
+      })
+    )
+    expect(screen.getByTestId('pairing-url')).toHaveTextContent('none')
+    act(() => publish({ status: 'offline', selfHosted: { configured: false, status: 'offline' } }))
+    await act(async () => release())
+    expect(screen.getByTestId('pairing-url')).toHaveTextContent('none')
+    expect(screen.getByTestId('can-generate')).toHaveTextContent('false')
+    expect(screen.getByTestId('pair-loading')).toHaveTextContent('false')
   })
 
   it('defaults signed-in pairing to Anywhere and remints when same-network is selected', async () => {

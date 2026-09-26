@@ -92,7 +92,7 @@ describe('liveness safety net lifecycle', () => {
     vi.advanceTimersByTime(30 * 60_000)
     expect(coordinator.ensureLive).toHaveBeenCalledTimes(1)
 
-    service.authMutated()
+    service.demandStateChanged()
     vi.advanceTimersByTime(5 * 60_000)
     expect(coordinator.ensureLive).toHaveBeenCalledTimes(2)
 

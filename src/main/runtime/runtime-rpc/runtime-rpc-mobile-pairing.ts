@@ -1,3 +1,7 @@
+import {
+  resolveMobileRelayProvider,
+  type MobileRelayProvider
+} from '../../../shared/mobile-relay-provider'
 import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
 import {
   mobileRelayMintFailureFromUnknown,
@@ -18,6 +22,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   async createMobilePairingOffer(args: {
     address?: string | null
     connectionMode?: MobilePairingConnectionMode
+    relayProvider?: MobileRelayProvider
     name?: string
     rotate?: boolean
   }): Promise<MobilePairingOffer> {
@@ -37,12 +42,14 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       this.mobilePairingOfferGeneration += 1
       return this.createMobilePairingOfferSerial(args, this.mobilePairingOfferGeneration)
     }
+    const relayProvider = resolveMobileRelayProvider(args.relayProvider)
     const address = args.address ?? null
     const rotate = args.rotate === true
     const inFlight = this.mobileRelayPairingOfferInFlight
     if (
       inFlight?.generation === this.mobilePairingOfferGeneration &&
       inFlight.address === address &&
+      inFlight.relayProvider === relayProvider &&
       (inFlight.rotate || !rotate)
     ) {
       return inFlight.request
@@ -58,7 +65,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       () => undefined,
       () => undefined
     )
-    this.mobileRelayPairingOfferInFlight = { generation, address, rotate, request }
+    this.mobileRelayPairingOfferInFlight = { generation, address, relayProvider, rotate, request }
     void request.then(
       () => {
         if (this.mobileRelayPairingOfferInFlight?.request === request) {
@@ -78,6 +85,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     args: {
       address?: string | null
       connectionMode?: MobilePairingConnectionMode
+      relayProvider?: MobileRelayProvider
       name?: string
       rotate?: boolean
     },
@@ -85,11 +93,15 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   ): Promise<MobilePairingOffer> {
     // Why: the renderer is outside the trust boundary, so only an explicit local-only value may suppress Relay provisioning.
     const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
+    const provider = resolveMobileRelayProvider(args.relayProvider)
     const pending = this.deviceRegistry?.getPendingDevice('mobile')
     // Why: connection policy is part of the credential, so rotate on any policy switch — an old-policy QR must not pair under the new one.
     const switchingPendingMode =
       pending != null &&
-      this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode
+      (this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode ||
+        this.deviceRegistry?.getMobileRelayProvider(pending.deviceId) !== provider ||
+        (pending.relayBinding &&
+          this.mobileRelayPairingProvider?.ownsBinding?.(provider, pending.relayBinding) === false))
     if (args.rotate || switchingPendingMode) {
       if (pending?.relayBinding) {
         // Why: record the durable cloud revoke before rotating the local token so an old relay invite can't outlive the QR.
@@ -113,8 +125,11 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     let connectionModeStored = false
     try {
       connectionModeStored =
-        this.deviceRegistry?.setMobilePairingConnectionMode(direct.deviceId, connectionMode) ??
-        false
+        this.deviceRegistry?.setMobilePairingConnectionMode(
+          direct.deviceId,
+          connectionMode,
+          provider
+        ) ?? false
     } catch (error) {
       console.error('[runtime] Failed to persist the pairing connection mode:', error)
     }
@@ -164,7 +179,10 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     }
     let relayPairing: Awaited<ReturnType<MobileRelayPairingProvider['createPairingRelay']>>
     try {
-      relayPairing = await relayProvider.createPairingRelay(device.deviceId)
+      relayPairing =
+        provider === 'official'
+          ? await relayProvider.createPairingRelay(device.deviceId)
+          : await relayProvider.createPairingRelay(device.deviceId, provider)
     } catch (error) {
       // Why: the raw provider error can carry request metadata or credentials — log only the validated code.
       const relayFailure = mobileRelayMintFailureFromUnknown({
@@ -181,7 +199,8 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       generation !== this.mobilePairingOfferGeneration ||
       relayProvider !== this.mobileRelayPairingProvider ||
       currentDevice?.token !== device.token ||
-      this.deviceRegistry?.getMobilePairingConnectionMode(device.deviceId) !== 'automatic'
+      this.deviceRegistry?.getMobilePairingConnectionMode(device.deviceId) !== 'automatic' ||
+      this.deviceRegistry?.getMobileRelayProvider(device.deviceId) !== provider
     ) {
       this.queueOrRetainRelayDeviceRevoke(device.deviceId, relayPairing.binding)
       if (createdNewPendingDevice) {

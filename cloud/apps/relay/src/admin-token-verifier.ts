@@ -56,8 +56,9 @@ type RelayAdminIdentity =
 function createGoogleServiceTokenVerifier(input: {
   jwksUrl: string
   audience: string
-  serviceAccount: string
+  serviceAccount: string | undefined
 }): (token: string) => Promise<boolean> {
+  if (!input.serviceAccount) return async () => false
   const jwks = createRemoteJWKSet(new URL(input.jwksUrl))
   return async (token) => {
     try {
@@ -132,6 +133,7 @@ export function createReadOnlyAdminTokenVerifier(
 export function createAdminTokenVerifier(
   config: RelayConfig
 ): (token: string, route?: string) => Promise<boolean> {
+  if (!config.deployServiceAccount) return async () => false
   const serviceAccounts = new Map<string, RelayAdminIdentity>([
     [config.deployServiceAccount, 'deploy']
   ])

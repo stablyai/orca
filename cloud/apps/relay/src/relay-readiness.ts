@@ -117,7 +117,7 @@ async function timed<T>(
 
 export function createRelayReadiness(
   database: RelayDatabase,
-  jwksUrl: string,
+  jwksUrl: string | undefined,
   options: RelayReadinessOptions = {}
 ): RelayReadinessProbe {
   const fetchImpl = options.fetch ?? fetch
@@ -135,6 +135,7 @@ export function createRelayReadiness(
   let degraded: RelayReadinessDependency[] = []
 
   const probeJwks = async (): Promise<RelayReadinessFailure | undefined> => {
+    if (!jwksUrl) return undefined
     try {
       const response = await fetchImpl(jwksUrl, { signal: AbortSignal.timeout(timeoutMs) })
       return response.ok ? undefined : 'jwks_http_failed'

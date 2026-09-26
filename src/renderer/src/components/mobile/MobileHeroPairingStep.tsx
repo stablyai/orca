@@ -9,7 +9,7 @@ import { MobileRelayBetaNotice } from '../settings/MobileRelayBetaNotice'
 import { MachineNameField } from '../settings/MachineNameField'
 import { MobileRelayMintFailureNotice } from './mobile-relay-mint-failure-notice'
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobilePairingPath } from '../../../../shared/mobile-pairing-path'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { translate } from '@/i18n/i18n'
 
@@ -29,12 +29,18 @@ function pairDeviceHeading(): string {
 function emptyPairingQrMessage(args: {
   relayMintFailure: MobileRelayMintFailure | null
   canGeneratePairing: boolean
-  connectionMode: MobilePairingConnectionMode
+  connectionMode: MobilePairingPath
   pairingQrError: boolean
   pairingUrl: string | null
 }): string {
   if (args.relayMintFailure != null) {
     return translate('auto.components.mobile.MobileHero.noRelayCode', 'No pairing code available')
+  }
+  if (!args.canGeneratePairing && args.connectionMode === 'self-hosted') {
+    return translate(
+      'mobile.selfHostedRelay.configurePrompt',
+      'Save your Relay URL and access key to create a pairing code'
+    )
   }
   if (!args.canGeneratePairing && args.connectionMode === 'automatic') {
     return translate(
@@ -92,8 +98,8 @@ export function MobileHeroPairingStep({
   onRetryRelay: () => void
   onCopyRelayDiagnostics: () => void
   pairLoading: boolean
-  connectionMode: MobilePairingConnectionMode
-  onConnectionModeChange: (mode: MobilePairingConnectionMode) => void
+  connectionMode: MobilePairingPath
+  onConnectionModeChange: (mode: MobilePairingPath) => void
   onRegeneratePairing: () => void
   canGeneratePairing: boolean
   onCopyPairingCode: () => void
@@ -117,7 +123,7 @@ export function MobileHeroPairingStep({
         } as React.CSSProperties)
   const copyPairingCodeRef = useRef<HTMLButtonElement | null>(null)
   const pairingWasReadyRef = useRef(pairingUrl != null && !pairLoading)
-  const usingRelay = connectionMode === 'automatic'
+  const usingRelay = connectionMode !== 'local-only'
   const [networkDisclosureOpen, setNetworkDisclosureOpen] = useState(false)
   // A custom address is a deliberate override: show the row outright rather than
   // behind a trigger that could not collapse it anyway.
@@ -212,6 +218,7 @@ export function MobileHeroPairingStep({
       </div>
       {relayMintFailure != null ? (
         <MobileRelayMintFailureNotice
+          selfHosted={connectionMode === 'self-hosted'}
           className="mp-pairing-failure"
           failure={relayMintFailure}
           onUseLan={onUseLan}

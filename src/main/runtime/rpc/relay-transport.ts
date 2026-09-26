@@ -2,6 +2,7 @@ import WebSocket, { type RawData } from 'ws'
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { RpcTransport } from './transport'
 import type { MobileSocketTransport, MobileSocketTransportMetadata } from './mobile-socket-wiring'
+import type { MobileRelayProvider } from '../../../shared/mobile-relay-provider'
 
 const MAX_RELAY_MESSAGE_BYTES = 1024 * 1024
 // Why: terminate() normally emits 'close' within one tick; 5s covers slow
@@ -25,6 +26,7 @@ type CloudRelayTransportOptions = {
   generation: number
   createSocket?: (url: string) => WebSocket
   onConnectionClosed?: (connectionId: string) => void
+  relayProvider?: MobileRelayProvider
 }
 
 function relayWebSocketOrigin(cellUrl: string): string {
@@ -45,6 +47,7 @@ function relayWebSocketOrigin(cellUrl: string): string {
 export class CloudRelayTransport implements RpcTransport, MobileSocketTransport {
   private readonly cellWebSocketOrigin: string
   private readonly relayHostId: string
+  private readonly relayProvider: MobileRelayProvider
   private generation: number
   private readonly createSocket: (url: string) => WebSocket
   private readonly onConnectionClosed: ((connectionId: string) => void) | undefined
@@ -60,6 +63,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
   constructor(options: CloudRelayTransportOptions) {
     this.cellWebSocketOrigin = relayWebSocketOrigin(options.cellUrl)
     this.relayHostId = options.relayHostId
+    this.relayProvider = options.relayProvider ?? 'official'
     this.generation = options.generation
     this.onConnectionClosed = options.onConnectionClosed
     this.createSocket =
@@ -144,7 +148,8 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       relayHostId: this.relayHostId,
       relayDeviceId: connection.relayDeviceId,
       basisConnId: connection.connId,
-      credentialKind: connection.kind
+      credentialKind: connection.kind,
+      ...(this.relayProvider === 'self-hosted' ? { relayProvider: this.relayProvider } : {})
     }
     this.socketsByConnectionId.set(connection.connId, socket)
     this.metadataBySocket.set(socket, metadata)

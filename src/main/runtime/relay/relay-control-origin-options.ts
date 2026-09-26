@@ -5,6 +5,7 @@ import type { RelayIdentity } from './relay-session-broker-contract'
 import type { RelayAssignment } from './relay-http-client'
 import type { RelayControlOrigin } from './relay-control-origin'
 import type { RelayDrainMessage } from './relay-control-protocol'
+import type { MobileRelayProvider } from '../../../shared/mobile-relay-provider'
 
 export type RelayControlOriginOptions = {
   assignment: RelayAssignment
@@ -14,6 +15,7 @@ export type RelayControlOriginOptions = {
   keypair: E2EEKeypair
   appVersion: string
   mobileSocketWiring: MobileSocketWiring
+  relayProvider?: MobileRelayProvider
   createControlSocket?: (url: string, relayJwt: string) => WebSocket
   createDataSocket?: (url: string) => WebSocket
   onConnectionOwned: (connectionId: string, origin: RelayControlOrigin) => void

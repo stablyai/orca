@@ -18423,5 +18423,24 @@
   },
   "common": {
     "retry": "Retry"
+  },
+  "mobile": {
+    "selfHostedRelay": {
+      "title": "Self-hosted Relay",
+      "description": "Use your own server. No Orca account needed.",
+      "configurePrompt": "Save your Relay URL and access key to create a pairing code",
+      "mintFailed": "Couldn’t create a self-hosted Relay pairing code.",
+      "desktopOnly": "Configure the Relay in the desktop app.",
+      "saved": "Relay settings saved",
+      "removed": "Relay settings removed",
+      "saveFailed": "Could not save Relay settings.",
+      "url": "Relay URL",
+      "urlPlaceholder": "https://relay.example.com",
+      "key": "Access key",
+      "keyDescription": "Use the access key from your Relay server. It stays on this computer; phones pair by scanning a code.",
+      "editDescription": "Enter the key again to update settings. Changing the server or removing it disconnects phones using this Relay.",
+      "save": "Save Relay",
+      "remove": "Remove configuration"
+    }
   }
 }
