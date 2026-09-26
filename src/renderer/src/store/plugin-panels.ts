@@ -1,16 +1,19 @@
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
+import { useRemotePluginCatalog } from './remote-plugin-panels'
 import type { PluginHostListEntry, PluginHostPanel } from '../../../preload/api-types'
 
 /** A panel contribution from an enabled plugin, flattened for sidebar use. */
 export type ActivePluginPanel = PluginHostPanel & {
   pluginKey: string
   pluginName: string
+  runtimeEnvironmentId?: string
 }
 
 export type ActivePluginCommand = PluginHostListEntry['commands'][number] & {
   pluginKey: string
   pluginName: string
+  runtimeEnvironmentId?: string
 }
 
 export type PluginPanelsFetchStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -195,22 +198,34 @@ export function collectEditablePluginCommands(
 
 /** Panel contributions of enabled plugins, loading the list on first use. */
 export function usePluginPanels(): ActivePluginPanel[] {
-  const plugins = usePluginPanelsStore((s) => s.plugins)
+  const { plugins, environmentId } = usePluginCatalog()
   useEffect(() => {
     ensurePluginPanelsLoaded()
   }, [])
   // Why: derive in useMemo (not the selector) so the store snapshot stays
   // referentially stable and doesn't retrigger useSyncExternalStore loops.
-  return useMemo(() => collectActivePluginPanels(plugins), [plugins])
+  return useMemo(
+    () =>
+      collectActivePluginPanels(plugins).map((panel) =>
+        environmentId ? { ...panel, runtimeEnvironmentId: environmentId } : panel
+      ),
+    [plugins, environmentId]
+  )
 }
 
 /** Commands of enabled plugins, sharing the authoritative plugin-list refresh. */
 export function usePluginCommands(): ActivePluginCommand[] {
-  const plugins = usePluginPanelsStore((state) => state.plugins)
+  const { plugins, environmentId } = usePluginCatalog()
   useEffect(() => {
     ensurePluginPanelsLoaded()
   }, [])
-  return useMemo(() => collectActivePluginCommands(plugins), [plugins])
+  return useMemo(
+    () =>
+      collectActivePluginCommands(plugins).map((command) =>
+        environmentId ? { ...command, runtimeEnvironmentId: environmentId } : command
+      ),
+    [plugins, environmentId]
+  )
 }
 
 /** Enabled commands remain editable while a chord conflict has errored the
@@ -221,4 +236,14 @@ export function useEditablePluginCommands(): ActivePluginCommand[] {
     ensurePluginPanelsLoaded()
   }, [])
   return useMemo(() => collectEditablePluginCommands(plugins), [plugins])
+}
+
+export function usePluginCatalog() {
+  const remote = useRemotePluginCatalog()
+  const plugins = usePluginPanelsStore((state) => state.plugins)
+  const fetchStatus = usePluginPanelsStore((state) => state.fetchStatus)
+  const panelErrors = usePluginPanelsStore((state) => state.panelErrors)
+  return remote.environmentId === null
+    ? { plugins, fetchStatus, panelErrors, environmentId: null }
+    : remote
 }

@@ -1,4 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { setRemotePluginPanelHealth } from '@/store/remote-plugin-panels'
+import { installWindowVisibilityTimeoutPoller } from '@/lib/window-visibility-timeout-poller'
+import { readRuntimePluginPanel, runtimePluginPanelAction } from '@/runtime/runtime-plugin-client'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 import {
   PANEL_PING_TYPE,
@@ -15,7 +18,11 @@ import {
 import { createPanelWatchdog } from './plugin-panel-watchdog'
 import { buildPanelDesignTokenCss, currentPanelColorScheme } from './plugin-panel-design-token-css'
 import { usePluginPanelThemeRevision } from './use-plugin-panel-theme-revision'
-import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
+import {
+  usePluginPanels,
+  usePluginPanelsStore,
+  type ActivePluginPanel
+} from '@/store/plugin-panels'
 import { translate } from '@/i18n/i18n'
 
 type PluginPanelProps = {
@@ -47,10 +54,34 @@ function fillPanelShell(html: string): string {
 
 function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panels = usePluginPanels()
-  const setPanelHealth = usePluginPanelsStore((state) => state.setPanelHealth)
   const panel = isPluginPanelTabKey(tabKey)
     ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
     : null
+  return (
+    <PluginPanelContent
+      key={`${panel?.runtimeEnvironmentId ?? 'local'}:${tabKey}`}
+      tabKey={tabKey}
+      panel={panel}
+    />
+  )
+}
+
+function PluginPanelContent({
+  tabKey,
+  panel
+}: PluginPanelProps & { panel: ActivePluginPanel | null }): React.JSX.Element {
+  const setLocalPanelHealth = usePluginPanelsStore((state) => state.setPanelHealth)
+  const environmentId = panel?.runtimeEnvironmentId
+  const setPanelHealth = useCallback(
+    (key: string, health: 'healthy' | 'error') => {
+      if (environmentId) {
+        setRemotePluginPanelHealth(environmentId, key, health)
+      } else {
+        setLocalPanelHealth(key, health)
+      }
+    },
+    [environmentId, setLocalPanelHealth]
+  )
   const [entryState, setEntryState] = useState<PluginPanelEntryState>({ status: 'loading' })
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null)
@@ -65,7 +96,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   // frame must be rebuilt when the app theme changes, not only when the document does.
   const panelFrameKey =
     entryState.status === 'ready'
-      ? `${tabKey}:${entryState.documentRevision}:${themeRevision}`
+      ? `${environmentId ?? 'local'}:${tabKey}:${entryState.documentRevision}:${themeRevision}`
       : null
   const watchdog = useMemo(
     () =>
@@ -88,7 +119,9 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     const handler = createPanelBridgeMessageHandler({
       sessionToken,
       getPanelWindow: () => iframeRef.current?.contentWindow ?? null,
-      callPanelAction: callPanelActionViaPreload,
+      callPanelAction: environmentId
+        ? (args) => runtimePluginPanelAction(environmentId, args)
+        : callPanelActionViaPreload,
       isActive: () => active,
       onPong: (pingId) => watchdog.handlePong(pingId)
     })
@@ -97,7 +130,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       active = false
       window.removeEventListener('message', handler)
     }
-  }, [panelDocument, sessionToken, watchdog])
+  }, [environmentId, panelDocument, sessionToken, watchdog])
 
   useEffect(() => {
     if (!panelFrameKey || loadedFrameKey !== panelFrameKey) {
@@ -119,16 +152,18 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     setEntryState({ status: 'loading' })
     setSessionToken(null)
     const pluginsApi = window.api?.plugins
-    if (!pluginsApi) {
+    if (!pluginsApi && !environmentId) {
       setPanelHealth(tabKey, 'error')
       setEntryState({ status: 'error' })
       return
     }
     let loadGeneration = 0
-    const load = (): void => {
+    const load = (): Promise<void> => {
       const generation = ++loadGeneration
-      pluginsApi
-        .readPanelEntry({ pluginKey, panelId })
+      const entryRequest = environmentId
+        ? readRuntimePluginPanel(environmentId, pluginKey, panelId)
+        : pluginsApi!.readPanelEntry({ pluginKey, panelId })
+      return entryRequest
         .then((entry) => {
           if (cancelled || generation !== loadGeneration) {
             return
@@ -164,14 +199,20 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
           }
         })
     }
-    load()
-    const unsubscribe = pluginsApi.onChanged ? pluginsApi.onChanged(load) : null
+    const stopPolling = environmentId
+      ? installWindowVisibilityTimeoutPoller({ run: load, getDelayMs: () => 10_000 })
+      : null
+    if (!environmentId) {
+      void load()
+    }
+    const unsubscribe = !environmentId && pluginsApi?.onChanged ? pluginsApi.onChanged(load) : null
     return () => {
       cancelled = true
       loadGeneration += 1
+      stopPolling?.()
       unsubscribe?.()
     }
-  }, [panelId, pluginKey, setPanelHealth, tabKey])
+  }, [environmentId, panelId, pluginKey, setPanelHealth, tabKey])
 
   // Persisted plugin tabs can outlive their plugin (uninstalled/disabled);
   // render a graceful empty state instead of a broken frame.

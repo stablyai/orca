@@ -9,7 +9,7 @@ import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
 import {
   collectInstalledPluginTabKeys,
   usePluginPanels,
-  usePluginPanelsStore,
+  usePluginCatalog,
   type PluginPanelsFetchStatus
 } from '@/store/plugin-panels'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -45,15 +45,17 @@ export function useRightSidebarActivityItems({
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
-  const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
+  const localPluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
+  const catalog = usePluginCatalog()
+  const pluginSystemEnabled = catalog.environmentId ? true : localPluginSystemEnabled
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
     () => (pluginSystemEnabled ? pluginPanels : []),
     [pluginPanels, pluginSystemEnabled]
   )
-  const installedPlugins = usePluginPanelsStore((s) => s.plugins)
-  const pluginFetchStatus = usePluginPanelsStore((s) => s.fetchStatus)
-  const pluginPanelErrors = usePluginPanelsStore((s) => s.panelErrors)
+  const installedPlugins = catalog.plugins
+  const pluginFetchStatus = catalog.fetchStatus
+  const pluginPanelErrors = catalog.panelErrors
   const installedPluginTabKeys = useMemo(
     () => collectInstalledPluginTabKeys(installedPlugins),
     [installedPlugins]
