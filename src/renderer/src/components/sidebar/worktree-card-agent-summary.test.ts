@@ -53,16 +53,27 @@ describe('worktree card agent summary', () => {
     expect(summarizeAgents([agent], 'Agent')).toBe('Agent monitoring')
   })
 
-  it('keeps monitoring visible before a compact row prompt', () => {
+  it('keeps the prompt first on a monitoring compact row', () => {
     const agent = monitoringAgent()
     agent.entry.prompt = 'Run background checks'
 
     const markup = renderCompactAgentRow({ agent, now: 2000, onActivate: vi.fn() })
 
-    expect(markup).toContain('title="Monitoring background tasks - Run background checks"')
+    expect(markup).toContain('title="Run background checks - Monitoring background tasks"')
     expect(markup).toMatch(
-      /Monitoring background tasks<\/span><span[^>]*> - Run background checks<\/span>/
+      /Run background checks<\/span><span[^>]*> - Monitoring background tasks<\/span>/
     )
+    // The trailing label is what truncates away, so the dot must still name the state.
+    expect(markup).toContain('aria-label="Monitoring background tasks"')
+  })
+
+  it('names the monitoring state once when the row has no prompt', () => {
+    const agent = monitoringAgent()
+
+    const markup = renderCompactAgentRow({ agent, now: 2000, onActivate: vi.fn() })
+
+    expect(markup).toContain('title="Monitoring background tasks"')
+    expect(markup).not.toContain(' - Monitoring background tasks')
   })
 
   it('hands the whole row to the send-target reason, and only then', () => {
@@ -84,7 +95,7 @@ describe('worktree card agent summary', () => {
 
     expect(orderedTitles(eligible)).toEqual([
       'Claude',
-      'Monitoring background tasks - Run background checks'
+      'Run background checks - Monitoring background tasks'
     ])
     expect(eligible).toContain('data-slot="tooltip-trigger"')
   })
