@@ -322,6 +322,9 @@ export type RuntimeTerminalClose = {
   ptyKilled: boolean
   ptyStopVerdict?: 'live' | 'unverifiable'
   ptyStopReason?: string
+  /** The host durably recorded a kill order it replays when the PTY's SSH host reconnects.
+   *  Older hosts never send it, so a client promises no retry without it. */
+  pendingKillRecorded?: true
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'

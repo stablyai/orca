@@ -119,10 +119,14 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
         closedSelectionTabIds
       )
     if (tab.type === 'terminal') {
-      const parentLeafCount = snapshot.tabs.filter(
-        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
-      ).length
-      const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
+      // Why: the wire id carries the intent — `parent::leaf` names a pane, `parent` its tab.
+      const resolution = this.resolveTerminalCloseTarget(
+        worktreeId,
+        tab.id === tabId
+          ? { kind: 'pane', tabId: tab.parentTabId, leafId: tab.leafId }
+          : { kind: 'tab', tabId: tab.parentTabId }
+      )
+      const closingWholeParent = resolution === 'tab' || resolution === 'last-pane'
       if (closingWholeParent) {
         closedSelectionTabIds = snapshot.tabs.flatMap((candidate) =>
           candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
@@ -228,9 +232,14 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
           })
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         } else if (retirement.hasPersistedTab) {
-          await this.commitHeadlessTerminalTabRetirement(worktreeId, tab.parentTabId, {
-            force: options.force
-          })
+          // Why: the renderer's close normally commits this through its own intent; this covers
+          // a renderer that acknowledged a tab it no longer listed. Missing is fine: that intent's
+          // durable write can land between this check and this commit.
+          await this.closeTerminalSurface(
+            worktreeId,
+            { kind: 'tab', tabId: tab.parentTabId },
+            { allowMissing: true, force: options.force }
+          )
         }
         if (!acknowledgeRetirement().matches) {
           this.republishMobileSessionTabsSnapshot(worktreeId)
@@ -239,40 +248,26 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
         this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
         return finishCommittedClose()
       }
-      // Why: notifier implementations without the acknowledged relay may expose
-      // only raw pane close. Runtime-owned parents still need de-persist + kill.
-      if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
-        await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
-          force: options.force,
-          ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
-        })
-        this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
-        return finishCommittedClose()
-      }
-      if (!this.notifier?.closeTerminal) {
-        await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
-          force: options.force,
-          ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
-        })
-        return finishCommittedClose()
-      }
-      if (tab.id === tabId) {
-        const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
-        if (pty) {
-          if (this.ptyController?.kill(pty.ptyId) !== true) {
-            throw new Error('terminal_close_failed')
-          }
+      if (closingWholeParent) {
+        // Why: notifier implementations without the acknowledged relay may expose
+        // only raw pane close. Runtime-owned parents still need de-persist + kill.
+        if (
+          !this.notifier?.closeTerminal ||
+          this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)
+        ) {
+          await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
+            force: options.force,
+            ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
+          })
+          this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
           return finishCommittedClose()
         }
         this.notifier.closeTerminal(tab.parentTabId)
+        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
         return delegatedMobileSessionTabClose()
       }
-      // Why: paired web tab bars represent a split terminal with one local
-      // parent tab id. Closing that parent should close the desktop tab, not
-      // just whichever leaf happened to be first in the session snapshot.
-      this.notifier.closeTerminal(tab.parentTabId)
-      this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
-      return delegatedMobileSessionTabClose()
+      await this.closeMobileSessionTerminalPane(worktreeId, tab)
+      return finishCommittedClose()
     } else if (tab.type === 'browser') {
       // Why: a browser tab can be hosted by a client, by the offscreen backend,
       // or by the renderer; each surface owns a different retirement path.

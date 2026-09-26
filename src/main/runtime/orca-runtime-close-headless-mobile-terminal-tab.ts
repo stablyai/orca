@@ -37,10 +37,13 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       return proof ? [proof] : []
     })
     const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, closedParentTabId)
-    const projectedPtyIds = await this.commitHeadlessTerminalTabRetirement(
+    const projectedPtyIds = await this.closeTerminalSurface(
       worktreeId,
-      closedParentTabId,
-      { allowMissing: options.allowMissingPersistedTab, force: options.force }
+      { kind: 'tab', tabId: closedParentTabId },
+      {
+        allowMissing: options.allowMissingPersistedTab,
+        force: options.force
+      }
     )
     if (!acknowledgeRetirement().matches) {
       throw new Error('terminal_pane_owner_changed')
