@@ -106,6 +106,7 @@ jobs:
         env:
           ORCA_E2E_DIAG_DIR: artifacts/diag
           ORCA_BACKGROUND_LAUNCH: '1'
+          DEBUG: 'pw:browser'
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           $exe = "dist/orca-windows-setup.exe"

@@ -20,6 +20,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { seedFreshProfile } from './onboarding-profile.mjs'
+import { isPidAlive } from './daemon-processes.mjs'
 
 const NEW_TAB_BUTTON = { role: 'button', name: 'New tab' }
 const NEW_TERMINAL_ITEM = /New Terminal/i
@@ -490,18 +491,53 @@ export async function closeApp(app, timeoutMs = 10_000, { allowForceKill = true 
   if (!app) {
     return
   }
-  const mainPid = await resolveElectronMainPid(app)
+  const mainPid = await resolveElectronMainPid(app, { allowLauncherFallback: allowForceKill })
+  const launcher = app.process()
+  let closeStatus = 'not-started'
   let closeTimeout
   try {
+    if (!allowForceKill && mainPid === null) {
+      throw new Error('Cannot verify graceful close without the authoritative Electron PID')
+    }
+    closeStatus = 'pending'
+    const closePromise = app.close().then(
+      () => {
+        closeStatus = 'resolved'
+      },
+      (error) => {
+        closeStatus = 'rejected'
+        throw error
+      }
+    )
     await Promise.race([
-      app.close(),
+      closePromise,
       new Promise((_, reject) => {
         closeTimeout = setTimeout(() => reject(new Error('close timeout')), timeoutMs)
         closeTimeout.unref?.()
       })
     ])
+    if (!allowForceKill && isPidAlive(mainPid)) {
+      throw new Error('Playwright close resolved while the authoritative Electron PID remains live')
+    }
   } catch (error) {
     if (!allowForceKill) {
+      const evidence = {
+        closeStatus,
+        error: error instanceof Error ? error.message : String(error),
+        main: readClosePidEvidence(mainPid),
+        launcher: {
+          ...readClosePidEvidence(launcher?.pid),
+          exitCode: launcher?.exitCode ?? null,
+          signalCode: launcher?.signalCode ?? null,
+          stdio:
+            launcher?.stdio.map((pipe, fd) => ({
+              fd,
+              destroyed: pipe?.destroyed ?? null,
+              readableEnded: pipe?.readableEnded ?? null
+            })) ?? []
+        }
+      }
+      console.error(`[win-update-e2e] strict-close-failed: ${JSON.stringify(evidence)}`)
       throw error
     }
     if (mainPid) {
@@ -515,5 +551,20 @@ export async function closeApp(app, timeoutMs = 10_000, { allowForceKill = true 
     // Why: successful closes must not retain a timeout closure or keep a shared
     // harness process alive until the failure deadline expires.
     clearTimeout(closeTimeout)
+  }
+}
+
+function readClosePidEvidence(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return { pid: pid ?? null, state: 'unverifiable', error: 'PID unavailable' }
+  }
+  try {
+    return { pid, state: isPidAlive(pid) ? 'live' : 'exited' }
+  } catch (error) {
+    return {
+      pid,
+      state: 'unverifiable',
+      error: error instanceof Error ? error.message : String(error)
+    }
   }
 }

@@ -1,6 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { closeApp } from './app-driver.mjs'
+import { isPidAlive } from './daemon-processes.mjs'
+
+vi.mock('./daemon-processes.mjs', () => ({ isPidAlive: vi.fn().mockReturnValue(true) }))
 
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -17,6 +20,7 @@ describe('update-survival shutdown', () => {
     const failure = new Error('quit rejected')
     const app = {
       evaluate: vi.fn().mockResolvedValue(123),
+      process: () => ({ pid: 124, stdio: [] }),
       close: vi.fn().mockRejectedValue(failure)
     }
 
@@ -28,6 +32,7 @@ describe('update-survival shutdown', () => {
     vi.useFakeTimers()
     const app = {
       evaluate: vi.fn().mockResolvedValue(123),
+      process: () => ({ pid: 124, stdio: [] }),
       close: vi.fn(() => new Promise(() => {}))
     }
     const closed = closeApp(app, 45_000, { allowForceKill: false })
@@ -40,5 +45,19 @@ describe('update-survival shutdown', () => {
     await rejected
     expect(execFileSync).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('rejects a resolved close while the authoritative main remains live', async () => {
+    const app = {
+      evaluate: vi.fn().mockResolvedValue(123),
+      process: () => ({ pid: 124, stdio: [] }),
+      close: vi.fn().mockResolvedValue(undefined)
+    }
+
+    await expect(closeApp(app, 45_000, { allowForceKill: false })).rejects.toThrow(
+      'authoritative Electron PID remains live'
+    )
+    expect(isPidAlive).toHaveBeenCalledWith(123)
+    expect(execFileSync).not.toHaveBeenCalled()
   })
 })
