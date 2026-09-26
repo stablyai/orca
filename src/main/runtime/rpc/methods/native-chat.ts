@@ -217,7 +217,7 @@ export const NATIVE_CHAT_METHODS = [
         runtime.releaseSubscriptionByRequest(connectionId, params.requestId)
         return { unsubscribed: true }
       }
-      // COMPAT(native chat request-addressed unsubscribe): token and prefix paths for phones that predate `requestId`.
+      // COMPAT(native chat request-addressed unsubscribe): token and prefix paths for the web client and phones that predate `requestId`.
       const connection = connectionId ?? 'local'
       if (params.subscriptionId) {
         runtime.cleanupSubscription(`nativeChat:${connection}:${params.subscriptionId}`)

@@ -211,8 +211,8 @@ export class RpcClientStreamRegistry {
     if (stream?.method === 'terminal.subscribe') {
       const params = buildTerminalUnsubscribeParams(stream.params)
       if (params) {
-        // Why: `requestId` names this exact request; hosts that predate it strip it and use the slot.
-        this.sendRpc('terminal.unsubscribe', { ...params, requestId: id })
+        const unsubscribe = { method: 'terminal.unsubscribe', params }
+        this.sendRpc(unsubscribe.method, withUnsubscribeRequestId(unsubscribe, id))
       }
     } else {
       const unsubscribe = buildStreamUnsubscribe(stream?.method, stream?.params)
