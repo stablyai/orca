@@ -40,7 +40,7 @@ test.describe('Reveal active workspace button', () => {
   // (not a scenario real users hit). Reveal-into-view is covered robustly by
   // the "outside the virtualized window" test below.
 
-  test('clears sidebar filters before revealing a hidden current workspace', async ({
+  test('adjusts sidebar filters before revealing a hidden current workspace', async ({
     orcaPage,
     testRepoPath
   }, testInfo) => {
@@ -82,18 +82,19 @@ test.describe('Reveal active workspace button', () => {
     await prepareSidebarForScrollTest(orcaPage)
 
     // Other specs can add worktrees to the shared repository before this test runs.
-    const targetId = await orcaPage.evaluate((repoPath) => {
+    const target = await orcaPage.evaluate((repoPath) => {
       const state = window.__store!.getState()
       const repo = state.repos.find((candidate) => candidate.path === repoPath)
       return repo
         ? state.worktreesByRepo[repo.id]?.find(
             (worktree) => worktree.branch === 'refs/heads/e2e-secondary'
-          )?.id
+          )
         : undefined
     }, testRepoPath)
-    if (!targetId) {
+    if (!target) {
       throw new Error('Seeded secondary worktree is missing')
     }
+    const targetId = target.id
 
     const targetRows = orcaPage.locator(
       `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(targetId)}]`
@@ -132,11 +133,9 @@ test.describe('Reveal active workspace button', () => {
     await revealButton.click()
     await orcaPage
       .getByRole('dialog', { name: 'Reveal hidden workspace?' })
-      .getByRole('button', { name: 'Clear filters and reveal' })
+      .getByRole('button', { name: 'Adjust filters and reveal' })
       .click()
 
-    await expect(targetRow).toBeVisible()
-    await expect(targetRow).toHaveAttribute('data-scroll-reveal-highlight', 'true')
     await expect
       .poll(
         () =>
@@ -149,10 +148,12 @@ test.describe('Reveal active workspace button', () => {
           }),
         {
           timeout: 10_000,
-          message: 'Reveal button should clear repo filters that hide the current workspace'
+          message: 'Reveal should add the target repo while preserving the selected repo'
         }
       )
-      .toEqual([])
+      .toEqual([filterRepoId, target.repoId])
+    await expect(targetRow).toBeVisible()
+    await expect(targetRow).toHaveAttribute('data-scroll-reveal-highlight', 'true')
   })
 
   test('reveals the current workspace when it starts outside the virtualized window', async ({

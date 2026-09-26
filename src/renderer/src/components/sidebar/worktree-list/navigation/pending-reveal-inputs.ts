@@ -18,6 +18,10 @@ import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
 import { getPinnedWorktreeRevealCollapsedGroupKeys } from './reveal-ancestors'
+import {
+  findPreferredRenderRowIndexForWorktree,
+  findPreferredRenderRowIndexForWorktreeIdentity
+} from './render-row-lookup'
 
 export const MAX_REVEAL_RETRIES = 8
 
@@ -47,8 +51,23 @@ export type PendingSidebarRevealArgs = {
   projectGrouping?: ProjectGroupingModel
   flashRevealedRow: (rowKey: string) => void
   markRevealScroll: (targetTop: number) => void
+  isRevealScrollSettling: () => boolean
+  wasRevealScrollInterrupted: () => boolean
   schedulePendingRevealFrame: (callback: FrameRequestCallback) => void
-  cancelPendingRevealFrames: () => void
+}
+
+export function findPendingWorktreeRevealIndex(
+  renderRows: readonly RenderRow[],
+  request: PendingSidebarWorktreeReveal,
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+): number {
+  return request.executionHostId
+    ? findPreferredRenderRowIndexForWorktreeIdentity(
+        renderRows,
+        { id: request.worktreeId, hostId: request.executionHostId },
+        pinnedDisplayPolicy
+      )
+    : findPreferredRenderRowIndexForWorktree(renderRows, request.worktreeId, pinnedDisplayPolicy)
 }
 
 // Expand whatever collapsed section hides the reveal target, then scroll to it.

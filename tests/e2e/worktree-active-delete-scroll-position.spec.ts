@@ -1,4 +1,5 @@
-import type { Page } from '@stablyai/playwright-test'
+import type { Locator, Page } from '@stablyai/playwright-test'
+import { writeFile } from 'node:fs/promises'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
@@ -170,13 +171,13 @@ async function prepareScrolledActiveRow(page: Page, targetId: string): Promise<v
   await expect(target).toHaveAttribute('aria-current', 'page')
 }
 
-async function startRowRemovalSampling(
-  page: Page,
+async function armRowRemovalSampling(
+  deleteItem: Locator,
   targetId: string,
   belowId: string
 ): Promise<void> {
-  await page.evaluate(
-    ({ belowId, maxRemovalWaitFrames, postRemovalSampleFrames, targetId }) => {
+  await deleteItem.evaluate(
+    (element, { belowId, maxRemovalWaitFrames, postRemovalSampleFrames, targetId }) => {
       const sample = async (): Promise<RowRemovalFrame[]> => {
         const readFrame = (): RowRemovalFrame => {
           const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
@@ -210,7 +211,13 @@ async function startRowRemovalSampling(
         }
         return frames
       }
-      Reflect.set(window, '__activeDeleteRowRemovalFrames', sample())
+      // Playwright may wait for menu actionability longer than the entire frame sample window.
+      delete window.__activeDeleteRowRemovalFrames
+      element.addEventListener(
+        'pointerdown',
+        () => Reflect.set(window, '__activeDeleteRowRemovalFrames', sample()),
+        { capture: true, once: true }
+      )
     },
     {
       belowId,
@@ -233,7 +240,7 @@ async function finishRowRemovalSampling(page: Page): Promise<RowRemovalFrame[]> 
 
 test('deleting the active scrolled worktree preserves position and closes the row gap', async ({
   orcaPage
-}) => {
+}, testInfo) => {
   await waitForSessionReady(orcaPage)
   await orcaPage.setViewportSize({ width: 1_200, height: 800 })
   const { belowId, successorId, targetId } = await seedActiveDeletionRows(orcaPage)
@@ -252,7 +259,7 @@ test('deleting the active scrolled worktree preserves position and closes the ro
   await expect(deleteItem).toBeVisible()
   await expect(deleteItem).toBeInViewport()
   await pauseForVisualProof(orcaPage)
-  await startRowRemovalSampling(orcaPage, targetId, belowId)
+  await armRowRemovalSampling(deleteItem, targetId, belowId)
   await deleteItem.click()
 
   await expect(target).toHaveCount(0)
@@ -261,6 +268,12 @@ test('deleting the active scrolled worktree preserves position and closes the ro
     .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId ?? null))
     .toBe(successorId)
   const frames = await finishRowRemovalSampling(orcaPage)
+  const framePath = testInfo.outputPath('active-delete-row-removal-frames.json')
+  await writeFile(framePath, JSON.stringify(frames))
+  await testInfo.attach('active-delete-row-removal-frames', {
+    path: framePath,
+    contentType: 'application/json'
+  })
   await pauseForVisualProof(orcaPage)
   const mountedTops = frames.flatMap((frame) => (frame.belowTop === null ? [] : [frame.belowTop]))
   const firstRemovedFrame = frames.findIndex((frame) => !frame.targetExists)
