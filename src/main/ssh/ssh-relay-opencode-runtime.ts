@@ -78,14 +78,19 @@ export function ensureRemoteOpenCodeRuntime(
   const signal = options.signal ? AbortSignal.any([options.signal, timeout.signal]) : timeout.signal
   let remotePending = false
   let remoteUnconfirmed = false
-  const remote: RemoteOperation = async (operation) => {
-    signal.throwIfAborted()
+  const assertCurrentGeneration = (): void => {
     if (conn.getConnectGeneration() !== generation) {
       throw new Error('SSH connection changed during SQLite runtime setup.')
     }
+  }
+  const remote: RemoteOperation = async (operation) => {
+    signal.throwIfAborted()
+    assertCurrentGeneration()
     remotePending = true
     try {
-      return await operation()
+      const result = await operation()
+      assertCurrentGeneration()
+      return result
     } catch (error) {
       remoteUnconfirmed ||= signal.aborted || isUnconfirmedSshCommandTermination(error)
       throw error
@@ -97,6 +102,10 @@ export function ensureRemoteOpenCodeRuntime(
     install(conn, host, remoteHome, options, signal, remote),
     signal
   )
+    .then((outcome) => {
+      assertCurrentGeneration()
+      return outcome
+    })
     .catch((error: unknown) => {
       console.warn(
         '[ssh-relay] OpenCode history runtime setup did not finish:',

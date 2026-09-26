@@ -253,16 +253,69 @@ describe('SSH OpenCode runtime setup', () => {
     expect(mocks.write).toHaveBeenCalledOnce()
   })
 
-  it('does not issue more host commands from a superseded setup', async () => {
+  it.each(['ready', 'not-needed'] as const)(
+    'refuses a late %s result from a superseded setup',
+    async (status) => {
+      const conn = connection()
+      const generation = vi.spyOn(conn, 'getConnectGeneration')
+      mocks.exec.mockImplementationOnce(async () => {
+        generation.mockReturnValue(2)
+        return frame(status, '/usr/bin/node')
+      })
+      expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe('failed')
+      expect(mocks.exec).toHaveBeenCalledOnce()
+      expect(mocks.write).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['publication', 'cleanup'] as const)(
+    'refuses completed setup when its generation changes during %s',
+    async (stage) => {
+      const conn = connection()
+      const generation = vi.spyOn(conn, 'getConnectGeneration')
+      const started = Promise.withResolvers<void>()
+      const finish = Promise.withResolvers<string>()
+      mocks.exec.mockImplementation(async (_conn, command: string) => {
+        if (command.includes('SELECT 1 AS ready')) {
+          return frame('ready', '/usr/bin/node')
+        }
+        const selected =
+          stage === 'publication'
+            ? command.includes('published')
+            : command.includes('claim_identity') && !command.includes('old=')
+        if (selected) {
+          started.resolve()
+          return finish.promise
+        }
+        return hostCommandResult(command)
+      })
+      const pending = ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())
+      await started.promise
+      generation.mockReturnValue(2)
+      finish.resolve(stage === 'publication' ? frame('published') : '')
+
+      expect(await pending).toBe('failed')
+      expect(mocks.exec).toHaveBeenCalledTimes(stage === 'publication' ? 4 : 5)
+      expect(mocks.write).toHaveBeenCalledOnce()
+    }
+  )
+
+  it('keeps a newer setup registered when the superseded setup finishes late', async () => {
     const conn = connection()
     const generation = vi.spyOn(conn, 'getConnectGeneration')
-    mocks.exec.mockImplementationOnce(async () => {
-      generation.mockReturnValue(2)
-      return frame('ready', '/usr/bin/node')
-    })
-    expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe('failed')
-    expect(mocks.exec).toHaveBeenCalledOnce()
-    expect(mocks.write).not.toHaveBeenCalled()
+    const oldProbe = Promise.withResolvers<string>()
+    const currentProbe = Promise.withResolvers<string>()
+    mocks.exec.mockReturnValueOnce(oldProbe.promise).mockReturnValueOnce(currentProbe.promise)
+    const oldSetup = ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())
+    generation.mockReturnValue(2)
+    const currentSetup = ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())
+    oldProbe.resolve(frame('not-needed'))
+    expect(await oldSetup).toBe('failed')
+
+    const joined = ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())
+    expect(mocks.exec).toHaveBeenCalledTimes(2)
+    currentProbe.resolve(frame('not-needed'))
+    expect(await Promise.all([currentSetup, joined])).toEqual(['not-needed', 'not-needed'])
   })
 
   it.each(['deadline', 'caller'] as const)(
