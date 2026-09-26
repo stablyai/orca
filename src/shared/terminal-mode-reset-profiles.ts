@@ -131,9 +131,19 @@ export function replayPayloadEndsWithCursorHidden(payload: string): boolean {
   return hideIndex !== -1 && hideIndex > payload.lastIndexOf('\x1b[?25h')
 }
 
+// Why a set, not a push: the agent pops once at exit, so restoring without a stack frame still lands the shell on 0.
+function buildKittyKeyboardFlagsRestore(flags: number | undefined): string {
+  return flags !== undefined && Number.isSafeInteger(flags) && flags > 0 ? `\x1b[=${flags};1u` : ''
+}
+
 // Why: some agents hide the real cursor and draw their own, so preserve the payload's final visibility (pty-connection re-shows it if the agent was actually a dead TUI).
-export function buildPostReplayLiveAgentReattachReset(payload: string): string {
-  return replayPayloadEndsWithCursorHidden(payload)
+// Why the restore: the agent negotiated kitty once and never re-sends it, so the reset alone leaves xterm unable to encode chords like Cmd+Z (#10381).
+export function buildPostReplayLiveAgentReattachReset(
+  payload: string,
+  kittyKeyboardFlags?: number
+): string {
+  const reset = replayPayloadEndsWithCursorHidden(payload)
     ? `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
     : POST_REPLAY_LIVE_AGENT_REATTACH_RESET
+  return `${reset}${buildKittyKeyboardFlagsRestore(kittyKeyboardFlags)}`
 }
