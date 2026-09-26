@@ -1,3 +1,4 @@
+import type { AgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import type {
   AgentJournalDispatchState,
   AgentJournalItemBody,
@@ -85,6 +86,7 @@ export function journalDispatchRowBuilder(
       dispatchState: input.state,
       providerItemId,
       reason: boundedDispatchReason(input),
+      rejection: input.state === 'rejected' ? input.rejection : undefined,
       seq,
       fence: input.fence,
       ts,
@@ -287,6 +289,7 @@ export function buildJournalDispatchRow(input: {
   dispatchState: AgentJournalDispatchState
   providerItemId: string | null
   reason: string | null
+  rejection?: AgentSessionFailureFact
   seq: number
   fence: number
   ts: number
@@ -298,6 +301,7 @@ export function buildJournalDispatchRow(input: {
     state: input.dispatchState,
     providerItemId: input.providerItemId,
     reason: input.reason,
+    ...(input.rejection ? { rejection: input.rejection } : {}),
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
     ...(input.recovered ? { recovered: input.recovered } : {})
   }

@@ -18,6 +18,8 @@
 // reason, and a client has to know which kind it is holding before it can decide
 // whether the string is showable.
 
+import type { AgentSessionFailureFact } from './agent-session-failure'
+
 export const DISPATCH_REJECTED_WRITE_FAILED = 'provider_write_failed'
 
 /** Local admission refused the frame before any transport was involved. Two
@@ -38,6 +40,39 @@ export const DISPATCH_REJECTED_PROVIDER_CLOSED = 'provider_closed_before_deliver
 export function dispatchWriteFailureReason(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
   return `${DISPATCH_REJECTED_WRITE_FAILED}: ${detail}`
+}
+
+/** A rejection as the host writes it: the sentence (or legacy marker) released clients print, and
+ *  the typed fact newer ones read. */
+export type AgentJournalDispatchRejection = {
+  reason: string
+  rejection: AgentSessionFailureFact
+}
+
+export const DISPATCH_REJECTION_CANCELLED: AgentJournalDispatchRejection = {
+  reason: DISPATCH_REJECTED_CANCELLED,
+  rejection: { kind: 'cancelled' }
+}
+
+export const DISPATCH_REJECTION_HOST_RESTARTED: AgentJournalDispatchRejection = {
+  reason: DISPATCH_REJECTED_HOST_RESTARTED,
+  rejection: { kind: 'hostRestarted' }
+}
+
+export const DISPATCH_REJECTION_PROVIDER_CLOSED: AgentJournalDispatchRejection = {
+  reason: DISPATCH_REJECTED_PROVIDER_CLOSED,
+  rejection: { kind: 'chatClosed' }
+}
+
+/** The marker keeps its Orca text after the prefix, as released clients expect; they hide it. */
+export function dispatchWriteFailureRejection(error: unknown): AgentJournalDispatchRejection {
+  return { reason: dispatchWriteFailureReason(error), rejection: { kind: 'writeFailed' } }
+}
+
+export function dispatchQueueFullRejection(
+  marker: typeof DISPATCH_REJECTED_QUEUE_FULL | typeof DISPATCH_REJECTED_CODEX_QUEUE_FULL
+): AgentJournalDispatchRejection {
+  return { reason: marker, rejection: { kind: 'queueFull' } }
 }
 
 /** True for the internal transport marker, false for a provider's own words. */

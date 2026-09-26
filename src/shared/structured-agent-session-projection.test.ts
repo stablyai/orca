@@ -103,6 +103,25 @@ describe('structured agent session status projection', () => {
     })
   })
 
+  it("forwards a status row's failure fact and drops one this build cannot place", () => {
+    const failure = {
+      kind: 'providerExited' as const,
+      detail: { text: 'stderr tail', audience: 'log' as const }
+    }
+    expect(
+      projectStructuredItemToNativeChat(
+        item('exit', 1, { kind: 'status', text: 'Stopped.', failure })
+      )?.blocks[0]
+    ).toEqual({ type: 'text', text: 'Stopped.', failure })
+    const future = item('future', 2, { kind: 'status', text: 'Stopped.' })
+    // A newer host's kind reads as no fact, so the row keeps its text and nothing else.
+    Object.assign(future.body, { failure: { kind: 'futureKind' } })
+    expect(projectStructuredItemToNativeChat(future)?.blocks[0]).toEqual({
+      type: 'text',
+      text: 'Stopped.'
+    })
+  })
+
   it('projects running, attention, and completed lifecycle states', () => {
     const running = item('running', 1, {
       kind: 'status',

@@ -7,6 +7,7 @@
 // rewritten in place, so a host that cannot read a row refuses to write the
 // journal rather than skipping or compacting past it.
 
+import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentType } from './agent-status-types'
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
@@ -272,6 +273,9 @@ export type AgentJournalStatusItem = {
   }
   /** Present on thread-goal transitions; absent on rows from older hosts. */
   threadGoal?: AgentJournalThreadGoalState
+  /** On a row that reports a failure: what failed, typed. `text` stays the sentence older
+   *  clients print; absent on rows from older hosts. */
+  failure?: AgentSessionFailureFact
 }
 
 /** The durable record of one root turn. `running` exposes cancellation while
@@ -353,8 +357,11 @@ export type AgentJournalSubmission = {
   dispatchState: AgentJournalDispatchState
   /** Provider item identity adopted on accept; null otherwise. */
   providerItemId: string | null
-  /** Terminal reason on `rejected`. */
+  /** Terminal reason on `rejected`: a sentence a person can read, or one of the legacy markers
+   *  older clients already recognise. On `unknown`, the doubt marker. */
   reason: string | null
+  /** On `rejected`, why, typed; absent on rows from older hosts. */
+  rejection?: AgentSessionFailureFact
   submittedAt: number
   resolvedAt: number | null
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live
