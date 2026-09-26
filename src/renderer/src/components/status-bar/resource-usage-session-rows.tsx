@@ -18,12 +18,15 @@ export function SessionRow({
   session,
   worktreeId,
   onNavigate,
-  onKill
+  onKill,
+  readOnly = false
 }: {
   session: UnifiedSessionRow
   worktreeId: string
   onNavigate: (tabId: string, paneKey: string | null) => void
   onKill: (session: UnifiedSessionRow) => void
+  /** Remote hosts are view-only: killing there needs runtime terminal.stop routing. */
+  readOnly?: boolean
 }): React.JSX.Element {
   const clickable = session.tabId !== null && session.bound
   const handleClick = (): void => {
@@ -65,25 +68,27 @@ export function SessionRow({
       <MetricPair cpu={session.cpu} memory={session.memory} size="small" />
       {/* Why: kill X sits in the shared gutter for column alignment; bound rows reveal it on hover/focus, orphan rows always show it as reclaimable. */}
       <span className={ROW_TRAILING_GUTTER_CLS}>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onKill(session)
-          }}
-          className={cn(
-            'rounded p-0.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive',
-            session.bound &&
-              'can-hover:opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
-          )}
-          aria-label={translate(
-            'auto.components.status.bar.ResourceUsageStatusSegment.fa6d36758d',
-            'Kill session {{value0}}',
-            { value0: session.sessionId }
-          )}
-        >
-          <X className="size-3" />
-        </button>
+        {readOnly ? null : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onKill(session)
+            }}
+            className={cn(
+              'rounded p-0.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive',
+              session.bound &&
+                'can-hover:opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
+            )}
+            aria-label={translate(
+              'auto.components.status.bar.ResourceUsageStatusSegment.fa6d36758d',
+              'Kill session {{value0}}',
+              { value0: session.sessionId }
+            )}
+          >
+            <X className="size-3" />
+          </button>
+        )}
       </span>
     </div>
   )
@@ -112,7 +117,8 @@ export function WorktreeRow({
   onNavigate,
   onDelete,
   onKillSession,
-  navigateToTab
+  navigateToTab,
+  readOnly = false
 }: {
   worktree: UnifiedWorktreeRow
   storeRecord: Worktree | null
@@ -123,6 +129,7 @@ export function WorktreeRow({
   onDelete: () => void
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
+  readOnly?: boolean
 }): React.JSX.Element {
   const hasResources = worktree.sessions.length > 0 || worktree.browsers.length > 0
   // Why: synthetic buckets (orphan/unattributed) have no sidebar target to reveal; real and SSH-resolved worktrees stay navigable.
@@ -131,7 +138,7 @@ export function WorktreeRow({
   const isNavigable = !isSynthetic
   // Why: Delete needs a sidebar worktree record; hidden for synthetic/SSH-only rows and the active worktree, but the row stays navigable.
   const showWorktreeActions =
-    !isSynthetic && storeRecord !== null && worktree.worktreeId !== activeWorktreeId
+    !readOnly && !isSynthetic && storeRecord !== null && worktree.worktreeId !== activeWorktreeId
   const isMainWorktree = storeRecord?.isMainWorktree ?? false
   const rowLabel = storeRecord?.displayName?.trim() || worktree.worktreeName
 
@@ -255,6 +262,7 @@ export function WorktreeRow({
             key={session.sessionId}
             session={session}
             worktreeId={worktree.worktreeId}
+            readOnly={readOnly}
             onNavigate={navigateToTab}
             onKill={onKillSession}
           />

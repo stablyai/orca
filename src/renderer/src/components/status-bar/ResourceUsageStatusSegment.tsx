@@ -6,6 +6,7 @@ import { useResourceUsageStatusController } from './use-resource-usage-status-co
 import { renderResourceUsageStatusTrigger } from './resource-usage-status-trigger'
 import {
   renderDaemonUnreachableBanner,
+  renderRemoteHostUnreachableBanner,
   renderResourceUsagePopoverHeader,
   renderResourceUsageSummary,
   renderSessionsOnlyErrorBanner
@@ -16,6 +17,7 @@ import {
 } from './resource-usage-popover-body'
 import { renderResourceUsageKillDialog } from './resource-usage-kill-dialog'
 import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
+import { ResourceManagerHostSwitcher } from './ResourceManagerHostSwitcher'
 
 export { SessionRow, WorktreeRow } from './resource-usage-session-rows'
 
@@ -44,6 +46,13 @@ export function ResourceUsageStatusSegment({
     setPopoverBodyNode,
     daemonActions,
     resourceSnapshot,
+    resourceHosts,
+    activeHostId,
+    setSelectedHostId,
+    selectDefaultHost,
+    viewingRemoteHost,
+    remoteHostUnreachable,
+    showLoadingSkeleton,
     spaceScanReady,
     recordFeatureInteraction,
     unifiedRepos,
@@ -56,6 +65,7 @@ export function ResourceUsageStatusSegment({
     memBadgeLabel,
     commitToneClass,
     commitBadgeLabel,
+    badgeCommitToneClass,
     daemonUnreachable,
     sessionsOnlyError,
     resourceManagerTooltipLines,
@@ -78,6 +88,9 @@ export function ResourceUsageStatusSegment({
       onOpenChange={(nextOpen) => {
         if (nextOpen) {
           recordFeatureInteraction('resource-manager')
+          // Why: open on the machine the focused workspace runs on, so working from a
+          // remote workspace does not start every open with a switch.
+          selectDefaultHost()
         }
         setOpen(nextOpen)
       }}
@@ -87,7 +100,7 @@ export function ResourceUsageStatusSegment({
         resourceManagerAriaLabel,
         spaceScanReady,
         iconOnly,
-        commitToneClass,
+        commitToneClass: badgeCommitToneClass,
         memBadgeLabel,
         triggerSessionCount,
         orphanCount,
@@ -104,11 +117,22 @@ export function ResourceUsageStatusSegment({
         // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
       >
-        {renderResourceUsagePopoverHeader({ daemonActions })}
-        {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions })}
-        {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner()}
-        {resourceSnapshot &&
-          renderResourceUsageSummary({
+        {/* Why: fixed overall height — sections come and go per host (footer, Space,
+            banners), and without this the whole popover would resize under the cursor. */}
+        <div className="flex h-[37.5rem] max-h-[calc(100vh-6rem)] flex-col">
+          {renderResourceUsagePopoverHeader({ daemonActions, viewingRemoteHost })}
+          <ResourceManagerHostSwitcher
+            hosts={resourceHosts}
+            selectedHostId={activeHostId}
+            onSelect={setSelectedHostId}
+          />
+          {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions })}
+          {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner()}
+          {remoteHostUnreachable && renderRemoteHostUnreachableBanner()}
+          {renderResourceUsageSummary({
+            hasSnapshot: resourceSnapshot !== null,
+            showLoadingSkeleton,
+            viewingRemoteHost,
             totalCpu,
             totalMemory,
             memoryMetricCopy,
@@ -117,33 +141,40 @@ export function ResourceUsageStatusSegment({
             commitToneClass,
             orphanCount
           })}
-        {/* Why: fixed 420px height so the popover doesn't jump as worktrees expand/collapse or sessions change; inner tree owns its scroll. */}
-        {renderResourceUsagePopoverBody({
-          setPopoverBodyNode,
-          unifiedRepos,
-          resourceSnapshot,
-          sortOption,
-          setSortOption,
-          memoryMetricCopy,
-          collapsedRepos,
-          toggleRepo,
-          collapsedWorktrees,
-          activeWorktreeId,
-          toggleWorktree,
-          navigateToWorktree,
-          navigateToTab,
-          deleteWorktree,
-          handleKillSession,
-          appCollapsed,
-          setAppCollapsed,
-          daemonUnreachable
-        })}
-        {renderResourceUsagePopoverFooter({
-          handleOpenWorkspaceCleanup,
-          orphanCount,
-          handleKillOrphans
-        })}
-        <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
+          {renderResourceUsagePopoverBody({
+            setPopoverBodyNode,
+            unifiedRepos,
+            resourceSnapshot,
+            sortOption,
+            setSortOption,
+            memoryMetricCopy,
+            collapsedRepos,
+            toggleRepo,
+            collapsedWorktrees,
+            activeWorktreeId,
+            toggleWorktree,
+            navigateToWorktree,
+            navigateToTab,
+            deleteWorktree,
+            handleKillSession,
+            appCollapsed,
+            setAppCollapsed,
+            readOnly: viewingRemoteHost,
+            showLoadingSkeleton
+          })}
+          {/* Why: cleanup, orphan reclaim and the disk Space scan all operate on this
+              machine; they would silently target the wrong host from a remote view. */}
+          {viewingRemoteHost ? null : (
+            <>
+              {renderResourceUsagePopoverFooter({
+                handleOpenWorkspaceCleanup,
+                orphanCount,
+                handleKillOrphans
+              })}
+              <WorkspaceSpaceCompactPanel onOpenFullPage={openSpaceResults} />
+            </>
+          )}
+        </div>
       </PopoverContent>
       {/* Why: hoisted to a sibling of PopoverContent — nested, the Dialog unmounts with the popover mid-interaction and the kill-confirm flow disappears. */}
       {renderResourceUsageKillDialog({

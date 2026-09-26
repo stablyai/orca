@@ -100,7 +100,10 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }))
     },
     memory: {
-      getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
+      // Why: the web client has no host switcher — it is already scoped to one
+      // runtime — so the host argument is accepted and ignored for API parity.
+      getSnapshot: (_request?: { executionHostId?: string | null }) =>
+        Promise.resolve(createEmptyMemorySnapshot())
     },
     aiVault: createWebAiVaultApi(),
     preflight: createPreflightApi(),

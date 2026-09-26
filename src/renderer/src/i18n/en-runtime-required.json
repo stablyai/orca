@@ -2236,6 +2236,7 @@
             "4bb076fa89": "Kill",
             "6449a95c78": "How much of this machine's physical RAM the Orca-tracked processes are sitting on.",
             "6d9793d4bc": "Resource Manager - Terminals",
+            "888dad8c55": "Loading…",
             "996295bff2": "orphan terminal",
             "9e2525c89f": "Resident memory held by Orca plus the processes under each worktree's terminals.",
             "e7ccce7e87": "of system RAM"

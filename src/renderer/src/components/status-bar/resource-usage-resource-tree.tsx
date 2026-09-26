@@ -66,7 +66,8 @@ export function ResourceTree({
   navigateToWorktree,
   navigateToTab,
   onDelete,
-  onKillSession
+  onKillSession,
+  readOnly
 }: {
   repos: UnifiedProjectGroup[]
   sortOption: SortOption
@@ -79,6 +80,7 @@ export function ResourceTree({
   navigateToTab: (tabId: string, paneKey: string | null) => void
   onDelete: (worktreeId: string) => void
   onKillSession: (session: UnifiedSessionRow) => void
+  readOnly: boolean
 }): React.JSX.Element {
   const worktreeById = useWorktreeMap()
 
@@ -104,6 +106,7 @@ export function ResourceTree({
         onDelete={() => onDelete(wt.worktreeId)}
         onKillSession={onKillSession}
         navigateToTab={navigateToTab}
+        readOnly={readOnly}
       />
     )
   }
