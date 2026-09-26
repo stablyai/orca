@@ -129,6 +129,7 @@ describe('getHourlyBuildIdentity', () => {
   // install it.
   it('stays on the already-shipped hourly base after a buggy main release is unpublished', () => {
     const identity = getHourlyBuildIdentity(new Date('2026-09-14T20:00:00Z'), {
+      packageVersion: '1.4.201',
       publishedVersions: [
         'v1.4.201',
         'v1.4.202',

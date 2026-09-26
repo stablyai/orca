@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
+import { PromiseSettlementWaiters } from '../shared/promise-settlement-waiters'
 import type { AiVaultListResult } from '../shared/ai-vault-types'
 import type {
   AiVaultSessionTitleRequest,
@@ -9,8 +10,7 @@ import {
   RELAY_AI_VAULT_MAX_CALLS,
   RELAY_AI_VAULT_IDLE_TIMEOUT_MS,
   RELAY_AI_VAULT_READY_TIMEOUT_MS,
-  RELAY_AI_VAULT_SCAN_TIMEOUT_MS,
-  RELAY_AI_VAULT_TITLE_TIMEOUT_MS,
+  armRelayAiVaultCallTimeout,
   armRelayAiVaultCancellationTimeout,
   createRelayAiVaultServiceCall,
   relayAiVaultAbortError,
@@ -37,7 +37,7 @@ import { relayLogLine } from './relay-diagnostic-log'
 
 export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
   private child: ChildProcess | null = null
-  private ready: Promise<ChildProcess> | null = null
+  private ready: PromiseSettlementWaiters<ChildProcess> | null = null
   private readyReject: ((error: Error) => void) | null = null
   private readyTimer: NodeJS.Timeout | null = null
   private readonly active = new Map<RelayAiVaultServiceLane, RelayAiVaultServiceCall>()
@@ -74,6 +74,9 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     this.clearReadyTimer()
     this.restartPolicy.dispose()
     const error = new Error('Relay AI Vault service was disposed.')
+    this.readyReject?.(error)
+    this.readyReject = null
+    this.ready = null
     for (const call of [...this.active.values(), ...this.queue.splice(0)]) {
       settleRelayAiVaultServiceCall(call, error)
     }
@@ -128,17 +131,22 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
       }
       const call = this.queue.splice(index, 1)[0]!
       this.active.set(lane, call)
-      void this.ensureChild(call.forceStart).then(
-        (child) => this.sendCall(child, call),
-        (error: Error) => {
-          if (this.active.get(lane) !== call) {
+      const attempt = ++call.startAttempt
+      const readiness = this.ensureChild(call.forceStart)
+      void readiness
+        .wait({
+          signal: call.signal,
+          createAbortError: relayAiVaultAbortError,
+          onFulfilled: (child) => this.sendCall(child, call)
+        })
+        .catch((error: Error) => {
+          if (this.active.get(lane) !== call || call.startAttempt !== attempt) {
             return
           }
           this.active.delete(lane)
           this.retryStartOrSettle(call, error)
           this.pump()
-        }
-      )
+        })
     }
     this.scheduleIdleIfNeeded()
   }
@@ -147,15 +155,9 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     if (this.active.get(call.lane) !== call || call.settled) {
       return
     }
-    const timeout =
-      call.request.operation === 'list'
-        ? RELAY_AI_VAULT_SCAN_TIMEOUT_MS
-        : RELAY_AI_VAULT_TITLE_TIMEOUT_MS
-    call.timer = setTimeout(
-      () => this.onFault(new Error(`Relay AI Vault service timed out after ${timeout}ms.`)),
-      timeout
+    armRelayAiVaultCallTimeout(call, (timeout) =>
+      this.onFault(new Error(`Relay AI Vault service timed out after ${timeout}ms.`))
     )
-    call.timer.unref?.()
     call.sent = true
     child.send(call.request)
   }
@@ -166,44 +168,46 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     }
   }
 
-  private ensureChild(forceStart: boolean): Promise<ChildProcess> {
+  private ensureChild(forceStart: boolean): PromiseSettlementWaiters<ChildProcess> {
     if (this.child && !this.ready) {
-      return Promise.resolve(this.child)
+      return new PromiseSettlementWaiters(Promise.resolve(this.child))
     }
     if (this.ready) {
       return this.ready
     }
     const startError = this.restartPolicy.startError(forceStart)
     if (startError) {
-      return Promise.reject(startError)
+      return new PromiseSettlementWaiters(Promise.reject(startError))
     }
     let child: ChildProcess
     try {
       child = this.options.processFactory()
     } catch (error) {
-      return Promise.reject(relayAiVaultError(error))
+      return new PromiseSettlementWaiters(Promise.reject(relayAiVaultError(error)))
     }
     this.child = child
-    this.ready = new Promise<ChildProcess>((resolve, reject) => {
-      this.readyReject = reject
-      // Why: held on the instance so a crash before ready cannot leave the deadline
-      // armed, where it would later fault the healthy replacement sidecar.
-      this.readyTimer = setTimeout(
-        () => this.onFault(new Error('Relay AI Vault service did not become ready.')),
-        RELAY_AI_VAULT_READY_TIMEOUT_MS
-      )
-      this.readyTimer.unref?.()
-      child.on('message', (message) => {
-        if (isRelayAiVaultServiceChildMessage(message) && message.type === 'ready') {
-          this.clearReadyTimer()
-          this.ready = null
-          this.readyReject = null
-          resolve(child)
-          return
-        }
-        this.onMessage(message)
+    this.ready = new PromiseSettlementWaiters(
+      new Promise<ChildProcess>((resolve, reject) => {
+        this.readyReject = reject
+        // Why: held on the instance so a crash before ready cannot leave the deadline
+        // armed, where it would later fault the healthy replacement sidecar.
+        this.readyTimer = setTimeout(
+          () => this.onFault(new Error('Relay AI Vault service did not become ready.')),
+          RELAY_AI_VAULT_READY_TIMEOUT_MS
+        )
+        this.readyTimer.unref?.()
+        child.on('message', (message) => {
+          if (isRelayAiVaultServiceChildMessage(message) && message.type === 'ready') {
+            this.clearReadyTimer()
+            this.ready = null
+            this.readyReject = null
+            resolve(child)
+            return
+          }
+          this.onMessage(message)
+        })
       })
-    })
+    )
     child.on('error', (error) => this.onFault(error))
     child.on('disconnect', () => this.onFault(new Error('Relay AI Vault service disconnected.')))
     child.on('exit', (code) => this.onFault(new Error(`Relay AI Vault service exited (${code}).`)))
