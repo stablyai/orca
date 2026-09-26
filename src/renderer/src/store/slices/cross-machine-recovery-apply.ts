@@ -9,6 +9,7 @@ import {
   type CrossMachineRecoveryApplyRequest,
   type RecoveryWorkspaceFragment
 } from '../../../../shared/cross-machine-recovery-session-ops'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { detectLanguage } from '@/lib/language-detect'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
@@ -100,12 +101,33 @@ export function applyCrossMachineRecoveryOpToStore(
   return outcome
 }
 
+// Why: hydration silently drops rows for worktrees missing from the catalog, and reposync may have just restored this checkout.
+async function ensureLocalDestinationKnown(
+  store: RecoveryStore,
+  worktreeId: string
+): Promise<void> {
+  if (store.getState().getKnownWorktreeById(worktreeId)) {
+    return
+  }
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  if (!store.getState().repos.some((repo) => repo.id === repoId)) {
+    await store.getState().fetchRepos({ runtimeEnvironmentId: null })
+  }
+  await store.getState().fetchWorktrees(repoId, { forceLocalOwner: true })
+  if (!store.getState().getKnownWorktreeById(worktreeId)) {
+    throw new Error(`Recovery destination ${worktreeId} is not a known local worktree`)
+  }
+}
+
 export async function handleCrossMachineRecoveryApplyRequest(
   store: RecoveryStore,
   api: RecoveryPreloadApi,
   request: CrossMachineRecoveryApplyRequest
 ): Promise<CrossMachineRecoveryApplyReply> {
   try {
+    if (request.op.kind === 'import') {
+      await ensureLocalDestinationKnown(store, request.op.fragment.worktreeId)
+    }
     const outcome = applyCrossMachineRecoveryOpToStore(store, request.op)
     if (outcome.ok) {
       // Why: the host treats this reply as the durability boundary before resuming or reporting.

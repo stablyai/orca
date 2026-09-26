@@ -124,6 +124,42 @@ describe('cross-machine recovery renderer apply', () => {
     expect(session.flush).toHaveBeenCalledTimes(1)
   })
 
+  it('refreshes the local catalog before importing into a worktree the renderer has not listed', async () => {
+    const { store, apply } = setup()
+    store.setState({ worktreesByRepo: { repo1: [] } })
+    const fetchWorktrees = vi
+      .spyOn(store.getState(), 'fetchWorktrees')
+      .mockImplementation(async () => {
+        store.setState({
+          worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/repo1/wt' })] }
+        })
+        return true
+      })
+
+    const reply = await apply({ kind: 'import', fragment: fragment(), records: [record] })
+
+    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo1', { forceLocalOwner: true })
+    expect(reply).toEqual({ requestId: 'r1', outcome: { ok: true, claimed: null } })
+    expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-new'])
+  })
+
+  it('fails the import instead of dropping the layout when the worktree stays unknown', async () => {
+    const { store, session, apply } = setup()
+    store.setState({ worktreesByRepo: { repo1: [] } })
+    vi.spyOn(store.getState(), 'fetchWorktrees').mockResolvedValue(true)
+
+    const reply = await apply({ kind: 'import', fragment: fragment(), records: [record] })
+
+    expect(reply).toEqual({
+      requestId: 'r1',
+      error: `Recovery destination ${WT} is not a known local worktree`
+    })
+    expect(store.getState().tabsByWorktree[WT]).toBeUndefined()
+    expect(store.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
+    expect(session.set).not.toHaveBeenCalled()
+  })
+
   it('refuses a worktree that already has live tabs without writing', async () => {
     const { store, session, apply } = setup()
     store.setState({ tabsByWorktree: { [WT]: [makeTab({ id: 'existing', worktreeId: WT })] } })
