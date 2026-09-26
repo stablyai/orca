@@ -228,7 +228,15 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     ])
     // Why: `-f -f` moves a locked preparation while preserving its lock reason (Git >=2.25).
     await runGit(['worktree', 'move', '-f', '-f', 'compat-prepared', 'compat-final'])
-    await runGit(['-C', 'compat-final', 'switch', '--no-track', '-c', 'compat-prepared-final'])
+    await runGit([
+      '-C',
+      'compat-final',
+      'checkout',
+      '--no-track',
+      '-b',
+      'compat-prepared-final',
+      head
+    ])
 
     await expect(runGit(['-C', 'compat-final', 'branch', '--show-current'])).resolves.toMatchObject(
       { stdout: 'compat-prepared-final\n' }

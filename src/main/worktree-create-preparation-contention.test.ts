@@ -44,6 +44,12 @@ import {
   hasPendingWorktreeCreatePreparations,
   prepareWorktreeCreateForRepo
 } from './worktree-create-preparation'
+import {
+  listPreparations,
+  releasePreparationClaim,
+  startPreparation,
+  takePreparation
+} from './worktree-create-preparation-pool'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -144,6 +150,45 @@ describe('claimed worktree preparation', () => {
     await flushBackgroundWork()
     expect(mocks.prepare).toHaveBeenCalledTimes(2)
     expect(hasPendingWorktreeCreatePreparations()).toBe(true)
+  })
+
+  it('does not let two creates claim the same prepared checkout', async () => {
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    const [first, second] = await Promise.all([consume(), consume()])
+
+    expect([first.status, second.status].sort()).toEqual(['hit', 'miss'])
+    expect(mocks.finalize).toHaveBeenCalledOnce()
+    expect(hasPendingWorktreeCreatePreparations()).toBe(true)
+    first.rearm?.()
+    second.rearm?.()
+    expect(hasPendingWorktreeCreatePreparations()).toBe(false)
+  })
+
+  it('keeps an explicit prefetch ahead of an automatic replacement for the same key', async () => {
+    await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    const entry = listPreparations()[0]
+    if (!entry) {
+      throw new Error('expected a prepared checkout')
+    }
+    const claim = takePreparation(entry)
+    const base = {
+      repoPath: repo.path,
+      workspaceRoot: '/workspace',
+      baseBranch: 'origin/main',
+      canonicalBase: 'refs/remotes/origin/main'
+    }
+    await startPreparation({ ...base, options: {} }, 'automatic')
+    await startPreparation({ ...base, options: { admissionTier: 'background' } })
+    await startPreparation({ ...base, options: {} }, 'automatic')
+
+    const released = releasePreparationClaim(claim)
+    expect(released.pendingPreparations).toEqual([
+      {
+        kind: 'explicit',
+        args: { ...base, options: { admissionTier: 'background' } }
+      }
+    ])
+    expect(releasePreparationClaim(claim)).toEqual({ released: false, pendingPreparations: [] })
   })
 
   it('allows a fresh prefetch after an isolated create completes', async () => {

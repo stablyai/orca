@@ -55,7 +55,7 @@ describe('worktree create admission tier', () => {
       admissionTier: 'interactive'
     })
 
-    for (const match of ['worktree move', 'switch --no-track', 'worktree unlock']) {
+    for (const match of ['worktree move', 'checkout --no-track', 'worktree unlock']) {
       const options = optionsForCommand(match)
       expect(options, match).toHaveLength(1)
       expect(options[0], match).toMatchObject({ admissionTier: 'interactive' })

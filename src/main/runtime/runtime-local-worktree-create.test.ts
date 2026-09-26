@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolve } from 'node:path'
 import type { Store } from '../persistence'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -32,7 +33,7 @@ const mocks = vi.hoisted(() => ({
   resolveInclude: vi.fn<() => Promise<string[]>>(),
   copyPaths: vi.fn<() => Promise<string[]>>(),
   created: {
-    path: '/worktrees/app',
+    path: '',
     head: 'abc123',
     branch: 'app',
     isBare: false,
@@ -82,6 +83,8 @@ vi.mock('../ipc/worktree-symlinks', () => ({
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
 import type { PreparationRearmHolder } from '../worktree-create-preparation'
 
+const worktreePath = resolve('/worktrees', 'app')
+
 function createWorktree(
   request: Partial<RuntimeManagedWorktreeCreateArgs> = {},
   rearm: PreparationRearmHolder = { fire: () => {} }
@@ -112,6 +115,7 @@ function createWorktree(
 
 beforeEach(() => {
   vi.resetAllMocks()
+  mocks.created.path = worktreePath
   mocks.routing.mockReturnValue({})
   mocks.defaultBase.mockImplementation(async () => {
     expect(resolveGitAdmissionTier()).toBe('interactive')
@@ -237,8 +241,8 @@ describe('runtime create Git priority', () => {
       expect(mocks.remoteBase).toHaveBeenCalledWith('/repo', 'main', options)
       expect(mocks.hasBase).toHaveBeenCalledWith('/repo', 'main', options)
       expect(mocks.consume).toHaveBeenCalledWith(expect.objectContaining({ options }))
-      expect(mocks.pushTarget).toHaveBeenCalledWith('/worktrees/app', 'app', target, options)
-      expect(mocks.listing).toHaveBeenCalledWith('/repo', '/worktrees/app', 'app', options)
+      expect(mocks.pushTarget).toHaveBeenCalledWith(worktreePath, 'app', target, options)
+      expect(mocks.listing).toHaveBeenCalledWith('/repo', worktreePath, 'app', options)
       expect(mocks.resolveShared).toHaveBeenCalledWith('/repo', options)
       expect(mocks.resolveInclude).toHaveBeenCalledWith('/repo', options)
     }
@@ -270,7 +274,7 @@ describe('runtime create Git priority', () => {
       }
     )
     try {
-      await expect(createWorktree()).resolves.toHaveProperty('worktreePath', '/worktrees/app')
+      await expect(createWorktree()).resolves.toHaveProperty('worktreePath', worktreePath)
       expect(mocks.add).toHaveBeenCalledOnce()
     } finally {
       blocker.release()
@@ -292,7 +296,7 @@ describe('runtime create Git priority', () => {
     expect(mocks.refresh).toHaveBeenCalledWith('/repo', base, options)
     expect(mocks.addSparse).toHaveBeenCalledWith(
       '/repo',
-      '/worktrees/app',
+      worktreePath,
       'app',
       ['src'],
       'origin/main',
