@@ -99,7 +99,7 @@ function withProviderTurnScope(item: RetainedRow, merged: readonly RetainedRow[]
   const providerTurnId = identity?.provider === 'codex' ? identity.turnId : null
   const turnRecord = providerTurnId
     ? merged.find((candidate) => {
-        const turn = readAgentJournalTurn(candidate.body as AgentJournalItemBody)
+        const turn = readAgentJournalTurn(restoreRewindJournalBody(candidate.body))
         return turn?.turnId === providerTurnId || turn?.providerTurnId === providerTurnId
       })
     : undefined

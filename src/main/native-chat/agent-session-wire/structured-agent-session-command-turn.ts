@@ -27,8 +27,10 @@ import {
 import { boundJournalStatusText } from '../agent-session-journal/journal-prompt-body-bounds'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderChildPhase } from './structured-agent-session-adapter'
+import type {
+  StructuredAgentSessionAdapter,
+  StructuredAgentSessionProviderChildPhase
+} from './structured-agent-session-adapter'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import type { StructuredSessionCompactionResult } from './structured-session-compaction'
 
