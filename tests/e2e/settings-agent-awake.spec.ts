@@ -208,7 +208,7 @@ test.describe('Agent awake setting', () => {
     ).toBeVisible()
     let startedIds: number[] = []
     if (process.platform === 'darwin') {
-      // macOS uses an app-owned caffeinate assertion instead of Electron's display blocker.
+      // macOS uses an app-owned caffeinate assertion instead of Electron's blocker.
       await expect
         .poll(() => readMacosSleepAssertionPids(electronApp), { timeout: 5_000 })
         .not.toEqual([])
@@ -222,7 +222,10 @@ test.describe('Agent awake setting', () => {
           expect.objectContaining({
             activeIds: expect.arrayContaining([expect.any(Number)]),
             starts: expect.arrayContaining([
-              expect.objectContaining({ type: 'prevent-display-sleep' })
+              expect.objectContaining({
+                type:
+                  process.platform === 'win32' ? 'prevent-display-sleep' : 'prevent-app-suspension'
+              })
             ])
           })
         )
