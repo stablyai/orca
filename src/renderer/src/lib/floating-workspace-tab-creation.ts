@@ -12,12 +12,7 @@ import { translate } from '@/i18n/i18n'
 import { assertClientCreationActionAvailable } from './client-creation-action-policy'
 import { launchAgentInNewTab } from './launch-agent-in-new-tab'
 
-type FloatingWorkspaceTerminalStore = Pick<
-  AppState,
-  'activeGroupIdByWorktree' | 'createTab' | 'activateTab'
->
-
-type FloatingWorkspaceAgentStore = Pick<AppState, 'activateTab' | 'setActiveTabForWorktree'>
+type FloatingWorkspaceTerminalStore = Pick<AppState, 'activeGroupIdByWorktree' | 'createTab'>
 
 type FloatingWorkspaceBrowserStore = Pick<
   AppState,
@@ -34,48 +29,31 @@ export async function createFloatingWorkspaceTerminalTab(
 
   // Why: the floating workspace is a local scratchpad; a focused remote runtime
   // must not own its SSH/tmux terminals or prune them via session snapshots.
-  const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride, {
-    activate: false
-  })
-  store.activateTab(tab.id)
+  const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride)
   focusTerminalTabSurface(tab.id)
   return tab
 }
 
 /** Returns false when no launch command could be built. */
-export function createFloatingWorkspaceAgentTab(
-  store: FloatingWorkspaceAgentStore,
-  agent: TuiAgent
-): boolean {
+export function createFloatingWorkspaceAgentTab(agent: TuiAgent): boolean {
   // Floating resolves the terminal-backed lane: a chat view over a PTY when the chat default is
   // on, never a structured session.
   const result = launchAgentInNewTab({
     agent,
     worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-    launchSource: 'shortcut',
-    // Why: `agent-auto-ack-targets` relies on the floating panel's active tab never becoming the
-    // global `activeTabId`; activating here would also flip the main view off an open editor.
-    activate: false
+    launchSource: 'shortcut'
   })
   if (!result) {
     return false
   }
-  if (result.surface.kind !== 'local-terminal') {
-    return true
+  if (result.surface.kind === 'local-terminal') {
+    focusTerminalTabSurface(result.surface.tabId)
   }
-  // Why: the floating panel renders its visible tab from the unified group's activeTabId, which
-  // setActiveTabForWorktree alone does not write.
-  store.setActiveTabForWorktree(FLOATING_TERMINAL_WORKTREE_ID, result.surface.tabId)
-  store.activateTab(result.surface.tabId)
-  focusTerminalTabSurface(result.surface.tabId)
   return true
 }
 
 /** Keyboard entry point: a shortcut has no UI of its own, so failures surface as toasts. */
-export function launchFloatingWorkspaceAgentShortcut(
-  store: FloatingWorkspaceAgentStore,
-  agent: TuiAgent | null
-): void {
+export function launchFloatingWorkspaceAgentShortcut(agent: TuiAgent | null): void {
   if (!agent) {
     toast.message(
       translate(
@@ -85,7 +63,7 @@ export function launchFloatingWorkspaceAgentShortcut(
     )
     return
   }
-  if (!createFloatingWorkspaceAgentTab(store, agent)) {
+  if (!createFloatingWorkspaceAgentTab(agent)) {
     toast.error(
       translate(
         'auto.components.Terminal.e57db40c11',

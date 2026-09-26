@@ -4,8 +4,6 @@ import {
   shouldDropHiddenRendererPtyData
 } from '../../pty-hidden-delivery-gate'
 import {
-  deliveredHiddenRendererResizeOutputPtys,
-  pendingHiddenRendererResizeOutputPtys,
   rendererVisibilityKnownPtys,
   visibleRendererPtys,
   activeRendererPtys
@@ -23,28 +21,6 @@ export function rendererPtyIsKnownHidden(id: string): boolean {
   return rendererVisibilityKnownPtys.has(id) && !visibleRendererPtys.has(id)
 }
 
-export function ptyHasHiddenRendererResizeOutput(id: string): boolean {
-  return (
-    pendingHiddenRendererResizeOutputPtys.has(id) || deliveredHiddenRendererResizeOutputPtys.has(id)
-  )
-}
-
-export function markHiddenRendererResizeOutputDelivered(id: string): void {
-  if (!pendingHiddenRendererResizeOutputPtys.delete(id)) {
-    return
-  }
-  deliveredHiddenRendererResizeOutputPtys.add(id)
-}
-
-export function clearDeliveredHiddenRendererResizeOutput(id: string): void {
-  deliveredHiddenRendererResizeOutputPtys.delete(id)
-}
-
-export function clearHiddenRendererResizeOutput(id: string): void {
-  pendingHiddenRendererResizeOutputPtys.delete(id)
-  deliveredHiddenRendererResizeOutputPtys.delete(id)
-}
-
 export function acceptPtyDataForRenderer(
   session: PtyIpcSession,
   payload: {
@@ -60,7 +36,7 @@ export function acceptPtyDataForRenderer(
   const preservesSeq = !payload.transformed && rawLength === payload.data.length
   const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
   const projectionId = projection?.identity.projectionSemanticsId
-  if (session.mainWindow.isDestroyed()) {
+  if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     if (projectionId) {
       session.sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
     }
@@ -101,11 +77,7 @@ export function acceptPtyDataForRenderer(
     }
     return
   }
-  const containsBackgroundOutput =
-    rendererPtyIsKnownHidden(payload.id) || ptyHasHiddenRendererResizeOutput(payload.id)
-  if (containsBackgroundOutput) {
-    markHiddenRendererResizeOutputDelivered(payload.id)
-  }
+  const containsBackgroundOutput = rendererPtyIsKnownHidden(payload.id)
   const overflowMarkedBeforeAppend = session.pendingOverflowMarkedPtys.has(payload.id)
   if (projection?.desktopSpan) {
     session.sourceCreditPendingPtys.add(payload.id)

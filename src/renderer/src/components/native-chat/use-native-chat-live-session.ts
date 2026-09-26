@@ -2,9 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type AgentType,
-  type NativeChatMessage,
-  type NativeChatSession,
-  type NativeChatTurnLifecycle
+  type NativeChatMessage
 } from '../../../../shared/native-chat-types'
 import {
   applyAppend,
@@ -18,12 +16,15 @@ import {
   nextNativeChatLimit,
   type NativeChatOlderPageResult
 } from './native-chat-pagination'
+import type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
 import { getNativeChatSessionTransport } from './native-chat-session-transport'
 import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
 import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
+
+export type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
 
 export type UseNativeChatLiveSessionArgs = {
   /** Composite `${tabId}:${leafId}` key — selects the live hook entry. */
@@ -37,23 +38,6 @@ export type UseNativeChatLiveSessionArgs = {
   runtimeEnvironmentId?: string | null
   /** False suspends transcript IO while retaining the last committed session. */
   enabled?: boolean
-}
-
-/** A live session plus the older-history pagination controls the view needs. */
-export type NativeChatLiveSession = NativeChatSession & {
-  /** Latest provider turn boundary, used to settle orphaned running tool rows. */
-  transcriptLifecycle?: NativeChatTurnLifecycle
-  /** True when an older page may still exist (the last read filled the window). */
-  hasMore: boolean
-  /** Whether an older-history page is currently loading. */
-  loadingEarlier: boolean
-  /** Page in older history. Resolves once the page has landed (or not); a call while
-   *  one is in flight joins it. */
-  loadEarlier: () => Promise<NativeChatOlderPageResult>
-  /** Raw initial-read phase. `status` is not a substitute: a live 'working' hook
-   *  outranks (and so hides) 'loading', which would let a consumer deciding from
-   *  an empty list treat an in-flight transcript as real history. */
-  readPhase: ReadState['phase']
 }
 
 // Stable empty-base reference so a non-ready read doesn't churn the base axis.
@@ -70,21 +54,6 @@ function nextSubscriptionId(): string {
 // Only a guess at the flush delay — a host that reports the transcript pending
 // overrides it outright. Exported for tests.
 export const NOTFOUND_RETRY_WINDOW_MS = 60_000
-
-export type ReadState =
-  | { phase: 'loading' }
-  /** The host reported no transcript behind this window yet: rendered, but not a
-   *  settled read, so nothing may treat the empty list as real history. */
-  | { phase: 'awaiting' }
-  | { phase: 'ready'; messages: NativeChatMessage[] }
-  | { phase: 'error'; error: string }
-
-/** True while no transcript read has settled — 'loading' and 'awaiting' alike.
- *  Consumers that must not act on `messages` as real history use this, not a
- *  bare `!== 'ready'`, which would also swallow the error surface. */
-export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): boolean {
-  return phase === 'loading' || phase === 'awaiting'
-}
 
 /**
  * Renderer hook that streams a NativeChatSession for a pane: windowed
@@ -112,6 +81,7 @@ export function useNativeChatLiveSession(
   const [read, setRead] = useState<ReadState>({ phase: 'loading' })
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
+  const [olderHistoryGeneration, setOlderHistoryGeneration] = useState(0)
   const [transcriptLifecycle, transcriptLifecycleControl] = useNativeChatTranscriptLifecycle()
   // The active read window; raised by loadEarlier to page in older history.
   const limitRef = useRef(NATIVE_CHAT_INITIAL_LIMIT)
@@ -147,6 +117,7 @@ export function useNativeChatLiveSession(
   useEffect(() => {
     // Why: agent/path/owner rebinds can keep the same session; every source generation must invalidate pagination captured before it.
     transcriptEpochRef.current += 1
+    setOlderHistoryGeneration(transcriptEpochRef.current)
     setLoadingEarlier(false)
     const sourceChanged = retainedSourceKeyRef.current !== sourceKey
     retainedSourceKeyRef.current = sourceKey
@@ -247,6 +218,7 @@ export function useNativeChatLiveSession(
         if (frame.type === 'snapshot' || frame.type === 'replacement') {
           // Why: snapshots and inode replacements are authoritative generations; older pagination must not repaint them.
           transcriptEpochRef.current += 1
+          setOlderHistoryGeneration(transcriptEpochRef.current)
           setLoadingEarlier(false)
           if ('error' in frame && frame.error) {
             // Why: an error frame carries no transcript, so it must not consume the seed — a healthy read still has to repair the pane.
@@ -368,7 +340,14 @@ export function useNativeChatLiveSession(
       loading: read.phase === 'loading' && appended.length === 0,
       ...(read.phase === 'error' && appended.length === 0 ? { error: read.error } : {})
     })
-    return { ...session, hasMore, loadingEarlier, loadEarlier, readPhase: read.phase }
+    return {
+      ...session,
+      hasMore,
+      loadingEarlier,
+      olderHistoryGeneration,
+      loadEarlier,
+      readPhase: read.phase
+    }
   }, [
     normalizedMessages,
     assembledMessages,
@@ -381,6 +360,7 @@ export function useNativeChatLiveSession(
     hookHasWorkingSubagents,
     hasMore,
     loadingEarlier,
+    olderHistoryGeneration,
     loadEarlier,
     appended
   ])

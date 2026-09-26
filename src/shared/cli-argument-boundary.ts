@@ -9,6 +9,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'comments',
   'connect',
   'current',
+  'current-json',
   'debug',
   'dry-run',
   'enter',

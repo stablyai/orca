@@ -21,15 +21,14 @@ export function createOpenFileState(
     activeTabTypeByWorktree: {},
     activeTabType: 'terminal',
     recentlyClosedEditorTabsByWorktree: {},
-    setActiveTabType: (type, targetWorktreeId) =>
-      set((s) => {
-        const worktreeId = targetWorktreeId ?? s.activeWorktreeId
-        return {
-          ...(worktreeId === s.activeWorktreeId ? { activeTabType: type } : {}),
-          activeTabTypeByWorktree: worktreeId
-            ? { ...s.activeTabTypeByWorktree, [worktreeId]: type }
-            : s.activeTabTypeByWorktree
-        }
-      })
+    // Why the worktree is required: an implicit "active worktree" default let callers retype the
+    // main window while acting on a tab that lives elsewhere (e.g. the floating workspace).
+    setActiveTabType: (type, worktreeId) =>
+      set((s) => ({
+        ...(worktreeId === s.activeWorktreeId ? { activeTabType: type } : {}),
+        activeTabTypeByWorktree: worktreeId
+          ? { ...s.activeTabTypeByWorktree, [worktreeId]: type }
+          : s.activeTabTypeByWorktree
+      }))
   }
 }

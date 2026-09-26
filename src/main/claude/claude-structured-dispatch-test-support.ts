@@ -3,7 +3,9 @@ import type { AgentJournalMessageItem } from '../../shared/agent-session-journal
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
+import { createClaudeSessionStartupGate } from './claude-structured-session-startup-gate'
 
 export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): ClaudeSession {
   return {
@@ -18,6 +20,7 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
     backgroundTasks: new ClaudeBackgroundTaskTracker(),
+    childWork: new ClaudeChildWorkDecoder(),
     commands: new ClaudeSlashCommandCatalog(),
     dispatchSequence: 0,
     optionMutationSequence: 0,
@@ -28,7 +31,8 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
     restoreSkippedOptions: new Set(),
     capabilities: [],
     events: undefined,
-    translator: null
+    translator: null,
+    startup: { ...createClaudeSessionStartupGate(), state: 'proven' }
   }
 }
 

@@ -5,7 +5,10 @@ import {
 } from '../../agent-status-types'
 import { normalizeOptionalField } from '../../agent-status-field-normalization'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
-import type { AgentLeadStatusResolution } from '../../agent-lead-status-fold'
+import {
+  mainAgentTurnInterrupted,
+  type AgentLeadStatusResolution
+} from '../../agent-lead-status-fold'
 import {
   codexRosterToSnapshots,
   finishCodexSubagent,
@@ -59,6 +62,7 @@ export function buildCodexStatusPayload(
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    interrupted: mainAgentTurnInterrupted(lead),
     subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey)),
     mainAgent: codexMainAgentStatusForPayload(lead)
   })

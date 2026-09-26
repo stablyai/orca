@@ -89,7 +89,7 @@ export function fakeClaude(providerSession: string) {
       exitVerdict: selfExit?.exitVerdict ?? { root: 'live', tree: 'unverifiable' },
       close: async () => {
         connection.closed = true
-        return selfExit === null
+        return selfExit === null || selfExit.exitVerdict.tree === 'exited'
       }
     }
     connections.push(connection)

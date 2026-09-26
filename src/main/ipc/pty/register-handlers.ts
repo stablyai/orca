@@ -1,4 +1,3 @@
-import type { BrowserWindow } from 'electron'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence'
@@ -13,7 +12,12 @@ import { localProvider } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
-import { installPtyKillIpcHandler } from './ipc/renderer-kill'
+import {
+  installPtyKillIpcHandler,
+  stopReplacedPanePty,
+  type PtyKillIpcDeps
+} from './ipc/renderer-kill'
+import { markReplacedPtyStop } from './delivery/exit'
 import { installPtyWriteIpcHandlers } from './ipc/write'
 import { installPtySpawnIpcHandler } from './ipc/spawn'
 import { installPtyRuntimeController } from './runtime/controller'
@@ -43,7 +47,7 @@ import {
   clearRendererGateResetHandlers,
   clearDidFinishLoadHandler
 } from './delivery/lifecycle-reset'
-import { createPtyIpcSession, type PtyIpcSessionOptions } from './session'
+import { createPtyIpcSession, type PtyIpcSessionOptions, type PtyRendererDelivery } from './session'
 import { wirePtyIpcSession } from './delivery/wire-session'
 import { configureLocalPtyProvider } from './provider/local-configure'
 import { bindProviderListeners } from './provider/bind-listeners'
@@ -62,7 +66,7 @@ import {
 import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/linux-terminal-orca-cli-shim'
 
 export function registerPtyHandlers(
-  mainWindow: BrowserWindow,
+  mainWindow?: PtyRendererDelivery,
   runtime?: OrcaRuntimeService,
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   getSettings?: () => GlobalSettings,
@@ -87,7 +91,7 @@ export function registerPtyHandlers(
   setInvalidatePendingPtyDrainPolicy(() => {})
   // Why: neutralize rebind at the same moment as drain so a daemon replace in this window cannot attach the old accept/exit closures.
   setRebindProviderListeners(() => {})
-  registerRendererLifecycleResetHandlers(mainWindow.webContents)
+  registerRendererLifecycleResetHandlers(mainWindow?.webContents)
 
   const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
     if (connectionId) {
@@ -164,17 +168,19 @@ export function registerPtyHandlers(
     // Why: the daemon pacer must not keep throttling ptys whose hidden marks died with the renderer; the fresh renderer's sync re-marks the still-hidden ones.
     session.resyncBackgroundedDeliveriesAfterGateReset()
   }
-  setRendererGateResetState({
-    contents: mainWindow.webContents,
-    load: resetRendererPtyDeliveryGateState,
-    gone: resetRendererPtyDeliveryGateState
-  })
-  mainWindow.webContents.on('did-finish-load', resetRendererPtyDeliveryGateState)
-  mainWindow.webContents.on('render-process-gone', resetRendererPtyDeliveryGateState)
+  if (mainWindow) {
+    setRendererGateResetState({
+      contents: mainWindow.webContents,
+      load: resetRendererPtyDeliveryGateState,
+      gone: resetRendererPtyDeliveryGateState
+    })
+    mainWindow.webContents.on('did-finish-load', resetRendererPtyDeliveryGateState)
+    mainWindow.webContents.on('render-process-gone', resetRendererPtyDeliveryGateState)
+  }
 
   // Why: only LocalPtyProvider PTYs (main-process) can be orphaned on reload; daemon sessions survive by design and cleanup would kill them.
   clearDidFinishLoadHandler()
-  if (localProvider instanceof LocalPtyProvider) {
+  if (mainWindow && localProvider instanceof LocalPtyProvider) {
     const lp = localProvider
     const finishLoadHandler = () => {
       // Why: always advance to keep the generation monotonic, but skip the sweep on crash/freeze-recovery reload — it would kill live local PTYs before session restore (#5787).
@@ -239,6 +245,14 @@ export function registerPtyHandlers(
   })
 
   installPtySnapshotIpcHandlers({ runtime, pendingData: session.pendingData })
+  const killDeps: PtyKillIpcDeps = {
+    store,
+    runtime,
+    getLocalPtyProviderStartupPromise,
+    shutdownProviderAndDetectExit: session.shutdownProviderAndDetectExit,
+    rememberSyntheticKillExit: session.rememberSyntheticKillExit,
+    sendPtyExitToRenderer: session.sendPtyExitToRenderer
+  }
   installPtySpawnIpcHandler({
     runtime,
     store,
@@ -260,21 +274,12 @@ export function registerPtyHandlers(
       session.transitionSpawnHiddenRendererPtyDeliveryState,
     trustedTerminalHandleEnv: session.trustedTerminalHandleEnv,
     sendPtySpawnedToRenderer: session.sendPtySpawnedToRenderer,
-    syncPtyBackgroundedDelivery: session.syncPtyBackgroundedDelivery
+    syncPtyBackgroundedDelivery: session.syncPtyBackgroundedDelivery,
+    stopReplacedPty: (id) =>
+      stopReplacedPanePty(killDeps, id, (ptyId) => markReplacedPtyStop(session, ptyId))
   })
-  installPtyWriteIpcHandlers({
-    mainWindow,
-    runtime,
-    clearHiddenRendererResizeOutput: session.clearHiddenRendererResizeOutput
-  })
+  installPtyWriteIpcHandlers({ mainWindow, runtime })
   installPtyResizeVisibilityIpc(session)
   installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
-  installPtyKillIpcHandler({
-    store,
-    runtime,
-    getLocalPtyProviderStartupPromise,
-    shutdownProviderAndDetectExit: session.shutdownProviderAndDetectExit,
-    rememberSyntheticKillExit: session.rememberSyntheticKillExit,
-    sendPtyExitToRenderer: session.sendPtyExitToRenderer
-  })
+  installPtyKillIpcHandler(killDeps)
 }

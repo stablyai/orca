@@ -465,10 +465,10 @@ describe('createFloatingWorkspaceTerminalTab', () => {
     expect(store.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      undefined,
-      { activate: false }
+      undefined
     )
-    expect(store.activateTab).toHaveBeenCalledWith('floating-tab-1')
+    // Why: createTab itself activates the new tab within the floating group.
+    expect(store.activateTab).not.toHaveBeenCalled()
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('floating-tab-1')
   })
 
@@ -488,10 +488,10 @@ describe('createFloatingWorkspaceTerminalTab', () => {
     expect(store.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,
       'floating-group',
-      'pwsh',
-      { activate: false }
+      'pwsh'
     )
-    expect(store.activateTab).toHaveBeenCalledWith('floating-tab-runtime')
+    // Why: createTab itself activates the new tab within the floating group.
+    expect(store.activateTab).not.toHaveBeenCalled()
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('floating-tab-runtime')
   })
 })
@@ -792,34 +792,31 @@ describe('handleEmptyFloatingWorkspacePanelCloseShortcut', () => {
 })
 
 describe('launchFloatingWorkspaceAgentShortcut', () => {
-  const store = { activateTab: vi.fn(), setActiveTabForWorktree: vi.fn() }
-
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('selects and focuses the new agent tab in the floating group', () => {
+  it('launches the agent in the floating workspace and focuses its tab', () => {
     launchAgentInNewTabMock.mockReturnValue({
       surface: { kind: 'local-terminal', tabId: 'agent-tab' }
     })
-    launchFloatingWorkspaceAgentShortcut(store, 'claude')
+    launchFloatingWorkspaceAgentShortcut('claude')
     expect(launchAgentInNewTabMock).toHaveBeenCalledWith(
       expect.objectContaining({ agent: 'claude', worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
     )
-    expect(store.activateTab).toHaveBeenCalledWith('agent-tab')
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('agent-tab')
     expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('reports a launch command that could not be built', () => {
     launchAgentInNewTabMock.mockReturnValue(null)
-    launchFloatingWorkspaceAgentShortcut(store, 'claude')
+    launchFloatingWorkspaceAgentShortcut('claude')
     expect(toast.error).toHaveBeenCalledTimes(1)
-    expect(store.activateTab).not.toHaveBeenCalled()
+    expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
   })
 
   it('reports a missing agent without launching anything', () => {
-    launchFloatingWorkspaceAgentShortcut(store, null)
+    launchFloatingWorkspaceAgentShortcut(null)
     expect(toast.message).toHaveBeenCalledTimes(1)
     expect(launchAgentInNewTabMock).not.toHaveBeenCalled()
   })

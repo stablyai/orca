@@ -116,7 +116,8 @@ export type StructuredAgentSessionEventSink = {
   tryAppendLifecycleTransition?(
     identitySizeBound: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    resolveIdentity: StructuredAgentSessionIdentityResolver
+    resolveIdentity: StructuredAgentSessionIdentityResolver,
+    options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   /** Current durable epoch, when this deferred sink is bound to its journal. */
   journalEpoch?(): string | null
@@ -208,7 +209,7 @@ export function createDeferredStructuredAgentSessionEventSink(
           bound.journal.appendLifecycleBatch({
             settlementId,
             mutations,
-            // Linkage is deliberately not forwarded: see the batch row builder.
+            // No row-level linkage: each mutation names its own (see the batch row builder).
             fence: bound.fence
           })
       },
@@ -259,27 +260,6 @@ export function createDeferredStructuredAgentSessionEventSink(
           options
         ),
       ...resolvedAppend,
-      tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity) => {
-        const bytes = estimateStructuredAgentSessionItemBytes(identitySizeBound, body)
-        return queue.submit(
-          {
-            bytes,
-            lifecycle: true,
-            run: async (bound) => {
-              const identity = resolveIdentity(bound.journal)
-              if (identity === null) {
-                return
-              }
-              if (estimateStructuredAgentSessionItemBytes(identity, body) > bytes) {
-                throw new Error('structured agent-session item identity exceeded its reserved size')
-              }
-              await bound.journal.appendItem(identity, body, { fence: bound.fence })
-              bound.publish()
-            }
-          },
-          { lifecycle: true }
-        )
-      },
       journalEpoch: queue.journalEpoch,
       appendLifecycleBatch: (settlementId, mutations, options = {}) => {
         const admission = appendLifecycleBatch(settlementId, mutations, options)

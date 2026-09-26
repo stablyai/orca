@@ -4,9 +4,16 @@ import {
   setClaudeStructuredOption
 } from './claude-structured-options'
 import type { ClaudeSession } from './claude-structured-session-state'
-import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
-import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 import {
+  ClaudeControlRequestError,
+  ClaudeControlRequestTimeoutError
+} from './claude-agent-sdk-control-requests'
+import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import { ClaudeChildWorkDecoder } from './claude-child-work-decoder'
+import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
+import { createClaudeSessionStartupGate } from './claude-structured-session-startup-gate'
+import {
+  claudeStructuredSessionOptionsFrom,
   observeClaudeFastModeFacts,
   readClaudeStructuredSessionOptions
 } from './claude-structured-session-options'
@@ -29,6 +36,7 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
     backgroundTasks: new ClaudeBackgroundTaskTracker(),
+    childWork: new ClaudeChildWorkDecoder(),
     commands: new ClaudeSlashCommandCatalog(),
     dispatchSequence: 0,
     optionMutationSequence: 0,
@@ -39,7 +47,8 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
     restoreSkippedOptions: new Set(),
     capabilities: [],
     events: undefined,
-    translator: null
+    translator: null,
+    startup: { ...createClaudeSessionStartupGate(), state: 'proven' }
   }
 }
 
@@ -436,5 +445,47 @@ describe('Claude Fast mode reported by the session frame alone', () => {
     const result = await readClaudeStructuredSessionOptions(session, undefined)
 
     expect(result.current.fastMode).toBeUndefined()
+  })
+})
+
+describe('Claude structured option restore under the request deadline', () => {
+  it('keeps a saved choice the CLI never answered as wanted but unconfirmed, and drops a refused one', async () => {
+    const session = sessionFor(async () => {
+      throw new ClaudeControlRequestTimeoutError('set_model')
+    })
+    session.connection.applyFlagSettings = async () => {
+      throw new ClaudeControlRequestTimeoutError('apply_flag_settings')
+    }
+    session.connection.setPermissionMode = async () => {
+      throw new ClaudeControlRequestError('set_permission_mode', 'unknown mode')
+    }
+    // Startup already read the CLI's own model and effort, and vouched for them.
+    session.reportedOptions = { model: 'claude-sonnet-5', effort: 'medium' }
+    session.confirmedOptions.add('effort')
+    session.options = new Map([
+      ['model', 'sonnet'],
+      ['effort', 'high'],
+      ['permissionMode', 'plan']
+    ])
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(restoreClaudeStructuredSessionOptions(session, 10)).resolves.toBeUndefined()
+
+    expect(Object.fromEntries(session.options)).toEqual({ model: 'sonnet', effort: 'high' })
+    expect([...session.restoreSkippedOptions]).toEqual(['permissionMode'])
+    expect(claudeStructuredSessionOptionsFrom(session, null).current).toEqual({
+      model: 'sonnet',
+      effort: 'high'
+    })
+  })
+
+  it("keeps a timed-out client write as the deadline's own error, not a rejection", async () => {
+    const session = sessionFor(async () => {
+      throw new ClaudeControlRequestTimeoutError('set_model')
+    })
+
+    await expect(
+      setClaudeStructuredOption(session, { key: 'model', value: 'sonnet' }, 10)
+    ).rejects.toBeInstanceOf(ClaudeControlRequestTimeoutError)
   })
 })

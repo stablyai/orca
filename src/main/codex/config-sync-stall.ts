@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { observeAgentStateFile } from './codex-path-observation'
+import { isOnlyCodexDaemonOverride } from './codex-daemon-socket-path-guard'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import {
   getCodexSettingsBaselinePath,
@@ -35,7 +36,12 @@ export function getCodexConfigSyncStatus(
   // report `synced` while the mirror refused its content read — telling the
   // user their edits had been applied when nothing had run.
   const runtimeConfigObservation = observeAgentStateFile(runtimeConfigPath)
-  if (runtimeConfigObservation.kind === 'absent') {
+  // Why: a config holding only Orca's daemon override withholds no user settings.
+  if (
+    runtimeConfigObservation.kind === 'absent' ||
+    (runtimeConfigObservation.kind === 'present' &&
+      isOnlyCodexDaemonOverride(runtimeConfigObservation.value))
+  ) {
     return { state: 'synced', reason: null, systemConfigPath }
   }
   if (runtimeConfigObservation.kind === 'indeterminate') {

@@ -379,7 +379,7 @@ describe('agent tab shortcuts', () => {
     expect(resolveTerminalAgentTabShortcut).toHaveBeenCalledWith(
       expect.objectContaining({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
     )
-    expect(launchFloatingWorkspaceAgentShortcut).toHaveBeenCalledWith(mocks.state, 'claude')
+    expect(launchFloatingWorkspaceAgentShortcut).toHaveBeenCalledWith('claude')
     expect(controller.handleNewAgentTab).not.toHaveBeenCalled()
   })
 })

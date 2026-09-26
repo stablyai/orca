@@ -96,7 +96,7 @@ describe('codex goal accounting revisions', () => {
       { fence: 1 }
     )
     const { sink, drained, subscribe, published } = journalSink(journal)
-    const goals = new CodexJournalGoals(sink)
+    const goals = new CodexJournalGoals(sink, () => ({}))
 
     goals.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() })
     await drained()
@@ -160,14 +160,14 @@ describe('codex goal accounting revisions', () => {
     root = await mkdtemp(join(tmpdir(), 'orca-goal-resume-revision-'))
     const journal = await journals.open({ identity: IDENTITY, journalDir: root })
     const first = journalSink(journal)
-    const prior = new CodexJournalGoals(first.sink)
+    const prior = new CodexJournalGoals(first.sink, () => ({}))
     prior.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() })
     await first.drained()
     prior.dispose()
     const [created] = journal.snapshot().items
 
     const second = journalSink(journal)
-    const resumed = new CodexJournalGoals(second.sink)
+    const resumed = new CodexJournalGoals(second.sink, () => ({}))
     // Only a few seconds more: a resume snapshot still refreshes, since no live tick follows.
     const snapshot = goalFrame({ timeUsedSeconds: 3, updatedAt: 1789067991 })
     resumed.handle({ threadId: THREAD, method: 'thread/goal/updated', params: snapshot })

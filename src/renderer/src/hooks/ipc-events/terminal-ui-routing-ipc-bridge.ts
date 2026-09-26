@@ -167,7 +167,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
           store.markWorktreeVisited(worktreeId)
           store.setActiveView('terminal')
           store.setActiveBrowserTab(browserTarget.workspaceId)
-          store.setActiveTabType('browser')
+          store.setActiveTabType('browser', worktreeId)
           store.revealWorktreeInSidebar(worktreeId)
         }
         return
@@ -178,14 +178,14 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       store.focusGroup(worktreeId, tab.groupId)
       store.activateTab(tab.id)
       if (tab.contentType === 'agent-session') {
-        store.setActiveTabType('agent-session')
+        store.setActiveTabType('agent-session', worktreeId)
       } else if (browserTarget) {
         // Why: browser tabs need their own active-page state, not the editor file activation path.
         store.setActiveBrowserTab(browserTarget.workspaceId)
-        store.setActiveTabType('browser')
+        store.setActiveTabType('browser', worktreeId)
       } else {
         store.setActiveFile(tab.entityId)
-        store.setActiveTabType('editor')
+        store.setActiveTabType('editor', worktreeId)
       }
       store.revealWorktreeInSidebar(worktreeId)
     })

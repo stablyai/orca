@@ -72,8 +72,8 @@ it('files a continuation superseded by a replayed message, lists it and says so 
   host.release(SESSION, 'pane')
 })
 
-// Nothing was attempted and nothing is owed: the chat moved on by itself between listing and acting.
-it('files nothing for a chat that finished on its own before its attempt, and spends the offer', async () => {
+// Nothing was attempted and nothing is owed: the user moved on between listing and acting.
+it('files nothing for a chat the user moved on in before its attempt, and spends the offer', async () => {
   const { host, acquire, root } = await interruptedRestart()
   await host.restartResume.list()
   await host.hold(SESSION, 'pane')
@@ -82,9 +82,8 @@ it('files nothing for a chat that finished on its own before its attempt, and sp
   vi.spyOn(StructuredAgentSessionResumeAdmission.prototype, 'run').mockImplementationOnce(
     async function (this, ...args) {
       events.appendItem(
-        { provider: 'codex', threadId: THREAD, turnId: 'interrupted-turn', ordinal: 1 },
-        { kind: 'turn', turnId: 'interrupted-turn', state: 'completed' },
-        { lifecycle: true }
+        { provider: 'codex', threadId: THREAD, turnId: 'newer-turn', ordinal: 1 },
+        hostTestMessage('A newer task from another client')
       )
       await host.flushStreamedEvents(SESSION)
       return admit.apply(this, args)

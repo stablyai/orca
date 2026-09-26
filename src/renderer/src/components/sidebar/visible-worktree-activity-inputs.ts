@@ -43,8 +43,8 @@ const structuredChatWorktreeIds = new WeakMap<Record<string, Tab[]>, ReadonlySet
  * Worktree ids holding a structured chat tab.
  *
  * Why existence rather than a live provider child: that child is held only while the chat's pane is
- * visible and is evicted 15s after it is not, so keying on it would flip a workspace to sleeping on
- * every worktree switch and report a process recycle the user never sees. The chat itself — its
+ * visible and is evicted after it sits idle unheld, so keying on it would flip a workspace to sleeping
+ * after any worktree switch and report a process recycle the user never sees. The chat itself — its
  * transcript, and its ability to take the next send — outlives the child.
  */
 export function getWorktreeIdsWithStructuredChat(

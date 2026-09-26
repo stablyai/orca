@@ -7,6 +7,7 @@ export const notebookApi = {
   describePython: (args) => ipcRenderer.invoke('notebook:describePython', args),
   startKernel: (args) => ipcRenderer.invoke('notebook:startKernel', args),
   installIpykernel: (args) => ipcRenderer.invoke('notebook:installIpykernel', args),
+  createVenv: (args) => ipcRenderer.invoke('notebook:createVenv', args),
   execute: (args) => ipcRenderer.invoke('notebook:execute', args),
   interrupt: (args) => ipcRenderer.invoke('notebook:interrupt', args),
   shutdownKernel: (args) => ipcRenderer.invoke('notebook:shutdownKernel', args),

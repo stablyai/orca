@@ -1,14 +1,19 @@
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity
+  AgentJournalItemIdentity,
+  AgentJournalProducerLinkage
 } from '../../shared/agent-session-journal-types'
 import type {
+  StructuredAgentSessionAppendOptions,
   StructuredAgentSessionEventSink,
   StructuredAgentSessionLifecycleIdentityResolver,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { partitionJournalLifecycleMutations } from '../native-chat/agent-session-journal/journal-lifecycle-batch-partition'
-import type { JournalLifecycleMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
+import {
+  journalLifecycleItemMutation,
+  type JournalLifecycleMutationInput
+} from '../native-chat/agent-session-journal/journal-row-builders'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-contracts'
 import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
@@ -30,13 +35,14 @@ export function appendCodexLifecycleMutations(
     } else {
       for (const mutation of chunk) {
         if (mutation.kind === 'item') {
+          const options = { lifecycle: true, ...mutation.linkage }
           if (sink.tryAppendItem) {
-            admission = sink.tryAppendItem(mutation.identity, mutation.body, { lifecycle: true })
+            admission = sink.tryAppendItem(mutation.identity, mutation.body, options)
             if (!admission.accepted) {
               return admission
             }
           } else {
-            sink.appendItem(mutation.identity, mutation.body, { lifecycle: true })
+            sink.appendItem(mutation.identity, mutation.body, options)
           }
         } else {
           if (sink.tryAppendTombstone) {
@@ -63,6 +69,22 @@ export function appendCodexLifecycleMutations(
   return ADMITTED
 }
 
+/** An ordinary (non-lifecycle) append, published once admitted. */
+export function appendCodexItemAndPublish(
+  sink: StructuredAgentSessionEventSink,
+  identity: AgentJournalItemIdentity,
+  body: AgentJournalItemBody,
+  options: StructuredAgentSessionAppendOptions
+): StructuredAgentSessionSinkAdmission {
+  const admission = sink.tryAppendItem
+    ? sink.tryAppendItem(identity, body, options)
+    : (sink.appendItem(identity, body, options), ADMITTED)
+  if (!admission.accepted) {
+    return admission
+  }
+  return sink.tryPublish ? sink.tryPublish() : (sink.publish(), ADMITTED)
+}
+
 function criticalAdmission(
   admission: StructuredAgentSessionSinkAdmission
 ): CodexJournalTranslationAdmission {
@@ -72,12 +94,14 @@ function criticalAdmission(
 export function appendCodexLifecycleItem(
   sink: StructuredAgentSessionEventSink,
   identity: AgentJournalItemIdentity,
-  body: AgentJournalItemBody
+  body: AgentJournalItemBody,
+  linkage: AgentJournalProducerLinkage
 ): CodexJournalTranslationAdmission {
+  const options = { lifecycle: true, ...linkage }
   if (sink.tryAppendItem) {
-    return criticalAdmission(sink.tryAppendItem(identity, body, { lifecycle: true }))
+    return criticalAdmission(sink.tryAppendItem(identity, body, options))
   }
-  sink.appendItem(identity, body, { lifecycle: true })
+  sink.appendItem(identity, body, options)
   return CODEX_JOURNAL_ADMITTED
 }
 
@@ -85,14 +109,15 @@ export function appendCodexLifecycleTransition(
   sink: StructuredAgentSessionEventSink,
   identitySizeBound: AgentJournalItemIdentity,
   body: AgentJournalItemBody,
-  resolveIdentity: StructuredAgentSessionLifecycleIdentityResolver
+  resolveIdentity: StructuredAgentSessionLifecycleIdentityResolver,
+  linkage: AgentJournalProducerLinkage
 ): CodexJournalTranslationAdmission {
   if (sink.tryAppendLifecycleTransition) {
     return criticalAdmission(
-      sink.tryAppendLifecycleTransition(identitySizeBound, body, resolveIdentity)
+      sink.tryAppendLifecycleTransition(identitySizeBound, body, resolveIdentity, linkage)
     )
   }
-  const admission = appendCodexLifecycleItem(sink, identitySizeBound, body)
+  const admission = appendCodexLifecycleItem(sink, identitySizeBound, body, linkage)
   return admission.accepted ? publishCodexLifecycle(sink) : admission
 }
 
@@ -106,10 +131,12 @@ export function publishCodexLifecycle(
   return CODEX_JOURNAL_ADMITTED
 }
 
+/** One producer's rows, admitted together. */
 export function admitCodexLifecycleItems(
   sink: StructuredAgentSessionEventSink,
   settlementId: string,
-  items: readonly Pick<CodexPendingJournalPrompt, 'identity' | 'body'>[]
+  items: readonly Pick<CodexPendingJournalPrompt, 'identity' | 'body'>[],
+  linkage: AgentJournalProducerLinkage
 ): CodexJournalTranslationAdmission {
   if (items.length === 0) {
     return { accepted: false, reason: 'untranslated' }
@@ -118,14 +145,14 @@ export function admitCodexLifecycleItems(
     const admission = criticalAdmission(
       sink.tryAppendLifecycleBatch(
         settlementId,
-        items.map((item) => ({ kind: 'item' as const, identity: item.identity, body: item.body })),
+        items.map((item) => journalLifecycleItemMutation(linkage, item.identity, item.body)),
         { lifecycle: true }
       )
     )
     return admission.accepted ? publishCodexLifecycle(sink) : admission
   }
   for (const item of items) {
-    const admission = appendCodexLifecycleItem(sink, item.identity, item.body)
+    const admission = appendCodexLifecycleItem(sink, item.identity, item.body, linkage)
     if (!admission.accepted) {
       return admission
     }

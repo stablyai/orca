@@ -14,10 +14,13 @@ describe('createFrameReader', () => {
     const read = createFrameReader((frame) => frames.push(frame))
     read('warning: something printed\n{"type": "rea')
     read('dy"}\n{"type": "stream", "content": {"name": "stdout", "text": "hi"}}\n[1, 2]\n')
+    read('{"type": "missing", "externallyManaged": true}\n{"type": "missing"}\n')
     read('{"type": "unknown"}\n{"type": "done", "status": "ok", "execution_count": 3}\n{"partial')
     expect(frames).toEqual([
       { type: 'ready' },
       { type: 'stream', content: { name: 'stdout', text: 'hi' } },
+      { type: 'missing', externallyManaged: true },
+      { type: 'missing', externallyManaged: false },
       { type: 'done', status: 'ok', execution_count: 3 }
     ])
   })
@@ -76,6 +79,7 @@ const bare = process.env.ORCA_TEST_PYTHON_WITHOUT_IPYKERNEL
 describe.skipIf(!bare)('notebook kernel without ipykernel', () => {
   it('reports the missing package instead of starting', async () => {
     const { ready } = startNotebookKernel({ python: bare!, cwd: __dirname, onFrame: () => {} })
-    expect(await ready).toEqual({ status: 'missing-ipykernel' })
+    // A bare venv accepts pip installs, whatever its base interpreter does.
+    expect(await ready).toEqual({ status: 'missing-ipykernel', externallyManaged: false })
   })
 })

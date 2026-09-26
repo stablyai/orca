@@ -61,7 +61,7 @@ test.describe('Terminal Codex runtime home', () => {
         })
         const tab = state.createTab(state.activeWorktreeId!)
         state.setActiveTab(tab.id)
-        state.setActiveTabType('terminal')
+        state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
       },
       { accountId, managedHomePath }
     )

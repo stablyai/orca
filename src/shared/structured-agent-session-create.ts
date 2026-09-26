@@ -23,6 +23,8 @@ export type StructuredAgentSessionCreateParams = {
   worktree: string
   agent: AgentSessionHandleProvider
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** Sent only to a host advertising `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`. */
+  tabId?: string
 }
 
 /** Provider-prefixed so a session id names its lane on sight, and underscore-only
@@ -52,13 +54,15 @@ export function structuredAgentSessionCreateParams(args: {
   worktree: string
   agent: AgentSessionHandleProvider
   resumeFrom?: StructuredAgentSessionResumeSource
+  tabId?: string
   randomUuid: () => string
   now?: number
 }): StructuredAgentSessionCreateParams {
   const fields = {
     worktree: args.worktree,
     agent: args.agent,
-    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.tabId ? { tabId: args.tabId } : {})
   }
   return {
     envelope: {

@@ -78,6 +78,13 @@ export function usePageHostSnapshot(hostId: string, routePathname: string): Page
                 host: {
                   id: found.id,
                   name: found.name,
+                  ...(found.personalName !== undefined ? { personalName: found.personalName } : {}),
+                  ...(found.lastKnownMachineName !== undefined
+                    ? { lastKnownMachineName: found.lastKnownMachineName }
+                    : {}),
+                  ...(found.lastKnownHostPlatform !== undefined
+                    ? { lastKnownHostPlatform: found.lastKnownHostPlatform }
+                    : {}),
                   endpoint: found.endpoint,
                   lastConnected: found.lastConnected
                 }

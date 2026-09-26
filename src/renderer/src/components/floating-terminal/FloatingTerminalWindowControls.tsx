@@ -60,7 +60,7 @@ export function FloatingTerminalWindowControls({
     if (!defaultAgent) {
       return
     }
-    if (!createFloatingWorkspaceAgentTab(useAppStore.getState(), defaultAgent)) {
+    if (!createFloatingWorkspaceAgentTab(defaultAgent)) {
       toast.error(
         translate(
           'auto.components.floating.terminal.FloatingTerminalWindowControls.82da3701e7',

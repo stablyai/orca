@@ -40,6 +40,7 @@ function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
     agent: 'claude',
     hasMore: false,
     loadingEarlier: false,
+    olderHistoryGeneration: 0,
     loadEarlier,
     readPhase: 'ready'
   }

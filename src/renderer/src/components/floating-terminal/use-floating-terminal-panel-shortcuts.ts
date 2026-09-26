@@ -175,7 +175,7 @@ export function useFloatingTerminalPanelShortcuts({
       }
       if (resolution.kind === 'agent') {
         consume()
-        launchFloatingWorkspaceAgentShortcut(useAppStore.getState(), resolution.agent)
+        launchFloatingWorkspaceAgentShortcut(resolution.agent)
         return 'handled'
       }
       if (resolution.kind === 'index') {

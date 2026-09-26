@@ -24,6 +24,7 @@ export function createStructuredAgentSessionResolvedAppend(
     | 'tryAppendResolvedItemAndPublish'
     | 'tryReviseResolvedItem'
     | 'tryReviseResolvedItemAndPublish'
+    | 'tryAppendLifecycleTransition'
   >
 > {
   const submit = (
@@ -73,6 +74,31 @@ export function createStructuredAgentSessionResolvedAppend(
     tryReviseResolvedItem: (reservedBytes, resolve, options = {}) =>
       submit(reservedBytes, resolve, options, false),
     tryReviseResolvedItemAndPublish: (reservedBytes, resolve, options = {}) =>
-      submit(reservedBytes + 1, resolve, options, true)
+      submit(reservedBytes + 1, resolve, options, true),
+    tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity, options = {}) => {
+      const bytes = estimateStructuredAgentSessionItemBytes(identitySizeBound, body)
+      return queue.submit(
+        {
+          bytes,
+          lifecycle: true,
+          run: async (bound) => {
+            const identity = resolveIdentity(bound.journal)
+            if (identity === null) {
+              return
+            }
+            if (estimateStructuredAgentSessionItemBytes(identity, body) > bytes) {
+              throw new Error('structured agent-session item identity exceeded its reserved size')
+            }
+            await bound.journal.appendItem(
+              identity,
+              body,
+              structuredAgentSessionJournalAppendOptions(bound.fence, options)
+            )
+            bound.publish()
+          }
+        },
+        { lifecycle: true }
+      )
+    }
   }
 }

@@ -216,6 +216,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   })
 
   it('supports prepared worktree creation and finalization', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
     await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-prepared', 'HEAD'])
     await runGit(['-C', 'compat-prepared', 'reset', '--hard', 'HEAD'])
     await runGit([
@@ -234,12 +235,15 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       '--no-track',
       '-b',
       'compat-prepared-final',
-      'HEAD'
+      head
     ])
 
     await expect(runGit(['-C', 'compat-final', 'branch', '--show-current'])).resolves.toMatchObject(
       { stdout: 'compat-prepared-final\n' }
     )
+    await expect(runGit(['-C', 'compat-final', 'rev-parse', 'HEAD'])).resolves.toMatchObject({
+      stdout: `${head}\n`
+    })
     await runGit(['worktree', 'unlock', 'compat-final'])
     await runGit(['worktree', 'remove', '--force', 'compat-final'])
     await runGit(['branch', '-D', 'compat-prepared-final'])

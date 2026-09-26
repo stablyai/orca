@@ -10,13 +10,12 @@ import { classifySqliteReadFailure, isTransientSqliteContention } from './sqlite
 // with no usable -shm reports errcode 14 ("unable to open database file"). The
 // two need opposite responses, so the classifier must never conflate them.
 
-let tempDirs: string[] = []
+const tempDirs: string[] = []
 
 afterEach(() => {
-  for (const dir of tempDirs) {
+  for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
-  tempDirs = []
 })
 
 function contendedDatabase(): { path: string; release: () => void } {
@@ -40,18 +39,22 @@ function contendedDatabase(): { path: string; release: () => void } {
 describe('isTransientSqliteContention', () => {
   it('recognizes a real SQLITE_BUSY thrown by a read-only open', () => {
     const contended = contendedDatabase()
+    let reader: SyncDatabase | undefined
     let thrown: unknown
     try {
-      new SyncDatabase(contended.path, { readonly: true, timeout: 0 })
-        .prepare('SELECT id FROM session')
-        .all()
+      reader = new SyncDatabase(contended.path, { readonly: true, timeout: 0 })
+      reader.prepare('SELECT id FROM session').all()
     } catch (error) {
       thrown = error
     } finally {
-      contended.release()
+      try {
+        reader?.close()
+      } finally {
+        contended.release()
+      }
     }
 
-    expect((thrown as { errcode?: number }).errcode).toBe(5)
+    expect(thrown).toMatchObject({ [process.versions.bun ? 'errno' : 'errcode']: 5 })
     expect(isTransientSqliteContention(thrown)).toBe(true)
   })
 

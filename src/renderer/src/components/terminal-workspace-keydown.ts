@@ -85,7 +85,7 @@ export function handleTerminalWorkspaceKeyDown(
       notifyTerminalCapture(agentShortcut.actionId)
       if (floatingWorkspaceFocused) {
         // Why: this capture listener usually runs before the floating panel's own, so it routes there too.
-        launchFloatingWorkspaceAgentShortcut(useAppStore.getState(), agentShortcut.agent)
+        launchFloatingWorkspaceAgentShortcut(agentShortcut.agent)
       } else if (agentShortcut.agent) {
         handleNewAgentTab(agentShortcut.agent)
       } else {

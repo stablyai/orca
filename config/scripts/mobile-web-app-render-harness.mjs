@@ -631,8 +631,27 @@ export function installPageErrorSentinel() {
  * say that there was something to leak before it says that nothing did.
  */
 export function installSchedulerRecorder() {
-  globalThis.__orcaScheduler = { watching: false, scheduled: [], leaked: [] }
+  globalThis.__orcaScheduler = { watching: false, scheduled: [], leaked: [], heldFrames: 0 }
   const state = globalThis.__orcaScheduler
+  const requestFrame = globalThis.requestAnimationFrame.bind(globalThis)
+  const cancelFrame = globalThis.cancelAnimationFrame.bind(globalThis)
+  const heldFrames = new Map()
+  let nextHeldFrame = -2
+  globalThis.__orcaReleaseFrames = () => {
+    state.holdFramesFrom = null
+    for (const callback of heldFrames.values()) {
+      requestFrame(callback)
+    }
+    heldFrames.clear()
+    state.heldFrames = 0
+  }
+  globalThis.cancelAnimationFrame = (id) => {
+    if (heldFrames.delete(id)) {
+      state.heldFrames--
+    } else {
+      cancelFrame(id)
+    }
+  }
   const wrap = (schedule, kind) =>
     function (callback, ...rest) {
       if (!state.watching || typeof callback !== 'function') {
@@ -646,21 +665,22 @@ export function installSchedulerRecorder() {
       // it was cancelled or is merely waiting, and cancelling never sets it.
       const entry = { kind, caller, owned: container !== null, fired: false }
       state.scheduled.push(entry)
-      return schedule(
-        (...args) => {
-          entry.fired = true
-          if (container !== null && !container.isConnected) {
-            state.leaked.push(`${kind} from ${caller}`)
-          }
-          return callback(...args)
-        },
-        ...rest
-      )
+      const recorded = (...args) => {
+        entry.fired = true
+        if (container !== null && !container.isConnected) {
+          state.leaked.push(`${kind} from ${caller}`)
+        }
+        return callback(...args)
+      }
+      if (kind === 'frame' && state.holdFramesFrom && caller.includes(state.holdFramesFrom)) {
+        const id = nextHeldFrame--
+        heldFrames.set(id, recorded)
+        state.heldFrames++
+        return id
+      }
+      return schedule(recorded, ...rest)
     }
-  globalThis.requestAnimationFrame = wrap(
-    globalThis.requestAnimationFrame.bind(globalThis),
-    'frame'
-  )
+  globalThis.requestAnimationFrame = wrap(requestFrame, 'frame')
   globalThis.setTimeout = wrap(globalThis.setTimeout.bind(globalThis), 'timer')
   globalThis.setInterval = wrap(globalThis.setInterval.bind(globalThis), 'interval')
 }

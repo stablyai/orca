@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { codexProcessIdentity } from './codex-structured-owner-identity'
+import { codexProcessIdentity, codexProviderHandleLink } from './codex-structured-owner-identity'
 
 const IDENTITY = {
   sessionId: 'session-identity',
@@ -44,5 +44,24 @@ describe('codex process identity', () => {
       codexProcessIdentity({ identity: IDENTITY, spawnToken: 'spawn-a', pid: 4242 }, readStartTime)
     ).rejects.toThrow('start time')
     expect(readStartTime).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('codex provider handle link', () => {
+  it('names the unsaved thread a creation superseded, and nothing else can', () => {
+    expect(
+      codexProviderHandleLink({
+        threadId: 'thread-new',
+        resumed: false,
+        supersedesThreadId: 'thread-unsaved',
+        fence: 3,
+        observedAt: 1
+      })
+    ).toMatchObject({ origin: 'created', supersedesKey: 'codex:"thread-unsaved"' })
+    const base = { threadId: 'thread-new', fence: 3, observedAt: 1 }
+    // @ts-expect-error an adopted conversation was never an unsaved creation
+    codexProviderHandleLink({ ...base, resumed: false, origin: 'adopted', supersedesThreadId: 't' })
+    // @ts-expect-error a resume proved the thread it named, so it replaces nothing
+    codexProviderHandleLink({ ...base, resumed: true, supersedesThreadId: 't' })
   })
 })

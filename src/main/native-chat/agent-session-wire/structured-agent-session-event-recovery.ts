@@ -1,12 +1,14 @@
-import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
-import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import type { StructuredAgentSessionLifecycleEvent } from './structured-agent-session-adapter'
+import {
+  stopAgentSessionProviderRoot,
+  type StructuredAgentSessionLifecycleEvent
+} from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
-import { resumeHeldStructuredAgentSession } from './structured-agent-session-hold-resume'
+import type { StructuredAgentSessionHolds } from './structured-agent-session-holds'
+import { settleStructuredAgentSessionProviderStarted } from './structured-agent-session-provider-started'
 import {
   isStructuredAgentSessionRecoveryTicketCurrent,
   settleUnexpectedStructuredAgentSessionExit
@@ -24,9 +26,11 @@ export class StructuredAgentSessionEventRecovery {
       publishFence: (sessionId: string, session: StructuredAgentSessionHostSession) => void
       publishStatus?: (sessionId: string) => void
       hasResumeCapableHolder: (sessionId: string) => boolean
+      restartReleaseGrace: (sessionId: string) => void
       serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
       now: () => number
-      attachContext: () => StructuredAgentSessionAttachContext
+      /** The one restart every asker shares; the holds put an unheld child on the idle clock. */
+      ensureProviderChild: StructuredAgentSessionHolds['ensureProviderChild']
       onBarrierError: (sessionId: string, error: unknown) => void
     }
   ) {}
@@ -46,7 +50,7 @@ export class StructuredAgentSessionEventRecovery {
         }
         const fence = session.fence
         const acquisitionGeneration = session.acquisitionGeneration
-        const stopped = await stop(sessionId)
+        const stopped = await stopAgentSessionProviderRoot(() => stop(sessionId))
         if (!stopped || !acquisitionGeneration) {
           return null
         }
@@ -65,23 +69,29 @@ export class StructuredAgentSessionEventRecovery {
   }
 
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
+    if (event.type === 'started') {
+      return settleStructuredAgentSessionProviderStarted(this.context, event)
+    }
     const ticket = await settleUnexpectedStructuredAgentSessionExit(this.context, event)
     if (!ticket) {
       return
     }
+    // One serialized step with the ticket check inside it: a hold or a send that got there first
+    // has already replaced the owner, and this step finds that child and attaches nothing — or,
+    // once the lease has moved on, refuses on the stale ticket rather than spawning a second child.
     try {
-      await resumeHeldStructuredAgentSession({
-        sessionId: ticket.sessionId,
-        deps: this.context.deps,
-        now: this.context.now,
-        attach: (params) =>
-          attachStructuredAgentSession(
-            this.context.attachContext(),
-            'trusted-local:provider-exit-recovery',
-            params,
-            () => isStructuredAgentSessionRecoveryTicketCurrent(this.context, ticket)
-          )
-      })
+      const resumed = await this.context.serialize(ticket.sessionId, () =>
+        this.context.ensureProviderChild(ticket.sessionId, {
+          admitRecoveryTicket: () =>
+            isStructuredAgentSessionRecoveryTicketCurrent(this.context, ticket)
+        })
+      )
+      if (!resumed.ok && isStructuredAgentSessionRecoveryTicketCurrent(this.context, ticket)) {
+        this.context.onBarrierError(
+          ticket.sessionId,
+          new Error(`${resumed.refusal.code}: ${resumed.refusal.message}`)
+        )
+      }
     } catch (error) {
       if (isStructuredAgentSessionRecoveryTicketCurrent(this.context, ticket)) {
         this.context.onBarrierError(ticket.sessionId, error)

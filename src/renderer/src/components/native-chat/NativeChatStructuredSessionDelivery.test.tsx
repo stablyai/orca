@@ -38,7 +38,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  // The pane activates the host status feed for its startup phase; nothing here drives it.
+  subscribeStructuredAgentSessionStatus: async () => ({ unsubscribe: () => {} })
 }))
 
 vi.mock('./use-structured-agent-session', async () => {

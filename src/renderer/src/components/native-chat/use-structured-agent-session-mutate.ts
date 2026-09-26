@@ -28,7 +28,12 @@ export function useStructuredAgentSessionMutate(args: {
   /** Read at settle time, not at call time: the fence can move while a request
    *  is in flight, and a result from the previous fence is not this session's. */
   stateRef: { current: { fence: number | null } }
-}): { mutate: StructuredAgentSessionMutate; writeError: string | null } {
+}): {
+  mutate: StructuredAgentSessionMutate
+  writeError: string | null
+  /** A write this hook did not send, refused all the same (a pick applied by the launch). */
+  reportWriteError: (message: string) => void
+} {
   const { enabled = true, sessionId, stateRef, target } = args
   const [writeError, setWriteError] = useState<string | null>(null)
   const operationIds = useRef(new Map<string, string>())
@@ -75,10 +80,7 @@ export function useStructuredAgentSessionMutate(args: {
         return null
       }
       if (!result.ok) {
-        if (
-          agentSessionRefusalOperationState(fingerprintMethod, result.refusal.code) ===
-          'settled-rejected'
-        ) {
+        if (agentSessionRefusalOperationState(result.refusal.code) === 'settled-rejected') {
           operationIds.current.delete(key)
         }
         if (enabledRef.current && stateRef.current.fence === targetFence) {
@@ -98,5 +100,5 @@ export function useStructuredAgentSessionMutate(args: {
     [enabled, sessionId, stateRef, target]
   )
 
-  return { mutate, writeError }
+  return { mutate, writeError, reportWriteError: setWriteError }
 }

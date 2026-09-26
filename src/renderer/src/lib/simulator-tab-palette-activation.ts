@@ -60,6 +60,6 @@ export function activateSimulatorTabPaletteResult({
   state.focusGroup(worktreeId, tab.groupId)
   state.activateTab(tab.id, { worktreeId })
   state.setActiveTab(tab.id)
-  state.setActiveTabType('simulator')
+  state.setActiveTabType('simulator', worktreeId)
   return { status: 'activated', tabId: tab.id }
 }

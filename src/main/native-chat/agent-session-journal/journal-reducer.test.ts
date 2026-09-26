@@ -17,7 +17,11 @@ import {
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
-import { buildJournalItemRow, buildJournalTombstoneRow } from './journal-row-builders'
+import {
+  buildJournalItemRow,
+  buildJournalTombstoneRow,
+  journalLifecycleBatchRowBuilder
+} from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
 
 const EPOCH = 'epoch-1'
@@ -700,6 +704,34 @@ describe('producer linkage round-trips through the reducer', () => {
       ...linkage
     })
     expect(renderJournalState(state).items[0]).toMatchObject(linkage)
+  })
+
+  it('reads each mutation of a mixed batch as its own producer', () => {
+    // A batch can CREATE rows several agents produced — a settlement landing
+    // before any checkpoint did. The mutation that names a producer is that
+    // producer's; the one naming none is the session's own, beside it.
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(
+      state,
+      journalLifecycleBatchRowBuilder(
+        () => state,
+        'settle-mixed',
+        [
+          { kind: 'item', identity, body: text('child'), linkage },
+          {
+            kind: 'item',
+            identity: { provider: 'claude', sessionId: 'claude-session', uuid: 'own-1' },
+            body: text('own')
+          }
+        ],
+        { fence: 1 }
+      )(1, 1_001)
+    )
+
+    const [child, own] = renderJournalState(state).items
+    expect(child).toMatchObject({ body: text('child'), ...linkage })
+    expect(own?.body).toEqual(text('own'))
+    expect(own && 'agentId' in own).toBe(false)
   })
 
   it('lets a correction win over the provisional row, without moving the bubble', () => {

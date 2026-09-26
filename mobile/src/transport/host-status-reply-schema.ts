@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
 
 /**
  * The status the transport's own `status.get` reads.
@@ -27,7 +28,9 @@ export const hostStatusSchema = z.looseObject({
   minCompatibleMobileVersion: salvagedOptional('minCompatibleMobileVersion', z.number()),
   appVersion: salvagedOptional('appVersion', z.string()),
   floatingWorkspaceEnabled: salvagedOptional('floatingWorkspaceEnabled', z.boolean()),
-  capabilities: salvagedOptional('capabilities', z.array(z.string()))
+  capabilities: salvagedOptional('capabilities', z.array(z.string())),
+  hostPlatform: salvagedOptional('hostPlatform', z.enum(NODE_PLATFORM_NAMES)),
+  machineName: salvagedOptional('machineName', z.string())
 })
 
 export type HostStatusReply = z.output<typeof hostStatusSchema>

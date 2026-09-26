@@ -70,12 +70,24 @@ export function collectDescendantsFromIndex<Row extends ProcessIdentityRow>(
   rootPid: number
 ): (Row & { depth: number })[] {
   const descendants: (Row & { depth: number })[] = []
-  const stack = (index.childrenByPpid.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
+  // PID reuse can make a process snapshot cyclic; queue each PID at most once.
+  const visited = new Set<number>([rootPid])
+  const stack: { row: Row; depth: number }[] = []
+  const pushUnvisited = (row: Row, depth: number): void => {
+    if (visited.has(row.pid)) {
+      return
+    }
+    visited.add(row.pid)
+    stack.push({ row, depth })
+  }
+  for (const child of index.childrenByPpid.get(rootPid) ?? []) {
+    pushUnvisited(child, 1)
+  }
   while (stack.length > 0) {
     const { row, depth } = stack.pop()!
     descendants.push({ ...row, depth })
     for (const child of index.childrenByPpid.get(row.pid) ?? []) {
-      stack.push({ row: child, depth: depth + 1 })
+      pushUnvisited(child, depth + 1)
     }
   }
   return descendants
