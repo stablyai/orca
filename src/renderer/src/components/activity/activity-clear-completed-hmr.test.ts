@@ -89,6 +89,7 @@ function doneEvent(interrupted: boolean): ActivityEvent {
     id: 'evt',
     state: 'done',
     timestamp: 5_000,
+    observedAt: 5_000,
     worktree: makeWorktree(),
     repo: null,
     entry: { ...makeRetained('t-done:1').entry, interrupted },

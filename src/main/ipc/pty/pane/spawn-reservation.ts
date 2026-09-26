@@ -38,6 +38,23 @@ export function reservePaneSpawn(paneKey: string): PaneSpawnReservation {
   return reservation
 }
 
+/** Reserves the pane once no runtime create or other spawn holds it. */
+export async function reserveIdlePaneSpawn(ownerKey: string): Promise<PaneSpawnReservation> {
+  for (;;) {
+    const pendingCreate = pendingRuntimePaneCreatesByOwnerKey.get(ownerKey)
+    if (pendingCreate) {
+      await pendingCreate.promise
+      continue
+    }
+    const pendingSpawn = paneSpawnReservationsByOwnerKey.get(ownerKey)
+    if (pendingSpawn) {
+      await pendingSpawn.promise.catch(() => {})
+      continue
+    }
+    return reservePaneSpawn(ownerKey)
+  }
+}
+
 export function clearPaneSpawnReservation(
   paneKey: string,
   reservation: PaneSpawnReservation

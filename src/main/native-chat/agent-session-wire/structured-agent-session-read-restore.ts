@@ -1,7 +1,4 @@
-import type {
-  AgentSessionOwnerRuntimeKind,
-  AgentSessionRecord
-} from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { findJournalFileFormatRemnant } from '../agent-session-journal/journal-file-format-remnant'
 import { loadJournal } from '../agent-session-journal/journal-open'
@@ -20,6 +17,7 @@ export type RestoredStructuredAgentSessionRead = {
   params: AgentSessionAttachParams
   fence: number
   hasProviderChild: false
+  providerChildPhase: 'ready'
   acquisitionGeneration: null
 }
 
@@ -67,6 +65,7 @@ export async function restoreStructuredAgentSessionRead(
     params,
     fence: record.lease.runtimeFence,
     hasProviderChild: false,
+    providerChildPhase: 'ready',
     acquisitionGeneration: null
   }
 }
@@ -76,7 +75,6 @@ export function attachParamsForRecord(
   input: {
     clientOperationId: string
     expectedRuntimeFence: number
-    runtimeKind?: AgentSessionOwnerRuntimeKind
   }
 ): AgentSessionAttachParams {
   const params: AgentSessionAttachParams = {
@@ -90,7 +88,7 @@ export function attachParamsForRecord(
     provider: record.provider,
     agent: record.provider,
     accountHome: record.accountHome,
-    runtimeKind: input.runtimeKind ?? record.lease.runtimeKind
+    runtimeKind: 'native'
   }
   return {
     ...params,

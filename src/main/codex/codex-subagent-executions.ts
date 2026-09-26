@@ -3,6 +3,8 @@ import { MAX_SUBAGENT_FIELD_CHARS } from '../../shared/native-chat-subagent-summ
 
 const MAX_CHILDREN = 128
 const MAX_SETTLED_TURNS = 256
+/** Turn ordinals remembered per child; a row from an older run reads as its first. */
+const MAX_TURN_ORDINALS_PER_CHILD = 64
 
 export type CodexChildExecution = {
   turnId: string
@@ -14,7 +16,13 @@ export type CodexExecutionChild = {
   registered: boolean
   label: string | null
   parentTurnId: string | null
+  /** The thread whose stream carried this child's `started` activity. Codex
+   *  emits that item on the spawning agent's own session, so it names the parent. */
+  spawnerThreadId: string | null
   execution: CodexChildExecution | null
+  /** Which run each observed turn was, in the order the child's turns began. */
+  turnOrdinals: Map<string, number>
+  turnCount: number
 }
 
 /** Child turn events own execution; activity items only identify the child. */
@@ -25,7 +33,8 @@ export class CodexSubagentExecutions {
   register(
     agentThreadId: string,
     label: string | null,
-    parentTurnId: string | null | undefined
+    parentTurnId: string | null | undefined,
+    spawnerThreadId?: string
   ): CodexExecutionChild | undefined {
     const child = this.child(agentThreadId)
     if (!child) {
@@ -34,6 +43,8 @@ export class CodexSubagentExecutions {
     if (!child.registered || parentTurnId !== undefined) {
       child.parentTurnId = parentTurnId ?? null
     }
+    // A child is spawned once; its announcement is delivered twice, never by another thread.
+    child.spawnerThreadId ??= spawnerThreadId ?? null
     child.registered = true
     // Retain one overflow unit so the journal can append its per-row truncation marker.
     child.label ??=
@@ -58,6 +69,7 @@ export class CodexSubagentExecutions {
     if (!child) {
       return null
     }
+    this.numberTurn(child, turnId)
     if (
       state === 'working' &&
       child.execution?.turnId === turnId &&
@@ -85,6 +97,16 @@ export class CodexSubagentExecutions {
   /** Survives the child's turn, so a row outliving that turn can still name it. */
   label(agentThreadId: string): string | null {
     return this.children.get(agentThreadId)?.label ?? null
+  }
+
+  spawnerOf(agentThreadId: string): string | null {
+    return this.children.get(agentThreadId)?.spawnerThreadId ?? null
+  }
+
+  /** Which run of the child a turn was: 1 for the turn it was spawned into, then
+   *  one more per follow-up turn. Null when the turn was never observed. */
+  turnOrdinal(agentThreadId: string, turnId: string): number | null {
+    return this.children.get(agentThreadId)?.turnOrdinals.get(turnId) ?? null
   }
 
   workingChildren(): CodexExecutionChild[] {
@@ -128,10 +150,27 @@ export class CodexSubagentExecutions {
       registered: false,
       label: null,
       parentTurnId: null,
-      execution: null
+      spawnerThreadId: null,
+      execution: null,
+      turnOrdinals: new Map(),
+      turnCount: 0
     }
     this.children.set(agentThreadId, child)
     return child
+  }
+
+  private numberTurn(child: CodexExecutionChild, turnId: string): void {
+    if (child.turnOrdinals.has(turnId)) {
+      return
+    }
+    child.turnCount += 1
+    child.turnOrdinals.set(turnId, child.turnCount)
+    if (child.turnOrdinals.size > MAX_TURN_ORDINALS_PER_CHILD) {
+      const oldest = child.turnOrdinals.keys().next().value
+      if (oldest !== undefined) {
+        child.turnOrdinals.delete(oldest)
+      }
+    }
   }
 }
 

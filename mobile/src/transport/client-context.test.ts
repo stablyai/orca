@@ -8,6 +8,23 @@ import type { MobileConnectionPath } from './stable-logical-rpc-client'
 const push = vi.hoisted(() => ({ attach: vi.fn(), detach: vi.fn() }))
 vi.mock('../notifications/push-registration', () => ({ attachPushRegistration: push.attach }))
 
+// Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.
+const descriptorProbe = vi.hoisted(() => {
+  const stop = vi.fn()
+  return {
+    stop,
+    start: vi.fn((_client: unknown, _onStatus: (status: unknown) => void) => stop),
+    record: vi.fn()
+  }
+})
+vi.mock('./runtime-status-probe', () => ({
+  startRuntimeStatusProbe: (client: unknown, onStatus: (status: unknown) => void) =>
+    descriptorProbe.start(client, onStatus)
+}))
+vi.mock('./host-descriptor-recorder', () => ({
+  recordHostDescriptorFromStatus: (...args: unknown[]) => descriptorProbe.record(...args)
+}))
+
 const connectMock = vi.fn()
 const loadHostsMock = vi.fn()
 
@@ -28,7 +45,9 @@ import {
   RpcClientProvider,
   useDisconnectHostClient,
   useForceReconnect,
-  useHostClient
+  useHostClient,
+  usePrimeHosts,
+  useRefreshHostClient
 } from './client-context'
 import { useAllHostClients } from './use-all-host-clients'
 import { useRelayRecoveryStatus } from './client-context-connection-metrics'
@@ -398,6 +417,49 @@ describe('useHostClient', () => {
     }
   })
 
+  it('refreshes a Relay-active owned client onto the saved row after an endpoint edit', async () => {
+    const relayClient = makeFakeClient('connected', 'relay')
+    const replacement = makeFakeClient('connecting', 'tailscale')
+    connectMock.mockReturnValueOnce(relayClient).mockReturnValueOnce(replacement)
+    loadHostsMock.mockResolvedValue([HOST])
+    const edited = { ...HOST, endpoint: 'ws://100.101.102.103:6768' }
+
+    const states: ConnectionState[] = []
+    let refreshHostClient: ((hostId: string) => void) | null = null
+    let primeHosts: ((hosts: (typeof HOST)[]) => void) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      refreshHostClient = useRefreshHostClient()
+      primeHosts = usePrimeHosts()
+      states.push(useHostClient(HOST.id).state)
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+      // A failed post-save re-prime leaves the pre-edit profile cached.
+      act(() => primeHosts?.([HOST]))
+      loadHostsMock.mockResolvedValue([edited])
+      states.length = 0
+
+      await act(async () => {
+        refreshHostClient?.(HOST.id)
+        await Promise.resolve()
+      })
+
+      expect(relayClient.closeMock).toHaveBeenCalled()
+      expect(relayClient.notifyForeground).not.toHaveBeenCalled()
+      expect(connectMock.mock.calls[1]?.[0]).toEqual(edited)
+      // The owner reads amber through the rebuild, never a grey flash.
+      expect(states).not.toContain('disconnected')
+    } finally {
+      act(() => renderer?.unmount())
+    }
+  })
+
   it('rebuilds a pairing-rejected Relay client so re-pairing credentials are re-read', async () => {
     const rejectedRelayClient = makeFakeClient('disconnected', 'relay')
     const replacement = makeFakeClient('connecting', 'tailscale')
@@ -737,6 +799,33 @@ it('owns push registration for a paired host without mounting the home screen', 
   expect(push.attach).toHaveBeenCalledTimes(2)
   await act(async () => harness.unmount())
   expect(push.detach).toHaveBeenCalledTimes(2)
+})
+
+it('reads each connected host descriptor once per connection and records what lands', async () => {
+  descriptorProbe.start.mockClear()
+  descriptorProbe.stop.mockClear()
+  descriptorProbe.record.mockClear()
+  const client = makeFakeClient('handshaking')
+  connectMock.mockReturnValue(client)
+  loadHostsMock.mockResolvedValue([HOST])
+  const harness = await renderHarness(HOST.id)
+  expect(descriptorProbe.start).not.toHaveBeenCalled()
+  await act(async () => client.emitState('connected'))
+  await act(async () => client.emitState('connected'))
+  expect(descriptorProbe.start).toHaveBeenCalledOnce()
+  const onStatus = descriptorProbe.start.mock.calls[0]![1]
+  onStatus({ machineName: 'Studio', hostPlatform: 'darwin' })
+  onStatus(null)
+  expect(descriptorProbe.record).toHaveBeenCalledExactlyOnceWith(HOST.id, {
+    machineName: 'Studio',
+    hostPlatform: 'darwin'
+  })
+  await act(async () => client.emitState('disconnected'))
+  expect(descriptorProbe.stop).toHaveBeenCalledOnce()
+  await act(async () => client.emitState('connected'))
+  expect(descriptorProbe.start).toHaveBeenCalledTimes(2)
+  await act(async () => harness.unmount())
+  expect(descriptorProbe.stop).toHaveBeenCalledTimes(2)
 })
 
 it('registers an already authenticated host and detaches on explicit disconnect', async () => {

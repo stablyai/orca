@@ -694,4 +694,23 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktree).toHaveBeenCalled()
     expect(getLocalWorktreeScanGeneration(TEST_REPO_ID)).not.toBe(before)
   })
+
+  it('moves the scan generation before the first step after git worktree remove', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    const witness: { during?: number; after?: number } = {}
+    vi.mocked(removeWorktree).mockImplementationOnce(async () => {
+      witness.during = getLocalWorktreeScanGeneration(TEST_REPO_ID)
+      return {}
+    })
+    // Why the watcher gate: releasing it is the first awaited step after the git removal.
+    vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({
+      finish: vi.fn(async () => {
+        witness.after ??= getLocalWorktreeScanGeneration(TEST_REPO_ID)
+      })
+    })
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(witness.after).toBeGreaterThan(witness.during ?? Infinity)
+  })
 })

@@ -21,12 +21,14 @@ describe('the host status decodes from every version the gate admits', () => {
       minCompatibleMobileVersion: 1,
       appVersion: '1.4.200',
       capabilities: ['mobile.tasks.v1', 'push.v1'],
-      floatingWorkspaceEnabled: true
+      floatingWorkspaceEnabled: true,
+      hostPlatform: 'darwin',
+      machineName: 'Studio'
     }
     expect(reads(hostStatusSchema, status)).toMatchObject(status)
   })
 
-  it('reads a host that answers none of the five fields', () => {
+  it('reads a host that answers none of the status fields', () => {
     expect(reads(hostStatusSchema, {})).toEqual({})
     expect(reads(hostStatusSchema, { error: 'refused' })).toMatchObject({ error: 'refused' })
   })

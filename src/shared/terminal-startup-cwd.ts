@@ -1,6 +1,11 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
-import { resolveRuntimePath } from './cross-platform-path'
+import {
+  isWslUncPathForCallerLinuxPath,
+  normalizeRuntimePathForComparison,
+  resolveRuntimePath
+} from './cross-platform-path'
 import { parseWorkspaceKey } from './workspace-scope'
+import { parseWslUncPath } from './wsl-paths'
 import { splitWorktreeIdForFilesystem } from './worktree/id'
 
 export type TerminalStartupCwdMissingDirFallback = {
@@ -79,4 +84,59 @@ function resolveTerminalWorkspacePath(
   }
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
   return splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? null
+}
+
+/**
+ * Whether a requested cwd would start the agent somewhere other than the workspace root.
+ *
+ * Only such a cwd is a reason to route a launch to a terminal: a structured session runs in its
+ * workspace and cannot honour any other directory. A cwd that names the root, however it is
+ * spelled — trailing slash, `.`, a relative path back to it, Windows separators or case, either WSL
+ * UNC alias or the distro's own Linux path — asks for nothing a structured session cannot give. An
+ * unknown root is read as a custom cwd: the launch cannot prove the request names the root, so it
+ * keeps the surface that can honour it.
+ */
+export function requestsCwdOutsideWorkspaceRoot(
+  workspacePath: string | null | undefined,
+  requestedCwd: string | null | undefined
+): boolean {
+  const trimmedCwd = requestedCwd?.trim()
+  if (!trimmedCwd) {
+    return false
+  }
+  if (!workspacePath) {
+    return true
+  }
+  const resolved = resolveTerminalStartupCwd(workspacePath, trimmedCwd) ?? trimmedCwd
+  if (
+    normalizeRuntimePathForComparison(resolved) === normalizeRuntimePathForComparison(workspacePath)
+  ) {
+    return false
+  }
+  // Why: an agent inside a WSL workspace records its cwd as a Linux path, which the workspace's
+  // own distro reads as the root.
+  const wslRoot = parseWslUncPath(workspacePath)
+  return !(wslRoot && isWslUncPathForCallerLinuxPath(workspacePath, trimmedCwd, wslRoot.distro))
+}
+
+/** `requestsCwdOutsideWorkspaceRoot` for a workspace named by id, with the root taken from the
+ *  caller's own record of it when one exists, else derived the way terminal creation derives it.
+ *  The floating workspace has no root, so any cwd there is custom. */
+export function requestsCwdOutsideWorkspaceRootForWorkspace(args: {
+  workspaceId?: string
+  requestedCwd?: string | null
+  /** The root as the caller already knows it; consulted before the id is parsed for one. */
+  workspacePath?: string | null
+  resolveFolderWorkspacePath?: (folderWorkspaceId: string) => string | null | undefined
+}): boolean {
+  if (!args.requestedCwd?.trim()) {
+    return false
+  }
+  if (args.workspaceId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return true
+  }
+  const workspacePath =
+    args.workspacePath ??
+    resolveTerminalWorkspacePath(args.workspaceId, args.resolveFolderWorkspacePath)
+  return requestsCwdOutsideWorkspaceRoot(workspacePath, args.requestedCwd)
 }

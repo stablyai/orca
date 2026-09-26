@@ -536,7 +536,8 @@ describe('PR E2E gate contract', () => {
       )
     }
     for (const source of [
-      'src/main/ipc/rg-availability.ts',
+      'src/main/ripgrep/bundled-ripgrep-path.ts',
+      'src/shared/bundled-ripgrep.ts',
       'src/shared/ripgrep-process-availability.ts'
     ]) {
       expect(selectPrE2eSpecs([source]), source).toEqual([

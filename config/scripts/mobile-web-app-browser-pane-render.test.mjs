@@ -319,14 +319,14 @@ async function visibleLayerIndex(page) {
 /**
  * Waits for the page's own applied-frame signal: the double buffer's flip.
  *
- * `applyFrame` writes the next frame's URI onto the hidden layer as soon as the frame lands and
+ * The pacer writes the next frame's URI onto the hidden layer as soon as the frame lands and
  * only flips the opacity once the decode resolves, so "some painted layer carries a new digest" is
  * true before the frame is on screen. Measured here on 2026-09-20: the write landed at 80.7 ms
  * after the emit and the flip at 85.7 ms, a 5 ms window in which a wait on the digest returns and
  * the visible layer is still the previous frame. That is what made this file fail once in CI with
  * the second frame's digest equal to the first's and no console errors.
  *
- * The flip is one opacity write, at `settleBrowserFrameLayer`, and it is the behaviour under test
+ * The flip is one opacity write, at the pacer's `flip`, and it is the behaviour under test
  * rather than a proxy for it, so waiting on it can neither return early nor depend on how long a
  * decode takes. Asserting the exact layer, not merely a change, keeps a pane with nothing visible
  * from reading as a flip.
@@ -374,7 +374,7 @@ describePane('the browser pane in a page', () => {
       await waitForPaint(view.page, 1)
 
       const layers = await readPaintedLayers(view.page)
-      // Both layers, because a render repaints both from `renderedFrameSource`, and one visible.
+      // Both layers, because the first frame is painted on both, and one visible.
       // This does not prove the decode-then-flip ran: with the probe removed entirely, the first
       // frame still paints and a layer is still visible, because the visible layer starts at 0 and
       // never needed to move. The flip is the next case's to prove.

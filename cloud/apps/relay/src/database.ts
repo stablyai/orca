@@ -16,7 +16,8 @@ import { reportPostgresQueryFailure } from './postgres-query-failure.js'
 import {
   CellInventoryHoldSamples,
   emptyCellInventoryHoldCounts,
-  type CellInventoryHoldCounts
+  type CellInventoryHoldCounts,
+  type CellLockHoldSite
 } from './cell-inventory-hold-samples.js'
 
 export const POSTGRES_LOCK_TIMEOUT_MS = 1_000
@@ -44,13 +45,26 @@ export type RelayLockOptions = {
   // Report how long this lock is held to COMMIT. The hold, not the wait, is what
   // forms the queue, and nothing measured it before.
   measureHoldMs?: boolean
+  // Labels the measured hold; unset reads as the full-inventory lock.
+  holdSite?: CellLockHoldSite
+  // The statement carries its own row-lock clause (a CTE locks inside the
+  // statement), so none is appended. failIfUnavailable must match that clause.
+  lockClauseInStatement?: boolean
 }
 
-// A transaction that can report how long it held a measured lock before COMMIT.
-type HoldMeasuringTransaction = { consumeHoldMs(): number | undefined }
+type MeasuredHold = { holdMs: number; site: CellLockHoldSite }
 
-function measuredHoldMs(transaction: unknown): number | undefined {
-  return (transaction as HoldMeasuringTransaction).consumeHoldMs?.()
+// A transaction that can report how long it held a measured lock before COMMIT.
+type HoldMeasuringTransaction = { consumeHold(): MeasuredHold | undefined }
+
+function recordMeasuredHold(holds: CellInventoryHoldSamples, transaction: unknown): void {
+  const hold = (transaction as HoldMeasuringTransaction).consumeHold?.()
+  if (hold) holds.record(hold.holdMs, hold.site)
+}
+
+function lockedStatement(sql: string, options: RelayLockOptions): string {
+  if (options.lockClauseInStatement) return sql
+  return `${sql} FOR UPDATE${options.failIfUnavailable ? ' NOWAIT' : ''}`
 }
 export type RelayTransactionOptions = { reportRetries?: boolean }
 
@@ -775,20 +789,20 @@ function postgresTransactionErrorPhase(error: unknown): string {
 
 class SqliteTransaction implements RelayDatabase {
   readonly dialect = 'sqlite' as const
-  private heldFromMs: number | undefined
+  private held: { fromMs: number; site: CellLockHoldSite } | undefined
 
   constructor(protected readonly database: DatabaseSync) {}
 
-  consumeHoldMs(): number | undefined {
-    if (this.heldFromMs === undefined) return undefined
-    const holdMs = performance.now() - this.heldFromMs
-    this.heldFromMs = undefined
-    return holdMs
+  consumeHold(): MeasuredHold | undefined {
+    if (this.held === undefined) return undefined
+    const hold = { holdMs: performance.now() - this.held.fromMs, site: this.held.site }
+    this.held = undefined
+    return hold
   }
 
   protected noteHeld(options: RelayLockOptions): void {
-    if (options.measureHoldMs && this.heldFromMs === undefined) {
-      this.heldFromMs = performance.now()
+    if (options.measureHoldMs && this.held === undefined) {
+      this.held = { fromMs: performance.now(), site: options.holdSite ?? 'inventory' }
     }
   }
 
@@ -843,7 +857,7 @@ class SqliteDatabase extends SqliteTransaction {
     try {
       const result = await operation(transaction)
       this.database.exec('COMMIT')
-      this.holds.record(measuredHoldMs(transaction) ?? Number.NaN)
+      recordMeasuredHold(this.holds, transaction)
       return result
     } catch (error) {
       this.database.exec('ROLLBACK')
@@ -861,17 +875,17 @@ class SqliteDatabase extends SqliteTransaction {
 
 class PostgresTransaction implements RelayDatabase {
   readonly dialect = 'postgres' as const
-  private heldFromMs: number | undefined
+  private held: { fromMs: number; site: CellLockHoldSite } | undefined
   private lockUnavailable = 0
   private lockTimeouts = 0
 
   constructor(protected readonly client: pg.PoolClient) {}
 
-  consumeHoldMs(): number | undefined {
-    if (this.heldFromMs === undefined) return undefined
-    const holdMs = performance.now() - this.heldFromMs
-    this.heldFromMs = undefined
-    return holdMs
+  consumeHold(): MeasuredHold | undefined {
+    if (this.held === undefined) return undefined
+    const hold = { holdMs: performance.now() - this.held.fromMs, site: this.held.site }
+    this.held = undefined
+    return hold
   }
 
   // Drained by the owning database on both the commit and the rollback path: a
@@ -910,12 +924,9 @@ class PostgresTransaction implements RelayDatabase {
       // A blocked waiter holds its pooled client for the whole lock_timeout, so
       // hot tiny-table locks bound their own wait well under the pool default.
       if (bounded) await this.query(setLocalLockTimeout(options.lockTimeoutMs!))
-      const rows = await this.query(
-        `${sql} FOR UPDATE${options.failIfUnavailable ? ' NOWAIT' : ''}`,
-        params
-      )
-      if (options.measureHoldMs && this.heldFromMs === undefined) {
-        this.heldFromMs = performance.now()
+      const rows = await this.query(lockedStatement(sql, options), params)
+      if (options.measureHoldMs && this.held === undefined) {
+        this.held = { fromMs: performance.now(), site: options.holdSite ?? 'inventory' }
       }
       return rows
     } catch (error) {
@@ -1046,10 +1057,7 @@ export class PostgresDatabase implements RelayDatabase {
     try {
       // No transaction here, so options.lockTimeoutMs cannot apply: SET LOCAL
       // would be discarded at the autocommit boundary before the lock is taken.
-      return await this.query(
-        `${sql} FOR UPDATE${options.failIfUnavailable ? ' NOWAIT' : ''}`,
-        params
-      )
+      return await this.query(lockedStatement(sql, options), params)
     } catch (error) {
       if (
         options.failIfUnavailable &&
@@ -1073,7 +1081,7 @@ export class PostgresDatabase implements RelayDatabase {
         await client.query('BEGIN')
         const result = await operation(transaction)
         await client.query('COMMIT')
-        this.holds.record(measuredHoldMs(transaction) ?? Number.NaN)
+        recordMeasuredHold(this.holds, transaction)
         this.holds.recordUnavailable(transaction.consumeLockUnavailable())
         this.holds.recordLockTimeout(transaction.consumeLockTimeouts())
         return result

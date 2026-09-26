@@ -1,29 +1,40 @@
 import type { AgentSessionBackgroundTask } from './agent-session-background-task-wire'
 import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from './agent-status-types'
 import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
-import type {
-  AgentChildWorkKind,
-  AgentChildWorkMembership,
-  AgentChildWorkState
-} from './agent-status-child-work'
+import type { AgentChildWorkOutcome, AgentChildWorkState } from './agent-status-child-work'
+import type { AgentChildWorkView } from './agent-status-child-work-view'
 
 const LEGACY_PROVIDER_ID_MAX_LENGTH = 64
 const BACKGROUND_PROVIDER_ID_MAX_LENGTH = 512
 
-export type AgentChildWorkLegacyProjectionCandidate = {
-  providerId: string
-  child: {
-    kind: AgentChildWorkKind
-    state?: AgentChildWorkState
-    membership: AgentChildWorkMembership
-    firstObservedAt: number
-    name?: string
-    description?: string
-    agentType?: string
-    model?: string
-    totalTokens?: number
-    stoppable: boolean
-  }
+/** Anything a legacy wire shape can be derived from. Every `AgentChildWorkView` is one, so the
+ *  old and new shapes cannot disagree; so is a published background task (its state optional,
+ *  because an old host sends none). */
+export type AgentChildWorkLegacyProjectionCandidate = Pick<
+  AgentChildWorkView,
+  'kind' | 'membership' | 'firstObservedAt' | 'stoppable'
+> &
+  Partial<
+    Pick<
+      AgentChildWorkView,
+      | 'providerId'
+      | 'state'
+      | 'outcome'
+      | 'name'
+      | 'description'
+      | 'agentType'
+      | 'model'
+      | 'totalTokens'
+    >
+  >
+
+// The run state today's hosts publish for a settled task, so an old strip reads a settled view
+// exactly as it reads a settled task now (an unreadable terminal status settles as `done`).
+const LEGACY_SETTLED_RUN_STATE: Record<AgentChildWorkOutcome, AgentChildWorkState> = {
+  succeeded: 'done',
+  failed: 'blocked',
+  cancelled: 'idle',
+  unknown: 'done'
 }
 
 function legacyProviderId(value: unknown): string | null {
@@ -64,18 +75,16 @@ export function agentChildWorkProjectionCandidateFromBackgroundTask(
 ): AgentChildWorkLegacyProjectionCandidate {
   return {
     providerId: task.id,
-    child: {
-      kind: task.kind,
-      ...(task.state !== undefined ? { state: task.state } : {}),
-      membership: 'live',
-      firstObservedAt: task.startedAt ?? 0,
-      // Truthy, not present: an empty label carries no identity and would beat the
-      // `description ?? agentType ?? 'unknown'` fallbacks every child-row reader relies on.
-      ...(task.name ? { name: task.name, agentType: task.name } : {}),
-      ...(task.description ? { description: task.description } : {}),
-      ...(task.totalTokens !== undefined ? { totalTokens: task.totalTokens } : {}),
-      stoppable: task.stoppable ?? true
-    }
+    kind: task.kind,
+    ...(task.state !== undefined ? { state: task.state } : {}),
+    membership: 'live',
+    firstObservedAt: task.startedAt ?? 0,
+    // Truthy, not present: an empty label carries no identity and would beat the
+    // `description ?? agentType ?? 'unknown'` fallbacks every child-row reader relies on.
+    ...(task.name ? { name: task.name, agentType: task.name } : {}),
+    ...(task.description ? { description: task.description } : {}),
+    ...(task.totalTokens !== undefined ? { totalTokens: task.totalTokens } : {}),
+    stoppable: task.stoppable ?? true
   }
 }
 
@@ -84,28 +93,27 @@ export function projectAgentChildWorkLegacySubagents(
 ): AgentSubagentSnapshot[] | undefined {
   const projected: AgentSubagentSnapshot[] = []
   for (const candidate of candidates) {
-    if (!isAgentChildWorkKind(candidate.child.kind)) {
+    // The legacy roster lists live subagents only; a settled child was never published there.
+    if (!isAgentChildWorkKind(candidate.kind) || candidate.membership !== 'live') {
       continue
     }
     const id = legacyProviderId(candidate.providerId)
-    const state = legacySubagentState(candidate.child.state)
+    const state = legacySubagentState(candidate.state)
     if (
       !id ||
       !state ||
-      !Number.isFinite(candidate.child.firstObservedAt) ||
-      candidate.child.firstObservedAt < 0
+      !Number.isFinite(candidate.firstObservedAt) ||
+      candidate.firstObservedAt < 0
     ) {
       continue
     }
     projected.push({
       id,
       state,
-      startedAt: candidate.child.firstObservedAt,
-      ...(candidate.child.agentType !== undefined ? { agentType: candidate.child.agentType } : {}),
-      ...(candidate.child.model !== undefined ? { model: candidate.child.model } : {}),
-      ...(candidate.child.description !== undefined
-        ? { description: candidate.child.description }
-        : {})
+      startedAt: candidate.firstObservedAt,
+      ...(candidate.agentType !== undefined ? { agentType: candidate.agentType } : {}),
+      ...(candidate.model !== undefined ? { model: candidate.model } : {}),
+      ...(candidate.description !== undefined ? { description: candidate.description } : {})
     })
     if (projected.length === AGENT_STATUS_MAX_SUBAGENTS) {
       break
@@ -123,26 +131,22 @@ function projectBackgroundTask(
   candidate: AgentChildWorkLegacyProjectionCandidate
 ): AgentSessionBackgroundTask | null {
   const id = backgroundProviderId(candidate.providerId)
-  if (
-    !id ||
-    !Number.isFinite(candidate.child.firstObservedAt) ||
-    candidate.child.firstObservedAt < 0
-  ) {
+  if (!id || !Number.isFinite(candidate.firstObservedAt) || candidate.firstObservedAt < 0) {
     return null
   }
+  const state =
+    candidate.membership === 'settled' && candidate.outcome !== undefined
+      ? LEGACY_SETTLED_RUN_STATE[candidate.outcome]
+      : candidate.state
   return {
     id,
-    kind: candidate.child.kind,
-    ...(candidate.child.description !== undefined
-      ? { description: candidate.child.description }
-      : {}),
-    ...(candidate.child.name !== undefined ? { name: candidate.child.name } : {}),
-    ...(candidate.child.state !== undefined ? { state: candidate.child.state } : {}),
-    startedAt: candidate.child.firstObservedAt,
-    ...(candidate.child.totalTokens !== undefined
-      ? { totalTokens: candidate.child.totalTokens }
-      : {}),
-    stoppable: candidate.child.stoppable
+    kind: candidate.kind,
+    ...(candidate.description !== undefined ? { description: candidate.description } : {}),
+    ...(candidate.name !== undefined ? { name: candidate.name } : {}),
+    ...(state !== undefined ? { state } : {}),
+    startedAt: candidate.firstObservedAt,
+    ...(candidate.totalTokens !== undefined ? { totalTokens: candidate.totalTokens } : {}),
+    stoppable: candidate.stoppable
   }
 }
 
@@ -156,7 +160,7 @@ export function projectAgentChildWorkLegacyBackgroundTasks(
     if (!projected) {
       continue
     }
-    if (candidate.child.membership === 'live') {
+    if (candidate.membership === 'live') {
       tasks.push(projected)
     } else {
       settledTasks.push(projected)

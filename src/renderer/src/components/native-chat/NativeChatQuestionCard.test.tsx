@@ -69,6 +69,21 @@ function clickAction(text: string): void {
   click(button, text)
 }
 
+function typeAnswer(value: string): void {
+  const input = container.querySelector('input')!
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setter.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
+function optionPressed(label: string): string | null | undefined {
+  return [...container.querySelectorAll('button[aria-pressed]')]
+    .find((b) => b.textContent?.includes(label))
+    ?.getAttribute('aria-pressed')
+}
+
 const tabsOrSpaces: AskPrompt = {
   questions: [
     {
@@ -221,5 +236,124 @@ describe('NativeChatQuestionCard', () => {
       { indices: [0, 1], other: '' },
       { indices: [], other: 'SSH host' }
     ])
+  })
+
+  it('replaces a picked option with a typed answer on a single-select question', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    clickOption('Spaces')
+    typeAnswer('two spaces')
+    expect(optionPressed('Spaces')).toBe('false')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'two spaces' }])
+  })
+
+  it('keeps typed text in the field but sends a later-picked option', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    typeAnswer('two spaces')
+    clickOption('Tabs')
+    expect(container.querySelector('input')!.value).toBe('two spaces')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [0], other: '' }])
+  })
+
+  it('chooses the kept typed text again when its field is clicked', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    typeAnswer('two spaces')
+    clickOption('Tabs')
+    act(() => {
+      container.querySelector('input')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(optionPressed('Tabs')).toBe('false')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'two spaces' }])
+  })
+
+  it('ignores a click on the answer field while the answer is sending', () => {
+    const renderCard = (isSubmitting: boolean): void => {
+      act(() => {
+        root.render(
+          <NativeChatQuestionCard
+            prompt={tabsOrSpaces}
+            onAnswer={vi.fn()}
+            onCancel={() => {}}
+            isSubmitting={isSubmitting}
+          />
+        )
+      })
+    }
+    renderCard(false)
+    typeAnswer('two spaces')
+    clickOption('Tabs')
+    renderCard(true)
+    // Chromium still delivers pointer events to a disabled input.
+    const input = container.querySelector('input')!
+    act(() => {
+      input.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+      input.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(optionPressed('Tabs')).toBe('true')
+  })
+
+  it('keeps the picked option when keyboard focus passes through the field', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    typeAnswer('two spaces')
+    clickOption('Tabs')
+    act(() => {
+      container.querySelector('input')!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    })
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [0], other: '' }])
+  })
+
+  it('leaves nothing chosen when a picked option is unpicked over kept text', () => {
+    const onAnswer = vi.fn()
+    render(tabsOrSpaces, onAnswer)
+
+    typeAnswer('two spaces')
+    clickOption('Tabs')
+    clickOption('Tabs')
+
+    expect(optionPressed('Tabs')).toBe('false')
+    expect(
+      [...container.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Skip')
+    ).toBe(true)
+    expect(onAnswer).not.toHaveBeenCalled()
+  })
+
+  it('sends picked options and typed text together on a multi-select question', () => {
+    const onAnswer = vi.fn()
+    render(
+      {
+        questions: [
+          {
+            question: 'Which targets?',
+            multiSelect: true,
+            options: [{ label: 'Web' }, { label: 'Mobile' }]
+          }
+        ]
+      },
+      onAnswer
+    )
+
+    clickOption('Mobile')
+    typeAnswer('Desktop')
+    typeAnswer('')
+    typeAnswer('Desktop app')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'Desktop app' }])
   })
 })

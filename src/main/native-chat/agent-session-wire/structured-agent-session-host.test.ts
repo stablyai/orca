@@ -8,6 +8,7 @@ import { AgentSessionRecordStore } from '../../runtime/agent-session-record-stor
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import {
   adapter,
   attach,
@@ -138,13 +139,16 @@ describe('attach', () => {
     })
     const params = attachParams()
 
-    await expect(host.attach(CALLER, params)).rejects.toThrow(
-      'agent_session_provider_handle_stale_fence'
-    )
-    expect(await host.attach(CALLER, params)).toMatchObject({
+    const refused = {
       ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
-    })
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        message: 'agent_session_provider_handle_stale_fence',
+        ownerVerdict: 'exited'
+      }
+    }
+    expect(await host.attach(CALLER, params)).toEqual(refused)
+    expect(await host.attach(CALLER, params)).toEqual(refused)
     const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
     expect(await host.attach(CALLER, ensureParams(releasedFence))).toMatchObject({ ok: true })
     expect(acquire).toHaveBeenCalledTimes(2)
@@ -155,7 +159,10 @@ describe('attach', () => {
   it('reaps an acquisition when process identity commit fails', async () => {
     vi.spyOn(store, 'commitProcessIdentity').mockRejectedValueOnce(new Error('commit failed'))
 
-    await expect(host.attach(CALLER, attachParams())).rejects.toThrow('commit failed')
+    await expect(host.attach(CALLER, attachParams())).resolves.toMatchObject({
+      ok: false,
+      refusal: { message: 'commit failed', ownerVerdict: 'exited' }
+    })
 
     expect(releaseAcquisition).toHaveBeenCalledWith({ sessionId: SESSION })
   })
@@ -358,6 +365,46 @@ describe('respondToPrompt', () => {
     expect(answerPrompt).toHaveBeenCalledTimes(1)
   })
 
+  it("keeps a subagent's approval the subagent's once the user answers it", async () => {
+    // The answer revises the row without naming a producer, so it keeps the asker's.
+    await attach()
+    const child = { agentId: 'thread-child', producerKind: 'agent' as const }
+    const identity = {
+      provider: 'codex' as const,
+      threadId: 'thread-child',
+      turnId: 'c',
+      ordinal: 1
+    }
+    acquire.mock.calls.at(-1)?.[0].events?.appendItem(
+      identity,
+      {
+        kind: 'approval',
+        title: 'Run ls?',
+        detail: null,
+        options: [{ id: 'allow', label: 'Allow' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      child
+    )
+    await host.flushStreamedEvents(SESSION)
+    const itemId = agentJournalItemKey(identity)
+    const fields = { itemId, expectedRevision: 1, optionId: 'allow' }
+
+    await host.respondToPrompt(CALLER, {
+      envelope: envelope('agentSession.respondTo:approval', fields),
+      kind: 'approval',
+      ...fields
+    })
+
+    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const answered = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
+    expect(answered).toMatchObject({
+      revision: 2,
+      body: { resolution: { state: 'resolved' } },
+      ...child
+    })
+  })
+
   it('refuses a second answer to one prompt and says which answer won', async () => {
     await attach()
     const prompt = await seedApproval()
@@ -501,16 +548,19 @@ describe('restart', () => {
    *  them. Every lease loads unreconciled, so this is the state that decides
    *  whether a persisted session is reachable at all. */
   async function reboot(
-    probeOwner: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
+    probeOwner: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>,
+    adapterOverrides: Partial<StructuredAgentSessionAdapter> = {},
+    stopOwnerProcess?: StructuredAgentSessionHostDeps['stopOwnerProcess']
   ) {
     store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
     host = new StructuredAgentSessionHost({
       store,
-      adapter: adapter(),
+      adapter: { ...adapter(), ...adapterOverrides },
       journalRoot: root,
       claimKeyId: 'key-1',
       mintSpawnToken: () => 'spawn-b',
       probeOwner,
+      ...(stopOwnerProcess ? { stopOwnerProcess } : {}),
       now: () => NOW
     })
     replaceHostTestState({ store, host })
@@ -561,14 +611,15 @@ describe('restart', () => {
     expect(listRecords).toHaveBeenCalledTimes(restoreReads)
   })
 
-  it('clears stale TUI recovery at restart, and reacquires the native owner when a surface holds it', async () => {
+  it('clears a stale conflicted recovery at restart, and reacquires the native owner when a surface holds it', async () => {
     await attach()
     await store.transitionHandoff(SESSION, (record) => ({
       ...record,
       lease: {
         ...record.lease,
-        runtimeKind: 'tui',
-        handoffStage: 'manual-recovery'
+        // How a terminal owner an older build recorded loads.
+        claimStatus: 'conflicted',
+        handoffStage: 'recovering'
       }
     }))
     await reboot(async () => ({ outcome: 'pid-absent' }))
@@ -586,22 +637,65 @@ describe('restart', () => {
       handoffStage: null,
       handoffOperationId: null
     })
-    await expect(host.handoffStatus(SESSION)).resolves.toMatchObject({
+    expect(host.handoffStatus(SESSION)).toMatchObject({
       owner: 'native',
       phase: 'idle',
       stage: null
     })
   })
 
-  it("keeps a session whose owner cannot be probed out of a live writer's hands", async () => {
+  it('answers native for a chat whose start is still in flight', async () => {
+    await attach()
+    await reboot(async () => ({ outcome: 'pid-absent' }))
+    await host.restoreReadableSessions()
+    const started = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const settled = acquire.getMockImplementation()
+    if (!settled) {
+      throw new Error('missing acquire implementation')
+    }
+    acquire.mockImplementationOnce(async (input) => {
+      started.resolve()
+      await release.promise
+      return settled(input)
+    })
+
+    const hold = host.hold(SESSION, 'surface-1')
+    await started.promise
+    const claimMidStart = store.getRecord(SESSION)?.lease.claimStatus
+    const status = host.handoffStatus(SESSION)
+    release.resolve()
+    await hold
+
+    // Mid-start the lease is only reserved; ownership does not wait for the agent.
+    expect(claimMidStart).toBe('reserved')
+    expect(status).toMatchObject({ owner: 'native' })
+  })
+
+  it('vouches for no owner of a chat this host cannot run', async () => {
+    await attach()
+
+    await reboot(async () => ({ outcome: 'pid-absent' }), { supportsCreate: () => false })
+    expect(() => host.handoffStatus(SESSION)).toThrow('structured_agent_session_unsupported')
+  })
+
+  it('releases a session whose owner can never be probed, signalling nothing, and starts over', async () => {
     await attach()
     const held = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
-    await reboot(async () => ({ outcome: 'indeterminate', reason: 'no probe on this host' }))
+    const stopOwnerProcess = vi.fn()
+    await reboot(
+      async () => ({ outcome: 'indeterminate', reason: 'no probe on this host' }),
+      {},
+      stopOwnerProcess
+    )
+    acquire.mockClear()
 
-    expect(await host.attach(CALLER, ensureParams(held))).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_ownership_unknown' }
+    expect(await host.attach(CALLER, ensureParams(await staleFenceFrom(held)))).toMatchObject({
+      ok: true
     })
+    expect(acquire).toHaveBeenCalledOnce()
+    // An unverifiable pid may already belong to an unrelated process.
+    expect(stopOwnerProcess).not.toHaveBeenCalled()
   })
 
   it('does not remember a failed adjudication as done', async () => {
@@ -660,7 +754,8 @@ describe('subscribe', () => {
       emit: (event) => events.push(event),
       cursor: first.cursor
     })
-    expect(events[0]).toMatchObject({ type: 'batch', handoff: { owner: 'native', phase: 'idle' } })
+    expect(events[0]).toMatchObject({ type: 'batch' })
+    expect(events[0]).not.toHaveProperty('handoff')
 
     const second = hostTestMessage('and a timeout')
     await host.send(CALLER, {

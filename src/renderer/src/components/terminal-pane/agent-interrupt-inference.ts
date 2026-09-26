@@ -5,6 +5,7 @@ import {
 import {
   AGENT_INTERRUPT_SETTLE_MS,
   isNavigationEscapeIntent,
+  requiresDoubleEscapeInterrupt,
   type AgentInterruptInferenceRequest,
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
@@ -39,18 +40,11 @@ type CapturedInterruptBaseline = {
   inputCount?: number
 }
 
-function requiresDoubleEscapeForAgent(
-  agentType: AgentStatusEntry['agentType'],
-  intent: AgentInterruptInputIntent
-): boolean {
-  return (agentType === 'opencode' || agentType === 'copilot') && intent === 'plain-escape'
-}
-
 function shouldFlushInterruptImmediately(
   baseline: Pick<CapturedInterruptBaseline, 'agentType' | 'intent'>
 ): boolean {
   return (
-    requiresDoubleEscapeForAgent(baseline.agentType, baseline.intent) ||
+    requiresDoubleEscapeInterrupt(baseline.agentType, baseline.intent) ||
     baseline.agentType === 'gemini' ||
     (baseline.agentType === 'codex' && baseline.intent === 'plain-escape')
   )
@@ -254,7 +248,7 @@ export function createAgentInterruptInference({
       if (isIgnorableNavigationEscape(baseline.agentType, intent, entry.state)) {
         return
       }
-      if (requiresDoubleEscapeForAgent(baseline.agentType, intent)) {
+      if (requiresDoubleEscapeInterrupt(baseline.agentType, intent)) {
         const isSecondEscape =
           doubleEscapeBaseline !== null && isSameTurnBaseline(doubleEscapeBaseline, baseline)
         doubleEscapeBaseline = baseline

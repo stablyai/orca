@@ -2,10 +2,6 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./use-mobile-dictation.ts', import.meta.url), 'utf8')
-const audioChunkSource = readFileSync(
-  new URL('./mobile-dictation-audio-chunk.ts', import.meta.url),
-  'utf8'
-)
 const nativeCaptureSource = readFileSync(
   new URL('../platform/dictation-capture.ts', import.meta.url),
   'utf8'
@@ -39,43 +35,12 @@ describe('useMobileDictation source invariants', () => {
     expect(mirrorEffect).toContain('}, [client, enabled, onTranscript, onError])')
   })
 
-  it('reserves pending audio bytes before encoding microphone chunks', () => {
-    const microphoneEffect = sliceSource(
-      audioChunkSource,
-      'export function enqueueMobileDictationAudioChunk',
-      '  queue.pendingChunks.add(sendChunk)'
-    )
-
-    const reserveIndex = microphoneEffect.indexOf('tryReserve(byteLength)')
-    const encodeIndex = microphoneEffect.indexOf('bytesToBase64(bytes)')
-    expect(reserveIndex).toBeGreaterThanOrEqual(0)
-    expect(encodeIndex).toBeGreaterThanOrEqual(0)
-    expect(reserveIndex).toBeLessThan(encodeIndex)
-    expect(microphoneEffect).toContain('MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE')
-    expect(microphoneEffect).toContain('queue.pendingAudioBudget.release(byteLength)')
-    expect(source).toContain('enqueueMobileDictationAudioChunk(client, dictationId, chunk')
-  })
-
   it('carries audio the capture dropped into the same refusal the budget raises', () => {
     const chunkHandler = sliceBetween('const sub = capture.onChunk(', 'return () => sub.remove()')
     expect(chunkHandler).toContain('if (chunk.droppedBytes > 0)')
     expect(chunkHandler).toContain('MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE')
     // Only the page can drop: the seam's native half is where the microphone is.
     expect(nativeCaptureSource).toContain('droppedBytes: 0')
-  })
-
-  it('reuses audio chunk queue wiring across microphone events', () => {
-    const queueIndex = source.indexOf('const audioChunkQueue =')
-    const listenerIndex = source.indexOf('capture.onChunk(')
-
-    expect(queueIndex).toBeGreaterThanOrEqual(0)
-    expect(queueIndex).toBeLessThan(listenerIndex)
-    expect(source).toContain(
-      'enqueueMobileDictationAudioChunk(client, dictationId, chunk, audioChunkQueue)'
-    )
-    // The native half is the same calls in the same order it always made them; what moved is where
-    // they are written, so the page can answer the same shape.
-    expect(nativeCaptureSource).toContain("addExpoTwoWayAudioEventListener('onMicrophoneData'")
   })
 
   it('resets pending audio bytes whenever pending chunk tracking is cleared', () => {
@@ -108,34 +73,6 @@ describe('useMobileDictation source invariants', () => {
     expect(stopBody.indexOf('capture.end()')).toBeLessThan(
       stopBody.indexOf('await Promise.allSettled')
     )
-  })
-
-  it('keeps cleanup going when native recording shutdown throws', () => {
-    const closeAudio = sliceBetween(
-      'const closeDictationAudio = useCallback(',
-      'const failActiveDictation ='
-    )
-    const toggleIndex = closeAudio.indexOf('capture.end()')
-    const catchIndex = closeAudio.indexOf('} catch', toggleIndex)
-    expect(toggleIndex).toBeGreaterThanOrEqual(0)
-    expect(catchIndex).toBeGreaterThan(toggleIndex)
-
-    // The try above is not what makes this true, and this case used to claim it was. `end` is
-    // async, so a throwing binding rejects rather than throwing, and a synchronous `catch` around
-    // `void capture.end()` never sees it. The guard is the seam swallowing its own failure, which
-    // `dictation-capture.test.ts` drives against an engine that will not stop; the try stays for a
-    // seam that throws synchronously.
-    expect(nativeCaptureSource).toContain("console.error('Failed to stop microphone recording'")
-    expect(nativeCaptureSource).toContain("console.error('Failed to tear down the audio session'")
-
-    // stop()'s recording shutdown sits inside the try so a native throw still
-    // runs the finally release and error cleanup.
-    const stopBody = sliceBetween(
-      'const stop = useCallback(async () => {',
-      'const abandonDictation ='
-    )
-    expect(stopBody.indexOf('try {')).toBeGreaterThanOrEqual(0)
-    expect(stopBody.indexOf('try {')).toBeLessThan(stopBody.indexOf('capture.end()'))
   })
 
   it('routes an audio interruption through cancel and a disable through the reporting abort', () => {

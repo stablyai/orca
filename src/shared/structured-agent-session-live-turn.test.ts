@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import {
-  activeStructuredAgentSessionToolCall,
+  statusStructuredAgentSessionToolCall,
   isStructuredAgentSessionThinking
 } from './structured-agent-session-live-turn'
 
@@ -159,7 +159,7 @@ describe("the live-turn readers answer for the session's own agent", () => {
       input: { pattern: 'x' },
       state: 'running'
     })
-    expect(activeStructuredAgentSessionToolCall([turnStart, spawnCall, childCall])?.name).toBe(
+    expect(statusStructuredAgentSessionToolCall([turnStart, spawnCall, childCall])?.name).toBe(
       'Task'
     )
   })
@@ -171,7 +171,7 @@ describe("the live-turn readers answer for the session's own agent", () => {
       input: { pattern: 'x' },
       state: 'running'
     })
-    expect(activeStructuredAgentSessionToolCall([turnStart, childCall])).toBeNull()
+    expect(statusStructuredAgentSessionToolCall([turnStart, childCall])).toBeNull()
   })
 
   it('treats an agent id that failed to resolve as a child, not as the parent', () => {
@@ -184,7 +184,7 @@ describe("the live-turn readers answer for the session's own agent", () => {
       { kind: 'tool-call', name: 'Grep', input: { pattern: 'x' }, state: 'running' },
       ''
     )
-    expect(activeStructuredAgentSessionToolCall([turnStart, spawnCall, unresolved])?.name).toBe(
+    expect(statusStructuredAgentSessionToolCall([turnStart, spawnCall, unresolved])?.name).toBe(
       'Task'
     )
   })
@@ -197,7 +197,7 @@ describe("the live-turn readers answer for the session's own agent", () => {
       state: 'running'
     })
     expect(
-      activeStructuredAgentSessionToolCall([turnStart, spawnCall, legacyChildCall])?.name
+      statusStructuredAgentSessionToolCall([turnStart, spawnCall, legacyChildCall])?.name
     ).toBe('Grep')
   })
 })

@@ -46,6 +46,8 @@ export type PtyApi = {
     // Why: main sync-flushes the (worktreeId,tabId,leafId→ptyId) binding before pty:spawn returns to close a SIGKILL race (INVESTIGATION.md).
     tabId?: string
     leafId?: string
+    // Why: a pane with a live owner is otherwise reattached; a restart names the PTY main must stop first.
+    replacesPtyId?: string
     // Why: main fires `agent_started` only on spawn success, so launch metadata rides this field (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }) => Promise<{
@@ -213,6 +215,8 @@ export type PtyApi = {
       incarnationId?: string
       /** Set only when the owning relay disowned this id; never a claim that the process died. */
       ptySourceDisowned?: true
+      /** Main stopped this PTY so a new process could take its pane; the pane is not dying. */
+      replacedByRestart?: true
     }) => void
   ) => () => void
   onSpawned: (callback: (data: { id: string }) => void) => () => void

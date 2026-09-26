@@ -15,7 +15,9 @@ import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: rpc
+  callStructuredAgentSession: rpc,
+  // A failed row opens the status feed; these cases never drive it.
+  subscribeStructuredAgentSessionStatus: () => new Promise(() => {})
 }))
 vi.mock('sonner', () => ({ toast: vi.fn() }))
 
@@ -83,6 +85,54 @@ describe('NativeChatResumeStatusSegment', () => {
       'agentSession.restartResumable'
     ])
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
+  })
+
+  // The offer is spent once acted on, so without this entry a failed resume would leave the bar
+  // empty seconds after the toast went. The two are different facts and stay two entries.
+  it('keeps a failed resume as its own entry beside any remaining offer', async () => {
+    const failed = {
+      ...candidates[0]!,
+      failedAt: 60_000,
+      outcome: 'refused',
+      reason: 'agent_session_restart_work_superseded'
+    }
+    rpc.mockResolvedValue({ sessions: candidates.slice(1), failed: [failed] })
+    await mount()
+
+    expect(screen.getByText('1 chat to resume')).toBeTruthy()
+    const entry = screen.getByRole('button', {
+      name: '1 chat failed to resume. Click for details.'
+    })
+    expect(entry.textContent).toBe('1 chat failed to resume')
+
+    rpc.mockResolvedValue({ sessions: [], failed: [failed] })
+    await act(async () => entry.click())
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
+    // With the offer gone, only the failure entry is left — and it stays.
+    expect(screen.queryByText('1 chat to resume')).toBeNull()
+    expect(screen.getByText('1 chat failed to resume')).toBeTruthy()
+  })
+
+  // The agent may be working on an unconfirmed one, so the entry must not call it failed — the
+  // dialog says "couldn't confirm" for that row, and "failed" would invite a second "continue".
+  it('does not call an unconfirmed resume failed', async () => {
+    const failure = (sessionId: 'a' | 'b', outcome: 'refused' | 'unconfirmed') => ({
+      ...candidates.find((entry) => entry.sessionId === sessionId)!,
+      failedAt: 60_000,
+      outcome,
+      reason: outcome === 'refused' ? 'agent_session_restart_work_superseded' : 'pending'
+    })
+    rpc.mockResolvedValue({
+      sessions: [],
+      failed: [failure('a', 'refused'), failure('b', 'unconfirmed')]
+    })
+    await mount()
+
+    expect(
+      screen.getByRole('button', { name: '2 chats to check after resuming. Click for details.' })
+        .textContent
+    ).toBe('2 chats to check')
+    expect(screen.queryByText(/failed to resume/)).toBeNull()
   })
 
   it('names a single chat in the singular', async () => {

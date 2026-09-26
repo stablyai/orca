@@ -11,6 +11,11 @@ import type {
   MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 
+/** What one `ready` declared: what the page will report, and what it can be sent. */
+export type PageReadyDeclaration = {
+  readonly reports: readonly string[]
+  readonly accepts: readonly string[]
+}
 /**
  * Whether the host can be asked anything right now.
  *
@@ -215,9 +220,9 @@ export type MobileWebShellSessionEvent =
   | { readonly type: 'document-loaded' }
   /**
    * The page said `ready` over the bridge, which is the only proof its code ran at all, carrying
-   * what that `ready` declared it reports.
+   * what that `ready` declared it reports and accepts.
    */
-  | { readonly type: 'page-ready'; readonly reports: readonly string[] }
+  | ({ readonly type: 'page-ready' } & PageReadyDeclaration)
   /** The page has a frame on screen. Only a page that declared it ever sends one. */
   | { readonly type: 'page-painted' }
   /** The page is holding the device Back key, or has let it go. The host sends false on its own
@@ -259,6 +264,9 @@ export type MobileWebShellSession = {
    * with it, which is a key that does nothing at all.
    */
   readonly pageBackClaimed: boolean
+  /** Whether this document pads for the system bars itself, so the view may go edge-to-edge.
+   *  Cleared with `pageReady`, and false for every page built before the declaration existed. */
+  readonly pageOwnsSafeArea: boolean
   /** The gates the current step was taken on; null until the first one arrives. */
   readonly gates: MobileWebShellGates | null
   readonly cached: CachedGeneration | null

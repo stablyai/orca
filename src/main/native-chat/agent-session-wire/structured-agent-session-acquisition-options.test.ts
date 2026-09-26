@@ -107,7 +107,7 @@ function expectSettledAttachLease(record: AgentSessionRecord | null): void {
   expect(record).not.toBeNull()
   const lease = record!.lease
   const durableState = lease.handoffStage ?? lease.claimStatus
-  expect(['live', 'released', 'recovering', 'manual-recovery']).toContain(durableState)
+  expect(['live', 'released', 'recovering']).toContain(durableState)
   expect(lease.handoffStage).not.toBe('new-owner-proving')
 }
 
@@ -419,7 +419,10 @@ describe('structured session acquisition options', () => {
         now: () => NOW,
         onAttached: () => {}
       })
-    ).rejects.toThrow('model list unavailable')
+    ).resolves.toEqual({
+      ok: false,
+      refusal: { code: 'agent_session_operation_invalid', message: 'model list unavailable' }
+    })
     expect(releaseAcquisition).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease.ownerProcess).toBeNull()
   })
@@ -508,9 +511,16 @@ describe('structured session acquisition options', () => {
           onAttached: () => {}
         })
 
-      await expect(perform(store, CREATE_OPERATION, null)).rejects.toThrow(
-        exitProven ? injected.message : 'agent_session_acquisition_exit_unproven'
-      )
+      // A proven exit before the journal opens is answered once, as the refusal its replay gives.
+      const failed = perform(store, CREATE_OPERATION, null)
+      await (exitProven && failurePoint !== 'journal'
+        ? expect(failed).resolves.toEqual({
+            ok: false,
+            refusal: { code: 'agent_session_operation_invalid', message: injected.message }
+          })
+        : expect(failed).rejects.toThrow(
+            exitProven ? injected.message : 'agent_session_acquisition_exit_unproven'
+          ))
 
       const reopened = await AgentSessionRecordStore.open({
         directory: storeDir,
@@ -543,14 +553,12 @@ describe('structured session acquisition options', () => {
         })
         await expect(perform(reopened, RESUME_OPERATION, 2)).resolves.toMatchObject({ ok: true })
         expectSettledAttachLease(reopened.getRecord(SESSION))
-      } else {
+      } else if (failurePoint === 'proof' || failurePoint === 'journal') {
+        // A recorded owner goes to recovery, which concludes about it before the next start.
         expect(failedRecord?.lease).toMatchObject({
           runtimeFence: 1,
           claimStatus: failurePoint === 'journal' ? 'live' : 'reserved',
-          handoffStage:
-            failurePoint === 'proof' || failurePoint === 'journal'
-              ? 'recovering'
-              : 'manual-recovery',
+          handoffStage: 'recovering',
           // The settled operation must not stay named by the lease as an in-flight transfer.
           handoffOperationId: null,
           reservedSpawnToken: 'spawn-a'
@@ -559,7 +567,65 @@ describe('structured session acquisition options', () => {
           ok: false,
           refusal: { code: 'agent_session_ownership_unknown' }
         })
+      } else {
+        // No owner was recorded, and the adapter closed the stdio of anything it spawned: released,
+        // with no death evidence, since nothing proved one.
+        expect(failedRecord?.lease).toMatchObject({
+          runtimeFence: 2,
+          claimStatus: 'released',
+          handoffStage: null,
+          handoffOperationId: null,
+          ownerProcess: null,
+          reservedSpawnToken: null,
+          deathEvidence: null
+        })
+        await expect(perform(reopened, RESUME_OPERATION, 2)).resolves.toMatchObject({ ok: true })
       }
     })
+  })
+})
+
+describe('the tab a create reserves', () => {
+  async function openStore() {
+    root = await mkdtemp(join(tmpdir(), 'orca-surface-tab-id-'))
+    return AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  }
+
+  function attachWith(store: AgentSessionRecordStore, surfaceTabId?: string) {
+    return performAttach({
+      store,
+      adapter: adapter({ origin: 'created' }),
+      journalRoot: root!,
+      authority: {
+        spawnToken: 'spawn-a',
+        claimKeyId: 'key-1',
+        handoffOperationId: CREATE_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      // Beside the fingerprinted fields, like `options`: which tab shows the chat is not which
+      // conversation this attaches to.
+      params: {
+        ...attachParams(CREATE_OPERATION, null),
+        ...(surfaceTabId ? { surfaceTabId } : {})
+      },
+      now: () => NOW,
+      onAttached: () => {}
+    })
+  }
+
+  it('takes no tab at attach, then answers a retry naming another tab with the one it was given', async () => {
+    const store = await openStore()
+    const created = await attachWith(store, 'chat-tab-1')
+    // Publishing the tab takes the id, so a create that never gets there leaves nothing behind.
+    expect(created.ok && created.value.tabId).toBeUndefined()
+    expect(store.getSessionTabId(SESSION)).toBeNull()
+
+    await store.setSessionTabVisibility(SESSION, true, 'chat-tab-1')
+    expect(await attachWith(store, 'chat-tab-2')).toMatchObject({
+      ok: true,
+      value: { tabId: 'chat-tab-1' }
+    })
+    expect(store.getSessionTabId(SESSION)).toBe('chat-tab-1')
   })
 })

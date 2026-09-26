@@ -7,7 +7,9 @@ describe('empty streamed deltas', () => {
     const prefix = 'empty-delta-retention-prefix'
     const streams = createCodexStructuredItemStreams({
       sink: { appendItem() {}, appendTombstone() {}, publish() {} },
+      turnIdFor: () => 'turn',
       identityFor: () => ({ provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 0 }),
+      linkageFor: () => ({}),
       schedule: () => () => {}
     })
     const append = (delta: string) =>
@@ -22,15 +24,16 @@ describe('empty streamed deltas', () => {
       }
       const originalJoin = Array.prototype.join
       let retainedSlots = -1
-      const spy = vi
-        .spyOn(Array.prototype, 'join')
-        .mockImplementation(function (this: unknown[], separator) {
-          // Byte counters cannot detect empty entries retained by the stream's chunk array.
-          if (separator === '' && this[0] === prefix) {
-            retainedSlots = this.length
-          }
-          return originalJoin.call(this, separator)
-        })
+      const spy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
+        this: unknown[],
+        separator
+      ) {
+        // Byte counters cannot detect empty entries retained by the stream's chunk array.
+        if (separator === '' && this[0] === prefix) {
+          retainedSlots = this.length
+        }
+        return originalJoin.call(this, separator)
+      })
       let snapshot: ReturnType<typeof streams.snapshot>
       try {
         snapshot = streams.snapshot('thread', 'item')

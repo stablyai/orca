@@ -30,3 +30,6 @@ export class RendererPublicationThrottle {
     }
   }
 }
+
+// Why: one instance per process, or two owners of the same window would re-throttle it under each other's lease.
+export const rendererPublicationThrottle = new RendererPublicationThrottle()

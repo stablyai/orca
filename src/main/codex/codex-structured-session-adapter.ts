@@ -36,6 +36,7 @@ import {
 import { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
+import { changeCodexThreadGoal } from './codex-structured-thread-goal'
 import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn
@@ -267,6 +268,16 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       input.turnId
     )
   }
+
+  changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) =>
+    changeCodexThreadGoal(
+      this.session(input.sessionId),
+      input.change,
+      input.replacesGoal,
+      this.deps.requestTimeoutMs
+    )
+
+  supportsThreadGoal = (sessionId: string): boolean => this.sessions.has(sessionId)
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     answerCodexStructuredPrompt({ request, sessions: this.sessions })
