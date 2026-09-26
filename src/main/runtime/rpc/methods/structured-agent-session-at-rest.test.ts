@@ -323,8 +323,8 @@ describe('an agent exit', () => {
     const running = open.child!
     // A turn in flight, so the exit has something to settle.
     rig.adapter.acquire.mock.calls
-      .at(-1)![0]
-      .events.appendItem(
+      .at(-1)?.[0]
+      .events?.appendItem(
         { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'working', ordinal: 50 },
         { kind: 'turn', turnId: 'working', state: 'running' }
       )
