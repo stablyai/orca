@@ -305,6 +305,19 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('qwen')).toBe(true)
   })
 
+  it('recognizes Reasonix by its installed reasonix executable', () => {
+    expect(recognizeAgentProcess('/home/dev/.local/bin/reasonix')).toEqual({
+      agent: 'reasonix',
+      processName: 'reasonix'
+    })
+    expect(recognizeAgentProcess('C:/Users/dev/AppData/Roaming/npm/reasonix.cmd')).toEqual({
+      agent: 'reasonix',
+      processName: 'reasonix'
+    })
+    expect(isExpectedAgentProcess('/usr/local/bin/reasonix', 'reasonix')).toBe(true)
+    expect(isRecognizedAgentType('reasonix')).toBe(true)
+  })
+
   it('recognizes agent CLIs launched through interpreter wrappers', () => {
     expect(
       recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/codex')
