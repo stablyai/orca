@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -188,17 +189,11 @@ describe('nativeChat:readSession handler', () => {
     expect(subscribe).toBeDefined()
 
     const sent: { channel: string; payload: unknown }[] = []
-    let destroyedCb: (() => void) | undefined
-    const sender = {
+    const sender = Object.assign(new EventEmitter(), {
       id: 1,
       isDestroyed: () => false,
-      once: (event: string, cb: () => void) => {
-        if (event === 'destroyed') {
-          destroyedCb = cb
-        }
-      },
       send: (channel: string, payload: unknown) => sent.push({ channel, payload })
-    }
+    })
 
     const previousHome = process.env.HOME
     process.env.HOME = root
@@ -241,8 +236,8 @@ describe('nativeChat:readSession handler', () => {
       expect(appendedIds()).toContain('a-1')
 
       // Destroyed window tears down the watcher without error.
-      expect(destroyedCb).toBeDefined()
-      destroyedCb!()
+      expect(sender.listenerCount('destroyed')).toBe(1)
+      sender.emit('destroyed')
     } finally {
       if (previousHome === undefined) {
         delete process.env.HOME
@@ -264,17 +259,11 @@ describe('nativeChat:readSession handler', () => {
     expect(subscribe).toBeDefined()
 
     const sent: { channel: string; payload: unknown }[] = []
-    let destroyedCb: (() => void) | undefined
-    const sender = {
+    const sender = Object.assign(new EventEmitter(), {
       id: 7,
       isDestroyed: () => false,
-      once: (event: string, cb: () => void) => {
-        if (event === 'destroyed') {
-          destroyedCb = cb
-        }
-      },
       send: (channel: string, payload: unknown) => sent.push({ channel, payload })
-    }
+    })
 
     const previousHome = process.env.HOME
     process.env.HOME = root
@@ -290,7 +279,7 @@ describe('nativeChat:readSession handler', () => {
         }
       })
 
-      destroyedCb!()
+      sender.emit('destroyed')
     } finally {
       if (previousHome === undefined) {
         delete process.env.HOME
@@ -322,17 +311,11 @@ describe('nativeChat:readSession handler', () => {
     expect(subscribe).toBeDefined()
 
     let destroyed = false
-    let destroyedCb: (() => void) | undefined
-    const sender = {
+    const sender = Object.assign(new EventEmitter(), {
       id: 41,
       isDestroyed: () => destroyed,
-      once: (event: string, cb: () => void) => {
-        if (event === 'destroyed') {
-          destroyedCb = cb
-        }
-      },
       send: vi.fn()
-    }
+    })
 
     const previousHome = process.env.HOME
     process.env.HOME = root
@@ -346,9 +329,9 @@ describe('nativeChat:readSession handler', () => {
         }
       )
 
-      expect(destroyedCb).toBeDefined()
+      expect(sender.listenerCount('destroyed')).toBe(1)
       destroyed = true
-      destroyedCb!()
+      sender.emit('destroyed')
 
       await waitFor(() => _getNativeChatSenderCleanupCountForTest() === 0)
       expect(sender.send).not.toHaveBeenCalled()
