@@ -10,9 +10,12 @@ export type TerminalRunFacts = {
   firstUserInputAt: number | null
 }
 
+/** A cold restore starts a new process for a pane that had one, so it is never fresh. */
+type TerminalRunSpawnOrigin = PtySpawnCommitOrigin | 'cold-restore'
+
 type TerminalRunRecord = {
   incarnationId: string | null
-  spawnOrigin: PtySpawnCommitOrigin
+  spawnOrigin: TerminalRunSpawnOrigin
   firstUserInputAt: number | null
 }
 
@@ -22,16 +25,21 @@ export class TerminalRunFactsRegister {
 
   /** Once per process: a re-registration of the same incarnation keeps its facts. */
   recordSpawnCommit(
-    commit: Parameters<typeof spawnCommitBindingOrigin>[0] & { id: string; incarnationId?: string },
+    commit: Parameters<typeof spawnCommitBindingOrigin>[0] & {
+      id: string
+      incarnationId?: string
+      coldRestore?: object
+    },
     expectedSourceBinding?: unknown
   ): void {
     const incarnationId = commit.incarnationId ?? null
     if (this.runsByPtyId.get(commit.id)?.incarnationId === incarnationId) {
       return
     }
+    const origin = spawnCommitBindingOrigin(commit, expectedSourceBinding)
     this.runsByPtyId.set(commit.id, {
       incarnationId,
-      spawnOrigin: spawnCommitBindingOrigin(commit, expectedSourceBinding),
+      spawnOrigin: origin === 'spawn' && commit.coldRestore !== undefined ? 'cold-restore' : origin,
       firstUserInputAt: null
     })
   }
@@ -50,7 +58,7 @@ export class TerminalRunFactsRegister {
       return { freshSpawn: false, firstUserInputAt: null }
     }
     return {
-      freshSpawn: run.spawnOrigin !== 'reattach',
+      freshSpawn: run.spawnOrigin === 'spawn' || run.spawnOrigin === 'split',
       firstUserInputAt: run.firstUserInputAt
     }
   }

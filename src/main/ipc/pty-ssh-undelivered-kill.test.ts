@@ -311,6 +311,32 @@ describe('undelivered SSH stops', () => {
     }
   })
 
+  it('records nothing while a reversible stop owns the PTY and a restart stop joins it', async () => {
+    const store = createKillStore()
+    registerSshPtyProvider(
+      'ssh-1',
+      sshProviderStub(async () => {
+        throw new Error('socket closed')
+      })
+    )
+    setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
+    restorePtyIncarnation(SCOPED_PTY_ID, 'inc-f')
+    const { kill, runtime } = install(store)
+    const settleSleep = runtime.intentionalPtyStops.mark(SCOPED_PTY_ID, 'reversible', null)
+    const settleRestart = runtime.intentionalPtyStops.mark(SCOPED_PTY_ID, 'replaced', null)
+
+    try {
+      kill(SCOPED_PTY_ID)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(store.recordSshRemotePtyKillIntent).not.toHaveBeenCalled()
+    } finally {
+      settleRestart(false)
+      settleSleep(false)
+      unregisterSshPtyProvider('ssh-1')
+      deletePtyOwnership(SCOPED_PTY_ID)
+    }
+  })
+
   it('records nothing for a local PTY, which has no later host to ask', async () => {
     const store = createKillStore()
     setPtyOwnership('local-pty', null)

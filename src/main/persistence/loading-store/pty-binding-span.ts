@@ -5,29 +5,22 @@ export type PtyBindingSpanOutcome = 'fast_lane' | 'flushed' | 'refused' | 'threw
 
 /**
  * Who asked for the bind. `persistPtyBinding` cannot tell a fresh spawn from a warm remount, and
- * fresh spawns always flush, so a rate over all calls understates the reattach hit rate. The write
- * path never branches on it; the runtime's run facts record the spawn-commit value per process.
+ * fresh spawns always flush, so a rate over all calls understates the reattach hit rate. Metadata
+ * only: nothing in the write path may branch on it.
  */
 export type PtyBindingOrigin = 'reattach' | 'spawn' | 'relay_reattach' | 'split' | 'unknown'
 
 export type PtySpawnCommitOrigin = Extract<PtyBindingOrigin, 'reattach' | 'spawn' | 'split'>
 
-/** The spawn-commit paths share one rule: a split outranks a reattach, a reattach outranks a spawn.
- *  A cold restore and an adoption are reattaches: the pane had a process before this one. */
+/** The spawn-commit paths share one rule: a split outranks a reattach, a reattach outranks a spawn. */
 export function spawnCommitBindingOrigin(
-  commit: {
-    isReattach?: boolean
-    coldRestore?: object
-    agentSessionEnsure?: { disposition: string }
-  },
+  commit: { isReattach?: boolean; agentSessionEnsure?: { disposition: string } },
   expectedSourceBinding?: unknown
 ): PtySpawnCommitOrigin {
   if (expectedSourceBinding !== undefined) {
     return 'split'
   }
-  return commit.isReattach === true ||
-    commit.coldRestore !== undefined ||
-    commit.agentSessionEnsure?.disposition === 'adopted'
+  return commit.isReattach === true || commit.agentSessionEnsure?.disposition === 'adopted'
     ? 'reattach'
     : 'spawn'
 }

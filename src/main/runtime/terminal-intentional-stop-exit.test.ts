@@ -175,6 +175,29 @@ describe('intentional stops keep the pane through the exit', () => {
     ])
   })
 
+  it('labels the exit for both a sleep and a restart that stop the same process', async () => {
+    const harness = createHarness()
+    const settleSleep = harness.runtime.intentionalPtyStops.mark(
+      PTY_ID,
+      'reversible',
+      INCARNATION_ID
+    )
+
+    await stopReplacedPanePty(harness.deps, PTY_ID)
+    settleSleep(true)
+
+    expect(harness.boundPtyId()).toBe(PTY_ID)
+    expect(harness.rendererExits()).toEqual([
+      {
+        id: PTY_ID,
+        code: 0,
+        incarnationId: INCARNATION_ID,
+        preserveRendererBinding: true,
+        replacedByRestart: true
+      }
+    ])
+  })
+
   it('keeps the pane through the synthetic exit and the provider exit that follows it', async () => {
     const harness = createHarness({ lateProviderExit: true })
 
@@ -222,10 +245,12 @@ describe('intentional stops keep the pane through the exit', () => {
     await stopRendererOwnedPty(harness.deps, { id: PTY_ID, keepHistory: true })
 
     vi.advanceTimersByTime(SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS - 1)
-    expect(harness.runtime.intentionalPtyStops.claimExit(PTY_ID, INCARNATION_ID)).toBe('reversible')
+    expect(harness.runtime.intentionalPtyStops.claimExit(PTY_ID, INCARNATION_ID)).toEqual([
+      'reversible'
+    ])
     vi.advanceTimersByTime(1)
 
-    expect(harness.runtime.intentionalPtyStops.claimExit(PTY_ID, INCARNATION_ID)).toBeNull()
+    expect(harness.runtime.intentionalPtyStops.claimExit(PTY_ID, INCARNATION_ID)).toEqual([])
   })
 
   it('keeps the tab and its wake binding when the runtime puts the worktree to sleep', async () => {

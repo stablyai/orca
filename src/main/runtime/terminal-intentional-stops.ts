@@ -7,14 +7,17 @@ import { SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS } from '../ipc/pty/delivery/vis
  */
 export type TerminalIntentionalStopKind = 'reversible' | 'replaced'
 
+type IntentionalStopOwners = { inFlight: number; stopped: boolean }
+
 type IntentionalStop = {
-  kind: TerminalIntentionalStopKind
   /** Null until known; the first exit that claims the stop pins it to that process. */
   incarnationId: string | null
-  owners: number
-  stopped: boolean
+  /** Why per kind: overlapping stops of different kinds each hold their own label on the exit. */
+  ownersByKind: Map<TerminalIntentionalStopKind, IntentionalStopOwners>
   expiryTimer?: ReturnType<typeof setTimeout>
 }
+
+const NO_INTENTIONAL_STOP: readonly TerminalIntentionalStopKind[] = []
 
 /** The one register of PTY stops main made on purpose, read by every exit path. */
 export class TerminalIntentionalStops {
@@ -27,21 +30,18 @@ export class TerminalIntentionalStops {
     incarnationId: string | null
   ): (stopped: boolean) => void {
     let stop = this.stopsByPtyId.get(ptyId)
-    const joinsInFlightStop =
-      stop !== undefined &&
-      stop.owners > 0 &&
-      (stop.incarnationId === null ||
-        incarnationId === null ||
-        stop.incarnationId === incarnationId)
-    if (stop && joinsInFlightStop) {
-      stop.kind = kind
+    if (stop && this.joins(stop, incarnationId)) {
+      clearTimeout(stop.expiryTimer)
+      stop.expiryTimer = undefined
       stop.incarnationId ??= incarnationId
-      stop.owners += 1
     } else {
       clearTimeout(stop?.expiryTimer)
-      stop = { kind, incarnationId, owners: 1, stopped: false }
+      stop = { incarnationId, ownersByKind: new Map() }
       this.stopsByPtyId.set(ptyId, stop)
     }
+    const owners = stop.ownersByKind.get(kind) ?? { inFlight: 0, stopped: false }
+    owners.inFlight += 1
+    stop.ownersByKind.set(kind, owners)
     const owned = stop
     let settled = false
     return (stopped) => {
@@ -49,45 +49,61 @@ export class TerminalIntentionalStops {
         return
       }
       settled = true
-      owned.stopped ||= stopped
-      owned.owners -= 1
-      if (owned.owners > 0) {
-        return
+      owners.stopped ||= stopped
+      owners.inFlight -= 1
+      if (owners.inFlight === 0 && !owners.stopped) {
+        owned.ownersByKind.delete(kind)
       }
-      if (!owned.stopped) {
-        this.stopsByPtyId.delete(ptyId)
-        return
-      }
-      // Why a window: an SSH exit can arrive after the stop settles, and a synthetic exit can be
-      // followed by the provider's own; both describe the same stopped process.
-      owned.expiryTimer = setTimeout(() => {
-        if (this.stopsByPtyId.get(ptyId) === owned) {
-          this.stopsByPtyId.delete(ptyId)
-        }
-      }, SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS)
-      owned.expiryTimer.unref?.()
+      this.settleIfIdle(ptyId, owned)
     }
   }
 
-  /** The kind of stop this exit ends, or null when the process was not stopped on purpose. */
+  /** The kinds of stop this exit ends; empty when the process was not stopped on purpose. */
   claimExit(
     ptyId: string,
     exitIncarnationId: string | null | undefined
-  ): TerminalIntentionalStopKind | null {
+  ): readonly TerminalIntentionalStopKind[] {
     const stop = this.stopsByPtyId.get(ptyId)
     if (!stop) {
-      return null
+      return NO_INTENTIONAL_STOP
     }
     if (stop.incarnationId && exitIncarnationId && stop.incarnationId !== exitIncarnationId) {
-      return null
+      return NO_INTENTIONAL_STOP
     }
     stop.incarnationId ??= exitIncarnationId ?? null
-    return stop.kind
+    return [...stop.ownersByKind.keys()]
   }
 
   /** Whether a stop of this PTY that may still be undone is in flight. */
   isReversibleStopInFlight(ptyId: string): boolean {
-    const stop = this.stopsByPtyId.get(ptyId)
-    return stop?.kind === 'reversible' && stop.owners > 0
+    return (this.stopsByPtyId.get(ptyId)?.ownersByKind.get('reversible')?.inFlight ?? 0) > 0
+  }
+
+  // Why: a settled entry joins only its own known process, so an id reused by a process whose
+  // incarnation is not yet known never inherits the old stop.
+  private joins(stop: IntentionalStop, incarnationId: string | null): boolean {
+    if (stop.incarnationId !== null && stop.incarnationId === incarnationId) {
+      return true
+    }
+    const inFlight = [...stop.ownersByKind.values()].some((owners) => owners.inFlight > 0)
+    return inFlight && (stop.incarnationId === null || incarnationId === null)
+  }
+
+  private settleIfIdle(ptyId: string, stop: IntentionalStop): void {
+    if ([...stop.ownersByKind.values()].some((owners) => owners.inFlight > 0)) {
+      return
+    }
+    if (stop.ownersByKind.size === 0) {
+      this.stopsByPtyId.delete(ptyId)
+      return
+    }
+    // Why a window: an SSH exit can arrive after the stop settles, and a synthetic exit can be
+    // followed by the provider's own; both describe the same stopped process.
+    stop.expiryTimer = setTimeout(() => {
+      if (this.stopsByPtyId.get(ptyId) === stop) {
+        this.stopsByPtyId.delete(ptyId)
+      }
+    }, SYNTHETIC_KILL_EXIT_DUPLICATE_WINDOW_MS)
+    stop.expiryTimer.unref?.()
   }
 }

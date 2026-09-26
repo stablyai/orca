@@ -116,7 +116,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     }
     // Why both kinds: a sleep keeps its wake hint, and a restart's replacement takes the pane.
     const preservesIntentionallyStoppedSurface =
-      this.intentionalPtyStops.claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId) !== null
+      this.intentionalPtyStops.claimExit(ptyId, exitIncarnationId ?? pty?.incarnationId).length > 0
     advertisedUrlWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)

@@ -153,12 +153,12 @@ export function finalizePtyExitForRenderer(
       session.schedulePendingDataAfterCreditReport(true)
     }
   }
-  const intentionalStop =
-    session.runtime?.intentionalPtyStops?.claimExit(payload.id, payload.incarnationId) ?? null
+  const intentionalStops =
+    session.runtime?.intentionalPtyStops?.claimExit(payload.id, payload.incarnationId) ?? []
   session.mainWindow.webContents.send('pty:exit', {
     ...payload,
-    ...(intentionalStop === 'reversible' ? { preserveRendererBinding: true } : {}),
-    ...(intentionalStop === 'replaced' ? { replacedByRestart: true } : {})
+    ...(intentionalStops.includes('reversible') ? { preserveRendererBinding: true } : {}),
+    ...(intentionalStops.includes('replaced') ? { replacedByRestart: true } : {})
   })
 }
 
