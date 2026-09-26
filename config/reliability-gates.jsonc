@@ -20283,23 +20283,11 @@
       "protection": "partial",
       "owner": "relay",
       "layer": "registry-unit-and-local-websocket",
-      "surfaces": [
-        "relay host control activation"
-      ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "relay"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
-      "coveredProviders": [
-        "relay"
-      ],
+      "surfaces": ["relay host control activation"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["relay"],
       "coverageNotes": "Actual registry queue with controlled store latency plus local WebSocket proof and connection-capacity suites on macOS. No PostgreSQL or live remote host run. PTY, daemon, SSH process state, WSL execution and folder/git workspace behavior are unaffected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/cloud/apps/relay/src/host-session-registry.ts"
