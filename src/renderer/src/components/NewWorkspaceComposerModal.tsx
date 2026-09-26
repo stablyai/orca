@@ -25,7 +25,11 @@ import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../..
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
-import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import {
+  getWorkspaceComposerInitialFocusTarget,
+  isComposerProjectSelectShortcut,
+  openWorkspaceComposerProjectSelect
+} from '@/lib/workspace-composer-initial-focus'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
 
 // Why: match App-level AddRepoDialog loading — the add flow is off the hot
@@ -235,12 +239,13 @@ function QuickTabBody({
       ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
       : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
-  // Cmd/Ctrl+Enter submits. Escape belongs to the dialog's dismissable layer:
-  // the page-style "blur the focused field first" rule assumes the user chose
-  // that field, but this dialog auto-focuses the name input on open, so handling
-  // Escape here swallowed every first press and left the composer stuck open.
-  // Radix also closes only the topmost layer, so nested popovers/selects/dialogs
-  // keep their own Escape without needing a guard here.
+  // Cmd/Ctrl+Enter submits, Cmd/Ctrl+. opens the project select. Escape belongs
+  // to the dialog's dismissable layer: the page-style "blur the focused field
+  // first" rule assumes the user chose that field, but this dialog auto-focuses
+  // the name input on open, so handling Escape here swallowed every first press
+  // and left the composer stuck open. Radix also closes only the topmost layer,
+  // so nested popovers/selects/dialogs keep their own Escape without needing a
+  // guard here.
   const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
   useEffect(() => {
     if (!active || nestedDialogOpen) {
@@ -249,6 +254,15 @@ function QuickTabBody({
       return
     }
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (isComposerProjectSelectShortcut(event)) {
+        const root = composerRef.current
+        if (!root || !openWorkspaceComposerProjectSelect(root)) {
+          return
+        }
+        event.preventDefault()
+        return
+      }
+
       // Why: workspace creation is screen-local submit behavior, not a
       // user-configurable app command.
       if (!isScreenSubmitShortcut(event)) {
