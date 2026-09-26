@@ -36,6 +36,7 @@ export function BrowserNavigationControlRow({
   reloadControl,
   reloadLabel,
   showTourAnchors = true,
+  rowRef,
   children
 }: {
   controls: BrowserNavigationControls
@@ -46,10 +47,12 @@ export function BrowserNavigationControlRow({
   reloadLabel?: string
   /** Off for surfaces the browsing tour does not cover — a second anchor would steal its steps. */
   showTourAnchors?: boolean
+  rowRef?: React.Ref<HTMLDivElement>
   children?: React.ReactNode
 }): React.JSX.Element {
   return (
     <div
+      ref={rowRef}
       className="relative z-10 flex shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
       {...(showTourAnchors ? { 'data-contextual-tour-target': 'browser-toolbar' } : {})}
     >
