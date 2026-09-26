@@ -18,6 +18,7 @@ import {
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 import { installCommandInferredPaneAgent } from './command-inferred-pane-agent'
+import { isCrossMachineRecoveryRecord } from '../../../../../shared/cross-machine-recovery-session-ops'
 
 export function installSleepingRecordAccess(session: ConnectPanePtySession): void {
   session.getSleepingRecordForPane = (
@@ -25,13 +26,17 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
   ): { paneKey: string; record: SleepingAgentSessionRecord } | null => {
     const stableRecord = state.sleepingAgentSessionsByPaneKey[session.cacheKey]
     if (stableRecord) {
-      return { paneKey: session.cacheKey, record: stableRecord }
+      // Why: pane cold restore must not consume an imported session; the pane offers Resume instead.
+      return isCrossMachineRecoveryRecord(stableRecord)
+        ? null
+        : { paneKey: session.cacheKey, record: stableRecord }
     }
     const legacyMatches = Object.entries(state.sleepingAgentSessionsByPaneKey).filter(
       ([paneKey, record]) => {
         const legacy = parseLegacyNumericPaneKey(paneKey)
         return (
           legacy?.tabId === session.deps.tabId &&
+          !isCrossMachineRecoveryRecord(record) &&
           record.worktreeId === session.deps.worktreeId &&
           (!record.tabId || record.tabId === session.deps.tabId)
         )

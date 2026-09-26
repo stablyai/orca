@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/terminal-tab-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { isCrossMachineRecoveryRecord } from '../../../shared/cross-machine-recovery-session-ops'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -23,6 +24,7 @@ export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): 
 export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {
   return (
     record.origin !== 'quit' &&
+    !isCrossMachineRecoveryRecord(record) &&
     !(record.origin === 'live' && record.interrupted === true) &&
     record.state === 'done'
   )

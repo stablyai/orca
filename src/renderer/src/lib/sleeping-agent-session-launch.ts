@@ -15,6 +15,7 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { translate } from '@/i18n/i18n'
+import { isCrossMachineRecoveryRecord } from '../../../shared/cross-machine-recovery-session-ops'
 
 export type ResumeSleepingAgentSessionsOptions = {
   suppressNavigation?: boolean
@@ -66,6 +67,9 @@ export function launchSleepingAgentSession(
   record: SleepingAgentSessionRecord,
   options?: ResumeSleepingAgentSessionsOptions
 ): boolean {
+  if (isCrossMachineRecoveryRecord(record)) {
+    return false
+  }
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
   const resumeTarget = getResumeLaunchTarget(record.worktreeId)

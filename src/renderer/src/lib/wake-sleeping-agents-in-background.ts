@@ -12,6 +12,7 @@ import {
   isPassiveCompletedHibernationEvidence,
   recordPaneIsOwnedByPreservedPane
 } from './sleeping-agent-pane-ownership'
+import { isCrossMachineRecoveryRecord } from '../../../shared/cross-machine-recovery-session-ops'
 
 type BackgroundSleepingAgentWakeDispatcherOptions = {
   isWorkspaceSessionReady?: () => boolean
@@ -167,7 +168,8 @@ function getCanonicalPassiveWakeRecords(
 export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): void {
   const worktreeRecords = Object.values(
     useAppStore.getState().sleepingAgentSessionsByPaneKey
-  ).filter((record) => record.worktreeId === worktreeId)
+    // Why: imported cross-machine sessions launch only through the explicit Resume affordance.
+  ).filter((record) => record.worktreeId === worktreeId && !isCrossMachineRecoveryRecord(record))
   // Why: nothing is slept here, so there is no wake work. Skipping is what keeps
   // a phone browsing many worktrees from permanently background-mounting each one
   // (and reattaching its PTYs) on the desktop host it is paired to.
