@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getMarkdownRichModeUnsupportedReason } from './markdown-rich-mode'
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
 
+vi.mock('./markdown-rich-html-validation', () => ({
+  getRichMarkdownHtmlValidationOutput: vi.fn(() => null)
+}))
 vi.mock('./markdown-round-trip', () => ({
   getRichMarkdownRoundTripOutput: vi.fn((content: string) => content)
 }))
@@ -26,7 +29,7 @@ describe('rich Markdown comment scanning', () => {
     ['```html\n<!--complete-->\n```', null],
     ['<!--complete-->\n[a]: https://example.com', 'reference-links'],
     ['<!--complete-->\n[^a]: footnote', 'reference-links']
-  ] as const)('preserves the decision for %j', (content, expected) => {
+  ] as const)('detects unsupported syntax in %j when both validators fail', (content, expected) => {
     vi.mocked(getRichMarkdownRoundTripOutput).mockReturnValue(null)
     expect(getMarkdownRichModeUnsupportedReason(content)).toBe(expected)
   })

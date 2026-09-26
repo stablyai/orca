@@ -2,6 +2,12 @@ import { Node, mergeAttributes } from '@tiptap/core'
 import { isEditableDetailsHtmlBlock, matchDetailsHtmlBlock } from './details-markdown-html'
 import { formatMarkdownDocLinkBody, parseMarkdownDocLink } from './markdown-doc-links'
 import { normalizeMarkdownReferenceLinks } from './markdown-reference-link-normalization'
+import { createMarkdownCodeSpanScanner } from './markdown-code-span-scanner'
+import {
+  createMarkdownFenceTracker,
+  findMarkdownLineEnd,
+  skipMarkdownLineBreak
+} from './markdown-fence-scanner'
 import type {
   RichMarkdownEditorCodec,
   RichMarkdownSourceKind,
@@ -23,9 +29,13 @@ function isEscaped(content: string, index: number): boolean {
   return backslashCount % 2 === 1
 }
 
-function findLineEnd(content: string, start: number): number {
-  const newlineIndex = content.indexOf('\n', start)
-  return newlineIndex === -1 ? content.length : newlineIndex
+// A lone CR breaks a line for marked, so it starts one here too.
+function isAtLineStart(content: string, index: number): boolean {
+  if (index === 0) {
+    return true
+  }
+  const previous = content.charCodeAt(index - 1)
+  return previous === 10 || (previous === 13 && content.charCodeAt(index) !== 10)
 }
 
 function isLineOnlyHtml(line: string): boolean {
@@ -42,13 +52,8 @@ function isLineOnlyHtml(line: string): boolean {
 }
 
 function matchBlockHtml(content: string, start: number): string | null {
-  const lineEnd = findLineEnd(content, start)
-  const line = content.slice(start, lineEnd)
-  if (!isLineOnlyHtml(line)) {
-    return null
-  }
-
-  return line
+  const line = content.slice(start, findMarkdownLineEnd(content, start))
+  return isLineOnlyHtml(line) ? line : null
 }
 
 export function encodeRawMarkdownHtmlForRichEditor(
@@ -60,76 +65,33 @@ export function encodeRawMarkdownHtmlForRichEditor(
   const lastCommentClose = normalizedContent.lastIndexOf('-->')
   const { transport } = codec
   let index = 0
-  let isLineStart = true
-  let activeFence: '`' | '~' | null = null
-  let activeFenceLength = 0
+  const fence = createMarkdownFenceTracker()
+  const spans = createMarkdownCodeSpanScanner(normalizedContent)
   let result = ''
-  const nonWhitespace = /\S/g
-  const fencePrefix = /(`{3,}|~{3,})/y
-  let fenceProbe = -1
-  let fenceMatch: RegExpExecArray | null = null
-
   while (index < normalizedContent.length) {
+    const isLineStart = isAtLineStart(normalizedContent, index)
     if (isLineStart) {
-      // Reuse the lookahead across blank lines, preserving cross-line fence semantics.
-      if (index > fenceProbe) {
-        nonWhitespace.lastIndex = index
-        fenceProbe = nonWhitespace.exec(normalizedContent)?.index ?? normalizedContent.length
-        fencePrefix.lastIndex = fenceProbe
-        fenceMatch = fencePrefix.exec(normalizedContent)
-      }
-      if (fenceMatch) {
-        const fenceChar = fenceMatch[1][0] as '`' | '~'
-        const fenceLength = fenceMatch[1].length
-        if (activeFence === null) {
-          activeFence = fenceChar
-          activeFenceLength = fenceLength
-        } else if (activeFence === fenceChar && fenceLength >= activeFenceLength) {
-          activeFence = null
-          activeFenceLength = 0
-        }
+      const lineEnd = findMarkdownLineEnd(normalizedContent, index)
+      // Consume the fence line so a closer cannot become an inline-code opener.
+      if (fence.consume(normalizedContent.slice(index, lineEnd))) {
+        const end = skipMarkdownLineBreak(normalizedContent, lineEnd)
+        result += normalizedContent.slice(index, end)
+        index = end
+        continue
       }
     }
 
-    if (activeFence) {
-      const nextChar = normalizedContent[index]
-      result += nextChar
-      isLineStart = nextChar === '\n'
+    if (fence.insideFence) {
+      result += normalizedContent[index]
       index += 1
       continue
     }
 
     if (normalizedContent[index] === '`') {
-      let tickCount = 0
-      while (normalizedContent[index + tickCount] === '`') {
-        tickCount += 1
-      }
-
-      // Why: the closing backtick sequence must be exactly tickCount backticks,
-      // not a longer run. We scan forward to find the first exact match.
-      let searchFrom = index + tickCount
-      let closingIndex = -1
-      while (searchFrom < normalizedContent.length) {
-        const candidate = normalizedContent.indexOf('`'.repeat(tickCount), searchFrom)
-        if (candidate === -1) {
-          break
-        }
-        // Verify the match is exactly tickCount backticks (no extra backtick before/after)
-        if (
-          (candidate === 0 || normalizedContent[candidate - 1] !== '`') &&
-          normalizedContent[candidate + tickCount] !== '`'
-        ) {
-          closingIndex = candidate
-          break
-        }
-        searchFrom = candidate + 1
-      }
-
-      if (closingIndex !== -1) {
-        const rawSpan = normalizedContent.slice(index, closingIndex + tickCount)
-        result += rawSpan
-        isLineStart = rawSpan.endsWith('\n')
-        index = closingIndex + tickCount
+      const spanEnd = spans.findSpanEnd(index)
+      if (spanEnd !== null) {
+        result += normalizedContent.slice(index, spanEnd)
+        index = spanEnd
         continue
       }
     }
@@ -214,9 +176,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
       }
     }
 
-    const nextChar = normalizedContent[index]
-    result += nextChar
-    isLineStart = nextChar === '\n'
+    result += normalizedContent[index]
     index += 1
   }
 
