@@ -228,7 +228,7 @@ export class MobileRelayRpcStreams {
     if (this.hasLiveOwner(unsubscribe)) {
       return
     }
-    // Why: added after the slot-only sibling check; an old host strips it and would evict the live sibling.
+    // Why: added after the sibling check; an old host strips it and would evict the live sibling.
     const params = terminalRequestId
       ? { ...unsubscribe.params, requestId: terminalRequestId }
       : unsubscribe.params
