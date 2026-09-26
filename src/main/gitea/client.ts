@@ -14,6 +14,7 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { readCurrentWindowsEnvOverrides } from '../env/windows-env-refresh'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Why: self-hosted Forgejo can take ~5s to serve one /pulls page (it loads
@@ -41,8 +42,18 @@ type RequestOptions = {
   timeoutMs?: number
 }
 
+// Why (#14740): a Windows GUI launch inherits Explorer's stale environment
+// snapshot, so a rotated token or changed URL never reaches the packaged build
+// until sign-out. The registry overlay is refreshed before each status check;
+// pull-request creation reads the same overlay.
+let windowsEnvOverlay: Record<string, string> = {}
+
+export async function refreshGiteaEnvOverlay(): Promise<void> {
+  windowsEnvOverlay = await readCurrentWindowsEnvOverrides()
+}
+
 function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
+  const value = (windowsEnvOverlay[name] ?? process.env[name] ?? '').trim()
   return value.length > 0 ? value : null
 }
 
@@ -166,6 +177,7 @@ function matchesBranch(raw: RawGiteaPullRequest, branchName: string): boolean {
 }
 
 export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
+  await refreshGiteaEnvOverlay()
   const config = getAuthConfig()
   const tokenConfigured = config.token !== null
   if (!config.apiBaseUrl && !tokenConfigured) {
