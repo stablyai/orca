@@ -9,6 +9,7 @@ import {
   structuredAgentSessionPayloadFingerprint
 } from '../../../shared/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   StructuredAgentSessionLaunchCancelledError,
   type StructuredAgentLaunchReceipt
@@ -87,7 +88,7 @@ async function setLaunchOption(
     >({ kind: 'local' }, 'agentSession.setOption', {
       envelope: {
         sessionId,
-        clientOperationId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
+        clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid),
         expectedRuntimeFence: fence,
         payloadFingerprint: structuredAgentSessionPayloadFingerprint({
           method: 'agentSession.setOption',

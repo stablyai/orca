@@ -216,6 +216,10 @@ export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
 // older host that would reject the whole cancellation instead of falling back to turn stop.
 export const AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY =
   'agent-session.prompt-cancel.v1' as const
+// Why: agentSession.respondToQuestion has a strict schema, so clients must not send structured
+// `answers` to an older host; they fall back to the answer packed into `optionId`.
+export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
+  'agent-session.question-answers.v1' as const
 // Why: the host now publishes rows for work that is live inside a turn, and such
 // a row carries `stoppable: false` because no targeted stop can reach it. A
 // reader that predates the field draws a per-row Stop on every row it is given,
@@ -386,6 +390,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,

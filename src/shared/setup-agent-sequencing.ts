@@ -6,6 +6,7 @@ import {
   type SetupRunnerCommandShell,
   type SetupRunnerShell
 } from './setup-runner-command'
+import { createNonSecureContextUuid } from './non-secure-context-uuid'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 // Exported so the gate and its tests share one definition.
@@ -28,11 +29,7 @@ export function resolveSetupAgentSequenceLaunchCommand(
 }
 
 export function createSetupAgentSequenceNonce(): string {
-  const cryptoApi = globalThis.crypto
-  if (typeof cryptoApi?.randomUUID === 'function') {
-    return cryptoApi.randomUUID()
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  return createNonSecureContextUuid()
 }
 
 export function createSequencedSetupAgentCommands(args: {
