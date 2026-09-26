@@ -4,6 +4,7 @@ import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import { resetWebSessionBrowserPlacementsForTests } from './web-session-browser-placement'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
+import { resetWebSessionTerminalPlacementsForTests } from './web-session-terminal-placement'
 
 export const ENVIRONMENT_ID = 'web-env-1'
 export const SECOND_ENVIRONMENT_ID = 'web-env-2'
@@ -230,5 +231,6 @@ export function resetTerminalCreateEnvironment(): void {
   vi.unstubAllGlobals()
   clearRuntimeCompatibilityCacheForTests()
   resetWebSessionFocusIntentForTests()
+  resetWebSessionTerminalPlacementsForTests()
   vi.clearAllMocks()
 }

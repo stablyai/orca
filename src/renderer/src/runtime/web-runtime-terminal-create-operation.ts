@@ -81,6 +81,7 @@ export async function createWebRuntimeSessionTerminalResult(
   let hostCreated = false
   let createdTabId: string | undefined
   let createdLeafId: string | undefined
+  let legacyAlreadyPlacedInGroup = false
   try {
     const agent = args.launchAgent ?? args.agent
     const agentArgsOverride =
@@ -89,7 +90,6 @@ export async function createWebRuntimeSessionTerminalResult(
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
       const keyboardOptions = createAgentSessionKeyboardOptions(keyboardProtocol)
-      let legacyAlreadyPlacedInGroup = false
       // Why: structured creation cannot yet express afterTabId; keep the exact legacy placement contract until it can.
       // Why: focus belongs to the paired client; a headless execution host has no renderer to focus.
       // Why: rebuilding a prepared command through host authority can discard its embedded prompt and delivery flags.
@@ -206,18 +206,6 @@ export async function createWebRuntimeSessionTerminalResult(
       createdLeafId = legacyAlreadyPlacedInGroup
         ? created.terminal.leafId
         : createdTerminalLeafId(created.terminal)
-      if (args.targetGroupId && createdTabId && !legacyAlreadyPlacedInGroup) {
-        await callEnvironment({
-          method: 'session.tabs.move',
-          params: {
-            worktree: toRuntimeWorktreeSelector(args.worktreeId),
-            tabId: createdTabId,
-            targetGroupId: args.targetGroupId,
-            kind: 'move-to-group'
-          },
-          timeoutMs: 15_000
-        })
-      }
     } else {
       const response = await callEnvironment({
         method: 'session.tabs.createTerminal',
@@ -256,6 +244,19 @@ export async function createWebRuntimeSessionTerminalResult(
         hostTabId: webTerminalPlacementParentTabId(createdTabId),
         groupId: args.targetGroupId
       })
+      if (agent && !legacyAlreadyPlacedInGroup) {
+        // Why: the tab is already visible; recording first lets a drag during this round trip win.
+        await callEnvironment({
+          method: 'session.tabs.move',
+          params: {
+            worktree: toRuntimeWorktreeSelector(args.worktreeId),
+            tabId: createdTabId,
+            targetGroupId: args.targetGroupId,
+            kind: 'move-to-group'
+          },
+          timeoutMs: 15_000
+        })
+      }
     }
     if (args.activate !== false && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
       // Why: record focus intent so the reconcile follows the snapshot's active

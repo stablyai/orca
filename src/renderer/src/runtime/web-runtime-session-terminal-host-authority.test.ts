@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createWebRuntimeAgentSessionTerminal,
   createWebRuntimeAgentSessionTerminalWithLaunchDraft,
-  createWebRuntimeSessionTerminal
+  createWebRuntimeSessionTerminal,
+  moveWebRuntimeSessionTab
 } from './web-runtime-session'
 import { peekWebSessionFocusIntent } from './web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
@@ -642,4 +643,92 @@ describe('createWebRuntimeSessionTerminal', () => {
       text: 'https://github.com/o/r/issues/12'
     })
   })
+
+  // #22792: the new tab is visible while the host places it, so a drag in that window must stick.
+  it.each([
+    { dragDuringHostMove: true, settlementMoves: 0 },
+    { dragDuringHostMove: false, settlementMoves: 1 }
+  ])(
+    'settles into the requested pane unless the user dragged the tab (drag: $dragDuringHostMove)',
+    async ({ dragDuringHostMove, settlementMoves }) => {
+      const createdTabId = 'web-terminal-host-tab-2'
+      // The tab sits in the right split: either the user dragged it there, or it was mis-adopted.
+      mocks.getState.mockReturnValue({
+        ...mocks.getState(),
+        unifiedTabsByWorktree: { [WORKTREE_ID]: [{ id: createdTabId, groupId: 'group-right' }] },
+        groupsByWorktree: {
+          [WORKTREE_ID]: [
+            { id: 'group-left', tabOrder: [] },
+            { id: 'group-right', tabOrder: [createdTabId] }
+          ]
+        },
+        moveUnifiedTabToGroup: mocks.moveUnifiedTabToGroup
+      })
+      const runtimeCall = vi.fn(
+        async (request: { method: string; params?: { kind?: string; tabId?: string } }) => {
+          if (request.method === 'status.get') {
+            return {
+              id: 'status',
+              ok: true,
+              result: {
+                runtimeId: 'runtime-1',
+                graphStatus: 'ready',
+                runtimeProtocolVersion: 3,
+                minCompatibleRuntimeClientVersion: 2,
+                capabilities: ['agent-session.host-authority.v1']
+              }
+            }
+          }
+          if (request.method === 'terminal.createAgentSession') {
+            return {
+              id: 'create',
+              ok: true,
+              result: {
+                terminal: {
+                  handle: 'term_created',
+                  worktreeId: WORKTREE_ID,
+                  tabId: 'host-tab-2',
+                  paneKey: `host-tab-2:${FOCUS_LEAF_ID}`
+                },
+                disposition: 'created'
+              }
+            }
+          }
+          if (
+            dragDuringHostMove &&
+            request.method === 'session.tabs.move' &&
+            request.params?.kind === 'move-to-group'
+          ) {
+            await moveWebRuntimeSessionTab({
+              worktreeId: WORKTREE_ID,
+              tabId: createdTabId,
+              targetGroupId: 'group-left',
+              kind: 'split',
+              splitDirection: 'right'
+            })
+          }
+          return request.method === 'session.tabs.list'
+            ? { id: 'list', ok: true, result: makeSnapshot() }
+            : { id: 'move', ok: true, result: { moved: true } }
+        }
+      )
+      vi.stubGlobal('window', {
+        api: { runtimeEnvironments: { call: runtimeCall } }
+      })
+
+      await expect(
+        createWebRuntimeSessionTerminal({
+          worktreeId: WORKTREE_ID,
+          launchAgent: 'codex',
+          targetGroupId: 'group-left',
+          activate: true
+        })
+      ).resolves.toEqual({ status: 'created' })
+
+      expect(
+        runtimeCall.mock.calls.filter(([request]) => request.params?.kind === 'split')
+      ).toHaveLength(dragDuringHostMove ? 1 : 0)
+      expect(mocks.moveUnifiedTabToGroup).toHaveBeenCalledTimes(settlementMoves)
+    }
+  )
 })

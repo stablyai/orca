@@ -9,6 +9,7 @@ import {
   resetWebSessionBrowserPlacementsForTests
 } from './web-session-browser-placement'
 import {
+  markWebSessionTerminalPlacementUserMoved,
   recordWebSessionTerminalPlacement,
   resetWebSessionTerminalPlacementsForTests
 } from './web-session-terminal-placement'
@@ -610,5 +611,85 @@ describe('client-owned tab placement for paired worktrees', () => {
     expect(patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.id === T2)?.groupId).toBe(
       PREVIEW_GROUP
     )
+  })
+
+  describe('a terminal whose create recorded the left pane but now sits in the right split', () => {
+    /** Applies one host snapshot and returns the store as it looks afterwards. */
+    function applySnapshotWithT2InRightSplit(opts: {
+      userMoved: boolean
+    }): WebSessionTabsSyncState {
+      const placement = { environmentId: ENV, worktreeId: WT, hostTabId: 'host-tab-2' }
+      recordWebSessionTerminalPlacement({ ...placement, groupId: HOST_GROUP })
+      if (opts.userMoved) {
+        markWebSessionTerminalPlacementUserMoved(placement)
+      }
+      const state = makeState({
+        activeGroupIdByWorktree: { [WT]: PREVIEW_GROUP },
+        groupsByWorktree: {
+          [WT]: [
+            { id: HOST_GROUP, worktreeId: WT, activeTabId: T1, tabOrder: [T1] },
+            { id: PREVIEW_GROUP, worktreeId: WT, activeTabId: T2, tabOrder: [T2] }
+          ]
+        },
+        layoutByWorktree: { [WT]: SPLIT_LAYOUT },
+        unifiedTabsByWorktree: {
+          [WT]: [terminalUnifiedTab(T1, HOST_GROUP, 0), terminalUnifiedTab(T2, PREVIEW_GROUP, 1)]
+        }
+      })
+      const patch = applyWebSessionTabsSnapshot(
+        state,
+        makeSnapshot(
+          [
+            terminalSurface('host-tab-1', LEAF_ID, 'terminal-1'),
+            terminalSurface('host-tab-2', SECOND_LEAF_ID, 'terminal-2', true)
+          ],
+          {
+            activeGroupId: HOST_GROUP,
+            activeTabId: `host-tab-2::${SECOND_LEAF_ID}`,
+            activeTabType: 'terminal',
+            tabGroups: [
+              {
+                id: HOST_GROUP,
+                activeTabId: 'host-tab-2',
+                tabOrder: ['host-tab-1', 'host-tab-2'],
+                recentTabIds: []
+              }
+            ]
+          }
+        ),
+        ENV,
+        NOW
+      ) as Partial<WebSessionTabsSyncState>
+      return { ...state, ...patch }
+    }
+
+    function groupIdOf(state: WebSessionTabsSyncState, tabId: string): string | undefined {
+      return state.unifiedTabsByWorktree[WT]?.find((tab) => tab.id === tabId)?.groupId
+    }
+
+    // #22792: the split showed for a frame, then a snapshot put the tab back in the left pane.
+    it('keeps it in the split the user dragged it into', () => {
+      const next = applySnapshotWithT2InRightSplit({ userMoved: true })
+
+      expect(next.groupsByWorktree[WT]?.map((group) => [group.id, group.tabOrder])).toEqual([
+        [HOST_GROUP, [T1]],
+        [PREVIEW_GROUP, [T2]]
+      ])
+      expect(groupIdOf(next, T2)).toBe(PREVIEW_GROUP)
+      expect(layoutLeafGroupIds(next.layoutByWorktree[WT] ?? SPLIT_LAYOUT)).toEqual([
+        HOST_GROUP,
+        PREVIEW_GROUP
+      ])
+    })
+
+    // A snapshot can adopt the tab outside its pane before the record exists; the record repairs that.
+    it('still moves an untouched tab into the recorded pane', () => {
+      const next = applySnapshotWithT2InRightSplit({ userMoved: false })
+
+      expect(next.groupsByWorktree[WT]?.find((group) => group.id === HOST_GROUP)?.tabOrder).toEqual(
+        [T1, T2]
+      )
+      expect(groupIdOf(next, T2)).toBe(HOST_GROUP)
+    })
   })
 })

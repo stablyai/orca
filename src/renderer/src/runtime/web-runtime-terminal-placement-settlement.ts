@@ -2,6 +2,7 @@ import { insertUnifiedTabAfterAnchor } from '../lib/unified-tab-anchor-insertion
 import { useAppStore } from '../store'
 import {
   forgetWebSessionTerminalPlacement,
+  isWebSessionTerminalPlacementUserMoved,
   webTerminalPlacementParentTabId
 } from './web-session-terminal-placement'
 import {
@@ -38,7 +39,8 @@ export async function settleWebRuntimeTerminalPlacement(
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
     const tab = findTab()
-    if (!tab) {
+    // Why: a move the user made while the create was settling is where they want the tab.
+    if (!tab || isWebSessionTerminalPlacementUserMoved({ environmentId, worktreeId, hostTabId })) {
       return
     }
     const anchorId = placement.afterTabId
