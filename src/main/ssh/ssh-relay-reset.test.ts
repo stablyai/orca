@@ -14,7 +14,9 @@ import { execCommand } from './ssh-relay-deploy-helpers'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
 import type { SshConnection } from './ssh-connection'
 
-const TARGET_PID = '11111'
+// Why: above any real pid_max, so the pgrep fallback's self/parent filter ($$ and $PPID)
+// can never drop the target as a false self-match and flake the assertion.
+const TARGET_PID = '999999999'
 const UNRELATED_PID = '22222'
 
 type LsofMode = 'match' | 'empty'
