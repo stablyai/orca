@@ -1,4 +1,8 @@
 import type { AgentJournalMessageItem, AgentJournalSubmission } from './agent-session-journal-types'
+import {
+  parseAgentSessionWriteFailure,
+  type AgentSessionWriteFailure
+} from './agent-session-refusal-notice'
 import { agentSessionRefusalOperationState } from './agent-session-refusal-retry'
 import type {
   AgentSessionMutationEnvelope,
@@ -21,7 +25,30 @@ export type StructuredAgentSessionOutboxEntry = {
   source?: 'launch'
   /** Why the last attempt did not go through. Lives on the message so it goes when the message
    *  is sent again or delivered, instead of outliving it as a separate error. */
-  notice?: string
+  lastFailure?: StructuredAgentSessionAttemptFailure
+}
+
+/** Kept as the fact, not the words: the Retry row chooses those when it shows the entry. */
+export type StructuredAgentSessionAttemptFailure =
+  | AgentSessionWriteFailure
+  /** The host recorded the message and the provider turned it down, with the provider's reason. */
+  | { kind: 'rejected'; reason: string | null }
+
+function parseStructuredAgentSessionAttemptFailure(
+  value: unknown
+): StructuredAgentSessionAttemptFailure | undefined {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    value.kind === 'rejected' &&
+    'reason' in value
+  ) {
+    return value.reason === null || typeof value.reason === 'string'
+      ? { kind: 'rejected', reason: value.reason }
+      : undefined
+  }
+  return parseAgentSessionWriteFailure(value)
 }
 
 export type StructuredAgentSessionAttachment = {
@@ -183,6 +210,8 @@ export function parseStructuredAgentSessionOutboxEntry(
   ) {
     return null
   }
+  // A malformed failure is dropped: the row then says only that the message was not sent.
+  const lastFailure = parseStructuredAgentSessionAttemptFailure(entry.lastFailure)
   return {
     clientMessageId: entry.clientMessageId,
     sessionId,
@@ -196,7 +225,7 @@ export function parseStructuredAgentSessionOutboxEntry(
         ? entry.retryAfterUnknownSubmittedAt
         : null,
     ...(entry.source === 'launch' ? { source: 'launch' as const } : {}),
-    ...(typeof entry.notice === 'string' ? { notice: entry.notice } : {})
+    ...(lastFailure ? { lastFailure } : {})
   }
 }
 

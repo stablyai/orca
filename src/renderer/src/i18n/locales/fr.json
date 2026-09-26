@@ -17322,6 +17322,31 @@
   },
   "components": {
     "native-chat": {
+      "writeNotice": {
+        "notDoneSend": "Votre message n'a pas été envoyé.",
+        "tryAgainSend": "Cliquez sur Réessayer pour le renvoyer.",
+        "tryAgainComposerSend": "Renvoyez-le.",
+        "notDoneStop": "L'agent n'a pas été arrêté.",
+        "tryAgainStop": "Appuyez de nouveau sur Arrêter.",
+        "notDoneAnswer": "Votre réponse n'a pas été envoyée.",
+        "tryAgainAnswer": "Répondez de nouveau.",
+        "notDoneOption": "Le paramètre n'a pas été modifié.",
+        "tryAgainOption": "Choisissez-le de nouveau.",
+        "notDoneCommand": "La commande n'a pas été exécutée.",
+        "tryAgainCommand": "Exécutez de nouveau la commande.",
+        "notDoneGoal": "L'objectif n'a pas été modifié.",
+        "tryAgainGoal": "Définissez de nouveau l'objectif.",
+        "ownerUnconfirmed": "Orca n'a pas pu confirmer quel processus d'agent gère ce chat.",
+        "capacity": "Orca traite trop de requêtes pour ce chat.",
+        "outcomeUnknown": "Orca n'a pas pu confirmer si l'action a abouti. Vérifiez le chat avant de réessayer.",
+        "questionChanged": "Cette question a déjà reçu une réponse ou a changé.",
+        "sessionMissing": "Orca n'a pas trouvé la session d'agent de ce chat.",
+        "historyUnreadable": "Orca n'a pas pu lire l'historique enregistré de ce chat.",
+        "unsupported": "L'instance d'Orca qui exécute ce chat ne le prend pas en charge. Mettez Orca à jour, puis réessayez.",
+        "unreachable": "Orca n'a pas pu joindre l'agent.",
+        "rejectedUnreachable": "Impossible de joindre l'agent. Votre message n'a pas été envoyé — cliquez sur Réessayer pour le renvoyer.",
+        "rejectedInternal": "Orca n'a pas pu envoyer votre message — cliquez sur Réessayer pour le renvoyer."
+      },
       "composer": {
         "imageUnsupported": "Le collage d'image n'est pas pris en charge pour cet agent.",
         "send": "Envoyer",

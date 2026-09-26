@@ -11,8 +11,7 @@ import { toast } from 'sonner'
 import * as conversationCommands from './structured-conversation-command-send'
 import type { AgentSessionMutationResult } from '../../../../shared/agent-session-wire'
 import {
-  agentSessionRefusalNotice,
-  agentSessionWriteFailureNotice,
+  agentSessionRefusalFailure,
   agentSessionWriteKindForMethod as writeKind
 } from '../../../../shared/agent-session-refusal-notice'
 import { agentSessionRefusalOperationState } from '../../../../shared/agent-session-refusal-retry'
@@ -20,6 +19,7 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/str
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { structuredSessionOperationId } from './use-structured-agent-session-outbox'
+import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 
 export type StructuredAgentSessionWriteOutcome<T> =
   | { kind: 'done'; value: T }
@@ -95,7 +95,10 @@ export function useStructuredAgentSessionMutate(args: {
         return enabledRef.current && stateRef.current.fence === targetFence
           ? {
               kind: 'not-done',
-              notice: agentSessionWriteFailureNotice(writeKind(fingerprintMethod))
+              notice: agentSessionWriteFailureText(
+                { kind: 'unreachable' },
+                writeKind(fingerprintMethod)
+              )
             }
           : { kind: 'dropped' }
       }
@@ -106,7 +109,10 @@ export function useStructuredAgentSessionMutate(args: {
         return enabledRef.current && stateRef.current.fence === targetFence
           ? {
               kind: 'not-done',
-              notice: agentSessionRefusalNotice(result.refusal, writeKind(fingerprintMethod))
+              notice: agentSessionWriteFailureText(
+                agentSessionRefusalFailure(result.refusal),
+                writeKind(fingerprintMethod)
+              )
             }
           : { kind: 'dropped' }
       }

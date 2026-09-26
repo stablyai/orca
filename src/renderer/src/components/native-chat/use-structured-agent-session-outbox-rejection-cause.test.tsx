@@ -13,6 +13,16 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
+import { agentSessionWriteNoticeEnglish } from '../../../../shared/agent-session-refusal-notice'
+import { structuredAgentSessionAttemptFailureParts } from '../../../../shared/structured-agent-session-send-disposition'
+import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+
+function shownFailure(entry: StructuredAgentSessionOutboxEntry | undefined): string | undefined {
+  return (
+    entry?.lastFailure &&
+    agentSessionWriteNoticeEnglish(structuredAgentSessionAttemptFailureParts(entry.lastFailure))
+  )
+}
 
 // What the host answers when the child it restarted for this send died before starting.
 const REASON =
@@ -65,7 +75,7 @@ describe('a send the host rejected because the agent never started', () => {
 
     act(() => expect(result.current.send('hello')).toBe(true))
 
-    await waitFor(() => expect(result.current.outbox[0]?.notice).toBe(REASON))
+    await waitFor(() => expect(shownFailure(result.current.outbox[0])).toBe(REASON))
     expect(result.current.outbox[0]?.state).toBe('queued')
     expect(result.current.blockedClientMessageId).toBe(result.current.outbox[0]?.clientMessageId)
   })
@@ -121,8 +131,8 @@ describe('a send refused while its agent restarted', () => {
 
     act(() => expect(result.current.send('hello')).toBe(true))
     await waitFor(() =>
-      expect(result.current.outbox[0]?.notice).toBe(
-        'The agent was restarting. Your message was not sent. Retry to send it again.'
+      expect(shownFailure(result.current.outbox[0])).toBe(
+        "Orca couldn't confirm which agent process owns this chat. Your message was not sent. Retry to send it again."
       )
     )
 
@@ -130,7 +140,7 @@ describe('a send refused while its agent restarted', () => {
     rerender({ fence: 3, submissions: [] })
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
     expect(result.current.outbox[0]).toMatchObject({ state: 'dispatching' })
-    expect(result.current.outbox[0]?.notice).toBeUndefined()
+    expect(shownFailure(result.current.outbox[0])).toBeUndefined()
 
     const id = result.current.outbox[0]!.clientMessageId
     rerender({ fence: 3, submissions: [submission(id, 'pending')] })

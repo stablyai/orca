@@ -21,8 +21,8 @@ import {
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 import {
-  agentSessionRefusalNotice,
-  agentSessionWriteFailureNotice
+  agentSessionRefusalFailure,
+  type AgentSessionWriteFailure
 } from '../../../shared/agent-session-refusal-notice'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
@@ -35,7 +35,7 @@ export type StructuredLaunchSelection = {
 
 export type StructuredLaunchOptionOutcome =
   | { kind: 'accepted'; options: Readonly<Record<string, string>> }
-  | { kind: 'refused'; message: string }
+  | { kind: 'refused'; failure: AgentSessionWriteFailure }
   | { kind: 'superseded' }
 
 type OptionReply = (outcome: StructuredLaunchOptionOutcome) => void
@@ -104,9 +104,9 @@ async function setLaunchOption(
     })
     return result.ok
       ? { kind: 'accepted', options: result.value.options ?? { [key]: value } }
-      : { kind: 'refused', message: agentSessionRefusalNotice(result.refusal, 'option') }
+      : { kind: 'refused', failure: agentSessionRefusalFailure(result.refusal) }
   } catch {
-    return { kind: 'refused', message: agentSessionWriteFailureNotice('option') }
+    return { kind: 'refused', failure: { kind: 'unreachable' } }
   }
 }
 

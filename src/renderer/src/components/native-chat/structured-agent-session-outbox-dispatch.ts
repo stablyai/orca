@@ -77,7 +77,7 @@ export function dispatchStructuredAgentSessionOutboxEntry(args: {
     const staged = updateStructuredAgentSessionOutboxEntry(
       args.persisted,
       args.next.clientMessageId,
-      ({ notice: _sentAgain, ...entry }) => ({
+      ({ lastFailure: _sentAgain, ...entry }) => ({
         ...entry,
         state: 'dispatching' as const,
         lastAttemptAt: Date.now()

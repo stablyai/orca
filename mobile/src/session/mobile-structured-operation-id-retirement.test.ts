@@ -157,7 +157,47 @@ describe('what a structured refusal says on the phone', () => {
     expect(result).toEqual({
       status: 'refused',
       code: 'agent_session_checkpoint_stale',
-      message: 'The agent was restarting. Your message was not sent. Send it again.'
+      message:
+        "Orca couldn't confirm which agent process owns this chat. Your message was not sent. Send it again."
+    })
+  })
+
+  const stop = {
+    method: 'agentSession.cancel',
+    fingerprintMethod: 'agentSession.cancel',
+    sessionId: 'session-1',
+    expectedRuntimeFence: 1,
+    fields: { turnId: 'turn-1' },
+    clientOperationId: `1900000000000-${'d'.repeat(32)}`
+  }
+
+  it("keeps a failed request's transport text off the screen", async () => {
+    const result = await requestStructuredAgentSessionMutation({
+      ...stop,
+      client: fakeClient(async () => {
+        throw new Error('ECONNRESET 10.0.0.2:443')
+      })
+    })
+
+    expect(result).toEqual({
+      status: 'failed',
+      message: "Orca couldn't reach the agent. Press Stop again."
+    })
+  })
+
+  it("keeps the host's text off the screen when it turns the request away unrun", async () => {
+    const result = await requestStructuredAgentSessionMutation({
+      ...stop,
+      client: fakeClient(async () => ({
+        ok: false,
+        error: { code: 'method_not_found', message: 'Unknown method: agentSession.cancel' },
+        _meta: { runtimeId: 'runtime-1' }
+      }))
+    })
+
+    expect(result).toEqual({
+      status: 'failed',
+      message: "The Orca running this chat doesn't support this. Update Orca, then try again."
     })
   })
 })

@@ -11,7 +11,12 @@ import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_QUEUE_FULL
 } from './structured-agent-session-dispatch-rejection'
-import { disposeStructuredAgentSessionSendResult } from './structured-agent-session-send-disposition'
+import { agentSessionWriteNoticeEnglish } from './agent-session-refusal-notice'
+import {
+  disposeStructuredAgentSessionSendFailure,
+  disposeStructuredAgentSessionSendResult,
+  structuredAgentSessionAttemptFailureParts
+} from './structured-agent-session-send-disposition'
 import {
   createStructuredAgentSessionOutboxEntry,
   reconcileStructuredAgentSessionOutbox,
@@ -56,7 +61,10 @@ function notice(reason: string | null): string | undefined {
   })
   // The reason travels with the message it explains, never as a separate error.
   expect(disposition.error).toBeNull()
-  return disposition.entries[0]?.notice
+  const failure = disposition.entries[0]?.lastFailure
+  return (
+    failure && agentSessionWriteNoticeEnglish(structuredAgentSessionAttemptFailureParts(failure))
+  )
 }
 
 describe('what a rejection shows the user', () => {
@@ -108,7 +116,7 @@ describe('what a rejection shows the user', () => {
 })
 
 describe('what a refusal shows the user', () => {
-  it('words a refused send for people and keeps the message with its reason', () => {
+  it('keeps the refusal as a fact on the message, without the host diagnostic', () => {
     const disposition = disposeStructuredAgentSessionSendResult({
       entries: [entry],
       entry,
@@ -129,13 +137,36 @@ describe('what a refusal shows the user', () => {
       {
         clientMessageId: entry.clientMessageId,
         state: 'queued',
-        notice: 'The agent was restarting. Your message was not sent. Retry to send it again.'
+        lastFailure: { kind: 'refused', code: 'agent_session_checkpoint_stale' }
       }
     ])
+    expect(
+      agentSessionWriteNoticeEnglish(
+        structuredAgentSessionAttemptFailureParts(disposition.entries[0]!.lastFailure!)
+      )
+    ).toBe(
+      "Orca couldn't confirm which agent process owns this chat. Your message was not sent. Retry to send it again."
+    )
+  })
+
+  it('keeps an unreachable host as a fact, not a transport error string', () => {
+    const disposition = disposeStructuredAgentSessionSendFailure({
+      entries: [entry],
+      entry,
+      blockedClientMessageId: null,
+      cause: new Error('socket hang up: ECONNRESET 10.0.0.2:443'),
+      isDeliveryUnknown: () => false
+    })
+
+    expect(disposition.error).toBeNull()
+    expect(disposition.entries[0]?.lastFailure).toEqual({ kind: 'unreachable' })
   })
 
   it('drops the reason once the same message is accepted', () => {
-    const refused = { ...entry, notice: 'The agent was restarting.' }
+    const refused: StructuredAgentSessionOutboxEntry = {
+      ...entry,
+      lastFailure: { kind: 'refused', code: 'agent_session_checkpoint_stale' }
+    }
     const result = rejectedWith(null)
     if (!result.ok) {
       throw new Error('expected a send result')

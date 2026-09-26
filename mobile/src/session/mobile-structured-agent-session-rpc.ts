@@ -10,6 +10,7 @@ import type {
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import {
   agentSessionRefusalNotice,
+  agentSessionWriteFailureNotice,
   agentSessionWriteKindForMethod,
   type AgentSessionWriteKind
 } from '../../../src/shared/agent-session-refusal-notice'
@@ -181,7 +182,20 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
         }
   } catch (error) {
     if (error instanceof AgentSessionRpcResponseError && PRE_HANDLER_RPC_REFUSALS.has(error.code)) {
-      return { status: 'failed', message: error.message }
+      // The host turned the request away before running it; its text is written for a log.
+      return {
+        status: 'failed',
+        message: agentSessionRefusalNotice(
+          {
+            code:
+              error.code === 'method_not_found' || error.code === 'method_not_supported'
+                ? 'structured_agent_session_unsupported'
+                : 'agent_session_operation_invalid',
+            message: ''
+          },
+          phoneWriteKind(fingerprintMethod)
+        )
+      }
     }
     if (
       isRpcDeliveryUnknown(error) ||
@@ -192,7 +206,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     }
     return {
       status: 'failed',
-      message: error instanceof Error ? error.message : 'Request not sent'
+      message: agentSessionWriteFailureNotice(phoneWriteKind(fingerprintMethod))
     }
   }
 }

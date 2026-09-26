@@ -17457,6 +17457,31 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "writeNotice": {
+        "notDoneSend": "Your message was not sent.",
+        "tryAgainSend": "Retry to send it again.",
+        "tryAgainComposerSend": "Send it again.",
+        "notDoneStop": "The agent wasn't stopped.",
+        "tryAgainStop": "Press Stop again.",
+        "notDoneAnswer": "Your answer was not sent.",
+        "tryAgainAnswer": "Answer it again.",
+        "notDoneOption": "The setting wasn't changed.",
+        "tryAgainOption": "Choose it again.",
+        "notDoneCommand": "The command didn't run.",
+        "tryAgainCommand": "Run the command again.",
+        "notDoneGoal": "The goal wasn't changed.",
+        "tryAgainGoal": "Set the goal again.",
+        "ownerUnconfirmed": "Orca couldn't confirm which agent process owns this chat.",
+        "capacity": "Orca is handling too many requests for this chat.",
+        "outcomeUnknown": "Orca couldn't confirm whether that went through. Check the chat before trying again.",
+        "questionChanged": "This question was already answered or has changed.",
+        "sessionMissing": "Orca couldn't find this chat's agent session.",
+        "historyUnreadable": "Orca couldn't read this chat's saved history.",
+        "unsupported": "The Orca running this chat doesn't support this. Update Orca, then try again.",
+        "unreachable": "Orca couldn't reach the agent.",
+        "rejectedUnreachable": "Couldn't reach the agent. Your message was not sent — Retry to send it again.",
+        "rejectedInternal": "Orca could not send your message — Retry to send it again."
+      },
       "taskList": {
         "title": "Tasks",
         "completed": "Completed",

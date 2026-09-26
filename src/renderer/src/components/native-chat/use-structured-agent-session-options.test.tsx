@@ -417,7 +417,7 @@ describe('useStructuredAgentSessionOptions', () => {
       answer({})
       mocks.hold.mockResolvedValue({
         kind: 'refused',
-        message: 'Model gpt-5.6-luna is unavailable'
+        failure: { kind: 'refused', code: 'agent_session_operation_capacity' }
       })
       const { result, unmount } = renderOptions(
         { ...PROVISIONAL, launchSeedOptions: SEED },
@@ -427,7 +427,9 @@ describe('useStructuredAgentSessionOptions', () => {
         await result.current.setStructuredOption('model', 'gpt-5.6-luna')
       })
       await waitFor(() =>
-        expect(mocks.toastError).toHaveBeenCalledWith('Model gpt-5.6-luna is unavailable')
+        expect(mocks.toastError).toHaveBeenCalledWith(
+          "Orca is handling too many requests for this chat. The setting wasn't changed. Choose it again."
+        )
       )
       expect(mocks.enqueue).not.toHaveBeenCalled()
       unmount()

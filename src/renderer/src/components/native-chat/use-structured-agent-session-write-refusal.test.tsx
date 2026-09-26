@@ -77,7 +77,7 @@ describe('a chat write the host refused', () => {
     })
 
     expect(mocks.toastError).toHaveBeenCalledWith(
-      "The agent was restarting. The agent wasn't stopped. Press Stop again."
+      "Orca couldn't confirm which agent process owns this chat. The agent wasn't stopped. Press Stop again."
     )
     expect(result.current.error).toBeNull()
   })
@@ -106,7 +106,8 @@ describe('a chat write the host refused', () => {
     await act(async () => {
       await expect(result.current.runConversationCommand('compact')).resolves.toEqual({
         accepted: false,
-        error: "The command didn't run. Wait for the agent to finish, then run it again."
+        // The code does not say why, so no next step is offered that could be false.
+        error: "The command didn't run."
       })
     })
 

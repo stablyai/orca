@@ -24,6 +24,7 @@ import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/stru
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
+import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 import type { StructuredAgentSessionLaunchView } from './use-native-chat-provisional-launch'
 import {
   getStructuredAgentSessionLaunchSelection,
@@ -186,7 +187,7 @@ export function useStructuredAgentSessionOptions(args: {
   const settleLaunchOptionPick = useCallback(
     (outcome: StructuredLaunchOptionOutcome) => {
       if (outcome.kind === 'refused') {
-        toast.error(outcome.message)
+        toast.error(agentSessionWriteFailureText(outcome.failure, 'option'))
       } else if (outcome.kind === 'accepted') {
         rememberOptionPicks(
           structuredAgentSessionOptionView(

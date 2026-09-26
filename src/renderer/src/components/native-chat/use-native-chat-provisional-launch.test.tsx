@@ -171,7 +171,7 @@ describe('a chat pane over its own launch', () => {
     })
     rerender()
     await waitFor(() =>
-      expect(mocks.toastError).toHaveBeenCalledWith("The setting wasn't changed. Choose it again.")
+      expect(mocks.toastError).toHaveBeenCalledWith("The setting wasn't changed.")
     )
     // Reverted to what the chat runs; the refusal never kept the launch from publishing.
     expect(currentModel(result.current.optionSnapshot)).toBe('gpt-5.5')
