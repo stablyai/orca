@@ -1,22 +1,31 @@
-import { execFileSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { closeApp } from './app-driver.mjs'
-import { isPidAlive } from './daemon-processes.mjs'
 
-vi.mock('./daemon-processes.mjs', () => ({ isPidAlive: vi.fn().mockReturnValue(true) }))
-
-vi.mock('node:child_process', async (importOriginal) => ({
-  ...(await importOriginal()),
-  execFileSync: vi.fn()
-}))
+const processes = {
+  isPidAlive: vi.fn().mockReturnValue(true),
+  killTree: vi.fn()
+}
+const strictCloseOptions = { allowForceKill: false, processes }
 
 afterEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()
-  vi.mocked(isPidAlive).mockReturnValue(true)
+  processes.isPidAlive.mockReturnValue(true)
 })
 
 describe('update-survival shutdown', () => {
+  it('keeps the force-kill fallback enabled for best-effort cleanup', async () => {
+    const app = {
+      evaluate: vi.fn().mockResolvedValue(123),
+      process: () => ({ pid: 124, stdio: [] }),
+      close: vi.fn().mockRejectedValue(new Error('quit rejected'))
+    }
+
+    await closeApp(app, 45_000, { processes })
+
+    expect(processes.killTree).toHaveBeenCalledExactlyOnceWith(123)
+  })
+
   it('fails before installation instead of killing the daemon tree after a rejected close', async () => {
     const failure = new Error('quit rejected')
     const app = {
@@ -25,8 +34,8 @@ describe('update-survival shutdown', () => {
       close: vi.fn().mockRejectedValue(failure)
     }
 
-    await expect(closeApp(app, 45_000, { allowForceKill: false })).rejects.toBe(failure)
-    expect(execFileSync).not.toHaveBeenCalled()
+    await expect(closeApp(app, 45_000, strictCloseOptions)).rejects.toBe(failure)
+    expect(processes.killTree).not.toHaveBeenCalled()
   })
 
   it('allows normal teardown past ten seconds and still rejects a wedged quit without a tree kill', async () => {
@@ -36,15 +45,15 @@ describe('update-survival shutdown', () => {
       process: () => ({ pid: 124, stdio: [] }),
       close: vi.fn(() => new Promise(() => {}))
     }
-    const closed = closeApp(app, 45_000, { allowForceKill: false })
+    const closed = closeApp(app, 45_000, strictCloseOptions)
     const rejected = expect(closed).rejects.toThrow('close timeout')
 
     await vi.advanceTimersByTimeAsync(30_000)
     expect(vi.getTimerCount()).toBe(1)
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(processes.killTree).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(15_000)
     await rejected
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(processes.killTree).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -55,28 +64,28 @@ describe('update-survival shutdown', () => {
       close: vi.fn().mockResolvedValue(undefined)
     }
 
-    await expect(closeApp(app, 45_000, { allowForceKill: false })).rejects.toThrow(
+    await expect(closeApp(app, 45_000, strictCloseOptions)).rejects.toThrow(
       'authoritative Electron PID remains live'
     )
-    expect(isPidAlive).toHaveBeenCalledWith(123)
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(processes.isPidAlive).toHaveBeenCalledWith(123)
+    expect(processes.killTree).not.toHaveBeenCalled()
   })
 
   it('accepts verified main and launcher exit while inherited pipes keep close pending', async () => {
     vi.useFakeTimers()
-    vi.mocked(isPidAlive).mockReturnValue(false)
+    processes.isPidAlive.mockReturnValue(false)
     const app = {
       evaluate: vi.fn().mockResolvedValue(123),
       process: () => ({ pid: 124, exitCode: 0, stdio: [{ readableEnded: false }] }),
       close: vi.fn(() => new Promise(() => {}))
     }
-    const closed = expect(closeApp(app, 45_000, { allowForceKill: false })).resolves.toBeUndefined()
+    const closed = expect(closeApp(app, 45_000, strictCloseOptions)).resolves.toBeUndefined()
 
     await vi.advanceTimersByTimeAsync(45_000)
     await closed
-    expect(isPidAlive).toHaveBeenCalledWith(123)
-    expect(isPidAlive).toHaveBeenCalledWith(124)
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(processes.isPidAlive).toHaveBeenCalledWith(123)
+    expect(processes.isPidAlive).toHaveBeenCalledWith(124)
+    expect(processes.killTree).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -84,7 +93,7 @@ describe('update-survival shutdown', () => {
     'rejects a %s launcher even when the main exited',
     async (state) => {
       vi.useFakeTimers()
-      vi.mocked(isPidAlive).mockImplementation((pid) => {
+      processes.isPidAlive.mockImplementation((pid) => {
         if (pid === 123) {
           return false
         }
@@ -98,13 +107,13 @@ describe('update-survival shutdown', () => {
         process: () => ({ pid: 124, stdio: [] }),
         close: vi.fn(() => new Promise(() => {}))
       }
-      const closed = expect(closeApp(app, 45_000, { allowForceKill: false })).rejects.toThrow(
+      const closed = expect(closeApp(app, 45_000, strictCloseOptions)).rejects.toThrow(
         'close timeout'
       )
 
       await vi.advanceTimersByTimeAsync(45_000)
       await closed
-      expect(execFileSync).not.toHaveBeenCalled()
+      expect(processes.killTree).not.toHaveBeenCalled()
     }
   )
 })

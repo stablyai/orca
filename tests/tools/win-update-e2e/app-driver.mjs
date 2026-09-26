@@ -485,8 +485,19 @@ export async function readTerminalTextBestEffort(page) {
   })
 }
 
+const appShutdownProcesses = {
+  isPidAlive,
+  killTree(pid) {
+    execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
+  }
+}
+
 /** Cleanup may kill the tree; survival proofs must disable that fallback. */
-export async function closeApp(app, timeoutMs = 10_000, { allowForceKill = true } = {}) {
+export async function closeApp(
+  app,
+  timeoutMs = 10_000,
+  { allowForceKill = true, processes = appShutdownProcesses } = {}
+) {
   // A partially-created session (launch failed before assignment) passes undefined.
   if (!app) {
     return
@@ -516,7 +527,7 @@ export async function closeApp(app, timeoutMs = 10_000, { allowForceKill = true 
         closeTimeout.unref?.()
       })
     ])
-    if (!allowForceKill && isPidAlive(mainPid)) {
+    if (!allowForceKill && processes.isPidAlive(mainPid)) {
       throw new Error('Playwright close resolved while the authoritative Electron PID remains live')
     }
   } catch (error) {
@@ -524,9 +535,9 @@ export async function closeApp(app, timeoutMs = 10_000, { allowForceKill = true 
       const evidence = {
         closeStatus,
         error: error instanceof Error ? error.message : String(error),
-        main: readClosePidEvidence(mainPid),
+        main: readClosePidEvidence(mainPid, processes),
         launcher: {
-          ...readClosePidEvidence(launcher?.pid),
+          ...readClosePidEvidence(launcher?.pid, processes),
           exitCode: launcher?.exitCode ?? null,
           signalCode: launcher?.signalCode ?? null,
           stdio:
@@ -551,7 +562,7 @@ export async function closeApp(app, timeoutMs = 10_000, { allowForceKill = true 
     }
     if (mainPid) {
       try {
-        execFileSync('taskkill', ['/pid', String(mainPid), '/T', '/F'], { stdio: 'ignore' })
+        processes.killTree(mainPid)
       } catch {
         /* already gone */
       }
@@ -563,12 +574,12 @@ export async function closeApp(app, timeoutMs = 10_000, { allowForceKill = true 
   }
 }
 
-function readClosePidEvidence(pid) {
+function readClosePidEvidence(pid, processes) {
   if (!Number.isInteger(pid) || pid <= 0) {
     return { pid: pid ?? null, state: 'unverifiable', error: 'PID unavailable' }
   }
   try {
-    return { pid, state: isPidAlive(pid) ? 'live' : 'exited' }
+    return { pid, state: processes.isPidAlive(pid) ? 'live' : 'exited' }
   } catch (error) {
     return {
       pid,
