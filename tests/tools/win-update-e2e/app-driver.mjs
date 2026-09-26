@@ -484,12 +484,8 @@ export async function readTerminalTextBestEffort(page) {
   })
 }
 
-/**
- * Close the app gracefully; force-kill its process tree on timeout. Mirrors
- * tests/e2e/helpers/electron-process-shutdown.ts so the daemon (detached) is
- * left alive exactly as a normal quit would.
- */
-export async function closeApp(app, timeoutMs = 10_000) {
+/** Cleanup may kill the tree; survival proofs must disable that fallback. */
+export async function closeApp(app, timeoutMs = 10_000, { allowForceKill = true } = {}) {
   // A partially-created session (launch failed before assignment) passes undefined.
   if (!app) {
     return
@@ -504,7 +500,10 @@ export async function closeApp(app, timeoutMs = 10_000) {
         closeTimeout.unref?.()
       })
     ])
-  } catch {
+  } catch (error) {
+    if (!allowForceKill) {
+      throw error
+    }
     if (mainPid) {
       try {
         execFileSync('taskkill', ['/pid', String(mainPid), '/T', '/F'], { stdio: 'ignore' })

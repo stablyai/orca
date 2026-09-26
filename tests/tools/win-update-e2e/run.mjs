@@ -220,9 +220,19 @@ async function runProof(ctx, args) {
   const preScrollback = await readTerminalTextBestEffort(session.page)
 
   // Close app normally; the detached daemon must remain alive.
-  await closeApp(session.app)
+  // Allow renderer acknowledgement and teardown; a tree kill invalidates survival evidence.
+  await closeApp(session.app, 45_000, { allowForceKill: false })
   const daemonAliveAfterClose = preDaemon.pid != null && isPidAlive(preDaemon.pid)
   log('daemon', `alive after app close: ${daemonAliveAfterClose}`)
+  log('marker', `alive after graceful app close: ${isPidAlive(created.markerPid)}`)
+  await delay(60_000)
+  log(
+    'pre-install-control',
+    JSON.stringify({
+      daemonAlive: preDaemon.pid != null && isPidAlive(preDaemon.pid),
+      markerAlive: isPidAlive(created.markerPid)
+    })
+  )
 
   // --- Start the console-window watch through the whole update + soak ---
   const watchDuration = 120 + opts.soakSeconds

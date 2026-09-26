@@ -70,7 +70,7 @@ jobs:
       # relocation code lives under src/, so changing it correctly rebuilds.
       - name: Cache branch installer
         id: cache-installer
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: dist/orca-windows-setup.exe
           key: branch-installer-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/win32/**', 'package.json', 'pnpm-lock.yaml') }}
@@ -87,6 +87,13 @@ jobs:
           node config/scripts/ensure-native-runtime.mjs --runtime=electron
           pnpm run build:desktop
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+
+      - name: Cache successfully built installer before survival verification
+        if: steps.cache-installer.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: dist/orca-windows-setup.exe
+          key: ${{ steps.cache-installer.outputs.cache-primary-key }}
 
       # Why: install the branch build, open a terminal, update the SAME build
       # over it, and assert the relocated daemon survives. Same build on both
