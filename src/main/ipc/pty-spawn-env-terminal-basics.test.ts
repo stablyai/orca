@@ -140,7 +140,7 @@ describe('registerPtyHandlers', () => {
           }
         )
 
-        expect(env.BROWSER).toBe('orca open-url --url %s')
+        expect(env.BROWSER).toBe('orca')
       } finally {
         if (inheritedBrowser === undefined) {
           delete process.env.BROWSER
@@ -150,10 +150,10 @@ describe('registerPtyHandlers', () => {
       }
     })
 
-    it('preserves an explicit browser command on headless runtimes', () => {
+    it.each(['custom-browser %s', ''])('preserves an explicit BROWSER value %j', (browser) => {
       const env = buildPtyHostEnv(
         'pty-custom-browser',
-        { BROWSER: 'custom-browser %s' },
+        { BROWSER: browser },
         {
           isPackaged: true,
           userDataPath: '/tmp/orca-user-data',
@@ -163,10 +163,13 @@ describe('registerPtyHandlers', () => {
         }
       )
 
-      expect(env.BROWSER).toBe('custom-browser %s')
+      expect(env.BROWSER).toBe(browser)
     })
 
-    it('uses the registered WSL CLI name for headless browser launches', () => {
+    it.each([
+      { isPackaged: true, command: 'orca-ide' },
+      { isPackaged: false, command: 'orca-dev' }
+    ])('uses the WSL executable $command for browser launches', ({ isPackaged, command }) => {
       const inheritedBrowser = process.env.BROWSER
       delete process.env.BROWSER
       try {
@@ -174,7 +177,7 @@ describe('registerPtyHandlers', () => {
           'pty-headless-wsl',
           {},
           {
-            isPackaged: true,
+            isPackaged,
             userDataPath: '/tmp/orca-user-data',
             selectedCodexHomePath: null,
             isWsl: true,
@@ -183,7 +186,7 @@ describe('registerPtyHandlers', () => {
           }
         )
 
-        expect(env.BROWSER).toBe('orca-ide open-url --url %s')
+        expect(env.BROWSER).toBe(command)
       } finally {
         if (inheritedBrowser === undefined) {
           delete process.env.BROWSER

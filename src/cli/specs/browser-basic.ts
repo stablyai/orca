@@ -19,7 +19,11 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
     path: ['open-url'],
     summary: 'Open a URL on the paired client that hosts this terminal',
     usage: 'orca open-url --url <url> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree'],
+    notes: [
+      'A single HTTP(S) URL is shorthand for open-url --url, so orca can be used as BROWSER.'
+    ],
+    examples: ['orca https://example.com']
   },
   {
     path: ['snapshot'],

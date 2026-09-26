@@ -294,7 +294,7 @@ export function buildPtyHostEnv(
     process.env.BROWSER === undefined
   ) {
     const cliCommand = opts.isWsl ? (opts.isPackaged ? 'orca-ide' : 'orca-dev') : 'orca'
-    baseEnv.BROWSER = `${cliCommand} open-url --url %s`
+    baseEnv.BROWSER = cliCommand
   }
 
   // Why: must run after the prepends above — they re-read PATH from the unscrubbed
