@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -151,7 +152,7 @@ async function seed(acceptedSubmissions = false) {
         selectedItemId = agentJournalSubmissionKey(clientOperationId)
       }
     } else {
-      sink.appendItem(identity, body)
+      sink.appendItem(identity, body, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     }
   }
   await host.flushStreamedEvents(HOST_TEST_SESSION)
@@ -268,7 +269,8 @@ describe('host rewind', () => {
     const target = await seed()
     sink.appendItem(
       { provider: 'orca', clientMessageId: 'active' },
-      { kind: 'status', text: 'working', turnLifecycle: { turnId: 'active', state: 'running' } }
+      { kind: 'status', text: 'working', turnLifecycle: { turnId: 'active', state: 'running' } },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     expect(await host.rewind(caller, await params(target))).toMatchObject({
       ok: false,
@@ -377,12 +379,24 @@ describe('host rewind', () => {
       completedAt: HOST_TEST_NOW - 4_000,
       durationMs: 5_000
     }
-    sink.appendItem(message('kept'), hostTestMessage('kept'))
-    sink.appendItem(goalRow, goalBody)
-    sink.appendItem(turnRow('kept'), keptTurn)
-    sink.appendItem(message('drop'), hostTestMessage('drop'))
-    sink.appendItem(turnRow('drop'), { ...keptTurn, turnId: 'drop', durationMs: 1_000 })
-    sink.appendItem(message('tip'), { ...hostTestMessage('tip'), role: 'assistant' })
+    sink.appendItem(message('kept'), hostTestMessage('kept'), {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    sink.appendItem(goalRow, goalBody, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    sink.appendItem(turnRow('kept'), keptTurn, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    sink.appendItem(message('drop'), hostTestMessage('drop'), {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    sink.appendItem(
+      turnRow('drop'),
+      { ...keptTurn, turnId: 'drop', durationMs: 1_000 },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    sink.appendItem(
+      message('tip'),
+      { ...hostTestMessage('tip'), role: 'assistant' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
     await host.flushStreamedEvents(HOST_TEST_SESSION)
     // The provider preflight knows only its own items, never the host's turn rows.
     const items = [{ identity: message('kept'), body: hostTestMessage('kept from provider') }]
@@ -432,10 +446,18 @@ describe('host rewind', () => {
         payload: { head: '{}', byteLength: 2, digest: '4'.repeat(64), truncated: false }
       }
     }
-    sink.appendItem(message('kept'), hostTestMessage('kept'))
-    sink.appendItem(goalRow, goalBody)
-    sink.appendItem(message('drop'), hostTestMessage('drop'))
-    sink.appendItem(message('tip'), { ...hostTestMessage('tip'), role: 'assistant' })
+    sink.appendItem(message('kept'), hostTestMessage('kept'), {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    sink.appendItem(goalRow, goalBody, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    sink.appendItem(message('drop'), hostTestMessage('drop'), {
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
+    sink.appendItem(
+      message('tip'),
+      { ...hostTestMessage('tip'), role: 'assistant' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
     await host.flushStreamedEvents(HOST_TEST_SESSION)
     rewind.mockImplementationOnce(async (input) => {
       await input.onReverted?.()

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Legacy import runs the existing per-agent transcript decoders and keys the
 // results by identity read off the same raw lines. Fixtures are shaped like the
 // files the providers actually write.
@@ -567,7 +568,7 @@ describe('import failures', () => {
     await journal.appendItem(
       { provider: 'codex', threadId: CODEX_SESSION, turnId: 'turn-1', ordinal: 1 },
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'kept' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const before = journal.epoch
     const metadataOnly = await writeFixture('metadata-only.jsonl', [

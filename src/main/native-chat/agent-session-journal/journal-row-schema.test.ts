@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+} from '../../../shared/agent-session-journal-types'
 import {
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS,
   parseJournalRow,
@@ -277,7 +280,8 @@ describe('producer linkage on the persisted row', () => {
       seq: 1,
       fence: 1,
       ts: 1_700_000_000_000,
-      ...(withLinkage ? { linkage } : {})
+      ...(withLinkage ? { linkage } : {}),
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
     const parsed = parseJournalRow(JSON.stringify(row))
     return parsed.ok ? parsed.row : null
@@ -348,10 +352,21 @@ describe('producer linkage on the persisted row', () => {
 
   it('round-trips a batch mutation that names its own producer, with no version bump', () => {
     const state = createJournalReducerState('session-1', 'epoch-1')
-    const own = { kind: 'item' as const, identity: { ...identity, uuid: 'u-own' }, body }
+    const own = {
+      kind: 'item' as const,
+      identity: { ...identity, uuid: 'u-own' },
+      body,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
     const build = (child: JournalLifecycleMutationInput) =>
       journalLifecycleBatchRowBuilder(() => state, 'settle-1', [child, own], { fence: 1 })(1, 1)
-    const row = build({ kind: 'item', identity, body, linkage })
+    const row = build({
+      kind: 'item',
+      identity,
+      body,
+      linkage,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     const parsed = parseJournalRow(JSON.stringify(row))
     const mutations = parsed.ok && parsed.row.kind === 'lifecycle-batch' ? parsed.row.mutations : []
@@ -359,7 +374,9 @@ describe('producer linkage on the persisted row', () => {
     expect(mutations[1] && 'agentId' in mutations[1]).toBe(false)
     // The same batch without the stamp writes the same version: an older host
     // ignores the unknown keys rather than latching the journal read-only.
-    expect(row.v).toBe(build({ kind: 'item', identity, body }).v)
+    expect(row.v).toBe(
+      build({ kind: 'item', identity, body, turnScope: AGENT_JOURNAL_THREAD_SCOPE }).v
+    )
   })
 
   it('keeps a batch mutation but drops its unusable producer id', () => {

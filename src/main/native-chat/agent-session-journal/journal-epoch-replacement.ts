@@ -7,6 +7,8 @@
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
+  AgentJournalProducerLinkage,
+  AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
@@ -22,10 +24,13 @@ import {
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
 import { assertJournalFence } from './journal-write-guards'
 
-export type JournalReplacementItem = {
+export type JournalReplacementItem = AgentJournalProducerLinkage & {
   identity: AgentJournalItemIdentity
   body: AgentJournalItemBody
   observedAt?: number
+  /** Absent for history rebuilt from a source that never stated one: derived from position, as
+   *  a legacy row's is, and then written down. */
+  turnScope?: AgentJournalTurnScope
 }
 
 export function replaceJournalEpoch(input: {
@@ -56,7 +61,9 @@ export function replaceJournalEpoch(input: {
       body: item.body,
       seq: state.lastSequence + 1,
       fence: input.fence,
-      ts: item.observedAt ?? input.now()
+      ts: item.observedAt ?? input.now(),
+      linkage: item,
+      turnScope: item.turnScope ?? state.derivedTurnScope.scopeFor(item.body)
     })
     assertJournalFence(row.fence, state.highestFence)
     applyJournalRow(state, row)

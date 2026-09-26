@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
 import {
   isFreshNonDoneAgentStatus,
@@ -146,7 +147,7 @@ export function dispatchTerminalNotification(
         agentToolName: agentStatus.toolName,
         agentToolInput: agentStatus.toolInput,
         agentLastAssistantMessage: agentStatus.lastAssistantMessage,
-        agentInterrupted: agentStatus.interrupted
+        agentTurnOutcome: agentMainAgentVerdict(agentStatus) ?? undefined
       }
     : {}
   const notificationId =

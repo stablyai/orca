@@ -9,7 +9,10 @@ import type {
 import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import { mobileE2EETextPayloadAdmissionBytes } from '../../runtime/rpc/mobile-e2ee-outbound-admission'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+} from '../../../shared/agent-session-journal-types'
 import { openJournalDatabase } from '../agent-session-journal/journal-database'
 import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
 import { insertJournalRow } from '../agent-session-journal/journal-row-table'
@@ -39,7 +42,10 @@ beforeEach(async () => {
     journalDir: root
   })
   for (let ordinal = 1; ordinal <= 20; ordinal += 1) {
-    await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), { fence: 1 })
+    await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
   }
 })
 

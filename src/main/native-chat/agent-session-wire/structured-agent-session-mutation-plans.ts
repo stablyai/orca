@@ -14,7 +14,12 @@ import type {
   AgentSessionPromptResult,
   AgentSessionSendResult
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionConversationCommandResult } from '../../../shared/agent-session-conversation-command'
 import { DISPATCH_DOUBT_SUBMISSION_MISSING } from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import {
+  STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
+  structuredAgentSessionCompactBody
+} from './structured-agent-session-command-turn'
 import {
   performCancel,
   performPrompt,
@@ -92,6 +97,45 @@ export function sendPlan(params: {
           recovered: true
         }
       }
+    }
+  }
+}
+
+export type ConversationCommandAcceptance =
+  | { clientMessageId: string }
+  /** What an older build's run of this operation recorded. */
+  | { recorded: AgentSessionConversationCommandResult }
+
+/** `/compact` accepted like a send: one submission, keyed by the operation id, that the delivery
+ *  loop carries out as the command's own turn. */
+export function conversationCommandPlan(params: {
+  envelope: AgentSessionMutationEnvelope
+  priorRecord: () => AgentSessionConversationCommandResult | null
+}): MutationPlan<ConversationCommandAcceptance> {
+  const clientMessageId = params.envelope.clientOperationId
+  return {
+    method: 'agentSession.conversationCommand',
+    conversationWrite: true,
+    markUnknownBeforeRun: true,
+    fields: { command: STRUCTURED_AGENT_SESSION_COMPACT_COMMAND },
+    recoverUnknownFromDurableState: true,
+    run: async (ctx) => {
+      const sent = await performSend(ctx, {
+        clientMessageId,
+        payloadFingerprint: params.envelope.payloadFingerprint,
+        body: structuredAgentSessionCompactBody()
+      })
+      return sent.ok ? { ok: true, value: { clientMessageId } } : sent
+    },
+    replay: (ctx, outcome) => {
+      if (outcome.status === 'succeeded' && outcome.conversationCommand) {
+        return { recorded: outcome.conversationCommand }
+      }
+      if (ctx.journal.submissions().some((entry) => entry.clientMessageId === clientMessageId)) {
+        return { clientMessageId }
+      }
+      const prior = params.priorRecord()
+      return prior ? { recorded: prior } : null
     }
   }
 }

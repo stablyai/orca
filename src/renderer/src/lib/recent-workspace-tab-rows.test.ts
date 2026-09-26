@@ -166,6 +166,28 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     )
   })
 
+  it('surfaces a failed outcome as failed', () => {
+    const failed = entry('failed', 'done', NOW - 1_000, {
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 1_000 }
+    })
+
+    expect(resolveRecentWorkspaceTabStatus(row('failed'), sources([failed]), NOW)).toBe('failed')
+  })
+
+  it('surfaces a main agent that failed while its subagent works as failed, above working', () => {
+    const held = (tabId: string, outcome: 'failure' | 'success') =>
+      entry(tabId, 'working', NOW - 1_000, {
+        mainAgent: { state: 'done', outcome, stateStartedAt: NOW - 2_000 }
+      })
+
+    expect(
+      resolveRecentWorkspaceTabStatus(row('held'), sources([held('held', 'failure')]), NOW)
+    ).toBe('failed')
+    expect(
+      resolveRecentWorkspaceTabStatus(row('held'), sources([held('held', 'success')]), NOW)
+    ).toBe('working')
+  })
+
   it('does not let a cleanly finished sibling mask an interruption', () => {
     const interrupted = entry('mixed', 'done', NOW - 1_000, {
       paneKey: `mixed:${LEAF_ID}`,

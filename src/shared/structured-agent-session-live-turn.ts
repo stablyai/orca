@@ -17,9 +17,11 @@
 // (none). So a child-linked row can never be what terminates one of these
 // scans. Re-check that before giving any of those sites a producer.
 
-import type {
-  AgentJournalRenderItem,
-  AgentJournalTurnLifecycle
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalRenderItem,
+  type AgentJournalTurnLifecycle,
+  type AgentJournalTurnScope
 } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn } from './agent-session-turn-record'
@@ -62,6 +64,22 @@ export function newestStructuredAgentSessionTurnBySequence(
     }
   }
   return newest
+}
+
+/** The scope a row written now joins: the running turn, or the conversation when none runs.
+ *  By sequence, for items held unordered. */
+export function liveStructuredAgentSessionTurnScope(
+  items: Iterable<AgentJournalRenderItem>
+): AgentJournalTurnScope {
+  let newest: AgentJournalRenderItem | null = null
+  for (const item of items) {
+    if ((newest === null || item.sequence >= newest.sequence) && readAgentJournalTurn(item.body)) {
+      newest = item
+    }
+  }
+  return newest && readAgentJournalTurn(newest.body)?.state === 'running'
+    ? { kind: 'turn', turnItemId: newest.itemId }
+    : AGENT_JOURNAL_THREAD_SCOPE
 }
 
 /** Whether that newest turn is still running, which is all most callers want. */

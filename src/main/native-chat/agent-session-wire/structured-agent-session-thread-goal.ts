@@ -66,7 +66,8 @@ export async function performThreadGoalChange(
         blocks: [{ type: 'text', text: change.objective }],
         sentAs: 'goal'
       },
-      { fence: ctx.fence }
+      // Accepting a goal is delivering it, so it joins whatever turn runs now.
+      { fence: ctx.fence, turnScope: ctx.journal.liveTurnScope() }
     )
   }
   const withdrawObjective = async (): Promise<void> => {

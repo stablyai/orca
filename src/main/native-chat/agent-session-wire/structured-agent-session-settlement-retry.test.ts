@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // The settlement latch governs EVERY unclean restart — SIGKILL, force quit, OOM, a quit that blew
 // its deadline — so the evidence it reads decides whether the user sees a failure notice at all.
 
@@ -76,7 +77,7 @@ async function seedRunningTurn(): Promise<void> {
   await journal.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 },
     { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: 900 },
-    { fence: FENCE }
+    { fence: FENCE, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 }
 
@@ -91,7 +92,7 @@ async function seedIdlePendingApproval(): Promise<void> {
       options: [{ id: 'yes', label: 'Allow' }],
       resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
     },
-    { fence: FENCE }
+    { fence: FENCE, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 }
 

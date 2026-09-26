@@ -65,3 +65,17 @@ export function dispatchRejectionReasonIsInternal(reason: string | null | undefi
     reason === DISPATCH_REJECTED_PROVIDER_CLOSED
   )
 }
+
+/**
+ * What a rejected send says about the request, for the session's verdict: `failure` when the
+ * agent or its start refused it, null when nobody failed. A withdrawn send, and one a restart or
+ * a close left undelivered, are not verdicts — the chat shows them unsent with Retry. An
+ * allowlist of the null reasons, because every other reason includes open provider text.
+ */
+export function dispatchRejectionVerdict(reason: string | null | undefined): 'failure' | null {
+  return reason === DISPATCH_REJECTED_CANCELLED ||
+    reason === DISPATCH_REJECTED_HOST_RESTARTED ||
+    reason === DISPATCH_REJECTED_PROVIDER_CLOSED
+    ? null
+    : 'failure'
+}

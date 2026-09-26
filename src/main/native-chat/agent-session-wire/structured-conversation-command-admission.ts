@@ -1,10 +1,19 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
+/**
+ * Why a conversation command may not run now; null when it may.
+ *
+ * `at-rest`: a command accepted with no child running. A running turn on record then belongs to a
+ * dead generation, which the start before handover sweeps, so it refuses nothing yet.
+ * `handover`: the command is the oldest queued message, and those queued behind it wait for it.
+ */
 export function conversationCommandBlocked(
-  ctx: AgentSessionTurnContext,
-  record: AgentSessionRecord
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'adapter' | 'sessionId' | 'fence'>,
+  record: AgentSessionRecord,
+  admission?: 'at-rest' | 'handover'
 ): string | null {
   const items = ctx.journal.snapshot().items
   if (record.rewind?.phase === 'prepared' || record.rewind?.phase === 'provider-succeeded') {
@@ -17,8 +26,10 @@ export function conversationCommandBlocked(
   ) {
     return 'This conversation has been cleared. Open the current conversation to continue.'
   }
+  // An older build's compaction record belongs to a child this host no longer runs.
   if (
-    record.conversationCommand?.state === 'unknown' &&
+    record.conversationCommand?.command === 'clear' &&
+    record.conversationCommand.state === 'unknown' &&
     record.conversationCommand.phase === 'prepared'
   ) {
     return 'The previous conversation operation is unconfirmed.'
@@ -26,7 +37,7 @@ export function conversationCommandBlocked(
   if (record.lease.handoffStage || record.lease.handoffOperationId) {
     return 'Wait for the session handoff to finish.'
   }
-  if (activeStructuredAgentSessionTurnId(items)) {
+  if (admission !== 'at-rest' && activeStructuredAgentSessionTurnId(items)) {
     return 'Wait for the current turn to finish before using this command.'
   }
   if (
@@ -50,7 +61,8 @@ export function conversationCommandBlocked(
   if (
     ctx.journal.submissions().some(
       (entry) =>
-        entry.dispatchState === 'pending' ||
+        (entry.dispatchState === 'pending' &&
+          !(admission === 'handover' && isQueuedAgentJournalSubmission(entry))) ||
         // Doubt left by an earlier child is not this one's work in flight.
         (entry.dispatchState === 'unknown' && entry.recovered !== true && entry.fence === ctx.fence)
     )

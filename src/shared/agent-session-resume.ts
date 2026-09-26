@@ -1,5 +1,6 @@
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
+import type { AgentMainAgentStatus } from './main-agent-status'
 import type { TuiAgent } from './tui-agent'
 
 export const RESUMABLE_TUI_AGENTS = [
@@ -58,6 +59,9 @@ export type SleepingAgentSessionRecord = {
   terminalTitle?: string
   lastAssistantMessage?: string
   interrupted?: boolean
+  /** The main agent's own status when captured, copied with `interrupted` by `agentVerdictFields`;
+   *  read the verdict through `agentMainAgentVerdict`. */
+  mainAgent?: AgentMainAgentStatus
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
   /** How the record was captured. Worktree-sleep records (legacy records have

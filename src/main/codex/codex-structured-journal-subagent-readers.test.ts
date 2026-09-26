@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import { selectStructuredAgentTurnActivity } from '../../shared/native-chat-turn-activity'
-import { latestStructuredAgentSessionAssistantMessage } from '../../shared/structured-agent-session-projection'
+import { latestStructuredAgentSessionAssistantMessage } from '../../shared/structured-agent-session-latest-request'
 import {
   isStructuredAgentSessionThinking,
   statusStructuredAgentSessionToolCall

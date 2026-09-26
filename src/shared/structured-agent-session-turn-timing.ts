@@ -10,6 +10,7 @@ import type {
   AgentJournalTurnLifecycleState
 } from './agent-session-journal-types'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import { structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
 
 export type StructuredAgentTurnTiming = {
@@ -59,42 +60,23 @@ function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | n
   }
 }
 
-/** Timing keyed by the user message that opened each turn. A row can name the
- *  submission directly or by a provider key that resolves through its alias.
- *  Rows from older hosts carry no key and fall back
- *  to the nearest user message before them in journal order — the submission
- *  row is written ahead of dispatch, so it always precedes the provider's
- *  turn-start. Untimed rows are skipped unless explicitly unverifiable (null). */
+/** Timing keyed by each turn's anchor (see `structuredAgentTurnAnchors`): the user message that
+ *  opened it, or the turn record itself for a turn no message opened. Untimed rows are skipped
+ *  unless explicitly unverifiable (null). */
 export function selectStructuredAgentTurnTimings(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
 ): ReadonlyMap<string, StructuredAgentTurnTiming | null> {
-  const itemIds = new Set(items.map((item) => item.itemId))
-  const aliases = new Map<string, string>()
-  // Codex folds a send issued mid-turn into the running turn under the SAME provider
-  // key, so the earliest submission that names a key is the prompt that opened the turn.
-  for (const submission of submissions) {
-    if (submission.providerItemId && !aliases.has(submission.providerItemId)) {
-      aliases.set(submission.providerItemId, agentJournalSubmissionKey(submission.clientMessageId))
-    }
-  }
+  const anchors = structuredAgentTurnAnchors(items, submissions)
   const timings = new Map<string, StructuredAgentTurnTiming | null>()
-  let precedingUserItemId: string | null = null
   for (const item of items) {
-    if (item.body.kind === 'message' && item.body.role === 'user') {
-      precedingUserItemId = item.itemId
-      continue
-    }
-    const turn = readAgentJournalTurn(item.body)
+    const anchor = anchors.get(item.itemId)
     const timing = readTiming(item)
-    if (!timing && turn?.state !== 'unverifiable') {
-      continue
-    }
-    const key = turn?.userItemId
-    const userItemId =
-      key === undefined ? precedingUserItemId : itemIds.has(key) ? key : (aliases.get(key) ?? null)
-    if (userItemId !== null) {
-      timings.set(userItemId, timing)
+    if (
+      anchor !== undefined &&
+      (timing || readAgentJournalTurn(item.body)?.state === 'unverifiable')
+    ) {
+      timings.set(anchor, timing)
     }
   }
   return timings

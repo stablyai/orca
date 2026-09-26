@@ -5,7 +5,12 @@
 // keeping a copy, so there is nothing to disagree with.
 
 import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemIdentity,
+  type AgentJournalTurnScope
+} from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   claudeTurnLifecycleIdentity,
@@ -53,6 +58,15 @@ export class ClaudeOpenTurn {
     return this.current
       ? claudeTurnLifecycleIdentity(this.current.sessionId, this.current.turnId)
       : null
+  }
+
+  /** Which turn a row written now belongs to: the open one, or none. A subagent's rows too —
+   *  its work is its parent turn's. */
+  get turnScope(): AgentJournalTurnScope {
+    const identity = this.identity
+    return identity
+      ? { kind: 'turn', turnItemId: agentJournalItemKey(identity) }
+      : AGENT_JOURNAL_THREAD_SCOPE
   }
 
   get groupKey(): string | null {

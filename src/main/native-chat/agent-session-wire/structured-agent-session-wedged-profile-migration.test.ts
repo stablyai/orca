@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // The profiles already shipped into a dead end.
 //
 // Every record here is a shape taken from a real wedged store: a lease that no acquisition, no
@@ -201,7 +202,7 @@ async function seedRunningTurn(provider: 'codex' | 'claude' = 'codex'): Promise<
       ? { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
       : { provider: 'claude', sessionId: 'provider-session-alpha-1', uuid: 'uuid-running' },
     { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: NOW - 5_000 },
-    { fence: 13 }
+    { fence: 13, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await journal.close()
 }
@@ -385,7 +386,7 @@ describe('already-wedged profiles become usable on load', () => {
     await restoredJournal().appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'turn-2', ordinal: 0 },
       { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: NOW },
-      { fence }
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
     // A reconnecting client replays its attach; the same operation admits the live owner.

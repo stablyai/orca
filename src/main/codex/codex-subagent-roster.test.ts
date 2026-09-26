@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import { isAdmissibleAgentJournalItemBody } from '../../shared/agent-session-journal-schemas'
 import type {
@@ -43,6 +44,7 @@ function createHarness(options: { threadId?: string | null } = {}): {
     tryPublish: () => ({ accepted: true })
   }
   const roster = new CodexSubagentRoster({
+    turnScopeFor: () => AGENT_JOURNAL_THREAD_SCOPE,
     sink,
     primaryThreadId: () => (options.threadId === undefined ? THREAD : options.threadId),
     activeTurn: () => TURN,
@@ -138,6 +140,7 @@ function createCoalescingHarness(): {
     }
   }
   const roster = new CodexSubagentRoster({
+    turnScopeFor: () => AGENT_JOURNAL_THREAD_SCOPE,
     sink,
     primaryThreadId: () => THREAD,
     activeTurn: () => TURN,
@@ -668,6 +671,7 @@ describe('CodexSubagentRoster', () => {
       const published: number[] = []
       const refusal = { accepted: false, reason: 'backpressure' } as const
       const roster = new CodexSubagentRoster({
+        turnScopeFor: () => AGENT_JOURNAL_THREAD_SCOPE,
         sink: {
           appendItem: () => {},
           appendTombstone: () => {},
@@ -721,6 +725,7 @@ describe('CodexSubagentRoster', () => {
     const appended: Appended[] = []
     const published: number[] = []
     const roster = new CodexSubagentRoster({
+      turnScopeFor: () => AGENT_JOURNAL_THREAD_SCOPE,
       sink: {
         appendItem: () => {},
         appendTombstone: () => {},
@@ -765,6 +770,7 @@ describe('CodexSubagentRoster', () => {
 
   it('propagates sink backpressure instead of reporting the row as written', () => {
     const roster = new CodexSubagentRoster({
+      turnScopeFor: () => AGENT_JOURNAL_THREAD_SCOPE,
       sink: {
         appendItem: () => {},
         appendTombstone: () => {},

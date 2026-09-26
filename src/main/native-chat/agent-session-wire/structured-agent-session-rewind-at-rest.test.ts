@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A Codex rewind whose outcome only the provider can prove, found on a chat at rest: nothing on
 // screen will start the agent that settles it, so the next send does, and its message is kept.
 
@@ -158,8 +159,10 @@ function sendParams(text: string) {
 async function interruptedRewindAtRest(): Promise<void> {
   expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const drop = { ...KEPT, turnId: 'drop' }
-  sink.appendItem(KEPT, hostTestMessage('verified history'))
-  sink.appendItem(drop, hostTestMessage('to be rewound'))
+  sink.appendItem(KEPT, hostTestMessage('verified history'), {
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE
+  })
+  sink.appendItem(drop, hostTestMessage('to be rewound'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
   await host.flushStreamedEvents(SESSION)
   rewind.mockImplementation(async (input) => {
     await input.onReverted?.()
@@ -205,7 +208,7 @@ describe('an interrupted Codex rewind on a chat at rest (R16)', () => {
 describe('a rewind asked of a chat at rest (P2-23)', () => {
   it('starts the agent first and answers with what the provider says', async () => {
     expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
-    sink.appendItem(KEPT, hostTestMessage('kept'))
+    sink.appendItem(KEPT, hostTestMessage('kept'), { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await host.flushStreamedEvents(SESSION)
     const epoch = (await host.journalSnapshot(SESSION)).cursor.epoch
     await host.flushAllStreamedEvents()

@@ -68,3 +68,39 @@ describe('conversationCommandBlocked background tasks', () => {
     )
   })
 })
+
+describe('conversationCommandBlocked for a command sent at rest (C6, B3)', () => {
+  const staleTurn = {
+    items: [{ itemId: 'turn-1', body: { kind: 'turn', turnId: 'turn-1', state: 'running' } }]
+  }
+
+  it("does not refuse over a dead generation's running turn, which the start sweeps", () => {
+    const ctx = contextWith(null)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission reads only each item's body.
+    ctx.journal.snapshot = () => staleTurn as never
+    expect(conversationCommandBlocked(ctx, RECORD, 'at-rest')).toBeNull()
+    expect(conversationCommandBlocked(ctx, RECORD)).toBe(
+      'Wait for the current turn to finish before using this command.'
+    )
+  })
+
+  it("ignores an older build's compaction record", () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission reads only the lease and the command record.
+    const record = {
+      lease: {},
+      conversationCommand: { command: 'compact', phase: 'prepared', state: 'unknown' }
+    } as unknown as AgentSessionRecord
+    expect(conversationCommandBlocked(contextWith(null), record)).toBeNull()
+  })
+
+  it('at handover, lets the command itself and messages queued behind it wait', () => {
+    const ctx = contextWith(null)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission reads only the dispatch fields.
+    const queued = [
+      { clientMessageId: 'command', dispatchState: 'pending', handoverRecorded: true },
+      { clientMessageId: 'behind', dispatchState: 'pending', handoverRecorded: true }
+    ] as never
+    ctx.journal.submissions = () => queued
+    expect(conversationCommandBlocked(ctx, RECORD, 'handover')).toBeNull()
+  })
+})

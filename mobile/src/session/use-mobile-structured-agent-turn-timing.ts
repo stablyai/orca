@@ -4,6 +4,7 @@ import type {
   AgentJournalSubmission
 } from '../../../src/shared/agent-session-journal-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { StructuredAgentHostClock } from '../../../src/shared/structured-agent-session-reducer'
 import {
   selectStructuredAgentRunningTurnTiming,
@@ -28,11 +29,17 @@ export function useMobileStructuredAgentTurnTiming(
     hostClock?: StructuredAgentHostClock | null
   },
   turnId: string | null
-): { settledTurns: NativeChatSettledTurns; workingStartedAt: number | null } {
+): {
+  settledTurns: NativeChatSettledTurns
+  /** What places each transcript row in its turn; the same read desktop makes. */
+  turnJournal: NativeChatTurnJournal
+  workingStartedAt: number | null
+} {
   const settledTurns = useMemo(
     () => selectStructuredAgentSettledTurns(items, submissions),
     [items, submissions]
   )
+  const turnJournal = useMemo(() => ({ items, submissions }), [items, submissions])
   const [latch, setLatch] = useState<StructuredAgentTurnClockLatch | null>(null)
   const runningTiming = useMemo(
     () => (turnId === null ? null : selectStructuredAgentRunningTurnTiming(items, turnId)),
@@ -50,5 +57,5 @@ export function useMobileStructuredAgentTurnTiming(
   if (step.latch !== latch) {
     setLatch(step.latch)
   }
-  return { settledTurns, workingStartedAt: step.workingStartedAt }
+  return { settledTurns, turnJournal, workingStartedAt: step.workingStartedAt }
 }

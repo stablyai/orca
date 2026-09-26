@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -50,7 +51,7 @@ async function pendingPrompt(): Promise<{ journal: AgentSessionJournal; itemId: 
         resolvedAt: null
       }
     },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   return { journal, itemId: item.itemId }
 }
@@ -117,7 +118,7 @@ describe('performCancel for a pending prompt', () => {
             resolvedAt: null
           }
         },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
     })
 

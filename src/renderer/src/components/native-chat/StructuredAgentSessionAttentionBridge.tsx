@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { getStructuredAgentSessionTurnCompletionFeed } from '@/runtime/structured-agent-session-turn-completion-feed'
 import { dispatchStructuredTurnCompletionAttention } from './structured-attention-dispatch'
 import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
@@ -24,15 +25,19 @@ function StructuredAgentSessionAttention({ tab }: { tab: StructuredTab }): null 
     [environmentId]
   )
   const feed = useMemo(() => getStructuredAgentSessionTurnCompletionFeed(target), [target])
+  const statusFeed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
   useEffect(() => feed.activate(), [feed])
   useEffect(
     () =>
       feed.subscribe((completion) => {
         if (completion.sessionId === tab.entityId) {
-          dispatchStructuredTurnCompletionAttention(tab, completion)
+          // The status mirror, not the row: the host publishes the status before the completion,
+          // and the row is only projected from the mirror after a render.
+          const hostStatus = statusFeed.getSnapshot().get(tab.entityId)?.status
+          dispatchStructuredTurnCompletionAttention(tab, completion, hostStatus)
         }
       }),
-    [feed, tab]
+    [feed, statusFeed, tab]
   )
   return null
 }

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Recovery drives the real journal loader against real on-disk damage: a hole
 // punched in the row sequence, and a row stamped with a schema this host cannot
 // read — on both version axes, because only one of them is detectable before a
@@ -80,7 +81,7 @@ async function seedJournal(count: number): Promise<string> {
     await journal.appendItem(
       item(ordinal),
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: `item-${ordinal}` }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
   const epoch = journal.epoch
@@ -290,7 +291,8 @@ describe('openAgentSessionJournalWithRecovery', () => {
         {
           kind: 'item',
           identity: { provider: 'orca', clientMessageId: 'approval-1' },
-          body: { kind: 'status', text: 'approved' }
+          body: { kind: 'status', text: 'approved' },
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
         }
       ]
     })
@@ -405,7 +407,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
     await reopened.journal.appendItem(
       item(2),
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'typed later' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const epoch = reopened.journal.epoch
     await reopened.journal.close()

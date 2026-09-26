@@ -1,7 +1,10 @@
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
+import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalItemBody,
+  type AgentJournalRenderItem,
+  type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
@@ -183,20 +186,28 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
         )
       )
     } else if (showUnexpectedExitOutcome) {
+      // The turn the exit ended, and an error so no fold ever hides why it stopped.
       mutations.push({
         kind: 'item',
         identity: { provider: 'orca', clientMessageId: input.settlementId },
         body: {
           kind: 'status',
-          text: boundJournalStatusText(unexpectedProviderExitOutcome(input.unexpectedExitReason))
-        }
+          text: boundJournalStatusText(unexpectedProviderExitOutcome(input.unexpectedExitReason)),
+          tone: 'error'
+        },
+        turnScope: runningRootTurnScope(items)
       })
     }
     for (const item of items) {
       const identity = parseAgentJournalItemKey(item.itemId)
       const body = terminalDeadGenerationBody(item)
       if (identity && body) {
-        mutations.push({ kind: 'item', identity, body })
+        mutations.push({
+          kind: 'item',
+          identity,
+          body,
+          turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+        })
       }
     }
     mutations.push(...runningTurnLifecycleRevisions(items, input.verdict))
@@ -214,6 +225,13 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
     input.onError?.(input.sessionId, error)
     return false
   }
+}
+
+function runningRootTurnScope(items: readonly AgentJournalRenderItem[]): AgentJournalTurnScope {
+  const running = items.findLast(
+    (item) => isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)?.state === 'running'
+  )
+  return running ? { kind: 'turn', turnItemId: running.itemId } : AGENT_JOURNAL_THREAD_SCOPE
 }
 
 function terminalDeadGenerationBody(item: AgentJournalRenderItem): AgentJournalItemBody | null {

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Source validation must finish before a new session claims the provider conversation.
 
 import { mkdtemp, rm, writeFile, truncate } from 'node:fs/promises'
@@ -162,7 +163,7 @@ describe('adopting a provider conversation on create', () => {
       await journal.appendItem(
         { provider: 'legacy', agent: 'codex', sessionId: THREAD, recordId: 'journal-only' },
         { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'not yet in rollout' }] },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       await journal.close()
     })

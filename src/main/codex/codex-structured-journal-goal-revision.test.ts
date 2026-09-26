@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -93,10 +94,10 @@ describe('codex goal accounting revisions', () => {
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'earlier' },
       { kind: 'status', text: 'Context compacted' },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const { sink, drained, subscribe, published } = journalSink(journal)
-    const goals = new CodexJournalGoals(sink, () => ({}))
+    const goals = new CodexJournalGoals(sink, () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }))
 
     goals.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() })
     await drained()
@@ -104,7 +105,7 @@ describe('codex goal accounting revisions', () => {
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'later' },
       { kind: 'status', text: 'Something after the goal' },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     subscribe()
 
@@ -160,14 +161,18 @@ describe('codex goal accounting revisions', () => {
     root = await mkdtemp(join(tmpdir(), 'orca-goal-resume-revision-'))
     const journal = await journals.open({ identity: IDENTITY, journalDir: root })
     const first = journalSink(journal)
-    const prior = new CodexJournalGoals(first.sink, () => ({}))
+    const prior = new CodexJournalGoals(first.sink, () => ({
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }))
     prior.handle({ threadId: THREAD, method: 'thread/goal/updated', params: goalFrame() })
     await first.drained()
     prior.dispose()
     const [created] = journal.snapshot().items
 
     const second = journalSink(journal)
-    const resumed = new CodexJournalGoals(second.sink, () => ({}))
+    const resumed = new CodexJournalGoals(second.sink, () => ({
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }))
     // Only a few seconds more: a resume snapshot still refreshes, since no live tick follows.
     const snapshot = goalFrame({ timeUsedSeconds: 3, updatedAt: 1789067991 })
     resumed.handle({ threadId: THREAD, method: 'thread/goal/updated', params: snapshot })

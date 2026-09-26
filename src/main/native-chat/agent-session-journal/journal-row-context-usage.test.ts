@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Context facts ride turn rows. Every kind the writer produces must replay, and
 // one this build cannot read must cost the fact, never the row or the journal.
 
@@ -91,7 +92,10 @@ describe('context facts on replayed turn rows', () => {
   it('replays every part and kind the writer produces, unchanged', async () => {
     const journal = await open()
     for (const [index, facts] of FACTS.entries()) {
-      await journal.appendItem(row(index), turn(`turn-${index}`, facts), { fence: 1 })
+      await journal.appendItem(row(index), turn(`turn-${index}`, facts), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     }
     const written = journal.snapshot().items.map((item) => item.body)
     await journal.close()
@@ -104,11 +108,14 @@ describe('context facts on replayed turn rows', () => {
 
   it('keeps a turn row whose facts it cannot read, and everything after it, minus the facts', async () => {
     const journal = await open()
-    await journal.appendItem(row(0), turn('turn-0', FACTS[0]), { fence: 1 })
+    await journal.appendItem(row(0), turn('turn-0', FACTS[0]), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.appendItem(
       row(1),
       { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'after' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.close()
     const opened = openJournalDatabase(journalDatabaseFile(root))

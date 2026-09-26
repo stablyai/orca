@@ -8,7 +8,7 @@ import {
 import { MAX_CODEX_GENERIC_TURN_BUCKETS } from './codex-structured-journal-limits'
 import { appendCodexLifecycleItem, publishCodexLifecycle } from './codex-structured-journal-sink'
 import { readCodexTurnId } from './codex-structured-thread-facts'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
 
 export class CodexJournalCompactions {
   private readonly turns = new Map<string, 'item' | 'legacy'>()
@@ -16,7 +16,9 @@ export class CodexJournalCompactions {
   constructor(
     private readonly sink: StructuredAgentSessionEventSink,
     private readonly activeTurn: (threadId: string) => string | null,
-    private readonly linkageFor: CodexRowLinkage
+    private readonly attributionFor: CodexRowAttribution,
+    /** A command's own turn: the host writes its result row in place of this marker. */
+    private readonly claimed: (turnId: string) => boolean
   ) {}
 
   handle(event: {
@@ -31,6 +33,9 @@ export class CodexJournalCompactions {
     if (!turnId) {
       return null
     }
+    if (this.claimed(turnId)) {
+      return CODEX_JOURNAL_ADMITTED
+    }
     // Collapse compactions within a thread/turn; the canonical item replaces its legacy fallback.
     const key = createHash('sha256')
       .update(JSON.stringify([event.threadId, turnId]))
@@ -44,7 +49,7 @@ export class CodexJournalCompactions {
       this.sink,
       { provider: 'orca', clientMessageId: `codex-compaction:${key}` },
       { kind: 'status', text: 'Context compacted', presentation: 'compaction' },
-      this.linkageFor(event.threadId, turnId)
+      this.attributionFor(event.threadId, turnId)
     )
     if (!admission.accepted) {
       return admission

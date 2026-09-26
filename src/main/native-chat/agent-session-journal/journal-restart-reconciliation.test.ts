@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Wiring the restart reconciler: what provider history is allowed to decide
 // about a submission the crash boundary could only doubt.
 
@@ -201,7 +202,8 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     const journal = await open()
     // An identical message, delivered and committed BEFORE the one that crashed.
     await journal.appendItem(claudeIdentity('uuid-old'), userMessage('deploy the thing'), {
-      fence: 1
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
     await journal.appendSubmission({
       clientMessageId: 'cm_1',

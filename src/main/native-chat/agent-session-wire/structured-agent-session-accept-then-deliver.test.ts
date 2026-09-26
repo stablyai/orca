@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A send is accepted, then delivered: the host answers once the message is recorded, and the
 // session's delivery loop starts a provider child for it and hands it over. Against the real host,
 // store and journal; each assertion reads what an open chat or the journal's next reader sees.
@@ -8,7 +9,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import type {
+  AgentSessionSubscribeEvent,
+  AgentSessionTurnCompletionEvent
+} from '../../../shared/agent-session-wire'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_HOST_RESTARTED,
@@ -324,6 +329,28 @@ describe('a start the chat needed and did not get', () => {
     expect(await errorRows()).toHaveLength(1)
   })
 
+  it('notifies failed once for the queued messages one start failure refused', async () => {
+    await host.close(SESSION)
+    acquire.mockRejectedValueOnce(new Error('spawn codex ENOENT'))
+    const completions: AgentSessionTurnCompletionEvent[] = []
+    host.subscribeTurnCompletions({ id: 'dot-1', emit: (event) => completions.push(event) })
+    await accept('first')
+    const second = await accept('second')
+
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
+    await host.flushAllStreamedEvents()
+    expect(completions).toEqual([
+      {
+        type: 'completion',
+        completion: expect.objectContaining({
+          sessionId: SESSION,
+          turnId: agentJournalSubmissionKey(second),
+          outcome: 'failure'
+        })
+      }
+    ])
+  })
+
   it.each([
     [
       'eligibility',
@@ -452,7 +479,12 @@ describe('what an earlier host process left behind', () => {
     await writeAsEarlierProcess(async (journal, fence) => {
       await journal.appendSubmission({ ...earlierSubmission('legacy', 'l'), fence })
       await journal.appendSubmission({ ...earlierSubmission('handed', 'h', true), fence })
-      await journal.resolveDispatch({ clientMessageId: 'handed', state: 'pending', fence })
+      await journal.resolveDispatch({
+        clientMessageId: 'handed',
+        state: 'pending',
+        fence,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
     })
     await host.flushAllStreamedEvents()
     await startHost()
@@ -631,7 +663,7 @@ describe('a compaction or rewind an earlier child left prepared', () => {
     await startHost()
   }
 
-  it('settles an interrupted compaction at open, so a send is accepted and delivered (R16)', async () => {
+  it("ignores an older build's interrupted compaction, so a send is accepted and delivered (R16)", async () => {
     await leftPrepared((fence) =>
       store.setConversationCommand(SESSION, fence, {
         command: 'compact',
@@ -646,10 +678,8 @@ describe('a compaction or rewind an earlier child left prepared', () => {
     const id = await accept('after the compaction')
 
     await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
-    expect(store.getRecord(SESSION)?.conversationCommand).toMatchObject({
-      phase: 'committed',
-      state: 'unknown'
-    })
+    // Nothing settles the record: it belongs to a child this host no longer runs.
+    expect(store.getRecord(SESSION)?.conversationCommand).toMatchObject({ phase: 'prepared' })
   })
 
   it('completes a rewind the provider already applied at open, so a send is accepted (R16)', async () => {

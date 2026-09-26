@@ -177,7 +177,8 @@ const MessageBody = z.object({
   role: z.string().min(1),
   blocks: z.array(Block),
   // Open like roles: a send mode a newer build writes must not turn the row malformed.
-  sentAs: z.string().min(1).optional()
+  sentAs: z.string().min(1).optional(),
+  command: z.object({ name: z.string().min(1) }).optional()
 })
 
 const ThreadGoal = z.object({
@@ -266,7 +267,8 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     requestedAt: z.number().finite().positive().optional(),
     completedAt: z.number().finite().positive().optional(),
     durationMs: z.number().finite().nonnegative().optional(),
-    contextUsage: AgentSessionContextUsageSchema.optional()
+    contextUsage: AgentSessionContextUsageSchema.optional(),
+    providerTurnId: z.string().min(1).optional()
   })
 ])
 
@@ -284,6 +286,13 @@ export const AgentJournalProducerLinkageFields = {
   attempt: z.number().int().optional()
 } as const
 
+/** Open like the other persisted vocabularies: a scope kind a newer host states must not turn
+ *  the row malformed. A reader places only `turn` with an id; anything else reads as `thread`. */
+export const AgentJournalTurnScopeSchema = z.object({
+  kind: z.string().min(1),
+  turnItemId: z.string().min(1).optional()
+})
+
 export const AgentJournalRenderItemSchema = z.object({
   itemId: z.string().min(1),
   revision: z.number().int(),
@@ -292,6 +301,7 @@ export const AgentJournalRenderItemSchema = z.object({
   observedAt: z.number(),
   recovered: z.literal(true).optional(),
   recoveredAt: z.number().optional(),
+  turnScope: AgentJournalTurnScopeSchema.optional(),
   ...AgentJournalProducerLinkageFields
 })
 

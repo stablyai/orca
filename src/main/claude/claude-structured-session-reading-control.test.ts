@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createDeferredStructuredAgentSessionEventSink,
@@ -236,7 +237,8 @@ describe('Claude structured reading control', () => {
     const resumeReading = vi.spyOn(claude.connections[0], 'resumeReading')
     deferred.sink.appendItem(
       { provider: 'orca', clientMessageId: 'blocked-prefill' },
-      { kind: 'message', role: 'system', blocks: [{ type: 'text', text: 'prefill' }] }
+      { kind: 'message', role: 'system', blocks: [{ type: 'text', text: 'prefill' }] },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await appendEntered.promise
     const notification = {

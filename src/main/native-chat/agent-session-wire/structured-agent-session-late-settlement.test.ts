@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -268,7 +269,10 @@ describe('settling a send the provider proves it received after the ack window',
     await journal().appendItem(
       { provider: 'claude', sessionId: THREAD, uuid: 'echo-row' },
       params.body,
-      { fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1 }
+      {
+        fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      }
     )
 
     expect(await submissions()).toMatchObject([

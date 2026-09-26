@@ -1,15 +1,17 @@
 import type { ClaudeSession, ClaudeStructuredSessionEvent } from './claude-structured-session-state'
-import type { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
+import type {
+  StructuredSessionCompaction,
+  StructuredSessionCompactionResult
+} from '../native-chat/agent-session-wire/structured-session-compaction'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-/** Compaction needs no ack deadline of its own: `compactions.run` keeps its own
- *  180s completion window and settles on Claude's terminal `result` frame, so
- *  the dispatch here only has to report a refusal to send. */
+/** Compaction needs no ack deadline of its own: `compactions.run` settles on Claude's terminal
+ *  `result` frame, so the dispatch here only has to report a refusal to send. */
 export function compactClaudeSession(
   session: ClaudeSession,
   compactions: StructuredSessionCompaction,
   input: Parameters<NonNullable<StructuredAgentSessionAdapter['compact']>>[0]
-): Promise<{ error?: string }> {
+): Promise<StructuredSessionCompactionResult> {
   return compactions.run(
     input.sessionId,
     session.providerSessionId,
@@ -22,8 +24,7 @@ export function compactClaudeSession(
       }
       return undefined
     },
-    input.onLateResult,
-    input.turnId
+    { turnId: input.turnId, turnItemId: input.turnItemId }
   )
 }
 
@@ -37,9 +38,6 @@ export function observeClaudeCompaction(
   }
   if (event.type === 'message') {
     compactions.claude(event.sessionId, event.message)
-  }
-  if (event.type === 'ended') {
-    compactions.ended(event.sessionId)
   }
 }
 

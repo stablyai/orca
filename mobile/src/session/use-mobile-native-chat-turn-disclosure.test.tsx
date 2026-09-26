@@ -1,7 +1,13 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type {
+  AgentJournalItemBody,
+  AgentJournalRenderItem,
+  AgentJournalTurnScope
+} from '../../../src/shared/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
@@ -20,12 +26,14 @@ function Harness({
   enabled,
   isWorking = true,
   settledTurns,
+  turnJournal,
   scopeKey = 'host\0worktree\0tab-a'
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
   isWorking?: boolean
   settledTurns?: NativeChatSettledTurns
+  turnJournal?: NativeChatTurnJournal
   scopeKey?: string
 }): React.JSX.Element {
   const disclosure = useMobileNativeChatTurnDisclosure({
@@ -33,6 +41,7 @@ function Harness({
     enabled,
     isWorking,
     settledTurns,
+    turnJournal,
     scopeKey
   })
   return createElement('result', { disclosure })
@@ -203,5 +212,48 @@ describe('useMobileNativeChatTurnDisclosure', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('keeps a turn the provider opened live while it runs, and the turn before it settled', () => {
+    let sequence = 0
+    const entry = (
+      itemId: string,
+      body: AgentJournalItemBody,
+      turnScope: AgentJournalTurnScope = { kind: 'thread' }
+    ): AgentJournalRenderItem => {
+      sequence += 1
+      return { itemId, revision: 0, sequence, observedAt: sequence, body, turnScope }
+    }
+    const said = (itemId: string, turnItemId: string) =>
+      entry(
+        itemId,
+        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: itemId }] },
+        { kind: 'turn', turnItemId }
+      )
+    const items = [
+      entry('u1', { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'go' }] }),
+      entry('t1', { kind: 'turn', turnId: 't1', state: 'completed', userItemId: 'u1' }),
+      said('a1', 't1'),
+      entry('wake', { kind: 'turn', turnId: 'wake', state: 'running', userItemId: 'claude:wake' }),
+      said('wake-note', 'wake')
+    ]
+    const messages: NativeChatMessage[] = ['u1', 'a1', 'wake-note'].map((id, index) => ({
+      ...userMessage(id),
+      role: index === 0 ? 'user' : 'assistant'
+    }))
+    act(() => {
+      renderer = create(
+        createElement(Harness, {
+          messages,
+          enabled: true,
+          settledTurns: new Map([['u1', { startedAt: 500, workedSeconds: 4 }]]),
+          turnJournal: { items, submissions: [] }
+        })
+      )
+    })
+    const disclosure = renderer!.root.findByType('result').props.disclosure
+    const rows = messages.map((message, index) => disclosure.resolveRow(index, message))
+    expect(rows.map((row) => row.activeTurnIsWorking)).toEqual([false, false, true])
+    expect(rows[0].turnStatus?.workedSeconds).toBe(4)
   })
 })

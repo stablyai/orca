@@ -10,6 +10,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalThreadGoal,
   AgentJournalTurnLifecycle,
+  AgentJournalTurnScope,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
@@ -18,6 +19,7 @@ import type { AgentSessionContextUsage } from '../../../shared/agent-session-con
 import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
 import {
   activeStructuredAgentSessionTurnIdBySequence,
+  liveStructuredAgentSessionTurnScope,
   newestStructuredAgentSessionTurnBySequence
 } from '../../../shared/structured-agent-session-live-turn'
 import { agentSessionJournalCloseRetries } from './journal-close-retry'
@@ -218,6 +220,10 @@ export class AgentSessionJournal {
   activeTurnId = (): string | null =>
     activeStructuredAgentSessionTurnIdBySequence(this.state.items.values())
 
+  /** Where a row written now belongs: the running turn, or the conversation. */
+  liveTurnScope = (): AgentJournalTurnScope =>
+    liveStructuredAgentSessionTurnScope(this.state.items.values())
+
   /** The newest turn record whatever state it settled in, for readers that need the outcome. */
   newestTurn = (): AgentJournalTurnLifecycle | null =>
     newestStructuredAgentSessionTurnBySequence(this.state.items.values())
@@ -269,7 +275,7 @@ export class AgentSessionJournal {
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options: JournalItemAppendOptions = { fence: 0 }
+    options: JournalItemAppendOptions
   ): Promise<JournalAppendResult> {
     return this.itemAppender.append(identity, body, options)
   }

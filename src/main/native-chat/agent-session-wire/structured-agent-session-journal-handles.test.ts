@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Journal handle ownership across the wire layer.
 //
 // Every one of these sites is reached only when something has already gone
@@ -91,7 +92,7 @@ describe('site 6: recovery rehydration', () => {
       await seeded.appendItem(
         { provider: 'codex', threadId: SESSION, turnId: 'turn-1', ordinal },
         { kind: 'status', text: `seed-${ordinal}` },
-        { fence: 1 }
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
     }
     await seeded.close()

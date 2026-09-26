@@ -3,7 +3,8 @@
 // The entry is the conversation and outlives any number of children. A child enters only when an
 // attach has fully succeeded, and leaves only through `endProviderChild`, which every ending shares:
 // an exit, a failed re-attach, a Stop and an eviction. Each is matched on the child's generation
-// and fence, so an ending that arrives late for an older child cannot end a newer one.
+// and fence, so an ending that arrives late for an older child cannot end a newer one. Being that
+// one place is also what lets a waiter hear every ending, whichever way the adapter reported it.
 
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -17,6 +18,10 @@ import type {
 type ChildBearer = Pick<StructuredAgentSessionHostSession, 'child' | 'lastEndedChild'> & {
   journal: Pick<AgentSessionJournal, 'cursor'>
 }
+
+type ChildEndWaiter = { identity: StructuredAgentSessionProviderChildIdentity; resolve: () => void }
+
+const childEndWaiters = new WeakMap<ChildBearer, ChildEndWaiter[]>()
 
 /** The fence a conversation write carries: the record's, which is where the next child starts. A
  *  child's own writes carry `child.fence`, which equals it while that child holds the lease. */
@@ -33,6 +38,23 @@ export function indexProviderChild(
   child: StructuredAgentSessionProviderChild
 ): void {
   session.child = child
+  // A re-attach to the same child keeps its waiters; any other child is gone.
+  releaseChildEndWaiters(session, (identity) => !sameChild(identity, child))
+}
+
+/** Resolves when this child is no longer the conversation's, at once when it already is not. */
+export function providerChildEnded(
+  session: ChildBearer,
+  identity: StructuredAgentSessionProviderChildIdentity
+): Promise<void> {
+  if (!matchingChild(session, identity)) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const waiters = childEndWaiters.get(session) ?? []
+    waiters.push({ identity, resolve })
+    childEndWaiters.set(session, waiters)
+  })
 }
 
 export function markProviderChildStarted(
@@ -55,7 +77,29 @@ export function endProviderChild(
   }
   session.child = null
   session.lastEndedChild = { ...ended, endedAt: session.journal.cursor() }
+  releaseChildEndWaiters(session, () => true)
   return true
+}
+
+function releaseChildEndWaiters(
+  session: ChildBearer,
+  ended: (identity: StructuredAgentSessionProviderChildIdentity) => boolean
+): void {
+  const waiters = childEndWaiters.get(session)
+  if (!waiters) {
+    return
+  }
+  const remaining = waiters.filter((waiter) => !ended(waiter.identity))
+  for (const waiter of waiters) {
+    if (!remaining.includes(waiter)) {
+      waiter.resolve()
+    }
+  }
+  if (remaining.length > 0) {
+    childEndWaiters.set(session, remaining)
+  } else {
+    childEndWaiters.delete(session)
+  }
 }
 
 function matchingChild(
@@ -63,7 +107,12 @@ function matchingChild(
   identity: StructuredAgentSessionProviderChildIdentity
 ): StructuredAgentSessionProviderChild | null {
   const { child } = session
-  return child && child.generation === identity.generation && child.fence === identity.fence
-    ? child
-    : null
+  return child && sameChild(child, identity) ? child : null
+}
+
+function sameChild(
+  a: StructuredAgentSessionProviderChildIdentity,
+  b: StructuredAgentSessionProviderChildIdentity
+): boolean {
+  return a.generation === b.generation && a.fence === b.fence
 }

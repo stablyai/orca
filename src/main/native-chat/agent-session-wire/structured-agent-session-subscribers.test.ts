@@ -2,7 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+} from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
@@ -116,7 +119,7 @@ describe('AgentSessionSubscribers', () => {
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'clocked' },
       { kind: 'status', text: 'Clocked' },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     subscribers.publish(SESSION, journal)
     subscribers.backgroundTasks(SESSION, null, 1)
@@ -253,12 +256,12 @@ describe('AgentSessionSubscribers', () => {
     await journal.appendItem(
       { ...turn, ordinal: 1 },
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     await journal.appendItem(
       turn,
       { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     subscribers.publish(SESSION, journal)
 
@@ -318,7 +321,7 @@ describe('AgentSessionSubscribers', () => {
     await journal.appendItem(
       { provider: 'orca', clientMessageId: 'after-background-fence' },
       { kind: 'status', text: 'After background state' },
-      { fence: 2 }
+      { fence: 2, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     subscribers.publish(SESSION, journal)
 

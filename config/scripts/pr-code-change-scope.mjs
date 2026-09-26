@@ -156,6 +156,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/methods/session-tabs.ts',
   'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',
+  'src/main/runtime/runtime-worktree-agent-',
+  'src/main/runtime/runtime-worktree-pty-agent-sources',
+  'src/shared/runtime-worktree-contracts',
   'src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
 ]
 

@@ -95,7 +95,12 @@ async function restartWithPersistedTurn(): Promise<StructuredAgentSessionHost> {
   const host = createHost(store)
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const body = hostTestMessage('persisted conversation')
-  await host.send(CALLER, { envelope: sendEnvelope(store, { body }), body })
+  const sent = await host.send(CALLER, { envelope: sendEnvelope(store, { body }), body })
+  if (!sent.ok) {
+    throw new Error('send was refused')
+  }
+  // Delivered, not just accepted: a message still queued at the restart was never a request.
+  await host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
   await host.flushAllStreamedEvents()
   return createHost(await AgentSessionRecordStore.open({ directory, hostId: 'local' }))
 }

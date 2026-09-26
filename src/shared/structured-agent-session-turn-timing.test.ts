@@ -226,7 +226,7 @@ describe('explicit user-item attribution', () => {
     expect([...selectStructuredAgentTurnTimings(items).keys()]).toEqual(['claude:s:u1'])
   })
 
-  it('attributes nothing when a keyed row names a user item nobody journaled', () => {
+  it('keys a turn whose named user item nobody journaled on its own record', () => {
     const items = [
       user('orca:first'),
       lifecycle('auto', {
@@ -236,7 +236,10 @@ describe('explicit user-item attribution', () => {
         completedAt: 2_000
       })
     ]
-    expect(selectStructuredAgentTurnTimings(items).size).toBe(0)
+    // A turn the provider started itself: its time is its own, never the prompt before it.
+    expect([...selectStructuredAgentTurnTimings(items).keys()]).toEqual([
+      'legacy:codex:s:turn-lifecycle%3Aauto'
+    ])
   })
 
   it('falls back to journal order only for rows without a key (older hosts)', () => {

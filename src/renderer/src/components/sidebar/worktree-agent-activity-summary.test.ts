@@ -22,6 +22,7 @@ function makeAgentStatusEntry(args: {
   restoredUnconfirmed?: true
   workingMode?: AgentStatusEntry['workingMode']
   interrupted?: true
+  mainAgent?: AgentStatusEntry['mainAgent']
 }): AgentStatusEntry {
   return {
     paneKey: args.paneKey,
@@ -34,6 +35,7 @@ function makeAgentStatusEntry(args: {
     restoredUnconfirmed: args.restoredUnconfirmed,
     workingMode: args.workingMode,
     interrupted: args.interrupted,
+    mainAgent: args.mainAgent,
     orchestration: args.parentPaneKey
       ? {
           taskId: 'task-1',
@@ -221,6 +223,93 @@ describe('selectWorktreeAgentActivitySummary', () => {
     )
 
     expect(summary).toMatchObject({ hasInterrupted: true, hasLiveDone: false })
+  })
+
+  it('separates a failed outcome from clean completion and from a cancellation', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const summary = selectWorktreeAgentActivitySummary(
+      {
+        tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+        agentStatusEpoch: 3,
+        agentStatusByPaneKey: {
+          [paneKey]: makeAgentStatusEntry({
+            paneKey,
+            state: 'done',
+            mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1_000 }
+          })
+        },
+        migrationUnsupportedByPtyId: {},
+        runtimeAgentOrchestrationByPaneKey: {},
+        retainedAgentsByPaneKey: {}
+      },
+      'repo::/wt-1'
+    )
+
+    expect(summary).toMatchObject({ hasFailed: true, hasInterrupted: false, hasLiveDone: false })
+  })
+
+  it('reports a main agent that failed while its subagents run, beside their pending question', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const summaryFor = (state: 'working' | 'waiting', outcome: 'failure' | 'success') =>
+      selectWorktreeAgentActivitySummary(
+        {
+          tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+          agentStatusEpoch: state === 'working' ? (outcome === 'failure' ? 5 : 6) : 7,
+          agentStatusByPaneKey: {
+            [paneKey]: makeAgentStatusEntry({
+              paneKey,
+              state,
+              mainAgent: { state: 'done', outcome, stateStartedAt: 1_000 }
+            })
+          },
+          migrationUnsupportedByPtyId: {},
+          runtimeAgentOrchestrationByPaneKey: {},
+          retainedAgentsByPaneKey: {}
+        },
+        'repo::/wt-1'
+      )
+
+    expect(summaryFor('working', 'failure')).toMatchObject({
+      hasFailed: true,
+      hasLiveWorking: false
+    })
+    expect(summaryFor('working', 'success')).toMatchObject({
+      hasFailed: false,
+      hasLiveWorking: true
+    })
+    expect(summaryFor('waiting', 'failure')).toMatchObject({ hasFailed: true, hasPermission: true })
+  })
+
+  it('reads a retained failed agent as failed after its pane goes away, not done', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const retainedTab = makeTab('tab-2', 'repo::/wt-2')
+    const summary = selectWorktreeAgentActivitySummary(
+      {
+        tabsByWorktree: { 'repo::/wt-2': [retainedTab] },
+        agentStatusEpoch: 4,
+        agentStatusByPaneKey: {},
+        migrationUnsupportedByPtyId: {},
+        runtimeAgentOrchestrationByPaneKey: {},
+        retainedAgentsByPaneKey: {
+          'tab-2:0': {
+            entry: makeAgentStatusEntry({
+              paneKey: 'tab-2:0',
+              state: 'done',
+              mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1_000 }
+            }),
+            worktreeId: 'repo::/wt-2',
+            tab: retainedTab,
+            agentType: 'claude',
+            startedAt: 1_000
+          }
+        }
+      },
+      'repo::/wt-2'
+    )
+
+    expect(summary).toMatchObject({ hasFailed: true, hasRetainedDone: false })
   })
 
   it('lets an unconfirmed restored row suppress only its pane title', () => {

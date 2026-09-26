@@ -33,6 +33,8 @@ function comparableBody(body: AgentJournalMessageItem | undefined): boolean {
   return (
     body?.kind === 'message' &&
     body.role === 'user' &&
+    // A conversation command leaves no user item in provider history to find.
+    body.command === undefined &&
     body.blocks.length === 1 &&
     body.blocks[0]?.type === 'text' &&
     body.blocks[0].text.trim().length > 0

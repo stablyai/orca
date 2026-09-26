@@ -551,7 +551,8 @@ describe('codex journal translation', () => {
               userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
               startedAt: expect.any(Number),
               completedAt: expect.any(Number)
-            }
+            },
+            turnScope: { kind: 'thread' }
           }
         ]
       }

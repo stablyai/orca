@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // `close()`: enqueue-time admission, and the fulfilled/rejected split.
 //
 // The two failures this file exists to prevent: an append enqueued in the same
@@ -78,7 +79,10 @@ afterEach(async () => {
 describe('closed-state admission happens at enqueue', () => {
   it('completes a write enqueued in the same turn as the close', async () => {
     const journal = await openJournal()
-    const append = journal.appendItem(item(1), body('before'), { fence: 1 })
+    const append = journal.appendItem(item(1), body('before'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const closed = journal.close()
 
     await expect(append).resolves.toBeDefined()
@@ -90,7 +94,10 @@ describe('closed-state admission happens at enqueue', () => {
   it('refuses a write offered while the close is still in flight, without queueing it', async () => {
     const journal = await openJournal()
     const closing = journal.close()
-    const refused = journal.appendItem(item(1), body('during'), { fence: 1 })
+    const refused = journal.appendItem(item(1), body('during'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     // The rejection is available before the close step has run: it never joined
     // the queue, so nothing is ever chained behind a close.
@@ -107,7 +114,12 @@ describe('closed-state admission happens at enqueue', () => {
         (error: unknown) => error
       )
     const refusals = [
-      settle(journal.appendItem(item(1), body('after'), { fence: 1 })),
+      settle(
+        journal.appendItem(item(1), body('after'), {
+          fence: 1,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        })
+      ),
       settle(journal.appendTombstone(item(3), { fence: 1 })),
       settle(
         journal.appendSubmission({
@@ -122,7 +134,14 @@ describe('closed-state admission happens at enqueue', () => {
         journal.appendLifecycleBatch({
           settlementId: 'settle',
           fence: 1,
-          mutations: [{ kind: 'item', identity: item(4), body: body('x') }]
+          mutations: [
+            {
+              kind: 'item',
+              identity: item(4),
+              body: body('x'),
+              turnScope: AGENT_JOURNAL_THREAD_SCOPE
+            }
+          ]
         })
       ),
       settle(journal.rollEpoch('handle_forked', 1)),
@@ -137,12 +156,20 @@ describe('closed-state admission happens at enqueue', () => {
   // caller's own turn, so a refusal never advances the queue.
   it('rejects without waiting for the queue to advance', async () => {
     const journal = await openJournal()
-    const inFlight = journal.appendItem(item(1), body('admitted'), { fence: 1 })
+    const inFlight = journal.appendItem(item(1), body('admitted'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const closing = journal.close()
 
     // Settles while the admitted append is still running: it reached the gate in
     // the caller's own turn and never joined the queue behind it.
-    await expect(journal.appendItem(item(2), body('later'), { fence: 1 })).rejects.toMatchObject({
+    await expect(
+      journal.appendItem(item(2), body('later'), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+    ).rejects.toMatchObject({
       code: 'journal_closed'
     })
     await expect(inFlight).resolves.toBeDefined()
@@ -164,7 +191,10 @@ describe('closed-state admission happens at enqueue', () => {
 describe('a rejected close is a real retry', () => {
   it('retries the release, releases the handle, and then goes terminal', async () => {
     const journal = await openJournal()
-    await journal.appendItem(item(1), body('durable'), { fence: 1 })
+    await journal.appendItem(item(1), body('durable'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const injected = injectReleaseFailure(journal)
 
     await expect(journal.close()).rejects.toThrow('injected release failure')
@@ -172,7 +202,12 @@ describe('a rejected close is a real retry', () => {
 
     // Write-closed anyway: retry exists to release the OS handle, never to
     // resurrect the store.
-    await expect(journal.appendItem(item(2), body('after'), { fence: 1 })).rejects.toMatchObject({
+    await expect(
+      journal.appendItem(item(2), body('after'), {
+        fence: 1,
+        turnScope: AGENT_JOURNAL_THREAD_SCOPE
+      })
+    ).rejects.toMatchObject({
       code: 'journal_closed'
     })
 

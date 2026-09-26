@@ -225,7 +225,21 @@ describe('provider-exit settlement', () => {
             provider: 'orca',
             clientMessageId: `provider-exit:${SESSION}:7:${GENERATION}`
           },
-          body: { kind: 'status', text: unexpectedProviderExitOutcome('provider exited') }
+          body: {
+            kind: 'status',
+            text: unexpectedProviderExitOutcome('provider exited'),
+            tone: 'error'
+          },
+          // The exit belongs to the turn it ended.
+          turnScope: {
+            kind: 'turn',
+            turnItemId: agentJournalItemKey({
+              provider: 'codex',
+              threadId: 'thread-1',
+              turnId: 'turn-2',
+              ordinal: 0
+            })
+          }
         },
         {
           kind: 'item',
@@ -236,7 +250,8 @@ describe('provider-exit settlement', () => {
             state: 'interrupted',
             startedAt: 30,
             completedAt: 1_234
-          }
+          },
+          turnScope: { kind: 'thread' }
         }
       ]
     })
@@ -313,7 +328,8 @@ describe('provider-exit settlement', () => {
           expect.objectContaining({
             body: {
               kind: 'status',
-              text: unexpectedProviderExitOutcome('provider exited after completing the turn')
+              text: unexpectedProviderExitOutcome('provider exited after completing the turn'),
+              tone: 'error'
             }
           })
         ])
@@ -361,7 +377,11 @@ describe('provider-exit settlement', () => {
       expect.objectContaining({
         mutations: [
           expect.objectContaining({
-            body: { kind: 'status', text: unexpectedProviderExitOutcome('provider exited') }
+            body: {
+              kind: 'status',
+              text: unexpectedProviderExitOutcome('provider exited'),
+              tone: 'error'
+            }
           })
         ]
       })

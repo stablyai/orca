@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // A close that REJECTED did not release the handle.
 //
 // `AgentSessionJournal.close()` is retryable by design: the release step is
@@ -192,7 +193,8 @@ describe('the attach orchestration', () => {
         {
           kind: 'status',
           text: 'still writable'
-        }
+        },
+        { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
     ).resolves.toBeDefined()
     expect(agentSessionJournalCloseRetries.pendingDirectories).toEqual([])
@@ -229,7 +231,8 @@ describe('the attach orchestration', () => {
         {
           kind: 'status',
           text: 'still writable'
-        }
+        },
+        { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
     ).resolves.toBeDefined()
     expect(agentSessionJournalCloseRetries.pendingDirectories).toEqual([])

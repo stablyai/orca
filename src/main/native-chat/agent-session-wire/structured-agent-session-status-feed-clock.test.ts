@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Which journal changes republish a session's status now that the summary carries its own state
 // clock: a moved clock always does, and row activity alone does not once the clock dates the state.
 
@@ -73,7 +74,7 @@ async function openFeed() {
     }
   })
   const write = async (identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-    await journal.appendItem(identity, body, { fence: 1 })
+    await journal.appendItem(identity, body, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     feed.publish(SESSION, journal)
   }
   await write(

@@ -55,7 +55,7 @@ export type NativeChatTranscriptSlot = {
 export type NativeChatTranscriptSlotsInput = {
   messages: readonly NativeChatMessage[]
   turnKeys: readonly (string | undefined)[]
-  latestUserIndex: number
+  /** The live turn (`nativeChatTurnMembership`); undefined when no row has opened one. */
   currentTurnKey: string | undefined
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
   turnStatuses: {
@@ -77,7 +77,6 @@ export function buildNativeChatTranscriptSlots(
   const {
     messages,
     turnKeys,
-    latestUserIndex,
     currentTurnKey,
     receipts,
     turnStatuses,
@@ -99,6 +98,10 @@ export function buildNativeChatTranscriptSlots(
       // and its plain-text twin is then the only record the spawn happened.
       outlivesTurn: message.blocks.some(
         (block) => isSubagentGroupBlock(block) || isBackgroundTaskBlock(block)
+      ),
+      reportsTurnOutcome: message.blocks.some(
+        (block) =>
+          block.type === 'text' && (block.tone === 'error' || block.presentation === 'compaction')
       )
     }
   })
@@ -125,16 +128,28 @@ export function buildNativeChatTranscriptSlots(
     settledTurnKeys,
     expandedTurnKeys
   })
+  // A settled turn's status draws at its first row: the message that opened it, or — for a turn
+  // the provider opened on its own — the first thing it produced.
+  const firstRowOfTurn = new Map<string, number>()
+  for (const [index, turnKey] of turnKeys.entries()) {
+    if (turnKey !== undefined && !firstRowOfTurn.has(turnKey)) {
+      firstRowOfTurn.set(turnKey, index)
+    }
+  }
   const slots: NativeChatTranscriptSlot[] = []
   for (const [index, message] of messages.entries()) {
     const turnKey = turnKeys[index]
     const receipt = receipts.get(message.id)
+    // The live turn's status draws only on the message that opened it; one the provider opened on
+    // its own has none, so the transcript-tail indicator alone carries it until it settles.
     const candidateStatus =
-      index === latestUserIndex
-        ? turnStatuses.active
-        : message.role === 'user' && turnKey
+      turnKey === undefined || firstRowOfTurn.get(turnKey) !== index
+        ? undefined
+        : turnKey !== currentTurnKey
           ? turnStatuses.completedByTurn[turnKey]
-          : undefined
+          : message.role === 'user'
+            ? turnStatuses.active
+            : undefined
     const status =
       showTurnStatus && candidateStatus?.workedSeconds != null ? candidateStatus : undefined
     const turnDiff = turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined

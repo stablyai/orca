@@ -27,7 +27,9 @@ import {
   readCodexTurnId,
   readCodexTurnStatus
 } from './codex-structured-thread-facts'
-import type { CodexRowLinkage } from './codex-subagent-linkage'
+import type { CodexRowAttribution } from './codex-subagent-linkage'
+import type { CodexJournalTurnScopes } from './codex-journal-turn-scopes'
+import { recordCodexCommandTurnClaim } from './codex-command-turn-claim'
 
 type TurnBoundaryEvent = {
   sessionId: string
@@ -51,7 +53,10 @@ export class CodexJournalTurnBoundaries {
       clearPromptTurn?: (threadId: string, turnId: string) => void
       flushSuppression: () => CodexJournalTranslationAdmission
       resetActivity: (threadId: string) => void
-      linkageFor: CodexRowLinkage
+      attributionFor: CodexRowAttribution
+      turnScopes: CodexJournalTurnScopes
+      /** The command turn's journal key when a pending conversation command owns this turn. */
+      claimCommandTurn?: (threadId: string, turnId: string) => string | null
       now?: () => number
     }
   ) {}
@@ -65,16 +70,26 @@ export class CodexJournalTurnBoundaries {
       return { accepted: false, reason: 'backpressure' }
     }
     const startedAt = this.receiptTime(event)
-    const admission = publishCodexTurnLifecycle({
-      sink: this.deps.sink,
-      primaryThreadId: this.deps.primaryThreadId(),
-      sessionId: event.sessionId,
-      threadId: event.threadId,
-      turnId,
-      state: 'running',
-      startedAt
-    })
+    const commandTurnItemId =
+      event.threadId === this.deps.primaryThreadId()
+        ? (this.deps.claimCommandTurn?.(event.threadId, turnId) ?? null)
+        : null
+    // The command's turn is the record: this turn writes none, and its rows join the command's.
+    const admission = commandTurnItemId
+      ? recordCodexCommandTurnClaim(this.deps.sink, commandTurnItemId, turnId)
+      : publishCodexTurnLifecycle({
+          sink: this.deps.sink,
+          primaryThreadId: this.deps.primaryThreadId(),
+          sessionId: event.sessionId,
+          threadId: event.threadId,
+          turnId,
+          state: 'running',
+          startedAt
+        })
     if (admission.accepted) {
+      if (commandTurnItemId) {
+        this.deps.turnScopes.claim(turnId, commandTurnItemId)
+      }
       this.deps.activeTurns.remember(
         event.threadId,
         turnId,
@@ -146,15 +161,14 @@ export class CodexJournalTurnBoundaries {
     // turn boundary is no evidence contact was lost. Only `settleSession` may
     // write `unverifiable`.
     const status = readCodexTurnStatus(event.params)
-    const turnLifecycle =
-      event.threadId === this.deps.primaryThreadId()
-        ? this.settled(event.threadId, turnId, {
-            state: codexTurnLifecycleState(status),
-            outcome: codexTurnOutcome(status),
-            completedAt: this.receiptTime(event),
-            durationMs: readCodexTurnDurationMs(event.params)
-          })
-        : null
+    const turnLifecycle = this.ownsRecord(event.threadId, turnId)
+      ? this.settled(event.threadId, turnId, {
+          state: codexTurnLifecycleState(status),
+          outcome: codexTurnOutcome(status),
+          completedAt: this.receiptTime(event),
+          durationMs: readCodexTurnDurationMs(event.params)
+        })
+      : null
     const requestOrigin = this.deps.activeTurns.requestOrigin(event.threadId, turnId)
     const latestDispatchSequence = this.deps.activeTurns.latestDispatchSequence(
       event.threadId,
@@ -170,7 +184,7 @@ export class CodexJournalTurnBoundaries {
       activeItems: this.deps.items.activeItems,
       pendingPrompts: this.deps.pendingPrompts,
       ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {}),
-      linkageFor: this.deps.linkageFor
+      attributionFor: this.deps.attributionFor
     })
     if (admission.accepted) {
       if (turnLifecycle) {
@@ -183,6 +197,7 @@ export class CodexJournalTurnBoundaries {
       }
       this.deps.items.ordinals.forgetTurn(event.threadId, turnId)
       this.deps.activeTurns.forget(event.threadId, turnId)
+      this.deps.turnScopes.forget(turnId)
       this.deps.resetActivity(event.threadId)
     }
     return admission
@@ -209,14 +224,13 @@ export class CodexJournalTurnBoundaries {
     if (!turnId || !this.deps.activeTurns.isActive(event.threadId, turnId)) {
       return CODEX_JOURNAL_ADMITTED
     }
-    const turnLifecycle =
-      event.threadId === this.deps.primaryThreadId()
-        ? this.settled(event.threadId, turnId, {
-            state: 'completed',
-            outcome: 'failure',
-            completedAt: this.receiptTime(event)
-          })
-        : null
+    const turnLifecycle = this.ownsRecord(event.threadId, turnId)
+      ? this.settled(event.threadId, turnId, {
+          state: 'completed',
+          outcome: 'failure',
+          completedAt: this.receiptTime(event)
+        })
+      : null
     const requestOrigin = this.deps.activeTurns.requestOrigin(event.threadId, turnId)
     const latestDispatchSequence = this.deps.activeTurns.latestDispatchSequence(
       event.threadId,
@@ -232,7 +246,7 @@ export class CodexJournalTurnBoundaries {
       activeItems: this.deps.items.activeItems,
       pendingPrompts: this.deps.pendingPrompts,
       ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {}),
-      linkageFor: this.deps.linkageFor
+      attributionFor: this.deps.attributionFor
     })
     if (admission.accepted) {
       if (turnLifecycle) {
@@ -245,6 +259,7 @@ export class CodexJournalTurnBoundaries {
       }
       this.deps.items.ordinals.forgetTurn(event.threadId, turnId)
       this.deps.activeTurns.forget(event.threadId, turnId)
+      this.deps.turnScopes.forget(turnId)
       this.deps.resetActivity(event.threadId)
     }
     return admission
@@ -278,9 +293,15 @@ export class CodexJournalTurnBoundaries {
     }
   }
 
+  /** Whether this translator writes the turn's record: a primary turn no command claimed. */
+  ownsRecord(threadId: string, turnId: string): boolean {
+    return threadId === this.deps.primaryThreadId() && !this.deps.turnScopes.claimed(turnId)
+  }
+
   clear(): void {
     this.deps.activeTurns.clear()
     this.recentTurns.clear()
+    this.deps.turnScopes.clear()
   }
 
   private receiptTime(event: TurnBoundaryEvent): number {

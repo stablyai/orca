@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -71,7 +72,7 @@ async function awaitingApproval() {
   await journal.appendItem(
     { ...IDENTITY, ordinal: 1 },
     { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'rm the branch' }] },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   await journal.appendItem(
     { ...IDENTITY, ordinal: 2 },
@@ -82,7 +83,7 @@ async function awaitingApproval() {
       options: [{ id: 'allow', label: 'Allow' }],
       resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
     },
-    { fence: 1 }
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
   const sessions = new Map([
     [

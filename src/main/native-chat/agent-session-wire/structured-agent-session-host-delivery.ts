@@ -17,7 +17,6 @@ import type {
 } from './structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from './structured-agent-session-provider-child'
 import { structuredAgentSessionStartFailureText } from './structured-agent-session-send-preparation'
-import { settleInterruptedCompaction } from './structured-compaction-recovery'
 import { recoverStructuredRewind } from './structured-rewind-recovery'
 
 export type StructuredAgentSessionConversationDelivery = {
@@ -39,6 +38,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   ensureProviderChild: (sessionId: string) => Promise<StructuredAgentSessionResumeOutcome>
   reset: (sessionId: string, journal: AgentSessionJournal, reset: AgentJournalResetReason) => void
   publishRestored: (sessionId: string) => void
+  flushStreamedEvents: (sessionId: string) => Promise<void>
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
   const loop = new StructuredAgentSessionDeliveryLoop({
@@ -51,7 +51,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       structuredAgentSessionConversationFence(deps.store, sessionId),
     startFailureText: (sessionId, cause) =>
       structuredAgentSessionStartFailureText(deps.store.getRecord(sessionId), cause),
-    onError: (sessionId, error) => deps.onEventSinkError?.({ sessionId, error })
+    onError: (sessionId, error) => deps.onEventSinkError?.({ sessionId, error }),
+    record: (sessionId) => deps.store.getRecord(sessionId),
+    flushStreamedEvents: input.flushStreamedEvents,
+    now: () => deps.now?.() ?? Date.now()
   })
   const adoptOpened = async (
     sessionId: string,
@@ -77,10 +80,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
 }
 
 /**
- * A compaction or rewind found prepared when the conversation opens was started under a child
- * this process no longer has — the open runs only when none is indexed — so nothing will finish
- * it, and left alone it refuses every send until a view attaches. Settled here instead of by a
- * start inside acceptance. A Codex rewind only its provider can prove stays for the attach.
+ * A rewind found prepared when the conversation opens was started under a child this process no
+ * longer has — the open runs only when none is indexed — so nothing will finish it, and left alone
+ * it refuses every send until a view attaches. Settled here instead of by a start inside
+ * acceptance. A Codex rewind only its provider can prove stays for the attach.
  */
 async function settleInterruptedCommands(
   deps: StructuredAgentSessionHostDeps,
@@ -89,7 +92,6 @@ async function settleInterruptedCommands(
 ): Promise<void> {
   const fence = structuredAgentSessionConversationFence(deps.store, sessionId)
   try {
-    await settleInterruptedCompaction(deps.store, sessionId, session.journal, fence)
     await recoverStructuredRewind(deps.store, sessionId, session.journal, fence)
   } catch (error) {
     deps.onEventSinkError?.({ sessionId, error })

@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // Two independent version axes, both fail closed.
 //
 //   `PRAGMA user_version`  the DB SHAPE, known before the first read
@@ -86,14 +87,19 @@ afterEach(async () => {
 describe('axis 1: the database shape', () => {
   it('latches read-only on a newer user_version and writes nothing', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.close()
     await withDatabase((db) => db.pragma(`user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`))
     const before = await stat(journalDatabaseFile(root))
 
     const reopened = await open()
     expect(reopened.isReadOnly).toBe(true)
-    await expect(reopened.appendItem(item(1), body('b'), { fence: 1 })).rejects.toMatchObject({
+    await expect(
+      reopened.appendItem(item(1), body('b'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    ).rejects.toMatchObject({
       code: 'journal_read_only'
     })
     // The file this build must not touch is byte-identical afterwards.
@@ -120,7 +126,10 @@ describe('axis 1: the database shape', () => {
 
   it('migrates an older user_version forward on reopen', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await journal.close()
     await withDatabase((db) => db.pragma('user_version = 0'))
 
@@ -137,7 +146,10 @@ describe('axis 1: the database shape', () => {
 describe('axis 2: the row body shape', () => {
   it('degrades to read-only on a row from a newer build, without skipping it', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const epoch = journal.epoch
     const nextSeq = journal.cursor().sequence + 1
     await journal.close()
@@ -159,7 +171,9 @@ describe('axis 2: the row body shape', () => {
 
     const reopened = await open()
     expect(reopened.isReadOnly).toBe(true)
-    await expect(reopened.appendItem(item(1), body('b'), { fence: 1 })).rejects.toMatchObject({
+    await expect(
+      reopened.appendItem(item(1), body('b'), { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    ).rejects.toMatchObject({
       code: 'journal_read_only'
     })
     await reopened.close()
@@ -174,7 +188,10 @@ describe('axis 2: the row body shape', () => {
 
   it('skips a malformed row without giving up the journal, and discloses the skip', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const epoch = journal.epoch
     const nextSeq = journal.cursor().sequence + 1
     await journal.close()
@@ -195,7 +212,10 @@ describe('axis 2: the row body shape', () => {
 
   it('keeps one disclosure row across reopens instead of stacking duplicates', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const epoch = journal.epoch
     const nextSeq = journal.cursor().sequence + 1
     await journal.close()
@@ -214,7 +234,10 @@ describe('axis 2: the row body shape', () => {
 
   it('reopens a journal holding an admitted malformed-percent item id without throwing', async () => {
     const journal = await open()
-    await journal.appendItem(item(0), body('a'), { fence: 1 })
+    await journal.appendItem(item(0), body('a'), {
+      fence: 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const epoch = journal.epoch
     const nextSeq = journal.cursor().sequence + 1
     await journal.close()

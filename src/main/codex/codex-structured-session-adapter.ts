@@ -118,7 +118,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       handleUnhandledFrame: (sessionId, kind, payload) =>
         this.handleUnhandledFrame(sessionId, kind, payload),
       forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
-        this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
+        this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason),
+      claimCommandTurn: (sessionId, threadId, turnId) =>
+        this.compactions.claimTurn(sessionId, threadId, turnId)
     })
 
   /** Buffers pre-publication events and drops events from superseded children. */
@@ -159,9 +161,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       if (session.backgroundTasks.observe(event)) {
         this.deps.onBackgroundTasksChanged?.(event.sessionId, session.backgroundTasks.state)
       }
-    }
-    if (event.type === 'ended') {
-      this.compactions.ended(event.sessionId)
     }
     this.deps.onEvent?.(event)
     return admission
@@ -264,10 +263,12 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
             throw error
           })
       },
-      input.onLateResult,
-      input.turnId
+      { turnId: input.turnId, turnItemId: input.turnItemId }
     )
   }
+
+  abandonCommand = (sessionId: string): void => this.compactions.abandon(sessionId)
+  releaseCommand = (sessionId: string): void => this.compactions.ended(sessionId)
 
   changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) =>
     changeCodexThreadGoal(

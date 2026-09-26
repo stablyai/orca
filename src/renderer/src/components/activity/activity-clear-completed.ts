@@ -18,11 +18,15 @@ export type ClearCompletedActivityPlan = {
   clearedThreadCount: number
 }
 
-/** A thread is clearable when it needs nothing from the user: completed or interrupted,
+/** A thread is clearable when it needs nothing from the user: completed, failed or interrupted,
  *  with no fresh live working/monitoring/blocked/waiting state. */
 export function isClearableActivityThread(thread: AgentPaneThread): boolean {
   const id = activityThreadStatusId(thread)
-  return id === 'done' || id === 'interrupted'
+  // Why: a failed main agent reads failed while its subagents still run; that thread is still live.
+  if (thread.currentAgentState) {
+    return false
+  }
+  return id === 'done' || id === 'failed' || id === 'interrupted'
 }
 
 export function planClearCompletedActivity(

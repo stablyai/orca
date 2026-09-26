@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
@@ -340,7 +341,10 @@ describe('Claude live prompt ownership', () => {
   })
 
   it('drops resolved prompt bodies instead of retaining them for the session lifetime', () => {
-    const prompts = new ClaudeJournalPrompts({ sink: lifecycleRecorder().sink })
+    const prompts = new ClaudeJournalPrompts({
+      sink: lifecycleRecorder().sink,
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     for (let index = 0; index < 128; index += 1) {
       const promptKey = `resolved-${index}`
@@ -672,7 +676,8 @@ describe('Claude live prompt ownership', () => {
               }
             ]
           : []
-      }
+      },
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
     const prompt: ClaudePendingPrompt = {
       requestId: 'grouped-request',
@@ -713,7 +718,8 @@ describe('Claude live prompt ownership', () => {
           lifecycleAttempts += 1
           return backpressured ? { accepted: false, reason: 'backpressure' } : { accepted: true }
         }
-      }
+      },
+      turnScope: () => AGENT_JOURNAL_THREAD_SCOPE
     })
     const registerCancellation = (index: number): void => {
       const promptKey = `permission-${index}`

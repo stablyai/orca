@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
@@ -45,7 +46,7 @@ function fixture(maxMetadataBytes?: number) {
     {
       sink,
       maxMetadataBytes,
-      linkageFor: () => ({}),
+      attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE }),
       schedule: (run) => {
         scheduled.add(run)
         return () => {
@@ -118,7 +119,7 @@ describe('persistent command retention', () => {
           sink,
           streams: items.streams,
           activeItems: items.activeItems,
-          linkageFor: () => ({})
+          attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE })
         })
       ).toEqual({ accepted: true })
     }
@@ -214,7 +215,7 @@ describe('persistent command retention', () => {
         sink,
         streams: items.streams,
         activeItems: items.activeItems,
-        linkageFor: () => ({})
+        attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE })
       })
     ).toEqual({ accepted: true })
     expect(items.activeItems.size).toBe(1)

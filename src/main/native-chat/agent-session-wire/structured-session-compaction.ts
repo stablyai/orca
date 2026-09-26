@@ -1,10 +1,21 @@
+/** How a conversation command the provider ran ended, from the provider's own frames. */
+export type StructuredSessionCompactionResult = {
+  outcome: 'success' | 'failure' | 'cancellation'
+  error?: string
+}
+
 type PendingCompaction = {
   identity: string
-  commandTurnId?: string
+  /** The host's command turn: its `turnId`, and its journal key. */
+  commandTurnId: string
+  commandTurnItemId: string
+  /** The provider turn that carries the command out, once the provider opened one. */
   turnId?: string
   error?: string
   compacted: boolean
-  finish: (result: { error?: string }) => void
+  /** Stop answered the command; the provider's own end only releases the entry. */
+  abandoned: boolean
+  resolve: (result: StructuredSessionCompactionResult) => void
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -18,62 +29,42 @@ export function isCodexCompactionComplete(method: string, params: unknown): bool
   )
 }
 
-/** A receipt is not completion; keep listening through the provider's terminal frame. */
+/** A receipt is not completion; keep listening through the provider's terminal frame. There is no
+ *  deadline: the command ends by that frame, Stop, or the host's `ended` when the child ends. */
 export class StructuredSessionCompaction {
   private readonly pending = new Map<string, PendingCompaction>()
-  constructor(private readonly timeoutMs = 180_000) {}
 
+  /** The entry is registered before `invoke` sends anything, so the provider turn it opens is
+   *  claimed as the command's. */
   async run(
     sessionId: string,
     identity: string,
     invoke: () => Promise<unknown>,
-    onLateResult?: (result: { error?: string }) => Promise<void>,
-    commandTurnId?: string
-  ): Promise<{ error?: string }> {
-    if (this.pending.has(sessionId)) {
+    command: { turnId: string; turnItemId: string }
+  ): Promise<StructuredSessionCompactionResult> {
+    if (this.pending.get(sessionId)?.abandoned === false) {
       throw new Error('Compaction is already running.')
     }
-    let timer: ReturnType<typeof setTimeout>
-    let expired = false
-    const completion = new Promise<{ error?: string }>((resolve, reject) => {
-      const finish = (result: { error?: string }) => {
-        this.pending.delete(sessionId)
-        if (expired && onLateResult) {
-          void onLateResult(result).catch((error) =>
-            console.warn('Could not persist late compaction completion', error)
-          )
-        }
-        resolve(result)
-      }
+    const completion = new Promise<StructuredSessionCompactionResult>((resolve) => {
       this.pending.set(sessionId, {
         identity,
-        commandTurnId,
+        commandTurnId: command.turnId,
+        commandTurnItemId: command.turnItemId,
         compacted: false,
-        finish
+        abandoned: false,
+        resolve
       })
-      timer = setTimeout(() => {
-        expired = true
-        reject(new Error('Compaction completion is unconfirmed.'))
-      }, this.timeoutMs)
-      timer.unref?.()
     })
-    // Observe rejection even while invoke is waiting for its own receipt.
-    void completion.catch(() => {})
     try {
       const admission = record(await invoke())
       if (typeof admission.error === 'string') {
-        this.pending.get(sessionId)?.finish({ error: admission.error })
+        this.finish(sessionId, { outcome: 'failure', error: admission.error })
       }
-      return await completion
     } catch (error) {
-      expired = this.pending.has(sessionId)
+      this.pending.delete(sessionId)
       throw error
-    } finally {
-      clearTimeout(timer!)
-      if (!expired) {
-        this.pending.delete(sessionId)
-      }
     }
+    return completion
   }
 
   hasPending(sessionId: string): boolean {
@@ -88,8 +79,31 @@ export class StructuredSessionCompaction {
     return this.ownsTurn(sessionId, turnId) ? this.pending.get(sessionId)?.turnId : turnId
   }
 
+  /** The command's journal key when the provider turn starting on `threadId` carries it out. The
+   *  single writer of the claim, and idempotent per provider turn so a refused frame's retry gets
+   *  the same answer. */
+  claimTurn(sessionId: string, threadId: string, providerTurnId: string): string | null {
+    const pending = this.pending.get(sessionId)
+    if (!pending || pending.identity !== threadId) {
+      return null
+    }
+    pending.turnId ??= providerTurnId
+    return pending.turnId === providerTurnId ? pending.commandTurnItemId : null
+  }
+
+  /** Stop: the command ends as cancelled now. The entry stays so the interrupt that follows still
+   *  finds the provider turn, and the provider's end releases it. */
+  abandon(sessionId: string): void {
+    const pending = this.pending.get(sessionId)
+    if (pending && !pending.abandoned) {
+      pending.abandoned = true
+      pending.resolve({ outcome: 'cancellation' })
+    }
+  }
+
+  /** The child ended: drop the entry whatever state it is in, so nothing later is claimed into it. */
   ended(sessionId: string): void {
-    this.pending.get(sessionId)?.finish({ error: 'The provider exited during compaction.' })
+    this.finish(sessionId, { outcome: 'failure', error: 'The provider exited during compaction.' })
   }
 
   codex(sessionId: string, method: string, value: unknown): void {
@@ -98,19 +112,22 @@ export class StructuredSessionCompaction {
     if (!pending || params.threadId !== pending.identity) {
       return
     }
-    const turn = record(params.turn)
-    if (method === 'turn/started' && typeof turn.id === 'string') {
-      pending.turnId = turn.id
-    }
     if (isCodexCompactionComplete(method, params)) {
       pending.compacted = true
     }
-    if (method === 'turn/completed' && turn.id === pending.turnId) {
+    const turn = record(params.turn)
+    if (method === 'turn/completed' && pending.turnId !== undefined && turn.id === pending.turnId) {
       const error = record(turn.error).message
-      pending.finish(
-        turn.status === 'completed' && pending.compacted
-          ? {}
-          : { error: typeof error === 'string' ? error : 'Compaction did not complete.' }
+      this.finish(
+        sessionId,
+        turn.status === 'interrupted'
+          ? { outcome: 'cancellation' }
+          : turn.status === 'completed' && pending.compacted
+            ? { outcome: 'success' }
+            : {
+                outcome: 'failure',
+                error: typeof error === 'string' ? error : 'Compaction did not complete.'
+              }
       )
     }
   }
@@ -137,7 +154,18 @@ export class StructuredSessionCompaction {
       const error =
         pending.error ??
         (pending.compacted ? undefined : 'Compaction was not confirmed by the provider.')
-      pending.finish(error ? { error } : {})
+      this.finish(sessionId, error ? { outcome: 'failure', error } : { outcome: 'success' })
+    }
+  }
+
+  private finish(sessionId: string, result: StructuredSessionCompactionResult): void {
+    const pending = this.pending.get(sessionId)
+    if (!pending) {
+      return
+    }
+    this.pending.delete(sessionId)
+    if (!pending.abandoned) {
+      pending.resolve(result)
     }
   }
 }

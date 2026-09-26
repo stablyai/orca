@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -222,7 +223,10 @@ describe('journal reopen after the writing host is gone', () => {
       { id: 'a', label: 'read_readme', state: 'working', startedAt: 10 },
       { id: 'b', label: 'read_package', state: 'working', startedAt: 10 }
     ])
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     // Still the writing host: it can see the children, so the row says so.
     const beforeRestart = live.snapshot().items.at(-1)!
@@ -245,7 +249,10 @@ describe('journal reopen after the writing host is gone', () => {
   it('revises the row in place rather than appending a second one', async () => {
     const live = await open()
     const row = rosterRow([{ id: 'a', label: 'read', state: 'working', startedAt: 10 }])
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const before = live.snapshot().items.length
     await live.close()
 
@@ -257,7 +264,10 @@ describe('journal reopen after the writing host is gone', () => {
   it('settles a persisted working background task to unverifiable', async () => {
     const live = await open()
     const row = backgroundTaskRow()
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     const beforeRestart = live.snapshot().items.at(-1)!
     expect(taskOf(beforeRestart.body)).toMatchObject({ state: 'working' })
     expect(twinOf(beforeRestart.body)).toBe('Started background command "sleep 20"')
@@ -273,7 +283,10 @@ describe('journal reopen after the writing host is gone', () => {
   it('writes nothing on a second reopen once every child is settled', async () => {
     const live = await open()
     const row = rosterRow([{ id: 'a', label: 'read', state: 'working', startedAt: 10 }])
-    await live.appendItem(row.identity, row.body, { fence: 0 })
+    await live.appendItem(row.identity, row.body, {
+      fence: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
     await live.close()
 
     const once = await open()

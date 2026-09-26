@@ -2,13 +2,18 @@ import { useCallback, useMemo, useState } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
+  nativeChatTurnMembership,
+  type NativeChatTurnJournal,
+  type NativeChatTurnMembership
+} from '../../../src/shared/native-chat-turn-membership'
+import {
   MOBILE_UNANCHORED_TURN_KEY,
   useMobileNativeChatTurnStatus,
   type NativeChatTurnStatus
 } from './use-mobile-native-chat-turn-status'
 
 const EMPTY_TURN_IDS: ReadonlySet<string> = new Set()
-const EMPTY_TURN_KEYS: readonly undefined[] = []
+const NO_MEMBERSHIP: NativeChatTurnMembership = { turnKeys: [], liveTurnKey: undefined }
 const MAX_EXPANDED_TURNS = 128
 
 export type MobileNativeChatTurnRow = {
@@ -28,6 +33,7 @@ export function useMobileNativeChatTurnDisclosure({
   isWorking,
   workingStartedAt,
   settledTurns,
+  turnJournal = null,
   thinking = false,
   activityText = null,
   scopeKey
@@ -38,6 +44,8 @@ export function useMobileNativeChatTurnDisclosure({
   workingStartedAt?: number | null
   /** Host-recorded durations; they outrank whatever this client observed. */
   settledTurns?: NativeChatSettledTurns | null
+  /** The journal that places each row in its turn; absent groups rows by position. */
+  turnJournal?: NativeChatTurnJournal | null
   /** Whether the turn is reasoning right now, derived from its journal content. */
   thinking?: boolean
   /** What the provider says the live turn is doing; outranks the other labels. */
@@ -51,8 +59,15 @@ export function useMobileNativeChatTurnDisclosure({
   onToggleTurn: (turnKey: string) => void
   resolveRow: (index: number, message: NativeChatMessage) => MobileNativeChatTurnRow
 } {
+  // Resolve each row's turn, and which turn is live, once from the turn record when the host
+  // states scopes.
+  const { turnKeys, liveTurnKey } = useMemo(
+    () => (enabled ? nativeChatTurnMembership(messages, turnJournal) : NO_MEMBERSHIP),
+    [enabled, messages, turnJournal]
+  )
   const turnStatuses = useMobileNativeChatTurnStatus({
-    messages,
+    turnKeys,
+    liveTurnKey,
     enabled,
     isWorking,
     workingStartedAt,
@@ -84,32 +99,26 @@ export function useMobileNativeChatTurnDisclosure({
     },
     [scopeKey]
   )
-  // Resolve each row's turn boundary once — a findLast per row is quadratic on a
-  // long transcript.
-  const turnKeys = useMemo(() => {
-    if (!enabled) {
-      return EMPTY_TURN_KEYS
-    }
-    let turnKey: string | undefined
-    return messages.map((message) => {
-      if (message.role === 'user') {
-        turnKey = message.id
+  // A settled turn's status draws at its first row.
+  const firstRowOfTurn = useMemo(() => {
+    const first = new Map<string, number>()
+    for (const [index, turnKey] of turnKeys.entries()) {
+      if (turnKey !== undefined && !first.has(turnKey)) {
+        first.set(turnKey, index)
       }
-      return turnKey
-    })
-  }, [enabled, messages])
+    }
+    return first
+  }, [turnKeys])
 
   const { active, activeTurnKey, completedByTurn } = turnStatuses
   const activeActivityText = enabled && isWorking ? (activityText ?? null) : null
   const resolveRow = useCallback(
-    (index: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
+    (index: number, _message: NativeChatMessage): MobileNativeChatTurnRow => {
       const turnKey = turnKeys[index]
       const turnStatus =
-        !enabled || message.role !== 'user'
-          ? null
-          : turnKey
-            ? (completedByTurn[turnKey] ?? null)
-            : null
+        enabled && turnKey !== undefined && firstRowOfTurn.get(turnKey) === index
+          ? (completedByTurn[turnKey] ?? null)
+          : null
       return {
         turnStatus,
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
@@ -122,11 +131,21 @@ export function useMobileNativeChatTurnDisclosure({
         activeTurnIsWorking:
           enabled &&
           isWorking &&
-          (turnKey === activeTurnKey ||
-            (turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY))
+          (liveTurnKey !== undefined
+            ? turnKey === liveTurnKey
+            : turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY)
       }
     },
-    [turnKeys, enabled, activeTurnKey, completedByTurn, expandedTurnIds, isWorking]
+    [
+      turnKeys,
+      firstRowOfTurn,
+      liveTurnKey,
+      enabled,
+      activeTurnKey,
+      completedByTurn,
+      expandedTurnIds,
+      isWorking
+    ]
   )
 
   return {

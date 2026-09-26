@@ -1,3 +1,4 @@
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 // The crash boundary: the host wrote a submission row, dispatched, and died
 // before it learned whether the provider took the message. Replay must reconcile
 // without duplicating the user's message and without losing it.
@@ -137,7 +138,10 @@ describe('crash between provider accept and journal commit', () => {
     })
     // The provider's own copy of the message arrives next, under the identity
     // reconciliation adopted. It must land in the bubble the user already sees.
-    await restarted.appendItem(outcome.identity, userMessage('deploy the thing'), { fence: 2 })
+    await restarted.appendItem(outcome.identity, userMessage('deploy the thing'), {
+      fence: 2,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    })
 
     const items = restarted.snapshot().items
     expect(items).toHaveLength(1)

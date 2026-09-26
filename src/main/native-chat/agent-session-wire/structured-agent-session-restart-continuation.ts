@@ -6,7 +6,10 @@
 // message asks the agent to verify its last action before repeating it, and the launch toast
 // reports what happened.
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
@@ -106,7 +109,8 @@ function restartNoteWriter(
     await session.journal.appendItem(
       { provider: 'orca', clientMessageId: `restart-continuation:${sessionId}:${host.now()}` },
       { kind: 'status', text, ...(tone ? { tone } : {}) },
-      { fence }
+      // About the conversation, not any turn in it.
+      { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
 }
