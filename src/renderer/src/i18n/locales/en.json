@@ -4084,6 +4084,7 @@
             "active": "Active",
             "inactive": "Inactive",
             "ariaLabel": "{{title}}, {{status}}",
+            "tooltipDescription": "Caffeinate prevents idle sleep while active. Closing a MacBook lid may still put it to sleep.",
             "onDescription": "Keep this computer awake continuously",
             "autoDescription": "Stay awake while an agent is working",
             "offDescription": "Allow normal system sleep behavior"
@@ -10899,10 +10900,10 @@
         "agent-awake-copy": {
           "e5995ce268": "Keep computer awake while agents are working",
           "95d3031db2": "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings.",
-          "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.",
+          "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Caffeinate prevents idle sleep while active, but closing a MacBook lid may still put it to sleep.",
           "modeTitle": "Keep computer awake",
           "modeDescriptionWindows": "Choose On, Agent, or Off. Agent mode stays awake while agents are working; lid-close behavior follows this device's power settings.",
-          "modeDescriptionDefault": "Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy."
+          "modeDescriptionDefault": "Choose On, Agent, or Off. Agent mode stays awake while agents are working. Caffeinate prevents idle sleep while active, but closing a MacBook lid may still put it to sleep."
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent status hooks",
