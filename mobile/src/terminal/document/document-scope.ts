@@ -94,6 +94,8 @@ export type TerminalDocumentState = {
   terminalFontFamily: string
   /** `terminal-init`: whether the first live chunk since init is still pending. */
   firstDataPending: boolean
+  /** `cell-metrics-probe`: the laid-out cell box last reported for the current terminal. */
+  reportedCellBox: string
   /** `terminal-init`: whether the replayed snapshot was an alternate screen. */
   activeAltScreenSnapshot: boolean
   /** `fit-scale`: the fit scale the document committed. */
@@ -263,6 +265,7 @@ function createTerminalDocumentState(): TerminalDocumentState {
     currentTextScale: 1,
     terminalFontFamily: '',
     firstDataPending: false,
+    reportedCellBox: '',
     activeAltScreenSnapshot: false,
     currentScale: 1,
     userScale: 1,

@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { MIN_FIT_COLS, MIN_FIT_ROWS, type TerminalFitDimensions } from './terminal-cell-metrics'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 
 /**
@@ -14,11 +15,6 @@ import type { TerminalWebViewCommand } from './terminal-webview-messages'
 
 const READY_TIMEOUT_MS = 3000
 const MEASURE_TIMEOUT_MS = 2000
-/** Below these the fit is not a terminal anyone can read, and the caller disables fit-to-phone. */
-const MIN_FIT_COLS = 20
-const MIN_FIT_ROWS = 8
-
-export type TerminalFitDimensions = { cols: number; rows: number }
 
 export function createTerminalWebViewReadyPromises() {
   let readyPromise: Promise<void> | null = null

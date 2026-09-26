@@ -56,6 +56,7 @@ export function MobileSessionActiveContent({
     notifyTerminalFrameHeight,
     setTerminalWebViewRef,
     handleTerminalWebReady,
+    handleTerminalCellBoxChange,
     handleFileTap,
     handleNativeChatFileTap,
     handleTerminalOpenUrl,
@@ -220,6 +221,7 @@ export function MobileSessionActiveContent({
           }}
           onRef={setTerminalWebViewRef}
           onWebReady={handleTerminalWebReady}
+          onCellBoxChange={handleTerminalCellBoxChange}
           onSelectionMode={handleSelectionMode}
           onSelectionCopy={handleSelectionCopy}
           onSelectionEvicted={handleSelectionEvicted}

@@ -232,7 +232,7 @@ describe('the document host seams, once the page sets them', () => {
     const scope = startedScope({ postToHost: (message) => posted.push(message) })
     // The sequence's own `web-ready` is the document reporting itself started; what this case reads
     // is what the two notify paths send afterwards.
-    expect(posted).toEqual([{ type: 'web-ready' }])
+    expect(posted).toEqual([expect.objectContaining({ type: 'web-ready' })])
     posted.length = 0
     notify(scope, { type: 'pong', pingId: 7 })
     flog(scope, 'probe', { n: 1 })

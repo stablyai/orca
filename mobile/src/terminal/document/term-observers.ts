@@ -4,12 +4,14 @@ import type { TerminalDocumentScope } from './document-scope'
 import { logFeedAndEvict } from './selection-state-and-eviction'
 import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { emitModesIfChanged } from './mode-mirroring'
+import { reportLaidOutCellBox } from './cell-metrics-probe'
 
 export function attachTermObservers(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return
   }
   disposeTermObservers(scope)
+  scope.reportedCellBox = ''
   try {
     scope.termObserverDisposables.push(
       scope.term.onLineFeed!(function () {
@@ -32,6 +34,16 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
         scope.term.onWriteParsed(function () {
           emitModesIfChanged(scope)
           emitKeyboardAvoidanceMetrics(scope)
+        })
+      )
+    }
+  } catch {}
+  // Why: onDimensionsChange skips a renderer swap and a DPR change; every one of them re-renders.
+  try {
+    if (scope.term.onRender) {
+      scope.termObserverDisposables.push(
+        scope.term.onRender(function () {
+          reportLaidOutCellBox(scope)
         })
       )
     }

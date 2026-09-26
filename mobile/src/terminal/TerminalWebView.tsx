@@ -24,6 +24,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       clearEngineError,
       engineError,
       handle,
+      layout,
       receive,
       reportNativeEngineError,
       resetReadiness
@@ -62,7 +63,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     }, [clearEngineError, resetReadiness])
 
     return (
-      <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}>
+      <View
+        style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}
+        onLayout={(e) => layout(e.nativeEvent.layout.width, e.nativeEvent.layout.height)}
+      >
         <WebView
           ref={webViewRef}
           source={XTERM_WEBVIEW_SOURCE}

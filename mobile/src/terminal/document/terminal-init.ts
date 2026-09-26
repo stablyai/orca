@@ -2,6 +2,7 @@ import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 import { MOBILE_TERMINAL_CARET_OPTIONS } from '../terminal-webview-html/theme'
 import { ESC } from './escape-introducers'
 import { notify } from './host-notify'
+import { reportLaidOutCellBox } from './cell-metrics-probe'
 import { fontPxForScale } from './text-scaling'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
@@ -150,6 +151,8 @@ export function init(
       scope.initialOscLinkRowOffset = 0
       scope.initialOscLinkEvictionReady = true
       applyFitScale(scope, 'init-replay')
+      // Why: a paused (hidden) render service has not rendered yet, so ready reports it too.
+      reportLaidOutCellBox(scope)
       notify(scope, { type: 'ready', cols: cols, rows: rows })
     })
   })
