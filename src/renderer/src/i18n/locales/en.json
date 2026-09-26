@@ -1007,6 +1007,9 @@
           "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet."
         }
       },
+      "tabMoveToSplitCopy": {
+        "shortcutTitle": "{{label}}: {{direction}}"
+      },
       "clipboardWriteFailure": {
         "tooLarge": "The text is too large to copy."
       }
