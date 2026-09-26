@@ -18,7 +18,12 @@ import {
 } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
-import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './ssh-connection-utils'
+import {
+  CONNECT_TIMEOUT_MS,
+  INITIAL_RETRY_ATTEMPTS,
+  INITIAL_RETRY_DELAY_MS,
+  RECONNECT_BACKOFF_MS
+} from './ssh-connection-utils'
 import { MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../shared/ssh-types'
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
@@ -340,5 +345,108 @@ describe('SshConnection', () => {
     await expect(superseded).rejects.toThrow('SSH connection attempt was cancelled')
     expect(conn.getState().status).toBe('connected')
     expect(published).not.toContain('error')
+  })
+})
+
+describe('SshConnection wait reason', () => {
+  beforeEach(() => {
+    resetSshConnectionMocks()
+  })
+
+  // A spinner with no reason sent users hunting; the timed-out attempt knew exactly why.
+  it('publishes why the initial connect is still retrying, then clears it on success', async () => {
+    vi.useFakeTimers()
+    try {
+      const published: { status: string; error: string | null }[] = []
+      const conn = new SshConnection(
+        createTarget(),
+        createCallbacks({
+          onStateChange: vi.fn((_id, state) =>
+            published.push({ status: state.status, error: state.error })
+          )
+        })
+      )
+      ssh2Mock.connectSequence = [
+        Object.assign(new Error('connect ETIMEDOUT 93.184.216.34:22'), { code: 'ETIMEDOUT' }),
+        'ready'
+      ]
+      // Why: attemptConnect does real async fs work before it creates the client, so the fake
+      // clock must not advance until the client exists or the retry sleep is never reached.
+      const firstClient = nextSshClientCreation()
+      const connected = conn.connect()
+      await firstClient
+      await vi.advanceTimersByTimeAsync(1)
+      await advanceToNextSshClient(INITIAL_RETRY_DELAY_MS)
+      await connected
+
+      expect(published.map((e) => e.status)).toEqual(['connecting', 'connecting', 'connected'])
+      expect(published[0].error).toBeNull()
+      expect(published[1].error).toContain('example.com:22 did not answer')
+      expect(published[1].error).toContain('VPN')
+      expect(published[2].error).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('carries the last failure through every reconnecting state after a drop', async () => {
+    vi.useFakeTimers()
+    try {
+      const published: { status: string; error: string | null }[] = []
+      const conn = new SshConnection(
+        createTarget({ host: '10.0.0.5' }),
+        createCallbacks({
+          onStateChange: vi.fn((_id, state) =>
+            published.push({ status: state.status, error: state.error })
+          )
+        })
+      )
+      await connectWithFakeTimers(conn)
+      published.length = 0
+
+      ssh2Mock.connectBehavior = 'error'
+      ssh2Mock.connectErrorMessage = 'connect ETIMEDOUT 10.0.0.5:22'
+      ssh2Mock.connectErrorCode = 'ETIMEDOUT'
+      emitSshEvent('close')
+      await advanceToNextSshClient(RECONNECT_BACKOFF_MS[0])
+      await advanceToNextSshClient(RECONNECT_BACKOFF_MS[1])
+
+      const [afterDrop, ...afterFailures] = published.filter((e) => e.status === 'reconnecting')
+      expect(afterDrop.error).toBe('The SSH connection to Test Server dropped.')
+      expect(afterFailures.length).toBeGreaterThan(0)
+      for (const entry of afterFailures) {
+        expect(entry.error).toMatch(/^10\.0\.0\.5:22 did not answer/)
+      }
+      expect(published.filter((e) => e.status === 'connecting').every((e) => e.error)).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports the give-up error in the same words as the wait', async () => {
+    vi.useFakeTimers()
+    try {
+      const conn = new SshConnection(createTarget({ host: '10.0.0.5' }), createCallbacks())
+      ssh2Mock.connectBehavior = 'error'
+      ssh2Mock.connectErrorMessage = 'connect ETIMEDOUT 10.0.0.5:22'
+      ssh2Mock.connectErrorCode = 'ETIMEDOUT'
+      let created = nextSshClientCreation()
+      const failed = conn.connect().catch((error: Error) => error)
+      for (let attempt = 0; attempt < INITIAL_RETRY_ATTEMPTS; attempt++) {
+        await created
+        await vi.advanceTimersByTimeAsync(1)
+        if (attempt < INITIAL_RETRY_ATTEMPTS - 1) {
+          created = nextSshClientCreation()
+          await vi.advanceTimersByTimeAsync(INITIAL_RETRY_DELAY_MS)
+        }
+      }
+      const error = await failed
+      expect(error).toBeInstanceOf(Error)
+      expect((error as Error).message).toBe('connect ETIMEDOUT 10.0.0.5:22')
+      expect(conn.getState().status).toBe('error')
+      expect(conn.getState().error).toMatch(/^10\.0\.0\.5:22 did not answer/)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
