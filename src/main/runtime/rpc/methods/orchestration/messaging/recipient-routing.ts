@@ -20,9 +20,15 @@ export function assertDispatchMailboxDeliverable(db: OrchestrationDb, dispatchId
   if (!dispatch || ACTIVE_DISPATCH_STATUSES.includes(dispatch.status)) {
     return
   }
+  // Why: an assignee that now coordinates its own Run reads only that Run's mailbox; the
+  // Dispatch's Run is usually the sender's own mailbox and would never reach it.
+  const assigneeRun = dispatch.assignee_pane_key
+    ? db.getCurrentRunForPane(dispatch.assignee_pane_key)
+    : undefined
+  const reachableRunId = assigneeRun?.id ?? dispatch.run_id
   throw new OrchestrationError(
     'dispatch_inactive',
-    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${dispatch.run_id} instead, or start a new Dispatch for follow-up work.`
+    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${reachableRunId} instead, or start a new Dispatch for follow-up work.`
   )
 }
 
