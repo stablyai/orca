@@ -279,7 +279,11 @@ describe('a bare workspace id two partitions both hold', () => {
   it('keeps a declined row in its own partition when a sibling workspace is written', async () => {
     const SIBLING_ID = 'repo-sibling::/checkout'
     const partitions = {
-      local: session({}),
+      // Explicit empty row: this worktree IS known locally (the #12723 renderer/runtime split,
+      // same shape `strandedPartitions()` uses elsewhere) — a gap to fill, not GAP-03's "never
+      // heard of this worktree at all" shape that `workspace-session-host-offline-reconnect.test.ts`
+      // exercises.
+      local: session({ tabsByWorktree: { [SIBLING_ID]: [] } }),
       [SSH_HOST_ID]: session({
         tabsByWorktree: {
           // Contested and held by no other partition, so the read declines it...

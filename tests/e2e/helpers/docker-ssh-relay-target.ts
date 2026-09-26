@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { getDockerSshRelayImage } from './docker-ssh-relay-image'
@@ -232,6 +232,9 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'orca-ssh-docker-'))
   const identityFile = path.join(tempDir, 'id_ed25519')
   run('ssh-keygen', ['-t', 'ed25519', '-N', '', '-f', identityFile, '-q'])
+  // Why: some hosts' tmp directories carry a default ACL that grants group/other read on new
+  // files regardless of umask, which sshd's StrictModes then rejects as an insecure key.
+  chmodSync(identityFile, 0o600)
   const publicKey = readFileSync(`${identityFile}.pub`, 'utf8').trim()
   const containerName = `orca-ssh-e2e-${testInfo.workerIndex}-${Date.now()}-${randomUUID().slice(0, 8)}`
   let target: DockerSshRelayTarget | null = null

@@ -2,7 +2,10 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { HostLiveTerminalProbeVerdict } from '@/runtime/host-live-terminal-probe'
-import type { RemoteWorkspaceSyncStatus } from '@/store/slices/ssh'
+import {
+  hostHasAnsweredForTarget,
+  type RemoteWorkspaceTestimonyState
+} from '@/lib/remote-workspace-host-testimony'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import {
   getExecutionHostIdForWorktree,
@@ -35,10 +38,8 @@ import {
  */
 export type WorkspaceTerminalHostAuthority = HostLiveTerminalProbeVerdict
 
-export type WorkspaceTerminalHostAuthorityState = WorktreeRuntimeOwnerState & {
-  remoteWorkspaceHydratedTargetIds?: ReadonlySet<string>
-  remoteWorkspaceSyncStatusByTargetId?: Record<string, RemoteWorkspaceSyncStatus>
-}
+export type WorkspaceTerminalHostAuthorityState = WorktreeRuntimeOwnerState &
+  RemoteWorkspaceTestimonyState
 
 /** A sync attempt that has stopped without an answer. `unverifiable` is the honest verdict about the
  *  host, but holding it forever is not a verdict — it is a refusal to act, so nothing would ever
@@ -64,7 +65,7 @@ function resolveDirectSshAuthority(
     // Why: the same pair use-app-session-persistence.ts gates uploads on. A conflicting snapshot
     // means the client's picture is not the host's, so it is no basis for deciding the host holds
     // nothing.
-    return phase === 'conflict' ? 'unverifiable' : 'none'
+    return hostHasAnsweredForTarget(state, targetId) ? 'none' : 'unverifiable'
   }
   if (phase !== undefined && TERMINATED_WITHOUT_ANSWER_PHASES.has(phase)) {
     // The bounded floor. Without it a single failed sync leaves every git worktree on this target

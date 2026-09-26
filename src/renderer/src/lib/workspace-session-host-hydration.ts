@@ -1,26 +1,26 @@
 import type { Repo } from '../../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import {
   getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import {
-  createRepoRowExecutionHostLookup,
-  resolveWorktreeExecutionHost
-} from '../../../shared/worktree-execution-host-resolution'
 import {
   adoptStrandedHostPartitionSession,
-  partitionRowsTheWriteWontReturn,
-  workspaceIdsNamedByPartition
+  partitionRowsTheWriteWontReturn
 } from '../../../shared/workspace-session-stranded-partition-adoption'
 import {
   mergeWorkspaceSessionsWithHostShadow,
   normalizeWorkspaceSessionKeyToWorktreeId
 } from './workspace-session-host-contention'
+import {
+  reconciledWorktreeIdsForHost,
+  sshPartitionCatalogAttribution,
+  unownedSessionKeys
+} from './workspace-session-host-reconciliation'
 import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-session-host-split'
 
 type SessionReadApi = {
@@ -158,6 +158,27 @@ export async function fetchWorkspaceSessionFromHosts(
     .session
 }
 
+function wasTargetConnectedAtLastShutdown(
+  session: WorkspaceSessionState,
+  targetId: string | null
+): boolean {
+  if (!targetId) {
+    return false
+  }
+  if (session.activeConnectionIdsAtShutdown !== undefined) {
+    return session.activeConnectionIdsAtShutdown.includes(targetId)
+  }
+  // When activeConnectionIdsAtShutdown is undefined (older persisted sessions, interrupted
+  // shutdowns), infer connection status from remoteSessionIdsByTabId: if the base session still
+  // holds a remote PTY session for this target, the client was connected to it, so do not decline.
+  for (const sessionId of Object.values(session.remoteSessionIdsByTabId ?? {})) {
+    if (parseAppSshPtyId(sessionId)?.connectionId === targetId) {
+      return true
+    }
+  }
+  return false
+}
+
 export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   api: SessionReadApi,
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[],
@@ -220,12 +241,18 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   // in an ssh partition still has to survive the next write to it.
   const shadow: HostSessionSlices = { ...merged.shadow }
   for (const [hostId, slice] of sshPartitions) {
+    const targetId = getSshTargetIdForExecutionHost(hostId)
     const adoption = adoptStrandedHostPartitionSession(session, slice, {
       contestedSessionKeys: attribution.contestedSessionKeys,
       foreignSessionKeys: unownedSessionKeys(
         session,
         attribution.contestedSessionKeys,
         attribution.foreignSessionKeysByHostId.get(hostId)
+      ),
+      reconciledWorktreeIds: reconciledWorktreeIdsForHost(
+        attribution,
+        hostId,
+        wasTargetConnectedAtLastShutdown(merged.session, targetId)
       )
     })
     session = adoption.session
@@ -267,120 +294,4 @@ async function listPersistedSshPartitionHostIds(api: SessionReadApi): Promise<Ex
     console.warn('[session] skipping the persisted partition census:', err)
     return []
   }
-}
-
-/**
- * What the repo catalog says about the workspaces each SSH partition names.
- *
- * `contested` — "one workspace written twice" is false, so adoption may gap-fill but never replace.
- * Three sources, none of which is bare co-presence in 'local' and `ssh:<targetId>`; that pair IS the
- * shape the repair exists for, and reading it as a collision disables the repair:
- *  - the local/runtime rivalry the contention split already arbitrated;
- *  - two SSH partitions both naming the id, which that split never sees;
- *  - a repo id the catalog registers on more than one host.
- *
- * `foreign` — the catalog positively resolves the id to a different host. That is residue, not a
- * rival claim: adopting it would show a stale row in front of the live one and then route it into
- * the live partition. The same "positively says otherwise" rule `catalogReattributedAwayFrom` uses
- * — an id the catalog cannot speak for is neither contested nor foreign, so a boot whose repos have
- * not hydrated still reunites its rows.
- */
-function sshPartitionCatalogAttribution(
-  repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[],
-  sshPartitions: readonly (readonly [ExecutionHostId, WorkspaceSessionState | null])[],
-  mergedContested: ReadonlySet<string>
-): {
-  contestedSessionKeys: Set<string>
-  foreignSessionKeysByHostId: Map<ExecutionHostId, Set<string>>
-} {
-  const contestedSessionKeys = new Set(mergedContested)
-  const foreignSessionKeysByHostId = new Map<ExecutionHostId, Set<string>>()
-  const repoLookup = createRepoRowExecutionHostLookup(repos)
-  const ownedByHostId = new Map<ExecutionHostId, Set<string>>()
-  for (const [hostId, slice] of sshPartitions) {
-    if (!slice) {
-      continue
-    }
-    const foreign = new Set<string>()
-    const owned = new Set<string>()
-    for (const workspaceId of workspaceIdsNamedByPartition(slice)) {
-      // A folder key carries no repo id at all, and `getRepoIdFromWorktreeId` hands back the whole
-      // key rather than nothing, so the catalog would be asked about `folder:<uuid>` and answer
-      // `unknown`. Right verdict, wasted resolution; skip it by shape instead.
-      const resolution = isWorktreeSessionKey(workspaceId)
-        ? resolveWorktreeExecutionHost(repoLookup, {
-            repoId: getRepoIdFromWorktreeId(workspaceId),
-            hostId: null
-          })
-        : null
-      if (resolution?.kind === 'resolved' && resolution.hostId !== hostId) {
-        foreign.add(workspaceId)
-        continue
-      }
-      if (resolution?.kind === 'unresolved' && resolution.reason === 'ambiguous') {
-        contestedSessionKeys.add(workspaceId)
-      }
-      owned.add(workspaceId)
-    }
-    if (foreign.size > 0) {
-      foreignSessionKeysByHostId.set(hostId, foreign)
-    }
-    ownedByHostId.set(hostId, owned)
-  }
-  // Why co-presence is asked only of the ids left after the catalog has spoken: one partition
-  // holding residue the catalog attributes elsewhere is a single owner plus a leftover, not a
-  // collision. Counting the leftover would withhold the real owner's rows from the write.
-  for (const workspaceId of sessionKeysHeldByMultiplePartitionSets([...ownedByHostId.values()])) {
-    contestedSessionKeys.add(workspaceId)
-  }
-  return { contestedSessionKeys, foreignSessionKeysByHostId }
-}
-
-/** Ids that appear in more than one of these per-partition sets. */
-function sessionKeysHeldByMultiplePartitionSets(sets: readonly ReadonlySet<string>[]): Set<string> {
-  const held = new Set<string>()
-  const contested = new Set<string>()
-  for (const keys of sets) {
-    for (const key of keys) {
-      if (held.has(key)) {
-        contested.add(key)
-      }
-      held.add(key)
-    }
-  }
-  return contested
-}
-
-/**
- * Keys this partition must not contribute: the ones the catalog gave to another host, plus a
- * contested id the assembled session holds no row for at all.
- *
- * Why the second class: a contested id is withheld from the read-source override, so the write
- * re-derives an owner — and for an id the catalog cannot name, that answer is 'local'. Adopting
- * such a row would move it out of the partition that owns it and into the blob, which is the
- * two-store split this whole change removes. Gap-filling stays available for a contested id the
- * session already has a row for, because that row's own partition is what the write follows.
- * Declining to adopt leaks a row into invisibility for one boot; it never deletes one.
- */
-function unownedSessionKeys(
-  session: WorkspaceSessionState,
-  contestedSessionKeys: ReadonlySet<string>,
-  foreignSessionKeys: ReadonlySet<string> | undefined
-): ReadonlySet<string> {
-  if (contestedSessionKeys.size === 0) {
-    return foreignSessionKeys ?? new Set<string>()
-  }
-  const unowned = new Set(foreignSessionKeys ?? [])
-  const known = workspaceIdsNamedByPartition(session)
-  for (const key of contestedSessionKeys) {
-    if (!known.has(normalizeWorkspaceSessionKeyToWorkspaceId(key))) {
-      unowned.add(key)
-    }
-  }
-  return unowned
-}
-
-/** A worktree session key names its repo before `::`; a folder key names no repo at all. */
-function isWorktreeSessionKey(workspaceId: string): boolean {
-  return workspaceId.includes('::')
 }

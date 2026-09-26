@@ -43,9 +43,21 @@ import {
 
 export type WorktreeHostClaims = ReadonlyMap<string, ReadonlySet<ExecutionHostId>>
 
-const WORKTREE_KEYED_FIELDS = (
+export const WORKTREE_KEYED_FIELDS = (
   Object.keys(WORKSPACE_SESSION_FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]
 ).filter((field) => WORKSPACE_SESSION_FIELD_OWNERSHIP[field] === 'worktreeKeyed')
+
+/** `WORKTREE_KEYED_FIELDS` plus the tab- and pane-keyed fields a declined tab also owns
+ *  (`terminalLayoutsByTabId`, `remoteSessionIdsByTabId`, `localOnlyScrollbackByTabId`,
+ *  `terminalPtyIncarnationsByPaneKey`). `attachHostSessionShadow` restores over this wider set so a
+ *  GAP-03 stranded-partition shadow (`partitionRowsTheWriteWontReturn`) can carry a declined tab's
+ *  dependent rows back with it, not just its `tabsByWorktree` entry. */
+export const PARKABLE_HOST_SESSION_FIELDS = (
+  Object.keys(WORKSPACE_SESSION_FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]
+).filter((field) => {
+  const ownership = WORKSPACE_SESSION_FIELD_OWNERSHIP[field]
+  return ownership === 'worktreeKeyed' || ownership === 'tabKeyed' || ownership === 'paneKeyed'
+})
 
 /** Bare worktree id behind a session key. Lives in shared because the partition adoption read needs
  *  the same normalization, and two implementations of it would drift. */
@@ -279,7 +291,7 @@ export function attachHostSessionShadow(
     if (!slice || !shadowSlice) {
       continue
     }
-    for (const field of WORKTREE_KEYED_FIELDS) {
+    for (const field of PARKABLE_HOST_SESSION_FIELDS) {
       const parked = shadowSlice[field]
       if (!isWorkspaceSessionRecord(parked)) {
         continue
