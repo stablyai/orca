@@ -26,10 +26,17 @@ const fsCalls = vi.hoisted((): FilesystemCalls => ({
 }))
 
 vi.mock('node:fs', async (importOriginal) => {
+  function isSynchronousFilesystemCall(
+    name: string,
+    value: unknown
+  ): value is (...args: unknown[]) => unknown {
+    return name.endsWith('Sync') && typeof value === 'function'
+  }
+
   const actual = await importOriginal<typeof NodeFs>()
   const patched: Record<string, unknown> = { ...actual }
   for (const [name, original] of Object.entries(actual)) {
-    if (!name.endsWith('Sync') || typeof original !== 'function') {
+    if (!isSynchronousFilesystemCall(name, original)) {
       continue
     }
     patched[name] = Object.assign((...args: unknown[]) => {
@@ -37,7 +44,7 @@ vi.mock('node:fs', async (importOriginal) => {
       if (fsCalls.recording && typeof path === 'string' && path.startsWith(fsCalls.directory)) {
         fsCalls.sync.push(`${name}:${path}`)
       }
-      return Reflect.apply(original, undefined, args)
+      return original(...args)
     }, original)
   }
   return { ...patched, default: patched }

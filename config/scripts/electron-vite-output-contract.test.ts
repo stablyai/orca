@@ -126,6 +126,9 @@ describe('Electron Vite output contract', () => {
     }
     expect(electronBuilderConfig.asarUnpack).toContain('out/main/persistence/profile-state/**')
     expect(electronBuilderConfig.asarUnpack).toContain(
+      'out/main/orca-profiles/profile-index-store.js'
+    )
+    expect(electronBuilderConfig.asarUnpack).toContain(
       'out/main/startup/http1-compatibility-marker.js'
     )
   })

@@ -1,11 +1,13 @@
 import { readFileSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, matchesGlob, resolve } from 'node:path'
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import { electronViteConfig } from '../../electron.vite.config'
 import { GUARDED_ENTRY_NAMES } from '../build-plugins/plain-node-entry-guard'
 
 const REPO_ROOT = resolve(__dirname, '..', '..')
 const CLI_ROOT = join(REPO_ROOT, 'src', 'cli')
+const packaging = createRequire(import.meta.url)('../electron-builder.config.cjs')
 
 function listCliSourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -61,6 +63,16 @@ describe('CLI imports of main-process modules', () => {
   it('guards every CLI main module against Electron imports', () => {
     const guarded = new Set<string>(GUARDED_ENTRY_NAMES)
     expect(findMainImports().filter(({ module }) => !guarded.has(module))).toEqual([])
+  })
+
+  it('unpacks every CLI main entry for plain Node outside Electron', () => {
+    const missing = findMainImports().filter(
+      ({ module }) =>
+        !packaging.asarUnpack.some((pattern: string) =>
+          matchesGlob(`out/main/${module}.js`, pattern)
+        )
+    )
+    expect(missing).toEqual([])
   })
 
   it('finds the imports it is meant to guard', () => {
