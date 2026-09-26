@@ -52,6 +52,7 @@ export function escapeDenseStream() {
  */
 export function probeRouteSource(componentPath) {
   return `import { useCallback, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { TextInput, View } from 'react-native'
 import { TerminalWebView } from ${JSON.stringify(componentPath)}
 
@@ -76,7 +77,11 @@ export default function TerminalProbeRoute() {
       selectAll: () => handleRef.current?.doSelectAll(),
       measure: () => handleRef.current?.measureFitDimensions(),
       awaitReady: () => handleRef.current?.awaitReady(),
-      setMounted: (next) => setMounted(next)
+      setMounted: (next) => setMounted(next),
+      unmountWithPendingFit: () => {
+        handleRef.current.resetZoom()
+        flushSync(() => setMounted(false))
+      }
     }
     const onBeforeInput = (event) => {
       globalThis.__orcaTerminalBeforeInput.push({

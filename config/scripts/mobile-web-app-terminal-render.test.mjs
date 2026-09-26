@@ -453,31 +453,8 @@ describeRender(
     }, 300_000)
 
     it('takes back the frames it is owed, not only the timers', async () => {
-      // The timer case above is witnessed by a 550 ms timeout, which every module's own stop
-      // cancels by the handle the scope holds. A frame is the other shape: `applyFitScale` asks
-      // for one through the scope's registry and never holds its id, so `stopFitScale` can only
-      // bump the token it tests itself against — the frame still runs. Nothing but
-      // `cancelDocumentFrames` takes it back.
-      //
-      // Two things have to be pinned down for that to be readable, and the first version of this
-      // case had neither.
-      //
-      // The witness has to be owed whenever the dispose lands. A single refit is not: the retry
-      // loop commits on its first attempt whenever the grid still measures, so one resize buys
-      // one frame and a dispose after it owes nothing — which agrees with an empty leak list for
-      // exactly the reason under test, once in five runs. So the refit is re-armed from a frame
-      // of the test's own, which leaves the document owed a frame at the end of every frame the
-      // browser serves, and dispose cannot land inside one.
-      //
-      // And the leak has to be counted from the moment dispose returned, not from the moment the
-      // host element left the DOM. React unmounts in two steps: the mutation phase detaches the
-      // host, and the passive cleanup that calls `dispose` runs after it — 1 ms apart here, 20 to
-      // 35 ms apart with the CPU throttled 20x, which is the CI runner this failed on. A frame
-      // served in that gap runs with a detached container while the document is still live and
-      // has not been asked to stop, and no registry could take it back. It went through
-      // `scheduleDocumentFrame` like every other; the old oracle called it a leak because it
-      // judged by the container rather than by dispose. Only what runs after the last statement
-      // of `dispose` is the document keeping something it gave up.
+      // resetZoom schedules a real fit frame; synchronous unmount disposes before it can run.
+      // stopFitScale only invalidates its token, so cancelDocumentFrames must cancel the callback.
       let documentChunk = null
       const { page } = await openPage(PROBE_ROUTE, {
         scheduler: true,
@@ -521,18 +498,7 @@ describeRender(
           observer.disconnect()
         })
         observer.observe(host, { attributes: true, attributeFilter: ['class'] })
-        // The page's refit follows the host's box, not the window, so the pulse resizes the host.
-        let narrow = false
-        const pulse = () => {
-          if (state.disposed !== null) {
-            return
-          }
-          narrow = !narrow
-          host.style.width = narrow ? '99%' : ''
-          requestAnimationFrame(pulse)
-        }
-        requestAnimationFrame(pulse)
-        globalThis.setTimeout(() => globalThis.__orcaTerminalProbe.setMounted(false), 200)
+        globalThis.__orcaTerminalProbe.unmountWithPendingFit()
       }, documentChunk)
       await page.locator('#terminal-container').waitFor({ state: 'detached', timeout: 30_000 })
       await page.evaluate(() => {
@@ -544,7 +510,10 @@ describeRender(
         polling: 100
       })
       await openProbeTerminal(page)
-      await page.evaluate(() => new Promise((resolve) => globalThis.setTimeout(resolve, 3000)))
+      // Serve real frames so a callback that escaped cancellation must reach the recorder.
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      )
 
       const scheduler = await page.evaluate(() => globalThis.__orcaScheduler)
       expect(
