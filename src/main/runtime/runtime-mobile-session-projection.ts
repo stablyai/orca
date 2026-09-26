@@ -258,7 +258,9 @@ export function projectRuntimeMobileSessionTabs(
       : livePty
         ? host.issuePtyHandle(livePty)
         : null
-    const exited = terminalHandle ? undefined : host.getTerminalSurfaceExit(tab.leafId)
+    // Why the whole record: the per-client projection needs its process ids for an older client's
+    // retirement proof, and strips them for every client.
+    const exited = terminalHandle ? undefined : host.getTerminalExitRecord(tab.leafId)
     const projectedAgentStatus =
       agentStatus ??
       host.buildPtyStatus(

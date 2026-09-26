@@ -10,8 +10,14 @@ import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventor
 
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
 await import('./orca-runtime-test-lifecycle.spec')
-const { store, TEST_WORKTREE_ID, HEADLESS_LEAF_ID } =
-  await import('./orca-runtime-test-fixtures.spec')
+const {
+  store,
+  TEST_WORKTREE_ID,
+  HEADLESS_LEAF_ID,
+  makeHeadlessTerminalLayout,
+  makeRuntimeStoreWithWorkspaceSession,
+  makeWorkspaceSessionWithHeadlessTerminal
+} = await import('./orca-runtime-test-fixtures.spec')
 const { makePendingAgentTabActivationRuntime } =
   await import('./orca-runtime-test-scenario-builders.spec')
 
@@ -57,8 +63,36 @@ function rendererSnapshot(
   }
 }
 
-function makeRendererRuntime(snapshot: RuntimeMobileSessionTabsSnapshot) {
-  const runtime = new OrcaRuntimeService(store)
+/** A persisted session holding `host-tab`, its one leaf bound to `ptyId` when given. */
+function sessionStoreWithHostTab(ptyId?: string) {
+  return makeRuntimeStoreWithWorkspaceSession(
+    makeWorkspaceSessionWithHeadlessTerminal({
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: [
+          {
+            id: 'host-tab',
+            ptyId: ptyId ?? null,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
+      }
+    })
+  )
+}
+
+function makeRendererRuntime(
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  runtimeStore: unknown = store
+) {
+  const runtime = new OrcaRuntimeService(runtimeStore as never)
   const spawn = vi.fn().mockResolvedValue({ id: 'pty-runtime-spawn' })
   runtime.setPtyController({
     spawn,
@@ -115,15 +149,14 @@ describe('terminal exit records', () => {
         leafId: HEADLESS_LEAF_ID,
         status: 'pending-handle',
         exited: {
-          ptyId: DEAD_PTY_ID,
-          incarnationId: 'inc-dead',
-          terminal: 'term_dead',
           exitCode: 3,
           cause: { kind: 'exited', exitCode: 3 },
           exitedAt: 1_700_000_000_000
         }
       })
     ])
+    // Why: a dead process's ids published to clients would become a permanent wire contract.
+    expect(JSON.stringify(capable)).not.toMatch(/pty-dead|inc-dead|term_dead/)
 
     // Why: an older client reads a handle-less leaf as a terminal still starting and waits forever.
     const old = await listForClient(runtime, [])
@@ -144,6 +177,22 @@ describe('terminal exit records', () => {
     const { runtime } = makeRendererRuntime(
       rendererSnapshot([
         { tabId: TAB_ID, leafId: HEADLESS_LEAF_ID },
+        { tabId: TAB_ID, leafId: SIBLING_LEAF_ID, ptyId: 'pty-sibling' }
+      ])
+    )
+    runtime.terminalExitRecords.record(exitRecord())
+
+    const old = await listForClient(runtime, [])
+
+    expect(old.tabs.map((tab) => (tab.type === 'terminal' ? tab.leafId : tab.id))).toEqual([
+      SIBLING_LEAF_ID
+    ])
+  })
+
+  it('never leaves an older client a handle-less leaf, even one still carrying its old binding', async () => {
+    const { runtime } = makeRendererRuntime(
+      rendererSnapshot([
+        { tabId: TAB_ID, leafId: HEADLESS_LEAF_ID, ptyId: 'pty-stale-binding' },
         { tabId: TAB_ID, leafId: SIBLING_LEAF_ID, ptyId: 'pty-sibling' }
       ])
     )
@@ -179,7 +228,7 @@ describe('terminal exit records', () => {
     expect(capable.tabs).toEqual([
       expect.objectContaining({
         parentTabId: 'moved-tab',
-        exited: expect.objectContaining({ ptyId: DEAD_PTY_ID })
+        exited: expect.objectContaining({ exitCode: 3 })
       })
     ])
   })
@@ -215,13 +264,91 @@ describe('terminal exit records', () => {
     ).toEqual([])
   })
 
-  it('ends the record when the surface is closed', () => {
-    const { runtime } = makePendingAgentTabActivationRuntime()
-    runtime.terminalExitRecords.record(exitRecord({ ptyId: 'serve-dead-pty' }))
+  it('does not show a stale exit on a closed tab reopened with the same leaf id', async () => {
+    const { runtimeStore, getSession, setSession } = sessionStoreWithHostTab()
+    const beforeClose = getSession()
+    const snapshot = rendererSnapshot([{ tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }])
+    const { runtime } = makeRendererRuntime(snapshot, runtimeStore)
+    runtime.terminalExitRecords.record(exitRecord())
 
     runtime.closeTerminalSurfaceFromRenderer({ worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab' })
+    // Reopening a recently closed tab restores it with its original ids.
+    setSession(beforeClose)
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [{ ...snapshot, snapshotVersion: 9 }]
+    })
+    const reopened = await listForClient(runtime, [
+      SESSION_TABS_TERMINAL_EXIT_STATE_RUNTIME_CAPABILITY
+    ])
 
-    expect(runtime.terminalExitRecords.get(HEADLESS_LEAF_ID)).toBeUndefined()
+    expect(reopened.tabs).toEqual([expect.objectContaining({ leafId: HEADLESS_LEAF_ID })])
+    expect(reopened.tabs[0]).not.toHaveProperty('exited')
+  })
+
+  it("gives a client without the capability exactly today's projection of an exit", async () => {
+    const graph = (ptyId: string | null) => ({
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId,
+          paneTitle: null
+        }
+      ],
+      mobileSessionTabs: [
+        rendererSnapshot([
+          { tabId: 'host-tab', leafId: HEADLESS_LEAF_ID, ...(ptyId ? { ptyId } : {}) }
+        ])
+      ]
+    })
+    // Today: main retires the surface when its process dies.
+    const today = makeRendererRuntime(
+      graph(DEAD_PTY_ID).mobileSessionTabs[0]!,
+      sessionStoreWithHostTab(DEAD_PTY_ID).runtimeStore
+    ).runtime
+    today.registerPty(DEAD_PTY_ID, TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      incarnationId: 'inc-dead'
+    })
+    today.attachWindow(1)
+    today.syncWindowGraph(1, graph(DEAD_PTY_ID))
+    const live = await listForClient(today, [])
+    expect(live.tabs).toEqual([expect.objectContaining({ status: 'ready' })])
+    today.onPtyExit(DEAD_PTY_ID, 3, 'inc-dead')
+    const retired = await listForClient(today, [])
+    const handle = retired.retiredTerminalSurfaces?.[0]?.terminal
+    expect(handle).toEqual(expect.any(String))
+
+    // Kept: the binding is cleared and main holds the exit record instead.
+    const kept = makeRendererRuntime(
+      graph(null).mobileSessionTabs[0]!,
+      sessionStoreWithHostTab().runtimeStore
+    ).runtime
+    kept.attachWindow(1)
+    kept.syncWindowGraph(1, graph(null))
+    kept.terminalExitRecords.record(exitRecord({ terminal: handle }))
+    const projected = await listForClient(kept, [])
+
+    const { snapshotVersion: _retiredVersion, ...retiredView } = retired
+    const { snapshotVersion: _keptVersion, ...keptView } = projected
+    // Why parsed, not string-equal: clients read fields by name, so key order is not on the wire.
+    expect(JSON.parse(JSON.stringify(keptView))).toStrictEqual(
+      JSON.parse(JSON.stringify(retiredView))
+    )
   })
 
   it('routes a user activation of a desktop-held exited leaf to the desktop pane', async () => {
