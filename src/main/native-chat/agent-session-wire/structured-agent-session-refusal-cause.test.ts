@@ -105,6 +105,22 @@ describe('the store fallback copy', () => {
     expect(refusal.message).toContain('4242')
   })
 
+  it('does not promise an update fixes a record this build cannot read', () => {
+    // Unreadable covers a damaged record as well as one a newer build wrote.
+    expect(
+      classifyStoreFailure(
+        agentSessionRefusalError('execution_owner_reconciling', 'recordUnreadable'),
+        null,
+        null
+      )
+    ).toEqual({
+      code: 'execution_owner_reconciling',
+      cause: 'recordUnreadable',
+      message:
+        "Orca can't read this chat's saved state. If a newer version of Orca saved it, update Orca to open it; otherwise start a new chat."
+    })
+  })
+
   it('names the latch for a bare code an older path still throws', () => {
     expect(
       classifyStoreFailure(new Error('agent_session_conflict'), null, {

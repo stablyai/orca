@@ -48,7 +48,9 @@ const SITUATION_MESSAGES: Partial<Record<AgentSessionRefusalCause, string>> = {
   tabIdTaken: 'Another chat already uses this tab. Try again.',
   conversationHeldElsewhere:
     'Another chat is already working in this conversation. Open that chat to continue.',
-  recordUnreadable: 'A newer version of Orca saved this chat. Update Orca to open it.'
+  // Also a damaged record, which no update opens.
+  recordUnreadable:
+    "Orca can't read this chat's saved state. If a newer version of Orca saved it, update Orca to open it; otherwise start a new chat."
 }
 
 /**
