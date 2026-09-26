@@ -1,4 +1,78 @@
 {
+  "conversationKnowledge": {
+    "name": "대화 지식",
+    "graph": "대화 지식 그래프",
+    "description": "에이전트 기록에서 AI가 생성한 주제, 결론 및 관계입니다.",
+    "status": {
+      "indexing": "생성 중",
+      "indexed": "생성됨",
+      "progress": "{{state}} · {{completed}}/{{total}} · {{failed}}개 실패"
+    },
+    "items": {
+      "count": "전체 {{total}}개 중 {{visible}}개 표시",
+      "empty": "지식 항목 없음"
+    },
+    "scope": {
+      "ariaLabel": "지식 그래프 범위",
+      "all": "전체",
+      "project": "프로젝트별"
+    },
+    "search": {
+      "ariaLabel": "대화 지식 검색",
+      "placeholder": "요약 또는 노드 검색"
+    },
+    "generateAll": "모두 생성",
+    "regenerateAll": "모두 다시 생성",
+    "stop": "생성 중지",
+    "configurationRequired": "설정 → 실험적 기능 → 대화 지식에서 활성화된 요약 에이전트와 모델을 선택하세요.",
+    "empty": {
+      "search": "일치하는 요약 또는 관련 노드가 없습니다.",
+      "generated": "아직 생성된 지식이 없습니다.",
+      "selection": "주제 또는 요약 노드를 선택하여 세부 정보와 출처를 확인하세요."
+    },
+    "error": {
+      "load": "생성된 지식을 불러올 수 없습니다.",
+      "start": "지식 생성을 시작할 수 없습니다.",
+      "stop": "지식 생성을 중지할 수 없습니다."
+    },
+    "detail": {
+      "generatedBy": "{{agent}} · {{model}}에서 생성",
+      "created": "생성",
+      "modified": "마지막 수정",
+      "summary": "요약",
+      "conclusions": "주요 결론",
+      "topics": "주제",
+      "entities": "엔터티",
+      "source": "출처",
+      "openSessionHistory": "에이전트 세션 기록 열기"
+    },
+    "nodeType": {
+      "project": "프로젝트",
+      "worktree": "워크트리",
+      "topic": "주제",
+      "entity": "엔터티",
+      "knowledge": "요약"
+    },
+    "settings": {
+      "description": "생성된 주제, 결론, 프로젝트, 워크트리 및 원본 세션을 탐색하는 그래프와 세부 정보 작업 영역을 추가합니다.",
+      "searchDescription": "에이전트 세션 기록에서 검색 가능한 지식 계층을 구축합니다.",
+      "toggle": "대화 지식 전환",
+      "summaryAgent": "요약 에이전트",
+      "chooseAgent": "활성화된 에이전트 선택",
+      "agentHelp": "감지되고 활성화되었으며 백그라운드 생성을 지원하는 에이전트만 표시됩니다.",
+      "summaryModel": "요약 모델",
+      "keyword": {
+        "conversation": "대화",
+        "history": "기록",
+        "knowledge": "지식",
+        "summary": "요약",
+        "graph": "그래프"
+      }
+    },
+    "enrichment": "AI 지식 보강",
+    "enrichmentCopy": "새 세션 또는 변경된 세션을 하루에 한 번 확인하여 요약, 주제, 결론 및 그래프 관계를 생성합니다.",
+    "enrichmentToggle": "AI 지식 보강 전환"
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",
@@ -133,6 +207,10 @@
     "activityWaitingSuffix": "activity waiting"
   },
   "worktreeJumpPalette": {
+    "conversationKnowledgeHeader": "지식",
+    "searchScope": "검색 범위",
+    "allResults": "전체",
+    "knowledgeResults": "지식",
     "matchLabel": {
       "comment": "댓글",
       "issue": "이슈",

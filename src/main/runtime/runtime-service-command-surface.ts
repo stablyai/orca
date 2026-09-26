@@ -12,6 +12,13 @@ import type { RuntimeSubscriptionRegistry } from './runtime-subscription-registr
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
+  searchAiVaultHistory: RuntimeAiVaultCommands['searchHistory']
+  readAiVaultHistorySession: RuntimeAiVaultCommands['readHistory']
+  listConversationKnowledge: RuntimeAiVaultCommands['listKnowledge']
+  enrichConversationKnowledge: RuntimeAiVaultCommands['enrichKnowledge']
+  startConversationKnowledgeIndex: RuntimeAiVaultCommands['startKnowledgeIndex']
+  getConversationKnowledgeIndexStatus: RuntimeAiVaultCommands['getKnowledgeIndexStatus']
+  cancelConversationKnowledgeIndex: RuntimeAiVaultCommands['cancelKnowledgeIndex']
   resolveAiVaultSessionTitles: RuntimeAiVaultCommands['resolveTitles']
   prepareAiVaultSessionResume: RuntimeAiVaultCommands['prepare']
   setSessionSearchEnabled: RuntimeSessionSearchSettingsController['setEnabled']
@@ -101,6 +108,13 @@ export function installRuntimeServiceCommandSurface(
   const waiters = owners.messageWaiters
   Object.assign(target, {
     listAiVaultSessions: vault.list.bind(vault),
+    searchAiVaultHistory: vault.searchHistory.bind(vault),
+    readAiVaultHistorySession: vault.readHistory.bind(vault),
+    listConversationKnowledge: vault.listKnowledge.bind(vault),
+    enrichConversationKnowledge: vault.enrichKnowledge.bind(vault),
+    startConversationKnowledgeIndex: vault.startKnowledgeIndex.bind(vault),
+    getConversationKnowledgeIndexStatus: vault.getKnowledgeIndexStatus.bind(vault),
+    cancelConversationKnowledgeIndex: vault.cancelKnowledgeIndex.bind(vault),
     resolveAiVaultSessionTitles: vault.resolveTitles.bind(vault),
     prepareAiVaultSessionResume: vault.prepare.bind(vault),
     setSessionSearchEnabled: sessionSearchSettings.setEnabled.bind(sessionSearchSettings),

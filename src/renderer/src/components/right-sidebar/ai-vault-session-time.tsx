@@ -6,10 +6,10 @@ export function SessionTime({
   value,
   className
 }: {
-  value: string
+  value: string | null | undefined
   className?: string
 }): React.JSX.Element {
-  const timestamp = Date.parse(value)
+  const timestamp = value ? Date.parse(value) : Number.NaN
   if (!Number.isFinite(timestamp)) {
     return (
       <span className={cn('shrink-0 text-[11px] text-muted-foreground', className)}>

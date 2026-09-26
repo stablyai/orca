@@ -18,13 +18,64 @@ import {
   projectStructuredAiVaultSessions
 } from '../../../ai-vault/structured-session-ownership'
 import {
+  AiVaultEmptyParams,
+  AiVaultHistorySearchParams,
+  AiVaultHistoryReadParams,
+  AiVaultKnowledgeListParams,
+  AiVaultKnowledgeGenerateParams,
+  AiVaultKnowledgeIndexParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from '../../../../shared/rpc-contract/ai-vault-params'
-export { AiVaultListSessionsParams, AiVaultPrepareSessionResumeParams, AiVaultSessionTitlesParams }
+export {
+  AiVaultEmptyParams,
+  AiVaultHistorySearchParams,
+  AiVaultHistoryReadParams,
+  AiVaultKnowledgeListParams,
+  AiVaultKnowledgeGenerateParams,
+  AiVaultKnowledgeIndexParams,
+  AiVaultListSessionsParams,
+  AiVaultPrepareSessionResumeParams,
+  AiVaultSessionTitlesParams
+}
 
 export const AI_VAULT_METHODS = [
+  defineMethod({
+    name: 'aiVault.searchHistory',
+    params: AiVaultHistorySearchParams,
+    handler: (params, { runtime }) => runtime.searchAiVaultHistory(params)
+  }),
+  defineMethod({
+    name: 'aiVault.readHistory',
+    params: AiVaultHistoryReadParams,
+    handler: (params, { runtime }) => runtime.readAiVaultHistorySession(params)
+  }),
+  defineMethod({
+    name: 'aiVault.listKnowledge',
+    params: AiVaultKnowledgeListParams,
+    handler: (params, { runtime }) => runtime.listConversationKnowledge(params)
+  }),
+  defineMethod({
+    name: 'aiVault.enrichHistory',
+    params: AiVaultKnowledgeGenerateParams,
+    handler: (params, { runtime }) => runtime.enrichConversationKnowledge(params)
+  }),
+  defineMethod({
+    name: 'aiVault.startKnowledgeIndex',
+    params: AiVaultKnowledgeIndexParams,
+    handler: (params, { runtime }) => runtime.startConversationKnowledgeIndex(params)
+  }),
+  defineMethod({
+    name: 'aiVault.getKnowledgeIndexStatus',
+    params: AiVaultEmptyParams,
+    handler: (_params, { runtime }) => runtime.getConversationKnowledgeIndexStatus()
+  }),
+  defineMethod({
+    name: 'aiVault.cancelKnowledgeIndex',
+    params: AiVaultEmptyParams,
+    handler: (_params, { runtime }) => runtime.cancelConversationKnowledgeIndex()
+  }),
   defineMethod({
     name: 'aiVault.searchSessions',
     params: AiVaultSearchRequestSchema,

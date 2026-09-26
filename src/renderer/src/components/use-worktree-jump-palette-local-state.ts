@@ -49,6 +49,7 @@ export function useWorktreeJumpPaletteLocalState({
   const [filter, setFilter] = useState<PaletteFilterState>(() =>
     buildPaletteFilterFromSidebarScope(sidebarScope)
   )
+  const [knowledgeOnly, setKnowledgeOnly] = useState(false)
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
   const previousActiveTabTypeRef = useRef<WorkspaceVisibleTabType>('terminal')
@@ -94,6 +95,8 @@ export function useWorktreeJumpPaletteLocalState({
     digitShortcutItemsRef,
     filter,
     setFilter,
+    knowledgeOnly,
+    setKnowledgeOnly,
     dialogElement,
     setDialogElement,
     previousWorktreeIdRef,

@@ -1,4 +1,78 @@
 {
+  "conversationKnowledge": {
+    "name": "Connaissances des conversations",
+    "graph": "Graphe des connaissances des conversations",
+    "description": "Sujets, conclusions et relations générés par l’IA à partir de l’historique des agents.",
+    "status": {
+      "indexing": "Génération",
+      "indexed": "Généré",
+      "progress": "{{state}} · {{completed}}/{{total}} · {{failed}} en échec"
+    },
+    "items": {
+      "count": "{{visible}} éléments affichés sur {{total}}",
+      "empty": "Aucun élément de connaissance"
+    },
+    "scope": {
+      "ariaLabel": "Portée du graphe de connaissances",
+      "all": "Tout",
+      "project": "Par projet"
+    },
+    "search": {
+      "ariaLabel": "Rechercher dans les connaissances des conversations",
+      "placeholder": "Rechercher des résumés ou des nœuds"
+    },
+    "generateAll": "Tout générer",
+    "regenerateAll": "Tout régénérer",
+    "stop": "Arrêter la génération",
+    "configurationRequired": "Choisissez un agent et un modèle de résumé activés dans Réglages → Expérimental → Connaissances des conversations.",
+    "empty": {
+      "search": "Aucun résumé ni nœud associé ne correspond.",
+      "generated": "Aucune connaissance générée pour le moment.",
+      "selection": "Sélectionnez un sujet ou un nœud de résumé pour consulter ses détails et ses sources."
+    },
+    "error": {
+      "load": "Impossible de charger les connaissances générées.",
+      "start": "Impossible de lancer la génération des connaissances.",
+      "stop": "Impossible d’arrêter la génération des connaissances."
+    },
+    "detail": {
+      "generatedBy": "Généré par {{agent}} · {{model}}",
+      "created": "Créée",
+      "modified": "Dernière modification",
+      "summary": "Résumé",
+      "conclusions": "Conclusions principales",
+      "topics": "Sujets",
+      "entities": "Entités",
+      "source": "Source",
+      "openSessionHistory": "Ouvrir l’historique des sessions de l’agent"
+    },
+    "nodeType": {
+      "project": "Projet",
+      "worktree": "Arbre de travail",
+      "topic": "Sujet",
+      "entity": "Entité",
+      "knowledge": "Résumé"
+    },
+    "settings": {
+      "description": "Ajoute un espace de graphe et de détails pour explorer les sujets, conclusions, projets, arbres de travail et sessions sources.",
+      "searchDescription": "Crée une couche de connaissances consultable à partir de l’historique des sessions de l’agent.",
+      "toggle": "Activer ou désactiver les connaissances des conversations",
+      "summaryAgent": "Agent de résumé",
+      "chooseAgent": "Choisir un agent activé",
+      "agentHelp": "Seuls les agents détectés et activés prenant en charge la génération en arrière-plan sont affichés.",
+      "summaryModel": "Modèle de résumé",
+      "keyword": {
+        "conversation": "conversation",
+        "history": "historique",
+        "knowledge": "connaissances",
+        "summary": "résumé",
+        "graph": "graphe"
+      }
+    },
+    "enrichment": "Enrichissement des connaissances par IA",
+    "enrichmentCopy": "Vérifie une fois par jour les sessions nouvelles ou modifiées et génère des résumés, sujets, conclusions et relations.",
+    "enrichmentToggle": "Activer ou désactiver l’enrichissement des connaissances par IA"
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca a rencontré une erreur de rendu.",
@@ -232,6 +306,10 @@
     "activityWaitingSuffix": "activité en attente"
   },
   "worktreeJumpPalette": {
+    "conversationKnowledgeHeader": "Connaissances",
+    "searchScope": "Portée de la recherche",
+    "allResults": "Tout",
+    "knowledgeResults": "Connaissances",
     "matchLabel": {
       "comment": "Commentaire",
       "issue": "Issue",

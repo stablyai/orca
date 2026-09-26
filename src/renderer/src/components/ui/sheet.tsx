@@ -52,6 +52,10 @@ const sheetContentVariants = cva(
   'fixed z-50 flex flex-col gap-0 bg-background/96 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl outline-none transition ease-in-out dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300',
   {
     variants: {
+      variant: {
+        default: '',
+        workspace: 'bg-worktree-sidebar/95 p-0 dark:bg-worktree-sidebar/95'
+      },
       side: {
         right:
           'inset-y-0 right-0 h-full w-3/4 border-l border-black/14 dark:border-white/14 data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-[560px]',
@@ -62,6 +66,7 @@ const sheetContentVariants = cva(
       }
     },
     defaultVariants: {
+      variant: 'default',
       side: 'right'
     }
   }
@@ -71,6 +76,7 @@ function SheetContent({
   className,
   children,
   side = 'right',
+  variant,
   showCloseButton = true,
   overlayClassName,
   overlayStyle,
@@ -87,7 +93,7 @@ function SheetContent({
       <SheetOverlay className={overlayClassName} style={overlayStyle} />
       <SheetPrimitive.Content
         data-slot="sheet-content"
-        className={cn(sheetContentVariants({ side }), className)}
+        className={cn(sheetContentVariants({ side, variant }), className)}
         // Why: same as SheetOverlay — the sheet content portals to the
         // document root and its header overlaps the titlebar drag strip.
         style={{ ...style, WebkitAppRegion: 'no-drag' } as React.CSSProperties}

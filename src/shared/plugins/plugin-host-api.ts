@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
+import { AI_VAULT_AGENTS } from '../ai-vault-types'
 
 /**
  * Host API v0 — the separately-versioned public facade plugins call. Every
@@ -41,6 +42,48 @@ const workspaceReadContextResult = z
   })
   .strict()
   .nullable()
+
+const historyMessageResult = z
+  .object({
+    id: z.string().min(1).max(1024),
+    role: z.enum(['user', 'assistant', 'tool', 'reasoning', 'system']),
+    text: z
+      .string()
+      .min(1)
+      .max(32 * 1024),
+    timestamp: z.string().datetime().nullable()
+  })
+  .strict()
+const historySearchParams = z.object({
+  query: z.string().min(1).max(512),
+  limit: z.number().int().min(1).max(50).optional()
+})
+const historySearchResult = z
+  .object({
+    matches: z
+      .array(
+        z
+          .object({
+            agent: z.enum(AI_VAULT_AGENTS),
+            sessionId: z.string().min(1).max(512),
+            title: z.string().min(1).max(512),
+            updatedAt: z.string().datetime().nullable(),
+            message: historyMessageResult
+          })
+          .strict()
+      )
+      .max(50),
+    scannedSessionCount: z.number().int().min(0).max(50_000)
+  })
+  .strict()
+const historyReadParams = z.object({
+  agent: z.enum(AI_VAULT_AGENTS),
+  sessionId: z.string().min(1).max(512),
+  limit: z.number().int().min(1).max(200).optional()
+})
+const historyReadResult = z
+  .object({ messages: z.array(historyMessageResult).max(200), truncated: z.boolean() })
+  .strict()
 
 const terminalSendTextParams = z.object({
   /** Explicit target. Never "the active terminal": a focus change must not
@@ -100,7 +143,13 @@ export type PluginHostMethodSpec = {
   /** pluginApi minor the method appeared in (`1.0` for the v0 set). */
   since: string
   /** Machine-readable resource boundary enforced by the host binding. */
-  scope: 'active-worktree' | 'explicit-terminal' | 'plugin-private' | 'desktop' | 'host-events'
+  scope:
+    | 'active-worktree'
+    | 'explicit-terminal'
+    | 'plugin-private'
+    | 'desktop'
+    | 'host-events'
+    | 'local-session-history'
   stability: 'experimental'
   capability: PluginCapabilityKind
   /** Mutations are audit-logged with actor `plugin:<id>`. */
@@ -129,6 +178,26 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: true,
     params: workspaceReadContextParams,
     result: workspaceReadContextResult
+  }),
+  spec({
+    name: 'history.search',
+    since: '1.1',
+    scope: 'local-session-history',
+    capability: 'history:read',
+    mutation: false,
+    panel: false,
+    params: historySearchParams,
+    result: historySearchResult
+  }),
+  spec({
+    name: 'history.read',
+    since: '1.1',
+    scope: 'local-session-history',
+    capability: 'history:read',
+    mutation: false,
+    panel: false,
+    params: historyReadParams,
+    result: historyReadResult
   }),
   spec({
     name: 'terminal.sendText',

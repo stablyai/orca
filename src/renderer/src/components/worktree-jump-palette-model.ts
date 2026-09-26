@@ -13,6 +13,7 @@ import type {
 } from '@/components/cmd-j/palette-project-results'
 import type { RecentWorkspaceTabRow } from '@/lib/recent-workspace-tab-rows'
 import type { Worktree } from '../../../shared/worktree/types'
+import type { ConversationKnowledgeItem } from '../../../shared/conversation-knowledge-items'
 import { CREATE_WORKSPACE_QUICK_ACTION_ID } from '@/components/cmd-j/quick-actions'
 import type { CREATE_WORKTREE_ITEM_ID } from '@/lib/worktree-palette-create-action'
 
@@ -59,6 +60,12 @@ export type ProjectTargetPaletteItem = {
   result: CmdJProjectSearchResult & Pick<CmdJRankedProjectSearchResult, 'qualityClass'>
 }
 
+export type ConversationKnowledgePaletteItem = {
+  id: string
+  type: 'conversation-knowledge'
+  item: ConversationKnowledgeItem
+}
+
 export type SectionHeader = { id: string; type: 'section-header'; label: string }
 export type HintRow = {
   id: string
@@ -76,6 +83,7 @@ export type PaletteItem =
   | ProjectTargetPaletteItem
   | SettingsPaletteItem
   | QuickActionPaletteItem
+  | ConversationKnowledgePaletteItem
   | BrowserPaletteItem
   | SimulatorPaletteItem
   | WorkspaceTabPaletteItem

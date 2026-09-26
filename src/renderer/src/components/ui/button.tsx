@@ -16,6 +16,14 @@ const buttonVariants = cva(
           'border border-border bg-background text-foreground shadow-xs hover:border-muted-foreground/35 hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        dense:
+          'h-auto px-2 py-1.5 text-xs font-normal hover:bg-accent hover:text-accent-foreground',
+        denseStrong:
+          'h-auto px-1.5 py-1 text-xs font-medium hover:bg-accent hover:text-accent-foreground',
+        denseMuted:
+          'h-auto gap-1.5 px-1.5 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+        concept:
+          'h-auto rounded-full border border-border/70 bg-background/95 p-2 text-foreground shadow-xs hover:bg-accent data-[current=true]:border-foreground/40 data-[current=true]:bg-accent data-[current=true]:ring-2 data-[current=true]:ring-ring data-[current=true]:ring-offset-2 data-[current=true]:ring-offset-background',
         link: 'text-primary underline-offset-4 hover:underline'
       },
       size: {

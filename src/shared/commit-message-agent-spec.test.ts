@@ -193,6 +193,8 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('orders Codex models by version descending to match the official picker', () => {
     const ids = COMMIT_MESSAGE_AGENT_SPECS.codex?.models.map((m) => m.id)
     expect(ids).toEqual([
+      'gpt-5.6-sol',
+      'gpt-5.6',
       'gpt-5.5',
       'gpt-5.4',
       'gpt-5.4-mini',
@@ -312,6 +314,22 @@ describe('model discovery parsers', () => {
         '{"type":"control_response","response":{"subtype":"error","request_id":"orca-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
       )
     ).toEqual([])
+  })
+
+  it('keeps provider-qualified Claude-compatible model ids such as MiniMax', () => {
+    const stdout = `${JSON.stringify({
+      type: 'control_response',
+      response: {
+        subtype: 'success',
+        request_id: 'orca-model-discovery',
+        response: {
+          models: [{ value: 'minimax/MiniMax-M2.1', displayName: 'MiniMax M2.1' }]
+        }
+      }
+    })}\n`
+    expect(parseClaudeModels(stdout)).toEqual([
+      { id: 'minimax/MiniMax-M2.1', label: 'MiniMax M2.1' }
+    ])
   })
 
   it('declares stdin-driven dynamic discovery for Claude', () => {

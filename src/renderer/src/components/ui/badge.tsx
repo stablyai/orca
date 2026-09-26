@@ -21,7 +21,9 @@ const badgeVariants = cva(
         /** The chip naming the machine a workspace runs on — quieter and squarer than `secondary`,
          *  so it reads as context beside a workspace name rather than as a status of its own. */
         hostContext:
-          'h-4 rounded border-border bg-accent px-1.5 text-[10px] leading-none text-muted-foreground dark:border-border/50 dark:bg-accent/80'
+          'h-4 rounded border-border bg-accent px-1.5 text-[10px] leading-none text-muted-foreground dark:border-border/50 dark:bg-accent/80',
+        compact: 'gap-1 px-1.5 py-0 text-[11px] font-normal',
+        evidence: 'border-border/60 bg-background/70 px-1.5 text-[9px] text-foreground'
       }
     },
     defaultVariants: {
