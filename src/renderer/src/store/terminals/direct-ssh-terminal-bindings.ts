@@ -16,15 +16,29 @@ import {
   resolveDirectSshTerminalKeys
 } from './terminal-pty-identities'
 
+export function collectDirectSshTerminalTabIds(
+  state: Parameters<typeof resolveDirectSshTerminalKeys>[0],
+  targetId: string
+): string[] {
+  const tabIds: string[] = []
+  for (const workspaceKey of resolveDirectSshTerminalKeys(state, targetId)) {
+    for (const tab of state.tabsByWorktree[workspaceKey] ?? []) {
+      tabIds.push(tab.id)
+    }
+  }
+  return tabIds
+}
+
 export function createDirectSshTerminalBindingActions(
   set: TerminalStoreSet,
-  _get: TerminalStoreGet
+  get: TerminalStoreGet
 ): Pick<
   TerminalSlice,
   | 'clearDirectSshTargetPtyBindings'
   | 'invalidateStaleDirectSshTargetPtyBindings'
   | 'retryDirectSshTargetPanes'
   | 'settleDirectSshPaneRetry'
+  | 'retireDirectSshTerminalsForRelayGeneration'
 > {
   return {
     clearDirectSshTargetPtyBindings: (targetId) => {
@@ -100,6 +114,17 @@ export function createDirectSshTerminalBindingActions(
         )
         return retry.patch ? { ...settledState, ...retry.patch } : settledState
       })
+    },
+    retireDirectSshTerminalsForRelayGeneration: (targetId) => {
+      const tabIds = collectDirectSshTerminalTabIds(get(), targetId)
+      for (const tabId of tabIds) {
+        get().closeTab(tabId, {
+          reason: 'cleanup',
+          localPtyTeardownOwnedExternally: true,
+          remoteCloseOwnedByHost: true
+        })
+      }
+      return tabIds.length
     }
   }
 }

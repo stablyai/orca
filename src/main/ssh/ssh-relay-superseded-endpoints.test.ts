@@ -70,7 +70,7 @@ describe('supersededRelayEndpointListCommand', () => {
 })
 
 describe('classifySupersededRelay', () => {
-  it('retains a live relay that still owns PTYs', () => {
+  it('nominates a sole-holder relay for reaping even when it still owns PTYs', () => {
     expect(
       classifySupersededRelay(
         incumbent([
@@ -80,10 +80,24 @@ describe('classifySupersededRelay', () => {
           'HOLDER=3669803 yes 13 11'
         ])
       )
+    ).toBe('reap-candidate')
+  })
+
+  it('retains a live relay that still has another socket holder', () => {
+    expect(
+      classifySupersededRelay(
+        incumbent([
+          'PRESENT=yes',
+          'LISTEN=accepted',
+          'HOLDERS_SOURCE=lsof',
+          'HOLDER=3669803 yes 13 11',
+          'HOLDER=3669804 no 0 0'
+        ])
+      )
     ).toBe('retained-live-work')
   })
 
-  it('nominates only a proven empty relay for reaping', () => {
+  it('nominates a proven empty relay for reaping', () => {
     expect(
       classifySupersededRelay(
         incumbent(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0'])
@@ -124,17 +138,35 @@ describe('sweepSupersededRelayEndpoints', () => {
     expect(issuedCommands()).toHaveLength(2)
   })
 
-  it('leaves an upgrade-orphaned relay that still owns terminals running, untouched', async () => {
+  it('reaps an upgrade-orphaned relay that still owns terminals, once the host confirms it is gone', async () => {
     execCommand
       .mockResolvedValueOnce(`${OLD_SOCK}\n`)
       .mockResolvedValueOnce(
         probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=3669803 yes 13 11'])
       )
+      .mockResolvedValueOnce('GONE\n')
     const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
     expect(findings).toHaveLength(1)
+    expect(findings[0]).toMatchObject({ sockPath: OLD_SOCK, outcome: 'reaped' })
+    expect(issuedCommands()[2]).toContain('kill -TERM "$pid"')
+    expect(issuedCommands()[2]).not.toContain('unrecognized_kids')
+  })
+
+  it('leaves a superseded relay running when another client still holds the socket', async () => {
+    execCommand
+      .mockResolvedValueOnce(`${OLD_SOCK}\n`)
+      .mockResolvedValueOnce(
+        probe([
+          'PRESENT=yes',
+          'LISTEN=accepted',
+          'HOLDERS_SOURCE=lsof',
+          'HOLDER=3669803 yes 13 11',
+          'HOLDER=3669804 no 0 0'
+        ])
+      )
+    const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
     expect(findings[0]).toMatchObject({ sockPath: OLD_SOCK, outcome: 'retained-live-work' })
     expect(issuedCommands().some((command) => /\bkill\s/.test(command))).toBe(false)
-    expect(issuedCommands().some((command) => /\brm -f\b/.test(command))).toBe(false)
   })
 
   it('reaps the empty husk an upgrade leaves behind, once the host confirms it is gone', async () => {

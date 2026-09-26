@@ -140,6 +140,11 @@ import {
 } from './ssh-pty-consumer-recovery'
 import { classifySshPtyFrameRejection, SshPtyFrameRejectionLog } from './ssh-pty-frame-rejection'
 import { SshPtyTargetedReattachQueue } from './ssh-pty-targeted-reattach-queue'
+import {
+  isSshRelayGenerationChange,
+  retireSshRelayGenerationLeases,
+  shouldBroadcastSshRelayGenerationRetired
+} from './ssh-relay-generation-reset'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
 
@@ -590,6 +595,10 @@ export class SshRelaySession {
         throw new Error('Session disposed during establish')
       }
       this.ptyConsumerSessionState = ptyConsumerSessionState
+      const previousRelayBuildId = getSshPtyConsumerRecovery(this.targetId)?.serverBuildId
+      if (isSshRelayGenerationChange(previousRelayBuildId, serverBuildId)) {
+        this.retireSupersededRelayGeneration()
+      }
       await this.rememberPtyConsumerRecovery(serverBuildId)
       if (!verifyRelayAttempt(mux, isAttemptCurrent, 'consumer recovery persistence')) {
         if (!mux.isDisposed()) {
@@ -626,7 +635,12 @@ export class SshRelaySession {
       }
 
       // Why: explicit disconnect keeps PTY ownership, so a later manual connect must reattach those remote PTYs.
-      await this.reattachKnownPtys(mux, shouldContinue)
+      await this.restoreKnownPtysOrRetireGeneration(
+        mux,
+        shouldContinue,
+        previousRelayBuildId,
+        serverBuildId
+      )
 
       if (!verifyRelayAttempt(mux, isAttemptCurrent, 'PTY reattach')) {
         throw new Error('Session disposed during establish')
@@ -750,6 +764,10 @@ export class SshRelaySession {
         return
       }
       this.ptyConsumerSessionState = ptyConsumerSessionState
+      const previousRelayBuildId = getSshPtyConsumerRecovery(this.targetId)?.serverBuildId
+      if (isSshRelayGenerationChange(previousRelayBuildId, serverBuildId)) {
+        this.retireSupersededRelayGeneration()
+      }
       await this.rememberPtyConsumerRecovery(serverBuildId)
       if (!verifyRelayAttempt(mux, isAttemptCurrent, 'consumer recovery persistence')) {
         if (!mux.isDisposed()) {
@@ -790,7 +808,12 @@ export class SshRelaySession {
         return
       }
 
-      await this.reattachKnownPtys(mux, shouldContinue)
+      await this.restoreKnownPtysOrRetireGeneration(
+        mux,
+        shouldContinue,
+        previousRelayBuildId,
+        serverBuildId
+      )
 
       if (!verifyRelayAttempt(mux, isAttemptCurrent, 'PTY reattach')) {
         return
@@ -2310,6 +2333,33 @@ export class SshRelaySession {
     const win = this.getMainWindow()
     if (win && !win.isDestroyed()) {
       win.webContents.send('pty:replay', { id: appPtyId, data })
+    }
+  }
+
+  private restoreKnownPtysOrRetireGeneration(
+    mux: SshChannelMultiplexer,
+    shouldContinue: () => boolean,
+    previousRelayBuildId: string | undefined,
+    serverBuildId: string | undefined
+  ): Promise<void> {
+    if (isSshRelayGenerationChange(previousRelayBuildId, serverBuildId)) {
+      return Promise.resolve()
+    }
+    return this.reattachKnownPtys(mux, shouldContinue)
+  }
+
+  private retireSupersededRelayGeneration(): void {
+    retireSshRelayGenerationLeases(this.store, this.targetId)
+    clearPtyOwnershipForConnection(this.targetId)
+    console.warn(
+      `[ssh-relay-session] Relay generation changed for ${this.targetId}; retiring persisted remote terminals`
+    )
+    if (!shouldBroadcastSshRelayGenerationRetired(this.targetId)) {
+      return
+    }
+    const win = this.getMainWindow()
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('ssh:relay-generation-retired', { targetId: this.targetId })
     }
   }
 

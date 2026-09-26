@@ -95,6 +95,16 @@ export const sshApi = {
     return () => ipcRenderer.removeListener('ssh:state-changed', listener)
   },
 
+  onRelayGenerationRetired: (callback: (data: { targetId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { targetId: string }): void => {
+      if (typeof data?.targetId === 'string' && data.targetId.length > 0) {
+        callback({ targetId: data.targetId })
+      }
+    }
+    ipcRenderer.on('ssh:relay-generation-retired', listener)
+    return () => ipcRenderer.removeListener('ssh:relay-generation-retired', listener)
+  },
+
   addPortForward: (args: {
     targetId: string
     localPort: number
