@@ -20,7 +20,7 @@ import {
   commitRuntimeSpawnHiddenDelivery,
   releaseRuntimeSpawnPreSpawnHiddenMark
 } from './spawn-hidden-delivery'
-import { releaseClaudePinnedAccountReservation } from '../../../claude-accounts/claude-pinned-pty-registry'
+import { releasePinnedClaudeReservation } from '../claude-pinned-spawn'
 
 function toRuntimeSpawnReply(result: {
   id: string
@@ -124,8 +124,6 @@ export async function spawnPtyFromRuntimeController(
     ctx.releaseWorktreeSpawn?.()
     ctx.finishTerminalInstall()
     // Why last: a committed pinned PTY is registered by now, so its account never reads as unused.
-    if (ctx.claudeAuth?.pinnedAccountId) {
-      releaseClaudePinnedAccountReservation(ctx.claudeAuth.pinnedAccountId)
-    }
+    releasePinnedClaudeReservation(ctx.claudeAuth)
   }
 }
