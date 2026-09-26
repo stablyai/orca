@@ -26,6 +26,8 @@ vi.mock('electron', () => ({
 
 import { CliInstaller } from './cli-installer'
 import { buildUnixDevLauncher } from './cli-dev-launcher'
+import { buildMacPrivilegedSymlinkTransaction } from './cli-command-filesystem-transaction'
+import { quoteShell } from './cli-install-path-format'
 
 const createdRoots: string[] = []
 const protectedDirectories: string[] = []
@@ -93,12 +95,60 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       const installed = await installer.install()
       expect(installed.state).toBe('installed')
       await expect(readlink(fixture.commandPath)).resolves.toBe(installed.launcherPath)
+      expect((await lstat(fixture.commandPath)).mode & 0o777).toBe(0o755)
+      expect((await lstat(fixture.protectedDirectory)).mode & 0o777).toBe(0o700)
+      expect(await readdir(fixture.protectedDirectory)).toEqual(['orca'])
 
       await chmod(fixture.protectedDirectory, 0o500)
       await expect(installer.remove()).resolves.toMatchObject({ state: 'not_installed' })
       expect(commands).toHaveLength(2)
       expect(commands.every((command) => command.includes('/bin/ln -P'))).toBe(true)
       expect(commands.every((command) => !command.includes('mv -f'))).toBe(true)
+    })
+
+    it('creates public directories and a readable link while keeping staging private', async () => {
+      const fixture = await createPrivilegedFixture()
+      const commandDirectory = join(fixture.root, 'new local', 'bin')
+      const commandPath = join(commandDirectory, 'orca')
+      const contents = join(fixture.root, "Orca's Test.app", 'Contents')
+      const launcherPath = join(contents, 'Resources', 'bin', 'orca')
+      const electronPath = join(contents, 'MacOS', 'Orca')
+      await mkdir(join(contents, 'Resources', 'bin'), { recursive: true })
+      await mkdir(join(contents, 'MacOS'), { recursive: true })
+      await writeFile(launcherPath, await readFile('resources/darwin/bin/orca'))
+      await chmod(launcherPath, 0o751)
+      await writeFile(electronPath, '#!/bin/sh\nprintf "reached-electron\\n"\n', { mode: 0o755 })
+
+      const command = buildMacPrivilegedSymlinkTransaction({
+        action: 'install',
+        commandPath,
+        launcherPath,
+        expected: null,
+        expectedFileSha256: null,
+        expectedRawSymlinkTarget: null
+      })
+      // Inspect staging before publication removes it.
+      const inspectDirectories =
+        `/usr/bin/find ${quoteShell(commandDirectory)} -mindepth 1 -type d ` +
+        `-exec /usr/bin/stat -f '%Lp' {} \\; && /bin/ln -s`
+      const result = await runProcess({
+        program: '/bin/sh',
+        args: ['-c', `umask 077; ${command.replace('/bin/ln -s', inspectDirectories)}`]
+      })
+      expect(result).toMatchObject({ code: 0, stdout: '700\n700\n', stderr: '' })
+      expect((await lstat(join(fixture.root, 'new local'))).mode & 0o777).toBe(0o755)
+      expect((await lstat(commandDirectory)).mode & 0o777).toBe(0o755)
+      expect((await lstat(commandPath)).mode & 0o777).toBe(0o755)
+      expect((await lstat(launcherPath)).mode & 0o777).toBe(0o751)
+      await expect(readlink(commandPath)).resolves.toBe(launcherPath)
+      expect(await readdir(commandDirectory)).toEqual(['orca'])
+      await expect(
+        runProcess({ program: commandPath, args: ['--version'] })
+      ).resolves.toMatchObject({
+        code: 0,
+        stdout: 'reached-electron\n',
+        stderr: ''
+      })
     })
 
     it('restores a trailing-newline symlink inserted after privileged inspection', async () => {
@@ -164,26 +214,34 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       ).toBe(false)
     })
 
-    it('restores the displaced command when publication setup fails', async () => {
-      const fixture = await createPrivilegedFixture()
-      const staleTarget = join(fixture.userDataPath, 'cli', 'bin', 'old', 'orca')
-      await symlink(staleTarget, fixture.commandPath)
-      const installer = new CliInstaller({
-        ...fixtureInstallerOptions(fixture),
-        privilegedRunner: async (command) => {
-          await chmod(fixture.protectedDirectory, 0o700)
-          const sabotaged = command.replace(/\/bin\/mkdir ('[^']*\/publish')/, '/usr/bin/false')
-          expect(sabotaged).not.toBe(command)
-          await executePrivilegedShell(sabotaged)
-        }
-      })
+    it.each(['directory', 'link permissions'])(
+      'restores the displaced command when publication %s setup fails',
+      async (failure) => {
+        const fixture = await createPrivilegedFixture()
+        const staleTarget = join(fixture.userDataPath, 'cli', 'bin', 'old', 'orca')
+        await symlink(staleTarget, fixture.commandPath)
+        let injectedFailure = false
+        const installer = new CliInstaller({
+          ...fixtureInstallerOptions(fixture),
+          privilegedRunner: async (command) => {
+            await chmod(fixture.protectedDirectory, 0o700)
+            const sabotaged =
+              failure === 'directory'
+                ? command.replace(/\/bin\/mkdir ('[^']*\/publish')/, '/usr/bin/false')
+                : command.replace('/bin/chmod -h 755', '/usr/bin/false')
+            injectedFailure = sabotaged !== command
+            await executePrivilegedShell(sabotaged)
+          }
+        })
 
-      await chmod(fixture.protectedDirectory, 0o500)
-      await expect(installer.install()).rejects.toThrow()
-      await expect(readlink(fixture.commandPath)).resolves.toBe(staleTarget)
-      expect(
-        (await readdir(fixture.protectedDirectory)).some((name) => name.startsWith('.orca-cli-'))
-      ).toBe(false)
-    })
+        await chmod(fixture.protectedDirectory, 0o500)
+        await expect(installer.install()).rejects.toThrow()
+        expect(injectedFailure).toBe(true)
+        await expect(readlink(fixture.commandPath)).resolves.toBe(staleTarget)
+        expect(
+          (await readdir(fixture.protectedDirectory)).some((name) => name.startsWith('.orca-cli-'))
+        ).toBe(false)
+      }
+    )
   }
 )
