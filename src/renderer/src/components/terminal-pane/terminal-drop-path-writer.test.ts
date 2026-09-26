@@ -48,7 +48,7 @@ describe('terminal drop path writer', () => {
       failureReason: 'write-rejected'
     })
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
-    expect(sendInputAccepted).toHaveBeenCalledWith('/repo/a.ts ')
+    expect(sendInputAccepted).toHaveBeenCalledWith(' /repo/a.ts ')
     expect(sendInput).not.toHaveBeenCalled()
   })
 
@@ -70,7 +70,7 @@ describe('terminal drop path writer', () => {
     // Why: image attachment detection in terminal TUIs keys off bracketed paste
     // of the literal path — no shell-escaping, no trailing space.
     expect(sendInputAccepted).toHaveBeenCalledWith(
-      wrapTerminalBracketedPasteText('/repo/My Screenshot.png')
+      ` ${wrapTerminalBracketedPasteText('/repo/My Screenshot.png')}`
     )
   })
 
@@ -88,7 +88,7 @@ describe('terminal drop path writer', () => {
       targetShell: 'posix'
     })
 
-    expect(sendInputAccepted).toHaveBeenNthCalledWith(1, '/repo/a.ts ')
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(1, ' /repo/a.ts ')
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
       wrapTerminalBracketedPasteText('/repo/shot.png')
@@ -113,7 +113,7 @@ describe('terminal drop path writer', () => {
     // non-image path would collide with it without an explicit separator.
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
-      `${wrapTerminalBracketedPasteText('/repo/shot.png')} `
+      ` ${wrapTerminalBracketedPasteText('/repo/shot.png')} `
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(2, '/repo/a.ts ')
   })
@@ -136,7 +136,7 @@ describe('terminal drop path writer', () => {
     // TUI input between the two attachments.
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
-      wrapTerminalBracketedPasteText('/repo/one.png')
+      ` ${wrapTerminalBracketedPasteText('/repo/one.png')}`
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
@@ -158,7 +158,7 @@ describe('terminal drop path writer', () => {
       targetShell: 'posix'
     })
 
-    expect(sendInputAccepted).toHaveBeenCalledWith("'/repo/a.png; touch /tmp/pwned #.png' ")
+    expect(sendInputAccepted).toHaveBeenCalledWith(" '/repo/a.png; touch /tmp/pwned #.png' ")
   })
 
   it('falls back to shell escaping for image paths with Windows shell metacharacters', async () => {
@@ -175,7 +175,7 @@ describe('terminal drop path writer', () => {
       targetShell: 'windows'
     })
 
-    expect(sendInputAccepted).toHaveBeenCalledWith('"C:\\Users\\me\\Pictures\\a&b.png" ')
+    expect(sendInputAccepted).toHaveBeenCalledWith(' "C:\\Users\\me\\Pictures\\a&b.png" ')
   })
 
   it('separates an image paste from a following image path that must be shell escaped', async () => {
@@ -194,7 +194,7 @@ describe('terminal drop path writer', () => {
 
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
-      `${wrapTerminalBracketedPasteText('/repo/shot.png')} `
+      ` ${wrapTerminalBracketedPasteText('/repo/shot.png')} `
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(2, "'/repo/a.png; touch /tmp/pwned #.png' ")
   })
@@ -257,5 +257,46 @@ describe('terminal drop path writer', () => {
       failureReason: 'target-stale'
     })
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
+  })
+
+  describe('first-path separator', () => {
+    it.each([
+      {
+        name: 'separates only the first path, whatever precedes the cursor',
+        paths: ['/repo/a b.ts', '/repo/c.ts'],
+        targetShell: 'posix',
+        sent: [" '/repo/a b.ts' ", '/repo/c.ts ']
+      },
+      {
+        name: 'separates Windows shell-quoted paths the same way',
+        paths: ['C:\\Remote Repo\\a.txt'],
+        targetShell: 'windows',
+        sent: [' "C:\\Remote Repo\\a.txt" ']
+      },
+      {
+        name: 'keeps the separator outside the bracketed image paste',
+        paths: ['/repo/shot.png'],
+        targetShell: 'posix',
+        sent: [` ${wrapTerminalBracketedPasteText('/repo/shot.png')}`]
+      }
+    ] as const)('$name', async ({ paths, targetShell, sent }) => {
+      const sendInputAccepted = vi.fn(async () => true)
+      const { manager, pane } = createManager()
+      const transport = createTransport(
+        vi.fn(() => true),
+        'pty-1',
+        sendInputAccepted
+      )
+
+      await writeTerminalDropPathsToCapturedTarget({
+        dropTarget: { paneId: pane.id, leafId: pane.leafId, ptyId: 'pty-1', transport } as never,
+        manager: manager as never,
+        paneTransports: new Map([[pane.id, transport]]) as never,
+        paths: [...paths],
+        targetShell
+      })
+
+      expect(sendInputAccepted.mock.calls).toEqual(sent.map((payload) => [payload]))
+    })
   })
 })

@@ -65,12 +65,20 @@ export async function writeTerminalDropPathsToCapturedTarget({
       isImageDropPath(nextPath) &&
       canPasteImageDropPathRaw(nextPath, targetShell)
     const needsSeparatorAfterImage = nextPath !== undefined && !nextPathIsRawPasteImage
-    const payload = pathIsRawPasteImage
+    const pathPayload = pathIsRawPasteImage
       ? separateImagePasteFromFollowingText(
           wrapTerminalBracketedPasteText(path),
           needsSeparatorAfterImage
         )
       : `${shellEscapePath(path, targetShell)} `
+    // Why: the first path always opens with a separator rather than guessing
+    // whether a draft precedes it (#22777). The screen can be read, but the cell
+    // left of the cursor is the TUI's own frame (border, padding, wrap column,
+    // CJK continuation cell), not the draft, and a remote write lands seconds
+    // after any such read. It sits outside the bracketed paste so image
+    // attachment detection still sees a bare path (#12715); later paths inherit
+    // the previous payload's trailing space.
+    const payload = index === 0 ? ` ${pathPayload}` : pathPayload
     const writeResult = await runTerminalPasteOperationWithTimeout(
       () => writeTerminalPastePtyInput(liveTransport, payload),
       operationTimeoutMs
