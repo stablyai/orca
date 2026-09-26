@@ -131,6 +131,9 @@ export type WorkspaceSessionState = {
    *  considered. Persisted so closing all tabs and re-opening the workspace
    *  does not recreate the template. */
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
+  /** Cross-machine recovery import whose layout each worktree holds. Lands in the same write as
+   *  that layout, so a retry knows the layout applied even when its provenance write never did. */
+  recoveryImportKeyByWorktreeId?: Record<string, string>
   /** Provider-session resume records captured when workspaces sleep. */
   sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
   /** Host-issued process incarnation for each durable terminal surface. */

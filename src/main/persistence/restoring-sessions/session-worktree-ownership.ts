@@ -49,6 +49,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   remoteSessionIdsByTabId: 'none',
   lastVisitedAtByWorktreeId: 'owner-keyed',
   defaultTerminalTabsAppliedByWorktreeId: 'owner-keyed',
+  recoveryImportKeyByWorktreeId: 'owner-keyed',
   sleepingAgentSessionsByPaneKey: 'row-record',
   terminalPtyIncarnationsByPaneKey: 'none',
   terminalTopologyRevisionByRepoId: 'none',

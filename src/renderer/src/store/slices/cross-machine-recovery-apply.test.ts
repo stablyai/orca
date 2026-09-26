@@ -77,6 +77,10 @@ function fragment(): RecoveryWorkspaceFragment {
   }
 }
 
+function importOp(): CrossMachineRecoveryApplyOp {
+  return { kind: 'import', importKey: 'key', fragment: fragment(), records: [record] }
+}
+
 function setup() {
   const store = createTestStore()
   store.setState({
@@ -103,7 +107,7 @@ describe('cross-machine recovery renderer apply', () => {
 
   it('imports the fragment into an empty worktree and persists before replying', async () => {
     const { store, session, apply } = setup()
-    const reply = await apply({ kind: 'import', fragment: fragment(), records: [record] })
+    const reply = await apply(importOp())
 
     expect(reply).toEqual({ requestId: 'r1', outcome: { ok: true, claimed: null } })
     const state = store.getState()
@@ -117,8 +121,10 @@ describe('cross-machine recovery renderer apply', () => {
     expect(state.activeFileIdByWorktree[WT]).toBe('/repo1/wt/src/a.ts')
     expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
     expect(state.defaultTerminalTabsAppliedByWorktreeId[WT]).toBe(true)
+    expect(state.recoveryImportKeyByWorktreeId[WT]).toBe('key')
     expect(session.set).toHaveBeenCalledTimes(1)
     const persisted = session.set.mock.calls[0][0]
+    expect(persisted.recoveryImportKeyByWorktreeId).toEqual({ [WT]: 'key' })
     expect(persisted.sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
     expect(persisted.tabsByWorktree[WT].map((tab: { id: string }) => tab.id)).toEqual(['tab-new'])
     expect(session.flush).toHaveBeenCalledTimes(1)
@@ -136,7 +142,7 @@ describe('cross-machine recovery renderer apply', () => {
         return true
       })
 
-    const reply = await apply({ kind: 'import', fragment: fragment(), records: [record] })
+    const reply = await apply(importOp())
 
     expect(fetchWorktrees).toHaveBeenCalledTimes(1)
     expect(fetchWorktrees).toHaveBeenCalledWith('repo1', { forceLocalOwner: true })
@@ -149,7 +155,7 @@ describe('cross-machine recovery renderer apply', () => {
     store.setState({ worktreesByRepo: { repo1: [] } })
     vi.spyOn(store.getState(), 'fetchWorktrees').mockResolvedValue(true)
 
-    const reply = await apply({ kind: 'import', fragment: fragment(), records: [record] })
+    const reply = await apply(importOp())
 
     expect(reply).toEqual({
       requestId: 'r1',
@@ -164,7 +170,7 @@ describe('cross-machine recovery renderer apply', () => {
     const { store, session, apply } = setup()
     store.setState({ tabsByWorktree: { [WT]: [makeTab({ id: 'existing', worktreeId: WT })] } })
 
-    const reply = await apply({ kind: 'import', fragment: fragment(), records: [record] })
+    const reply = await apply(importOp())
 
     expect(reply).toEqual({
       requestId: 'r1',
@@ -173,6 +179,24 @@ describe('cross-machine recovery renderer apply', () => {
     expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['existing'])
     expect(store.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
     expect(session.set).not.toHaveBeenCalled()
+  })
+
+  it('reports an import whose layout already landed without applying it twice', async () => {
+    const { store, session, apply } = setup()
+    await apply(importOp())
+    const landed = store.getState()
+
+    const reply = await apply(importOp())
+
+    expect(reply).toEqual({
+      requestId: 'r1',
+      outcome: { ok: true, claimed: null, alreadyApplied: true }
+    })
+    expect(store.getState().tabsByWorktree[WT]).toEqual(landed.tabsByWorktree[WT])
+    expect(store.getState().openFiles).toEqual(landed.openFiles)
+    expect(session.set.mock.calls.at(-1)?.[0].recoveryImportKeyByWorktreeId).toEqual({
+      [WT]: 'key'
+    })
   })
 
   it('claims a recovery record exactly once and restores it', async () => {
@@ -212,7 +236,7 @@ describe('cross-machine recovery renderer apply', () => {
     const { store, session, apply } = setup()
     session.flush.mockRejectedValueOnce(new Error('flush failed'))
 
-    const reply = await apply({ kind: 'import', fragment: fragment(), records: [record] })
+    const reply = await apply(importOp())
 
     expect(reply).toEqual({ requestId: 'r1', error: 'flush failed' })
     const state = store.getState()
@@ -222,6 +246,7 @@ describe('cross-machine recovery renderer apply', () => {
     expect(state.openFiles).toEqual([])
     expect(state.activeFileIdByWorktree[WT]).toBeUndefined()
     expect(state.defaultTerminalTabsAppliedByWorktreeId[WT]).toBeUndefined()
+    expect(state.recoveryImportKeyByWorktreeId[WT]).toBeUndefined()
   })
 
   it('does not treat a same-id runtime worktree as the local destination', async () => {
@@ -241,7 +266,7 @@ describe('cross-machine recovery renderer apply', () => {
     })
     const fetchWorktrees = vi.spyOn(store.getState(), 'fetchWorktrees').mockResolvedValue(true)
 
-    const reply = await apply({ kind: 'import', fragment: fragment(), records: [record] })
+    const reply = await apply(importOp())
 
     expect(fetchWorktrees).toHaveBeenCalledWith('repo1', { forceLocalOwner: true })
     expect(reply).toEqual({

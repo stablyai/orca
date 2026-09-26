@@ -20,6 +20,7 @@ export type WorkspaceHydrationPatch = Pick<
   | 'worktreesByRepo'
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
+  | 'recoveryImportKeyByWorktreeId'
   | 'closedTerminalTabTombstonesByTabId'
   | 'automaticAgentResumeClaimsByTabId'
   | 'sleepingAgentSessionsByPaneKey'
@@ -198,6 +199,11 @@ export function targetScopedWorkspaceHydrationPatch(
       ),
       ...state.defaultTerminalTabsAppliedByWorktreeId
     },
+    recoveryImportKeyByWorktreeId: replaceHydratedRecordKeys(
+      state.recoveryImportKeyByWorktreeId,
+      hydrated.recoveryImportKeyByWorktreeId,
+      workspaceKeys
+    ),
     // Why passed through whole: hydration already unioned it with live store state, and the map is
     // keyed by tab id rather than by workspace key so replaceHydratedRecordKeys has nothing to match.
     closedTerminalTabTombstonesByTabId: hydrated.closedTerminalTabTombstonesByTabId,

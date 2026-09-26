@@ -110,6 +110,10 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onRepoRemoval: 'prunedByOwnerKey',
     onTransfer: 'copiedByOwnerKey'
   },
+  recoveryImportKeyByWorktreeId: {
+    onRepoRemoval: 'prunedByOwnerKey',
+    onTransfer: 'copiedByOwnerKey'
+  },
   // Owner-scoped after all, just not by this path: deleteScannedSessionFieldsForOwners prunes it by
   // the record's worktreeId on worktree and project removal. Moving a project between profiles runs
   // removeSourceRepo, which has no owner scan, so these records leak there.

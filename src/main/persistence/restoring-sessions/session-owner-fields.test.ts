@@ -59,7 +59,8 @@ describe('deleting a workspace owner session fields', () => {
       'tabGroups',
       'tabGroupLayouts',
       'activeGroupIdByWorktree',
-      'defaultTerminalTabsAppliedByWorktreeId'
+      'defaultTerminalTabsAppliedByWorktreeId',
+      'recoveryImportKeyByWorktreeId'
     ])
   })
 

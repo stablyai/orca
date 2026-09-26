@@ -99,7 +99,7 @@ export function applyCrossMachineRecoveryOpToStore(
   }
   // Why: the not-empty check must see live tabs the debounced writer has not persisted yet.
   const { session, outcome } = applyCrossMachineRecoveryOp(buildWorkspaceSessionPayload(state), op)
-  if (!outcome.ok) {
+  if (!outcome.ok || outcome.alreadyApplied) {
     return outcome
   }
   const replaceWorkspaceKeys = [op.fragment.worktreeId]

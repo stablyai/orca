@@ -43,7 +43,12 @@ export type RecoveryWorkspaceFragment = {
 }
 
 export type CrossMachineRecoveryApplyOp =
-  | { kind: 'import'; fragment: RecoveryWorkspaceFragment; records: SleepingAgentSessionRecord[] }
+  | {
+      kind: 'import'
+      importKey: string
+      fragment: RecoveryWorkspaceFragment
+      records: SleepingAgentSessionRecord[]
+    }
   | { kind: 'merge-records'; records: SleepingAgentSessionRecord[] }
   | { kind: 'claim-record'; worktreeId: string; binding: RecoveryBindingKey }
   | { kind: 'restore-record'; record: SleepingAgentSessionRecord }
@@ -54,6 +59,8 @@ export type CrossMachineRecoveryApplyOutcome =
       claimed: SleepingAgentSessionRecord | null
       /** merge-records only: the record each requested binding holds after the merge. */
       merged?: SleepingAgentSessionRecord[]
+      /** import only: this importKey's layout had already landed, so the session is unchanged. */
+      alreadyApplied?: true
     }
   | { ok: false; code: 'recovery_destination_not_empty' }
 
@@ -66,13 +73,25 @@ export type CrossMachineRecoveryApplyReply =
   | { requestId: string; outcome: CrossMachineRecoveryApplyOutcome }
   | { requestId: string; error: string }
 
-export function worktreeHasSessionTabs(session: WorkspaceSessionState, worktreeId: string) {
+function worktreeHasSessionTabs(session: WorkspaceSessionState, worktreeId: string) {
   return (
     (session.tabsByWorktree[worktreeId]?.length ?? 0) > 0 ||
     (session.unifiedTabs?.[worktreeId]?.length ?? 0) > 0 ||
     (session.openFilesByWorktree?.[worktreeId]?.length ?? 0) > 0 ||
     (session.browserTabsByWorktree?.[worktreeId]?.length ?? 0) > 0
   )
+}
+
+/** Whether an import may apply its layout, already applied it, or would overwrite foreign tabs. */
+export function recoveryImportDestination(
+  session: WorkspaceSessionState,
+  worktreeId: string,
+  importKey: string
+): 'empty' | 'landed' | 'occupied' {
+  if (session.recoveryImportKeyByWorktreeId?.[worktreeId] === importKey) {
+    return 'landed'
+  }
+  return worktreeHasSessionTabs(session, worktreeId) ? 'occupied' : 'empty'
 }
 
 /** Dormant imported bindings of one worktree, awaiting an explicit Resume. */
@@ -111,7 +130,8 @@ function withRecords(
 
 function withFragment(
   session: WorkspaceSessionState,
-  fragment: RecoveryWorkspaceFragment
+  fragment: RecoveryWorkspaceFragment,
+  importKey: string
 ): WorkspaceSessionState {
   const id = fragment.worktreeId
   const tabGroupLayouts = { ...session.tabGroupLayouts }
@@ -154,7 +174,8 @@ function withFragment(
     defaultTerminalTabsAppliedByWorktreeId: {
       ...session.defaultTerminalTabsAppliedByWorktreeId,
       [id]: true
-    }
+    },
+    recoveryImportKeyByWorktreeId: { ...session.recoveryImportKeyByWorktreeId, [id]: importKey }
   }
 }
 
@@ -164,14 +185,19 @@ export function applyCrossMachineRecoveryOp(
   op: CrossMachineRecoveryApplyOp
 ): { session: WorkspaceSessionState; outcome: CrossMachineRecoveryApplyOutcome } {
   switch (op.kind) {
-    case 'import':
-      if (worktreeHasSessionTabs(session, op.fragment.worktreeId)) {
+    case 'import': {
+      const destination = recoveryImportDestination(session, op.fragment.worktreeId, op.importKey)
+      if (destination === 'landed') {
+        return { session, outcome: { ok: true, claimed: null, alreadyApplied: true } }
+      }
+      if (destination === 'occupied') {
         return { session, outcome: { ok: false, code: 'recovery_destination_not_empty' } }
       }
       return {
-        session: withRecords(withFragment(session, op.fragment), op.records),
+        session: withRecords(withFragment(session, op.fragment, op.importKey), op.records),
         outcome: { ok: true, claimed: null }
       }
+    }
     case 'merge-records': {
       const existing = session.sleepingAgentSessionsByPaneKey ?? {}
       // Why: concurrent replays mint different pane keys for one session; identity is the binding key.

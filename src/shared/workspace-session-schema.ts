@@ -297,6 +297,10 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'defaultTerminalTabsAppliedByWorktreeId',
     salvagingRecord(worktreeIdSchema, z.literal(true))
   ),
+  recoveryImportKeyByWorktreeId: salvagedOptional(
+    'recoveryImportKeyByWorktreeId',
+    salvagingRecord(worktreeIdSchema, z.string().min(1))
+  ),
   sleepingAgentSessionsByPaneKey: salvagedOptional(
     'sleepingAgentSessionsByPaneKey',
     sleepingAgentSessionsByPaneKeySchema

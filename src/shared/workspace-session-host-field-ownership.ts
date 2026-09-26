@@ -41,6 +41,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeGroupIdByWorktree: 'worktreeKeyed',
   lastVisitedAtByWorktreeId: 'worktreeKeyed',
   defaultTerminalTabsAppliedByWorktreeId: 'worktreeKeyed',
+  recoveryImportKeyByWorktreeId: 'worktreeKeyed',
   activeWorkspaceKey: 'global',
   activeWorktreeIdsOnShutdown: 'worktreeArray',
   terminalLayoutsByTabId: 'tabKeyed',

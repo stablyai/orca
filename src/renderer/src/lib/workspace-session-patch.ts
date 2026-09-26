@@ -10,6 +10,7 @@ import {
   buildEditorSessionData,
   buildSanitizedTabsByWorktree,
   buildTerminalSessionData,
+  nonEmptyRecord,
   type WorkspaceSessionSnapshot
 } from './workspace-session'
 import {
@@ -187,11 +188,12 @@ export function buildWorkspaceSessionPatch(
     patch.lastVisitedAtByWorktreeId = buildLastVisitedAtByWorktreeId(snapshot)
   }
   if (changed.has('defaultTerminalTabsAppliedByWorktreeId')) {
-    patch.defaultTerminalTabsAppliedByWorktreeId =
-      snapshot.defaultTerminalTabsAppliedByWorktreeId &&
-      Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
-        ? snapshot.defaultTerminalTabsAppliedByWorktreeId
-        : undefined
+    patch.defaultTerminalTabsAppliedByWorktreeId = nonEmptyRecord(
+      snapshot.defaultTerminalTabsAppliedByWorktreeId
+    )
+  }
+  if (changed.has('recoveryImportKeyByWorktreeId')) {
+    patch.recoveryImportKeyByWorktreeId = nonEmptyRecord(snapshot.recoveryImportKeyByWorktreeId)
   }
   if (changed.has('closedTerminalTabTombstonesByTabId')) {
     patch.closedTerminalTabTombstonesByTabId = buildPersistedClosedTerminalTabTombstones(

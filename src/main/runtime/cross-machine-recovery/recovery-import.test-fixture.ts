@@ -146,6 +146,7 @@ export function fixture(
     live?: boolean
     ensure?: CrossMachineRecoveryHost['ensureAgentSession']
     appendSystemPrompt?: boolean
+    rejectProvenanceOnce?: Error
   } = {}
 ) {
   const checkout = realpathSync(mkdtempSync(path.join(tmpdir(), 'xmr-import-')))
@@ -153,6 +154,7 @@ export function fixture(
   let session = emptySession()
   const meta: Record<string, WorktreeMeta> = {}
   const worktreeId = `repo-1::${checkout}`
+  let provenanceRejection = options.rejectProvenanceOnce
   const ensureAgentSession = vi.fn(
     options.ensure ??
       (async () => ({
@@ -170,6 +172,11 @@ export function fixture(
     getLocalSession: () => session,
     getWorktreeMeta: (id) => meta[id],
     updateRecoveryProvenance: async (id, update) => {
+      const rejection = provenanceRejection
+      provenanceRejection = undefined
+      if (rejection) {
+        throw rejection
+      }
       meta[id] = { ...meta[id], recoveryProvenance: update(meta[id]?.recoveryProvenance) }
     },
     applyOp: async (op) => {
@@ -190,6 +197,9 @@ export function fixture(
     worktreeId,
     ensureAgentSession,
     readCommonDir,
-    getSession: () => session
+    getSession: () => session,
+    setSession: (next: WorkspaceSessionState) => {
+      session = next
+    }
   }
 }

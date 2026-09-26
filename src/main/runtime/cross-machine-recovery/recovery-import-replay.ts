@@ -9,7 +9,6 @@ import type {
   RecoveryProvenance
 } from '../../../shared/cross-machine-recovery-descriptor'
 import { findRecoveryRecord } from '../../../shared/cross-machine-recovery-session-ops'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import {
   localRecoveryBindingKey,
   planRecoveryBindings,
@@ -27,23 +26,6 @@ export type RecoveryReplayInput = {
   base: Pick<RecoveryImportResult, 'importKey' | 'repoId' | 'worktreeId' | 'instanceId'>
   provenance: RecoveryProvenance
   dryRun: boolean
-}
-
-/** True when every sleeping record in the worktree is a dormant row of this same import. */
-export function holdsOnlyRecoveryImport(
-  session: WorkspaceSessionState,
-  worktreeId: string,
-  importKey: string
-): boolean {
-  const records = Object.values(session.sleepingAgentSessionsByPaneKey ?? {}).filter(
-    (record) => record.worktreeId === worktreeId
-  )
-  return (
-    records.length > 0 &&
-    records.every(
-      (record) => record.origin === 'recovery' && record.recovery?.importKey === importKey
-    )
-  )
 }
 
 /** Merges only bindings this host has neither live, mid-resume, nor already consumed; layout is untouched. */

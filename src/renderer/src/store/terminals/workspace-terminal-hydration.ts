@@ -191,6 +191,7 @@ export function createWorkspaceTerminalHydrationActions(
             ...session.defaultTerminalTabsAppliedByWorktreeId,
             ...s.defaultTerminalTabsAppliedByWorktreeId
           },
+          recoveryImportKeyByWorktreeId: session.recoveryImportKeyByWorktreeId ?? {},
           // Why replace and not union: both callers hand over a map they derived from this store
           // synchronously (the pull merge) or from disk before the store had one (startup), so there
           // is no local tombstone to lose — and a union would resurrect the ones the merge just

@@ -52,7 +52,8 @@ const WORKSPACE_SESSION_KEYED_FIELDS = [
   'tabGroupLayouts',
   'activeGroupIdByWorktree',
   'lastVisitedAtByWorktreeId',
-  'defaultTerminalTabsAppliedByWorktreeId'
+  'defaultTerminalTabsAppliedByWorktreeId',
+  'recoveryImportKeyByWorktreeId'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

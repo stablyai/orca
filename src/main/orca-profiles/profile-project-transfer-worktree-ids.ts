@@ -77,6 +77,7 @@ function collectSessionWorktreeIds(
   addOwnerKeys(session.activeGroupIdByWorktree)
   addOwnerKeys(session.lastVisitedAtByWorktreeId)
   addOwnerKeys(session.defaultTerminalTabsAppliedByWorktreeId)
+  addOwnerKeys(session.recoveryImportKeyByWorktreeId)
   addOwnerKeys(session.terminalTopologyRevisionByRepoId)
   addOwnerKeys(session.activeFileIdByWorktree)
   for (const tombstone of Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})) {
