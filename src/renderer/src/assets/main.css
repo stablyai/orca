@@ -1281,6 +1281,20 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
+/* An alpha fill stays distinct from idle, hovered and selected parent surfaces. */
+.worktree-sidebar-chip {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+.worktree-sidebar-chip-label {
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
+}
+
+.dark .worktree-sidebar-chip {
+  background: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
