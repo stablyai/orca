@@ -2,7 +2,6 @@ import {
   assertRelayWatcherRootCapacity,
   exceedsRelayWatcherRootCapacity
 } from './relay-watcher-root-capacity'
-import { PromiseSettlementWaiters } from '../shared/promise-settlement-waiters'
 
 type RelayWatchRootTeardowns = {
   rootPaths: () => string[]
@@ -64,8 +63,17 @@ export class RelayWatchRootCapacityGate {
     this.waiting.add(rootKey)
     // Once, and never past the caller: a genuinely full cap must still reach the refusal that sends
     // the client dormant, and an unsubscribe that never settles must not park the request with it.
-    const wait = signal ? new PromiseSettlementWaiters(released).wait({ signal }) : released
-    return wait.finally(() => {
+    let onAbort = (): void => {}
+    const abandoned = new Promise<void>((resolve) => {
+      onAbort = () => resolve()
+      if (signal?.aborted) {
+        resolve()
+      } else {
+        signal?.addEventListener('abort', onAbort, { once: true })
+      }
+    })
+    return (signal ? Promise.race([released, abandoned]) : released).finally(() => {
+      signal?.removeEventListener('abort', onAbort)
       this.waiting.delete(rootKey)
     })
   }

@@ -63,6 +63,27 @@ describe('relay watch-root capacity', () => {
     expect(removeListener).toHaveBeenCalledTimes(1)
   })
 
+  it.each([false, true])(
+    'resolves abandoned capacity waits (already aborted=%s)',
+    async (alreadyAborted) => {
+      const activeRoots = new Map(Array.from({ length: 20 }, (_, index) => [`active-${index}`, {}]))
+      const gate = new RelayWatchRootCapacityGate(activeRoots, new Map(), () => ({
+        rootPaths: () => ['retiring'],
+        settlePending: () => new Promise<void>(() => {})
+      }))
+      const controller = new AbortController()
+      if (alreadyAborted) {
+        controller.abort()
+      }
+      const removeListener = vi.spyOn(controller.signal, 'removeEventListener')
+      const waiting = gate.release('new-root', controller.signal)
+      expect(waiting).toBeDefined()
+      controller.abort()
+      await expect(waiting).resolves.toBeUndefined()
+      expect(removeListener).toHaveBeenCalledTimes(1)
+    }
+  )
+
   it('blocks replacement watches behind physical unsubscribe and counts the pending slot', async () => {
     let resolveUnsubscribe: () => void = () => {}
     const unsubscribe = vi.fn(
