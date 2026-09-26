@@ -20,6 +20,7 @@ import {
 import type { OrcadBunTarget } from '../../shared/orcad-bun-runtime'
 import { findOrcadCachePath } from './orcad-cache-path'
 import {
+  fileSha256,
   materializeCachedOrcadBunRuntime,
   verifyFileSha256,
   type OrcadBunRuntimeMaterializeOptions
@@ -214,14 +215,6 @@ async function isCompleteArtifact(
   } catch {
     return false
   }
-}
-
-async function fileSha256(path: string): Promise<string> {
-  const hash = createHash('sha256')
-  for await (const chunk of createReadStream(path)) {
-    hash.update(chunk)
-  }
-  return hash.digest('hex')
 }
 
 async function readTemplateManifest(

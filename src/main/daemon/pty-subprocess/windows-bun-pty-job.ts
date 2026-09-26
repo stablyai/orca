@@ -133,18 +133,16 @@ class BunPtyJob implements WindowsBunPtyJob {
 
   resume(): boolean {
     this.fullySuspended = false
-    let resumed = true
     const ownedPids = this.terminated ? [] : this.listProcessIds()
     for (const [pid, process] of this.suspended) {
       const processExited = ownedPids !== null && !ownedPids.includes(pid)
       if (!this.terminated && !processExited && !this.native.resumeProcess(process)) {
-        resumed = false
         continue
       }
       this.native.closeHandle(process)
       this.suspended.delete(pid)
     }
-    return resumed && this.suspended.size === 0
+    return this.suspended.size === 0
   }
 
   terminate(): JobTerminationOutcome {

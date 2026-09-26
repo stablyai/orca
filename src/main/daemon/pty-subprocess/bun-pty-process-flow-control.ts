@@ -55,13 +55,11 @@ export function createBunPtyProducerFlowControl(
     transitionRetry = undefined
   }
 
+  const needsTransition = (): boolean =>
+    !shuttingDown && !options.isExited() && state !== (pauseRequested ? 'paused' : 'running')
+
   const retryTransition = (): void => {
-    if (
-      shuttingDown ||
-      options.isExited() ||
-      state === (pauseRequested ? 'paused' : 'running') ||
-      transitionRetry
-    ) {
+    if (!needsTransition() || transitionRetry) {
       return
     }
     // Callers send transitions once; retain the obligation until fresh ownership confirms every group.
@@ -73,12 +71,7 @@ export function createBunPtyProducerFlowControl(
   }
 
   const reconcile = (): void => {
-    if (
-      shuttingDown ||
-      options.isExited() ||
-      state === (pauseRequested ? 'paused' : 'running') ||
-      pendingRead
-    ) {
+    if (!needsTransition() || pendingRead) {
       return
     }
     if (options.platform === 'win32') {
@@ -117,11 +110,7 @@ export function createBunPtyProducerFlowControl(
       .catch(() => '')
       .then((table) => {
         pendingRead = undefined
-        if (
-          shuttingDown ||
-          options.isExited() ||
-          state === (pauseRequested ? 'paused' : 'running')
-        ) {
+        if (!needsTransition()) {
           return
         }
         const nextPaused = pauseRequested

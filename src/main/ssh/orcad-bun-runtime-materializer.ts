@@ -186,7 +186,7 @@ export async function verifyFileSha256(
   }
 }
 
-async function fileSha256(path: string): Promise<string | null> {
+export async function fileSha256(path: string): Promise<string | null> {
   try {
     const hash = createHash('sha256')
     for await (const chunk of createReadStream(path)) {
