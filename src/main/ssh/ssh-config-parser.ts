@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -256,13 +255,8 @@ function splitOpenSshArguments(input: string): string[] {
 /** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */
 export function loadUserSshConfig(): SshConfigHost[] {
   const configPath = join(homedir(), '.ssh', 'config')
-  if (!existsSync(configPath)) {
-    return []
-  }
-
   try {
-    const content = expandSshConfigIncludes(configPath)
-    return parseSshConfig(content)
+    return parseSshConfig(expandSshConfigIncludes(configPath).content)
   } catch {
     console.warn(`[ssh] Failed to read SSH config at ${configPath}`)
     return []
