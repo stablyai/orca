@@ -76,6 +76,10 @@ the same 43 files and passed all 450 tests: the original 448 plus two regression
 Its test step fell from 400.26 to 205.17 seconds, and the complete job fell from
 498 to 298 seconds (40% less runner time). Builder, haptics, and grant-census file
 times fell from 73.70/88.94/258.58 seconds to 29.24/32.98/22.58 seconds.
+The later default-worker verification retained the same 450-test coverage, but
+its unchanged terminal-render test failed twice on the pre-existing timing
+assertion that a frame must be pending at disposal (`expected 0 to be greater
+than 0`). Its other 449 tests passed; no mobile source or assertion was relaxed.
 
 A four-worker experiment reduced aggregate unit job time from 3,386 to 3,133
 seconds (7.5%), but the repeat run exceeded the palette matcher's existing
