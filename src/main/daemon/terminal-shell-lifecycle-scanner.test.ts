@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { POST_REPLAY_DEAD_TUI_RESET } from '../../shared/terminal-mode-reset-profiles'
+import { PROCESS_BOUNDARY_GROUND } from '../../shared/terminal-mode-reset-profiles'
 import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 
 const ENTER_ALT = '\x1b[?1049h'
@@ -251,7 +251,7 @@ describe('TerminalShellLifecycleScanner', () => {
       scanner.seedOwner('shell')
       const generation = scanner.generation
 
-      scanner.scan(POST_REPLAY_DEAD_TUI_RESET)
+      scanner.scan(PROCESS_BOUNDARY_GROUND)
 
       expect(scanner.owner).toBe('shell')
       expect(scanner.generation).toBe(generation)

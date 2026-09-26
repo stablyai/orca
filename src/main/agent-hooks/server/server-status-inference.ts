@@ -17,6 +17,7 @@ import { AGENT_STATUS_STALE_AFTER_MS, type AgentType } from '../../../shared/age
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { equivalentInterruptAgentType, isValidPaneKey } from './server-status-identity'
 import { AgentHookServerRowOwnership } from './server-row-ownership'
+import { foldMainAgentWithRowChildWork } from './server-row-child-work-fold'
 
 export abstract class AgentHookServerStatusInference extends AgentHookServerRowOwnership {
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
@@ -73,45 +74,65 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (isNavigationEscapeIntent(agentType, request.intent)) {
       return false
     }
-    // Why: a 'working' pane can be child-driven; Ctrl+C doesn't stop background children, so inferring done would retire live child rows.
-    if (payload.subagents?.some((subagent) => subagent.state !== 'idle')) {
-      return false
-    }
-    // Why: Escape/Ctrl+C at Claude's idle prompt does not stop provider-owned shells or session crons.
+    const childWorkEvidenced =
+      payload.subagents?.some((subagent) => subagent.state !== 'idle') === true ||
+      (agentType === 'claude' &&
+        (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
+          this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey)))
+    // Why: a 'working' pane can be child-driven, and Ctrl+C at the idle prompt of a main agent that
+    // child work holds open cancels nothing, so the main agent fact decides. A row from a host too
+    // old to publish `mainAgent` keeps the evidence guard, and so does Codex: its synthesized row is
+    // a plain done, which would retire the live children its combine keeps working.
     if (
-      agentType === 'claude' &&
-      (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
-        this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey))
+      payload.mainAgent
+        ? payload.mainAgent.state !== 'working' || (agentType === 'codex' && childWorkEvidenced)
+        : childWorkEvidenced
     ) {
       return false
     }
-    // Why: keep the Claude lead-turn record in sync, or a later child event re-emits the stale 'working' state and resurrects the cancelled pane.
-    if (agentType === 'claude') {
-      markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
-    }
+    // Why: whoever owns the provider records folds the cancel with the child work the turn left
+    // running. A local pane's listener record must learn it too, or a later child event re-emits the
+    // stale 'working' state; a relayed pane's records live on the relay, so only its row is evidence.
+    const local =
+      agentType === 'claude' && !existing.connectionId
+        ? markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
+        : undefined
+    const relayed =
+      agentType === 'claude' && existing.connectionId
+        ? foldMainAgentWithRowChildWork('done', existing)
+        : undefined
     if (agentType === 'codex') {
       markCodexLeadTurnInterrupted(this.state, existing.paneKey)
     }
+    const state = local?.state ?? relayed?.stateName ?? 'done'
+    const workingMode = local?.workingMode ?? relayed?.workingMode
     const inferred = this.applyNormalizedStatus({
       paneKey: existing.paneKey,
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
       providerSession: existing.providerSession,
+      // Why: a cancel leaves the shell fact as it was; dropping it would stop restart from seeding
+      // the cancelled main agent, so a child's later drain could never settle the row.
+      ...(existing.claudeRunningNonAgentTask !== undefined
+        ? { claudeRunningNonAgentTask: existing.claudeRunningNonAgentTask }
+        : {}),
       payload: {
-        state: 'done',
+        state,
+        ...(workingMode ? { workingMode } : {}),
         prompt: payload.prompt,
         agentType,
         ...(payload.model ? { model: payload.model } : {}),
-        interrupted: true,
+        // Why: `interrupted` is the settled row's restatement of the verdict for readers that
+        // predate `mainAgent`; a row the cancel left monitoring carries it on `mainAgent.outcome` only.
+        ...(state === 'done' ? { interrupted: true } : {}),
         // Why: idle children are display state; dropping them on an inferred interrupt blanks rows a later hook would restore.
         ...(payload.subagents ? { subagents: payload.subagents } : {}),
-        // Why: the interrupt ends a running main agent's turn; one a watch loop held open had already
-        // settled, so it keeps its own clock and verdict.
-        mainAgent:
-          payload.mainAgent?.state === 'done'
-            ? payload.mainAgent
-            : { state: 'done', outcome: 'cancellation', stateStartedAt: Date.now() }
+        mainAgent: local?.mainAgent ?? {
+          state: 'done',
+          outcome: 'cancellation',
+          stateStartedAt: Date.now()
+        }
       }
     })
     if (!inferred) {

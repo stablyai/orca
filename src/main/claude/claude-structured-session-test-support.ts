@@ -54,6 +54,8 @@ export function fakeClaude(
     initProof?: 'init' | 'session-start' | 'none'
     initAccount?: unknown
     initCommands?: unknown
+    /** The initialize result's `models`, which the SDK also answers `list_models` from. */
+    initModels?: unknown[]
     /** What `get_context_usage` answers; defaults to an empty, unusable report. */
     contextUsage?: unknown
     exitBeforeInit?: string
@@ -123,7 +125,7 @@ export function fakeClaude(
           })
         }
         return {
-          models: [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
+          models: options.initModels ?? [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
           ...(options.initCommands === undefined ? {} : { commands: options.initCommands }),
           ...(options.initAccount === undefined ? {} : { account: options.initAccount })
         }

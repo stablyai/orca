@@ -94,16 +94,16 @@ The structured feed keeps its job of projecting a session's journal into a
 summary and streaming it to subscribers. On every publish it additionally
 ingests the summary into the hook server as a status row:
 
-| Row field                                           | From                                                                                                                                            |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `paneKey`                                           | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it |
-| `tabId`                                             | `structuredAgentSessionTabId(sessionId)`                                                                                                        |
-| `worktreeId`                                        | `summary.workspaceId` (a folder workspace id is a valid value)                                                                                  |
-| `state`                                             | `structuredAgentSessionAgentStatus(summary).state`: the lead's own status folded with its live `backgroundTasks`, so a settled lead whose subagent still runs reads `working`  |
-| `workingMode`                                       | `'monitoring'` from the same fold when watch loops are the only live child work; omitted otherwise, which clears it on the row                  |
-| `mainAgent`                                              | the main agent's own state before the fold, its last-turn verdict (`summary.turnOutcome`, present only while idle) and its own clock; see "The main agent fact" below |
-| `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it          |
-| prompt, tool, last message, model, provider session | the summary's fields                                                                                                                            |
+| Row field                                           | From                                                                                                                                                                          |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paneKey`                                           | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it                               |
+| `tabId`                                             | `structuredAgentSessionTabId(sessionId)`                                                                                                                                      |
+| `worktreeId`                                        | `summary.workspaceId` (a folder workspace id is a valid value)                                                                                                                |
+| `state`                                             | `structuredAgentSessionAgentStatus(summary).state`: the lead's own status folded with its live `backgroundTasks`, so a settled lead whose subagent still runs reads `working` |
+| `workingMode`                                       | `'monitoring'` from the same fold when watch loops are the only live child work; omitted otherwise, which clears it on the row                                                |
+| `mainAgent`                                         | the main agent's own state before the fold, its last-turn verdict (`summary.turnOutcome`, present only while idle) and its own clock; see "The main agent fact" below         |
+| `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it                                        |
+| prompt, tool, last message, model, provider session | the summary's fields                                                                                                                                                          |
 
 Sessions with no persisted turn (`status === null`) produce no row, matching
 what the chat shows. When the host revokes live ownership the row is re-set
@@ -243,9 +243,6 @@ divergences, pinned by name in the parity table
 (`src/shared/main-agent-status-parity.test.ts`) where they are reachable, so a
 reader does not mistake them for drift:
 
-- A cancelled turn with a still-running shell reads `done` in the hook lane
-  and `monitoring` in the structured lane; the cancel policy that removes it
-  flips that row.
 - The Claude hook lane holds a child's permission wait in one slot on the
   displaced main agent record (`waitingAgentId`, `stateBeforeWait`), not on
   the child. It publishes the displaced state as `mainAgent`, but the next
@@ -257,6 +254,36 @@ reader does not mistake them for drift:
 - The Codex hook lane drops its roster on a root `Stop` when it tracks no
   child transcripts, so a still-running or still-asking child stops holding
   the row.
+
+How the main agent's turn ended is not a fold input. A cancel is a verdict on
+the main agent, carried as `mainAgent.outcome: 'cancellation'` (and, for
+readers that predate `mainAgent`, as the row's `interrupted` flag on a `done`
+row); it never retires a shell, scheduled check or subagent the turn left
+running. That work leaves the row only when its own inventory omits it or the
+session ends, so a cancelled turn with a still-running shell reads
+`monitoring` in every lane, and the parity table in
+`src/shared/main-agent-status-parity.test.ts` drives that story through all of
+them. The same rule governs the cancel Orca infers from Ctrl+C: for any row
+that publishes `mainAgent`, the inference is admitted only when
+`mainAgent.state` is `working`, so Orca does not treat a Ctrl+C at the idle
+prompt of a row held open by child work as a turn cancel (Codex also keeps the
+child-evidence guard, and a row without `mainAgent` keeps only that guard).
+The keypress itself is not inert, though: measured live, Claude 2.1.280 stops
+its background subagents on a single idle-prompt Ctrl+C (shells survive) and
+Codex 0.156.1 quits outright, so refusing the inference can leave the row
+showing a subagent its CLI already stopped. The synthesized row is the fold
+of the cancelled main agent with the child work the pane's owner can see: the
+local listener's roster for a local pane, the row's own subagents and shell fact
+for a relayed one, whose provider records live on the relay.
+
+The store holds that verdict against restatements that predate it
+(`server-cancel-verdict-latch.ts`), because a relay never learns of a cancel
+the desktop infers and some TUIs emit late same-turn hooks. The hold is read
+off the row (`mainAgent.outcome: 'cancellation'`), never stored beside it, and
+dies on a new turn (a main agent prompt submission, a changed or explicit
+prompt, a session start) or the provider's own settled `mainAgent`. Child and
+replayed events under the hold keep the cancelled main agent and are re-folded
+with their own child evidence.
 
 ## PR 1b: the runtime's retained row store is deleted
 

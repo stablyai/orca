@@ -46,6 +46,23 @@ export function claudeStartupFailureReason(session: ClaudeSession): string | nul
     : null
 }
 
+/** Resolves when startup lands or `timeoutMs` passes; a stuck start then refuses the write as before. */
+export function claudeStartupSettledWithin(
+  session: ClaudeSession | undefined,
+  timeoutMs: number
+): Promise<void> {
+  if (session?.startup.state !== 'pending') {
+    return Promise.resolve()
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  return Promise.race([
+    session.startup.settled,
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs)
+    })
+  ]).finally(() => clearTimeout(timer))
+}
+
 export function claudeStartupHoldsWrites(session: ClaudeSession): boolean {
   return session.startup.state === 'pending' || session.startup.draining
 }

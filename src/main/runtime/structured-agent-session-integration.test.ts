@@ -6,7 +6,7 @@
 // that ship. The fake app-server answers the same JSON-RPC calls the real one
 // does and pushes the same notifications and blocking requests back.
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -31,7 +31,7 @@ import type {
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
-import { appendLegacyTranscriptMessages } from '../native-chat/agent-session-journal/journal-legacy-import'
+import { importLegacyTranscriptIntoJournal } from '../native-chat/agent-session-journal/journal-legacy-import'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
 import type { OrcaRuntimeService } from './orca-runtime'
@@ -407,20 +407,21 @@ describe('a structured codex session over agentSession.*', () => {
       identity,
       journalDir: journalDirectoryFor(root, identity)
     })
-    await appendLegacyTranscriptMessages({
+    const rollout = join(root, 'legacy-rollout.jsonl')
+    await writeFile(
+      rollout,
+      `${JSON.stringify({
+        type: 'event_msg',
+        timestamp: '2026-08-05T10:00:02.000Z',
+        payload: { type: 'user_message', message: 'legacy question', kind: 'plain' }
+      })}\n`
+    )
+    await importLegacyTranscriptIntoJournal({
       journal,
       agent: 'codex',
       sessionId: THREAD,
       fence: 0,
-      messages: [
-        {
-          id: 'legacy-user-1',
-          role: 'user',
-          source: 'transcript',
-          timestamp: 1_800_000_000_000,
-          blocks: [{ type: 'text', text: 'legacy question' }]
-        }
-      ]
+      options: { filePath: rollout }
     })
 
     const created = await ok<{ page: { items: AgentJournalRenderItem[] } }>(

@@ -144,6 +144,59 @@ async function claudeTranscriptExists(input: {
   return path !== null
 }
 
+export type ClaudeStructuredInvocation = { command: string; env: Record<string, string> }
+
+/**
+ * The one place a structured Claude child's binary and environment are
+ * resolved. The session launch and the session-less catalog probe both build
+ * on it, so a probe can never list under a different binary or env than the
+ * session it stands in for. Env VALUES stay out of the catalog fingerprint:
+ * drift there heals on the next refresh.
+ */
+export async function resolveClaudeStructuredInvocation(
+  deps: Pick<
+    ClaudeStructuredLaunchResolverDeps,
+    'resolveCommand' | 'resolveEnv' | 'resolveInheritedEnv' | 'resolveAuthPolicy'
+  > & { authSwitchSettleTimeoutMs?: number },
+  decorateEnv: (env: Record<string, string>) => Record<string, string> = (env) => env
+): Promise<ClaudeStructuredInvocation> {
+  const command = (deps.resolveCommand ?? resolveClaudeCommand)()
+  const auth = await deps.resolveAuthPolicy()
+  const overlay = await deps.resolveEnv?.()
+  const inheritedEnv = deps.resolveInheritedEnv
+    ? await deps.resolveInheritedEnv()
+    : cloneDefinedEnv(process.env)
+  // A switch can begin while the policy and overlay resolve, exactly as it can
+  // during the terminal preflight's prepareClaudeAuth — recheck after the awaits.
+  await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
+  // Under a managed account the pinned credential is the only auth this launch may
+  // use, so an explicit override is refused rather than silently beating the pin.
+  if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(overlay)) {
+    throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
+  }
+  // Why the overlay merges onto the inherited env rather than replacing it: the child
+  // still needs PATH and the rest of the shell environment, and withCliRuntimeOnPath
+  // derives PATH from what it is handed. Ambient Anthropic auth is stripped from the
+  // inherited half only when a managed account owns the credential; a system-auth
+  // user's own key is their sign-in and must reach the child.
+  const env = withCliRuntimeOnPath(
+    command,
+    decorateEnv({
+      ...applyClaudeEnvPatch(
+        withoutInheritedClaudeConfigDir(inheritedEnv, process.platform),
+        {},
+        {
+          stripAuthEnv: auth.stripAuthEnv,
+          platform: process.platform
+        }
+      ),
+      ...(overlay ? cloneDefinedEnv(overlay) : {})
+    }),
+    { platform: process.platform }
+  )
+  return { command, env }
+}
+
 /**
  * Wait a running account switch out, and refuse only if it never settles.
  *
@@ -229,43 +282,14 @@ export function createClaudeStructuredLaunchResolver(
     const permission = claudeStructuredPermissionOptions(
       (await deps.resolvePermissionMode?.()) ?? 'default'
     )
-    const command = (deps.resolveCommand ?? resolveClaudeCommand)()
-    const auth = await deps.resolveAuthPolicy()
-    const overlay = await deps.resolveEnv?.()
-    const inheritedEnv = deps.resolveInheritedEnv
-      ? await deps.resolveInheritedEnv()
-      : cloneDefinedEnv(process.env)
-    // A switch can begin while the policy and overlay resolve, exactly as it can
-    // during the terminal preflight's prepareClaudeAuth — recheck after the awaits.
-    await assertClaudeAuthSwitchSettled(deps.authSwitchSettleTimeoutMs)
-    // Under a managed account the pinned credential is the only auth this launch may
-    // use, so an explicit override is refused rather than silently beating the pin.
-    if (auth.stripAuthEnv && hasClaudeAuthEnvConflict(overlay)) {
-      throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
-    }
-    // Why the overlay merges onto the inherited env rather than replacing it: the child
-    // still needs PATH and the rest of the shell environment, and withCliRuntimeOnPath
-    // derives PATH from what it is handed. Ambient Anthropic auth is stripped from the
-    // inherited half only when a managed account owns the credential; a system-auth
-    // user's own key is their sign-in and must reach the child.
-    const env = withCliRuntimeOnPath(
-      command,
+    const { command, env } = await resolveClaudeStructuredInvocation(deps, (base) =>
       // Only a dispatched structured worker gets the orchestration identity and the Orca CLI on
       // PATH; an ordinary chat session's env passes through untouched.
       structuredWorkerChildIdentityEnv(record.sessionId, {
-        ...applyClaudeEnvPatch(
-          withoutInheritedClaudeConfigDir(inheritedEnv, process.platform),
-          {},
-          {
-            stripAuthEnv: auth.stripAuthEnv,
-            platform: process.platform
-          }
-        ),
-        ...(overlay ? cloneDefinedEnv(overlay) : {}),
+        ...base,
         // The turn translator relies on Claude's authoritative idle frame when no result arrives.
         [CLAUDE_SESSION_STATE_EVENTS_ENV]: '1'
-      }),
-      { platform: process.platform }
+      })
     )
     return {
       pathToClaudeCodeExecutable: command,

@@ -168,7 +168,7 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.resumeCopy',
-                    'When Orca quits or installs an update, chats that were mid-turn are automatically resumed when Orca is reopened.'
+                    'When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.'
                   )}
                 </p>
               </div>

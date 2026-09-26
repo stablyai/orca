@@ -164,6 +164,8 @@ export async function setClaudeStructuredOption(
     }
     if (input.key === 'model') {
       session.translator?.modelWritten(input.value)
+      // It described the model this write replaced; the next readback re-reads it.
+      delete session.appliedOptions
     }
     if (
       input.key === 'model' &&

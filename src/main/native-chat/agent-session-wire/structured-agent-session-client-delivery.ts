@@ -1,3 +1,4 @@
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import type {
@@ -42,6 +43,9 @@ export class StructuredAgentSessionClientDelivery {
   }
 
   publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)
+
+  publishChildWork = (sessionId: string, evidence: AgentChildWorkEvidence[]): void =>
+    this.statusFeed.publishChildWork(sessionId, evidence)
 
   publishStatusAndSettlement = (sessionId: string): void => {
     this.statusFeed.publish(sessionId)

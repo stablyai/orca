@@ -73,12 +73,9 @@ export const ADMISSION_METHODS = [
     method: 'agentSession.threadGoal',
     params: { envelope: envelope(), change: { kind: 'clear' } }
   },
-  {
-    method: 'agentSession.requestHandoff',
-    params: { envelope: envelope(), direction: 'to-tui', mode: 'now' }
-  },
   { method: 'agentSession.handoffStatus', params: { sessionId: SESSION } },
   { method: 'agentSession.options', params: { sessionId: SESSION } },
+  { method: 'agentSession.modelCatalog', params: { agent: 'codex', sessionId: SESSION } },
   { method: 'agentSession.history', params: { sessionId: SESSION, direction: 'tail' } },
   { method: 'agentSession.conversationOutline', params: { sessionId: SESSION } },
   { method: 'agentSession.subscribe', params: { sessionId: SESSION } },

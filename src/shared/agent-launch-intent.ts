@@ -105,7 +105,7 @@ export type AgentLaunchOutcome =
       sessionId: string
       handle: string
       /** The host-owned id of the tab that shows this chat: the tab half of the reserved `paneKey`
-       *  when one was sent, else the one the host recorded. Identity, not placement, like the
+       *  when one was sent, else the one the host gave its tab. Identity, not placement, like the
        *  terminal arm's `paneKey`. Absent from hosts that predate it. */
       tabId?: string
     }

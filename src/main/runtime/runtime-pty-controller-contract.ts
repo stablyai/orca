@@ -94,11 +94,6 @@ export type RuntimePtyController = {
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
   write(ptyId: string, data: string): boolean
-  writeAgentSessionProof?(
-    ptyId: string,
-    data: string,
-    authority: { sessionId: string; spawnToken: string }
-  ): boolean
   /** Three-valued settlement; local providers settle synchronously. */
   writeWithSettlement?(ptyId: string, data: string): WriteSettlement | Promise<WriteSettlement>
   /** Attach-only adoption of a live local daemon session so its output streams

@@ -33,12 +33,14 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   readClaudeManagedAccountGate?: () => ClaudeManagedAccountGateSettings | null
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
+  modelCatalog?: ClaudeStructuredSessionAdapterDeps['modelCatalog']
   onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
   onBackgroundTasksChanged?: (
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
+  onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
 }
 
 /** The adapter events the host's lifecycle handler consumes, in the host's vocabulary. */
@@ -61,9 +63,6 @@ export function structuredClaudeLifecycleEvent(
       cause: event.cause,
       fence: event.fence,
       acquisitionGeneration: event.acquisitionGeneration,
-      ...(event.settlementRetryRequired
-        ? { settlementRetryRequired: event.settlementRetryRequired }
-        : {}),
       ...(event.startupUnproven ? { startupUnproven: event.startupUnproven } : {})
     }
   }
@@ -130,7 +129,9 @@ export function createStructuredClaudeRuntimeAdapter(
       ? { onBackgroundTasksChanged: deps.onBackgroundTasksChanged }
       : {}),
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
+    ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.openClaudeConnection ? { openConnection: deps.openClaudeConnection } : {}),
-    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
+    ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+    ...(deps.modelCatalog ? { modelCatalog: deps.modelCatalog } : {})
   })
 }

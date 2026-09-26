@@ -9,7 +9,7 @@ main/agent-hooks/managed-hook-owner-identity.ts
 main/agent-hooks/managed-hook-runtime.ts
 main/app-icon.ts
 main/automations/precheck-runner.ts
-main/claude-accounts/keychain.ts
+main/macos-keychain/generic-password.ts
 main/computer/macos-computer-use-permission-status.ts
 main/computer/macos-computer-use-permissions.ts
 main/computer/macos-native-provider-transport.ts

@@ -9,6 +9,7 @@ import {
   type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
+import { resolveStructuredLaunchSeedOptions } from '../../../shared/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
@@ -20,12 +21,26 @@ import {
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
   worktreeId: string
   agent: AgentSessionHandleProvider
   params: StructuredAgentSessionCreateParams
+  /** The saved selection create seeds, read when the intent is built. */
+  seedOptions?: Readonly<Record<string, string>>
+}
+
+function launchSeedOptions(
+  state: ReturnType<typeof useAppStore.getState>,
+  agent: AgentSessionHandleProvider
+): { seedOptions?: Readonly<Record<string, string>> } {
+  const seedOptions = resolveStructuredLaunchSeedOptions(
+    state.settings?.nativeChatSessionOptions,
+    agent
+  )
+  return seedOptions ? { seedOptions } : {}
 }
 
 class StructuredAgentSessionCreateError extends Error {
@@ -91,7 +106,7 @@ export function createStructuredAgentSessionLaunchIntent(
   agent: AgentSessionHandleProvider,
   resumeFrom?: StructuredAgentSessionResumeSource
 ): StructuredAgentSessionLaunchIntent {
-  const sessionId = createStructuredAgentSessionId(agent, () => crypto.randomUUID())
+  const sessionId = createStructuredAgentSessionId(agent, createBrowserUuid)
   return buildStructuredAgentSessionLaunchIntent(worktreeId, agent, sessionId, resumeFrom)
 }
 
@@ -118,8 +133,9 @@ function buildStructuredAgentSessionLaunchIntent(
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
-      randomUuid: () => crypto.randomUUID()
-    })
+      randomUuid: createBrowserUuid
+    }),
+    ...launchSeedOptions(state, agent)
   }
 }
 
@@ -167,7 +183,8 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       agent: args.agent,
       ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
-    }
+    },
+    ...launchSeedOptions(state, args.agent)
   }
 }
 
