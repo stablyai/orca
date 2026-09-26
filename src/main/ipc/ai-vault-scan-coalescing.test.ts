@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../../shared/ai-vault-types'
 import type { IFilesystemProvider } from '../providers/types'
@@ -121,37 +122,44 @@ describe('Agent Session History scan coalescing', () => {
     await expect(second).resolves.toMatchObject({ sessions: [], issues: [] })
   })
 
-  it('keeps a shared multi-window scan alive when one window cancels', async () => {
-    let resolveRelay: ((result: AiVaultListResult) => void) | undefined
-    mocks.requestActiveSshAiVaultSessionList.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveRelay = resolve
-        })
-    )
-    registerAiVaultHandlers()
-    const list = ipcHandler('aiVault:listSessions')
-    const cancel = ipcHandler('aiVault:cancelListSessions')
-    const firstEvent = { sender: { id: 1 } }
-    const secondEvent = { sender: { id: 2 } }
-    const first = list(firstEvent, {
-      executionHostScope: 'ssh:dev-box',
-      requestToken: 'scan'
-    }) as Promise<AiVaultListResult>
-    const second = list(secondEvent, {
-      executionHostScope: 'ssh:dev-box',
-      requestToken: 'scan'
-    }) as Promise<AiVaultListResult>
-    await vi.waitFor(() => expect(resolveRelay).toBeDefined())
+  it.each(['cancel', 'destroyed', 'render-process-gone', 'did-navigate'])(
+    'keeps a shared multi-window scan alive when one window emits %s',
+    async (eventName) => {
+      let resolveRelay: ((result: AiVaultListResult) => void) | undefined
+      mocks.requestActiveSshAiVaultSessionList.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveRelay = resolve
+          })
+      )
+      registerAiVaultHandlers()
+      const list = ipcHandler('aiVault:listSessions')
+      const cancel = ipcHandler('aiVault:cancelListSessions')
+      const firstEvent = { sender: Object.assign(new EventEmitter(), { id: 1 }) }
+      const secondEvent = { sender: Object.assign(new EventEmitter(), { id: 2 }) }
+      const first = list(firstEvent, {
+        executionHostScope: 'ssh:dev-box',
+        requestToken: 'scan'
+      }) as Promise<AiVaultListResult>
+      const second = list(secondEvent, {
+        executionHostScope: 'ssh:dev-box',
+        requestToken: 'scan'
+      }) as Promise<AiVaultListResult>
+      await vi.waitFor(() => expect(resolveRelay).toBeDefined())
 
-    cancel(firstEvent, { requestToken: 'scan' })
+      if (eventName === 'cancel') {
+        cancel(firstEvent, { requestToken: 'scan' })
+      } else {
+        firstEvent.sender.emit(eventName)
+      }
 
-    // Electron logs every rejected handler, so a cancelled scan resolves instead.
-    await expect(first).resolves.toMatchObject({ cancelled: true, sessions: [], issues: [] })
-    expect(mocks.requestActiveSshAiVaultSessionList).toHaveBeenCalledTimes(1)
-    resolveRelay?.(EMPTY_RESULT)
-    await expect(second).resolves.toEqual(EMPTY_RESULT)
-  })
+      // Electron logs every rejected handler, so a cancelled scan resolves instead.
+      await expect(first).resolves.toMatchObject({ cancelled: true, sessions: [], issues: [] })
+      expect(mocks.requestActiveSshAiVaultSessionList).toHaveBeenCalledTimes(1)
+      resolveRelay?.(EMPTY_RESULT)
+      await expect(second).resolves.toEqual(EMPTY_RESULT)
+    }
+  )
 
   it('reports a real scan failure as a host issue rather than cancellation', async () => {
     mocks.requestActiveSshAiVaultSessionList.mockRejectedValue(new Error('relay socket closed'))
@@ -162,7 +170,7 @@ describe('Agent Session History scan coalescing', () => {
     // SSH host legs convert unexpected throws into scan issues so an `all`
     // multi-host list still returns the other hosts' sessions.
     const result = await list(
-      { sender: { id: 1 } },
+      { sender: Object.assign(new EventEmitter(), { id: 1 }) },
       { executionHostScope: 'ssh:dev-box', requestToken: 'scan' }
     )
     expect(result).toMatchObject({
@@ -180,7 +188,7 @@ describe('Agent Session History scan coalescing', () => {
     // The local leg degrades like the SSH legs above: a rejection reaches the
     // renderer as a raw string painted over the list instead of an issue row.
     const result = await list(
-      { sender: { id: 1 } },
+      { sender: Object.assign(new EventEmitter(), { id: 1 }) },
       { executionHostScope: 'local', requestToken: 'scan' }
     )
     expect(result).toMatchObject({
@@ -188,6 +196,68 @@ describe('Agent Session History scan coalescing', () => {
       issues: [expect.objectContaining({ message: 'transcript root is unreadable', kind: 'host' })]
     })
     expect(result).not.toHaveProperty('cancelled')
+  })
+
+  it('aborts local and SSH all-host legs only after the last renderer leaves', async () => {
+    const scanSignals: AbortSignal[] = []
+    const waitForAbort = (signal: AbortSignal): Promise<AiVaultListResult> => {
+      scanSignals.push(signal)
+      return new Promise((resolve) => {
+        signal.addEventListener('abort', () => resolve(EMPTY_RESULT), { once: true })
+      })
+    }
+    mocks.scanAiVaultSessionsInWorker.mockImplementation((_args, signal: AbortSignal) =>
+      waitForAbort(signal)
+    )
+    mocks.requestActiveSshAiVaultSessionList.mockImplementation(
+      (_targetId, _params, options: { signal: AbortSignal }) => waitForAbort(options.signal)
+    )
+    let resolveRuntime: ((result: AiVaultListResult) => void) | undefined
+    mocks.scanRuntimeAiVaultSessions.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRuntime = resolve
+        })
+    )
+    registerRuntimeHost()
+    const list = ipcHandler('aiVault:listSessions')
+    const firstEvent = { sender: Object.assign(new EventEmitter(), { id: 1 }) }
+    const secondEvent = { sender: Object.assign(new EventEmitter(), { id: 2 }) }
+    const first = list(firstEvent, { executionHostScope: 'all', requestToken: 'scan' })
+    const second = list(secondEvent, { executionHostScope: 'all', requestToken: 'scan' })
+    await vi.waitFor(() => expect(scanSignals).toHaveLength(2))
+    await vi.waitFor(() => expect(resolveRuntime).toBeDefined())
+
+    firstEvent.sender.emit('did-navigate')
+    await expect(first).resolves.toMatchObject({ cancelled: true })
+    expect(scanSignals.every((signal) => !signal.aborted)).toBe(true)
+    secondEvent.sender.emit('render-process-gone')
+    await expect(second).resolves.toMatchObject({ cancelled: true })
+    expect(scanSignals.every((signal) => signal.aborted)).toBe(true)
+    for (const event of [firstEvent, secondEvent]) {
+      expect(event.sender.eventNames()).toEqual([])
+    }
+    // Runtime RPC cannot be canceled; its late result remains safely observed.
+    resolveRuntime?.(EMPTY_RESULT)
+  })
+
+  it('does not start an abandoned scan after ownership initialization completes', async () => {
+    let finishOwnership: (() => void) | undefined
+    registerAiVaultHandlers({
+      ensureStructuredSessionOwnership: () =>
+        new Promise<void>((resolve) => {
+          finishOwnership = resolve
+        })
+    })
+    const event = { sender: Object.assign(new EventEmitter(), { id: 1 }) }
+    const pending = ipcHandler('aiVault:listSessions')(event, { requestToken: 'scan' })
+
+    event.sender.emit('did-navigate')
+    finishOwnership?.()
+
+    await expect(pending).resolves.toMatchObject({ cancelled: true })
+    expect(mocks.scanAiVaultSessionsInWorker).not.toHaveBeenCalled()
+    expect(event.sender.eventNames()).toEqual([])
   })
 
   it('re-joins a preempted same-scope caller onto the forced refresh', async () => {

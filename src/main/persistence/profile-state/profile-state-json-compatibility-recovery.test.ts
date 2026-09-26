@@ -83,7 +83,7 @@ function fixture() {
         ? authority.writeJsonCompatibilityExport(paths.dataFile)
         : authority.writeJsonCompatibilityExportAsync(paths.dataFile),
     reopen: () => {
-      const result = createProfileStateStore({ ...paths, authorityMode: 'sqlite-established' })
+      const result = createProfileStateStore({ ...paths })
       try {
         expect(result.backend).toBe('sqlite')
         return result.store.getSettings().theme

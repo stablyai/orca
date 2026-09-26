@@ -7,7 +7,7 @@ import {
   readActiveProfileId,
   readPersistedHttp1CompatibilityMode
 } from './http1-compatibility-profile-state'
-import { profileStateJsonExportPath } from '../persistence/profile-state/profile-state-export-path'
+import { profileStateJsonExportPath } from '../persistence/profile-state/legacy-json/profile-state-export-path'
 
 const temporaryDirectories: string[] = []
 

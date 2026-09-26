@@ -1,4 +1,15 @@
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  readPersistedStateJson,
+  writePersistedStateJson,
+  createStore,
+  dataFile,
+  makeRepo,
+  testState
+} from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { createProfileStateStore } from './persistence/profile-state/profile-state-store-factory'
 import type * as FsModule from 'node:fs'
 import {
   existsSync,
@@ -14,13 +25,6 @@ import { join } from 'node:path'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../shared/constants'
 import type { PersistedState } from '../shared/persisted-state-types'
 import type { Store as PersistenceStore } from './persistence/loading-store/store'
-import {
-  createStore,
-  dataFile,
-  makeRepo,
-  testState,
-  writeDataFile
-} from './persistence-test-harness'
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
@@ -68,9 +72,10 @@ describe('loading Store extraction seams', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-loading-store-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     vi.unstubAllEnvs()
     vi.mocked(writeSync).mockClear()
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -79,7 +84,7 @@ describe('loading Store extraction seams', () => {
     vi.stubEnv('ORCA_STARTUP_DIAGNOSTICS', '')
     const state = getDefaultPersistedState(testState.dir)
     state.workspaceSession = { ...state.workspaceSession, activeTabId: sentinel }
-    writeDataFile(state)
+    writePersistedStateJson(dataFile(), JSON.stringify(state))
 
     const stringifySpy = vi.spyOn(JSON, 'stringify')
     const store = createStore()
@@ -103,7 +108,7 @@ describe('loading Store extraction seams', () => {
     vi.stubEnv('ORCA_STARTUP_DIAGNOSTICS', '1')
     const state = getDefaultPersistedState(testState.dir)
     state.workspaceSession = { ...state.workspaceSession, activeTabId: sentinel }
-    writeDataFile(state)
+    writePersistedStateJson(dataFile(), JSON.stringify(state))
 
     const stringifySpy = vi.spyOn(JSON, 'stringify')
     const store = createStore()
@@ -134,7 +139,7 @@ describe('loading Store extraction seams', () => {
     vi.stubEnv('ORCA_STARTUP_DIAGNOSTICS', '1')
     const state = getDefaultPersistedState(testState.dir)
     state.workspaceSession = { ...state.workspaceSession, activeTabId: sentinel }
-    writeDataFile(state)
+    writePersistedStateJson(dataFile(), JSON.stringify(state))
 
     // Fake clock only the details closure advances, so a post-closure timestamp is unambiguous.
     let clock = 0
@@ -169,8 +174,7 @@ describe('loading Store extraction seams', () => {
     ])
   })
 
-  it('accepts the first JSON-parseable backup even when an older backup has richer state', async () => {
-    mkdirSync(testState.dir, { recursive: true })
+  it('imports the first usable legacy backup without overwriting the damaged source', () => {
     writeFileSync(dataFile(), '{{corrupt-primary', 'utf-8')
     writeFileSync(`${dataFile()}.bak.0`, '{}', 'utf-8')
     writeFileSync(
@@ -178,31 +182,33 @@ describe('loading Store extraction seams', () => {
       JSON.stringify({ repos: [makeRepo({ id: 'older-complete-profile' })] }),
       'utf-8'
     )
-
-    const store = await createStore()
-
-    expect(store.getRepos()).toEqual([])
-    expect(readFileSync(dataFile(), 'utf-8')).toBe('{}')
+    const { store } = createProfileStateStore({
+      dataFile: dataFile(),
+      databaseFile: join(testState.dir, 'profile-state.db'),
+      profileId: 'backup-import'
+    })
+    try {
+      expect(store.getRepos()).toEqual([])
+      expect(readFileSync(dataFile(), 'utf-8')).toBe('{{corrupt-primary')
+      expect(readPersistedStateJson(dataFile(), 'backup-import')).toContain('"repos":[]')
+    } finally {
+      store.freezeWrites()
+    }
   })
 
-  it('leaves backup bytes reusable when publishing recovery to the primary path fails', async () => {
+  it('leaves backup bytes reusable when the legacy source cannot be read', () => {
     mkdirSync(dataFile(), { recursive: true })
-    writeFileSync(
-      `${dataFile()}.bak.0`,
-      JSON.stringify({ repos: [makeRepo({ id: 'recovery-survives-publish-failure' })] }),
-      'utf-8'
-    )
-
-    const failedRecovery = await createStore()
-    expect(failedRecovery.getRepos()).toEqual([])
-    failedRecovery.freezeWrites()
-    expect(existsSync(`${dataFile()}.bak.0`)).toBe(true)
-
-    rmSync(dataFile(), { recursive: true, force: true })
-    const recovered = await createStore()
-    expect(recovered.getRepos().map((repo) => repo.id)).toEqual([
-      'recovery-survives-publish-failure'
-    ])
+    const backup = JSON.stringify({ repos: [makeRepo({ id: 'recovery-survives-read-failure' })] })
+    writeFileSync(`${dataFile()}.bak.0`, backup, 'utf-8')
+    expect(() =>
+      createProfileStateStore({
+        dataFile: dataFile(),
+        databaseFile: join(testState.dir, 'profile-state.db'),
+        profileId: 'backup-import'
+      })
+    ).toThrow()
+    expect(readFileSync(`${dataFile()}.bak.0`, 'utf-8')).toBe(backup)
+    expect(existsSync(join(testState.dir, 'profile-state.db'))).toBe(false)
   })
 
   it('aliases blank host reads, writes, and patches to the local disk partition', async () => {
@@ -217,7 +223,8 @@ describe('loading Store extraction seams', () => {
     expect(store.getWorkspaceSession('  ').activeRepoId).toBe('from-blank-patch')
     expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
 
-    const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as PersistedState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as PersistedState
     expect(persisted.workspaceSession?.activeRepoId).toBe('from-blank-patch')
     expect(persisted.workspaceSessionsByHostId).toEqual({})
   })
@@ -228,7 +235,7 @@ describe('loading Store extraction seams', () => {
     const { setMigrationUnsupportedPty } =
       await import('./agent-hooks/migration-unsupported-pty-state')
     const secondDataFile = join(testState.dir, 'second-profile', 'orca-data.json')
-    const second = new Store({ dataFile: secondDataFile })
+    const second = createSqliteTestStore(Store, { dataFile: secondDataFile })
 
     setMigrationUnsupportedPty({
       ptyId: 'listener-owner-pty',
@@ -239,8 +246,10 @@ describe('loading Store extraction seams', () => {
     first.flushOrThrow()
     second.flushOrThrow()
 
-    const firstState = JSON.parse(readFileSync(dataFile(), 'utf-8')) as PersistedState
-    const secondState = JSON.parse(readFileSync(secondDataFile, 'utf-8')) as PersistedState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const firstState = JSON.parse(readPersistedStateJson(dataFile())) as PersistedState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const secondState = JSON.parse(readPersistedStateJson(secondDataFile)) as PersistedState
     expect(
       firstState.migrationUnsupportedPtyEntries?.some(
         (entry) => entry.ptyId === 'listener-owner-pty'
@@ -261,7 +270,8 @@ describe('loading Store extraction seams', () => {
 
     store.updateUI({ sidebarWidth: 732 })
     expect(store.flushAsync()).toBe(finalFlush)
-    const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as PersistedState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as PersistedState
     expect(persisted.ui.sidebarWidth).toBe(731)
     expect(store.getUI().sidebarWidth).toBe(732)
   })
@@ -274,7 +284,8 @@ describe('loading Store extraction seams', () => {
     store.updateUI({ sidebarWidth: 742 })
     await finalFlush
 
-    const persisted = JSON.parse(readFileSync(dataFile(), 'utf-8')) as PersistedState
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The preceding Store save produced the PersistedState snapshot read by this test.
+    const persisted = JSON.parse(readPersistedStateJson(dataFile())) as PersistedState
     expect(persisted.ui.sidebarWidth).toBe(742)
   })
 
@@ -312,7 +323,7 @@ describe('loading Store extraction seams', () => {
         return 47
       }
     }
-    const overridden = new StoreWithRepoCountOverride({
+    const overridden = createSqliteTestStore(StoreWithRepoCountOverride, {
       dataFile: join(testState.dir, 'override-profile', 'orca-data.json')
     })
     expect(overridden.getRepoCount()).toBe(47)
