@@ -452,6 +452,25 @@ describe('a structured Claude session over agentSession.*', () => {
     claude.setSelfExit(null)
   })
 
+  it('releases a failed start that recorded no owner without claiming it exited', async () => {
+    claude.setSelfExit({
+      message: 'claude stream-json exited (code 1): claude: not signed in',
+      // The root was never seen to exit, so nothing proves this start's process gone.
+      exitVerdict: { root: 'live', tree: 'unverifiable' }
+    })
+
+    await call('agentSession.create', createIntentParams())
+    claude.setSelfExit(null)
+
+    // The adapter closed the stdio of what it spawned, and no owner was recorded to stop. The next
+    // start goes ahead; with no death evidence nothing reads the failed start as exited.
+    expect(leaseOf(SESSION)).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      deathEvidence: null
+    })
+  })
+
   it.each(['unverifiable', 'live'] as const)(
     'reopens a chat whose stop saw the Claude root exit with its tree %s',
     async (tree) => {

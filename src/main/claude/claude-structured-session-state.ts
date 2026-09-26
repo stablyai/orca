@@ -70,7 +70,6 @@ export type ClaudeStructuredSessionEvent =
       cause?: 'unexpected-exit' | 'requested-close'
       fence?: number
       acquisitionGeneration?: string
-      settlementRetryRequired?: boolean
       /** Host clock when the end was observed. */
       observedAt?: number
       /** The child ended before proving startup, so reacquiring would repeat the same start. */

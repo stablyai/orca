@@ -28,6 +28,9 @@ ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
 }
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
 ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
+if [ -n "\${WSL_DISTRO_NAME:-}" ]; then
+  set -- -WslDistro "$WSL_DISTRO_NAME" "$@"
+fi
 exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"
 `
 }
@@ -71,6 +74,7 @@ try {
   }
   [string]$OrcaLauncher = $args[0]
   [string]$WslCwd = ''
+  [string]$WslDistro = ''
   [int]$ForwardArgStart = 1
   if ($args.Count -ge 2 -and $args[1] -eq '-WslCwd') {
     if ($args.Count -lt 3) {
@@ -78,6 +82,13 @@ try {
     }
     $WslCwd = $args[2]
     $ForwardArgStart = 3
+  }
+  if ($ForwardArgStart -eq 3 -and $args.Count -ge 4 -and $args[3] -eq '-WslDistro') {
+    if ($args.Count -lt 5) {
+      throw 'Invalid Orca WSL CLI bridge invocation.'
+    }
+    $WslDistro = $args[4]
+    $ForwardArgStart = 5
   }
   [string[]]$ForwardArgs = @()
   if ($args.Count -gt $ForwardArgStart) {
@@ -87,6 +98,12 @@ try {
     Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue
   } else {
     $env:ORCA_CLI_CWD = $WslCwd
+  }
+  # Do not let an inherited Windows environment choose the caller's account location.
+  if ([string]::IsNullOrEmpty($WslDistro)) {
+    Remove-Item Env:ORCA_CLI_WSL_DISTRO -ErrorAction SilentlyContinue
+  } else {
+    $env:ORCA_CLI_WSL_DISTRO = $WslDistro
   }
   $LauncherDirectory = Split-Path -Parent $OrcaLauncher
   Push-Location -LiteralPath $LauncherDirectory

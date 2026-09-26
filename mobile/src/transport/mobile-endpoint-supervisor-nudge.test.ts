@@ -6,7 +6,8 @@ import {
   FakeLogicalClient,
   FakeRelaySession,
   FakeSession,
-  host
+  host,
+  relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
@@ -33,7 +34,7 @@ describe('mobile endpoint supervisor nudges', () => {
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected'))
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     expect(deps.openRelay).toHaveBeenCalledOnce()
@@ -62,7 +63,7 @@ describe('mobile endpoint supervisor nudges', () => {
       // Deterministic full jitter: fraction 0.5 → half the backoff window.
       randomBytes: () => new Uint8Array([128, 0])
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     expect(openRelay).toHaveBeenCalledOnce()
@@ -100,7 +101,7 @@ describe('mobile endpoint supervisor nudges', () => {
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       randomBytes: () => new Uint8Array([128, 0])
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
@@ -119,7 +120,7 @@ describe('mobile endpoint supervisor nudges', () => {
   it('leaves physical relay probing to the session watchdog', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.nudge('focus')
@@ -138,7 +139,7 @@ describe('mobile endpoint supervisor nudges', () => {
   it('does not suspend a relay from one focus RPC failure', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.nudge('focus')
@@ -164,7 +165,7 @@ describe('mobile endpoint supervisor nudges', () => {
             })
         )
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
     expect(deps.openRelay).toHaveBeenCalledOnce()
 
@@ -195,7 +196,7 @@ describe('mobile endpoint supervisor nudges', () => {
       readBundle: vi.fn(async () => expired),
       randomBytes: () => new Uint8Array([128, 0])
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
     await supervisor.start()
 
     supervisor.nudge('network-change')
@@ -221,9 +222,11 @@ describe('mobile endpoint supervisor nudges', () => {
       writeBundle: vi.fn(async () => {}),
       isActive: () => true,
       isForeground: () => true,
-      relay: () => host.relay,
+      isStopped: () => false,
+      hostId: host.id,
+      relay,
       resolveRelay: vi.fn(async ({ relay: endpoint }) => endpoint),
-      persistResolvedRelay: vi.fn(async () => {}),
+      setRelayRouting: vi.fn(async () => {}),
       bundle: () => bundle,
       adoptBundle: vi.fn(),
       recordMigration: vi.fn(),
@@ -260,9 +263,11 @@ describe('mobile endpoint supervisor nudges', () => {
       writeBundle: vi.fn(async () => {}),
       isActive: () => active,
       isForeground: () => active,
-      relay: () => host.relay,
+      isStopped: () => false,
+      hostId: host.id,
+      relay,
       resolveRelay: vi.fn(async ({ relay: endpoint }) => endpoint),
-      persistResolvedRelay: vi.fn(async () => {}),
+      setRelayRouting: vi.fn(async () => {}),
       bundle: () => bundle,
       adoptBundle: vi.fn(),
       recordMigration: vi.fn(),

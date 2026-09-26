@@ -15020,6 +15020,7 @@
           "notPython": "Ce fichier n'est pas un interpréteur Python.",
           "interrupt": "Interrompre",
           "restart": "Redémarrer le kernel",
+          "trustFirst": "Exécutez une cellule pour d'abord faire confiance à ce notebook",
           "runAll": "Tout exécuter",
           "clearAll": "Effacer toutes les sorties",
           "notResponding": "Ne répond pas. Redémarrez le kernel",
