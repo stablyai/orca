@@ -60,6 +60,16 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+ArrowDown'])
   },
   {
+    id: 'worktree.jumpToNextAttention',
+    title: 'Jump to agent needing input',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'agent', 'attention', 'waiting', 'needs input', 'jump'],
+    defaultBindings: platformBindings(['Mod+Shift+K']),
+    // Why: waiting agents live in terminals; the handler declines when none waits, so the shell keeps the chord.
+    allowInTerminal: true
+  },
+  {
     id: 'workspace.create',
     title: 'Create worktree',
     group: 'Global',

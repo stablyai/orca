@@ -7,6 +7,10 @@ import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-hist
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
+  focusAttentionTarget,
+  resolveNextAttentionTarget
+} from '../components/sidebar/next-attention-target'
+import {
   deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget
 } from '../components/sidebar/hovered-workspace-delete'
@@ -163,6 +167,20 @@ export function createAppCommandHandlers(
           return false
         }
         return claim('worktree.history.forward', () => useAppStore.getState().goForwardWorktree())
+      }
+    ],
+    [
+      'worktree.jumpToNextAttention',
+      () => {
+        if (creationLayoutActive) {
+          return false
+        }
+        // Why resolve before claiming: with no agent waiting the chord must reach the terminal.
+        const target = resolveNextAttentionTarget()
+        if (target === null) {
+          return false
+        }
+        return claim('worktree.jumpToNextAttention', () => focusAttentionTarget(target))
       }
     ],
     ['sidebar.left.toggle', () => claim('sidebar.left.toggle', () => actions.toggleSidebar())],
