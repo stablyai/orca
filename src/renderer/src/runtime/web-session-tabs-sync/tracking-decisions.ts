@@ -10,14 +10,17 @@ import {
   isRetiredSessionTabsPublicationEpoch,
   isHeadlessMergeSessionTabsPublication,
   noteSessionTabsPublicationEpoch,
+  reviveRetiredSessionTabsPublicationEpoch,
   sameSessionTabsPublicationLineage
 } from './publisher-identity-fences'
 import {
   sessionTabsFreshnessKey,
   rememberHostTerminalTabCount,
   trackWebSessionTabsWorktree,
-  recordAcceptedWebSessionTabsEnvironment
+  recordAcceptedWebSessionTabsEnvironment,
+  type WebSessionTabsReceiptOptions
 } from './tracking'
+import { scheduleWebRetiredEpochRepair } from './retired-epoch-repair'
 import { clearWebSessionTabsTrackingForWorktree } from './tracking-lifecycle'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
@@ -57,7 +60,8 @@ export function shouldApplyWebSessionTabsSnapshot(
 export function decideWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  runtimeId?: string
+  runtimeId?: string,
+  options: WebSessionTabsReceiptOptions = {}
 ): WebSessionTabsSnapshotDecision {
   if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId)) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
@@ -92,7 +96,13 @@ export function decideWebSessionTabsSnapshot(
     isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch) &&
     !currentSharesPublicationLineage
   ) {
-    return WEB_SESSION_TABS_FRAME_OUTRANKED
+    // Why not just drop: a live renderer publisher can return after a temporary headless epoch.
+    // Subscription frames stay fenced and schedule an authoritative repair; only a census we asked
+    // for may revive the epoch — and only after the ordering gates below admit the frame.
+    if (!options.authoritative) {
+      scheduleWebRetiredEpochRepair(environmentId, snapshot.worktree, snapshot.publicationEpoch)
+      return WEB_SESSION_TABS_FRAME_OUTRANKED
+    }
   }
   const replayable = replayableSessionTabsSnapshotByWorktree.get(key)
   const isExactCurrentReplay = Boolean(
@@ -119,6 +129,10 @@ export function decideWebSessionTabsSnapshot(
   // not be noted. It still applies: rejecting it outright would drop the terminal reconciliation
   // that legitimately rides on it (host-session-snapshot-authority.ts).
   if (hostSnapshotAffirmsWorktreeContents(snapshot)) {
+    // Revive only on the accepted path and only for frames that affirm worktree contents, so a
+    // rejected/stale authoritative census never clears `retired`, and unpublished placeholders
+    // never un-fence a generation.
+    reviveRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
     noteSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
   }
   latestSessionTabsSnapshotByWorktree.set(key, {

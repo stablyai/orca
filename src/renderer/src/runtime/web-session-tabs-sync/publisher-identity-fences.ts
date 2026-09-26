@@ -161,6 +161,24 @@ export function sameSessionTabsPublicationLineage(left: string, right: string): 
   )
 }
 
+/**
+ * Un-retires every retired generation that shares publication lineage with `publicationEpoch`.
+ * Only an authoritative census that names the epoch current may call this.
+ */
+export function reviveRetiredSessionTabsPublicationEpoch(
+  key: string,
+  publicationEpoch: string
+): void {
+  const history = sessionTabsPublicationEpochHistoryByWorktree.get(key)
+  if (!history) {
+    return
+  }
+  history.retired = history.retired.filter(
+    (retired) => !sameSessionTabsPublicationLineage(retired, publicationEpoch)
+  )
+}
+
+
 export function isHeadlessMergeSessionTabsPublication(publicationEpoch: string): boolean {
   return publicationEpoch.includes(':headless-merge:')
 }

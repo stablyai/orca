@@ -8,6 +8,7 @@ import {
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './tracking'
+import { forgetWebRetiredEpochRepairsOutside } from './retired-epoch-repair'
 import { decideWebSessionTabsSnapshot } from './tracking-decisions'
 import {
   acceptSessionTabsRuntimeId,
@@ -83,7 +84,8 @@ export function loadInitialWebSessionTabs({
           snapshot,
           requestReceivedFrame,
           runtimeId,
-          'bootstrap'
+          'bootstrap',
+          { authoritative: result.authoritative === true }
         )
       )
       const recovered = await Promise.all(
@@ -117,17 +119,27 @@ export function loadInitialWebSessionTabs({
             environmentId,
             snapshot,
             receivedFrames[index]!,
-            runtimeId
+            runtimeId,
+            { authoritative: result.authoritative === true }
           )
       )
       const decisions = applicable.map((snapshot) =>
-        decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId)
+        decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId, {
+          authoritative: result.authoritative === true
+        })
       )
       const freshSnapshots = applicable.filter((_snapshot, index) => decisions[index]!.apply)
       const initialInventoryStillCurrent =
         latestReceivedSessionTabsFrameByEnvironment.get(environmentId) === requestReceivedFrame &&
         (latestReceivedSessionTabsInventoryFrameByEnvironment.get(environmentId) ?? 0) <=
           requestReceivedFrame
+      if (initialInventoryStillCurrent) {
+        // Mirror local apply-time prune only when this listAll census still owns the request boundary.
+        forgetWebRetiredEpochRepairsOutside(
+          environmentId,
+          new Set(result.snapshots.map((snapshot) => snapshot.worktree))
+        )
+      }
       settleHydration = applyWebSessionTabsStorePatch(
         (state) => applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId),
         {
