@@ -12,6 +12,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
 import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
+import { getPairingScanErrorMessage } from '../src/transport/pairing-scan-error-message'
 import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
@@ -82,7 +83,7 @@ export default function PairScanScreen() {
       const offer = decodePairingUrl(data)
       if (!offer) {
         setStatus('error')
-        setErrorMessage('Not a valid Orca QR code')
+        setErrorMessage(getPairingScanErrorMessage(data))
         processingRef.current = false
         return
       }
@@ -227,7 +228,7 @@ export default function PairScanScreen() {
           </Text>
           <Text style={styles.subtitle}>
             {canAskAgain
-              ? 'Scan the QR code from Orca on your desktop, or paste the pairing code instead.'
+              ? 'Scan the desktop pairing QR from Orca on your computer, or paste the pairing code instead.'
               : 'Enable camera access in Settings, or paste the pairing code instead.'}
           </Text>
           <Pressable
@@ -250,7 +251,7 @@ export default function PairScanScreen() {
         <TextInputModal
           visible={pasteVisible}
           title="Paste pairing code"
-          message="Copy the code shown under the QR on your computer."
+          message="Copy the pairing code shown under the desktop QR on your computer."
           placeholder="orca://pair?code=... or paste the code"
           onSubmit={handlePasteSubmit}
           onCancel={() => setPasteVisible(false)}
@@ -268,7 +269,7 @@ export default function PairScanScreen() {
       <View style={styles.steps}>
         <Step number={1} text="Open Orca on your computer" />
         <Step number={2} text="Go to Settings → Mobile" />
-        <Step number={3} text="Scan the QR code" />
+        <Step number={3} text="Scan the desktop pairing QR" />
       </View>
 
       {status === 'scanning' && (
@@ -348,7 +349,7 @@ export default function PairScanScreen() {
       <TextInputModal
         visible={pasteVisible}
         title="Paste pairing code"
-        message="Copy the code shown under the QR on your computer."
+        message="Copy the pairing code shown under the desktop QR on your computer."
         placeholder="orca://pair?code=... or paste the code"
         onSubmit={handlePasteSubmit}
         onCancel={() => setPasteVisible(false)}
