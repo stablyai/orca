@@ -11125,7 +11125,8 @@
           "runtimeSessionWarning": "{{value0}} will keep running in the current runtime. Let tasks finish or restart terminals before continuing.",
           "pendingRuntimeChange": "Runtime change pending. New project work will use the selected runtime after you apply.",
           "cancel": "Cancel",
-          "applyRuntimeChange": "Apply runtime change"
+          "applyRuntimeChange": "Apply runtime change",
+          "wslStorageLocked": "This project is stored inside {{distro}} (\\\\wsl.localhost), so the runtime is locked to that distro. Move the project out of the distro to change it."
         },
         "PrivacyDiagnosticsRows": {
           "5a7cbe069a": "DO_NOT_TRACK=1 is set — creating and sending diagnostic files is disabled.",

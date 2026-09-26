@@ -196,6 +196,113 @@ describe('ProjectWindowsRuntimeSetting', () => {
     }
   })
 
+  it('drops a pending runtime change when the storage lock engages', () => {
+    const updateProject = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    try {
+      act(() => {
+        root.render(
+          <ProjectWindowsRuntimeSetting
+            project={project}
+            settings={getDefaultSettings('/tmp')}
+            isLocalWindowsProject
+            wslAvailable
+            wslDistros={['Ubuntu-24.04', 'Debian']}
+            wslCapabilitiesLoading={false}
+            runtimeSessionSummary={{ liveTerminalCount: 1, activeTaskCount: 1 }}
+            updateProject={updateProject}
+          />
+        )
+      })
+
+      clickButton(container, 'WSL')
+      expect(container.textContent).toContain('Runtime change pending')
+
+      // Why: moving the project onto \\wsl.localhost\Debian must lock the runtime
+      // and retire the half-made pending choice — not leave both on screen.
+      act(() => {
+        root.render(
+          <ProjectWindowsRuntimeSetting
+            project={project}
+            settings={getDefaultSettings('/tmp')}
+            isLocalWindowsProject
+            repoPath="\\wsl.localhost\Debian\home\u\sample-project"
+            wslAvailable
+            wslDistros={['Ubuntu-24.04', 'Debian']}
+            wslCapabilitiesLoading={false}
+            runtimeSessionSummary={{ liveTerminalCount: 1, activeTaskCount: 1 }}
+            updateProject={updateProject}
+          />
+        )
+      })
+
+      expect(container.textContent).not.toContain('Runtime change pending')
+      expect(container.textContent).toContain('runtime is locked to that distro')
+    } finally {
+      act(() => {
+        root.unmount()
+      })
+      container.remove()
+    }
+  })
+
+  it('refuses to commit a pending change while the storage lock is active', () => {
+    const updateProject = vi.fn().mockResolvedValue(true)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    // Why windows-host: a stored preference that contradicts the lock makes the
+    // mount effect normalize once, so a second updateProject can only come from
+    // an Apply the guard must block.
+    const lockedProject: Project = {
+      ...project,
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    }
+
+    try {
+      act(() => {
+        root.render(
+          <ProjectWindowsRuntimeSetting
+            project={lockedProject}
+            settings={getDefaultSettings('/tmp')}
+            isLocalWindowsProject
+            repoPath="\\wsl.localhost\Debian\home\u\sample-project"
+            wslAvailable
+            wslDistros={['Debian']}
+            wslCapabilitiesLoading={false}
+            runtimeSessionSummary={{ liveTerminalCount: 1, activeTaskCount: 0 }}
+            updateProject={updateProject}
+          />
+        )
+      })
+
+      // The mount effect normalizes the contradicting stored preference once.
+      expect(updateProject).toHaveBeenCalledTimes(1)
+
+      clickButton(container, 'WSL')
+      // Why assert first: without a rendered Apply button the test would pass
+      // vacuously, never exercising the commit guard it exists to pin.
+      const applyButton = Array.from(container.querySelectorAll('button')).find((button) =>
+        button.textContent?.includes('Apply runtime change')
+      )
+      expect(applyButton).toBeTruthy()
+      act(() => {
+        applyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      })
+
+      // Why still 1: the lock guard no-ops the commit, so Apply adds no update.
+      expect(updateProject).toHaveBeenCalledTimes(1)
+    } finally {
+      act(() => {
+        root.unmount()
+      })
+      container.remove()
+    }
+  })
+
   it('shows repair copy instead of silently falling back when a selected WSL distro is missing', () => {
     const markup = renderToStaticMarkup(
       <ProjectWindowsRuntimeSetting
@@ -214,6 +321,61 @@ describe('ProjectWindowsRuntimeSetting', () => {
 
     expect(markup).toContain('Ubuntu-24.04 is not installed in WSL.')
     expect(markup).toContain('Choose an installed distro or switch this project to Windows.')
+  })
+
+  it('locks the runtime to the storage distro for projects on a WSL UNC path', () => {
+    vi.useFakeTimers()
+    const updateProject = vi.fn()
+    const { container, root } = renderClient({
+      project,
+      settings: getDefaultSettings('/tmp'),
+      isLocalWindowsProject: true,
+      repoPath: '\\\\wsl.localhost\\Debian\\home\\u\\sample-project',
+      wslAvailable: true,
+      wslDistros: ['Debian'],
+      wslCapabilitiesLoading: false,
+      updateProject
+    })
+
+    try {
+      act(() => {
+        vi.runAllTimers()
+      })
+      // Why: storage and execution must agree — the selector locks to the
+      // storage distro and normalizes a contradicting stored preference.
+      expect(updateProject).toHaveBeenCalledWith('project-1', {
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Debian' }
+      })
+      expect(container.textContent).toContain('runtime is locked to that distro')
+      // Why aria-disabled: a native disabled button leaves the tab order (see
+      // SettingsFormControls), so the segments disable via aria-disabled.
+      const disabledButtons = Array.from(
+        container.querySelectorAll('button[aria-disabled="true"]')
+      ).map((button) => button.textContent?.trim())
+      expect(disabledButtons).toContain('Windows')
+      expect(disabledButtons).toContain('Default (Windows)')
+    } finally {
+      cleanupClient(container, root)
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the runtime switchable when the storage distro is no longer installed', () => {
+    const markup = renderToStaticMarkup(
+      <ProjectWindowsRuntimeSetting
+        project={project}
+        settings={getDefaultSettings('/tmp')}
+        isLocalWindowsProject
+        repoPath="\\wsl.localhost\gone\home\u\proj"
+        wslAvailable
+        wslDistros={['Ubuntu-24.04']}
+        wslCapabilitiesLoading={false}
+        updateProject={vi.fn()}
+      />
+    )
+
+    expect(markup).not.toContain('runtime is locked to that distro')
+    expect(markup).not.toContain('aria-disabled="true"')
   })
 
   it('does not render for remote or non-Windows-owned projects', () => {

@@ -10986,7 +10986,8 @@
           "runtimeSessionWarning": "{{value0}}会继续在当前运行时中运行。继续前请等待任务完成或重启终端。",
           "pendingRuntimeChange": "运行时更改待处理。应用后，新项目工作将使用所选运行时。",
           "cancel": "取消",
-          "applyRuntimeChange": "应用运行时更改"
+          "applyRuntimeChange": "应用运行时更改",
+          "wslStorageLocked": "项目存储在 {{distro}}（\\\\wsl.localhost）内，运行时与其保持一致。将项目移出该 distro 后可更改。"
         },
         "PrivacyDiagnosticsRows": {
           "5a7cbe069a": "已设置 DO_NOT_TRACK=1，创建和发送诊断文件已停用。",

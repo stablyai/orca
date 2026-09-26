@@ -5,12 +5,22 @@ import {
   normalizeProjectRuntimePreference,
   resolveProjectExecutionRuntime
 } from '../../../../shared/project-execution-runtime'
-import { useState } from 'react'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { useEffect, useRef, useState } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Button } from '../ui/button'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
+import {
+  getDefaultRuntimeLabel,
+  getProjectRuntimeDescription,
+  getRuntimeSessionWarning,
+  getVisibleDistroOptions,
+  getNextProjectWslDistro,
+  hasActiveRuntimeSessions,
+  sameRuntimePreference
+} from './project-runtime-setting-copy'
 
 type ProjectRuntimeSegment = LocalWindowsRuntimePreference['kind']
 
@@ -18,6 +28,8 @@ type ProjectWindowsRuntimeSettingProps = {
   project: Project | null
   settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'>
   isLocalWindowsProject: boolean
+  /** Where this project's files live; a WSL UNC pins the runtime to that distro. */
+  repoPath?: string | null
   wslAvailable: boolean
   wslDistros: string[]
   wslCapabilitiesLoading: boolean
@@ -32,6 +44,7 @@ export function ProjectWindowsRuntimeSetting({
   project,
   settings,
   isLocalWindowsProject,
+  repoPath,
   wslAvailable,
   wslDistros,
   wslCapabilitiesLoading,
@@ -41,18 +54,59 @@ export function ProjectWindowsRuntimeSetting({
   const [pendingPreference, setPendingPreference] = useState<LocalWindowsRuntimePreference | null>(
     null
   )
+  const normalizedLockRef = useRef<string | null>(null)
+
+  // Why locked: storage and execution must agree — a project on
+  // \\wsl.localhost\<distro> that ran on the Windows host would push every git
+  // and terminal call across 9P. Unlocks when the distro disappears (repair)
+  // or WSL goes unavailable (the repair copy's "switch to Windows" must work).
+  const storageWslDistro = repoPath ? (parseWslUncPath(repoPath)?.distro ?? null) : null
+  const lockedWslDistro =
+    storageWslDistro &&
+    (wslCapabilitiesLoading || (wslAvailable && wslDistros.includes(storageWslDistro)))
+      ? storageWslDistro
+      : null
+  const lockedPreference = lockedWslDistro
+    ? ({ kind: 'wsl', distro: lockedWslDistro } as LocalWindowsRuntimePreference)
+    : null
+
+  // Why: legacy projects could carry a non-WSL preference over a WSL UNC path;
+  // align the stored preference with the lock instead of displaying a lie.
+  useEffect(() => {
+    if (!project || !lockedWslDistro) {
+      // Why reset: the lock is off (distro gone / WSL unavailable). Clearing the
+      // ref lets a later re-engage re-normalize instead of skipping on a stale key.
+      normalizedLockRef.current = null
+      return
+    }
+    // Why: the lock overrides any half-made choice — drop a pending change so the
+    // Apply/Cancel banner cannot linger over a locked, non-editable control.
+    setPendingPreference(null)
+    const stored = normalizeProjectRuntimePreference(project.localWindowsRuntimePreference)
+    if (stored.kind === 'wsl' && stored.distro === lockedWslDistro) {
+      return
+    }
+    const lockKey = `${project.id}:${lockedWslDistro}`
+    if (normalizedLockRef.current === lockKey) {
+      return
+    }
+    normalizedLockRef.current = lockKey
+    void updateProject(project.id, {
+      localWindowsRuntimePreference: { kind: 'wsl', distro: lockedWslDistro }
+    })
+  }, [lockedWslDistro, project, updateProject])
 
   if (!project || !isLocalWindowsProject) {
     return null
   }
 
   const preference = normalizeProjectRuntimePreference(project.localWindowsRuntimePreference)
-  const selectedPreference = pendingPreference ?? preference
+  const selectedPreference = lockedPreference ?? pendingPreference ?? preference
   const nextWslDistro = getNextProjectWslDistro(selectedPreference, settings, wslDistros)
   const resolution = resolveProjectExecutionRuntime({
     appPlatform: 'win32',
     projectId: project.id,
-    projectRuntimePreference: preference,
+    projectRuntimePreference: lockedPreference ?? preference,
     globalWindowsRuntimeDefault: settings.localWindowsRuntimeDefault,
     wslAvailable: wslCapabilitiesLoading ? undefined : wslAvailable,
     availableWslDistros: wslCapabilitiesLoading ? null : wslDistros
@@ -65,6 +119,12 @@ export function ProjectWindowsRuntimeSetting({
   const defaultRuntimeLabel = getDefaultRuntimeLabel(settings)
   const commitRuntimePreference = (nextPreference: LocalWindowsRuntimePreference): void => {
     setPendingPreference(null)
+    // Why: storage pins the runtime while locked, so no commit is accepted —
+    // normalization already persisted the locked distro, and this no-op stops a
+    // stale pending Apply from writing anything over it.
+    if (lockedWslDistro !== null) {
+      return
+    }
     if (nextPreference.kind === 'inherit-global') {
       void updateProject(project.id, { localWindowsRuntimePreference: undefined })
       return
@@ -104,6 +164,11 @@ export function ProjectWindowsRuntimeSetting({
     }
   }
   const handleDistroChange = (distro: string): void => {
+    // Why: while locked, storage pins the runtime — a different distro would
+    // recreate the storage/execution mismatch the lock exists to prevent.
+    if (lockedWslDistro !== null && distro !== lockedWslDistro) {
+      return
+    }
     requestRuntimePreference({ kind: 'wsl', distro })
   }
 
@@ -128,14 +193,16 @@ export function ProjectWindowsRuntimeSetting({
               options={[
                 {
                   value: 'inherit-global',
-                  label: <span className="whitespace-nowrap">{defaultRuntimeLabel}</span>
+                  label: <span className="whitespace-nowrap">{defaultRuntimeLabel}</span>,
+                  disabled: lockedWslDistro !== null
                 },
                 {
                   value: 'windows-host',
                   label: translate(
                     'auto.components.settings.ProjectWindowsRuntimeSetting.windows',
                     'Windows'
-                  )
+                  ),
+                  disabled: lockedWslDistro !== null
                 },
                 {
                   value: 'wsl',
@@ -147,11 +214,15 @@ export function ProjectWindowsRuntimeSetting({
                 }
               ]}
             />
-            {isWslSelected ? (
+            {isWslSelected || lockedWslDistro !== null ? (
               <Select
-                value={selectedPreference.kind === 'wsl' ? selectedPreference.distro : ''}
+                value={
+                  selectedPreference.kind === 'wsl'
+                    ? selectedPreference.distro
+                    : (lockedWslDistro ?? '')
+                }
                 onValueChange={handleDistroChange}
-                disabled={wslCapabilitiesLoading || !wslAvailable}
+                disabled={lockedWslDistro !== null || wslCapabilitiesLoading || !wslAvailable}
               >
                 <SelectTrigger size="sm" className="w-full min-w-52">
                   <SelectValue
@@ -179,6 +250,15 @@ export function ProjectWindowsRuntimeSetting({
           'Runtime changes apply to new terminals, agent checks, and skill discovery for this project. Existing terminals keep their current runtime.'
         )}
       </p>
+      {lockedWslDistro !== null ? (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.ProjectWindowsRuntimeSetting.wslStorageLocked',
+            'This project is stored inside {{distro}} (\\\\wsl.localhost), so the runtime is locked to that distro. Move the project out of the distro to change it.',
+            { distro: lockedWslDistro }
+          )}
+        </p>
+      ) : null}
       {runtimeSessionWarning ? (
         <p className="text-xs text-muted-foreground">{runtimeSessionWarning}</p>
       ) : null}
@@ -217,160 +297,4 @@ export function ProjectWindowsRuntimeSetting({
       ) : null}
     </section>
   )
-}
-
-function hasActiveRuntimeSessions(summary?: ProjectRuntimeSessionSummary): boolean {
-  return (summary?.liveTerminalCount ?? 0) > 0 || (summary?.activeTaskCount ?? 0) > 0
-}
-
-function sameRuntimePreference(
-  left: LocalWindowsRuntimePreference,
-  right: LocalWindowsRuntimePreference
-): boolean {
-  if (left.kind !== right.kind) {
-    return false
-  }
-  return left.kind !== 'wsl' || left.distro === (right.kind === 'wsl' ? right.distro : null)
-}
-
-function joinRuntimeSessionParts(parts: string[]): string {
-  if (parts.length <= 1) {
-    return parts[0] ?? ''
-  }
-  return translate(
-    'auto.components.settings.ProjectWindowsRuntimeSetting.runtimeSessionJoin',
-    '{{value0}} and {{value1}}',
-    { value0: parts.slice(0, -1).join(', '), value1: parts.at(-1) }
-  )
-}
-
-function getLiveTerminalCountLabel(count: number): string {
-  return translate(
-    count === 1
-      ? 'auto.components.settings.ProjectWindowsRuntimeSetting.liveTerminalSingular'
-      : 'auto.components.settings.ProjectWindowsRuntimeSetting.liveTerminalPlural',
-    count === 1 ? '{{count}} live terminal' : '{{count}} live terminals',
-    { count }
-  )
-}
-
-function getActiveTaskCountLabel(count: number): string {
-  return translate(
-    count === 1
-      ? 'auto.components.settings.ProjectWindowsRuntimeSetting.activeTaskSingular'
-      : 'auto.components.settings.ProjectWindowsRuntimeSetting.activeTaskPlural',
-    count === 1 ? '{{count}} active task' : '{{count}} active tasks',
-    { count }
-  )
-}
-
-function getRuntimeSessionWarning(summary?: ProjectRuntimeSessionSummary): string | null {
-  const liveTerminalCount = summary?.liveTerminalCount ?? 0
-  const activeTaskCount = summary?.activeTaskCount ?? 0
-  if (liveTerminalCount === 0 && activeTaskCount === 0) {
-    return null
-  }
-
-  const parts = [
-    liveTerminalCount > 0 ? getLiveTerminalCountLabel(liveTerminalCount) : '',
-    activeTaskCount > 0 ? getActiveTaskCountLabel(activeTaskCount) : ''
-  ].filter((part) => part.length > 0)
-
-  return translate(
-    'auto.components.settings.ProjectWindowsRuntimeSetting.runtimeSessionWarning',
-    '{{value0}} will keep running in the current runtime. Let tasks finish or restart terminals before continuing.',
-    { value0: joinRuntimeSessionParts(parts) }
-  )
-}
-
-function getNextProjectWslDistro(
-  preference: LocalWindowsRuntimePreference,
-  settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'>,
-  wslDistros: readonly string[]
-): string | null {
-  if (preference.kind === 'wsl') {
-    return preference.distro
-  }
-  const globalDistro =
-    settings.localWindowsRuntimeDefault.kind === 'wsl'
-      ? settings.localWindowsRuntimeDefault.distro
-      : null
-  if (globalDistro?.trim()) {
-    return globalDistro.trim()
-  }
-  return wslDistros.find((distro) => distro.trim().length > 0) ?? null
-}
-
-function getVisibleDistroOptions(
-  preference: LocalWindowsRuntimePreference,
-  wslDistros: readonly string[]
-): string[] {
-  const options = [...wslDistros]
-  if (preference.kind === 'wsl' && !options.includes(preference.distro)) {
-    return [preference.distro, ...options]
-  }
-  return options
-}
-
-function getDefaultRuntimeLabel(
-  settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'>
-): string {
-  const runtimeLabel =
-    settings.localWindowsRuntimeDefault.kind === 'wsl'
-      ? translate('auto.components.settings.ProjectWindowsRuntimeSetting.wsl', 'WSL')
-      : translate('auto.components.settings.ProjectWindowsRuntimeSetting.windows', 'Windows')
-
-  return translate(
-    'auto.components.settings.ProjectWindowsRuntimeSetting.defaultRuntime',
-    'Default ({{value0}})',
-    { value0: runtimeLabel }
-  )
-}
-
-function getProjectRuntimeDescription(
-  resolution: ReturnType<typeof resolveProjectExecutionRuntime>
-): string {
-  if (resolution.status === 'repair-required') {
-    if (resolution.repair.reason === 'wsl-unavailable') {
-      return translate(
-        'auto.components.settings.ProjectWindowsRuntimeSetting.wslUnavailable',
-        'WSL is not available. Switch this project to Windows or repair WSL.'
-      )
-    }
-    if (resolution.repair.reason === 'wsl-distro-missing') {
-      return translate(
-        'auto.components.settings.ProjectWindowsRuntimeSetting.distroMissing',
-        '{{value0}} is not installed in WSL. Choose an installed distro or switch this project to Windows.',
-        { value0: resolution.repair.preferredRuntime.distro ?? 'WSL' }
-      )
-    }
-    return translate(
-      'auto.components.settings.ProjectWindowsRuntimeSetting.distroRequired',
-      'Choose a WSL distro or switch this project to Windows.'
-    )
-  }
-
-  if (resolution.runtime.kind === 'wsl') {
-    return resolution.runtime.reason === 'global-default'
-      ? translate(
-          'auto.components.settings.ProjectWindowsRuntimeSetting.inheritedWsl',
-          'No project override. General settings select {{value0}} via WSL.',
-          { value0: resolution.runtime.distro }
-        )
-      : translate(
-          'auto.components.settings.ProjectWindowsRuntimeSetting.projectWsl',
-          'This project runs in {{value0}} via WSL.',
-          { value0: resolution.runtime.distro }
-        )
-  }
-
-  return resolution.runtime.reason === 'global-default'
-    ? translate(
-        'auto.components.settings.ProjectWindowsRuntimeSetting.inheritedWindows',
-        'No project override. General settings select Windows.'
-      )
-    : translate(
-        'auto.components.settings.ProjectWindowsRuntimeSetting.projectWindows',
-        'This project runs on Windows.'
-      )
 }

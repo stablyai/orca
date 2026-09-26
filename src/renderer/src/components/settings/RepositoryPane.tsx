@@ -353,6 +353,7 @@ export function RepositoryPane({
               project={project}
               settings={settings}
               isLocalWindowsProject={isLocalWindowsProject}
+              repoPath={repo.path}
               wslAvailable={wslAvailable}
               wslDistros={wslDistros}
               wslCapabilitiesLoading={wslCapabilitiesLoading}
