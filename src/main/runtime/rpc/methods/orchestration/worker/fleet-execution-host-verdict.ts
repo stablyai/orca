@@ -12,11 +12,14 @@ import {
 } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectFleetNextAction } from '../../../../../../shared/orchestration-fleet-worker-projection'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { AgentStatusState } from '../../../../../../shared/agent-status-types'
 import { isStructuredSessionAddress } from '../../../../structured-worker-identity'
 
 export type ExecutionHostObservation = {
   status: 'live' | 'unverifiable' | 'exited'
   reason?: string
+  /** What a live agent is doing, when the host that runs it can say. */
+  activity?: AgentStatusState
 }
 
 type FleetWorkerRow = OrchestrationFleetPage['workers'][number]
@@ -36,6 +39,9 @@ export function applyExecutionHostVerdict(
       : observation.status === 'exited'
         ? { verdict: 'exited', source: 'execution_host' }
         : { verdict: 'unverifiable', reason: hostReportedReason(observation.reason) }
+  if (observation.status === 'live' && observation.activity) {
+    worker.stage.activity = observation.activity
+  }
   worker.evidence.liveStatus = observation.status === 'live' ? 'fresh' : 'unavailable'
   worker.evidence.lastObservedAt = observation.status === 'unverifiable' ? null : observedAt
   refreshFleetWorkerVerdict(worker, durable)

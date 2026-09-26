@@ -11,14 +11,16 @@
  * `check --wait`, where a waiter preempts pointer delivery, but a structured coordinator is a chat
  * session whose turn ends — so nothing else would ever wake it for its own `run:` mail.
  *
- * A `dispatch` message is the one exception to pointing: it is a chat assignee's dispatch preamble,
- * the turn a PTY assignee would have typed into it. It goes alone, as its own body, and the turn it
- * becomes is its reading, so an accepted one is marked read and `check` never replays it.
+ * A chat assignee's owed dispatch preamble is the one exception to pointing: it is the turn a PTY
+ * assignee would have typed into its pane. It goes alone, as its own body, and the turn it becomes
+ * is its reading, so an accepted one is marked read. Every other message, whatever its type, gets
+ * the pointer (see `isOwedDispatchPreamble`).
  */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { MessageRow, OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
+import { isOwedDispatchPreamble } from './dispatch-preamble-identity'
 import type { OrchestrationCliCommand } from './cli-command'
 import {
   selectOrchestrationPointerBatch,
@@ -222,7 +224,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       this.retain(mailboxHandle, sessionId, 'session-not-attached', reservedTypes)
       return
     }
-    const preamble = unread.find((message) => message.type === 'dispatch')
+    const preamble = unread.find((message) => isOwedDispatchPreamble(mailboxHandle, message))
     const batch = preamble ? [preamble] : unread
     const text = preamble
       ? preamble.body

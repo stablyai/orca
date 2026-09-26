@@ -1,3 +1,4 @@
+import { NOT_OWED_DISPATCH_PREAMBLE_SQL } from '../../dispatch-preamble-identity'
 import type { DeliveryRow, MessageRow, MessageType } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
@@ -62,7 +63,7 @@ export function getOrCreateMailboxDelivery(
         .prepare(
           `SELECT 1 FROM messages
            WHERE run_id = ? AND to_handle = ? AND read = 0
-             AND delivery_contract = 'current_delivery'
+             AND delivery_contract = 'current_delivery' AND ${NOT_OWED_DISPATCH_PREAMBLE_SQL}
              AND type IN (${placeholders}) LIMIT 1`
         )
         .get(params.runId, params.mailboxHandle, ...params.wakeTypes)
@@ -76,7 +77,7 @@ export function getOrCreateMailboxDelivery(
         .prepare(
           `SELECT * FROM messages
            WHERE run_id = ? AND to_handle = ? AND read = 0
-             AND delivery_contract = 'current_delivery'
+             AND delivery_contract = 'current_delivery' AND ${NOT_OWED_DISPATCH_PREAMBLE_SQL}
            ORDER BY sequence ASC LIMIT ?`
         )
         .all(params.runId, params.mailboxHandle, limit) as MessageRow[]

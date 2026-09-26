@@ -75,9 +75,9 @@ function runtime(prompts: string[]): OrcaRuntimeService {
     | 'getNestedWorkerMaxDepth'
     | 'getTerminalOrchestrationCliCommand'
     | 'sendTerminalAgentPrompt'
-    | 'notifyMessageArrived'
+    | 'deliverPendingMessagesForHandle'
   > = {
-    notifyMessageArrived: () => {},
+    deliverPendingMessagesForHandle: () => {},
     getNestedWorkerMaxDepth: () => 2,
     getTerminalOrchestrationCliCommand: () => 'orca',
     sendTerminalAgentPrompt: async (handle, text) => {

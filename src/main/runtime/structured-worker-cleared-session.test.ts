@@ -226,3 +226,49 @@ describe('terminal read by the session address an agent is shown', () => {
     ).toBeNull()
   })
 })
+
+describe('one lineage walk, one failure contract', () => {
+  beforeEach(() => {
+    structuredWorkerIdentities.clear()
+    closed.length = 0
+    historyAsked.length = 0
+    installClearedWorkerHost()
+  })
+
+  it('refuses when the record store cannot be read, instead of serving the pre-clear session', async () => {
+    const identity = registerWorker()
+    const host = hostRef.current as { deps: { store: { getRecord: unknown } } }
+    host.deps.store.getRecord = () => {
+      throw new Error('disk gone')
+    }
+
+    expect(() =>
+      readStructuredWorkerJournal({
+        identity,
+        dispatchId: 'ctx_1',
+        workerState: 'running',
+        liveness: 'live',
+        agent: 'claude'
+      })
+    ).toThrow(expect.objectContaining({ code: 'session_caller_not_live' }))
+    await expect(stopStructuredWorker(identity, 'ctx_1')).rejects.toMatchObject({
+      code: 'session_caller_not_live'
+    })
+    expect(historyAsked).toEqual([])
+    expect(closed).toEqual([])
+  })
+
+  it('refuses a chat on another host with the typed host-boundary refusal', () => {
+    const successor = records.get(SUCCESSOR)!
+    records.set(SUCCESSOR, {
+      ...successor,
+      location: { ...successor.location, executionHostId: 'ssh:box' }
+    })
+
+    expect(() => readStructuredWorkerTerminal({ handle: `session:${MINTED}`, db: null })).toThrow(
+      expect.objectContaining({ code: 'session_caller_host_boundary' })
+    )
+    // Mail maps the same verdict to "not deliverable here".
+    expect(structuredWorkerMailSessionId(MINTED)).toBeNull()
+  })
+})

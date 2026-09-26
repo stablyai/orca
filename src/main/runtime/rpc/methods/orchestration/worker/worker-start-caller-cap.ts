@@ -1,9 +1,9 @@
 /**
  * worker-start for a caller whose shell tool kills a command at a fixed limit: a chat's agent runs
  * every command under one. Killed, the caller gets nothing, not even the Dispatch id, and may start
- * a duplicate. So the start returns inside that limit with the receipt a terminal caller already
- * gets for a worker not yet proven ready, `outcome_unknown`, and keeps running in the host: it
- * settles the worker ready, unknown or failed exactly as it would have, for worker-show to report.
+ * a duplicate. So the start returns inside that limit with the worker's durable state, `starting`,
+ * and keeps running in the host: it settles the worker ready, unknown or failed exactly as it
+ * would have, for worker-show to report.
  */
 
 const CAPPED = Symbol('capped')
@@ -33,8 +33,3 @@ export async function settleWithinCallerCap(
   })
   return inProgressReceipt()
 }
-
-export const CAPPED_WORKER_START_REASON =
-  'The worker is still starting. worker-start returned before its readiness so the command ends ' +
-  "inside this caller's shell-tool time limit; Orca keeps starting it. If it becomes ready and " +
-  'reports, this Dispatch settles normally.'

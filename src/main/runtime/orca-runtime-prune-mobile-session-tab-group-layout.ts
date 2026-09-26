@@ -226,14 +226,14 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
   getAgentStatusForHandle(handle: string): string | null {
     // A structured worker has no pane and no title, so every PTY probe below answers null and
     // `@idle` would enumerate it and then silently drop it. Its status is the journal's.
-    const structured = resolveStructuredWorkerAuthority(handle, this._orchestrationDb)
-    if (structured) {
-      return structuredWorkerAgentStatus(structuredWorkerSessionId(structured.identity))
-    }
-    if (handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
-      return chatAssigneeAgentStatus(handle)
-    }
     try {
+      const structured = resolveStructuredWorkerAuthority(handle, this._orchestrationDb)
+      if (structured) {
+        return structuredWorkerAgentStatus(structuredWorkerSessionId(structured.identity))
+      }
+      if (handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)) {
+        return chatAssigneeAgentStatus(handle)
+      }
       const ptyId = this.getTerminalAgentStatusPtyId(handle)
       return this.getTerminalAgentStatusSnapshot(handle, ptyId).titleStatus
     } catch {

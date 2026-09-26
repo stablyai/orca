@@ -91,11 +91,7 @@ export function isRecordedStructuredWorkerSession(
 export function structuredWorkerSessionId(
   identity: Pick<StructuredWorkerIdentity, 'sessionId'>
 ): string {
-  try {
-    return executingSessionId(identity.sessionId)
-  } catch {
-    return identity.sessionId
-  }
+  return executingSessionId(identity.sessionId)
 }
 
 /** Identity plus the executing session's record, which still proves this runtime owns it. */

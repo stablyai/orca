@@ -36,8 +36,9 @@ import { AGENT_SESSION_NOT_ATTACHED } from '../native-chat/agent-session-wire/st
 import type { OrchestrationDb } from './orchestration/db'
 import { resolveOrchestrationParty } from './orchestration/orchestration-party'
 import {
-  lineageLiveSession,
-  readAgentSessionRecordStore
+  otherHostSessionRefusal,
+  readAgentSessionRecordStore,
+  resolveExecutingSession
 } from './orchestration/structured-session-lineage'
 import { boundStructuredJournalTail } from './orchestration/structured-worker-journal-archive'
 import { readStructuredJournalPage } from './orchestration/structured-worker-journal-page'
@@ -47,7 +48,6 @@ import {
   structuredWorkerSessionId,
   structuredWorkerTerminalState
 } from './structured-worker-authority'
-import { structuredWorkerHostScope } from './structured-worker-identity'
 import { readTerminalTail } from './terminal-tail-read'
 
 /**
@@ -128,9 +128,10 @@ function structuredSessionReadTarget(handle: string, db: OrchestrationDb | null)
     return worker ? structuredWorkerSessionId(worker) : null
   }
   const store = readAgentSessionRecordStore()
-  const live = party?.orcaSessionId && store ? lineageLiveSession(store, party.orcaSessionId) : null
-  if (live && !structuredWorkerHostScope(live.location)) {
-    throw new Error(`${handle} runs on another host; read it on the host that runs it.`)
+  const executing =
+    party?.orcaSessionId && store ? resolveExecutingSession(store, party.orcaSessionId) : null
+  if (executing?.kind === 'other-host') {
+    throw otherHostSessionRefusal(party?.orcaSessionId ?? handle)
   }
-  return live?.sessionId ?? null
+  return executing?.kind === 'here' ? executing.sessionId : null
 }

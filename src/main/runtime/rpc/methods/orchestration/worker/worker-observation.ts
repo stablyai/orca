@@ -244,6 +244,7 @@ export function projectFleetWorkerPage(
   const now = Date.now()
   return projectWorkerFleet({
     db,
+    agentStatus: (handle) => runtime.getAgentStatusForHandle(handle),
     rows,
     attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], now),
     statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),

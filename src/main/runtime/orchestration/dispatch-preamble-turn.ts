@@ -3,24 +3,26 @@
  *
  * A PTY assignee has its preamble typed into its pane, where a busy agent queues it. A chat takes
  * input only as a turn, and a turn sent mid-turn folds into the running one, so the preamble is
- * stored as the one `dispatch` message in the Dispatch's mailbox and the structured mail lane
- * delivers it: it waits out a running turn or a question only a human can answer, wakes an
+ * stored in the Dispatch's mailbox under the id only the host mints (`isOwedDispatchPreamble`), no
+ * mail reader ever returns it, and the structured mail lane delivers it: it waits out a running turn or a question only a human can answer, wakes an
  * evicted chat, and is found again at the chat's idle edge after a restart. It dies with the
  * Dispatch, because that lane reaches a chat's Dispatch mailbox only while the Dispatch is active.
  */
 
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationDb } from './db'
+import { dispatchPreambleMessageId } from './dispatch-preamble-identity'
 
 const PREAMBLE_TURN_POLL_MS = 250
 
 /** Stores the owed preamble and hands it to the lane; returns the message that carries it. */
 export function queueDispatchPreambleTurn(
-  runtime: Pick<OrcaRuntimeService, 'notifyMessageArrived'>,
+  runtime: Pick<OrcaRuntimeService, 'deliverPendingMessagesForHandle'>,
   db: OrchestrationDb,
   args: { dispatchId: string; runId: string; from: string; preamble: string }
 ): string {
   const message = db.insertMessage({
+    id: dispatchPreambleMessageId(args.dispatchId),
     from: args.from,
     to: `dispatch:${args.dispatchId}`,
     subject: `Dispatch ${args.dispatchId}`,
@@ -28,7 +30,8 @@ export function queueDispatchPreambleTurn(
     type: 'dispatch',
     runId: args.runId
   })
-  runtime.notifyMessageArrived(message.to_handle, message.type)
+  // Not mail, so no mail waiter is woken: only the lane takes it.
+  runtime.deliverPendingMessagesForHandle(message.to_handle)
   return message.id
 }
 

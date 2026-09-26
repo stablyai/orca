@@ -13,15 +13,14 @@ import {
 } from '../../../shared/orca-session-address'
 import type { OrchestrationDb } from './db'
 import { currentRunCoordinatorOrcaSessionId } from './db/runs/run-coordinator-orca-session'
-import { structuredWorkerHostScope } from '../structured-worker-identity'
 import type { StructuredPointerTarget } from './structured-mailbox-pointer-delivery'
 import {
   addressableSessionParty,
   structuredSessionMailReach
 } from './structured-session-mail-address'
 import {
-  lineageLiveSession,
   readAgentSessionRecordStore,
+  resolveExecutingSession,
   type AgentSessionRecordReader
 } from './structured-session-lineage'
 import type { RunRow } from './types'
@@ -65,14 +64,15 @@ export function structuredSessionMailTarget(
 
 /**
  * The session a structured worker's mail reaches: the one minted for it, or that session's live
- * `/clear` successor, which carries on as the worker the way a terminal keeps its handle.
+ * `/clear` successor, which carries on as the worker the way a terminal keeps its handle. Null
+ * whenever it cannot be delivered here.
  */
 export function structuredWorkerMailSessionId(
   mintedSessionId: string,
   store: AgentSessionRecordReader | null = readAgentSessionRecordStore()
 ): string | null {
-  const live = store ? lineageLiveSession(store, mintedSessionId) : null
-  return live && structuredWorkerHostScope(live.location) ? live.sessionId : null
+  const executing = store ? resolveExecutingSession(store, mintedSessionId) : null
+  return executing?.kind === 'here' ? executing.sessionId : null
 }
 
 /**

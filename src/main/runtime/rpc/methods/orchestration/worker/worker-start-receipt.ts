@@ -32,8 +32,10 @@ export function failWorkerStartWithReceipt(args: {
   const releasable =
     residual?.ownership_state === 'owned' && !isStructuredWorkerHandle(residual.terminal_handle)
   return {
-    ...workerStartReceipt(args, worker, reason),
+    ...workerStartReceipt(args, worker),
     state: worker.state === 'start_unknown' ? 'outcome_unknown' : worker.state,
+    failedStage: args.failedStage,
+    lastError: reason,
     ...(releasable
       ? {
           recovery: `This start created a terminal that never ran the Task. Close it with: orca orchestration worker-release --dispatch ${args.dispatchId}`
@@ -43,39 +45,42 @@ export function failWorkerStartWithReceipt(args: {
   }
 }
 
-type WorkerStartReceiptArgs = Omit<Parameters<typeof failWorkerStartWithReceipt>[0], 'error'>
+type WorkerStartReceiptArgs = Omit<
+  Parameters<typeof failWorkerStartWithReceipt>[0],
+  'error' | 'failedStage'
+>
 
 /**
- * The `outcome_unknown` receipt for a start still in progress, written nothing: the start runs on
- * and settles the worker as it would have. What a caller that cannot wait any longer is handed.
+ * A start still running when its caller can wait no longer: the worker's durable state,
+ * `starting`, as worker-show reports it, and nothing written. The start runs on and settles the
+ * worker ready, unknown or failed exactly as it would have.
  */
-export function inProgressWorkerStartReceipt(
-  args: WorkerStartReceiptArgs,
-  reason: string
-): unknown {
+export function inProgressWorkerStartReceipt(args: WorkerStartReceiptArgs): unknown {
   const worker = args.db.getWorkerDispatch(args.dispatchId)
   if (!worker) {
     throw new Error(`Worker Dispatch ${args.dispatchId} was not found.`)
   }
   return {
-    ...workerStartReceipt(args, worker, reason),
-    state: 'outcome_unknown',
-    nextCommands: unknownWorkerStartNextCommands(args.dispatchId)
+    ...workerStartReceipt(args, worker),
+    state: 'starting',
+    nextCommands: startingWorkerNextCommands(args.dispatchId)
   }
+}
+
+/** What to run on a worker whose start has not settled yet. */
+export function startingWorkerNextCommands(dispatchId: string): string[] {
+  return [`orca orchestration worker-show --dispatch ${dispatchId} --json`]
 }
 
 function workerStartReceipt(
   args: WorkerStartReceiptArgs,
-  worker: { stage: string; effects: string; residual_resources: string },
-  reason: string
+  worker: { stage: string; effects: string; residual_resources: string }
 ) {
   return {
     runId: args.runId,
     taskId: args.taskId,
     dispatchId: args.dispatchId,
     stage: worker.stage,
-    failedStage: args.failedStage,
-    lastError: reason,
     setup: args.setup,
     launch: args.launch,
     mode: args.mode,

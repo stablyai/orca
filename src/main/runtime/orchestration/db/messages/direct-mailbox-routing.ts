@@ -1,3 +1,4 @@
+import { NOT_OWED_DISPATCH_PREAMBLE_SQL } from '../../dispatch-preamble-identity'
 import type { MessageType } from '../../types'
 import type { OrchestrationDb } from '../orchestration-db'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT, type MailboxRoutingPage } from './mailbox-routing-page'
@@ -123,12 +124,12 @@ export function routeUnreadDispatchMailboxToRunMailbox(
       params.push(throughSequence)
     }
     params.push(ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1)
-    // A `dispatch` row is the assignee's owed preamble, never mail: it dies with its Dispatch.
+    // An owed preamble is the assignee's turn, never mail: it dies with its Dispatch.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SELECT names exactly these two columns.
     const rows = this.db
       .prepare(
         `SELECT id, type FROM messages INDEXED BY idx_messages_unread_current_inbox
-         WHERE run_id = ? AND to_handle = ? AND read = 0 AND type <> 'dispatch'
+         WHERE run_id = ? AND to_handle = ? AND read = 0 AND ${NOT_OWED_DISPATCH_PREAMBLE_SQL}
            AND delivery_contract = 'current_delivery'${throughClause}
          ORDER BY sequence LIMIT ?`
       )

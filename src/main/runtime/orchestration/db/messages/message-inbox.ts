@@ -1,3 +1,4 @@
+import { NOT_OWED_DISPATCH_PREAMBLE_SQL } from '../../dispatch-preamble-identity'
 import type { MessageType, MessageRow } from '../../types'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
@@ -41,7 +42,7 @@ export function getUnreadMessages(
         .prepare(
           `SELECT * FROM messages
            WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
-             AND type IN (${placeholders}) ORDER BY sequence`
+             AND ${NOT_OWED_DISPATCH_PREAMBLE_SQL} AND type IN (${placeholders}) ORDER BY sequence`
         )
         .all(toHandle, ...types) as MessageRow[]
     )
@@ -51,6 +52,7 @@ export function getUnreadMessages(
       .prepare(
         `SELECT * FROM messages
          WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
+           AND ${NOT_OWED_DISPATCH_PREAMBLE_SQL}
          ORDER BY sequence`
       )
       .all(toHandle) as MessageRow[]
@@ -140,7 +142,9 @@ export function getUndeliveredUnreadMailboxHandles(this: OrchestrationDb): strin
 export function getAllMessages(this: OrchestrationDb, toHandle: string, limit = 20): MessageRow[] {
   return exposeMessageListTimestamps(
     this.db
-      .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
+      .prepare(
+        `SELECT * FROM messages WHERE to_handle = ? AND ${NOT_OWED_DISPATCH_PREAMBLE_SQL} ORDER BY sequence DESC LIMIT ?`
+      )
       .all(toHandle, limit) as MessageRow[]
   )
 }
@@ -223,7 +227,9 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): vo
 export function getInbox(this: OrchestrationDb, limit = 20): MessageRow[] {
   return exposeMessageListTimestamps(
     this.db
-      .prepare('SELECT * FROM messages ORDER BY sequence DESC LIMIT ?')
+      .prepare(
+        `SELECT * FROM messages WHERE ${NOT_OWED_DISPATCH_PREAMBLE_SQL} ORDER BY sequence DESC LIMIT ?`
+      )
       .all(limit) as MessageRow[]
   )
 }
@@ -240,14 +246,16 @@ export function getAllMessagesForHandle(
     return exposeMessageListTimestamps(
       this.db
         .prepare(
-          `SELECT * FROM messages WHERE to_handle = ? AND type IN (${placeholders}) ORDER BY sequence DESC LIMIT ?`
+          `SELECT * FROM messages WHERE to_handle = ? AND ${NOT_OWED_DISPATCH_PREAMBLE_SQL} AND type IN (${placeholders}) ORDER BY sequence DESC LIMIT ?`
         )
         .all(toHandle, ...types, limit) as MessageRow[]
     )
   }
   return exposeMessageListTimestamps(
     this.db
-      .prepare('SELECT * FROM messages WHERE to_handle = ? ORDER BY sequence DESC LIMIT ?')
+      .prepare(
+        `SELECT * FROM messages WHERE to_handle = ? AND ${NOT_OWED_DISPATCH_PREAMBLE_SQL} ORDER BY sequence DESC LIMIT ?`
+      )
       .all(toHandle, limit) as MessageRow[]
   )
 }

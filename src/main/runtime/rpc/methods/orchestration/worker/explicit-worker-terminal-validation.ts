@@ -42,16 +42,10 @@ export async function assertExplicitWorkerTerminalUsable(args: {
     explicitTerminal.handle === coordinatorHandle ||
     (targetPane !== null && targetPane === callerPane)
   ) {
-    throw new OrchestrationError(
-      'terminal_is_coordinator',
-      `Terminal ${terminal} is this coordinator's own terminal. Pass --terminal for a different agent pane, or omit it so worker-start creates one.`
-    )
+    throw coordinatorItselfRefusal(terminal)
   }
   if (explicitTerminal.worktreeId !== resolvedWorktreeId) {
-    throw new OrchestrationError(
-      'terminal_worktree_mismatch',
-      `Terminal ${terminal} does not belong to worktree ${resolvedWorktreeId}.`
-    )
+    throw otherWorktreeRefusal(terminal, resolvedWorktreeId)
   }
   if (!(await runtime.isTerminalRunningAgent(terminal))) {
     throw new OrchestrationError(
@@ -70,10 +64,7 @@ async function assertExplicitWorkerChatUsable(args: {
 }): Promise<void> {
   const { runtime, chat } = args
   if (chat.address === args.coordinator?.address) {
-    throw new OrchestrationError(
-      'terminal_is_coordinator',
-      `${chat.address} is this coordinator itself. Pass --terminal for a different agent, or omit it so worker-start creates one.`
-    )
+    throw coordinatorItselfRefusal(chat.address)
   }
   const db = runtime.getOrchestrationDb()
   await assertChatAssigneeReachable(runtime, chat, db)
@@ -81,9 +72,21 @@ async function assertExplicitWorkerChatUsable(args: {
     ? readAgentSessionRecordStore()?.getRecord(chat.orcaSessionId)
     : null
   if (record?.location.workspaceId !== args.resolvedWorktreeId) {
-    throw new OrchestrationError(
-      'terminal_worktree_mismatch',
-      `${chat.address} does not belong to worktree ${args.resolvedWorktreeId}.`
-    )
+    throw otherWorktreeRefusal(chat.address, args.resolvedWorktreeId)
   }
+}
+
+/** One wording for a terminal and a chat alike; only the address differs. */
+function coordinatorItselfRefusal(address: string): OrchestrationError {
+  return new OrchestrationError(
+    'terminal_is_coordinator',
+    `${address} is this coordinator's own address. Pass --terminal for a different agent, or omit it so worker-start creates one.`
+  )
+}
+
+function otherWorktreeRefusal(address: string, worktreeId: string | undefined): OrchestrationError {
+  return new OrchestrationError(
+    'terminal_worktree_mismatch',
+    `${address} does not belong to worktree ${worktreeId}.`
+  )
 }

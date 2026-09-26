@@ -22,7 +22,7 @@ import {
   persistWorkerSetupWaitOutcome
 } from './worker-setup-gate'
 import { failWorkerStartWithReceipt, inProgressWorkerStartReceipt } from './worker-start-receipt'
-import { CAPPED_WORKER_START_REASON, settleWithinCallerCap } from './worker-start-caller-cap'
+import { settleWithinCallerCap } from './worker-start-caller-cap'
 import { parseTaskDeps } from './task-deps-argument'
 import { assertExplicitWorkerTerminalUsable } from './explicit-worker-terminal-validation'
 import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-custody'
@@ -281,18 +281,14 @@ export async function startLocalWorker(args: {
     }
   }
   return settleWithinCallerCap(finish(), args.callerCapDeadline, () =>
-    inProgressWorkerStartReceipt(
-      {
-        db,
-        runId: run.id,
-        taskId: task.id,
-        dispatchId: started.dispatch.id,
-        failedStage,
-        setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
-        launch: launch.receipt,
-        mode
-      },
-      CAPPED_WORKER_START_REASON
-    )
+    inProgressWorkerStartReceipt({
+      db,
+      runId: run.id,
+      taskId: task.id,
+      dispatchId: started.dispatch.id,
+      setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
+      launch: launch.receipt,
+      mode
+    })
   )
 }
