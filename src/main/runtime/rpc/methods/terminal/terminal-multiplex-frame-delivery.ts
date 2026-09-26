@@ -29,6 +29,15 @@ import type { RpcBinarySendResult } from '../../transports/rpc-binary-sender'
 
 export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection): void {
   const { sendBinary, emit } = state
+  // A discarded frame needs a socket close: every client recovers from one, but a multiplex-only
+  // close leaves the socket open with nothing behind it, so input vanishes silently (#20802).
+  const closeAfterDiscardedFrame = (): void => {
+    const wasOpen = !state.closed
+    state.closeMultiplex()
+    if (wasOpen) {
+      state.closeConnection?.(1013, 'Terminal stream frame dropped under backpressure')
+    }
+  }
   state.sendFrame = (
     streamId: number,
     opcode: TerminalStreamOpcode,
@@ -50,12 +59,12 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
         }
       )
     } catch {
-      state.closeMultiplex()
+      closeAfterDiscardedFrame()
       return false
     }
     if (sent === false) {
       // False means transport discarded the frame; only reconnect supplies an authoritative retry snapshot.
-      state.closeMultiplex()
+      closeAfterDiscardedFrame()
       return false
     }
     return true

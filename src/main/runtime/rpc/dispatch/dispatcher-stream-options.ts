@@ -27,6 +27,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'peerDesktops'
   | 'delegatedMobileDevices'
   | 'sendBinary'
+  | 'closeConnection'
   | 'registerBinaryStreamHandler'
   | 'registerBinaryMessageHandler'
 > & {
@@ -85,6 +86,7 @@ export function rpcContextFromTransport(
     peerDesktops: options?.peerDesktops,
     delegatedMobileDevices: options?.delegatedMobileDevices,
     sendBinary: options?.sendBinary,
+    closeConnection: options?.closeConnection,
     registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
     registerBinaryMessageHandler: options?.registerBinaryMessageHandler,
     orchestrationCaller

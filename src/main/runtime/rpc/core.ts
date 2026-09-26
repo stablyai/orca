@@ -208,6 +208,8 @@ export type RpcContext = {
   }
   // Binary terminal transport is absent on Unix and non-E2EE WebSocket paths.
   sendBinary?: RpcBinarySender
+  // A stream that lost a frame must reset the socket; a local close leaves input silently dropped (#20802).
+  closeConnection?: (code: number, reason: string) => void
   // Register only handler-owned stream ids; binary frames arrive outside JSON-RPC.
   registerBinaryStreamHandler?: (
     streamId: number,

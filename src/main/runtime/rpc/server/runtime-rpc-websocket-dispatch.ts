@@ -295,6 +295,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
             : undefined,
         signal: abortRegistration?.signal,
         sendBinary,
+        closeConnection: ws ? (code, reason) => ws.close(code, reason) : undefined,
         registerBinaryStreamHandler: (streamId, handler) =>
           this.registerBinaryStreamHandler(connectionId, streamId, handler),
         registerBinaryMessageHandler: (handler) =>
