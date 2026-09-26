@@ -267,7 +267,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     )
   }
 
-  abandonCommand = (sessionId: string): void => this.compactions.abandon(sessionId)
+  abandonCommand = (sessionId: string, turnId: string): boolean =>
+    this.compactions.abandon(sessionId, turnId)
   releaseCommand = (sessionId: string): void => this.compactions.ended(sessionId)
 
   changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) =>

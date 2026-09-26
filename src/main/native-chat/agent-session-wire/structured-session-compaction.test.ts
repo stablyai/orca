@@ -122,7 +122,7 @@ describe('structured compaction lifecycle', () => {
     const tracker = new StructuredSessionCompaction()
     const result = tracker.run('s', 't', async () => ({}), COMMAND)
     await Promise.resolve()
-    tracker.abandon('s')
+    tracker.abandon('s', COMMAND.turnId)
     await expect(result).resolves.toEqual({ outcome: 'cancellation' })
     // The provider turn that opens afterwards is still the command's, so the interrupt finds it.
     expect(tracker.claimTurn('s', 't', 'c')).toBe(COMMAND.turnItemId)
@@ -134,10 +134,22 @@ describe('structured compaction lifecycle', () => {
     expect(tracker.hasPending('s')).toBe(false)
   })
 
+  it('ends nothing at a Stop that names an earlier command', async () => {
+    const tracker = new StructuredSessionCompaction()
+    const result = tracker.run('s', 'p', async () => ({}), COMMAND)
+    const settled = vi.fn()
+    void result.then(settled)
+    expect(tracker.abandon('s', 'compact:cmd-0')).toBe(false)
+    await Promise.resolve()
+    expect(settled).not.toHaveBeenCalled()
+    expect(tracker.abandon('s', COMMAND.turnId)).toBe(true)
+    await expect(result).resolves.toEqual({ outcome: 'cancellation' })
+  })
+
   it('keeps the cancellation when the provider reports an error after Stop', async () => {
     const tracker = new StructuredSessionCompaction()
     const result = tracker.run('s', 'p', async () => {}, COMMAND)
-    tracker.abandon('s')
+    tracker.abandon('s', COMMAND.turnId)
     tracker.claude('s', { type: 'result', subtype: 'error_during_execution', session_id: 'p' })
     await expect(result).resolves.toEqual({ outcome: 'cancellation' })
     expect(tracker.hasPending('s')).toBe(false)

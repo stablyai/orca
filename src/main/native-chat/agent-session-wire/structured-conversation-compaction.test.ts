@@ -43,7 +43,10 @@ beforeEach(() => {
         finish = resolve
       })
   )
-  abandonCommand = vi.fn(() => finish({ outcome: 'cancellation' }))
+  abandonCommand = vi.fn(() => {
+    finish({ outcome: 'cancellation' })
+    return true
+  })
   Object.assign(state.host.deps.adapter, { compact, abandonCommand })
 })
 
@@ -251,7 +254,7 @@ it('ends the command at Stop before the provider opened a turn for it (B4)', asy
     })
   ).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
 
-  expect(abandonCommand).toHaveBeenCalledWith(SESSION)
+  expect(abandonCommand).toHaveBeenCalledWith(SESSION, turnId)
   await vi.waitFor(async () =>
     expect(readAgentJournalTurn((await commandTurn(cmid))?.body)).toMatchObject({
       state: 'interrupted',

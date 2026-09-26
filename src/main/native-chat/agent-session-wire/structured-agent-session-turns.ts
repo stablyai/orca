@@ -249,10 +249,10 @@ export async function performCancel(
   const turnScope = ctx.journal.liveTurnScope()
   // A conversation command ends at Stop whether or not the provider opened a turn for it yet;
   // the interrupt below reaches a provider turn it did open.
-  const abandoned = !input.scope && isStructuredAgentSessionCommandTurnId(input.turnId)
-  if (abandoned) {
-    ctx.adapter.abandonCommand?.(ctx.sessionId)
-  }
+  const abandoned =
+    !input.scope &&
+    isStructuredAgentSessionCommandTurnId(input.turnId) &&
+    ctx.adapter.abandonCommand?.(ctx.sessionId, input.turnId) === true
   try {
     const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
     cancelled = input.scope

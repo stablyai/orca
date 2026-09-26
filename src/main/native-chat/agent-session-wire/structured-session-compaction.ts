@@ -91,14 +91,17 @@ export class StructuredSessionCompaction {
     return pending.turnId === providerTurnId ? pending.commandTurnItemId : null
   }
 
-  /** Stop: the command ends as cancelled now. The entry stays so the interrupt that follows still
-   *  finds the provider turn, and the provider's end releases it. */
-  abandon(sessionId: string): void {
+  /** Stop on the command `commandTurnId` names: it ends as cancelled now, and true says it did. The
+   *  entry stays so the interrupt that follows still finds the provider turn, and the provider's end
+   *  releases it. A Stop naming an earlier command ends nothing. */
+  abandon(sessionId: string, commandTurnId: string): boolean {
     const pending = this.pending.get(sessionId)
-    if (pending && !pending.abandoned) {
-      pending.abandoned = true
-      pending.resolve({ outcome: 'cancellation' })
+    if (!pending || pending.abandoned || pending.commandTurnId !== commandTurnId) {
+      return false
     }
+    pending.abandoned = true
+    pending.resolve({ outcome: 'cancellation' })
+    return true
   }
 
   /** The child ended: drop the entry whatever state it is in, so nothing later is claimed into it. */

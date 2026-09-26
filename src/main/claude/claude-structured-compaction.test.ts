@@ -63,7 +63,7 @@ describe('Claude compaction transcript content', () => {
     await vi.advanceTimersByTimeAsync(10 * 60_000)
 
     expect(settled).not.toHaveBeenCalled()
-    tracker.abandon('orca-session')
+    tracker.abandon('orca-session', COMMAND.turnId)
     await vi.advanceTimersByTimeAsync(1)
     expect(settled).toHaveBeenCalledWith({ outcome: 'cancellation' })
   })

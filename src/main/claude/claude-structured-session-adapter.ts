@@ -194,7 +194,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
     compactClaudeSession(this.session(input.sessionId), this.compactions, input)
 
-  abandonCommand = (sessionId: string): void => this.compactions.abandon(sessionId)
+  abandonCommand = (sessionId: string, turnId: string): boolean =>
+    this.compactions.abandon(sessionId, turnId)
   releaseCommand = (sessionId: string): void => this.compactions.ended(sessionId)
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (request) =>
