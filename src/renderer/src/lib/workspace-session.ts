@@ -133,9 +133,8 @@ export function buildEditorSessionData(
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
-    // Why: never persist a dirty draft for a read-only tab — restoring one would reintroduce writable/hot-exit state for an agent transcript.
     const dirtyDraftContent = f.isDirty && f.readOnly !== true ? editorDrafts[f.id] : undefined
-    arr.push({
+    const persistedFile: PersistedOpenFile = {
       filePath: f.filePath,
       relativePath: f.relativePath,
       worktreeId: f.worktreeId,
@@ -143,15 +142,23 @@ export function buildEditorSessionData(
       isPreview: f.isPreview || undefined,
       runtimeEnvironmentId: f.runtimeEnvironmentId,
       externalSshTargetId: f.externalSshTargetId,
-      // Why: persist readOnly only when true; absence is the writable default on restore.
       ...(f.readOnly === true ? { readOnly: true } : {}),
       ...(f.readOnly === true && f.liveTail === true ? { liveTail: true } : {}),
       ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {}),
-      // Why: baseline travels with the draft so restore can detect a changed-on-disk conflict before autosave clobbers an offline agent write.
       ...(dirtyDraftContent !== undefined && f.lastKnownDiskSignature
         ? { lastKnownDiskSignature: f.lastKnownDiskSignature }
         : {})
-    })
+    }
+    const ownerKey = JSON.stringify([f.filePath, f.runtimeEnvironmentId?.trim() || null])
+    const existingIndex = arr.findIndex(
+      (entry) =>
+        JSON.stringify([entry.filePath, entry.runtimeEnvironmentId?.trim() || null]) === ownerKey
+    )
+    if (existingIndex === -1) {
+      arr.push(persistedFile)
+    } else {
+      arr[existingIndex] = persistedFile
+    }
     const ids =
       editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
     ids.add(f.id)
