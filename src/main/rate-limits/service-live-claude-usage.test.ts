@@ -153,6 +153,49 @@ describe('RateLimitService', () => {
     }
   })
 
+  it('keeps earned resets through live posts and keeps polling so their count stays current', async () => {
+    vi.useFakeTimers()
+    try {
+      const withResets = (availableCount: number): ProviderRateLimits => ({
+        ...okProvider('claude', 40),
+        rateLimitResetCredits: { availableCount, totalEarnedCount: 1, nextExpiresAt: null }
+      })
+      vi.mocked(fetchClaudeRateLimits)
+        .mockImplementationOnce(async () => withResets(1))
+        .mockImplementation(async () => withResets(0))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      service.attach(asRateLimitWindow(new FakeRateLimitWindow()))
+      service.start({ fetchImmediately: false })
+      await vi.advanceTimersByTimeAsync(1000)
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 50 },
+        sevenDay: { used_percentage: 30 }
+      })
+      expect(service.getState().claude?.usageMetadata?.source).toBe('live-session')
+      expect(service.getState().claude?.rateLimitResetCredits?.availableCount).toBe(1)
+
+      for (let minute = 0; minute < 15; minute += 1) {
+        service.ingestLiveClaudeRateLimits({
+          configDir: null,
+          fiveHour: { used_percentage: 51 + minute },
+          sevenDay: { used_percentage: 30 }
+        })
+        await vi.advanceTimersByTimeAsync(60 * 1000)
+      }
+
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+      expect(service.getState().claude?.rateLimitResetCredits?.availableCount).toBe(0)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('honours a Retry-After that lands while the live feed is fresh', async () => {
     vi.useFakeTimers()
     try {

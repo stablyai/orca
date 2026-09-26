@@ -25,6 +25,7 @@ vi.mock('@/i18n/i18n', () => ({
 import {
   barColor,
   clampUsedPercent,
+  formatResetCreditCount,
   formatResetCreditExpiry,
   formatResetCountdown,
   getProviderUsageErrorMessage,
@@ -69,6 +70,15 @@ describe('formatResetCountdown', () => {
 
   it('keeps the "in" preposition for future reset times', () => {
     expect(formatResetCountdown(12 * 60 * 60_000 + 41 * 60_000)).toBe('Resets in 12h 41m')
+  })
+})
+
+describe('formatResetCreditCount', () => {
+  it('uses each provider’s own name for resets', () => {
+    expect(formatResetCreditCount('claude', 1)).toBe('1 usage-limit reset available')
+    expect(formatResetCreditCount('claude', 2)).toBe('2 usage-limit resets available')
+    expect(formatResetCreditCount('codex', 1)).toBe('1 rate-limit reset available')
+    expect(formatResetCreditCount('codex', 3)).toBe('3 rate-limit resets available')
   })
 })
 
@@ -449,6 +459,33 @@ describe('getWindowSections', () => {
 })
 
 describe('ProviderPanel reset rendering', () => {
+  it('renders Claude earned resets with their expiry, and hides the row when none were reported', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-22T18:00:00Z'))
+    const withResets = (availableCount: number): ProviderRateLimits =>
+      provider({
+        status: 'ok',
+        rateLimitResetCredits: {
+          availableCount,
+          nextExpiresAt: availableCount > 0 ? Date.parse('2026-10-22T16:00:00Z') : null
+        }
+      })
+
+    const one = renderToStaticMarkup(createElement(ProviderPanel, { p: withResets(1) }))
+    expect(one).toContain('1 usage-limit reset available')
+    expect(one).toContain('Expires in 29d 22h')
+
+    const none = renderToStaticMarkup(createElement(ProviderPanel, { p: withResets(0) }))
+    expect(none).toContain('0 usage-limit resets available')
+    expect(none).not.toContain('Expires')
+
+    const unreported = renderToStaticMarkup(
+      createElement(ProviderPanel, { p: provider({ status: 'ok' }) })
+    )
+    expect(unreported).not.toContain('reset available')
+    expect(unreported).not.toContain('resets available')
+  })
+
   it('renders the Fable reset countdown when Claude reports a reset timestamp', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 3, 20, 0))

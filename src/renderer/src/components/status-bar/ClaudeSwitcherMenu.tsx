@@ -34,6 +34,8 @@ import {
 import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import { InlineUsageBars, InlineUsageSkeleton } from './InlineProviderUsage'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
+import { ResetCreditsMenuLabel } from './ResetCreditsMenuLabel'
+import { formatResetCreditCount, formatResetCreditExpiry } from './tooltip'
 import { getClaudeAccountSyncKey } from './provider-account-sync-key'
 
 // Exported so its account-switch/reset logic is preserved for row drill-in even
@@ -198,6 +200,7 @@ export function ClaudeSwitcherMenu({
   const selectedGroup =
     switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
+  const resetCreditCount = claude.rateLimitResetCredits?.availableCount ?? null
 
   return (
     <ProviderDetailsMenu
@@ -206,6 +209,8 @@ export function ClaudeSwitcherMenu({
       iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
+      // Why: resets get their own section below the bars, matching the Codex menu.
+      hidePanelResetCredits
       ariaLabel={translate(
         'auto.components.status.bar.StatusBar.3dd7ddfae1',
         'Open Claude details and account switcher'
@@ -224,6 +229,18 @@ export function ClaudeSwitcherMenu({
       open={open}
       onOpenChange={handleOpenChange}
     >
+      {resetCreditCount !== null ? (
+        <>
+          <ResetCreditsMenuLabel
+            label={formatResetCreditCount('claude', resetCreditCount)}
+            expiry={formatResetCreditExpiry(
+              claude.rateLimitResetCredits?.nextExpiresAt,
+              resetCreditCount
+            )}
+          />
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
       <DropdownMenuLabel>
         {translate('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
       </DropdownMenuLabel>

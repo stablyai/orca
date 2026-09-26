@@ -71,6 +71,29 @@ export function formatResetCreditExpiry(
       })
 }
 
+// Why: each provider names its resets differently; Claude calls them usage-limit resets.
+export function formatResetCreditCount(
+  provider: ProviderRateLimits['provider'],
+  count: number
+): string {
+  if (provider === 'claude') {
+    return count === 1
+      ? translate('auto.components.status.bar.tooltip.3f8a61c2d4', '1 usage-limit reset available')
+      : translate(
+          'auto.components.status.bar.tooltip.9b27e4d05a',
+          '{{value0}} usage-limit resets available',
+          { value0: count }
+        )
+  }
+  return count === 1
+    ? translate('auto.components.status.bar.tooltip.45198c7d95', '1 rate-limit reset available')
+    : translate(
+        'auto.components.status.bar.tooltip.bce421cba3',
+        '{{value0}} rate-limit resets available',
+        { value0: count }
+      )
+}
+
 // ---------------------------------------------------------------------------
 // Shared icon component
 // ---------------------------------------------------------------------------
@@ -320,10 +343,9 @@ export function ProviderPanel({
   }
 
   const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
-  const resetCreditCount =
-    showResetCredits && p.provider === 'codex'
-      ? (p.rateLimitResetCredits?.availableCount ?? null)
-      : null
+  const resetCreditCount = showResetCredits
+    ? (p.rateLimitResetCredits?.availableCount ?? null)
+    : null
   const resetCreditExpiry =
     resetCreditCount != null
       ? formatResetCreditExpiry(p.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
@@ -338,18 +360,7 @@ export function ProviderPanel({
         </div>
         <div className={faintClass}>{updatedAgo}</div>
         {resetCreditCount !== null && resetCreditCount !== undefined ? (
-          <div className={mutedClass}>
-            {resetCreditCount === 1
-              ? translate(
-                  'auto.components.status.bar.tooltip.45198c7d95',
-                  '1 rate-limit reset available'
-                )
-              : translate(
-                  'auto.components.status.bar.tooltip.bce421cba3',
-                  '{{value0}} rate-limit resets available',
-                  { value0: resetCreditCount }
-                )}
-          </div>
+          <div className={mutedClass}>{formatResetCreditCount(p.provider, resetCreditCount)}</div>
         ) : null}
         {resetCreditExpiry ? <div className={faintClass}>{resetCreditExpiry}</div> : null}
       </div>

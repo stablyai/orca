@@ -39,12 +39,14 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     )
   }
 
-  // Why: the statusline never carries the Fable window, so for an account that has one the live feed
-  // cannot stand in for the OAuth poll; only accounts the feed fully covers skip it.
+  // Why: the statusline never carries the Fable window or earned resets. An account with Fable, or one
+  // eligible for resets (even at 0, so a newly earned reset shows up), keeps the OAuth poll.
   protected shouldSkipAutomatedClaudeFetch(limits: ProviderRateLimits | null): boolean {
     return (
       this.isRetryAfterActive(limits) ||
-      (this.isLiveClaudeUsageFresh(limits) && !limits?.fableWeekly)
+      (this.isLiveClaudeUsageFresh(limits) &&
+        !limits?.fableWeekly &&
+        !limits?.rateLimitResetCredits)
     )
   }
 
@@ -130,6 +132,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible
         // and let its presence keep the OAuth poll ungated (see shouldSkipAutomatedClaudeFetch).
         fableWeekly: previous?.fableWeekly ?? null,
+        // Why: resets arrive only on the OAuth poll; a statusline post is not evidence they changed.
+        rateLimitResetCredits: previous?.rateLimitResetCredits ?? null,
         updatedAt: Date.now(),
         error: null,
         status: 'ok',

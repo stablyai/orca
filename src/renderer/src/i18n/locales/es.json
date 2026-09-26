@@ -3485,6 +3485,8 @@
             "8418ec448d": "No se pudo actualizar el uso de {{value0}}. Es posible que las sesiones de agentes sigan iniciadas.",
             "45198c7d95": "1 reset de rate limit disponible",
             "bce421cba3": "{{value0}} resets de rate limit disponibles",
+            "3f8a61c2d4": "1 reset de límite de uso disponible",
+            "9b27e4d05a": "{{value0}} resets de límite de uso disponibles",
             "7ec6e030a0": "El siguiente vence ahora",
             "d1e442a9e5": "Vence ahora",
             "6cf9eaed10": "El siguiente vence en {{value0}}",
