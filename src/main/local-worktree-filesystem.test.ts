@@ -30,12 +30,12 @@ function completeExecFile(stdout = ''): void {
   runProcessMock.mockResolvedValue({ code: 0, signal: null, stdout, stderr: '', timedOut: false })
 }
 
-function failExecFile(exitCode: number): void {
+function failExecFile(exitCode: number, stderr = 'missing'): void {
   runProcessMock.mockResolvedValue({
     code: exitCode,
     signal: null,
     stdout: '',
-    stderr: 'missing',
+    stderr,
     timedOut: false
   })
 }
@@ -171,7 +171,7 @@ describe('local worktree filesystem runtime access', () => {
 
   it('uses the selected WSL distro for stat, read, and removal on Windows', async () => {
     await withPlatform('win32', async () => {
-      completeExecFile('file')
+      completeExecFile('regular file')
       const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
       await expect(access.statPath('/home/me/repo/.git')).resolves.toEqual({ type: 'file' })
 
@@ -220,12 +220,21 @@ describe('local worktree filesystem runtime access', () => {
 
   it('reports missing WSL stat targets with an ENOENT-shaped error', async () => {
     await withPlatform('win32', async () => {
-      failExecFile(2)
+      failExecFile(1, "stat: cannot statx '/mnt/c/repo/missing/.git': No such file or directory\n")
       const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
 
       await expect(access.statPath('/mnt/c/repo/missing/.git')).rejects.toMatchObject({
         code: 'ENOENT'
       })
+    })
+  })
+
+  it('does not treat an unreadable WSL stat target as missing', async () => {
+    await withPlatform('win32', async () => {
+      failExecFile(1, "stat: cannot statx '/mnt/c/repo/locked': Permission denied\n")
+      const access = getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' })
+
+      await expect(access.statPath('/mnt/c/repo/locked')).rejects.toThrow('Permission denied')
     })
   })
 })
