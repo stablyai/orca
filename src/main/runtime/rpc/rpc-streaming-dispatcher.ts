@@ -65,6 +65,7 @@ export class RpcStreamingDispatcher {
 
     if (!isStreamingMethod(method)) {
       try {
+        // COMPAT(terminal request-addressed unsubscribe): fence for slot unsubscribes from phones without `requestId`.
         // Capture before middleware yields to a replacement subscribe on the same connection.
         const subscriptionRegistrationVersion =
           request.method === 'terminal.unsubscribe'

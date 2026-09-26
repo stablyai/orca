@@ -306,7 +306,8 @@ describe('terminal subscribe buffering', () => {
       expect(runtime.registerOwnedSubscriptionCleanup).toHaveBeenCalledWith(
         'terminal-1:desktop-1',
         expect.any(Function),
-        'conn-legacy-json'
+        'conn-legacy-json',
+        'req-1'
       )
       expect(registry.peekCleanup('terminal-1:desktop-1')).toBeUndefined()
       expect(runtime.waitForTerminal).not.toHaveBeenCalled()

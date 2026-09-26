@@ -96,6 +96,7 @@ export class RpcDispatcher {
           runtime: this.runtime,
           signal: options?.signal,
           connectionId: options?.connectionId,
+          // COMPAT(terminal request-addressed unsubscribe): fence for slot unsubscribes from phones without `requestId`.
           subscriptionRegistrationVersion:
             request.method === 'terminal.unsubscribe'
               ? this.runtime.getSubscriptionRegistrationVersion()

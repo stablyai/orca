@@ -123,3 +123,106 @@ describe('subscription registration versions', () => {
     expect(cleanup).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('request-addressed release', () => {
+  const requestAddresses = (registry: RuntimeSubscriptionRegistry): number =>
+    registry['subscriptionsByRequest'].size
+  // Never `cleanupAndWait` here: it would run the cleanup itself and hide a missed release.
+  const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it('releases the registration a request created, and forgets the address', async () => {
+    const registry = new RuntimeSubscriptionRegistry()
+    const cleanup = vi.fn()
+    registry.registerOwned('terminal:slot', cleanup, 'conn-a', 'req-1')
+    expect(requestAddresses(registry)).toBe(1)
+
+    registry.releaseByRequest('conn-a', 'req-1')
+    await settle()
+
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(requestAddresses(registry)).toBe(0)
+  })
+
+  it('ignores the request a same-slot replacement superseded', async () => {
+    const registry = new RuntimeSubscriptionRegistry()
+    const replacement = vi.fn()
+    registry.registerOwned('terminal:slot', vi.fn(), 'conn-a', 'req-old')
+    registry.registerOwned('terminal:slot', replacement, 'conn-a', 'req-new')
+    expect(requestAddresses(registry)).toBe(1)
+
+    registry.releaseByRequest('conn-a', 'req-old')
+    await settle()
+    expect(replacement).not.toHaveBeenCalled()
+
+    registry.releaseByRequest('conn-a', 'req-new')
+    await settle()
+    expect(replacement).toHaveBeenCalledOnce()
+  })
+
+  it('does not grow across replace and release cycles', async () => {
+    const registry = new RuntimeSubscriptionRegistry()
+    const cleanup = vi.fn()
+    for (let i = 0; i < 50; i++) {
+      registry.registerOwned('terminal:slot', cleanup, 'conn-a', `req-${2 * i}`)
+      registry.registerOwned('terminal:slot', cleanup, 'conn-a', `req-${2 * i + 1}`)
+      expect(requestAddresses(registry)).toBe(1)
+      registry.releaseByRequest('conn-a', `req-${2 * i + 1}`)
+      await settle()
+    }
+    expect(cleanup).toHaveBeenCalledTimes(100)
+    expect(requestAddresses(registry)).toBe(0)
+  })
+
+  it('keeps the newer owner when a reused request id outlives the old release', async () => {
+    const registry = new RuntimeSubscriptionRegistry()
+    const gate = Promise.withResolvers<void>()
+    const newer = vi.fn()
+    // IPC aborts a subscription and reuses its id before the old teardown settles.
+    const old = registry.registerOwned('terminal:old', () => gate.promise, 'ipc', 'sub-1')
+    old.releaseIfCurrent()
+    registry.registerOwned('terminal:new', newer, 'ipc', 'sub-1')
+    gate.resolve()
+    await settle()
+
+    registry.releaseByRequest('ipc', 'sub-1')
+    await settle()
+    expect(newer).toHaveBeenCalledOnce()
+    expect(requestAddresses(registry)).toBe(0)
+  })
+
+  it('keeps the address of a registration whose cleanup failed, so a retry still reaches it', async () => {
+    const registry = new RuntimeSubscriptionRegistry()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const cleanup = vi.fn().mockRejectedValueOnce(new Error('teardown failed'))
+    registry.registerOwned('terminal:slot', cleanup, 'conn-a', 'req-1')
+
+    registry.releaseByRequest('conn-a', 'req-1')
+    await settle()
+    expect(cleanup).toHaveBeenCalledOnce()
+    expect(requestAddresses(registry)).toBe(1)
+
+    registry.releaseByRequest('conn-a', 'req-1')
+    await settle()
+    expect(cleanup).toHaveBeenCalledTimes(2)
+    expect(requestAddresses(registry)).toBe(0)
+    consoleError.mockRestore()
+  })
+
+  it('addresses nothing without both a connection and a request id', async () => {
+    const registry = new RuntimeSubscriptionRegistry()
+    const unaddressed = vi.fn()
+    const addressed = vi.fn()
+    registry.registerOwned('terminal:no-conn', unaddressed, undefined, 'req-1')
+    registry.registerOwned('terminal:no-req', vi.fn(), 'conn-a')
+    registry.registerOwned('terminal:addressed', addressed, 'conn-a', 'req-1')
+    expect(requestAddresses(registry)).toBe(1)
+
+    registry.releaseByRequest(undefined, 'req-1')
+    registry.releaseByRequest('conn-b', 'req-1')
+    await settle()
+
+    expect(unaddressed).not.toHaveBeenCalled()
+    expect(addressed).not.toHaveBeenCalled()
+    await registry.cleanupAndWait('terminal:addressed')
+  })
+})
