@@ -180,7 +180,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   ipcMain.removeAllListeners('pty:rendererDispatcherReady')
   ipcMain.on('pty:rendererDispatcherReady', (event) => {
     // Why: the reconcile below destructively clears delivery accounting, so a straggler handshake from a dying window must not reset the new window.
-    if (!isMainWindowPtyIpcEvent(event, mainWindow, mainWindow.webContents)) {
+    if (!isMainWindowPtyIpcEvent(event, mainWindow)) {
       return
     }
     // Why: a handshake while the gate is already open means a page load whose lifecycle reset was missed; clear the dead page's stale accounting so it can't permanently gate survivors.

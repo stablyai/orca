@@ -1,13 +1,12 @@
 /**
- * `orcad` — the Orca runtime served from plain Node, with no Electron.
+ * `orcad` — the Orca runtime served without Electron.
  *
  * Installs the Node host adapters, constructs the same `OrcaRuntimeService` the
  * desktop uses, installs a PTY controller via `registerHeadlessPtyRuntime`, and
  * serves runtime RPC. See docs/design/node-only-runtime-backend.html.
  *
- * Desktop UI surfaces stay uninstalled: no native notifications, no renderer window. The
- * renderer window is faked as a destroyed one because `registerPtyHandlers` takes a
- * non-null `BrowserWindow`. Browser automation is different — it is installed through
+ * Desktop UI surfaces stay uninstalled: no native notifications or renderer delivery.
+ * Browser automation is installed through
  * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
  * Chromium proves available at startup.
  */
