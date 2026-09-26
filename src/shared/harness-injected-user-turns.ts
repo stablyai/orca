@@ -10,7 +10,7 @@
 // `<user_query>` envelope is a genuine user turn, and misclassifying it would
 // hide the turn (drop it from transcripts, demote its session title, or leave
 // the agent visibly done after an interrupt).
-const LEADING_TAG_NAME = /^<([a-z][a-z0-9-]*)(?:[\s>]|$)/
+const LEADING_TAG_NAME = /^<([a-z][a-z0-9_-]*)(?:[\s>]|$)/
 
 // Consumers must only treat tags we have observed from harnesses as machinery;
 // arbitrary kebab tags can be genuine user code.
@@ -22,6 +22,7 @@ const KNOWN_HARNESS_TAG_NAMES = new Set([
   'command-args',
   'command-message',
   'command-name',
+  'codex_internal_context',
   'cross-session-message',
   'fork-boilerplate',
   'local-command-caveat',

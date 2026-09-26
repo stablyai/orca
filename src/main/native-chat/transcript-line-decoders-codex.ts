@@ -13,6 +13,9 @@ import {
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
 import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
+import { codexGoalRowText } from '../codex/codex-goal-journal-rows'
+import { codexGoalJournalSignature } from '../codex/codex-goal-journal-identity'
+import { isKnownHarnessInjectedUserTurnText } from '../../shared/harness-injected-user-turns'
 
 export function decodeCodexTranscriptLine(
   line: string,
@@ -50,7 +53,7 @@ function codexUnwrappedResponseItem(
   const role = record.role === 'assistant' ? 'assistant' : record.role === 'user' ? 'user' : null
   const decodedBlocks = codexTurnItemBlocks(record.content)
   const blocks =
-    role === 'user' ? decodedBlocks.filter((block) => !isSkillContext(block)) : decodedBlocks
+    role === 'user' ? decodedBlocks.filter((block) => !isModelContext(block)) : decodedBlocks
   return role && blocks.length > 0 ? { id, role, blocks, timestamp, source: 'transcript' } : null
 }
 
@@ -67,7 +70,7 @@ function codexResponseItem(
     }
     const decodedBlocks = claudeContentBlocks(payload.content)
     const blocks =
-      role === 'user' ? decodedBlocks.filter((block) => !isSkillContext(block)) : decodedBlocks
+      role === 'user' ? decodedBlocks.filter((block) => !isModelContext(block)) : decodedBlocks
     if (blocks.length === 0) {
       return null
     }
@@ -115,9 +118,13 @@ function codexResponseItem(
   return null
 }
 
-// Explicit skill expansions are model context, not the user's recorded prompt.
-function isSkillContext(block: NativeChatBlock): boolean {
-  return block.type === 'text' && block.text.trimStart().slice(0, 7).toLowerCase() === '<skill>'
+// Skill expansions and goal reinjections are model context, not user prompts.
+function isModelContext(block: NativeChatBlock): boolean {
+  return (
+    block.type === 'text' &&
+    (block.text.trimStart().slice(0, 7).toLowerCase() === '<skill>' ||
+      isKnownHarnessInjectedUserTurnText(block.text))
+  )
 }
 
 function codexEventMessage(
@@ -125,6 +132,26 @@ function codexEventMessage(
   id: string,
   timestamp: number | null
 ): NativeChatMessage | null {
+  if (payload.type === 'thread_goal_updated') {
+    const method = 'thread/goal/updated'
+    const text = codexGoalRowText(method, payload)
+    const signature = codexGoalJournalSignature(method, payload)
+    const goal = asRecord(payload.goal)
+    if (!text || !signature || !goal) {
+      return null
+    }
+    return {
+      id,
+      role: 'system',
+      blocks: [{ type: 'text', text }],
+      timestamp,
+      source: 'transcript',
+      codexGoal: {
+        threadId: extractString(payload.threadId) ?? extractString(goal?.threadId) ?? '',
+        signature
+      }
+    }
+  }
   if (payload.type === CODEX_EVENT_TURN_ABORTED) {
     return {
       id,
@@ -139,7 +166,7 @@ function codexEventMessage(
   }
   if (payload.type === 'user_message') {
     const text = extractString(payload.message)
-    return text
+    return text && !isKnownHarnessInjectedUserTurnText(text)
       ? { id, role: 'user', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
       : null
   }
@@ -167,7 +194,10 @@ function codexCompletedTurnItem(
     return null
   }
   if (item.type === 'UserMessage' || item.type === 'user_message') {
-    return { id, role: 'user', blocks, timestamp, source: 'transcript' }
+    const visible = blocks.filter((block) => !isModelContext(block))
+    return visible.length
+      ? { id, role: 'user', blocks: visible, timestamp, source: 'transcript' }
+      : null
   }
   if (item.type === 'AgentMessage' || item.type === 'agent_message') {
     return { id, role: 'assistant', blocks, timestamp, source: 'transcript' }

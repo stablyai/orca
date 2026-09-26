@@ -1,18 +1,25 @@
 import { createHash } from 'node:crypto'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import { codexGoalGeneration, codexGoalRowSignature } from './codex-goal-journal-rows'
 
-export type CodexGoalJournalState = {
-  thread: string
-  signature: string
-  occurrence: string
-}
-
-const GOAL_IDENTITY_PREFIX = 'codex-goal'
-const DIGEST_PATTERN = /^[0-9a-f]{64}$/
+export {
+  parseCodexGoalJournalItemId,
+  type CodexGoalJournalState
+} from '../../shared/codex-goal-journal-identity'
 
 export function codexGoalJournalDigest(value: string): string {
   return createHash('sha256').update(value).digest('hex')
+}
+
+export function codexGoalJournalSignature(method: string, payload: unknown): string | null {
+  const signature = codexGoalRowSignature(method, payload)
+  if (signature === null) {
+    return null
+  }
+  const generation = codexGoalGeneration(payload)
+  const providerGeneration =
+    generation === null ? null : codexGoalJournalDigest(`provider:${generation}`)
+  return codexGoalJournalDigest(`${signature}\u0000${providerGeneration ?? ''}`)
 }
 
 export function codexGoalJournalIdentity(
@@ -22,26 +29,6 @@ export function codexGoalJournalIdentity(
 ): AgentJournalItemIdentity {
   return {
     provider: 'orca',
-    clientMessageId: `${GOAL_IDENTITY_PREFIX}:${thread}:${signature}:${occurrence}`
+    clientMessageId: `codex-goal:${thread}:${signature}:${occurrence}`
   }
-}
-
-/** Recognizes only the host-owned rows used to record Codex goal lifecycle state. */
-export function parseCodexGoalJournalItemId(itemId: string): CodexGoalJournalState | null {
-  const identity = parseAgentJournalItemKey(itemId)
-  if (identity?.provider !== 'orca') {
-    return null
-  }
-  const [prefix, thread, signature, occurrence, ...rest] = identity.clientMessageId.split(':')
-  return prefix === GOAL_IDENTITY_PREFIX &&
-    DIGEST_PATTERN.test(thread ?? '') &&
-    DIGEST_PATTERN.test(signature ?? '') &&
-    DIGEST_PATTERN.test(occurrence ?? '') &&
-    rest.length === 0
-    ? {
-        thread: thread as string,
-        signature: signature as string,
-        occurrence: occurrence as string
-      }
-    : null
 }

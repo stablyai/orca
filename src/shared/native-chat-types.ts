@@ -197,6 +197,8 @@ export type NativeChatMessage = {
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** Provider goal snapshot identity; repeated accounting updates are presentation-only no-ops. */
+  codexGoal?: { threadId: string; signature: string }
   /** How a user message was delivered when it was not an ordinary prompt. */
   sentAs?: AgentJournalMessageSendMode
 }

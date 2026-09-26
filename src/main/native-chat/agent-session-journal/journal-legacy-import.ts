@@ -30,6 +30,7 @@ import {
 import { decodeTranscriptStream } from '../transcript-stream-lines'
 import { boundSubagentEntryId } from '../subagent-entry-id-bounds'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
+import { codexGoalTranscriptIdentity } from './journal-codex-goal-import'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import {
   boundInlineText,
@@ -132,7 +133,8 @@ export async function prepareLegacyTranscriptImport(input: {
   }
   const replacement: JournalReplacementItem[] = []
   for (const [index, message] of decoded.messages.entries()) {
-    const identity = decoded.identities[index]
+    const goal = codexGoalTranscriptIdentity(message, input.sessionId)
+    const identity = goal ?? decoded.identities[index]
     if (!identity) {
       continue
     }
