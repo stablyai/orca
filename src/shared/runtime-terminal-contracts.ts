@@ -196,8 +196,7 @@ export type RuntimeTerminalRead = {
   source?: 'stream' | 'screen' | 'screen-unavailable'
   /** UI-only composer text, excluded from `tail`. */
   draft?: string
-}
-
+} & { renderable?: boolean }
 export type RuntimeTerminalRename = {
   handle: string
   tabId: string
