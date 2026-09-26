@@ -1,4 +1,5 @@
 import { shellEscape } from './ssh-connection-utils'
+import { posix, win32 } from 'node:path'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
@@ -23,15 +24,27 @@ const HASH = `const fs=require('node:fs');const fsp=fs.promises;const path=requi
 async function hash(file){try{const digest=require('node:crypto').createHash('sha256');for await(const chunk of fs.createReadStream(file))digest.update(chunk);return digest.digest('hex')}catch(error){if(error.code==='ENOENT')return null;throw error}}
 `
 
-export function probeOpenCodeNodeSqliteCommand(host: RemoteHostPlatform, nodePath: string): string {
+export function probeOpenCodeNodeSqliteCommand(
+  host: RemoteHostPlatform,
+  nodePath: string,
+  homeDirectory: string
+): string {
   return nodeCommand(
     host,
     nodePath,
     `${SEND}
+const fs=require('node:fs/promises');const path=require('node:path');
+(async()=>{const data=path.join(process.env.XDG_DATA_HOME?.trim()||path.join(process.argv[1],'.local','share'),'opencode');
+const override=process.env.OPENCODE_DB?.trim();let present=false;
+try{if(override&&override!==':memory:'){present=(await fs.stat(path.isAbsolute(override)?override:path.join(data,override))).isFile()}
+else if(!override){const directory=await fs.opendir(data);for await(const entry of directory){if(entry.isFile()&&/^opencode(?:-[A-Za-z0-9_.-]+)?\\.db$/.test(entry.name)){present=true;break}}}}
+catch(error){if(error.code!=='ENOENT'&&error.code!=='ENOTDIR')throw error}
+if(!present){send({status:'not-needed'});return}
 let db;try{db=new(require('node:sqlite').DatabaseSync)(':memory:');
 if(db.prepare('SELECT 1 AS ready').get().ready!==1)throw Error('SQLite read failed');
-send({status:'ready',executable:process.execPath})}catch{send({status:'unsupported'})}finally{if(db)db.close()}`,
-    []
+send({status:'ready',executable:process.execPath})}catch{send({status:'unsupported'})}finally{if(db)db.close()}
+})().catch(error=>{console.error(error.message);process.exitCode=1})`,
+    [homeDirectory]
   )
 }
 
@@ -49,8 +62,7 @@ export function prepareOpenCodeRuntimeStageCommand(args: {
     args.nodePath,
     `${HASH}${SEND}
 (async()=>{const [stage,marker,executable,expected,reference]=process.argv.slice(1);
-await fsp.mkdir(path.join(stage,'payload'),{recursive:true,mode:448});
-await fsp.writeFile(path.join(stage,marker),'',{flag:'wx',mode:384});
+await fsp.access(path.join(stage,marker));
 let candidate=executable;let digest=candidate?await hash(candidate):null;
 if(candidate&&digest!==expected){try{const ref=JSON.parse(await fsp.readFile(reference,'utf8'));
 const relative=path.relative(path.dirname(executable),ref.executable);
@@ -86,7 +98,11 @@ if(existing!==expected){
 if(existing!==null)executable=path.join(path.dirname(destination),'repair-'+token,path.basename(destination));
 await fsp.mkdir(path.dirname(executable),{recursive:true,mode:448});
 if(process.platform!=='win32')await fsp.chmod(source,448);
-try{await fsp.link(source,executable)}catch(error){if(await hash(executable)!==expected)throw error}
+try{await fsp.link(source,executable)}catch(error){if(await hash(executable)!==expected){
+if(!['EPERM','EOPNOTSUPP','ENOTSUP','ENOSYS','EXDEV'].includes(error.code))throw error;
+executable=path.join(path.dirname(destination),'repair-'+token,path.basename(destination));
+await fsp.mkdir(path.dirname(executable),{recursive:true,mode:448});await fsp.rename(source,executable)
+}}
 }
 send({status:'ready',executable})})().catch(error=>{console.error(error.message);process.exitCode=1})`,
     [args.stagedBinary, args.executable, args.expectedHash, args.repairToken]
@@ -113,19 +129,6 @@ finally{await fs.rm(temporary,{force:true})}})().catch(error=>{console.error(err
   )
 }
 
-export function removeOpenCodeRuntimeStageCommand(
-  host: RemoteHostPlatform,
-  nodePath: string,
-  stageDir: string
-): string {
-  return nodeCommand(
-    host,
-    nodePath,
-    `require('node:fs/promises').rm(process.argv[1],{recursive:true,force:true}).catch(error=>{console.error(error.message);process.exitCode=1})`,
-    [stageDir]
-  )
-}
-
 export function parseOpenCodeRuntimeResult(output: string): {
   status: string
   executable?: string
@@ -146,7 +149,7 @@ export function parseOpenCodeRuntimeResult(output: string): {
   if ('executable' in result) {
     if (
       typeof result.executable !== 'string' ||
-      !/^(?:\/|[A-Za-z]:[\\/])/.test(result.executable) ||
+      !(posix.isAbsolute(result.executable) || win32.isAbsolute(result.executable)) ||
       /[\0\r\n]/.test(result.executable)
     ) {
       throw new Error('SQLite runtime setup returned an invalid executable path.')

@@ -53,6 +53,7 @@ describe('WSL SQLite reader clients', () => {
     ])
     expect(await openCodeWslClient('ubuntu', path)).toBe(first)
     expect(mocks.create).toHaveBeenCalledOnce()
+    expect(mocks.running).not.toHaveBeenCalled()
     expect(mocks.create).toHaveBeenCalledWith(
       expect.objectContaining({
         args: ['-d', 'Ubuntu', '--exec', '/usr/bin/node', '/mnt/c/reader $literal.cjs'],
@@ -70,31 +71,33 @@ describe('WSL SQLite reader clients', () => {
     )
   })
 
-  it('retires clients when a distro stops, configuration changes, or the distro disappears', async () => {
+  it('checks confirmed running state at process creation and retires changed configurations', async () => {
     configureOpenCodeWslReaders([runtime])
     await openCodeWslClient('Ubuntu', path)
     const first = mocks.create.mock.results[0]?.value
+    const admit = mocks.create.mock.calls[0]?.[0].beforeSpawn
+    expect(admit).toBeDefined()
+    await admit?.(new AbortController().signal)
+    expect(mocks.running).toHaveBeenCalledWith([path], { requireConfirmed: true })
     mocks.running.mockResolvedValueOnce([])
-    await expect(openCodeWslClient('Ubuntu', path)).rejects.toThrow('not running')
+    await expect(admit?.(new AbortController().signal)).rejects.toThrow('not running')
+    configureOpenCodeWslReaders([{ ...runtime, executable: '/new/node' }])
     expect(first?.dispose).toHaveBeenCalledOnce()
     await openCodeWslClient('Ubuntu', path)
     const second = mocks.create.mock.results[1]?.value
-    configureOpenCodeWslReaders([{ ...runtime, executable: '/new/node' }])
-    expect(second?.dispose).toHaveBeenCalledOnce()
-    await openCodeWslClient('Ubuntu', path)
-    const third = mocks.create.mock.results[2]?.value
     configureOpenCodeWslReaders([])
-    expect(third?.dispose).toHaveBeenCalledOnce()
+    expect(second?.dispose).toHaveBeenCalledOnce()
   })
 
   it('cancels a running-distro probe before creating a child', async () => {
     configureOpenCodeWslReaders([runtime])
+    await openCodeWslClient('Ubuntu', path)
     mocks.running.mockReturnValue(new Promise(() => {}))
     const controller = new AbortController()
-    const pending = openCodeWslClient('Ubuntu', path, controller.signal)
+    const pending = mocks.create.mock.calls[0]?.[0].beforeSpawn?.(controller.signal)
     controller.abort(new Error('cancelled probe'))
     await expect(pending).rejects.toThrow('cancelled probe')
-    expect(mocks.create).not.toHaveBeenCalled()
+    expect(mocks.create).toHaveBeenCalledOnce()
   })
 
   it('keeps unavailable readers unavailable until repaired configuration arrives', async () => {

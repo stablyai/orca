@@ -73,7 +73,8 @@ for (const [runtime, executable] of [
       const client = createOpenCodeSqliteProcessClient({
         executable,
         args: [entry],
-        cwd: directory
+        cwd: directory,
+        beforeSpawn: async () => {}
       })
       try {
         const issues: AiVaultScanIssue[] = []

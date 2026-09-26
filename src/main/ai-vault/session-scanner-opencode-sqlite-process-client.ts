@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { spawnProcess } from '../../shared/child-process/run-process'
+import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { WorkerRequestTransport } from '../lazy-worker-thread-host'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import {
@@ -17,6 +18,7 @@ export type OpenCodeSqliteProcessOptions = {
   log?: (message: string) => void
   requestTimeoutMs?: number
   idleTeardownMs?: number
+  beforeSpawn?: (signal: AbortSignal) => Promise<void>
 }
 
 function createProcessTransport(options: OpenCodeSqliteProcessOptions): WorkerRequestTransport {
@@ -100,9 +102,52 @@ export function createOpenCodeSqliteProcessClient(
   options: OpenCodeSqliteProcessOptions
 ): OpenCodeSqliteWorkerClient {
   return new OpenCodeSqliteWorkerClient({
-    workerFactory: () => createProcessTransport(options),
+    workerFactory: () =>
+      options.beforeSpawn
+        ? createAdmittedProcessTransport(options, options.beforeSpawn)
+        : createProcessTransport(options),
     log: options.log,
     requestTimeoutMs: options.requestTimeoutMs,
     idleTeardownMs: options.idleTeardownMs
+  })
+}
+
+/** Admission belongs to each process birth, including respawns queued after a failure. */
+function createAdmittedProcessTransport(
+  options: OpenCodeSqliteProcessOptions,
+  admit: (signal: AbortSignal) => Promise<void>
+): WorkerRequestTransport {
+  const events = new EventEmitter()
+  const controller = new AbortController()
+  let transport: WorkerRequestTransport | undefined
+  const ready = Promise.resolve().then(async () => {
+    await waitForPromiseWithSignal(admit(controller.signal), controller.signal)
+    controller.signal.throwIfAborted()
+    transport = createProcessTransport(options)
+    transport.on('message', (message) => events.emit('message', message))
+    transport.on('error', (error) => events.emit('error', error))
+    transport.on('exit', (code) => events.emit('exit', code))
+    transport.unref()
+    return transport
+  })
+  return Object.assign(events, {
+    postMessage(request: unknown): void {
+      void ready
+        .then((processTransport) => {
+          controller.signal.throwIfAborted()
+          processTransport.postMessage(request)
+        })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted) {
+            events.emit('error', error instanceof Error ? error : new Error(String(error)))
+          }
+        })
+    },
+    unref(): void {},
+    async terminate(): Promise<number> {
+      controller.abort()
+      transport?.removeAllListeners()
+      return transport ? transport.terminate() : 0
+    }
   })
 }

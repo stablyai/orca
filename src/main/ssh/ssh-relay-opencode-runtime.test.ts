@@ -8,9 +8,19 @@ const mocks = vi.hoisted(() => ({
   upload: vi.fn(),
   write: vi.fn(),
   materialize: vi.fn(),
-  target: vi.fn()
+  target: vi.fn(),
+  warm: false,
+  checksumError: false,
+  cleanupError: false,
+  reservationError: false
 }))
-vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: mocks.exec }))
+vi.mock('./ssh-relay-deploy-helpers', () => ({
+  execCommand: mocks.exec,
+  isUnconfirmedSshCommandTermination: (error: unknown) =>
+    error instanceof Error &&
+    'sshChannelCloseConfirmed' in error &&
+    error.sshChannelCloseConfirmed === false
+}))
 vi.mock('./ssh-relay-install-transfers', () => ({
   uploadRelayDirectory: mocks.upload,
   writeRelayFile: mocks.write
@@ -36,6 +46,36 @@ const frame = (status: string, executable?: string) =>
   `${OPENCODE_RUNTIME_RESULT}${JSON.stringify({ status, executable })}\n`
 const options = () => ({ nodePath: '/usr/bin/node', relayDir, cacheRoot })
 
+function hostCommandResult(command: string): string {
+  if (command.includes('staging quota is full')) {
+    if (mocks.reservationError) {
+      throw new Error('staging quota is full')
+    }
+    return `__ORCA_UPLOAD_STAGE_SLOT__${command.match(/\.sftp-namespace-[0-9a-f]{32}/)?.[0]}:slot-0`
+  }
+  if (command.includes('SELECT 1 AS ready')) {
+    return frame('unsupported')
+  }
+  if (command.includes('checksum mismatch')) {
+    if (mocks.checksumError) {
+      throw new Error('Uploaded SQLite runtime checksum mismatch')
+    }
+    return frame('ready', binary)
+  }
+  if (command.includes('published')) {
+    return frame('published')
+  }
+  if (command.includes('status:')) {
+    return mocks.warm ? frame('ready', binary) : frame('staged')
+  }
+  if (mocks.cleanupError && command.includes('claim_identity') && !command.includes('old=')) {
+    throw Object.assign(new Error('Cleanup teardown is unconfirmed'), {
+      sshChannelCloseConfirmed: false
+    })
+  }
+  return ''
+}
+
 function connection(system = false): SshConnection {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exec and transfers are mocked; setup only reads this transport flag.
   return { usesSystemSshTransport: () => system } as unknown as SshConnection
@@ -49,21 +89,11 @@ beforeEach(async () => {
   await writeFile(runtime, 'verified runtime')
   mocks.materialize.mockResolvedValue(runtime)
   mocks.target.mockResolvedValue('linux-x64-glibc')
-  mocks.exec.mockImplementation(async (_conn, command: string) => {
-    if (command.includes('SELECT 1 AS ready')) {
-      return frame('unsupported')
-    }
-    if (command.includes('status:')) {
-      if (command.includes('checksum mismatch')) {
-        return frame('ready', binary)
-      }
-      if (command.includes('published')) {
-        return frame('published')
-      }
-      return frame('staged')
-    }
-    return ''
-  })
+  mocks.warm = false
+  mocks.checksumError = false
+  mocks.cleanupError = false
+  mocks.reservationError = false
+  mocks.exec.mockImplementation(async (_conn, command: string) => hostCommandResult(command))
 })
 
 afterEach(async () => {
@@ -75,7 +105,9 @@ afterEach(async () => {
 describe('SSH OpenCode runtime setup', () => {
   it('publishes a capable existing Node without materializing or uploading Bun', async () => {
     mocks.exec.mockResolvedValueOnce(frame('ready', '/opt/node 24/bin/node'))
-    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(true)
+    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
+      'ready'
+    )
     expect(mocks.target).not.toHaveBeenCalled()
     expect(mocks.materialize).not.toHaveBeenCalled()
     expect(mocks.upload).not.toHaveBeenCalled()
@@ -90,7 +122,9 @@ describe('SSH OpenCode runtime setup', () => {
       expect(await readdir(localDir)).toEqual(['bun'])
       expect(await readFile(join(localDir, 'bun'), 'utf8')).toBe('verified runtime')
     })
-    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(true)
+    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
+      'ready'
+    )
     expect(mocks.target).toHaveBeenCalledWith(
       expect.objectContaining({ host, signal: expect.any(AbortSignal) })
     )
@@ -102,10 +136,10 @@ describe('SSH OpenCode runtime setup', () => {
   })
 
   it('reuses a remotely verified binary without downloading it again', async () => {
-    mocks.exec
-      .mockResolvedValueOnce(frame('unsupported'))
-      .mockResolvedValueOnce(frame('ready', binary))
-    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(true)
+    mocks.warm = true
+    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
+      'ready'
+    )
     expect(mocks.materialize).not.toHaveBeenCalled()
     expect(mocks.upload).not.toHaveBeenCalled()
   })
@@ -115,7 +149,7 @@ describe('SSH OpenCode runtime setup', () => {
     const uploadOptions = mocks.upload.mock.calls[0][4]
     const writeOptions = mocks.write.mock.calls[0][4]
     expect(uploadOptions.sftpNamespace.homeRelativeNamespaceRoot).toMatch(
-      /^\.orca-remote\/vault-sqlite\/\.upload-/
+      /^\.orca-remote\/\.upload-stages\/slot-0$/
     )
     expect(uploadOptions.sftpNamespace.shellProbePath).toBe(
       writeOptions.sftpNamespace.shellProbePath
@@ -137,7 +171,7 @@ describe('SSH OpenCode runtime setup', () => {
       ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options()),
       ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())
     ])
-    expect(result).toEqual([true, true])
+    expect(result).toEqual(['ready', 'ready'])
     expect(mocks.upload).toHaveBeenCalledOnce()
   })
 
@@ -152,21 +186,15 @@ describe('SSH OpenCode runtime setup', () => {
     const second = ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())
     await vi.waitFor(() => expect(mocks.materialize).toHaveBeenCalledOnce())
     finish(runtime)
-    expect(await Promise.all([first, second])).toEqual([true, true])
+    expect(await Promise.all([first, second])).toEqual(['ready', 'ready'])
     expect(mocks.upload).toHaveBeenCalledTimes(2)
   })
 
   it('never publishes a reference after a failed remote checksum', async () => {
-    mocks.exec.mockImplementation(async (_conn, command: string) => {
-      if (command.includes('SELECT 1 AS ready')) {
-        return frame('unsupported')
-      }
-      if (command.includes('checksum mismatch')) {
-        throw new Error('Uploaded SQLite runtime checksum mismatch')
-      }
-      return frame('staged')
-    })
-    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(false)
+    mocks.checksumError = true
+    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
+      'failed'
+    )
     expect(mocks.write).not.toHaveBeenCalled()
   })
 
@@ -181,24 +209,74 @@ describe('SSH OpenCode runtime setup', () => {
         ...options(),
         signal: controller.signal
       })
-    ).toBe(false)
+    ).toBe('teardown-unconfirmed')
     expect(mocks.write).not.toHaveBeenCalled()
-    expect(mocks.exec).toHaveBeenCalledTimes(2)
+    expect(mocks.exec).toHaveBeenCalledTimes(4)
   })
 
   it('bounds even an unresponsive setup operation at 180 seconds', async () => {
     vi.useFakeTimers()
     mocks.exec.mockReturnValue(new Promise(() => {}))
-    const result = ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())
+    const conn = connection()
+    const result = ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())
     await vi.advanceTimersByTimeAsync(180_000)
-    expect(await result).toBe(false)
+    expect(await result).toBe('teardown-unconfirmed')
     expect(mocks.exec.mock.calls[0][2].signal.aborted).toBe(true)
     expect(mocks.materialize).not.toHaveBeenCalled()
+    expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe(
+      'teardown-unconfirmed'
+    )
+    expect(mocks.exec).toHaveBeenCalledOnce()
+  })
+
+  it('retains the upload stage when a failed transfer may still be running', async () => {
+    mocks.upload.mockRejectedValue(
+      Object.assign(new Error('Upload teardown is unconfirmed'), {
+        sshChannelCloseConfirmed: false
+      })
+    )
+    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
+      'teardown-unconfirmed'
+    )
+    expect(mocks.exec).toHaveBeenCalledTimes(4)
+    expect(mocks.write).not.toHaveBeenCalled()
+  })
+
+  it('reports an unconfirmed stage cleanup to the deployment command queue', async () => {
+    mocks.exec.mockResolvedValueOnce(frame('ready', '/usr/bin/node'))
+    mocks.cleanupError = true
+    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
+      'teardown-unconfirmed'
+    )
+    expect(mocks.exec).toHaveBeenCalledTimes(6)
+  })
+
+  it('skips installation without data and retries when a database appears on the same connection', async () => {
+    const conn = connection()
+    mocks.exec.mockResolvedValueOnce(frame('not-needed'))
+    expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe('not-needed')
+    expect(mocks.exec).toHaveBeenCalledOnce()
+    expect(mocks.materialize).not.toHaveBeenCalled()
+    expect(mocks.upload).not.toHaveBeenCalled()
+    expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe('ready')
+    expect(mocks.upload).toHaveBeenCalledOnce()
+  })
+
+  it('fails optionally without downloading or uploading when all bounded stages are occupied', async () => {
+    mocks.reservationError = true
+    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
+      'failed'
+    )
+    expect(mocks.exec).toHaveBeenCalledTimes(3)
+    expect(mocks.materialize).not.toHaveBeenCalled()
+    expect(mocks.upload).not.toHaveBeenCalled()
   })
 
   it('does not mistake an unanswered Node probe for an old runtime', async () => {
     mocks.exec.mockResolvedValue('login banner only')
-    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(false)
+    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
+      'failed'
+    )
     expect(mocks.materialize).not.toHaveBeenCalled()
   })
 })

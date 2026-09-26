@@ -32,6 +32,10 @@ import {
 import { gcRemoteRipgrepCache } from './ssh-relay-ripgrep-cache-gc'
 import { ensureRemoteOpenCodeRuntime } from './ssh-relay-opencode-runtime'
 import {
+  createRemoteOpenCodeRuntimeRetry,
+  type RemoteOpenCodeRuntimePreparation
+} from './ssh-relay-opencode-runtime-retry'
+import {
   readLocalFullVersion,
   computeRemoteRelayDir,
   isRelayAlreadyInstalled,
@@ -132,6 +136,7 @@ export type RelayDeployResult = {
   nodePath?: string
   sockPath?: string
   credentialFile?: string
+  prepareOpenCodeRuntime?: RemoteOpenCodeRuntimePreparation
 }
 
 class RelayDirectoryGcConflictError extends Error {
@@ -633,60 +638,81 @@ async function deployAndLaunchRelayAttempt(
         signal: deploySignal
       })
     )
-    .catch(() => {})
+    .catch(() => 'teardown-unconfirmed' as const)
   const cleanupReady = conn.canRunConcurrentExecCommands() ? Promise.resolve() : runtimeInstall
 
-  void cleanupReady
-    .then(() =>
+  const backgroundCleanup = cleanupReady.then((runtimeOutcome) => {
+    if (runtimeOutcome === 'teardown-unconfirmed') {
+      return false
+    }
+    return (
       execHostCommand(
         conn,
         hostPlatform,
         recoverOneStaleRelayUploadStageCommand(hostPlatform, uploadStagePoolDir)
       )
-    )
-    .catch(() => {})
-    // Why before GC: a superseded relay pins its version dir via the live-socket probe, so the
-    // sweep has to settle first or GC keeps every orphan's tree forever.
-    .then(() =>
-      sweepSupersededRelayEndpoints(conn, hostPlatform, {
-        remoteHome,
-        currentRelayDir: remoteRelayDir,
-        sockName: relaySocketNameForInstanceId(relayInstanceId),
-        // Set only when this launch relocated past sun_path; the sweep must not reap
-        // the socket the transport it just handed back is talking to.
-        ...(launched.sockPath.startsWith(SHORT_RELAY_SOCKET_DIR_PREFIX)
-          ? {
-              currentShortSocketDir: launched.sockPath.slice(0, launched.sockPath.lastIndexOf('/'))
-            }
-          : {}),
-        nodePath: launched.nodePath
-      })
-    )
-    .catch((error) => {
-      if (error instanceof RelayProbeCleanupUnconfirmedError) {
-        throw error
-      }
-    })
-    .then(() =>
-      gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
-        windowsNodePath: launched.nodePath,
-        windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)],
-        // Why pin rather than rely on the symlink alone: a deploy that fell back to a
-        // per-directory install has no reference to show, and its key must still survive.
-        nativeDepsCacheKeys: [
-          resolveRelayNativeDepsCacheKey({
-            platform,
-            localRelayDir,
-            deps: RELAY_NATIVE_DEPS
+        .catch((error) => {
+          if (isUnconfirmedSshCommandTermination(error)) {
+            throw error
+          }
+        })
+        // Why before GC: a superseded relay pins its version dir via the live-socket probe, so the
+        // sweep has to settle first or GC keeps every orphan's tree forever.
+        .then(() =>
+          sweepSupersededRelayEndpoints(conn, hostPlatform, {
+            remoteHome,
+            currentRelayDir: remoteRelayDir,
+            sockName: relaySocketNameForInstanceId(relayInstanceId),
+            // Set only when this launch relocated past sun_path; the sweep must not reap
+            // the socket the transport it just handed back is talking to.
+            ...(launched.sockPath.startsWith(SHORT_RELAY_SOCKET_DIR_PREFIX)
+              ? {
+                  currentShortSocketDir: launched.sockPath.slice(
+                    0,
+                    launched.sockPath.lastIndexOf('/')
+                  )
+                }
+              : {}),
+            nodePath: launched.nodePath
           })
-        ].filter((key): key is string => key !== null)
-      })
+        )
+        .catch((error) => {
+          if (
+            error instanceof RelayProbeCleanupUnconfirmedError ||
+            isUnconfirmedSshCommandTermination(error)
+          ) {
+            throw error
+          }
+        })
+        .then(() =>
+          gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
+            windowsNodePath: launched.nodePath,
+            windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)],
+            // Why pin rather than rely on the symlink alone: a deploy that fell back to a
+            // per-directory install has no reference to show, and its key must still survive.
+            nativeDepsCacheKeys: [
+              resolveRelayNativeDepsCacheKey({
+                platform,
+                localRelayDir,
+                deps: RELAY_NATIVE_DEPS
+              })
+            ].filter((key): key is string => key !== null)
+          })
+        )
+        // Why after the version GC and not beside it: that pass is what removes the relay directories
+        // holding the references, so running second is what lets a superseded build become collectable
+        // in the same connect rather than the next one.
+        .then(() =>
+          gcRemoteRipgrepCache(conn, hostPlatform, remoteHome, { pinnedEntry: ripgrepEntry })
+        )
+        .then(() => true)
+        .catch(
+          (error) =>
+            !(error instanceof RelayProbeCleanupUnconfirmedError) &&
+            !isUnconfirmedSshCommandTermination(error)
+        )
     )
-    // Why after the version GC and not beside it: that pass is what removes the relay directories
-    // holding the references, so running second is what lets a superseded build become collectable
-    // in the same connect rather than the next one.
-    .then(() => gcRemoteRipgrepCache(conn, hostPlatform, remoteHome, { pinnedEntry: ripgrepEntry }))
-    .catch(() => {})
+  })
 
   return {
     transport: launched.transport,
@@ -697,7 +723,17 @@ async function deployAndLaunchRelayAttempt(
     remoteRelayDir,
     nodePath: launched.nodePath,
     sockPath: launched.sockPath,
-    credentialFile: launched.credentialFile
+    credentialFile: launched.credentialFile,
+    prepareOpenCodeRuntime: createRemoteOpenCodeRuntimeRetry(
+      runtimeInstall,
+      backgroundCleanup,
+      (signal) =>
+        ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
+          nodePath: launched.nodePath,
+          relayDir: remoteRelayDir,
+          signal
+        })
+    )
   }
 }
 

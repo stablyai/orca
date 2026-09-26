@@ -47,8 +47,9 @@ describe('packaged relay artifact manifest', () => {
     const emitted = readdirSync(outDir)
       .filter((name) => name !== RELAY_VERSION_FILENAME)
       .sort()
-    const optional = relayOptionalArtifactFilenames(isWindowsRelayPlatform(platform))
-      .filter((filename) => existsSync(join(outDir, filename)))
+    const optional = relayOptionalArtifactFilenames(isWindowsRelayPlatform(platform)).filter(
+      (filename) => existsSync(join(outDir, filename))
+    )
     expect(emitted).toEqual([...expected, ...optional].sort())
   })
 
@@ -57,8 +58,9 @@ describe('packaged relay artifact manifest', () => {
     const hash = createHash('sha256')
     const artifacts = [
       ...relayArtifactFilenames(isWindowsRelayPlatform(platform)),
-      ...relayOptionalArtifactFilenames(isWindowsRelayPlatform(platform))
-        .filter((filename) => existsSync(join(outDir, filename)))
+      ...relayOptionalArtifactFilenames(isWindowsRelayPlatform(platform)).filter((filename) =>
+        existsSync(join(outDir, filename))
+      )
     ]
     for (const filename of artifacts) {
       hash.update(readFileSync(join(outDir, filename)))

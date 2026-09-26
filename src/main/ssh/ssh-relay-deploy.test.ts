@@ -63,7 +63,7 @@ vi.mock('../ripgrep/bundled-ripgrep-path', () => ({
 // Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
 vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
 vi.mock('./ssh-relay-opencode-runtime', () => ({
-  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue(true)
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
 }))
 vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
@@ -109,6 +109,7 @@ import {
   ensureRemoteBundledRipgrep,
   recordRemoteRipgrepReference
 } from './ssh-relay-ripgrep-install'
+import { gcRemoteRipgrepCache } from './ssh-relay-ripgrep-cache-gc'
 import * as DeployTiming from './ssh-relay-deploy-timing'
 import type { SshConnection } from './ssh-connection'
 import type * as SshRemoteNodeResolution from './ssh-remote-node-resolution'
@@ -562,7 +563,7 @@ describe('deployAndLaunchRelay', () => {
     vi.mocked(ensureRemoteOpenCodeRuntime).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
-          finishSetup = () => resolve(false)
+          finishSetup = () => resolve('failed')
         })
     )
     await deployAndLaunchRelay(conn)
@@ -582,6 +583,20 @@ describe('deployAndLaunchRelay', () => {
     await deployAndLaunchRelay(conn)
     expect(detachedLaunchCommand(conn)).not.toContain('--ripgrep-path')
     expect(ensureRemoteBundledRipgrep).not.toHaveBeenCalled()
+  })
+
+  it('skips cleanup when SQLite setup cannot confirm command teardown on a single-exec transport', async () => {
+    const conn = makeMockConnection()
+    vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(false)
+    queueFreshLinuxDeploy()
+    vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValueOnce('teardown-unconfirmed')
+    await deployAndLaunchRelay(conn)
+    await vi.waitFor(() => expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledOnce())
+    const execCount = vi.mocked(execCommand).mock.calls.length
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(execCommand).toHaveBeenCalledTimes(execCount)
+    expect(gcOldRelayVersions).not.toHaveBeenCalled()
+    expect(gcRemoteRipgrepCache).not.toHaveBeenCalled()
   })
 
   it('allows an unlimited SSH disconnect grace window', async () => {

@@ -48,16 +48,6 @@ export async function openCodeWslClient(
 ): Promise<OpenCodeSqliteWorkerClient> {
   throwIfSignalAborted(signal)
   const key = distro.toLowerCase()
-  const running = await waitForPromiseWithSignal(
-    filterPathsToRunningWslDistrosAsync([dbPath]),
-    signal
-  )
-  if (running.length === 0) {
-    clients.get(key)?.dispose()
-    clients.delete(key)
-    throw new Error(`WSL distro ${distro} is not running. Start it to read its history.`)
-  }
-  throwIfSignalAborted(signal)
   const runtime = runtimes.get(key)
   if (!runtime || runtime.error !== undefined) {
     throw new Error(
@@ -70,7 +60,16 @@ export async function openCodeWslClient(
       executable: resolveWslExecutablePath(),
       args: buildWslExecArgs(distro, [runtime.executable, runtime.readerPath]),
       cwd: resolveWslInteropSpawnCwd(),
-      env: { ...buildRelayAiVaultServiceEnv(), WSL_UTF8: '1' }
+      env: { ...buildRelayAiVaultServiceEnv(), WSL_UTF8: '1' },
+      async beforeSpawn(spawnSignal) {
+        const running = await waitForPromiseWithSignal(
+          filterPathsToRunningWslDistrosAsync([dbPath], { requireConfirmed: true }),
+          spawnSignal
+        )
+        if (running.length === 0) {
+          throw new Error(`WSL distro ${distro} is not running. Start it to read its history.`)
+        }
+      }
     })
     clients.set(key, client)
   }

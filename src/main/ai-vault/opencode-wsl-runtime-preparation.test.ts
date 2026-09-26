@@ -36,7 +36,13 @@ beforeEach(async () => {
   mocks.exists.mockReturnValue(true)
   mocks.running.mockImplementation(async (paths) => [...paths])
   mocks.run.mockImplementation(async (spec) =>
-    success(spec.program === 'wslpath' ? '/mnt/c/reader.cjs' : '/usr/bin/node')
+    success(
+      spec.script?.startsWith('data=')
+        ? 'present'
+        : spec.program === 'wslpath'
+          ? '/mnt/c/reader.cjs'
+          : '/usr/bin/node'
+    )
   )
   prepare = (await import('./opencode-wsl-runtime-preparation')).prepareOpenCodeWslReaders
 })
@@ -66,7 +72,7 @@ describe('WSL SQLite runtime preparation', () => {
     await vi.waitFor(() => expect(mocks.run).toHaveBeenCalledOnce())
     expect((await prepare([home]))[0]?.error).toContain('Preparing')
     expect(mocks.run).toHaveBeenCalledOnce()
-    release(success('/mnt/c/reader.cjs'))
+    release(success('present'))
     expect(await prepared()).toEqual([
       { distro: 'ubuntu', executable: '/usr/bin/node', readerPath: '/mnt/c/reader.cjs' }
     ])
@@ -97,14 +103,51 @@ describe('WSL SQLite runtime preparation', () => {
     expect((await prepared())[0]?.executable).toBe('/usr/bin/node')
   })
 
+  it('keeps a working reader during revalidation and prunes completed removed distros', async () => {
+    let now = 10_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const ready = await prepared()
+    now += 600_001
+    let release: (value: ReturnType<typeof success>) => void = () => {}
+    mocks.run.mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = resolve
+      })
+    )
+    expect(await prepare([home])).toEqual(ready)
+    await vi.waitFor(() => expect(mocks.run).toHaveBeenCalledTimes(4))
+    expect(await prepare([home])).toEqual(ready)
+    mocks.run.mockResolvedValueOnce(success('/mnt/c/repaired-reader.cjs'))
+    release(success('present'))
+    await vi.waitFor(async () =>
+      expect((await prepare([home]))[0]?.readerPath).toBe('/mnt/c/repaired-reader.cjs')
+    )
+    expect(await prepare([])).toEqual([])
+    expect((await prepare([home]))[0]?.error).toContain('Preparing')
+    await prepared()
+  })
+
   it('falls back to the pinned proxy runtime, verifies the guest stage, and preserves literal argv', async () => {
     const expected = ORCAD_BUN_RELEASE_ASSETS['linux-arm64-musl'].executableSha256
     mocks.run.mockImplementation(async (spec) => {
-      if (spec.program === 'node') {return { ...success(''), code: 1, stderr: 'no sqlite' }}
-      if (spec.program === 'uname') {return success('aarch64')}
-      if (spec.program === 'wslpath') {return success('/mnt/c/reader $literal.cjs')}
-      if (spec.script?.startsWith('getconf')) {return success('musl libc')}
-      if (spec.script?.startsWith('printf')) {return success('/home/ada $literal')}
+      if (spec.script?.startsWith('data=')) {
+        return success('present')
+      }
+      if (spec.program === 'node') {
+        return { ...success(''), code: 1, stderr: 'no sqlite' }
+      }
+      if (spec.program === 'uname') {
+        return success('aarch64')
+      }
+      if (spec.program === 'wslpath') {
+        return success('/mnt/c/reader $literal.cjs')
+      }
+      if (spec.script?.startsWith('getconf')) {
+        return success('musl libc')
+      }
+      if (spec.script?.startsWith('printf')) {
+        return success('/home/ada $literal')
+      }
       return success('')
     })
     const result = await prepared()
@@ -131,11 +174,24 @@ describe('WSL SQLite runtime preparation', () => {
 
   it('rechecks running state after downloading before it copies a runtime', async () => {
     mocks.run.mockImplementation(async (spec) => {
-      if (spec.program === 'node') {return { ...success(''), code: 1 }}
-      if (spec.program === 'uname') {return success('x86_64')}
-      if (spec.program === 'wslpath') {return success('/mnt/c/reader.cjs')}
-      if (spec.script?.startsWith('getconf')) {return success('glibc 2.31')}
-      if (spec.script?.startsWith('printf')) {return success('/home/ada')}
+      if (spec.script?.startsWith('data=')) {
+        return success('present')
+      }
+      if (spec.program === 'node') {
+        return { ...success(''), code: 1 }
+      }
+      if (spec.program === 'uname') {
+        return success('x86_64')
+      }
+      if (spec.program === 'wslpath') {
+        return success('/mnt/c/reader.cjs')
+      }
+      if (spec.script?.startsWith('getconf')) {
+        return success('glibc 2.31')
+      }
+      if (spec.script?.startsWith('printf')) {
+        return success('/home/ada')
+      }
       return success('')
     })
     mocks.download.mockImplementationOnce(async () => {
@@ -152,5 +208,22 @@ describe('WSL SQLite runtime preparation', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     expect(await prepare([home])).toEqual([])
     expect(mocks.run).not.toHaveBeenCalled()
+  })
+
+  it('skips runtime setup without a database and rechecks soon after OpenCode starts', async () => {
+    let now = 10_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    mocks.run.mockResolvedValueOnce(success(''))
+    await prepare([home])
+    await vi.waitFor(async () =>
+      expect((await prepare([home]))[0]?.error).toContain('No OpenCode database')
+    )
+    expect(mocks.run).toHaveBeenCalledOnce()
+    expect(mocks.download).not.toHaveBeenCalled()
+    expect(mocks.run.mock.calls[0]?.[0].script).toContain('OPENCODE_DB')
+    expect(mocks.run.mock.calls[0]?.[0].script).toContain('XDG_DATA_HOME')
+    now += 30_001
+    expect((await prepared())[0]?.executable).toBe('/usr/bin/node')
+    expect(mocks.running).toHaveBeenCalledWith(expect.any(Array), { requireConfirmed: true })
   })
 })

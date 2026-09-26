@@ -30,6 +30,11 @@ export async function prepareOpenCodeWslReaders(
       return distro ? [[distro.toLowerCase(), distro] as const] : []
     })
   )
+  for (const [key, entry] of preparation) {
+    if (!distros.has(key) && Number.isFinite(entry.expires)) {
+      preparation.delete(key)
+    }
+  }
   return [...distros].map(([key, distro]) => {
     const previous = preparation.get(key)
     if (previous && previous.expires > Date.now()) {
@@ -37,15 +42,17 @@ export async function prepareOpenCodeWslReaders(
     }
     const entry: { expires: number; value: OpenCodeWslRuntime } = {
       expires: Number.POSITIVE_INFINITY,
-      value: {
-        distro,
-        error: 'Preparing the WSL SQLite reader. Refresh Vault after setup finishes.'
-      }
+      value: previous?.value.executable
+        ? previous.value
+        : {
+            distro,
+            error: 'Preparing the WSL SQLite reader. Refresh Vault after setup finishes.'
+          }
     }
     preparation.set(key, entry)
     void prepare(distro).then(
       (runtime) => {
-        entry.expires = Date.now() + 10 * 60_000
+        entry.expires = Date.now() + (runtime.executable ? 10 * 60_000 : 30_000)
         entry.value = runtime
       },
       (error: unknown) => {
@@ -63,7 +70,9 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
   const run = async (spec: WslSpec): Promise<string> => {
     signal.throwIfAborted()
     const running = await waitForPromiseWithSignal(
-      filterPathsToRunningWslDistrosAsync([toWindowsWslUncPath('/', distro)]),
+      filterPathsToRunningWslDistrosAsync([toWindowsWslUncPath('/', distro)], {
+        requireConfirmed: true
+      }),
       signal
     )
     if (running.length === 0) {
@@ -89,6 +98,21 @@ async function prepare(distro: string): Promise<OpenCodeWslRuntime> {
     .find(existsSync)
   if (!reader) {
     throw new Error('The bundled WSL SQLite reader is missing. Reinstall Orca to repair it.')
+  }
+  const hasDatabase = await run({
+    script: [
+      'data="${XDG_DATA_HOME:-$HOME/.local/share}/opencode"',
+      'case "${OPENCODE_DB-}" in',
+      '  :memory:) exit 0 ;;',
+      '  /*) [ ! -f "$OPENCODE_DB" ] || printf present ;;',
+      '  "") for db in "$data"/opencode*.db; do if [ -f "$db" ]; then printf present; break; fi; done ;;',
+      '  *) [ ! -f "$data/$OPENCODE_DB" ] || printf present ;;',
+      'esac'
+    ].join('\n'),
+    loginPath: 'none'
+  })
+  if (hasDatabase !== 'present') {
+    return { distro, error: 'No OpenCode database is present in this WSL distro.' }
   }
   const readerPath = await run({
     program: 'wslpath',
