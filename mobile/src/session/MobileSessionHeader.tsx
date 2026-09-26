@@ -1,6 +1,7 @@
 import { View, Text, ScrollView, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
+  ChevronDown,
   ChevronLeft,
   Folder,
   File,
@@ -22,8 +23,15 @@ import { colors } from '../theme/mobile-theme'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import type { WorkspaceSwitcher } from './use-workspace-switcher'
 
-export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
+export function MobileSessionHeader({
+  controller,
+  switcher
+}: {
+  controller: MobileSessionController
+  switcher: WorkspaceSwitcher
+}) {
   const {
     hostId,
     isFolderWorkspaceRoute,
@@ -71,10 +79,22 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
           <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
         </Pressable>
 
-        <View style={styles.sessionTitleBlock}>
-          <Text style={styles.sessionTitle} numberOfLines={1}>
-            {worktreeName || 'Terminal'}
-          </Text>
+        <View style={styles.sessionTitleBlock} {...switcher.swipeHandlers}>
+          <Pressable
+            style={styles.sessionTitleButton}
+            onPress={switcher.open}
+            hitSlop={{ top: 8, bottom: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel="Switch workspace"
+            accessibilityHint={
+              switcher.flipTarget ? `Swipe to go to ${switcher.flipTarget.name}` : undefined
+            }
+          >
+            <Text style={styles.sessionTitle} numberOfLines={1}>
+              {worktreeName || 'Terminal'}
+            </Text>
+            <ChevronDown size={14} color={colors.textMuted} strokeWidth={2.2} />
+          </Pressable>
           <Pressable
             style={styles.sessionMetaRow}
             disabled={!showConnectionRetry}

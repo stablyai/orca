@@ -62,7 +62,15 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0
   },
+  sessionTitleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    maxWidth: '100%'
+  },
   sessionTitle: {
+    flexShrink: 1,
     color: colors.textPrimary,
     fontSize: 14,
     fontWeight: '600'
