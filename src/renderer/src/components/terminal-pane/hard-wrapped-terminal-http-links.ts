@@ -29,17 +29,29 @@ function buildCandidateFromStart(
   const cachedStart = translatedLines.get(startY)
   const startText = cachedStart?.text ?? startLine.translateToString(false)
   const schemeIndex = startText.search(HTTP_SCHEME_PATTERN)
-  if (schemeIndex === -1 || !VERTICAL_LAYOUT_FRAME_PATTERN.test(startText.slice(0, schemeIndex))) {
+  if (schemeIndex === -1) {
+    return null
+  }
+  let leftFrameIndex = -1
+  for (let i = schemeIndex - 1; i >= 0; i--) {
+    if (VERTICAL_LAYOUT_FRAME_PATTERN.test(startText[i]!)) {
+      leftFrameIndex = i
+      break
+    }
+  }
+  if (leftFrameIndex === -1) {
     return null
   }
   const translatedStart = cachedStart ?? translateLineWithColumns(startLine)
   translatedLines.set(startY, translatedStart)
+  const leftFrameColumn = translatedStart.columns[leftFrameIndex]
   const schemeColumn = translatedStart.columns[schemeIndex]
-  if (schemeColumn === undefined) {
+  if (leftFrameColumn === undefined || schemeColumn === undefined) {
     return null
   }
 
-  const continuationPrefix = translatedStart.text.slice(0, schemeIndex)
+  // Why: anchor on the left frame column so overlay modals join URLs even when background text varies left of the frame.
+  const startPadding = translatedStart.text.slice(leftFrameIndex + 1, schemeIndex)
   let text = ''
   let rightFrameColumn: number | null = null
   let previousRowCanContinue = true
@@ -59,15 +71,27 @@ function buildCandidateFromStart(
         ? translatedStart
         : (translatedLines.get(rowY) ?? translateLineWithColumns(line))
     translatedLines.set(rowY, translated)
-    if (rowY > startY && translated.text.slice(0, schemeIndex) !== continuationPrefix) {
+
+    const rowLeftFrameIndex = translated.columns.indexOf(leftFrameColumn)
+    if (
+      rowLeftFrameIndex === -1 ||
+      !VERTICAL_LAYOUT_FRAME_PATTERN.test(translated.text[rowLeftFrameIndex] ?? '')
+    ) {
+      break
+    }
+    const rowSchemeIndex = translated.columns.indexOf(schemeColumn)
+    if (
+      rowSchemeIndex === -1 ||
+      translated.text.slice(rowLeftFrameIndex + 1, rowSchemeIndex) !== startPadding
+    ) {
       break
     }
 
-    const fragment = translated.text.slice(schemeIndex).match(HTTP_FRAGMENT_PATTERN)?.[0] ?? ''
+    const fragment = translated.text.slice(rowSchemeIndex).match(HTTP_FRAGMENT_PATTERN)?.[0] ?? ''
     if (!fragment || (rowY > startY && HTTP_SCHEME_START_PATTERN.test(fragment))) {
       break
     }
-    const fragmentEnd = schemeIndex + fragment.length
+    const fragmentEnd = rowSchemeIndex + fragment.length
     const layoutSuffix = translated.text.slice(fragmentEnd)
     const rightFrameOffset = layoutSuffix.search(VERTICAL_LAYOUT_FRAME_PATTERN)
     const currentRightFrameIndex = rightFrameOffset === -1 ? -1 : fragmentEnd + rightFrameOffset
@@ -90,7 +114,7 @@ function buildCandidateFromStart(
       y: rowY,
       text: fragment,
       sourceText: translated.text,
-      columns: translated.columns.slice(schemeIndex, fragmentEnd + 1),
+      columns: translated.columns.slice(rowSchemeIndex, fragmentEnd + 1),
       startIndex: text.length,
       isWrapped: line.isWrapped,
       lineLength: line.length
