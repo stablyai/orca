@@ -32,7 +32,11 @@ import {
   useCrossMachineRecoverySnapshot
 } from './cross-machine-recovery-provider-store'
 import { buildRecoverySourceGroups } from './cross-machine-recovery-rows'
-import { pickupPhaseLabel, providerErrorMessage } from './cross-machine-recovery-copy'
+import {
+  pickupPhaseLabel,
+  providerErrorMessage,
+  refusedSessionsLabel
+} from './cross-machine-recovery-copy'
 import {
   revealRecoveredWorktree,
   startRecoveryPickup,
@@ -162,13 +166,9 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
       const refused = result.value.sessions.filter((session) => session.status === 'refused')
       if (refused.length > 0) {
         toast.warning(
-          translate(
-            'components.cross-machine-recovery.dialog.refused',
-            '{{count}} sessions were left on the other computer: {{reasons}}',
-            {
-              count: refused.length,
-              reasons: refused.map((s) => `${s.session_id} (${s.reason ?? 'refused'})`).join(', ')
-            }
+          refusedSessionsLabel(
+            refused.length,
+            refused.map((s) => `${s.session_id} (${s.reason ?? 'refused'})`).join(', ')
           )
         )
       }

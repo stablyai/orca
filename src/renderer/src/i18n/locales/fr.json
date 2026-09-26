@@ -18127,13 +18127,15 @@
         "unreachable": "{{hostName}} (injoignable)",
         "cancel": "Annuler",
         "recover": "Récupérer",
-        "refused": "{{count}} sessions sont restées sur l'autre ordinateur : {{reasons}}"
+        "refused_one": "{{count}} session est restée sur l'autre ordinateur : {{reasons}}",
+        "refused_other": "{{count}} sessions sont restées sur l'autre ordinateur : {{reasons}}"
       },
       "row": {
         "ageUnknown": "heure inconnue",
         "notReadyMissing": "Pas prêt : {{missing}} manquant",
         "notReady": "Pas encore prêt à être récupéré",
-        "sessions": "{{count}} sessions",
+        "sessions_one": "{{count}} session",
+        "sessions_other": "{{count}} sessions",
         "partial": "Transcription partielle",
         "collision": "Déjà en cours d'exécution sur cet ordinateur",
         "resumeAge": "Reprendre · dernière utilisation {{age}}",

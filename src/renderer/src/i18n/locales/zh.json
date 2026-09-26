@@ -18028,13 +18028,15 @@
         "unreachable": "{{hostName}}（无法访问）",
         "cancel": "取消",
         "recover": "恢复",
-        "refused": "{{count}} 个会话留在了另一台电脑上：{{reasons}}"
+        "refused_one": "{{count}} 个会话留在了另一台电脑上：{{reasons}}",
+        "refused_other": "{{count}} 个会话留在了另一台电脑上：{{reasons}}"
       },
       "row": {
         "ageUnknown": "时间未知",
         "notReadyMissing": "未就绪：缺少 {{missing}}",
         "notReady": "尚未准备好恢复",
-        "sessions": "{{count}} 个会话",
+        "sessions_one": "{{count}} 个会话",
+        "sessions_other": "{{count}} 个会话",
         "partial": "部分对话记录",
         "collision": "已在这台电脑上运行",
         "resumeAge": "继续 · 上次使用 {{age}}",

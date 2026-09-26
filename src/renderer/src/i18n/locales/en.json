@@ -18147,13 +18147,15 @@
         "unreachable": "{{hostName}} (unreachable)",
         "cancel": "Cancel",
         "recover": "Recover",
-        "refused": "{{count}} sessions were left on the other computer: {{reasons}}"
+        "refused_one": "{{count}} session was left on the other computer: {{reasons}}",
+        "refused_other": "{{count}} sessions were left on the other computer: {{reasons}}"
       },
       "row": {
         "ageUnknown": "unknown time",
         "notReadyMissing": "Not ready: missing {{missing}}",
         "notReady": "Not ready to recover yet",
-        "sessions": "{{count}} sessions",
+        "sessions_one": "{{count}} session",
+        "sessions_other": "{{count}} sessions",
         "partial": "Partial transcript",
         "collision": "Already running on this computer",
         "resumeAge": "Resume · last used {{age}}",

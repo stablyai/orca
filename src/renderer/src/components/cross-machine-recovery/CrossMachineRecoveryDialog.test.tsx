@@ -367,3 +367,19 @@ it('shows a newer partial checkpoint and the sessions it cannot recover', async 
     "Can't recover here: codex codex-1 (agent not supported yet), gemini gem-1 (future-reason)"
   )
 })
+
+it('counts one session in the singular', async () => {
+  bridge.list.mockResolvedValueOnce(
+    listResult([
+      recoveryTestItem({
+        host: 'laptop',
+        workspace: 'solo',
+        sessions: [{ id: 'only', human: '2026-09-26T00:00:00Z' }]
+      })
+    ])
+  )
+  await openDialog()
+  const row = document.querySelector('[data-testid="cross-machine-recovery-item"]')
+  expect(row?.textContent).toContain('main · 1 session ·')
+  expect(row?.textContent).not.toContain('1 sessions')
+})

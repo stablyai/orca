@@ -18028,13 +18028,15 @@
         "unreachable": "{{hostName}}（接続できません）",
         "cancel": "キャンセル",
         "recover": "復元",
-        "refused": "{{count}} 件のセッションは別のコンピュータに残されました: {{reasons}}"
+        "refused_one": "{{count}} 件のセッションは別のコンピュータに残されました: {{reasons}}",
+        "refused_other": "{{count}} 件のセッションは別のコンピュータに残されました: {{reasons}}"
       },
       "row": {
         "ageUnknown": "不明な時刻",
         "notReadyMissing": "準備ができていません: {{missing}} がありません",
         "notReady": "まだ復元できません",
-        "sessions": "{{count}} 件のセッション",
+        "sessions_one": "{{count}} 件のセッション",
+        "sessions_other": "{{count}} 件のセッション",
         "partial": "トランスクリプトの一部のみ",
         "collision": "このコンピュータですでに実行中です",
         "resumeAge": "再開 · 最終使用 {{age}}",

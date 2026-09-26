@@ -5,7 +5,11 @@ import { CommandItem } from '@/components/ui/command'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
-import { notRestorableReasonLabel, pauseReasonLabel } from './cross-machine-recovery-copy'
+import {
+  notRestorableReasonLabel,
+  pauseReasonLabel,
+  sessionCountLabel
+} from './cross-machine-recovery-copy'
 import {
   workspaceDisabledReason,
   type RecoverySessionRow,
@@ -61,10 +65,8 @@ export function CrossMachineRecoveryItemRow({
         <span className="block truncate text-sm">{row.workspaceName}</span>
         <span className="block truncate text-xs text-muted-foreground">
           {[row.repoName, row.branch].filter(Boolean).join(' · ')} ·{' '}
-          {translate('components.cross-machine-recovery.row.sessions', '{{count}} sessions', {
-            count: row.sessions.length
-          })}{' '}
-          · {ageLabel(row.newestHumanActivityAt ?? row.checkpointCapturedAt, now)}
+          {sessionCountLabel(row.sessions.length)} ·{' '}
+          {ageLabel(row.newestHumanActivityAt ?? row.checkpointCapturedAt, now)}
         </span>
         {row.completeness.code === 'deferred' ? (
           <span

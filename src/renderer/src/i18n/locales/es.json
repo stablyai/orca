@@ -15127,13 +15127,15 @@
         "unreachable": "{{hostName}} (inaccesible)",
         "cancel": "Cancelar",
         "recover": "Recuperar",
-        "refused": "{{count}} sesiones se quedaron en el otro ordenador: {{reasons}}"
+        "refused_one": "{{count}} sesión se quedó en el otro ordenador: {{reasons}}",
+        "refused_other": "{{count}} sesiones se quedaron en el otro ordenador: {{reasons}}"
       },
       "row": {
         "ageUnknown": "hora desconocida",
         "notReadyMissing": "No está listo: falta {{missing}}",
         "notReady": "Todavía no está listo para recuperar",
-        "sessions": "{{count}} sesiones",
+        "sessions_one": "{{count}} sesión",
+        "sessions_other": "{{count}} sesiones",
         "partial": "Transcripción parcial",
         "collision": "Ya se está ejecutando en este ordenador",
         "resumeAge": "Reanudar · último uso {{age}}",

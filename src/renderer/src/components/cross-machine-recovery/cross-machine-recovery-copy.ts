@@ -126,3 +126,27 @@ export function pickupPhaseLabel(progress: CcSyncProgress): string {
       return translate('components.cross-machine-recovery.copy.phase.unknown', 'Recovering…')
   }
 }
+
+export function sessionCountLabel(count: number): string {
+  return count === 1
+    ? translate('components.cross-machine-recovery.row.sessions_one', '{{count}} session', {
+        count
+      })
+    : translate('components.cross-machine-recovery.row.sessions_other', '{{count}} sessions', {
+        count
+      })
+}
+
+export function refusedSessionsLabel(count: number, reasons: string): string {
+  return count === 1
+    ? translate(
+        'components.cross-machine-recovery.dialog.refused_one',
+        '{{count}} session was left on the other computer: {{reasons}}',
+        { count, reasons }
+      )
+    : translate(
+        'components.cross-machine-recovery.dialog.refused_other',
+        '{{count}} sessions were left on the other computer: {{reasons}}',
+        { count, reasons }
+      )
+}

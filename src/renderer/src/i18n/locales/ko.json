@@ -18028,13 +18028,15 @@
         "unreachable": "{{hostName}} (연결할 수 없음)",
         "cancel": "취소",
         "recover": "복구",
-        "refused": "세션 {{count}}개가 다른 컴퓨터에 남았습니다: {{reasons}}"
+        "refused_one": "세션 {{count}}개가 다른 컴퓨터에 남았습니다: {{reasons}}",
+        "refused_other": "세션 {{count}}개가 다른 컴퓨터에 남았습니다: {{reasons}}"
       },
       "row": {
         "ageUnknown": "알 수 없는 시간",
         "notReadyMissing": "준비되지 않음: {{missing}} 없음",
         "notReady": "아직 복구할 준비가 되지 않았습니다",
-        "sessions": "세션 {{count}}개",
+        "sessions_one": "세션 {{count}}개",
+        "sessions_other": "세션 {{count}}개",
         "partial": "일부 대화 기록",
         "collision": "이 컴퓨터에서 이미 실행 중",
         "resumeAge": "재개 · 마지막 사용 {{age}}",
