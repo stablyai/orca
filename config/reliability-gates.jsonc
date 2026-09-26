@@ -20275,6 +20275,92 @@
         "Default config paths are shared with GNOME on a disposable hosted CI runner; nested mode refuses non-GitHub-Actions execution."
       ],
       "demotionRule": "Keep experimental on unexplained failures; retain exact bytes and participation checks without retries, skips, or longer deadlines."
+    },
+    {
+      "id": "relay.control-activation-ownership",
+      "title": "Closed queued controls leave persistence for the live retry",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "relay",
+      "layer": "registry-unit-and-local-websocket",
+      "surfaces": [
+        "relay host control activation"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "relay"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "relay"
+      ],
+      "coverageNotes": "Actual registry queue with controlled store latency plus local WebSocket proof and connection-capacity suites on macOS. No PostgreSQL or live remote host run. PTY, daemon, SSH process state, WSL execution and folder/git workspace behavior are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/cloud/apps/relay/src/host-session-registry.ts"
+      ],
+      "invariant": "A closed queued transport starts no durable activation; an already-started activation retains cleanup, and a live successor becomes the indexed control without concurrent same-host activation.",
+      "oracle": "Queue a closed control before a live retry behind stalled persistence. With controlled 4s store calls, require two total activations, one release for the already-started closed control, and live readiness at 4s. Existing tests retain cleanup when closure happens during I/O.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/host-session-registry.test.ts ../../../cloud/apps/relay/src/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts --silent=false"
+      ],
+      "testFiles": [
+        "cloud/apps/relay/src/host-session-registry.test.ts",
+        "cloud/apps/relay/src/host-session-client-accept.test.ts",
+        "cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts",
+        "cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "cloud/apps/relay/src/host-session-registry.test.ts",
+          "assertions": [
+            "skips a closed queued control so its live retry avoids abandoned database work",
+            "does not publish a control that closes during activation",
+            "does not rebind a control that closes during activation",
+            "fails a control waiting behind a stalled activation without breaking serialization"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/host-session-registry.test.ts ../../../cloud/apps/relay/src/host-session-client-accept.test.ts ../../../cloud/apps/relay/src/relay-host-proof-failure.blackbox.test.ts ../../../cloud/apps/relay/src/relay-connection-hard-cap.blackbox.test.ts --silent=false",
+          "result": "passed",
+          "durationSeconds": 0.407,
+          "summary": "88 tests across four files passed; relay typecheck passed separately."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Focused unit and local socket suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline regression failed: three activation calls, two releases, live ready at 8s. Guarded registry passed with two calls, one release, live ready at 4s under controlled store latency."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Deletes abandoned persistence before it starts. No new timer, polling, queue, provider call or wire change; existing FIFO and post-I/O cleanup remain."
+      },
+      "knownGaps": [
+        "No real PostgreSQL contention benchmark or live remote host/physical mobile run.",
+        "Windows/Linux execution and CI soak are not recorded; queue cleanup after a never-settling predecessor remains unchanged."
+      ],
+      "promotionCriteria": [
+        "Retain red/green count and latency assertions; collect cross-platform and CI soak evidence."
+      ],
+      "demotionRule": "Keep experimental until soak evidence; investigate lifecycle failures without retries or weakening count, identity or cleanup assertions."
     }
   ]
 }
