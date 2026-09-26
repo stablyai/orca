@@ -14,6 +14,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
 import {
+  hasConfiguredTuiAgentLaunchArgs,
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
@@ -127,6 +128,14 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     agentArgs !== undefined
       ? agentArgs
       : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+  // Why (#15373): a paired host re-resolves omitted args against its own settings, so a client that
+  // actually chose a permission mode must send it — including Manual's empty string. An unconfigured
+  // client has chosen nothing, so stay silent rather than forcing the built-in YOLO default on the host.
+  const pairedHostAgentArgs =
+    agentArgs !== undefined ||
+    hasConfiguredTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+      ? effectiveAgentArgs
+      : undefined
   const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
@@ -181,7 +190,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       promptDelivery,
       pastePromptAfterReady: pasteDraftAfterLaunch,
       submitPastedPrompt,
-      agentArgs,
+      agentArgs: pairedHostAgentArgs,
       // Why: omission means terminal locally, but would let a paired host apply
       // its own default; send the client's resolved terminal choice explicitly.
       viewMode: initialViewModeProps.viewMode ?? 'terminal',
@@ -257,6 +266,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,
+    // Why: the local launch command already bakes in the resolved args, so this override only records explicit caller intent.
     ...(agentArgs !== undefined ? { agentArgsOverride: agentArgs } : {}),
     ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
     ...(startupPlan.startupCommandDelivery
