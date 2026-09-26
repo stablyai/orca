@@ -64,7 +64,7 @@ async function activateNewTerminalTab(page: Page, worktreeId: string): Promise<v
     const state = store.getState()
     const tab = state.createTab(id, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, worktreeId)
 }
 
@@ -76,7 +76,7 @@ async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
     }
     const state = store.getState()
     state.setActiveTab(id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', store.getState().activeWorktreeId)
   }, tabId)
 }
 

@@ -154,6 +154,7 @@ function persistedTarget(
           visit(itemId, 0, body)
         }
       },
+      itemBody: (itemId: string) => persisted.get(itemId) ?? null,
       epoch: 'test'
     } as unknown as AgentSessionJournal
   return { journal, fence: 1, publish: vi.fn() }

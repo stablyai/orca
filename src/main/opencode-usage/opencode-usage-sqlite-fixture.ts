@@ -82,7 +82,8 @@ export type OpenCodeUsageFixtureSession = {
   id: string
   directory: string
   title?: string
-  model?: string
+  /** `null` writes a NULL `model`, the shape a v1 row has before the import derives one. */
+  model?: string | null
   cost?: number
   tokensInput?: number
   tokensOutput?: number
@@ -134,7 +135,9 @@ function insertSession(
     session.title ?? 'OpenCode session',
     created,
     session.timeUpdated ?? created + 60_000,
-    session.model ?? '{"providerID":"anthropic","modelID":"claude-sonnet-4-5"}'
+    session.model === undefined
+      ? '{"providerID":"anthropic","modelID":"claude-sonnet-4-5"}'
+      : session.model
   ]
   const usage = withUsageColumns
     ? [

@@ -11,6 +11,7 @@ import { getTightestUsageSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
+import { isCursorUsageBucket } from '../../../../shared/cursor-usage-buckets'
 
 function MiniBar({
   usedPct,
@@ -82,6 +83,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'M'
     case 'grok':
       return 'R'
+    case 'cursor':
+      return 'U'
     case 'codex':
       return 'X'
   }
@@ -94,6 +97,12 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
 // Why: Gemini exposes extra experimental buckets that made the pre-existing verbose footer noisy.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
+// Why: the allowlist above is Gemini's. Cursor's pools are its whole meter — filtering
+// them out leaves a signed-in account with an icon and no number at all.
+function isVisibleStatusBarBucket(name: string): boolean {
+  return STATUS_BAR_BUCKET_NAMES.has(name) || isCursorUsageBucket(name)
+}
+
 function VerboseProviderUsage({
   p,
   display
@@ -102,7 +111,10 @@ function VerboseProviderUsage({
   display: UsagePercentageDisplay
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
-    const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
+    const visibleBuckets = p.buckets.filter((bucket) => isVisibleStatusBarBucket(bucket.name))
+    // Why: a provider whose buckets are all filtered out still has a headline
+    // window worth showing rather than rendering an empty segment.
+    const fallbackWindow = p.session ?? p.monthly ?? null
     return (
       <>
         {visibleBuckets.map((bucket, index) => (
@@ -113,10 +125,10 @@ function VerboseProviderUsage({
             </span>
           </React.Fragment>
         ))}
-        {visibleBuckets.length === 0 && p.session ? (
+        {visibleBuckets.length === 0 && fallbackWindow ? (
           <WindowLabel
-            w={p.session}
-            label={formatRateLimitWindowChipLabel(p.session)}
+            w={fallbackWindow}
+            label={formatRateLimitWindowChipLabel(fallbackWindow)}
             display={display}
           />
         ) : null}

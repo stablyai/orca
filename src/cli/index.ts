@@ -34,7 +34,7 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     // Why: `host list` answers "what can this machine target, and with what flag". Half of that
     // answer (paired servers) is read from this machine's own pairing store and cannot be routed,
     // so routing the other half produced one listing describing two machines at once.
-    commandPath[0] === 'host' ||
+    commandPath.join(' ') === 'host list' ||
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||

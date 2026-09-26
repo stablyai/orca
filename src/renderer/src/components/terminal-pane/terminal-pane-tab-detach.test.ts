@@ -330,7 +330,7 @@ describe('detachTerminalPaneToTab', () => {
       targetTabId: 'tab-detached'
     })
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-detached')
-    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', WORKTREE_ID)
     expect(persistLayoutSnapshot).toHaveBeenCalled()
   })
 

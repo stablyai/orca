@@ -49,8 +49,7 @@ describe('restart journal restoration', () => {
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
       onReadable: () => undefined,
-      retrySettlement: async () => true,
-      restoreHandoff: async () => undefined
+      retrySettlement: async () => true
     })
 
     await vi.waitFor(() => expect(active).toBe(4))
@@ -62,7 +61,7 @@ describe('restart journal restoration', () => {
     expect(peak).toBe(4)
   })
 
-  it('runs pending settlement retry after recovery resolution and before handoff', async () => {
+  it('runs pending settlement retry after recovery resolution', async () => {
     const calls: string[] = []
     const params: AgentSessionAttachParams = {
       envelope: {
@@ -108,25 +107,16 @@ describe('restart journal restoration', () => {
             restoredParams === params ? 'retrySettlement:restored-params' : 'retrySettlement'
           )
           return true
-        },
-        restoreHandoff: async () => {
-          calls.push('restoreHandoff')
         }
       },
       'session-1'
     )
 
-    expect(calls).toEqual([
-      'resolveRecovery',
-      'onReadable',
-      'retrySettlement:restored-params',
-      'restoreHandoff'
-    ])
+    expect(calls).toEqual(['resolveRecovery', 'onReadable', 'retrySettlement:restored-params'])
   })
 
   it('does not rerun settlement retry when a second restore finds the session already open', async () => {
     const retrySettlement = vi.fn(async () => true)
-    const restoreHandoff = vi.fn(async () => undefined)
     restoreRead.mockResolvedValue({
       journal: {},
       params: {},
@@ -144,13 +134,11 @@ describe('restart journal restoration', () => {
         serialize: async (_sessionId, task) => task(),
         hasSession: () => true,
         onReadable: () => undefined,
-        retrySettlement,
-        restoreHandoff
+        retrySettlement
       },
       'session-1'
     )
 
     expect(retrySettlement).not.toHaveBeenCalled()
-    expect(restoreHandoff).toHaveBeenCalledOnce()
   })
 })

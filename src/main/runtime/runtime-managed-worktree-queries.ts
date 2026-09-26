@@ -1,4 +1,8 @@
 import type { DetectedWorktreeListResult, Worktree } from '../../shared/worktree/types'
+import {
+  getLocalWorktreeCatalogVersion,
+  localWorktreeCatalogVersionAt
+} from '../local-worktree-scan-generation'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeWorktreeListResult } from '../../shared/runtime-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
@@ -129,6 +133,7 @@ export class RuntimeManagedWorktreeQueries {
         repoId: repo.id,
         authoritative: true,
         source: 'git',
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
         worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
       }
     }
@@ -185,6 +190,8 @@ export class RuntimeManagedWorktreeQueries {
       repoId: repo.id,
       authoritative: scan.ok && !scan.superseded,
       source: scan.ok ? 'git' : 'metadata-fallback',
+      // Why the scan's generation: the rows describe the catalog as of when the scan began.
+      catalogVersion: localWorktreeCatalogVersionAt(scan.scanGeneration),
       worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
     }
   }

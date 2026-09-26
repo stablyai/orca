@@ -42,6 +42,7 @@ src/main/runtime/orca-runtime-get-agent-session-execution-namespace.ts
 src/main/runtime/orca-runtime-get-orchestration-dispatch-authority.ts
 src/main/runtime/orca-runtime-get-pty-record-for-pane-key.ts
 src/main/runtime/orca-runtime-get-runtime-id.ts
+src/main/runtime/orca-runtime-get-structured-agent-session-create-support.ts
 src/main/runtime/orca-runtime-get-terminal-interactive-wait.ts
 src/main/runtime/orca-runtime-get-unpersisted-tracked-title-for-pty.ts
 src/main/runtime/orca-runtime-get-worktree-ps.ts
@@ -75,7 +76,6 @@ src/main/runtime/orca-runtime-pick-most-recent-actor.ts
 src/main/runtime/orca-runtime-postlude.ts
 src/main/runtime/orca-runtime-prepare-pty-execution-context.ts
 src/main/runtime/orca-runtime-preserved-branch-cleanup.ts
-src/main/runtime/orca-runtime-prove-recovered-structured-tui-pty-process.ts
 src/main/runtime/orca-runtime-prune-mobile-session-tab-group-layout.ts
 src/main/runtime/orca-runtime-pty-foreground-process-reads.ts
 src/main/runtime/orca-runtime-publish-pty-backed-mobile-session-terminal.ts
@@ -96,7 +96,6 @@ src/main/runtime/orca-runtime-resolve-browser-network-execution-host-for-worktre
 src/main/runtime/orca-runtime-resolve-exit-waiters.ts
 src/main/runtime/orca-runtime-resolve-known-workspace-file-target.ts
 src/main/runtime/orca-runtime-resolve-mobile-session-terminal-command.ts
-src/main/runtime/orca-runtime-resolve-recovered-structured-tui-transcript.ts
 src/main/runtime/orca-runtime-resolve-terminal-pane.ts
 src/main/runtime/orca-runtime-resolve-terminal-split-source-authority.ts
 src/main/runtime/orca-runtime-resolve-waiter.ts
@@ -120,12 +119,8 @@ src/main/runtime/orca-runtime-state-fields.ts
 src/main/runtime/orca-runtime-stop-exact-terminals-for-worktree.ts
 src/main/runtime/orca-runtime-stop-explicitly-closed-tab-ptys.ts
 src/main/runtime/orca-runtime-stop-requested-pty-ids.ts
-src/main/runtime/orca-runtime-stop-structured-session-process.ts
 src/main/runtime/orca-runtime-stop-terminals-for-worktree.ts
 src/main/runtime/orca-runtime-stored-mobile-snapshot-has-stale-preserved-tab.ts
-src/main/runtime/orca-runtime-structured-agent-session-launch-tui.ts
-src/main/runtime/orca-runtime-structured-agent-session-recover-tui-owner.ts
-src/main/runtime/orca-runtime-structured-agent-session-reprove-tui-owner.ts
 src/main/runtime/orca-runtime-subscribe-to-terminal-resize.ts
 src/main/runtime/orca-runtime-sync-mobile-session-tabs.ts
 src/main/runtime/orca-runtime-sync-window-graph.ts

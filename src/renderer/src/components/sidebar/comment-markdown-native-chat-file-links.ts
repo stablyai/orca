@@ -2,7 +2,10 @@ import {
   createNativeChatFileHref,
   routeNativeChatHref
 } from '../../../../shared/native-chat-href-routing'
-import { parseFileLinkLocation } from '../../../../shared/file-link-location'
+import {
+  formatFileLinkLocation,
+  parseFileLinkLocation
+} from '../../../../shared/file-link-location'
 import { extractTerminalFileLinks, type ParsedTerminalFileLink } from '@/lib/terminal-links'
 
 type MarkdownNode = {
@@ -14,16 +17,16 @@ type MarkdownNode = {
 
 const ROOTED_PATH_PREFIX_PATTERN = /^(?:~[\\/]|\.{1,2}[\\/]|[\\/]|[A-Za-z]:[\\/])/
 
-function isLinkifiableFile(link: ParsedTerminalFileLink, requireSeparator: boolean): boolean {
+// Why: a link is underlined only when it names a path; a bare `name.md` resolves nowhere
+// reliable, so underlining it promises a click that cannot open anything.
+function isLinkifiableFile(link: ParsedTerminalFileLink, isProse: boolean): boolean {
   const hasRootedPrefix = ROOTED_PATH_PREFIX_PATTERN.test(link.pathText)
   const hasLineSuffix = link.line !== null || link.column !== null
   const hasAlphabeticExtension = /\.[\p{L}][\p{L}\p{N}\p{M}_+-]*$/u.test(link.pathText)
   const hasPathExtension = /\.[\p{L}\p{N}][\p{L}\p{N}\p{M}_+-]*$/u.test(link.pathText)
   return (
-    (!requireSeparator || /[\\/]/.test(link.pathText)) &&
-    (hasRootedPrefix ||
-      hasLineSuffix ||
-      (requireSeparator ? hasPathExtension : hasAlphabeticExtension)) &&
+    /[\\/]/.test(link.pathText) &&
+    (hasRootedPrefix || hasLineSuffix || (isProse ? hasPathExtension : hasAlphabeticExtension)) &&
     routeNativeChatHref(link.displayText).kind === 'file'
   )
 }
@@ -72,10 +75,11 @@ function hasPartialPathBoundary(value: string, link: ParsedTerminalFileLink): bo
   )
 }
 
-function createFileLinkNode(value: string, child: MarkdownNode): MarkdownNode {
+// Why: wrap the parsed location, not the display text; a `file://` URI must not reach the literal href.
+function createFileLinkNode(link: ParsedTerminalFileLink, child: MarkdownNode): MarkdownNode {
   return {
     type: 'link',
-    url: createNativeChatFileHref(value),
+    url: createNativeChatFileHref(formatFileLinkLocation(link)),
     children: [child]
   }
 }
@@ -122,7 +126,7 @@ function splitTextSegment(value: string): MarkdownNode[] {
     if (link.startIndex > cursor) {
       children.push({ type: 'text', value: value.slice(cursor, link.startIndex) })
     }
-    children.push(createFileLinkNode(link.displayText, { type: 'text', value: link.displayText }))
+    children.push(createFileLinkNode(link, { type: 'text', value: link.displayText }))
     cursor = link.endIndex
   }
   if (cursor < value.length) {
@@ -185,14 +189,15 @@ function splitTextNode(value: string): MarkdownNode[] {
   let cursor = 0
   for (const match of value.matchAll(QUOTED_TEXT_PATTERN)) {
     const content = match[1] ?? match[2]
-    if (!content || !exactFileLink(content, true)) {
+    const link = content ? exactFileLink(content, true) : null
+    if (!content || !link) {
       continue
     }
     const matchIndex = match.index ?? 0
     const quote = match[0][0]
     children.push(...splitUnquotedText(value.slice(cursor, matchIndex)))
     children.push({ type: 'text', value: quote })
-    children.push(createFileLinkNode(content, { type: 'text', value: content }))
+    children.push(createFileLinkNode(link, { type: 'text', value: content }))
     children.push({ type: 'text', value: quote })
     cursor = matchIndex + match[0].length
   }
@@ -208,13 +213,16 @@ function inlineCodeFileLink(node: MarkdownNode): MarkdownNode | null {
   if (!value) {
     return null
   }
-  return exactFileLink(value, true) ? createFileLinkNode(value, node) : null
+  const link = exactFileLink(value, true)
+  return link ? createFileLinkNode(link, node) : null
 }
 
 function transformFileLinks(node: MarkdownNode): void {
   if (node.type === 'link') {
-    if (node.url && routeNativeChatHref(node.url).kind === 'file') {
-      node.url = createNativeChatFileHref(node.url)
+    const route = routeNativeChatHref(node.url)
+    if (route.kind === 'file') {
+      // Why: the wrapped href carries literal location text, so URL syntax is resolved here, once.
+      node.url = createNativeChatFileHref(formatFileLinkLocation(route))
     }
     return
   }

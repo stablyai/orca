@@ -10,6 +10,7 @@
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
+  isToolCallBlock,
   type NativeChatMessage
 } from '../../../../shared/native-chat-types'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat-turn-status'
@@ -17,7 +18,10 @@ import {
   nativeChatTurnFold,
   type NativeChatTurnFoldRow
 } from '../../../../shared/native-chat-turn-fold'
-import { deriveNativeChatRowContent, nativeChatRowRendersContent } from './native-chat-row-content'
+import {
+  deriveNativeChatRowContent,
+  nativeChatRowRendersContent
+} from '../../../../shared/native-chat-row-content'
 import {
   estimateNativeChatRowHeight,
   nativeChatRowContentMetrics
@@ -30,6 +34,10 @@ export type NativeChatTranscriptSlot = {
   turnKey: string | undefined
   /** The row's own turn is the one still running, so its tools stay live. */
   activeTurnIsWorking: boolean
+  /** Nothing the agent said or did comes after this row, so its tool run is
+   *  the one still live while the turn works. A later run or answer settles it;
+   *  a reasoning aside does not, the agent is still inside the same batch. */
+  trailingRun: boolean
   /** Resolved approval/question stands in for the message it answered. */
   receipt: NativeChatResolvedPrompt | undefined
   /** Turn timing shown under this row, already filtered to "should render". */
@@ -94,6 +102,17 @@ export function buildNativeChatTranscriptSlots(
       )
     }
   })
+  // Liveness is the turn's, not any one call's: the run at the frontier stays
+  // live between its calls, and a run the agent has moved past is settled even
+  // while its last call is still reporting. An approval's receipt decides a call
+  // of the run above it, which then runs, so it does not move past that run.
+  const trailingRunIndex = foldRows.findLastIndex(
+    (row, index) =>
+      row.role !== 'user' &&
+      row.role !== 'reasoning' &&
+      receipts.get(messages[index].id)?.kind !== 'approval' &&
+      (row.rendersProse || messages[index].blocks.some(isToolCallBlock))
+  )
   const settledTurnKeys = new Set(
     showTurnStatus
       ? Object.entries(turnStatuses.completedByTurn)
@@ -134,6 +153,7 @@ export function buildNativeChatTranscriptSlots(
       activeTurnIsWorking:
         (currentTurnKey ? turnKey === currentTurnKey : turnKey === undefined) &&
         (isWorking || lifecycleWorking),
+      trailingRun: index === trailingRunIndex,
       receipt,
       status: status ?? undefined,
       folded,

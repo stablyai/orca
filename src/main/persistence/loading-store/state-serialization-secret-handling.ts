@@ -128,6 +128,10 @@ export class StateSerializationSecretHandlingOperations {
           PROTECTED_SECRET_SLOT.opencodeSessionCookie,
           this.runtime.state.settings.opencodeSessionCookie
         ),
+        opencodeGoApiKey: encryptToSentinel(
+          PROTECTED_SECRET_SLOT.opencodeGoApiKey,
+          this.runtime.state.settings.opencodeGoApiKey ?? ''
+        ),
         httpProxyUrl: encryptToSentinel(
           PROTECTED_SECRET_SLOT.httpProxyUrl,
           this.runtime.state.settings.httpProxyUrl ?? ''

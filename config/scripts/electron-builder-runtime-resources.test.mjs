@@ -410,6 +410,7 @@ describe('packaged runtime resources', () => {
           join(resourcesDir, 'plugins', 'launch'),
           { recursive: true }
         )
+        await seedBundledRipgrep(resourcesDir)
 
         const unpackedMainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
         await mkdir(unpackedMainDir, { recursive: true })
@@ -476,6 +477,7 @@ describe('packaged runtime resources', () => {
           join(resourcesDir, 'plugins', 'launch'),
           { recursive: true }
         )
+        await seedBundledRipgrep(resourcesDir)
         await mkdir(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true })
         // Why: afterPack now fails hard when the unpacked daemon entry is
         // missing, so the fixture must carry one like a real package layout.
@@ -528,6 +530,16 @@ describe('packaged runtime resources', () => {
 // Why source-anchored: the bundler renames a createRequire()'d require, so
 // verifyPackagedMainRuntimeDeps' `require("x")` scan cannot see these specifiers — packaging
 // stays green while the packaged app throws MODULE_NOT_FOUND the first time the path runs.
+// Why stubs: afterPack only checks each platform binary exists; non-ELF bytes skip the glibc scan.
+async function seedBundledRipgrep(resourcesDir) {
+  const { BUNDLED_RIPGREP_PLATFORMS } = require('../bundled-ripgrep-resources.cjs')
+  for (const platform of BUNDLED_RIPGREP_PLATFORMS) {
+    const dir = join(resourcesDir, 'ripgrep', platform)
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, platform.startsWith('win32-') ? 'rg.exe' : 'rg'), '', 'utf8')
+  }
+}
+
 function collectLazyRequireSpecifiers(directory, found = new Map()) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const entryPath = join(directory, entry.name)

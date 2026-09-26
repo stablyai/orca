@@ -39,21 +39,25 @@ import {
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
 import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
+import { applyStructuredLaunchHeldOptions } from './structured-agent-session-launch-options'
 
 export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
 export {
   getStructuredAgentLaunchStatus,
   getStructuredAgentSessionLaunchLifecycle,
+  getStructuredAgentSessionLaunchResumes,
   hasStructuredAgentSessionLaunchCancellationTombstone,
   markStructuredAgentSessionLaunchCancelled,
   retireStructuredAgentSessionLaunchCancellationTombstone,
   shouldRetainStructuredAgentSessionLaunchTab,
   subscribeStructuredAgentLaunchStatus,
+  useStructuredAgentSessionLaunchFailureReason,
   useStructuredAgentSessionLaunchLifecycle,
   type StructuredAgentLaunchStatus,
   type StructuredAgentSessionLaunchLifecycle
 } from './structured-agent-session-launch-registry'
 export { useStructuredAgentLaunchStatus } from './structured-agent-session-launch-status'
+export { useStructuredAgentSessionLaunchSelection } from './structured-agent-session-launch-options'
 
 type StructuredLaunchStateResult = {
   state: StructuredLaunchState
@@ -134,6 +138,7 @@ function trackLaunchSettlement(
         }
         return
       }
+      state.failureReason = error instanceof Error ? error.message : String(error)
       if (error instanceof StructuredAgentSessionCreateRefusalError) {
         settleStructuredLaunchRefusal(state)
       } else if (!state.visibilityUnknown) {
@@ -147,6 +152,14 @@ function trackLaunchSettlement(
   )
 }
 
+/** Every sender waits on the launch promise, so picks held during launch reach the host first. */
+function publishWithHeldOptions(
+  state: StructuredLaunchState,
+  created: Promise<StructuredAgentLaunchReceipt>
+): Promise<StructuredAgentLaunchReceipt> {
+  return created.then((receipt) => applyStructuredLaunchHeldOptions(state, receipt))
+}
+
 function resetStructuredLaunchCallers(state: StructuredLaunchState): void {
   state.callers = createStructuredLaunchCallerGroup()
   state.callers.onSettled = () => maybeCleanupLaunchState(state)
@@ -158,8 +171,14 @@ function restartStructuredLaunchState(state: StructuredLaunchState): void {
     state.intent = retryStructuredAgentSessionLaunchIntent(state.intent)
   }
   resetStructuredLaunchCallers(state)
+  delete state.failureReason
   state.callers.outcome = 'pending'
-  state.promise = wasVisibilityUnknown ? reconcileUnknownLaunch(state) : launchAndReconcile(state)
+  // A new create seeds from the settings of now; picks held through the failure still apply.
+  state.selection = { ...state.selection, seed: state.intent.seedOptions }
+  state.promise = publishWithHeldOptions(
+    state,
+    wasVisibilityUnknown ? reconcileUnknownLaunch(state) : launchAndReconcile(state)
+  )
   trackLaunchSettlement(state, state.promise)
   trackStructuredLaunchFailureToast(state.intent.agent, state.promise)
   notifyStructuredLaunchListeners()
@@ -219,7 +238,8 @@ function structuredAgentLaunchState(
     visibilityUnknown: false,
     cancelled: false,
     onVisibilityChanged: notifyStructuredLaunchListeners,
-    callers
+    callers,
+    selection: { seed: intent.seedOptions, held: {} }
   }
   callers.onSettled = () => maybeCleanupLaunchState(state)
   state.promise =
@@ -229,7 +249,7 @@ function structuredAgentLaunchState(
             `Could not durably stage the ${structuredAgentLabel(agent)} launch prompt.`
           )
         )
-      : launchAndReconcile(state)
+      : publishWithHeldOptions(state, launchAndReconcile(state))
   const caller = addStructuredLaunchCaller({
     group: state.callers,
     launchResult: state.promise,

@@ -86,7 +86,8 @@ describe('structured launch cancellation retirement', () => {
       },
       promise: launchPromise,
       visibilityUnknown: false,
-      cancelled: false
+      cancelled: false,
+      selection: { held: {} }
     } satisfies StructuredLaunchState)
 
     const beforeCancel = beginStructuredAgentSessionAuthoritativeInventory()

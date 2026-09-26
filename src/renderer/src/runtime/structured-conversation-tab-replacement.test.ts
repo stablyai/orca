@@ -14,21 +14,16 @@ import {
 beforeEach(resetWebSessionTabsSyncTestState)
 
 describe('clear pane identity', () => {
-  it.each(
-    (['agent-session', 'terminal'] as const).flatMap((contentType) =>
-      (['absent', 'before', 'after'] as const).map((history) => ({ contentType, history }))
-    )
-  )(
-    'replaces a $contentType pane with reopened history $history the replacement',
-    ({ contentType, history }) => {
+  it.each((['absent', 'before', 'after'] as const).map((history) => ({ history })))(
+    'replaces an agent-session pane with reopened history $history the replacement',
+    ({ history }) => {
       const state = makeState({
         unifiedTabsByWorktree: {
           [WT]: [
             {
               id: 'local-pane',
-              entityId: contentType === 'terminal' ? 'local-pane' : 'old-session',
-              contentType,
-              structuredSessionId: contentType === 'terminal' ? 'old-session' : undefined,
+              entityId: 'old-session',
+              contentType: 'agent-session',
               agentSessionAgent: 'codex',
               worktreeId: WT,
               groupId: 'local-group',
@@ -53,25 +48,7 @@ describe('clear pane identity', () => {
         },
         activeGroupIdByWorktree: { [WT]: 'local-group' },
         activeTabId: 'local-pane',
-        activeTabIdByWorktree: { [WT]: 'local-pane' },
-        ...(contentType === 'terminal'
-          ? {
-              tabsByWorktree: {
-                [WT]: [
-                  {
-                    id: 'local-pane',
-                    worktreeId: WT,
-                    ptyId: null,
-                    title: 'Old',
-                    customTitle: null,
-                    color: null,
-                    sortOrder: 0,
-                    createdAt: 1
-                  }
-                ]
-              }
-            }
-          : {})
+        activeTabIdByWorktree: { [WT]: 'local-pane' }
       })
       const snapshot = makeSnapshot(
         [

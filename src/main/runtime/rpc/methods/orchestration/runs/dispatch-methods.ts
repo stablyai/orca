@@ -1,6 +1,9 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { buildDispatchPreamble } from '../../../../orchestration/preamble'
+import {
+  buildDispatchPreamble,
+  dispatchPreambleSendOptions
+} from '../../../../orchestration/preamble'
 import { resolveDispatchCreator } from './dispatch-creator'
 import {
   injectRejectedError,
@@ -9,6 +12,7 @@ import {
 } from '../../../../orchestration/task-dispatch-refusal'
 import { resolveRunScope } from './run-scope'
 import { DispatchParams, DispatchShowParams } from '../schemas'
+import { resolveDispatchAssigneeParty } from '../../../../orchestration/orchestration-party'
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
@@ -18,6 +22,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       params,
       {
         orchestrationCompatibilityEvidence,
+        orchestrationCaller,
         runtime,
         legacyCoordinatorRunId,
         revalidateLegacyCoordinator,
@@ -34,7 +39,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         callerTerminalHandle: params.from,
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
-        callerEvidence: orchestrationCompatibilityEvidence
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
       })
       if (task.run_id !== run.id) {
         throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {
@@ -42,12 +48,13 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           runId: run.id
         })
       }
+      const assignee = params.to ? resolveDispatchAssigneeParty(params.to, db).address : undefined
 
       // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
       if (params.dryRun) {
         const maxDepth = runtime.getNestedWorkerMaxDepth()
         const previewDepth = db.resolveChildDispatchDepth(
-          resolveDispatchCreator(runtime, params.from),
+          resolveDispatchCreator(runtime, params.from, orchestrationCaller),
           maxDepth
         )
         const preamble = buildDispatchPreamble({
@@ -56,19 +63,17 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           canDispatchSubWorkers: previewDepth < maxDepth,
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle: params.to ?? 'worker',
+          workerHandle: assignee ?? 'worker',
           devMode: params.devMode,
-          ...(params.to
-            ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(params.to) }
-            : {})
+          ...(assignee ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(assignee) } : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
 
-      if (!params.to) {
+      if (!assignee) {
         throw new Error('Missing --to')
       }
-      const to = params.to
+      const to = assignee
 
       if (task.status !== 'ready') {
         throw taskNotStartableError(
@@ -128,7 +133,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         assigneePaneKey,
         launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
         processIncarnation,
-        creator: resolveDispatchCreator(runtime, params.from),
+        creator: resolveDispatchCreator(runtime, params.from, orchestrationCaller),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
       const dispatchCapability = params.inject
@@ -156,12 +161,11 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
       let prompt
       if (params.inject) {
         try {
-          prompt = await runtime.sendTerminalAgentPrompt(to, preamble, {
-            // A delayed provider hook must not revoke an accepted Dispatch.
-            acceptQueued: true,
-            observationTimeoutMs: 0,
-            requestId: orchestrationMutation?.requestId ?? ctx.id
-          })
+          prompt = await runtime.sendTerminalAgentPrompt(
+            to,
+            preamble,
+            dispatchPreambleSendOptions(orchestrationMutation?.requestId ?? ctx.id)
+          )
           injected = true
         } catch (err) {
           db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))

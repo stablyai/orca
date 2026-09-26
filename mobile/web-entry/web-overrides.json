@@ -30,6 +30,10 @@
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
     {
+      "file": "app/_layout.web.tsx",
+      "reason": "The page's route tree starts at app/h, so without a root layout expo-router mounts DefaultNavigator, an all-edges SafeAreaView that would pad every screen a second time. The native root owns pairing and push and cannot reach the page. This one adds no padding and feeds the insets the shell sent in init to react-native-safe-area-context, whose web provider reads env(safe-area-inset-*) as 0 in both WebViews."
+    },
+    {
       "file": "app/h/[hostId]/index.web.tsx",
       "reason": "The shell renders this page for this route, so the page has no shell to mount inside itself and no flag to read; the switch already happened natively. Its native file reaches OrcaMobileWebShellView, whose requireNativeViewManager call runs at import and throws in a browser."
     },
@@ -64,6 +68,10 @@
     {
       "file": "src/platform/keyboard-occlusion.web.ts",
       "reason": "react-native-web's Keyboard is a stub: addListener returns a subscription that never fires and isVisible() is always false, so a screen waiting for keyboardDidShow inside the page waits forever and the software keyboard covers whatever sits at the bottom of the document \u2014 the source-control commit bar, and the review note composer whose KeyboardAvoidingView is driven by those same events. The browser publishes the geometry a different way: the layout viewport keeps its size and visualViewport shrinks, so the occluded strip is innerHeight minus the visual viewport's height and offsetTop, tracked on its resize and scroll. A document with no visualViewport answers 0 rather than guessing."
+    },
+    {
+      "file": "src/platform/live-input-composing-range.web.ts",
+      "reason": "The terminal's Live input reads the change event's isComposing as the text system's marked-text range, and on the page that event is the DOM's. An Android WebView marks the keyboard's composing region, which Samsung and other Latin keyboards keep over every word, so the preedit mirror held each word unsent until the next keystroke or Enter. Native Android reports no range at all; this sibling answers the same in an Android WebView and passes the DOM's range through in any other browser. The native file passes the event's own through."
     },
     {
       "file": "src/platform/clipboard.web.ts",

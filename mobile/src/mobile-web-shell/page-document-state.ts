@@ -1,4 +1,5 @@
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
+import { BRIDGE_SAFE_AREA_ACCEPT } from './bridge/bridge-safe-area-insets'
 import type {
   MobileWebShellSession,
   MobileWebShellSessionEvent
@@ -9,7 +10,8 @@ export const CLEAR_PAGE_DOCUMENT_STATE = {
   pageReady: false,
   pageReportsPaint: false,
   pagePainted: false,
-  pageBackClaimed: false
+  pageBackClaimed: false,
+  pageOwnsSafeArea: false
 } as const
 
 /** The three things a document reports about itself, as the reducer receives them. */
@@ -39,10 +41,19 @@ export function pageDocumentStatePatch(
     return {
       pageReady: true,
       pageReportsPaint: event.reports.includes(BRIDGE_PAGE_PAINTED),
-      pageBackClaimed: false
+      pageBackClaimed: false,
+      pageOwnsSafeArea: event.accepts.includes(BRIDGE_SAFE_AREA_ACCEPT)
     }
   }
   // Kept off a page that never said it would report: acting on an unasked-for frame would make
   // the wait depend on a name arriving instead of on a claim the page made.
   return session.pageReportsPaint ? { pagePainted: true } : {}
+}
+
+/** Whether the shell may draw the view edge-to-edge: gated on `ready` like the Back claim, so a
+ *  declaration never outlives the document on screen. */
+export function shellPageOwnsSafeArea(
+  session: Pick<MobileWebShellSession, 'state' | 'pageOwnsSafeArea'>
+): boolean {
+  return session.state.kind === 'ready' && session.pageOwnsSafeArea
 }

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
+import { AgentSessionTransitionRecorder } from '../stats/agent-session-transition-recorder'
 import { buildBody, PANE } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -89,6 +90,72 @@ describe('Grok background status ownership', () => {
       server.stop()
     }
   })
+
+  it.each([
+    {
+      label: 'a background subagent',
+      task: { id: 'task-1', type: 'subagent', status: 'running', agentType: 'general-purpose' },
+      workingMode: undefined,
+      countsAfterMainAgentStops: true
+    },
+    {
+      label: 'a background shell',
+      task: { id: 'task-1', type: 'shell', status: 'running', command: 'sleep 30' },
+      workingMode: 'monitoring',
+      countsAfterMainAgentStops: false
+    }
+  ])(
+    'counts agent time after the main agent stops only for $label',
+    async ({ task, workingMode, countsAfterMainAgentStops }) => {
+      const server = new AgentHookServer()
+      const sink = { onAgentStart: vi.fn(), onAgentStop: vi.fn() }
+      const recorder = new AgentSessionTransitionRecorder(sink)
+      await server.start({ env: 'production' })
+      server.subscribeEnrichedStatus((enriched) => recorder.onStatus(enriched))
+      try {
+        await postGrokHook(server, {
+          hookEventName: 'user_prompt_submit',
+          sessionId: 'session-1',
+          promptId: 'prompt-1',
+          prompt: 'start background work'
+        })
+        await postGrokHook(server, {
+          hookEventName: 'stop',
+          sessionId: 'session-1',
+          promptId: 'prompt-1',
+          reason: 'end_turn',
+          stopHookActive: false,
+          backgroundTasks: [task]
+        })
+
+        expect(sink.onAgentStart).toHaveBeenCalledTimes(1)
+        expect(sink.onAgentStop).toHaveBeenCalledTimes(countsAfterMainAgentStops ? 0 : 1)
+        const [row] = server.getStatusSnapshot()
+        expect(row).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
+        expect(row?.workingMode).toBe(workingMode)
+
+        await postGrokHook(server, {
+          hookEventName: 'user_prompt_submit',
+          sessionId: 'session-1',
+          promptId: 'task-completed-task-1',
+          prompt: 'the background task completed'
+        })
+        await postGrokHook(server, {
+          hookEventName: 'stop',
+          sessionId: 'session-1',
+          promptId: 'task-completed-task-1',
+          reason: 'end_turn',
+          stopHookActive: false,
+          backgroundTasks: []
+        })
+        // The subagent's span stays one session; the shell's wake-up turn is a second one.
+        expect(sink.onAgentStart).toHaveBeenCalledTimes(countsAfterMainAgentStops ? 1 : 2)
+        expect(sink.onAgentStop).toHaveBeenCalledTimes(countsAfterMainAgentStops ? 1 : 2)
+      } finally {
+        server.stop()
+      }
+    }
+  )
 
   it('rejects a delayed remote cancellation from the turn replaced by a newer prompt', () => {
     const server = new AgentHookServer()

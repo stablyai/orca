@@ -149,7 +149,7 @@ async function createSourceTab(
     }
     const tab = state.createTab(worktreeId, undefined, shellOverride, { activate: true })
     store.getState().setActiveTab(tab.id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, shellOverride)
 

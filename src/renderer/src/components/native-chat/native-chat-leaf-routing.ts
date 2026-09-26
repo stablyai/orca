@@ -91,17 +91,10 @@ export function resolveNativeChatLeafRoute(args: {
   chatLeafStillMounted: boolean
   activeLeafIsEligible: boolean
   chatLeafHasConfirmedAgentExit?: boolean
-  structuredSessionId?: string | null
 }): NativeChatLeafRoute {
-  const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit && !args.structuredSessionId
+  const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit
   if (!args.isChatViewMode) {
     return { chatLeafId: null, exitChat: false }
-  }
-  if (args.structuredSessionId) {
-    return {
-      chatLeafId: args.chatLeafId ?? args.activeLeafId,
-      exitChat: false
-    }
   }
   if (args.chatLeafId && args.chatLeafStillMounted && !confirmedAgentExit) {
     // Why: agent/title evidence can disappear while local, SSH, or runtime
@@ -113,6 +106,11 @@ export function resolveNativeChatLeafRoute(args: {
   // mode until a concrete leaf exists instead of toggling it off during mount.
   if (!args.activeLeafId && !confirmedAgentExit) {
     return { chatLeafId: args.chatLeafId, exitChat: false }
+  }
+  if (args.chatLeafId && !args.chatLeafStillMounted && !confirmedAgentExit) {
+    // A user-closed chat pane is an explicit close, not an agent handoff. Do not
+    // retarget the chat surface to whichever sibling became active.
+    return { chatLeafId: null, exitChat: true }
   }
   if (args.activeLeafIsEligible && (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)) {
     return { chatLeafId: args.activeLeafId, exitChat: false }

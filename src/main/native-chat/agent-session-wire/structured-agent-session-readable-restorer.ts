@@ -4,6 +4,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import type { RestoredStructuredAgentSessionRead } from './structured-agent-session-read-restore'
 import {
   restoreOneStructuredAgentSessionRead,
+  restoreOneStructuredAgentSessionReadUnderSerialize,
   restoreStructuredAgentSessionsOnRestart
 } from './structured-agent-session-restart-restore'
 
@@ -24,7 +25,6 @@ export class StructuredAgentSessionReadableRestorer {
         sessionId: string,
         params: RestoredStructuredAgentSessionRead['params']
       ) => Promise<boolean>
-      restoreHandoff: (sessionId: string) => Promise<void>
     }
   ) {}
 
@@ -48,12 +48,27 @@ export class StructuredAgentSessionReadableRestorer {
    * answers for Claude and Codex from the record's own provider.
    */
   async restoreOne(sessionId: string): Promise<boolean> {
-    const record = this.input.store.getRecord(sessionId)
-    if (!record || !this.input.supportsRecord(record)) {
+    if (!this.supports(sessionId)) {
       return false
     }
     await restoreOneStructuredAgentSessionRead(this.input, sessionId)
     return this.input.hasSession(sessionId)
+  }
+
+  /** `restoreOne` for a caller already inside the session's serialize. Reconciliation is skipped
+   *  on purpose: a lease this host has not adjudicated is the attach's problem, and a replay
+   *  needs only the journal. */
+  async restoreOneUnderSerialize(sessionId: string): Promise<boolean> {
+    if (!this.supports(sessionId)) {
+      return false
+    }
+    await restoreOneStructuredAgentSessionReadUnderSerialize(this.input, sessionId)
+    return this.input.hasSession(sessionId)
+  }
+
+  private supports(sessionId: string): boolean {
+    const record = this.input.store.getRecord(sessionId)
+    return record !== null && this.input.supportsRecord(record)
   }
 
   private async restoreReadableSessions(sessionIds?: readonly string[]): Promise<void> {
