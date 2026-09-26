@@ -5,7 +5,9 @@ import { randomUUID } from 'node:crypto'
 import { vi } from 'vitest'
 import type {
   OrcaRecoveryDescriptorV1,
-  RecoveryAgentBinding
+  RecoveryAgentBinding,
+  RecoveryLayout,
+  RecoveryTab
 } from '../../../shared/cross-machine-recovery-descriptor'
 import { applyCrossMachineRecoveryOp } from '../../../shared/cross-machine-recovery-session-ops'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
@@ -17,6 +19,8 @@ export const SOURCE_TAB = randomUUID()
 export const SOURCE_LEAF = randomUUID()
 export const SOURCE_GROUP = randomUUID()
 export const SESSION_ID = '5f1c1c3e-1111-4222-8333-444455556666'
+export const AGENT_TAB = 'structured-agent-session-orca-sess-1'
+export const AGENT_SESSION_ID = '7b3e3e5f-3333-4444-8555-666677778888'
 
 export function emptySession(): WorkspaceSessionState {
   return {
@@ -138,6 +142,86 @@ export function descriptor(): OrcaRecoveryDescriptorV1 {
     presentation: { views: [], preferredClientKey: null, freshness: 'host-only' },
     omittedBindings: [],
     bindings: [binding()]
+  }
+}
+
+function agentSessionTab(): RecoveryTab {
+  return {
+    id: AGENT_TAB,
+    entityId: 'orca-sess-1',
+    groupId: SOURCE_GROUP,
+    contentType: 'agent-session',
+    agentSessionAgent: 'claude',
+    label: 'Claude chat',
+    customLabel: 'planning',
+    color: null,
+    sortOrder: 2,
+    createdAt: 3
+  }
+}
+
+function structuredBinding(): RecoveryAgentBinding {
+  return {
+    sourcePaneKey: AGENT_TAB,
+    sourceTabId: AGENT_TAB,
+    sourceLeafId: null,
+    surface: 'structured',
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: AGENT_SESSION_ID },
+    structuredCursor: { provider: 'claude', sessionId: AGENT_SESSION_ID, leafUuid: 'leaf-uuid' },
+    liveness: 'sleeping',
+    state: 'done',
+    launch: { sourceAgentArgs: null, sourceEnvKeys: [] },
+    capturedAt: 10,
+    updatedAt: 30,
+    lastHumanInputAt: null
+  }
+}
+
+export function withActiveAgentSessionTab(d: OrcaRecoveryDescriptorV1): OrcaRecoveryDescriptorV1 {
+  const group = d.layout.groups[0]!
+  return {
+    ...d,
+    layout: {
+      ...d.layout,
+      tabs: [...d.layout.tabs, agentSessionTab()],
+      groups: [{ ...group, activeTabId: AGENT_TAB, tabOrder: [...group.tabOrder, AGENT_TAB] }],
+      activeTabType: 'agent-session',
+      activeTabId: AGENT_TAB
+    },
+    bindings: [...d.bindings, structuredBinding()]
+  }
+}
+
+export function withPreferredClientView(
+  d: OrcaRecoveryDescriptorV1,
+  view: RecoveryLayout
+): OrcaRecoveryDescriptorV1 {
+  return {
+    ...d,
+    presentation: {
+      views: [
+        {
+          clientKey: 'local-renderer',
+          clientInstanceId: 'client-1',
+          clientName: 'desk',
+          clientKind: 'local-renderer',
+          hostReceivedAt: 1,
+          lastHumanInputAt: 1,
+          lastHumanFocusAt: 1,
+          focus: {
+            isActiveWorkspace: true,
+            focusedTabId: null,
+            focusedLeafId: null,
+            focusedPaneKey: null,
+            windowFocused: true
+          },
+          view
+        }
+      ],
+      preferredClientKey: 'local-renderer',
+      freshness: 'client-view'
+    }
   }
 }
 
