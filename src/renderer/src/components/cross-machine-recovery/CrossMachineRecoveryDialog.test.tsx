@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
+import type { CrossMachineRecoveryProviderApi } from '../../../../shared/cross-machine-recovery-provider-ipc'
 import { TooltipProvider } from '../ui/tooltip'
 import { CrossMachineRecoveryDialog } from './CrossMachineRecoveryDialog'
 import {
@@ -55,7 +56,7 @@ const bridge = {
     }
   })),
   inspect: vi.fn(),
-  pickup: vi.fn(async () => ({
+  pickup: vi.fn<CrossMachineRecoveryProviderApi['pickup']>(async () => ({
     ok: true,
     value: {
       version: 1,
@@ -118,6 +119,10 @@ function itemRow(name: string): HTMLElement {
   return row
 }
 
+function buttonLabelled(label: string): HTMLButtonElement | undefined {
+  return [...document.querySelectorAll('button')].find((button) => button.textContent === label)
+}
+
 it('renders local-destination rows with disabled reasons even while a remote environment is active', async () => {
   await openDialog()
   expect(
@@ -156,14 +161,43 @@ it('defaults resume to the most recent human session and disables the live-local
 it('picks up through the desktop bridge only and reveals the local worktree', async () => {
   await openDialog()
   await act(async () => itemRow('ready-name').click())
-  const recover = [...document.querySelectorAll('button')].find(
-    (button) => button.textContent === 'Recover'
-  )
-  await act(async () => recover?.click())
+  await act(async () => buttonLabelled('Recover')?.click())
   expect(bridge.pickup).toHaveBeenCalledWith(
     expect.objectContaining({ selector: 'laptop/ready', resume: ['recent'] })
   )
   expect(runtimeCall).not.toHaveBeenCalled()
   expect(runtimeEnvironmentsCall).not.toHaveBeenCalled()
+  expect(activate).toHaveBeenCalledWith('wt-recovered', { executionHostId: 'local' })
+})
+
+it('offers keep-local/replace/fork on a divergent local copy and re-runs pickup with the choice', async () => {
+  bridge.pickup.mockResolvedValueOnce({
+    ok: false,
+    error: {
+      code: 'divergent-local-copy',
+      message: 'local copy is newer',
+      details: {
+        session_id: 'recent',
+        local_last_activity_at: '2026-09-26T03:00:00Z',
+        picked_captured_at: '2026-09-26T00:00:00Z'
+      }
+    }
+  })
+  await openDialog()
+  await act(async () => itemRow('ready-name').click())
+  await act(async () => buttonLabelled('Recover')?.click())
+  expect(activate).not.toHaveBeenCalled()
+  const prompt = document.querySelector('[data-testid="cross-machine-recovery-divergence"]')
+  expect(prompt?.textContent).toContain('newer local copy of session recent')
+  expect(
+    [...(prompt?.querySelectorAll('button') ?? [])].map((button) => button.textContent)
+  ).toEqual(['Keep local', 'Replace local', 'Fork as new session'])
+  await act(async () => buttonLabelled('Fork as new session')?.click())
+  expect(bridge.pickup).toHaveBeenCalledTimes(2)
+  expect(bridge.pickup.mock.calls[0][0]).not.toHaveProperty('onDivergence')
+  expect(bridge.pickup.mock.calls[1][0]).toEqual(
+    expect.objectContaining({ selector: 'laptop/ready', resume: ['recent'], onDivergence: 'fork' })
+  )
+  expect(document.querySelector('[data-testid="cross-machine-recovery-divergence"]')).toBeNull()
   expect(activate).toHaveBeenCalledWith('wt-recovered', { executionHostId: 'local' })
 })
