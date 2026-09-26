@@ -1103,7 +1103,7 @@ export class HostSessionRegistry {
       .catch(() => undefined)
       .then(async () => {
         clearTimeout(queueWaitTimer)
-        if (queueWaitExpired) return
+        if (queueWaitExpired || socket.readyState !== socket.OPEN) return
         if ((this.sessions.get(key) ?? null) !== existing) {
           socket.close(RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
           return

@@ -80,8 +80,7 @@ function createProfile(profileId: string, theme: string): MigratedProfile {
   const options: ProfileStateStoreFactoryOptions = {
     dataFile,
     databaseFile,
-    profileId,
-    authorityMode: 'sqlite-candidate'
+    profileId
   }
   const first = createProfileStateStore(options)
   expect(first.backend).toBe('sqlite')
@@ -117,7 +116,10 @@ describe('profile-state candidate cutover soak', () => {
     profile.first.store.flushOrThrow()
     expect(readFileSync(profile.options.dataFile)).toEqual(retainedJson)
 
-    const legacyStore = new Store({ dataFile: profile.options.dataFile })
+    const legacyStore = new Store({
+      dataFile: profile.options.dataFile,
+      serializedState: retainedJson.toString('utf8')
+    })
     expect(legacyStore.getSettings().theme).toBe('light')
     expect(legacyStore.getSettings().terminalFontSize).not.toBe(123)
     legacyStore.freezeWrites()

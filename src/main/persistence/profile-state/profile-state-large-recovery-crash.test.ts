@@ -14,7 +14,7 @@ import {
 import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
 import { writeProfileStateDatabaseSnapshotAsync } from './profile-state-database-snapshot'
 import { importProfileStateJson, readProfileStateSnapshot } from './profile-state-documents'
-import { profileStateJsonExportPath } from './profile-state-export-path'
+import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
 import { buildRecoveryCrashProcess, killRecoveryAt } from './profile-state-recovery-crash-process'
 
 const suite = mkdtempSync(join(tmpdir(), 'orca-large-recovery-crash-'))

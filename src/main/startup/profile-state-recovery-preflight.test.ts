@@ -16,7 +16,7 @@ import {
   PROFILE_STATE_RECOVERY_RESULT_PREFIX
 } from '../../shared/profile-state-recovery-command'
 import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
-import { profileStateJsonExportPath } from '../persistence/profile-state/profile-state-export-path'
+import { profileStateJsonExportPath } from '../persistence/profile-state/legacy-json/profile-state-export-path'
 import {
   createProfileStateDatabaseBackupId,
   profileStateDatabaseBackupPath

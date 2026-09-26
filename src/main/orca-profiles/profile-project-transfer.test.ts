@@ -146,6 +146,9 @@ function readProfileStateDatabase(profileId: string): PersistedState {
 }
 
 function readProfileState(profileId: string): PersistedState {
+  if (existsSync(profileDatabasePath(profileId))) {
+    return readProfileStateDatabase(profileId)
+  }
   return JSON.parse(readFileSync(profileDataPath(profileId), 'utf-8')) as PersistedState
 }
 
@@ -441,7 +444,7 @@ describe('profile project transfer', () => {
     expect(readFileSync(sidecarPath, 'utf-8')).toBe('{"preserve":true}')
   })
 
-  it('keeps the legacy JSON backend when neither profile has a database', async () => {
+  it('migrates the mutated target when both participants have only legacy JSON', async () => {
     writeProfileState('personal', makeState({ repos: [makeRepo()] }))
     writeProfileState('work', makeState())
 
@@ -461,7 +464,7 @@ describe('profile project transfer', () => {
       expect.objectContaining({ path: '/workspace/orca' })
     ])
     expect(existsSync(profileDatabasePath('personal'))).toBe(false)
-    expect(existsSync(profileDatabasePath('work'))).toBe(false)
+    expect(existsSync(profileDatabasePath('work'))).toBe(true)
   })
 
   it('fails closed when a profile has both database and legacy JSON state', async () => {
@@ -678,6 +681,7 @@ describe('profile project transfer', () => {
     const sourceState = makeState({ repos: [makeRepo()] })
     writeProfileStateDatabase('personal', sourceState)
     writeProfileState('work', makeState())
+    const targetJson = readFileSync(profileDataPath('work'), 'utf-8')
 
     const { transferOrcaProfileProject } = await loadTransferModule()
     expect(
@@ -693,7 +697,7 @@ describe('profile project transfer', () => {
     ).toMatchObject({ status: 'transferred', mode: 'move' })
     expect(readProfileStateDatabase('personal').repos).toHaveLength(0)
     expect(readProfileStateDatabase('work').repos).toHaveLength(1)
-    expect(readProfileState('work').repos).toHaveLength(0)
+    expect(readFileSync(profileDataPath('work'), 'utf-8')).toBe(targetJson)
   })
 
   it.each([undefined, 'prepared', 'target-committed'])(

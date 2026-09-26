@@ -37,6 +37,14 @@ export function useFolderWorkspaceComposerPathStatus(
   )
   const cacheExpiryTick = useFolderWorkspacePathStatusCacheExpiryTick(folderWorkspacePathStatuses)
   const activePathStatusRefreshIdRef = useRef(0)
+  const previousPathStatusRefreshRef = useRef<{
+    request: typeof pathStatusRequest
+    cacheKey: string
+    refreshKey: string
+    runtimeEnvironmentId: typeof runtimeEnvironmentId
+    fetchStatus: typeof fetchFolderWorkspacePathStatus
+    pending: boolean
+  } | null>(null)
   const [completedPathStatusRefreshKeys, setCompletedPathStatusRefreshKeys] = useState<
     ReadonlySet<string>
   >(() => new Set())
@@ -72,7 +80,40 @@ export function useFolderWorkspaceComposerPathStatus(
   ])
 
   useEffect(() => {
-    if (!open || !pathStatusRequest || pathStatusRefreshKey === null) {
+    if (!open || !pathStatusRequest || pathStatusRefreshKey === null || !pathStatusCacheKey) {
+      previousPathStatusRefreshRef.current = null
+      return
+    }
+    const previousRefresh = previousPathStatusRefreshRef.current
+    const refresh = {
+      request: pathStatusRequest,
+      cacheKey: pathStatusCacheKey,
+      refreshKey: pathStatusRefreshKey,
+      runtimeEnvironmentId,
+      fetchStatus: fetchFolderWorkspacePathStatus,
+      pending: true
+    }
+    previousPathStatusRefreshRef.current = refresh
+    const completeRefresh = (): void => {
+      refresh.pending = false
+      setCompletedPathStatusRefreshKeys((current) => {
+        if (current.has(pathStatusRefreshKey)) {
+          return current
+        }
+        return new Set(current).add(pathStatusRefreshKey)
+      })
+    }
+    // Another folder's expiry does not invalidate this folder's fresh result.
+    if (
+      previousRefresh?.request === pathStatusRequest &&
+      previousRefresh.cacheKey === pathStatusCacheKey &&
+      previousRefresh.refreshKey !== pathStatusRefreshKey &&
+      previousRefresh.runtimeEnvironmentId === runtimeEnvironmentId &&
+      previousRefresh.fetchStatus === fetchFolderWorkspacePathStatus &&
+      !previousRefresh.pending &&
+      getFreshFolderWorkspacePathStatus(pathStatusRequest, pathStatusRouteOptions) !== null
+    ) {
+      completeRefresh()
       return
     }
     const refreshId = activePathStatusRefreshIdRef.current + 1
@@ -91,18 +132,16 @@ export function useFolderWorkspaceComposerPathStatus(
       if (activePathStatusRefreshIdRef.current !== refreshId) {
         return
       }
-      setCompletedPathStatusRefreshKeys((current) => {
-        if (current.has(pathStatusRefreshKey)) {
-          return current
-        }
-        return new Set(current).add(pathStatusRefreshKey)
-      })
+      completeRefresh()
     })
   }, [
     fetchFolderWorkspacePathStatus,
+    getFreshFolderWorkspacePathStatus,
     open,
+    pathStatusCacheKey,
     pathStatusRefreshKey,
     pathStatusRequest,
+    pathStatusRouteOptions,
     runtimeEnvironmentId
   ])
 
