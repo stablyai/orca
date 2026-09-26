@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises'
-import { isAbsolute, join } from 'node:path'
 import type {
   LinearIssueInclude,
   LinearIssueListRequest,
@@ -13,6 +11,7 @@ import {
   clampLinearIssueDepth
 } from '../shared/linear/agent-access'
 import { isLinearUuid } from '../shared/linear/uuid'
+import { readFileOrStdinText } from './file-or-stdin-text'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
@@ -250,7 +249,7 @@ export async function readLinearBody(
   }
   const body = hasBody
     ? getRequiredStringFlagAllowingEmpty(flags, 'body')
-    : await readLinearBodyFile(getRequiredStringFlag(flags, 'body-file'), cwd)
+    : await readFileOrStdinText(getRequiredStringFlag(flags, 'body-file'), cwd, 'body')
   if (body.length > LINEAR_WRITE_BODY_CAP) {
     throw new RuntimeClientError(
       'linear_body_too_large',
@@ -258,18 +257,4 @@ export async function readLinearBody(
     )
   }
   return body
-}
-
-async function readLinearBodyFile(path: string, cwd: string): Promise<string> {
-  if (path !== '-') {
-    return await readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
-  }
-  if (process.stdin.isTTY) {
-    throw new RuntimeClientError('invalid_argument', 'stdin body requested but stdin is a TTY')
-  }
-  const chunks: Buffer[] = []
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
-  }
-  return Buffer.concat(chunks).toString('utf8')
 }

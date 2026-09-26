@@ -75,6 +75,8 @@ ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
+ORCA repo hooks show --repo id:<repoId> --json
+ORCA repo hooks set --repo id:<repoId> --setup-script "pnpm install" --json
 ORCA worktree list --repo id:<repoId> --json
 ORCA worktree ps --json
 ORCA worktree current --json
@@ -119,6 +121,7 @@ ORCA worktree create --name task --run-hooks --json
 - **Prefer agent-first create for agent workers.** `ORCA worktree create --agent <id> --prompt "..."` puts the agent in the first terminal with no extra fallback shell. Repo setup or default-terminal settings may still add tabs or splits. A bare create's fallback shell plus a later `terminal create --command <agent>` is the anti-pattern; use `--agent`. Configured default tabs are intentional; never close one without verifying it is an unused shell.
 - Address the agent through exactly one handle. Use `startupTerminal.handle` as the sole agent handle when create returns it; otherwise take the match from `ORCA terminal list --worktree id:<repoId>::<newWorktreePath> --json`. Handles are runtime-scoped: after an Orca restart or a `terminal_handle_stale` error, re-list and continue with the replacement only; never dual-send to old and replacement handles. `--agent` already owns the first terminal, so do not `terminal create` that agent again.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
+- `--setup` only chooses whether the hooks run. To change what they run, use `ORCA repo hooks show` and `ORCA repo hooks set`; `set` writes this machine's local scripts and policies, the same ones the Repository settings pane edits, and never touches the committed `orca.yaml`. Pass a multi-line script with `--setup-script-file <path|->`, and `--setup-script null` to clear it.
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
 - `--activate` and `--run-hooks` reveal the new worktree. `--agent` alone stays in the background.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior.

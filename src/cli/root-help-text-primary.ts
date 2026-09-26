@@ -64,6 +64,8 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  repo add                  Add a project to Orca by filesystem path',
   '  repo show                 Show one registered repo',
   "  repo set-base-ref         Set the repo's default base ref for future worktrees",
+  '  repo hooks show           Show the setup and archive scripts a repo runs for new worktrees',
+  "  repo hooks set            Update a repo's local worktree hook scripts and setup policies",
   '  repo search-refs          Search branch/tag refs within a repo',
   '',
   'Worktrees:',
