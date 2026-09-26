@@ -9115,6 +9115,10 @@
               "workspaceOptions": "워크스페이스 옵션",
               "detailed": "상세"
             },
+            "showSidebarAgentModels": {
+              "title": "에이전트 모델명 표시",
+              "description": "사이드바의 간략한 에이전트 행에 모델명을 표시합니다. 끄면 이름과 현재 작업을 표시할 공간이 늘어납니다."
+            },
             "showPinnedWorktreesInGroups": {
               "title": "고정된 워크트리를 원래 목록에도 표시",
               "description": "고정된 워크트리는 Pinned에 유지하면서 전체, 프로젝트, 상태 및 PR에도 표시합니다.",

@@ -80,6 +80,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 }: BodyProps) {
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+  const showAgentModels = useAppStore((s) => s.settings?.showSidebarAgentModels !== false)
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const { targetMode: agentSendPopoverTargetMode, agentStatusEpoch } = useAppStore(
@@ -335,6 +336,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           }
           disclosureInGutter={isRootAgent}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          showModel={showAgentModels}
           cacheTimerActive={cacheTimerActive}
         />
         {hasChildAgents ? (

@@ -9333,6 +9333,10 @@
               "workspaceOptions": "workspace options",
               "detailed": "detailed"
             },
+            "showSidebarAgentModels": {
+              "title": "Show Agent Model Names",
+              "description": "Show model names in compact sidebar agent rows. Turn off to leave more room for names and activity."
+            },
             "showPinnedWorktreesInGroups": {
               "title": "Also show pinned worktrees in their original lists",
               "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR.",

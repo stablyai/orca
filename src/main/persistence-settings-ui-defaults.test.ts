@@ -107,6 +107,17 @@ describe('Store', () => {
     expect(settings.notifications.suppressWhenFocused).toBe(true)
   })
 
+  it('preserves hidden sidebar model names after reloading the profile', async () => {
+    const store = await createStore()
+    expect(store.getSettings().showSidebarAgentModels).toBe(true)
+    store.updateSettings({ showSidebarAgentModels: false })
+    store.flush()
+    expect((await createStore()).getSettings().showSidebarAgentModels).toBe(false)
+    store.updateSettings({ showSidebarAgentModels: true })
+    store.flush()
+    expect((await createStore()).getSettings().showSidebarAgentModels).toBe(true)
+  })
+
   it('repairs a persisted terminal line height outside xterm bounds', async () => {
     const persisted = getDefaultPersistedState(testState.dir)
     writeDataFile({

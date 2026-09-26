@@ -123,6 +123,18 @@ export const getShowPinnedWorktreesInGroupsEntry = createLocalizedCatalog(
   })
 )
 
+export const getShowSidebarAgentModelsEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
+  title: translate(
+    'auto.components.settings.appearance.search.showSidebarAgentModels.title',
+    'Show Agent Model Names'
+  ),
+  description: translate(
+    'auto.components.settings.appearance.search.showSidebarAgentModels.description',
+    'Show model names in compact sidebar agent rows. Turn off to leave more room for names and activity.'
+  ),
+  keywords: ['sidebar', 'agent', 'model', 'hide', 'show', 'compact']
+}))
+
 export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
@@ -189,5 +201,6 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
   },
   getWorkspaceCardLayoutEntry(),
   getLeftSidebarAppearanceEntry(),
-  getShowPinnedWorktreesInGroupsEntry()
+  getShowPinnedWorktreesInGroupsEntry(),
+  getShowSidebarAgentModelsEntry()
 ])

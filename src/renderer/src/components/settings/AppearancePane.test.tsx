@@ -215,6 +215,25 @@ describe('AppearancePane', () => {
     document.body.innerHTML = ''
   })
 
+  it('finds the sidebar model switch and saves the hidden preference', async () => {
+    mocks.state.settingsSearchQuery = 'model'
+    const updateSettings = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[role="switch"][aria-label="Show Agent Model Names"]'
+    )
+    expect(toggle).not.toBeNull()
+    expect(toggle?.getAttribute('aria-checked')).toBe('true')
+    await act(async () => toggle?.click())
+    expect(updateSettings).toHaveBeenCalledWith({ showSidebarAgentModels: false })
+    await rerenderAppearancePane({ ...getDefaultSettings('/tmp'), showSidebarAgentModels: false })
+    expect(
+      container
+        .querySelector('[role="switch"][aria-label="Show Agent Model Names"]')
+        ?.getAttribute('aria-checked')
+    ).toBe('false')
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     resetRendererAppPlatformCacheForTests()
