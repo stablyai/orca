@@ -146,11 +146,14 @@ describe.skipIf(!existsSync(runtimePath))('real Bun launcher lifecycle', () => {
     'drains Bun after its launcher is killed (startup pending: %s)',
     async (delay) => {
       const h = launch({ delay })
-      await vi.waitFor(() => expect(h.output()).toContain(delay ? 'booting:' : 'ready'), {
-        timeout: 5_000
-      })
-      expect(h.output()).toContain(`runtime:${ORCAD_BUN_VERSION}`)
-      expect(h.output()).toContain('channel-env:absent')
+      await vi.waitFor(
+        () => {
+          expect(h.output()).toContain(delay ? 'booting:' : 'ready')
+          expect(h.output()).toContain(`runtime:${ORCAD_BUN_VERSION}`)
+          expect(h.output()).toContain('channel-env:absent')
+        },
+        { timeout: 5_000 }
+      )
       h.child.kill('SIGKILL')
       await h.exit
       await vi.waitFor(
