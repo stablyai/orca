@@ -59,6 +59,56 @@ describe('createStructuredAttentionSurface', () => {
     expect(surface.resolveViewedSubjectKey(CHAT_TAB)).toBe(CHAT_SUBJECT)
   })
 
+  it('preserves the first tab match, including a nonstructured tab with the same ID', () => {
+    const store = seedChatTab()
+    const chat = store.getState().unifiedTabsByWorktree[WORKSPACE][0]
+    const first = { ...chat, entityId: 'first-session' }
+    store.setState({ unifiedTabsByWorktree: { first: [first], [WORKSPACE]: [chat] } })
+    expect(surfaceFor(store).resolveViewedSubjectKey(CHAT_TAB)).toBe(
+      structuredAgentSessionPaneKey(CHAT_TAB, 'first-session')
+    )
+
+    store.setState({
+      unifiedTabsByWorktree: {
+        first: [{ ...first, contentType: 'terminal' }],
+        [WORKSPACE]: [chat]
+      }
+    })
+    expect(surfaceFor(store).resolveViewedSubjectKey(CHAT_TAB)).toBeNull()
+  })
+
+  it('keeps the first cold lookup from reading IDs after an early match', () => {
+    const store = seedChatTab()
+    const chat = store.getState().unifiedTabsByWorktree[WORKSPACE][0]
+    const later = makeUnifiedTab({ id: 'later-tab', worktreeId: 'later', groupId: GROUP })
+    Object.defineProperty(later, 'id', {
+      get() {
+        throw new Error('Lookup must stop after the first matching tab')
+      }
+    })
+    store.setState({ unifiedTabsByWorktree: { [WORKSPACE]: [chat], later: [later] } })
+    expect(surfaceFor(store).resolveViewedSubjectKey(CHAT_TAB)).toBe(CHAT_SUBJECT)
+  })
+
+  it('follows replaced tab snapshots while keeping older surface snapshots isolated', () => {
+    const store = seedChatTab()
+    const previous = surfaceFor(store)
+    expect(previous.resolveViewedSubjectKey(CHAT_TAB)).toBe(CHAT_SUBJECT)
+    const chat = store.getState().unifiedTabsByWorktree[WORKSPACE][0]
+    store.setState({
+      unifiedTabsByWorktree: { [WORKSPACE]: [{ ...chat, entityId: 'new-session' }] }
+    })
+    expect(surfaceFor(store).resolveViewedSubjectKey(CHAT_TAB)).toBe(
+      structuredAgentSessionPaneKey(CHAT_TAB, 'new-session')
+    )
+    expect(previous.resolveViewedSubjectKey(CHAT_TAB)).toBe(CHAT_SUBJECT)
+
+    store.setState({ unifiedTabsByWorktree: {} })
+    expect(surfaceFor(store).resolveViewedSubjectKey(CHAT_TAB)).toBeNull()
+    store.setState({ unifiedTabsByWorktree: { 'folder:docs': [chat] } })
+    expect(surfaceFor(store).resolveViewedSubjectKey(CHAT_TAB)).toBe(CHAT_SUBJECT)
+  })
+
   it('rejects a key for the same tab whose session has moved on as superseded', () => {
     const store = seedChatTab({ sessionId: 'session-2' })
     expect(
