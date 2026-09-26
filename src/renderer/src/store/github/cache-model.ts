@@ -13,7 +13,10 @@ export type WorkItemsCacheSources = {
   upstreamCandidate: GitHubOwnerRepo | null
 }
 
-export type WorkItemsCacheError = ClassifiedError & { source: GitHubOwnerRepo }
+// `source` is optional: a fetch that throws before source resolution ever
+// completes (or never wrote an envelope at all, #16473) still needs a
+// renderable error entry, so the row falls back to the repo path.
+export type WorkItemsCacheError = ClassifiedError & { source?: GitHubOwnerRepo }
 
 export type CacheEntry<T> = {
   data: T | null

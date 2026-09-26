@@ -138,17 +138,15 @@ export const createWorkItemFetchActions = (
         }
         // Why: only surface issues-side errors here; PR-side failures predate the issue-source split (#1076) and are out of scope for this banner (design doc §2).
         const issuesError = envelope.errors?.issues
-        // Why: errors.issues without sources.issues has no slug for the banner, so it's dropped from the cache; log it so this rare case is visible in devtools.
-        if (issuesError && !envelope.sources.issues) {
-          console.warn(
-            '[workItems] dropping issues-side error with no resolved source:',
-            issuesError
-          )
-        }
-        const errorForCache: WorkItemsCacheError | undefined =
-          issuesError && envelope.sources.issues
-            ? { ...issuesError, source: envelope.sources.issues }
-            : undefined
+        // Why: `source` is optional (#16473); errors.issues without sources.issues
+        // still renders (falling back to the repo path) instead of being
+        // silently dropped from the cache.
+        const errorForCache: WorkItemsCacheError | undefined = issuesError
+          ? {
+              ...issuesError,
+              ...(envelope.sources.issues ? { source: envelope.sources.issues } : {})
+            }
+          : undefined
         const currentRepo = findRepoForGitHubOwner(get(), repoId, repoPath)
         const currentHostId = getGitHubWorkItemSourceHostId(
           get(),
