@@ -53,6 +53,9 @@ internal static class OrcaCliLauncher
                 "ORCA_CLI_COMMAND",
                 requestedCliCommand == "orca-ide" ? "orca-ide" : "orca"
             );
+            // Why: a stale pipe inherited from the Orca parent makes Electron log Crashpad
+            // registration errors on stderr even when the CLI succeeds (stablyai/orca#19792).
+            Environment.SetEnvironmentVariable("CHROME_CRASHPAD_PIPE_NAME", null);
 
             using (Process child = Process.Start(startInfo))
             {
