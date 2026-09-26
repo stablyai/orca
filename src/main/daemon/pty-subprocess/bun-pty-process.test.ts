@@ -248,21 +248,32 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(onExit).not.toHaveBeenCalled()
   })
 
-  it('forwards input, resize, graceful kill, and destroy', () => {
-    const harness = createBunHarness()
-    const proc = spawn()
+  it.each(['darwin', 'linux'] as const)(
+    'forwards input, resize, hangup, explicit signals, and destroy on %s',
+    (platform) => {
+      const harness = createBunHarness()
+      const proc = spawn({ platform })
 
-    proc.write('hello')
-    proc.resize(120, 40)
-    proc.kill()
-    proc.destroy()
+      proc.write('hello')
+      proc.resize(120, 40)
+      proc.kill()
+      proc.kill('SIGTERM')
+      proc.kill('SIGINT')
+      proc.kill('SIGKILL')
+      proc.destroy()
 
-    expect(harness.terminal.write).toHaveBeenCalledWith('hello')
-    expect(harness.terminal.resize).toHaveBeenCalledWith(120, 40)
-    expect(harness.processHandle.kill).toHaveBeenNthCalledWith(1, 'SIGTERM')
-    expect(harness.processHandle.kill).toHaveBeenNthCalledWith(2, 'SIGHUP')
-    expect(harness.terminal.close).toHaveBeenCalledOnce()
-  })
+      expect(harness.terminal.write).toHaveBeenCalledWith('hello')
+      expect(harness.terminal.resize).toHaveBeenCalledWith(120, 40)
+      expect(harness.processHandle.kill.mock.calls).toEqual([
+        ['SIGHUP'],
+        ['SIGTERM'],
+        ['SIGINT'],
+        ['SIGKILL'],
+        ['SIGHUP']
+      ])
+      expect(harness.terminal.close).toHaveBeenCalledOnce()
+    }
+  )
 
   it('destroys a still-running process even if its terminal has already closed', () => {
     const harness = createBunHarness()
@@ -340,7 +351,7 @@ describe('Bun.Terminal PTY adapter', () => {
       [4322, 'SIGCONT'],
       [4321, 'SIGCONT']
     ])
-    expect(harness.processHandle.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(harness.processHandle.kill).toHaveBeenCalledWith('SIGHUP')
   })
 
   it('falls back to Bun process signals when group signaling is unavailable', async () => {
@@ -554,6 +565,13 @@ describe('Bun.Terminal PTY adapter', () => {
     expect(job.terminate).not.toHaveBeenCalled()
     expect(harness.terminal.close).not.toHaveBeenCalled()
     expect(harness.terminal.write).toHaveBeenCalledWith('still usable')
+
+    proc.kill()
+    proc.kill('SIGKILL')
+    proc.destroy()
+    expect(harness.processHandle.kill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL'], ['SIGTERM']])
+    expect(job.terminate).toHaveBeenCalledTimes(3)
+    expect(harness.terminal.close).toHaveBeenCalledOnce()
   })
 
   it('delivers Windows exit after cleanup failures', async () => {

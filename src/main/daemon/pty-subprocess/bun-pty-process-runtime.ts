@@ -293,7 +293,8 @@ export function spawnBunPty(args: BunPtySpawnArgs, deps: SpawnBunPtyDeps = {}): 
     ...clearCapability,
     ...producerFlowControl,
     ...windowsCapabilities,
-    kill(signal = 'SIGTERM') {
+    // Interactive POSIX shells ignore SIGTERM.
+    kill(signal = platform === 'win32' ? 'SIGTERM' : 'SIGHUP') {
       if (!exited) {
         terminate(signal)
       }

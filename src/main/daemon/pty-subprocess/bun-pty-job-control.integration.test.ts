@@ -13,6 +13,89 @@ const runtimePath =
 describe.skipIf(
   process.platform === 'win32' || !existsSync(runtimePath) || !existsSync('/bin/bash')
 )('Bun terminal user job control', () => {
+  for (const shell of ['/bin/bash', '/bin/zsh']) {
+    it.skipIf(!existsSync(shell))(
+      `gracefully closes an interactive ${shell} before the daemon force-kill deadline`,
+      async () => {
+        const directory = mkdtempSync(join(tmpdir(), 'orca-bun-shell-hangup-'))
+        try {
+          const entry = join(directory, 'shell-hangup.cjs')
+          writeFileSync(
+            entry,
+            `
+const {spawnBunPty} = require(${JSON.stringify(join(__dirname, 'bun-pty-process.ts'))})
+const {createDaemonPtySubprocessHandle} = require(${JSON.stringify(join(__dirname, 'subprocess-handle.ts'))})
+const {SessionTerminationController} = require(${JSON.stringify(join(__dirname, '../session-termination-controller.ts'))})
+const {existsSync} = require('node:fs')
+const {join} = require('node:path')
+const cwd = ${JSON.stringify(directory)}
+const ready = join(cwd, 'ready'), cleanup = join(cwd, 'hangup-cleanup')
+const shell = ${JSON.stringify(shell)}
+const env = {...process.env,PS1:'',ORCA_TEST_READY:ready,ORCA_TEST_CLEANUP:cleanup}
+const proc = spawnBunPty({file:shell,args:shell.endsWith('/bash')?['--noprofile','--norc','-i']:['-f','-i'],cwd,env,cols:80,rows:24})
+const subprocess = createDaemonPtySubprocessHandle({process:proc,shellPath:shell,spawnCwd:cwd,env,startupCommandDeliveredInShellArgs:false,reportsChildExitStatus:true,sessionId:'shell-hangup',startupAgentRecognition:null})
+let exited = false, forced = false, exitCode, elapsedMs, startedAt
+const forceKill = subprocess.forceKill
+subprocess.forceKill = () => {forced = true;forceKill()}
+const controller = new SessionTerminationController({sessionId:'shell-hangup',subprocess,launchAgent:null,isExited:()=>exited,releaseProducerPause:()=>proc.resume()})
+subprocess.onExit(code => {
+  exited = true
+  exitCode = code
+  elapsedMs = Date.now() - startedAt
+  controller.markPhysicalExit()
+  controller.cancelForceKillFallback()
+})
+const waitFor = async predicate => {
+  const deadline = Date.now() + 8000
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error('Timed out waiting for shell hangup')
+    await Bun.sleep(10)
+  }
+}
+;(async()=>{
+  try {
+    proc.write(${JSON.stringify('trap \'printf cleaned > "$ORCA_TEST_CLEANUP"; exit 0\' HUP; printf ready > "$ORCA_TEST_READY"\r')})
+    await waitFor(() => existsSync(ready))
+    startedAt = Date.now()
+    controller.kill()
+    await waitFor(() => exited)
+    let reaped = false
+    try {process.kill(proc.pid, 0)} catch (error) {if(error.code==='ESRCH')reaped=true;else throw error}
+    console.log(JSON.stringify({cleaned:existsSync(cleanup),forced,exitCode,elapsedMs,reaped}))
+  } finally {
+    controller.cancelForceKillFallback()
+    if (!exited) {
+      subprocess.forceKill()
+      await waitFor(() => exited)
+    }
+    controller.disposeSubprocessHandle()
+  }
+})().catch(error => {console.error(error);process.exitCode=1})
+`
+          )
+          const result = await runProcess({
+            program: runtimePath,
+            args: [entry],
+            timeoutMs: 25_000
+          })
+          expect(result.timedOut).toBe(false)
+          expect(result.code, result.stderr).toBe(0)
+          const evidence = JSON.parse(result.stdout)
+          expect(evidence).toEqual({
+            cleaned: true,
+            forced: false,
+            exitCode: 0,
+            elapsedMs: expect.any(Number),
+            reaped: true
+          })
+          expect(evidence.elapsedMs).toBeLessThan(5_000)
+        } finally {
+          removeTreeSync(directory)
+        }
+      }
+    )
+  }
+
   it('keeps a real Ctrl-Z job suspended while pausing and resuming a background producer', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-bun-job-control-'))
     try {
@@ -22,14 +105,19 @@ describe.skipIf(
         entry,
         `
 const {spawnBunPty} = require(${JSON.stringify(join(__dirname, 'bun-pty-process.ts'))})
-const {readPosixPtyProcessTable} = require(${JSON.stringify(join(__dirname, '../../pty/posix-pty-process-groups.ts'))})
+const {readPosixPtyProcessTable,forceKillPosixPtyProcessGroups} = require(${JSON.stringify(join(__dirname, '../../pty/posix-pty-process-groups.ts'))})
 const signals = []
 const proc = spawnBunPty({
   file:'/bin/bash', args:['--noprofile','--norc','-i'], cwd:${JSON.stringify(directory)},
   env:{...process.env,PS1:'',ORCA_TEST_RUNTIME:process.execPath},cols:80,rows:24
 }, {signalProcessGroup:(pgid,signal)=>{process.kill(-pgid,signal);signals.push([pgid,signal])}})
-let output = ''
+let output = '', exited = false
 proc.onData(data => output += data)
+proc.onExit(() => {exited = true})
+const isAlive = pid => {
+  try {process.kill(pid, 0);return true}
+  catch (error) {if(error.code==='ESRCH')return false;throw error}
+}
 const rows = async () => {
   const table = (await readPosixPtyProcessTable(proc.pid)).trim().split(/\\r?\\n/).map(row => {
     const [pid,pgid,tty,state] = row.trim().split(/\\s+/)
@@ -68,8 +156,13 @@ const waitFor = async predicate => {
     const sleeperAfter = (await rows()).find(row => row.pid === sleeper.pid)
     console.log(JSON.stringify({producerPaused,producerResumed:true,userJobStopped:sleeperAfter?.state.startsWith('T')===true,userJobSignalled:signals.some(([pgid])=>pgid===sleeper.pgid)}))
   } finally {
-    proc.kill('SIGKILL')
-    proc.destroy()
+    try {
+      const ownedPids = (await rows()).map(row => row.pid)
+      forceKillPosixPtyProcessGroups(proc.pid, () => proc.kill('SIGKILL'))
+      await waitFor(() => exited && ownedPids.every(pid => !isAlive(pid)))
+    } finally {
+      proc.destroy()
+    }
   }
 })().catch(error => {console.error(error);process.exitCode=1})
 `
