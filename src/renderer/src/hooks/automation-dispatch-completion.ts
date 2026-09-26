@@ -33,6 +33,8 @@ export function createAutomationDispatchCompletion(args: {
   let dispatchMarked = false
   let pendingExitCode: number | null = null
   let pendingDone = false
+  let pendingPromptDeliveryFailed = false
+  let promptDeliveryPending = false
   let completionMarked = false
   let contactLost = false
   let unsubscribeAgentStatus = (): void => {}
@@ -148,11 +150,63 @@ export function createAutomationDispatchCompletion(args: {
       console.error('[automations] Failed to persist late automation result:', error)
     })
   }
-  const handleAgentDone = (): void => {
+  // Why: a prompt that never reached the agent is a proven failure, unlike a
+  // lost contact — leaving the run 'dispatched' would present a forever-idle
+  // agent as work in progress.
+  const markPromptDeliveryFailed = async (): Promise<void> => {
+    if (completionMarked) {
+      return
+    }
+    completionMarked = true
+    cleanupRunObservers()
+    try {
+      await args.markDispatchResult({
+        runId: args.run.id,
+        status: 'dispatch_failed',
+        workspaceId: args.worktree.id,
+        workspaceDisplayName: args.worktree.displayName,
+        outputSnapshot: getOutputSnapshot(),
+        precheckResult: args.precheckResult,
+        error: 'The automation prompt could not be delivered to the agent.'
+      })
+    } catch (error) {
+      args.releaseTerminalOwnership()
+      throw error
+    }
+    args.releaseTerminalOwnership()
+  }
+  const handlePromptDeliveryFailed = (): void => {
+    promptDeliveryPending = false
     if (completionMarked) {
       return
     }
     if (!dispatchMarked) {
+      pendingPromptDeliveryFailed = true
+      return
+    }
+    settleLateResult(markPromptDeliveryFailed())
+  }
+  const handlePromptDeliverySucceeded = (): void => {
+    promptDeliveryPending = false
+    // Why: `contactLost` wins — an abandoned run belongs to the completion
+    // watcher, and a pre-abandon `done` must not resurrect a verdict.
+    if (completionMarked || contactLost || !dispatchMarked) {
+      return
+    }
+    if (pendingDone) {
+      settleLateResult(markCompletionResult())
+    } else if (pendingExitCode !== null) {
+      settleLateResult(markExitResult(pendingExitCode))
+    }
+  }
+  const handleAgentDone = (): void => {
+    if (completionMarked) {
+      return
+    }
+    // Why: while prompt delivery is still retrying, a `done`/clean exit cannot
+    // reflect work the prompt may never have started — hold the success signal
+    // so a later delivery failure can still record dispatch_failed.
+    if (promptDeliveryPending || !dispatchMarked) {
       pendingDone = true
       return
     }
@@ -162,7 +216,9 @@ export function createAutomationDispatchCompletion(args: {
     if (completionMarked) {
       return
     }
-    if (!dispatchMarked) {
+    // Why: defer only the success verdict; a proven non-zero exit fails the
+    // run regardless of delivery, and an unproven one is a lost contact.
+    if ((promptDeliveryPending && code === 0) || !dispatchMarked) {
       pendingExitCode = code
       return
     }
@@ -242,8 +298,13 @@ export function createAutomationDispatchCompletion(args: {
       latestAssistantMessage = message?.trim() || latestAssistantMessage
     },
     cleanupRunObservers,
+    expectPromptDelivery: () => {
+      promptDeliveryPending = true
+    },
     handleAgentDone,
     handleExit,
+    handlePromptDeliveryFailed,
+    handlePromptDeliverySucceeded,
     observeAgentStatus,
     setReuseDispatchTabRelease: (release: () => void) => {
       releaseReuseDispatchTab = release
@@ -253,7 +314,15 @@ export function createAutomationDispatchCompletion(args: {
     },
     settlePendingAfterDispatch: async () => {
       dispatchMarked = true
-      if (pendingDone) {
+      if (pendingPromptDeliveryFailed) {
+        // Why: a known-undelivered prompt outranks a `done`/exit that cannot
+        // reflect work the agent never received.
+        await markPromptDeliveryFailed()
+      } else if (promptDeliveryPending) {
+        // Why: keep deferred done/exit signals stashed — the delivery verdict
+        // resolves them so a late failure can still record dispatch_failed.
+        return
+      } else if (pendingDone) {
         await markCompletionResult()
       } else if (pendingExitCode !== null) {
         await markExitResult(pendingExitCode)

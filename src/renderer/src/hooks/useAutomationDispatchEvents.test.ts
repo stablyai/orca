@@ -9,6 +9,7 @@ const mockLaunchAgentBackgroundSession = vi.fn()
 const mockLaunchWorktreeBackgroundTerminals = vi.fn()
 const mockFindReusableAutomationSession = vi.fn()
 const mockObserveExistingAutomationSession = vi.fn()
+const mockSubscribeAgentBackgroundDraftDelivery = vi.fn()
 const mockSubmitPromptToAgentPty = vi.fn()
 const mockCreateWorktree = vi.fn()
 const mockMarkDispatchResult = vi.fn()
@@ -138,6 +139,10 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   submitPromptToAgentPty: mockSubmitPromptToAgentPty
 }))
 
+vi.mock('@/lib/agent-background-draft-delivery', () => ({
+  subscribeAgentBackgroundDraftDelivery: mockSubscribeAgentBackgroundDraftDelivery
+}))
+
 // The reuse path reads run history over the local runtime target, not IPC.
 vi.mock('@/components/automations/automation-host-client', () => ({
   listAutomationRunsForTarget: vi.fn().mockResolvedValue([])
@@ -219,6 +224,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     mockSshGetState.mockResolvedValue({ status: 'connected' })
     mockSshConnect.mockResolvedValue({ status: 'connected' })
     mockSubmitPromptToAgentPty.mockResolvedValue(true)
+    mockSubscribeAgentBackgroundDraftDelivery.mockReturnValue(() => {})
     vi.stubGlobal('window', {
       api: {
         automations: {
@@ -892,5 +898,85 @@ describe('useAutomationDispatchEvents setup launch', () => {
 
     expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+  })
+
+  it('records dispatch_failed when a queued draft is never delivered', async () => {
+    let deliveryListener: ((delivered: boolean) => void) | undefined
+    mockSubscribeAgentBackgroundDraftDelivery.mockImplementation((_tabId, listener) => {
+      deliveryListener = listener
+      return () => {}
+    })
+    mockLaunchAgentBackgroundSession.mockResolvedValue({
+      tabId: 'agent-tab',
+      paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+      ptyId: 'agent-pty',
+      startupPlan: {},
+      scheduledDraftDelivery: true,
+      terminalOwnership: {
+        finalize: mockFinalizeTerminalOwnership,
+        release: mockReleaseTerminalOwnership
+      }
+    })
+
+    await registerAndDispatch()
+
+    expect(mockSubscribeAgentBackgroundDraftDelivery).toHaveBeenCalledWith(
+      'agent-tab',
+      expect.any(Function)
+    )
+    expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'dispatched' })
+    )
+
+    deliveryListener?.(false)
+    await vi.waitFor(() => {
+      expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runId: 'run-1',
+          status: 'dispatch_failed',
+          error: 'The automation prompt could not be delivered to the agent.'
+        })
+      )
+      expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
+    })
+
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+  })
+
+  it('lets a held done verdict through once the queued draft is delivered', async () => {
+    let deliveryListener: ((delivered: boolean) => void) | undefined
+    let launchArgs: { onAgentStatus?: (payload: { state: string }) => void } = {}
+    mockSubscribeAgentBackgroundDraftDelivery.mockImplementation((_tabId, listener) => {
+      deliveryListener = listener
+      return () => {}
+    })
+    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
+      launchArgs = args
+      return {
+        tabId: 'agent-tab',
+        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
+        ptyId: 'agent-pty',
+        startupPlan: {},
+        scheduledDraftDelivery: true,
+        terminalOwnership: {
+          finalize: mockFinalizeTerminalOwnership,
+          release: mockReleaseTerminalOwnership
+        }
+      }
+    })
+
+    await registerAndDispatch()
+    launchArgs.onAgentStatus?.({ state: 'done' })
+    await Promise.resolve()
+    expect(mockMarkDispatchResult).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'completed' })
+    )
+
+    deliveryListener?.(true)
+    await vi.waitFor(() =>
+      expect(mockMarkDispatchResult).toHaveBeenCalledWith(
+        expect.objectContaining({ runId: 'run-1', status: 'completed' })
+      )
+    )
   })
 })

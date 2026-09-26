@@ -301,7 +301,14 @@ export async function launchAgentBackgroundSession(
       scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent)
     }
 
-    return { tabId: tab.id, paneKey, ptyId, startupPlan, terminalOwnership }
+    return {
+      tabId: tab.id,
+      paneKey,
+      ptyId,
+      startupPlan,
+      terminalOwnership,
+      scheduledDraftDelivery: pasteDraftAfterLaunch !== null
+    }
   } catch (error) {
     // Why: terminal creation and stream subscription are separate remote calls.
     // A failure between them must not strand an invisible runtime terminal.
