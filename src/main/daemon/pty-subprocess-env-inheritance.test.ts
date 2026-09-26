@@ -477,6 +477,33 @@ describe('createPtySubprocess', () => {
     expect(env.LD_LIBRARY_PATH).toBe('/opt/audio/lib')
   })
 
+  it("does not inherit headless serve's virtual display into daemon PTY shells", async () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const saved = {
+      DISPLAY: process.env.DISPLAY,
+      ORCA_VIRTUAL_DISPLAY: process.env.ORCA_VIRTUAL_DISPLAY
+    }
+    process.env.DISPLAY = ':99'
+    process.env.ORCA_VIRTUAL_DISPLAY = ':99'
+
+    try {
+      await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.DISPLAY).toBeUndefined()
+    expect(env.ORCA_VIRTUAL_DISPLAY).toBeUndefined()
+  })
+
   it('does not inherit parent agent hook endpoint for development hook env', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

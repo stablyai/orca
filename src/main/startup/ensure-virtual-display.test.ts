@@ -25,6 +25,7 @@ vi.mock('electron', () => ({ app: appMock }))
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_DISPLAY = process.env.DISPLAY
+const ORIGINAL_VIRTUAL_DISPLAY = process.env.ORCA_VIRTUAL_DISPLAY
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', { value: platform, configurable: true })
@@ -65,6 +66,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     appMock.commandLine.getSwitchValue.mockReset().mockReturnValue('')
     appMock.once.mockReset()
     delete process.env.DISPLAY
+    delete process.env.ORCA_VIRTUAL_DISPLAY
   })
 
   afterEach(async () => {
@@ -77,6 +79,11 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
       delete process.env.DISPLAY
     } else {
       process.env.DISPLAY = ORIGINAL_DISPLAY
+    }
+    if (ORIGINAL_VIRTUAL_DISPLAY === undefined) {
+      delete process.env.ORCA_VIRTUAL_DISPLAY
+    } else {
+      process.env.ORCA_VIRTUAL_DISPLAY = ORIGINAL_VIRTUAL_DISPLAY
     }
   })
 
@@ -107,6 +114,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
     expect(spawnMock).not.toHaveBeenCalled()
     expect(process.env.DISPLAY).toBe(':0')
+    expect(process.env.ORCA_VIRTUAL_DISPLAY).toBeUndefined()
     expect(appMock.disableHardwareAcceleration).toHaveBeenCalled()
     expect(appMock.commandLine.appendSwitch).toHaveBeenCalledWith('disable-dev-shm-usage')
     expect(appMock.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu')
@@ -190,6 +198,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
     expect(spawnMock).not.toHaveBeenCalled()
     expect(rmSyncMock).not.toHaveBeenCalled()
     expect(process.env.DISPLAY).toBe(':99')
+    expect(process.env.ORCA_VIRTUAL_DISPLAY).toBe(':99')
     killSpy.mockRestore()
   })
 
@@ -242,6 +251,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
 
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(false)
     expect(process.env.DISPLAY).toBeUndefined()
+    expect(process.env.ORCA_VIRTUAL_DISPLAY).toBeUndefined()
   })
 
   it('accepts the display once the spawned Xvfb owns its lock', async () => {
@@ -264,6 +274,7 @@ describe('ensureVirtualDisplayForHeadlessServe', () => {
 
     expect(ensureVirtualDisplayForHeadlessServe({ isServeMode: true })).toBe(true)
     expect(process.env.DISPLAY).toBe(':99')
+    expect(process.env.ORCA_VIRTUAL_DISPLAY).toBe(':99')
   })
 
   describe('hasUsableLinuxDisplay', () => {
