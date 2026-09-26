@@ -281,9 +281,7 @@ function PrSidebarSections({
       ),
     isBusy: triage.isBusy('fix-checks'),
     availability: triage.availability,
-    error: triage.error,
-    warning: triage.warning,
-    undeliveredPrompt: triage.undeliveredPrompt
+    ...triage.noticeFor('fix-checks')
   }
   const conflictsTriage = {
     resolveConflicts: () =>
@@ -296,9 +294,7 @@ function PrSidebarSections({
       ),
     isBusy: triage.isBusy('resolve-conflicts'),
     availability: triage.availability,
-    error: triage.error,
-    warning: triage.warning,
-    undeliveredPrompt: triage.undeliveredPrompt
+    ...triage.noticeFor('resolve-conflicts')
   }
   // One card for identity + actions so the ready PR isn't a stack of thin
   // duplicate blocks (badge row, title, branches, then another action band).

@@ -19,6 +19,20 @@ const TRIAGE_LAUNCH = {
   'resolve-conflicts': { actionId: 'resolveConflicts', launchSource: 'conflict_resolution' }
 } as const
 
+/** What the last launch from one button left to show under that button. */
+export type PrAiTriageLaunchNotice = {
+  error: string | null
+  warning: string | null
+  /** The agent started without its prompt; kept so the user can paste it in themselves. */
+  undeliveredPrompt: string | null
+}
+
+const NO_LAUNCH_NOTICE: PrAiTriageLaunchNotice = {
+  error: null,
+  warning: null,
+  undeliveredPrompt: null
+}
+
 type Input = {
   client: RpcClient | null
   connState: ConnectionState
@@ -32,10 +46,8 @@ export function useMobilePrAiTriage(input: Input) {
   const { client, connState, worktreeId, hostCapabilities, hostStatusPending, hostStatusReadable } =
     input
   const [busyKey, setBusyKey] = useState<PrAiTriageKey | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [warning, setWarning] = useState<string | null>(null)
-  // The agent started without its prompt; kept so the user can paste it in themselves.
-  const [undeliveredPrompt, setUndeliveredPrompt] = useState<string | null>(null)
+  // Keyed by button, so one button's launch never shows (or offers to copy) under the other.
+  const [notices, setNotices] = useState<Partial<Record<PrAiTriageKey, PrAiTriageLaunchNotice>>>({})
   // Synchronous lock: setBusyKey commits async, so a fast double-tap could pass the
   // busyKey check twice before either render. The ref flips immediately and dedupes.
   const inFlightRef = useRef(false)
@@ -45,6 +57,10 @@ export function useMobilePrAiTriage(input: Input) {
     statusReadable: hostStatusReadable
   })
 
+  const setNotice = useCallback((key: PrAiTriageKey, notice: PrAiTriageLaunchNotice) => {
+    setNotices((current) => ({ ...current, [key]: notice }))
+  }, [])
+
   const launch = useCallback(
     async (key: PrAiTriageKey, buildPrompt: () => string): Promise<boolean> => {
       // Guard re-entry: one triage launch at a time keeps us from opening a pile
@@ -53,15 +69,13 @@ export function useMobilePrAiTriage(input: Input) {
         return false
       }
       if (!client || connState !== 'connected') {
-        setError('Waiting for desktop…')
+        setNotice(key, { ...NO_LAUNCH_NOTICE, error: 'Waiting for desktop…' })
         triggerError()
         return false
       }
       inFlightRef.current = true
       setBusyKey(key)
-      setError(null)
-      setWarning(null)
-      setUndeliveredPrompt(null)
+      setNotice(key, NO_LAUNCH_NOTICE)
       try {
         const prompt = buildPrompt()
         const result = await launchAgentWithPrompt({
@@ -77,32 +91,30 @@ export function useMobilePrAiTriage(input: Input) {
         } else {
           triggerError()
         }
-        setError(notice.error)
-        setWarning(notice.warning)
-        setUndeliveredPrompt(notice.undeliveredPrompt)
+        setNotice(key, {
+          error: notice.error,
+          warning: notice.warning,
+          undeliveredPrompt: notice.undeliveredPrompt
+        })
         return notice.succeeded
       } catch (err) {
         triggerError()
-        setError(err instanceof Error ? err.message : 'Failed to launch agent')
+        setNotice(key, {
+          ...NO_LAUNCH_NOTICE,
+          error: err instanceof Error ? err.message : 'Failed to launch agent'
+        })
         return false
       } finally {
         inFlightRef.current = false
         setBusyKey(null)
       }
     },
-    [busyKey, client, connState, hostCapabilities, worktreeId]
+    [busyKey, client, connState, hostCapabilities, setNotice, worktreeId]
   )
 
   return {
     availability,
-    error,
-    warning,
-    undeliveredPrompt,
-    clearError: useCallback(() => {
-      setError(null)
-      setWarning(null)
-      setUndeliveredPrompt(null)
-    }, []),
+    noticeFor: (key: PrAiTriageKey): PrAiTriageLaunchNotice => notices[key] ?? NO_LAUNCH_NOTICE,
     isBusy: useCallback((key: PrAiTriageKey) => busyKey === key, [busyKey]),
     launch
   }
