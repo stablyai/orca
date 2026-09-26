@@ -5,11 +5,21 @@ import {
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import { parseArgs } from '../args'
-import { printHelp } from '../help'
+import { formatCommandHelp, printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
 import { TERMINAL_HANDLERS } from './terminal'
 
 const ORIGINAL_EXIT_CODE = process.exitCode
+const TERMINAL_SELECTOR_COMMANDS = [
+  'show',
+  'read',
+  'send',
+  'wait',
+  'switch',
+  'close',
+  'rename',
+  'split'
+] as const
 
 describe('terminal close CLI', () => {
   afterEach(() => {
@@ -227,6 +237,7 @@ describe('terminal close CLI', () => {
 
     const help = String(log.mock.calls[0]?.[0])
     expect(help).toContain('--worktree <selector> --all')
+    expect(help).toContain('pty:<ptyId>')
     expect(help).toContain('durable persistence')
   })
 
@@ -774,5 +785,48 @@ describe('terminal create --shell', () => {
       code: 'runtime_unavailable'
     })
     expect(call).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('terminal selector help', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it.each(TERMINAL_SELECTOR_COMMANDS)(
+    'documents the stable pty selector for terminal %s',
+    (command) => {
+      const spec = COMMAND_SPECS.find(
+        (candidate) => candidate.path[0] === 'terminal' && candidate.path[1] === command
+      )
+
+      expect(spec).toBeDefined()
+      expect(spec!.usage).toContain('pty:<ptyId>')
+      expect(formatCommandHelp(spec!)).toContain(
+        '--terminal <selector> Runtime handle or stable pty:<ptyId>'
+      )
+    }
+  )
+
+  it('keeps orchestration terminal flags handle-only', () => {
+    const spec = COMMAND_SPECS.find(
+      (candidate) => candidate.path[0] === 'orchestration' && candidate.path[1] === 'check'
+    )
+
+    expect(spec).toBeDefined()
+    expect(formatCommandHelp(spec!)).not.toContain('pty:<ptyId>')
+  })
+
+  it('keeps root terminal usages synchronized', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    printHelp(COMMAND_SPECS, [])
+
+    const help = String(log.mock.calls[0]?.[0])
+    for (const command of TERMINAL_SELECTOR_COMMANDS) {
+      expect(help).toMatch(new RegExp(`orca terminal ${command} .*pty:<ptyId>`))
+    }
+
   })
 })
