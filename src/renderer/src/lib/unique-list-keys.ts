@@ -1,8 +1,8 @@
 /**
- * Check annotations and jobs carry no stable id of their own: GitHub workflow-level annotations
- * repeat identical content (`path`/`startLine` null, same message), and GitLab jobs may report a
- * null id. Keying on content alone therefore collides; keying on the array index alone reshuffles
- * rows on every list update. Pairing the content key with its occurrence count gives both.
+ * Stable React keys for lists whose items carry no id of their own. Keying on
+ * content alone collides when items repeat; keying on the array index reshuffles
+ * rows on every list update. Pairing the content key with its occurrence count
+ * gives both a stable and a unique key.
  */
 export function assignUniqueListKeys<T>(
   items: readonly T[],

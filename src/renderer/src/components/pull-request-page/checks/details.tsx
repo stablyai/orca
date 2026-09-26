@@ -12,7 +12,7 @@ import {
 import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
 import { translate } from '@/i18n/i18n'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import { assignUniqueListKeys } from './details-list-keys'
+import { assignUniqueListKeys } from '@/lib/unique-list-keys'
 
 export function CheckDetailsPanel({
   check,

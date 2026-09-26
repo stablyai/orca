@@ -1,6 +1,7 @@
 import { Circle, CircleCheck, CircleDot, ChevronRight, ListChecks } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
+import { assignUniqueListKeys } from '@/lib/unique-list-keys'
 import { translate } from '@/i18n/i18n'
 import {
   diffNativeChatTaskLists,
@@ -74,8 +75,8 @@ function Checklist({ list }: { list: TaskList }): React.JSX.Element {
       aria-label={translate('components.native-chat.taskList.title', 'Tasks')}
       className="space-y-1 py-1"
     >
-      {list.tasks.map((task, index) => (
-        <TaskRow key={`${task.content}:${index}`} task={task} />
+      {assignUniqueListKeys(list.tasks, (task) => task.content).map(({ key, item: task }) => (
+        <TaskRow key={key} task={task} />
       ))}
     </ul>
   )
@@ -147,12 +148,11 @@ export function NativeChatTaskList({
         <>
           {changes.length > 0 ? (
             <ul className="space-y-1 py-1">
-              {changes.map((change, index) => (
-                <TaskRow
-                  key={`${change.kind}:${index}`}
-                  task={change.task}
-                  label={changeLabel(change)}
-                />
+              {assignUniqueListKeys(
+                changes,
+                (change) => JSON.stringify([change.kind, change.task.content])
+              ).map(({ key, item: change }) => (
+                <TaskRow key={key} task={change.task} label={changeLabel(change)} />
               ))}
             </ul>
           ) : (
