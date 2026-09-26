@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { piBuildPtyEnvMock } from './pty-ipc-mock-registry'
+import { piBuildPtyEnvMock, statSyncMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   type DaemonSpawnCall,
@@ -456,6 +456,37 @@ describe('registerPtyHandlers', () => {
           expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
           // The same absolute spelling a structured session gets.
           expect(env.ORCA_CLI_COMMAND).toBe(join(shimDir, 'orca'))
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
+      })
+      it('runs the Codex launch preflight through the CLI the packaged Linux terminal names', async () => {
+        // Why: the bundled launcher behind the shim is a different file, so running it directly
+        // made the CLI hand the preflight off to the shim and boot Electron twice per launch.
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: 'linux'
+        })
+        const shimPath = join('/tmp/orca-user-data', 'linux-orca-cli-shim', 'orca')
+        statSyncMock.mockImplementation((target: string) => ({
+          isDirectory: () => target !== shimPath,
+          isFile: () => target === shimPath,
+          mode: 0o755,
+          size: 1
+        }))
+        try {
+          const env = await daemonSpawnAndGetEnv(
+            { PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter) },
+            () => '/tmp/orca-codex-home'
+          )
+          expect(env.ORCA_CLI_COMMAND).toBe(
+            join('/tmp/orca-user-data', 'linux-orca-cli-shim', 'orca')
+          )
+          expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(env.ORCA_CLI_COMMAND)
         } finally {
           Object.defineProperty(process, 'platform', {
             configurable: true,

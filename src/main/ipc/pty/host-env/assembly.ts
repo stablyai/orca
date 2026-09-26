@@ -242,35 +242,6 @@ export function buildPtyHostEnv(
     }
   }
 
-  // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.
-  if (opts.skipCodexHomeEnv) {
-    delete baseEnv.CODEX_HOME
-    delete baseEnv.ORCA_CODEX_HOME
-    delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
-  } else if (opts.selectedCodexHomePath) {
-    baseEnv.CODEX_HOME = opts.selectedCodexHomePath
-    // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers restore this runtime home before Codex launches.
-    baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
-    const preflightCommand = resolveCodexShellLaunchPreflightCommand({
-      hooksEnabled: opts.codexStatusHooksEnabled ?? opts.agentStatusHooksEnabled,
-      isPackaged: opts.isPackaged,
-      isWsl: opts.isWsl,
-      managedHomePath: opts.selectedCodexHomePath,
-      userDataPath: opts.userDataPath,
-      resourcesPath: opts.resourcesPath
-    })
-    if (preflightCommand) {
-      baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT = preflightCommand
-    } else {
-      delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
-    }
-  } else if (opts.stripInheritedOrcaCodexHome) {
-    stripInheritedOrcaCodexHomeOverride(baseEnv)
-    delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
-  } else {
-    delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
-  }
-
   // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `orca` targets the live dev instance.
   if (opts.isWsl) {
     baseEnv.ORCA_USER_DATA_PATH = opts.userDataPath
@@ -291,6 +262,36 @@ export function buildPtyHostEnv(
     baseEnv.ORCA_CLI_COMMAND = launcher
   } else {
     delete baseEnv.ORCA_CLI_COMMAND
+  }
+
+  // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.
+  if (opts.skipCodexHomeEnv) {
+    delete baseEnv.CODEX_HOME
+    delete baseEnv.ORCA_CODEX_HOME
+    delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+  } else if (opts.selectedCodexHomePath) {
+    baseEnv.CODEX_HOME = opts.selectedCodexHomePath
+    // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers restore this runtime home before Codex launches.
+    baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
+    const preflightCommand = resolveCodexShellLaunchPreflightCommand({
+      hooksEnabled: opts.codexStatusHooksEnabled ?? opts.agentStatusHooksEnabled,
+      isPackaged: opts.isPackaged,
+      isWsl: opts.isWsl,
+      managedHomePath: opts.selectedCodexHomePath,
+      userDataPath: opts.userDataPath,
+      resourcesPath: opts.resourcesPath,
+      cliLauncher: launcher
+    })
+    if (preflightCommand) {
+      baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT = preflightCommand
+    } else {
+      delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+    }
+  } else if (opts.stripInheritedOrcaCodexHome) {
+    stripInheritedOrcaCodexHomeOverride(baseEnv)
+    delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+  } else {
+    delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
   }
 
   if (
