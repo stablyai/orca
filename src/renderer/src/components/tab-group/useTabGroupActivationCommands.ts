@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { focusTerminalTabSurface } from '../../lib/focus-terminal-tab-surface'
+import { requestBrowserWorkspaceTabPageFocus } from '../../lib/browser-workspace-tab-activation'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import {
   activateWebRuntimeSessionTab,
@@ -135,6 +136,7 @@ export function useTabGroupActivationCommands({
       }
       setActiveBrowserTab(browserTabId)
       setActiveTabType('browser', worktreeId)
+      requestBrowserWorkspaceTabPageFocus(worktreeId, browserTabId)
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveBrowserTab, setActiveTabType, worktreeId]
   )

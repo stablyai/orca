@@ -316,6 +316,58 @@ describe('useBrowserPageChromeFocus', () => {
     expect(document.activeElement).toBe(guest())
   })
 
+  it('hands an already-active page the guest once it attaches a frame after the request', () => {
+    const view = render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames())
+
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+    view.rerender(<ChromeHarness />)
+    act(() => flushFrames())
+
+    // Why: the live listener consumes the one-shot request, so a single try against a guest that
+    // is still attaching would lose it for good.
+    expect(document.activeElement).toBe(guest())
+  })
+
+  it.each([
+    ['the chord', (): void => pressFocusAddressBarChord(true)],
+    ['IPC', (): void => act(() => focusAddressBarFromIpc.emit({ browserPageId: PAGE_ID }))]
+  ])('keeps the address bar taken over %s while a guest retry is pending', (_, focusBar) => {
+    const view = render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames())
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+
+    focusBar()
+    view.rerender(<ChromeHarness />)
+    act(() => flushFrames())
+
+    expectAddressBarFocusedAndSelected()
+  })
+
+  it('drops a guest retry in flight when the pane stops being the active surface', () => {
+    const view = render(
+      <>
+        <ChromeHarness hasGuest={false} />
+        <input data-testid="outside" />
+      </>
+    )
+    act(() => flushFrames())
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+
+    view.rerender(
+      <>
+        <ChromeHarness isActive={false} />
+        <input data-testid="outside" />
+      </>
+    )
+    const outside = document.querySelector<HTMLInputElement>('[data-testid="outside"]')
+    act(() => outside?.focus())
+    act(() => flushFrames())
+
+    expect(outside).not.toBeNull()
+    expect(document.activeElement).toBe(outside)
+  })
+
   it('ignores a durable request queued for a different page', () => {
     act(() => requestBrowserFocus({ pageId: 'page-other', target: 'address-bar' }))
 

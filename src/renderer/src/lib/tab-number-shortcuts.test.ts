@@ -1,7 +1,23 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { AppState } from '@/store/types'
-import { resolveTabNumberShortcutTarget } from './tab-number-shortcuts'
+import { consumeBrowserFocusRequest } from '@/components/browser-pane/host-guest/browser-focus'
+import { activateTabNumberShortcut, resolveTabNumberShortcutTarget } from './tab-number-shortcuts'
+
+const storeBox: { state: Record<string, unknown> | null } = vi.hoisted(() => ({ state: null }))
+
+vi.mock('@/store', () => ({
+  useAppStore: { getState: () => storeBox.state ?? {} }
+}))
+
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getRuntimeEnvironmentIdForWorktree: () => null
+}))
+
+vi.mock('@/runtime/web-runtime-session', () => ({
+  activateWebRuntimeSessionTab: vi.fn(),
+  isWebRuntimeSessionActive: () => false
+}))
 
 function tab(overrides: Partial<Tab> & Pick<Tab, 'id' | 'groupId'>): Tab {
   return {
@@ -131,5 +147,49 @@ describe('resolveTabNumberShortcutTarget', () => {
     expect(resolveTabNumberShortcutTarget({ ...base, activeView: 'settings' }, 0)).toBeNull()
     expect(resolveTabNumberShortcutTarget({ ...base, activeWorktreeId: null }, 0)).toBeNull()
     expect(resolveTabNumberShortcutTarget(base, -1)).toBeNull()
+  })
+})
+
+describe('activateTabNumberShortcut browser focus', () => {
+  it('hands the activated browser tab page the keyboard', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn() })
+    storeBox.state = {
+      activeView: 'terminal',
+      activeWorktreeId: 'wt-1',
+      activeGroupIdByWorktree: { 'wt-1': 'group-a' },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-a',
+            worktreeId: 'wt-1',
+            activeTabId: 'tab-browser',
+            tabOrder: ['tab-browser']
+          }
+        ]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          tab({
+            id: 'tab-browser',
+            entityId: 'browser-1',
+            groupId: 'group-a',
+            contentType: 'browser'
+          })
+        ]
+      },
+      browserTabsByWorktree: {
+        'wt-1': [{ id: 'browser-1', activePageId: 'page-1', url: 'https://example.com' }]
+      },
+      activateTab: vi.fn(),
+      focusGroup: vi.fn(),
+      setActiveBrowserTab: vi.fn(),
+      setActiveTabType: vi.fn()
+    }
+
+    expect(activateTabNumberShortcut(0)).toBe(true)
+
+    // Why: the chord only updated the store before, so the guest never took the keyboard.
+    expect(consumeBrowserFocusRequest('page-1')).toBe('webview')
+    vi.unstubAllGlobals()
   })
 })
