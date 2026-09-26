@@ -217,7 +217,7 @@ describe('LocalPtyProvider', () => {
         expect(mockProc.write).not.toHaveBeenCalled()
 
         await vi.advanceTimersByTimeAsync(200)
-        expect(mockProc.write).toHaveBeenCalledWith(`${command}\n`)
+        expect(mockProc.write).toHaveBeenCalledWith(`${command}\r`)
       } finally {
         vi.useRealTimers()
       }
@@ -269,7 +269,7 @@ describe('LocalPtyProvider', () => {
 
         vi.advanceTimersByTime(1)
         await Promise.resolve()
-        expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\n")
+        expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\r")
       } finally {
         vi.useRealTimers()
       }
@@ -315,7 +315,7 @@ describe('LocalPtyProvider', () => {
 
         vi.advanceTimersByTime(200)
         await Promise.resolve()
-        expect(mockProc.write).toHaveBeenCalledWith('printf ready\n')
+        expect(mockProc.write).toHaveBeenCalledWith('printf ready\r')
       } finally {
         vi.useRealTimers()
       }

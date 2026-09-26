@@ -278,7 +278,7 @@ describe('registerPtyHandlers', () => {
             await Promise.resolve()
             vi.runAllTimers()
 
-            expect(mockProc.proc.write).toHaveBeenCalledWith(`${command}\n`)
+            expect(mockProc.proc.write).toHaveBeenCalledWith(`${command}\r`)
             expect(spawned.agentResumeUnavailable).toBeUndefined()
           } finally {
             vi.useRealTimers()

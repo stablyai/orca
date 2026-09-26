@@ -189,9 +189,7 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onDataCb?.('\r\nuser@host $ ')
       await new Promise((r) => setTimeout(r, 40))
-      expect(lastSubprocess.write).toHaveBeenCalledWith(
-        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-      )
+      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
     })
 
     it('uses the short daemon settle path when marker and prompt arrive together', async () => {
@@ -211,9 +209,7 @@ describe('TerminalHost', () => {
         expect(lastSubprocess.write).not.toHaveBeenCalled()
 
         vi.advanceTimersByTime(1)
-        expect(lastSubprocess.write).toHaveBeenCalledWith(
-          process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-        )
+        expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
       } finally {
         vi.useRealTimers()
       }
@@ -242,9 +238,7 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      expect(lastSubprocess.write).toHaveBeenCalledWith(
-        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
-      )
+      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\r')
     })
 
     it('does not bracketed-paste-wrap multiline commands for a fallback shell without paste mode', async () => {

@@ -58,7 +58,7 @@ describe('writeStartupCommandWhenShellReady', () => {
     Object.defineProperty(process, 'platform', { value: origPlatform })
   })
 
-  it('appends LF on POSIX so bash/zsh submit the line', async () => {
+  it('appends CR on macOS so a rebound ^J cannot swallow the submit', async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     const proc = createMockProc()
     const ready = Promise.resolve()
@@ -69,7 +69,7 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['claude\n'])
+    expect(proc._writes).toEqual(['claude\r'])
   })
 
   it('appends CR on Windows so PowerShell/cmd.exe submit the line', async () => {
@@ -99,6 +99,19 @@ describe('writeStartupCommandWhenShellReady', () => {
 
     expect(proc._writes).toEqual(['claude\n'])
   })
+  it('keeps a caller-supplied LF on macOS instead of appending a second submit byte', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    writeStartupCommandWhenShellReady(ready, proc, 'claude\n', () => {})
+
+    await ready
+    proc._emitData('\r\nuser@host % ')
+    vi.advanceTimersByTime(30)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual(['claude\n'])
+  })
 
   it('keeps the no-prompt fallback conservative to avoid duplicate shell echo', async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' })
@@ -115,7 +128,7 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(150)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['codex\n'])
+    expect(proc._writes).toEqual(['codex\r'])
   })
 
   it('uses the short settle delay when marker scan already observed post-marker bytes', async () => {
@@ -131,7 +144,7 @@ describe('writeStartupCommandWhenShellReady', () => {
 
     vi.advanceTimersByTime(1)
     await Promise.resolve()
-    expect(proc._writes).toEqual(['codex\n'])
+    expect(proc._writes).toEqual(['codex\r'])
   })
 
   // Why: multiline startup commands must be bracketed-paste wrapped (ESC[200~ … ESC[201~) so shells insert them literally instead of treating each LF as Enter.
@@ -149,7 +162,7 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual([`\x1b[200~${command}\x1b[201~\n`])
+    expect(proc._writes).toEqual([`\x1b[200~${command}\x1b[201~\r`])
   })
 
   it('leaves a single-line command on the raw submit path even when bracketed paste is safe', async () => {
@@ -165,7 +178,7 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual(['claude\n'])
+    expect(proc._writes).toEqual(['claude\r'])
   })
 
   it('does not bracket-wrap a multiline command when the shell lacks bracketed paste', async () => {
@@ -181,6 +194,6 @@ describe('writeStartupCommandWhenShellReady', () => {
     vi.advanceTimersByTime(30)
     await Promise.resolve()
 
-    expect(proc._writes).toEqual([`${command}\n`])
+    expect(proc._writes).toEqual([`${command}\r`])
   })
 })
