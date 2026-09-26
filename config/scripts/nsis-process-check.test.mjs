@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcessSync } from '../../src/shared/child-process/run-process'
 
@@ -8,13 +9,22 @@ const processCheck = readFileSync(
   new URL('../nsis/orca-process-check.nsh', import.meta.url),
   'utf8'
 )
+const require = createRequire(import.meta.url)
+const builderRequire = createRequire(require.resolve('electron-builder/package.json'))
+const upstreamChecks = readFileSync(
+  join(
+    dirname(builderRequire.resolve('app-builder-lib/package.json')),
+    'templates/nsis/include/allowOnlyOneInstallerInstance.nsh'
+  ),
+  'utf8'
+)
 
-function readPowerShellProbe() {
-  const match = processCheck.match(/nsExec::Exec `"\$PowerShellPath" (.*?) -Command "([^"\n]+)"`/)
+function readPowerShellProbe(source = processCheck) {
+  const match = source.match(/nsExec::Exec `"\$PowerShellPath"(.*?) -(?:C|Command) "([^"\n]+)"`/)
   if (!match) {
-    throw new Error('The installer capability probe was not found')
+    throw new Error('The NSIS PowerShell invocation was not found')
   }
-  return { args: match[1].split(/\s+/), command: match[2] }
+  return { args: match[1].trim().split(/\s+/).filter(Boolean), command: match[2] }
 }
 
 describe('NSIS process-check integration', () => {
@@ -30,7 +40,11 @@ describe('NSIS process-check integration', () => {
     expect(processCheck).toContain('!insertmacro _CHECK_APP_RUNNING')
     expect(processCheck).not.toMatch(/!macro (?:FIND_PROCESS|KILL_PROCESS|_CHECK_APP_RUNNING)\b/)
     expect(processCheck).not.toMatch(/\b(?:Stop-Process|taskkill|Set-ExecutionPolicy)\b/)
-    expect(readPowerShellProbe().args).toEqual(['-NoProfile', '-NonInteractive'])
+    const findProcess = upstreamChecks.match(/!macro FIND_PROCESS\b[\s\S]*?!macroend/)?.[0]
+    if (!findProcess) {
+      throw new Error('The upstream process finder was not found')
+    }
+    expect(readPowerShellProbe().args).toEqual(readPowerShellProbe(findProcess).args)
   })
 })
 
