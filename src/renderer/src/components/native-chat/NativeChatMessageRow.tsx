@@ -143,6 +143,7 @@ export const MessageRow = memo(function MessageRow({
                 renderCodeBlock={NativeChatCodeBlock}
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
+                renderMath
               />
             </>
           ) : (
@@ -207,6 +208,7 @@ export const MessageRow = memo(function MessageRow({
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
           linkifyFilePaths={onLinkClick !== undefined}
+          renderMath
         />
       ) : null}
       {tools.length > 0 || subagentGroups.length > 0 || backgroundTasks.length > 0 ? (
