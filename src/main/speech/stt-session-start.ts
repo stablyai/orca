@@ -1,9 +1,10 @@
 import { Worker } from 'node:worker_threads'
+import { AppleSpeechSession } from './apple-speech-session'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
 import type { SttEventSink } from './stt-service'
-import type { SttSessionState } from './stt-session-state'
+import type { ProviderTranscriptionSession, SttSessionState } from './stt-session-state'
 import {
   clearSttIdleTeardownTimer,
   cleanupActiveSttWorkerLifecycleListeners,
@@ -32,7 +33,7 @@ export async function startSttDictation(
     }
     return
   }
-  if ((state.worker || state.cloudSession) && state.activeOwner && state.activeOwner !== owner) {
+  if ((state.worker || state.providerSession) && state.activeOwner && state.activeOwner !== owner) {
     throw new Error('dictation_already_active')
   }
   state.starting = true
@@ -67,25 +68,12 @@ async function startSttSession(
     throw new Error(`Unknown model: ${modelId}`)
   }
 
-  if (manifest.provider === 'openai') {
-    if (state.worker) {
-      const existingWorker = state.worker
-      await stopSttDictation(state, owner, { cancelStarting: false })
-      await teardownSttWorker(state, existingWorker)
-    }
-    const modelState = await state.modelManager.getModelState(modelId)
-    if (modelState.status !== 'ready') {
-      throw new Error(`Model not ready: ${modelState.status}`)
-    }
-    state.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
-    state.activeModelId = modelId
-    state.activeHotwordsFilePath = undefined
-    state.eventSink = sink
-    sink({ type: 'ready' })
+  if (manifest.provider === 'openai' || manifest.provider === 'apple') {
+    await startProviderSession(state, manifest.provider, modelId, sink, owner)
     return
   }
 
-  if (state.cloudSession) {
+  if (state.providerSession) {
     await stopSttDictation(state, owner, { cancelStarting: false })
   }
   const reusableWorker = state.worker
@@ -161,4 +149,65 @@ async function startSttSession(
     }
     throw error
   }
+}
+
+/**
+ * Starts a backend that needs no sherpa worker. Apple's helper streams its own
+ * partial and final segments, so the sink is wired up before it is launched.
+ */
+async function startProviderSession(
+  state: SttSessionState,
+  provider: 'openai' | 'apple',
+  modelId: string,
+  sink: SttEventSink,
+  owner: string
+): Promise<void> {
+  if (state.worker) {
+    const existingWorker = state.worker
+    await stopSttDictation(state, owner, { cancelStarting: false })
+    await teardownSttWorker(state, existingWorker)
+  } else if (state.providerSession) {
+    await stopSttDictation(state, owner, { cancelStarting: false })
+  }
+  const modelState = await state.modelManager.getModelState(modelId)
+  if (modelState.status !== 'ready') {
+    throw new Error(`Model not ready: ${modelState.status}`)
+  }
+
+  state.eventSink = sink
+  state.activeModelId = modelId
+  state.activeHotwordsFilePath = undefined
+  if (provider === 'openai') {
+    state.providerSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+    sink({ type: 'ready' })
+    return
+  }
+
+  // Why registered before it starts: the helper can report a failure in the
+  // same stdout chunk as its ready line, and the stop that failure triggers
+  // has to find the session it needs to tear down.
+  const session = new AppleSpeechSession((event) => state.eventSink?.(event))
+  state.providerSession = session
+  try {
+    await session.start()
+  } catch (error) {
+    clearFailedProviderSession(state, session)
+    throw error
+  }
+  if (state.providerSession !== session) {
+    throw new Error('dictation_canceled')
+  }
+  sink({ type: 'ready' })
+}
+
+function clearFailedProviderSession(
+  state: SttSessionState,
+  session: ProviderTranscriptionSession
+): void {
+  if (state.providerSession !== session) {
+    return
+  }
+  state.providerSession = null
+  state.activeModelId = null
+  state.eventSink = null
 }

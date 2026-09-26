@@ -1,7 +1,12 @@
 import type { VoiceSettings } from '../../shared/speech-types'
 import type { RuntimeSpeechModelSummary, RuntimeSpeechSetupState } from '../../shared/runtime-types'
 import { getDefaultVoiceSettings } from '../../shared/constants'
-import { getCatalogModel, isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
+import {
+  getAvailableSpeechModelCatalog,
+  getCatalogModel,
+  isAppleSpeechModel,
+  isLocalSpeechModel
+} from '../speech/model-catalog'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import {
   deleteLocalSpeechModel,
@@ -17,11 +22,13 @@ export class RuntimeMobileSpeechCatalog {
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
-    const models: RuntimeSpeechModelSummary[] = SPEECH_MODEL_CATALOG.map((manifest) => {
+    const models: RuntimeSpeechModelSummary[] = getAvailableSpeechModelCatalog().map((manifest) => {
       const state = stateById.get(manifest.id)
       return {
         id: manifest.id,
         label: manifest.label,
+        // Why not a new arm: `provider` is a closed set on the wire, and an
+        // on-device Apple model behaves exactly like a local one to a client.
         provider: manifest.provider === 'openai' ? 'openai' : 'local',
         sizeBytes: manifest.sizeBytes ?? null,
         recommended: manifest.recommended === true,
@@ -40,7 +47,7 @@ export class RuntimeMobileSpeechCatalog {
   async download(modelId: string): Promise<{ started: true }> {
     const store = this.requireStore()
     const manifest = getCatalogModel(modelId)
-    if (!manifest || !isLocalSpeechModel(manifest)) {
+    if (!manifest || !(isLocalSpeechModel(manifest) || isAppleSpeechModel(manifest))) {
       throw new Error('voice_model_not_downloadable')
     }
     void getSpeechModelManager(store)

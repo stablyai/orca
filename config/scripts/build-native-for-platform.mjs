@@ -36,9 +36,12 @@ for (const target of [process.stdout, process.stderr]) {
 }
 
 const exitCodes = await Promise.all(
-  ['build:computer-macos', 'build:keyboard-layout-macos', 'build:notification-status-macos'].map(
-    (scriptName) => runPnpmScript(scriptName)
-  )
+  [
+    'build:computer-macos',
+    'build:keyboard-layout-macos',
+    'build:notification-status-macos',
+    'build:speech-transcriber-macos'
+  ].map((scriptName) => runPnpmScript(scriptName))
 )
 clearTimeout(forceTimer)
 for (const [signal, handler] of signalHandlers) {

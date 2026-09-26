@@ -85,6 +85,9 @@ export function VoiceSpeechModelSection({
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
             const isCloud = manifest.provider === 'openai'
+            // The system owns these assets and shares them with every app, so
+            // Orca reports no size and offers no delete.
+            const isSystem = manifest.provider === 'apple'
             const deletePending = pendingDeleteModelIds.has(manifest.id)
             const sizeMb = manifest.sizeBytes ? Math.round(manifest.sizeBytes / 1_000_000) : null
 
@@ -129,7 +132,7 @@ export function VoiceSpeechModelSection({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium">{manifest.label}</span>
-                    {!isCloud && (
+                    {!isCloud && !isSystem && (
                       <span className="text-[10px] px-1 py-px rounded-full leading-none bg-muted text-muted-foreground">
                         {manifest.streaming
                           ? translate('auto.components.settings.VoicePane.d504ab05f0', 'streaming')
@@ -149,7 +152,7 @@ export function VoiceSpeechModelSection({
                               'Extracting...'
                             )
                           : `${Math.round(mState.progress * 100)}%`
-                        : isCloud
+                        : isCloud || isSystem
                           ? null
                           : translate(
                               'auto.components.settings.VoicePane.91980ce124',
@@ -162,7 +165,7 @@ export function VoiceSpeechModelSection({
                     {manifest.description}
                   </p>
                 </div>
-                {!isCloud && isReady ? (
+                {!isCloud && !isSystem && isReady ? (
                   <Button
                     type="button"
                     variant="ghost"

@@ -7,8 +7,13 @@ import type {
   SpeechModelState,
   SpeechModelStatus
 } from '../../shared/speech-types'
-import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
-import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
+import {
+  getAvailableSpeechModelCatalog,
+  getCatalogModel,
+  isLocalSpeechModel
+} from './model-catalog'
+import { installAppleSpeechModel } from './apple-speech-model-state'
+import { readProviderManagedModelState } from './provider-managed-model-state'
 import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
@@ -78,7 +83,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
 
   async getModelStates(): Promise<SpeechModelState[]> {
     const states: SpeechModelState[] = []
-    for (const manifest of SPEECH_MODEL_CATALOG) {
+    for (const manifest of getAvailableSpeechModelCatalog()) {
       const state = await this.getModelState(manifest.id)
       states.push(state)
     }
@@ -97,11 +102,8 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
-    if (manifest.provider === 'openai') {
-      return {
-        id: modelId,
-        status: hasOpenAiSpeechApiKey() ? 'ready' : 'not-downloaded'
-      }
+    if (manifest.provider !== 'local') {
+      return readProviderManagedModelState(manifest, modelId)
     }
 
     const modelDir = this.getModelDir(modelId)
@@ -154,6 +156,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
     const manifest = getCatalogModel(modelId)
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
+    }
+    if (manifest.provider === 'apple') {
+      return installAppleSpeechModel(modelId, this.updateState.bind(this), this.activeDownloads)
     }
     if (!isLocalSpeechModel(manifest)) {
       throw new Error(`Model does not support downloads: ${modelId}`)
@@ -234,11 +239,11 @@ export class ModelManager extends SpeechModelDownloadTransport {
 
   async deleteModel(modelId: string): Promise<void> {
     await this.migrationReady
-    if (!getCatalogModel(modelId)) {
+    const manifest = getCatalogModel(modelId)
+    if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
     }
-    const manifest = getCatalogModel(modelId)
-    if (!manifest || !isLocalSpeechModel(manifest)) {
+    if (!isLocalSpeechModel(manifest)) {
       throw new Error(`Model does not support deletion: ${modelId}`)
     }
     this.cancelDownload(modelId)

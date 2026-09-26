@@ -421,6 +421,11 @@ module.exports = {
         'orca-keyboard-layout',
         context.packager
       )
+      await signMacStandaloneHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-speech-transcriber'),
+        'orca-speech-transcriber',
+        context.packager
+      )
     }
   },
   win: {
@@ -510,6 +515,8 @@ module.exports = {
       NSLocalNetworkUsageDescription:
         'Orca allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
+      NSSpeechRecognitionUsageDescription:
+        'Orca transcribes your dictation on this device with Apple speech recognition.',
       NSAudioCaptureUsageDescription:
         'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
       NSBonjourServices: ['_http._tcp', '_https._tcp'],
@@ -560,6 +567,13 @@ module.exports = {
       {
         from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
         to: 'MacOS/orca-keyboard-layout'
+      },
+      // Why Contents/MacOS: SpeechAnalyzer's asset installs are keyed to the
+      // requesting bundle, which macOS only resolves for executables that live
+      // beside the app binary.
+      {
+        from: 'native/speech-transcriber-macos/.build/release/orca-speech-transcriber',
+        to: 'MacOS/orca-speech-transcriber'
       }
     ],
     target: [

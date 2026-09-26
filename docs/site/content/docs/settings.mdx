@@ -106,6 +106,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Microphone** — pick which input device dictation uses. Defaults to the system mic; choose a specific device (for example a headset) when you do not want the OS default. If the chosen mic is unplugged or missing, Orca falls back to the system default and shows a non-blocking notice.
 - **Dictation mode** — **Toggle** (press shortcut to start/stop) or **Hold** (hold shortcut to talk).
 - **Speech Model** — download/select an on-device model, or use cloud OpenAI models after pasting an API key:
+  - **Apple Speech** (macOS 26+ only) — the transcriber built into macOS, in your Mac dictation language. Nothing to download from Orca: the first time you pick it, macOS installs its own language files, which it shares with every other app and keeps after Orca is removed. Not offered on older macOS, on Windows, or on Linux.
   - **Parakeet TDT v3** (recommended) — multilingual European languages, offline.
   - **Parakeet TDT v2** — English, faster.
   - **Zipformer** family — bilingual ZH+EN streaming; streaming EN/ZH; **Zipformer Streaming KO** (Korean).

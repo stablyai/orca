@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow, systemPreferences } from 'electron'
 import { join } from 'node:path'
 import { writeFile, unlink } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
-import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
+import { getAvailableSpeechModelCatalog } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import {
@@ -14,7 +14,7 @@ import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:getCatalog', () => {
-    return SPEECH_MODEL_CATALOG
+    return getAvailableSpeechModelCatalog()
   })
 
   ipcMain.handle('speech:getModelStates', async () => {
