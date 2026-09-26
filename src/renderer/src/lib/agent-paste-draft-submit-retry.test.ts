@@ -169,6 +169,42 @@ describe('post-paste submit retry Enter', () => {
     await expect(promise).resolves.toBe(true)
     expect(enterWrites()).toHaveLength(2)
   })
+
+  it.each(['win32', 'linux', 'darwin'] as const)(
+    'uses the %s host input protocol before submitting a multiline launch prompt',
+    async (hostPlatform) => {
+      const promise = pasteDraftWhenAgentReady({
+        tabId: 'tab-1',
+        agent: 'codex',
+        content: 'first\nsecond',
+        submit: true,
+        hostPlatform
+      })
+      await signalCodexComposerReady()
+      await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+      await expect(promise).resolves.toBe(true)
+      expect(testState.sendRuntimePtyInputVerified.mock.calls.map((call) => call[2])).toEqual([
+        hostPlatform === 'win32' ? 'first\x1b\rsecond' : '\x1b[200~first\rsecond\x1b[201~',
+        '\r',
+        '\r'
+      ])
+    }
+  )
+
+  it('does not submit a failed Windows launch paste', async () => {
+    testState.sendRuntimePtyInputVerified.mockResolvedValue(false)
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      agent: 'codex',
+      content: 'first\nsecond',
+      submit: true,
+      hostPlatform: 'win32'
+    })
+    await signalCodexComposerReady()
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+    await expect(promise).resolves.toBe(false)
+    expect(enterWrites()).toHaveLength(0)
+  })
 })
 
 function enterWrites(): unknown[][] {

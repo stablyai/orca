@@ -181,6 +181,23 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).not.toHaveBeenCalled()
   })
 
+  it.each(['win32', 'linux', 'darwin'] as const)(
+    'passes the %s execution platform to launch prompt delivery',
+    async (launchPlatform) => {
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+      launchAgentInNewTab({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: 'Continue work\nRead the original transcript',
+        promptDelivery: 'submit-after-ready',
+        launchPlatform
+      })
+      expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+        expect.objectContaining({ hostPlatform: launchPlatform, submit: true })
+      )
+    }
+  )
+
   it('uses the explicit startup shell platform when building draft launch commands', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 

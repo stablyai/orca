@@ -79,6 +79,7 @@ export async function pasteDraftWhenAgentReady(args: {
   agent?: TuiAgent
   submit?: boolean
   forcePaste?: boolean
+  hostPlatform?: NodeJS.Platform
   timeoutMs?: number
   onTimeout?: () => void
   onUnconfirmedDelivery?: () => void
@@ -136,7 +137,8 @@ export async function pasteDraftWhenAgentReady(args: {
     ptyId,
     content,
     submit: submit === true,
-    agent
+    agent,
+    hostPlatform: args.hostPlatform
   })
 }
 
@@ -218,6 +220,7 @@ async function sendBracketedPasteToAgent(args: {
   content: string
   submit: boolean
   agent?: TuiAgent
+  hostPlatform?: NodeJS.Platform
 }): Promise<boolean> {
   const { settings = useAppStore.getState().settings, ptyId, content, submit, agent } = args
   const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
@@ -225,7 +228,17 @@ async function sendBracketedPasteToAgent(args: {
     // Why: paste + Enter (+ retry Enter) must be one transaction, or a concurrent
     // paste on this PTY can slip between them and submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
-      const pasted = await sendAgentDraftPasteContentNow(settings, ptyId, content)
+      const newline =
+        args.hostPlatform === 'win32' && agent
+          ? TUI_AGENT_CONFIG[agent].windowsInputRecordPasteNewline
+          : undefined
+      const pasted = await sendAgentDraftPasteContentNow(
+        settings,
+        ptyId,
+        content,
+        undefined,
+        newline
+      )
       if (!pasted || !submit) {
         return pasted
       }
