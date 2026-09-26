@@ -15155,6 +15155,7 @@
           "tryAgain": "Try again",
           "kernelCreatingVenv": "Creating .venv…",
           "createVenvItem": "Create virtual environment…",
+          "trustFirst": "Run a cell to trust this notebook first",
           "kernelStartFailed": "The kernel failed to start.",
           "noPython": "Python was not found on this computer. Install it from [python.org](https://www.python.org/downloads/), then run the cell again.",
           "kernelDied": "The kernel died.",

@@ -64,7 +64,11 @@ async function discoverEnvironment(
   filePath: string,
   rootPath: string | null
 ): Promise<PythonEnvironment | undefined> {
-  const found = await window.api.notebook.listPythonEnvironments({ filePath, rootPath })
+  const found = await window.api.notebook.listPythonEnvironments({
+    filePath,
+    rootPath,
+    runWorkspaceInterpreters: true
+  })
   const recommended = found.workspace[0] ?? found.path[0]
   if (recommended && isOpen(filePath)) {
     setEnvironment(filePath, recommended)
@@ -72,7 +76,11 @@ async function discoverEnvironment(
   return recommended
 }
 
+/** Starts the notebook's kernel; the one place a notebook's Python runs, so it refuses until trusted. */
 async function start(filePath: string, rootPath: string | null = null): Promise<void> {
+  if (!getSession(filePath).trusted) {
+    return
+  }
   // Why 'starting' before discovery: a second run meanwhile must queue, not start another kernel.
   updateSession(filePath, () => ({ status: 'starting' }))
   let result: KernelStartResult | null
@@ -156,7 +164,7 @@ export function restartKernel(filePath: string): void {
   void start(filePath)
 }
 
-/** Switching interpreters restarts a running kernel; otherwise queued cells wait for the new one. */
+/** Switching interpreters restarts a running kernel; before trust it only records the choice. */
 export function selectEnvironment(filePath: string, environment: PythonEnvironment): void {
   setEnvironment(filePath, environment)
   // A pick replaces an open setup prompt; the new env reopens it if it lacks ipykernel too.

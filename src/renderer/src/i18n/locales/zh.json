@@ -14917,6 +14917,7 @@
           "notPython": "该文件不是 Python 解释器。",
           "interrupt": "中断",
           "restart": "重启内核",
+          "trustFirst": "请先运行一个单元格以信任此笔记本",
           "runAll": "全部运行",
           "clearAll": "清除所有输出",
           "notResponding": "无响应。请重启内核",
