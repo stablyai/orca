@@ -17,6 +17,7 @@ import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-
 import {
   CLAUDE_ROOT,
   claudeRecord,
+  EPOCH,
   HANDLE_ROOT,
   journal,
   TEARDOWN_CURRENT,
@@ -64,6 +65,7 @@ describe('deriving what was working at teardown', () => {
         recordedAt: NOW,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
+        journalCursor: { epoch: EPOCH, sequence: 1 },
         providerHandleRoot: HANDLE_ROOT,
         latestUserItemId: null,
         activity: { state: 'working', prompts: [], tasks: [] }
@@ -451,7 +453,7 @@ describe('the resumable set', () => {
       getRecord: () => claudeRecord('5aed93d6-advanced-leaf'),
       supportsRecord: () => true,
       latestPrompt: () => '',
-      latestUserItemId: () => null
+      movedOn: () => false
     })
 
     expect(candidates).toHaveLength(1)
@@ -466,29 +468,19 @@ describe('the resumable set', () => {
       getRecord: () => claudeRecord(null, 'prov-session-2'),
       supportsRecord: () => true,
       latestPrompt: () => '',
-      latestUserItemId: () => null
+      movedOn: () => false
     })
 
     expect(set.candidates).toEqual([])
     expect(set.superseded).toEqual([forked])
   })
 
-  // An offer has no expiry: it ends only by the user's own actions, however old it is.
+  // An offer has no expiry, however old it is.
   it('still offers a months-old marker', () => {
     const monthsAgo = NOW - 90 * 24 * 60 * 60 * 1000
     expect(resumableSet({ markers: [marker({ recordedAt: monthsAgo })] }).candidates).toHaveLength(
       1
     )
-  })
-
-  // The user moving on is what withdraws an offer — and it is reported for DELETION, not merely
-  // filtered, so the record does not have to be re-filtered on every read forever.
-  it('withdraws and reports for deletion once the user has sent a newer message', () => {
-    const withdrawn = marker()
-    const set = resumableSet({ markers: [withdrawn], latestUserItemId: 'user-newer' })
-
-    expect(set.candidates).toEqual([])
-    expect(set.superseded).toEqual([withdrawn])
   })
 
   // Structural refusals are NOT endings: a record this host cannot see right now must not delete

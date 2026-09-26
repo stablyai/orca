@@ -79,6 +79,20 @@ describe('RpcClientStreamRegistry', () => {
     ])
   })
 
+  it('ends one transcript stream on dispose and leaves a sibling on the same socket (U-03)', () => {
+    const { registry, sent } = createRegistry()
+    const disposeFirst = registry.subscribe('agentSession.subscribe', { sessionId: 's1' }, () => {})
+    registry.subscribe('agentSession.subscribe', { sessionId: 's2' }, () => {})
+    const [first] = sent
+
+    disposeFirst()
+    expect(sent.at(-1)).toMatchObject({
+      method: 'agentSession.unsubscribe',
+      params: { sessionId: 's1', subscriptionId: first!.id }
+    })
+    expect(sent.filter((request) => request.method === 'agentSession.unsubscribe')).toHaveLength(1)
+  })
+
   it('keeps a disposed browser tombstone until ready can be unsubscribed', () => {
     const { registry, sent } = createRegistry()
     const dispose = registry.subscribe('browser.screencast', { page: 'page-1' }, () => {})

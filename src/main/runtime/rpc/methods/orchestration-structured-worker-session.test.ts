@@ -15,37 +15,34 @@ vi.mock('./structured-agent-session-create', () => ({
 const {
   createStructuredWorkerSession,
   releaseStructuredWorkerSession,
-  sendStructuredWorkerPreamble,
-  structuredWorkerHoldId
+  sendStructuredWorkerPreamble
 } = await import('./orchestration-structured-worker-session')
 const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
 const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
 const { structuredWorkerChildIdentityEnv } =
   await import('../../structured-worker-child-identity-env')
 
-function installHost() {
-  const hold = vi.fn(async () => {})
-  const release = vi.fn()
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a host stub carrying only the members the worker start reaches.
+function installHost(location = { executionHostId: 'local', wslDistro: null as string | null }) {
   const dispose = vi.fn()
+  const subscribe = vi.fn(async () => dispose)
   hostRef.current = {
     setSessionTabVisibility: async () => {},
     close: async () => {},
     deps: {
       store: {
         getRecord: () => ({
-          location: { executionHostId: 'local', wslDistro: null },
+          location,
           lease: { runtimeFence: 2, runtimeKind: 'native', claimStatus: 'live' }
         })
       }
     },
-    hold,
-    release,
-    subscribe: () => dispose
+    subscribe
   }
-  return { hold, release, dispose }
+  return { subscribe, dispose }
 }
 
-describe('structured worker session hold', () => {
+describe('structured worker session', () => {
   beforeEach(() => {
     structuredWorkerIdentities.clear()
     createSpy.mockReset()
@@ -55,8 +52,8 @@ describe('structured worker session hold', () => {
     }))
   })
 
-  it('takes a resume-capable hold at start and releases it only on settlement', async () => {
-    const { hold, release, dispose } = installHost()
+  it('binds only a redrive subscription at start, and settlement drops it', async () => {
+    const { subscribe, dispose } = installHost()
     const created = await createStructuredWorkerSession({
       runtime: { ensureStructuredAgentSessionHost: async () => {} } as never,
       worktreeId: 'wt_1',
@@ -64,18 +61,19 @@ describe('structured worker session hold', () => {
       dispatchId: 'd1',
       onJournalActivity: () => {}
     })
-    // Without the hold, the release clock evicts the provider child 15s after a user closes the
-    // worker's chat tab, killing an idle worker mid-dispatch.
-    expect(hold).toHaveBeenCalledWith(created.identity.sessionId, structuredWorkerHoldId('d1'))
-    expect(release).not.toHaveBeenCalled()
+    // No hold: while the dispatch is open the idle sweep reads it from the orchestration database.
+    expect(hostRef.current).not.toHaveProperty('hold')
+    expect(subscribe).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: created.identity.sessionId })
+    )
+    expect(dispose).not.toHaveBeenCalled()
 
     releaseStructuredWorkerSession('d1')
-    expect(release).toHaveBeenCalledWith(created.identity.sessionId, structuredWorkerHoldId('d1'))
     expect(dispose).toHaveBeenCalledTimes(1)
     expect(structuredWorkerIdentities.get(created.identity.handle)).toBeNull()
-    // A second settlement is a no-op rather than a second release of the same holder.
+    // A second settlement is a no-op.
     releaseStructuredWorkerSession('d1')
-    expect(release).toHaveBeenCalledTimes(1)
+    expect(dispose).toHaveBeenCalledTimes(1)
   })
 
   it('registers the identity BEFORE the session is created, so the child gets the handle', async () => {
@@ -101,8 +99,8 @@ describe('structured worker session hold', () => {
   })
 
   it('forgets the identity and discards the session when the start fails', async () => {
-    const { hold } = installHost()
-    hold.mockRejectedValueOnce(new Error('hold refused'))
+    // A session that resolves outside the local host is not a worker this runtime can own.
+    installHost({ executionHostId: 'local', wslDistro: 'Ubuntu' })
     const closed: string[] = []
     ;(hostRef.current as { close: (id: string) => Promise<void> }).close = async (id) => {
       closed.push(id)
@@ -115,7 +113,7 @@ describe('structured worker session hold', () => {
         dispatchId: 'd_fail',
         onJournalActivity: () => {}
       })
-    ).rejects.toThrow('hold refused')
+    ).rejects.toThrow(/local execution host outside WSL/)
     // Neither a live provider child nor a registry entry may outlive the failed start.
     expect(closed).toHaveLength(1)
     expect(structuredWorkerIdentities.getBySessionId(closed[0]!)).toBeNull()
@@ -129,7 +127,7 @@ describe('structured worker session hold', () => {
     }
     // `commit` answers this after `attach` SUCCEEDED and only the tab publish failed, so the
     // provider child is live. Reading it as "refused, nothing created" strands that child with no
-    // hold and no binding, and nothing else in the runtime ever retires it.
+    // binding, and nothing else in the runtime ever retires it.
     createSpy.mockImplementation(async () => ({
       ok: false,
       refusal: {

@@ -1,7 +1,8 @@
-// The lifetime of a provider child, from the surfaces that hold the session.
+// The lifetime of a provider child, against the real host rather than a double.
 //
-// Two leaks meet here and each has to be tested against the real host, not a double: a chat that
-// closes without stopping its app-server, and a launch that starts one for every record on disk.
+// Two leaks meet here: a chat that closes without stopping its app-server, and a launch that
+// starts one for every record on disk. A view never starts or keeps a child; work starts one, the
+// idle sweep stops it, and an exit is settled and left for the next send.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -16,7 +17,6 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   AgentSessionAcquisitionRootExitObservedError,
@@ -37,9 +37,9 @@ import {
 } from './structured-agent-session-host-test-data'
 
 const CALLER = { callerKey: 'client-1' }
-const SURFACE = 'desktop-chat:1'
-/** Short enough to keep the suite fast, long enough that an eviction is a decision and not a race. */
-const GRACE_MS = 5
+/** Short enough to keep the suite fast; the host clock below decides what is idle. */
+const SWEEP_MS = 5
+const IDLE_MS = 1_000
 
 let root: string
 let store: AgentSessionRecordStore
@@ -50,6 +50,7 @@ let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let sink: StructuredAgentSessionEventSink | null
 let hostErrors: unknown[]
 let statusSink: StructuredAgentSessionStatusSink
+let clock: number
 function adapter(): StructuredAgentSessionAdapter {
   return {
     acquire,
@@ -71,8 +72,8 @@ function openHost(
     journalRoot: root,
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
-    releaseGraceMs: GRACE_MS,
-    now: () => NOW,
+    idleSweep: { intervalMs: SWEEP_MS, idleMs: IDLE_MS },
+    now: () => clock,
     onEventSinkError: ({ error }) => hostErrors.push(error),
     statusSink,
     ...(probeOwner ? { probeOwner } : {})
@@ -90,6 +91,12 @@ async function reboot(): Promise<void> {
 
 async function attach(): Promise<void> {
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+}
+
+/** What a send's delivery or `agentSession.ensure` does: attach at the record's current fence. */
+async function startAgent(): Promise<void> {
+  const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
+  expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({ ok: true })
 }
 
 function envelope(method: string, fields: Record<string, unknown>): AgentSessionMutationEnvelope {
@@ -112,7 +119,7 @@ function emitTurnLifecycle(state: 'running' | 'completed', ordinal: number): voi
   )
 }
 
-/** Eviction is a sequence, not an event: the child stops first and the session is forgotten last. */
+/** The sweep stops the child first and closes the conversation last. */
 function waitForEviction(): Promise<void> {
   return vi.waitFor(() => {
     expect(closeSession).toHaveBeenCalledWith(SESSION)
@@ -120,9 +127,9 @@ function waitForEviction(): Promise<void> {
   })
 }
 
-/** Long enough for several grace windows to elapse, so "not evicted" means the clock declined. */
-function waitOutSeveralGraceWindows(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, GRACE_MS * 20))
+/** Long enough for many sweep ticks, so "not stopped" means the sweep declined. */
+function waitOutSeveralSweeps(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, SWEEP_MS * 20))
 }
 
 /** Fails the next eviction at `drain-published`, which leaves the session indexed for a retry. */
@@ -188,6 +195,7 @@ beforeEach(async () => {
   resetHostTestOperationIds()
   sink = null
   hostErrors = []
+  clock = NOW
   statusSink = { publish: vi.fn(), forget: vi.fn() }
   let generation = 0
   acquire = vi.fn(async ({ fence, spawnToken, events }) => {
@@ -218,13 +226,13 @@ afterEach(async () => {
 })
 
 describe('a chat that closes', () => {
-  it('releases the provider child it was holding', async () => {
+  it('stops the provider child it started', async () => {
     await attach()
-    await host.hold(SESSION, SURFACE)
 
-    host.release(SESSION, SURFACE)
+    await host.close(SESSION)
 
-    await waitForEviction()
+    expect(closeSession).toHaveBeenCalledWith(SESSION)
+    expect(host.hasSession(SESSION)).toBe(false)
     expect(hostErrors).toEqual([])
     // The record and its journal stay; only the process and the claim on it go.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -234,49 +242,24 @@ describe('a chat that closes', () => {
     })
   })
 
-  it('keeps the child while another surface still holds the session', async () => {
-    await attach()
-    await host.hold(SESSION, SURFACE)
-    await host.hold(SESSION, 'paired-phone:1')
-
-    host.release(SESSION, SURFACE)
-    await waitOutSeveralGraceWindows()
-
-    expect(closeSession).not.toHaveBeenCalled()
-    expect(host.hasSession(SESSION)).toBe(true)
-  })
-
   // The pane outlives the close by a few frames — a workspace delete closes the chats inside it
-  // while their panes are still mounted — so whatever a read raises in that window is what the user
-  // sees. This is the code the client narrows on to keep that window off the pane; a host that
-  // starts raising a different one there puts the red error back.
-  it('answers a read from the pane that outlived it with the code the client treats as transitional', async () => {
+  // while their panes are still mounted. A read in that window reopens the conversation as a cache
+  // and is answered, never refused; it starts nothing.
+  it('answers a read from the pane that outlived it without starting a child', async () => {
     await attach()
-    await host.hold(SESSION, SURFACE)
 
     await host.close(SESSION)
-
     expect(host.hasSession(SESSION)).toBe(false)
-    expect(() => host.history({ sessionId: SESSION, direction: 'tail' })).toThrow(
-      AGENT_SESSION_UNATTACHED_REFUSAL_CODE
-    )
-    expect(() =>
-      host.subscribe({ id: 'sub-1', sessionId: SESSION, emit: () => undefined })
-    ).toThrow(AGENT_SESSION_UNATTACHED_REFUSAL_CODE)
-  })
 
-  it('does not lose the session to a release the client sent twice', async () => {
-    await attach()
-    await host.hold(SESSION, SURFACE)
-    await host.hold(SESSION, 'paired-phone:1')
-
-    // A retried release must retire ONE holder, which is what a set gets right and a count does not.
-    host.release(SESSION, SURFACE)
-    host.release(SESSION, SURFACE)
-    await waitOutSeveralGraceWindows()
-
-    expect(closeSession).not.toHaveBeenCalled()
-    expect(host.hasSession(SESSION)).toBe(true)
+    expect((await host.history({ sessionId: SESSION, direction: 'tail' })).ok).toBe(true)
+    const unsubscribe = await host.subscribe({
+      id: 'sub-1',
+      sessionId: SESSION,
+      emit: () => undefined
+    })
+    unsubscribe()
+    expect(acquire).toHaveBeenCalledOnce()
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
   })
 
   it('answers a compatibility wait with what eviction recorded', async () => {
@@ -308,7 +291,7 @@ describe('a chat that closes', () => {
     })
   })
 
-  it('retries teardown after journal close loses its result', async () => {
+  it('keeps the stop it made when the journal close loses its result', async () => {
     await attach()
     const session = host['sessions'].get(SESSION)
     expect(session).toBeDefined()
@@ -320,25 +303,16 @@ describe('a chat that closes', () => {
       })
       .mockImplementation(closeJournal)
 
-    // The child stopped and its lease went back; only the conversation's close is left to retry.
+    // The child is stopped and the lease released before the handle closes; the entry is dropped
+    // before that close, so a lost result leaves no closing handle for a reader to find.
     await expect(host.close(SESSION)).rejects.toThrow('journal close result lost')
-    expect(host.hasSession(SESSION)).toBe(true)
-    expect(host['sessions'].get(SESSION)?.child).toBeNull()
+    expect(host.hasSession(SESSION)).toBe(false)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',
       ownerProcess: null
     })
-    expect(statusSink.forget).toHaveBeenCalledWith({
-      kind: 'structured-session',
-      sessionId: SESSION,
-      executionHostId: 'local',
-      wslDistro: null,
-      workspaceId: 'workspace-1',
-      workspaceKind: 'git-worktree'
-    })
 
     await expect(host.close(SESSION)).resolves.toBeUndefined()
-    expect(host.hasSession(SESSION)).toBe(false)
     expect(closeSession).toHaveBeenCalledOnce()
   })
 
@@ -375,31 +349,31 @@ describe('a chat that closes', () => {
 })
 
 describe('a session with a turn in flight', () => {
-  it('is not evicted while the turn runs, and is once it ends', async () => {
+  it('is not stopped while the turn runs, and is once it ends and idles', async () => {
     await attach()
-    await host.hold(SESSION, SURFACE)
     emitTurnLifecycle('running', 1)
     await host.flushStreamedEvents(SESSION)
 
-    host.release(SESSION, SURFACE)
-    await waitOutSeveralGraceWindows()
+    clock += IDLE_MS
+    await waitOutSeveralSweeps()
 
     expect(closeSession).not.toHaveBeenCalled()
     expect(host.hasSession(SESSION)).toBe(true)
 
     emitTurnLifecycle('completed', 2)
     await host.flushStreamedEvents(SESSION)
+    clock += IDLE_MS
 
     await waitForEviction()
   })
 
-  // Codex settles an admitted send only on its echo, which may never come; eviction retires it.
-  it('is evicted with an admitted send outstanding once no turn runs', async () => {
+  // Codex settles an admitted send only on its echo, which may never come; the stop retires it.
+  it('is stopped with an admitted send outstanding once no turn runs', async () => {
     await attach()
-    await host.hold(SESSION, SURFACE)
     await sendPending('admitted, never echoed')
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce())
 
-    host.release(SESSION, SURFACE)
+    clock += IDLE_MS
 
     await waitForEviction()
   })
@@ -410,7 +384,7 @@ describe('startup', () => {
     await attach()
     const beforeRestart = store.getRecord(SESSION)
     host['runtimeState'].stopLeaseRenewal()
-    host['holds'].dispose()
+    host['lifetime'].dispose()
     await host['sessions'].get(SESSION)?.journal.close()
     host['sessions'].clear()
 
@@ -418,7 +392,7 @@ describe('startup', () => {
     openHost(async () => ({ outcome: 'pid-absent' }))
     await host.restoreReadableSessions()
 
-    const restored = host.history({ sessionId: SESSION, direction: 'tail' })
+    const restored = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(restored.ok && restored.page.items.some((item) => item.body.kind === 'status')).toBe(
       false
     )
@@ -428,7 +402,7 @@ describe('startup', () => {
       settlementRetryRequired: undefined
     })
 
-    await host.hold(SESSION, SURFACE)
+    await startAgent()
     expect(store.getRecord(SESSION)?.providerHandleChain.at(-1)?.handle).toEqual(
       beforeRestart?.providerHandleChain.at(-1)?.handle
     )
@@ -446,16 +420,23 @@ describe('startup', () => {
     expect(host.listSessionTabs()).toEqual([
       { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'codex' }
     ])
-    expect(host.history({ sessionId: SESSION, direction: 'tail' }).ok).toBe(true)
+    expect((await host.history({ sessionId: SESSION, direction: 'tail' })).ok).toBe(true)
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
   })
 
-  it('gives the child back to a chat a surface actually opens', async () => {
+  it('gives the child back for work, never for a read', async () => {
     await attach()
     await reboot()
     await host.restoreReadableSessions()
 
-    await host.hold(SESSION, SURFACE)
+    const unsubscribe = await host.subscribe({
+      id: 'viewer-1',
+      sessionId: SESSION,
+      emit: () => undefined
+    })
+    expect(acquire).not.toHaveBeenCalled()
+    await startAgent()
+    unsubscribe()
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -466,16 +447,15 @@ describe('startup', () => {
   })
 })
 
-describe('a session evicted and opened again', () => {
+describe('a session closed and started again', () => {
   it('publishes provider events to the reattached chat', async () => {
     await attach()
-    await host.hold(SESSION, SURFACE)
-    host.release(SESSION, SURFACE)
-    await waitForEviction()
+    await host.close(SESSION)
+    expect(host.hasSession(SESSION)).toBe(false)
 
-    await host.hold(SESSION, 'desktop-chat:2')
+    await startAgent()
     const events: AgentSessionSubscribeEvent[] = []
-    const unsubscribe = host.subscribe({
+    const unsubscribe = await host.subscribe({
       id: 'subscriber-1',
       sessionId: SESSION,
       emit: (event) => events.push(event)
@@ -492,10 +472,10 @@ describe('a session evicted and opened again', () => {
   })
 })
 
-function submissionState(clientMessageId: string): string | undefined {
-  return host
-    .journalSnapshot(SESSION)
-    .submissions.find((entry) => entry.clientMessageId === clientMessageId)?.dispatchState
+async function submissionState(clientMessageId: string): Promise<string | undefined> {
+  return (await host.journalSnapshot(SESSION)).submissions.find(
+    (entry) => entry.clientMessageId === clientMessageId
+  )?.dispatchState
 }
 
 describe('an unexpected provider exit', () => {
@@ -539,7 +519,7 @@ describe('an unexpected provider exit', () => {
     await failJournalSinkUntilReleased()
 
     expect(dispatch).not.toHaveBeenCalled()
-    const history = host.history({ sessionId: SESSION, direction: 'tail' })
+    const history = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(
       history.ok &&
         history.page.items.some(
@@ -561,9 +541,8 @@ describe('an unexpected provider exit', () => {
     replaceFailedSink()
   })
 
-  it('releases the exact generation, reacquires outside the queue, and dispatches a new message', async () => {
+  it('releases the exact generation, starts nothing, and the next message starts a child', async () => {
     await attach()
-    await host.hold(SESSION, SURFACE)
     dispatch.mockRejectedValueOnce(new Error('provider delivery became unknown'))
     const unknownBody = hostTestMessage('message with unknown delivery')
     const unknownEnvelope = envelope('agentSession.send', { body: unknownBody })
@@ -571,8 +550,8 @@ describe('an unexpected provider exit', () => {
       host.send(CALLER, { envelope: unknownEnvelope, body: unknownBody })
     ).resolves.toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
     // Accepted, then handed over by the delivery loop, where the thrown dispatch becomes doubt.
-    await vi.waitFor(() =>
-      expect(submissionState(unknownEnvelope.clientOperationId)).toBe('unknown')
+    await vi.waitFor(async () =>
+      expect(await submissionState(unknownEnvelope.clientOperationId)).toBe('unknown')
     )
     const exitedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
@@ -585,17 +564,17 @@ describe('an unexpected provider exit', () => {
       acquisitionGeneration: 'generation-1'
     })
 
-    const recoveredHistory = host.history({ sessionId: SESSION, direction: 'tail' })
+    const recoveredHistory = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(
       recoveredHistory.ok &&
         hasUnansweredStructuredAgentSessionDispatch(recoveredHistory.page.submissions)
     ).toBe(false)
-    expect(acquire).toHaveBeenCalledTimes(2)
+    // No respawn: the exit is settled and shown, and the conversation waits for work.
+    expect(acquire).toHaveBeenCalledOnce()
     expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'live',
-      runtimeFence: exitedFence + 2,
-      ownerProcess: { pid: 4242 }
+      claimStatus: 'released',
+      runtimeFence: exitedFence + 1
     })
     dispatch.mockResolvedValueOnce({
       state: 'accepted',
@@ -607,13 +586,20 @@ describe('an unexpected provider exit', () => {
       ok: true,
       value: { submission: { dispatchState: 'pending' } }
     })
-    await vi.waitFor(() => expect(submissionState(nextEnvelope.clientOperationId)).toBe('accepted'))
+    await vi.waitFor(async () =>
+      expect(await submissionState(nextEnvelope.clientOperationId)).toBe('accepted')
+    )
+    expect(acquire).toHaveBeenCalledTimes(2)
     expect(dispatch).toHaveBeenCalledTimes(2)
   })
 
-  it('does not reacquire for a subscription-only hold or a stale child generation', async () => {
+  it('does not reacquire for a live reader or a stale child generation', async () => {
     await attach()
-    await host.hold(SESSION, 'subscriber-1', { resume: false })
+    const unsubscribe = await host.subscribe({
+      id: 'subscriber-1',
+      sessionId: SESSION,
+      emit: () => undefined
+    })
     const exitedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
     await host.handleAdapterEvent({
@@ -641,11 +627,11 @@ describe('an unexpected provider exit', () => {
       runtimeFence: exitedFence + 1,
       deathEvidence: { kind: 'exit-observed' }
     })
+    unsubscribe()
   })
 
   it('keeps a requested close out of recovery', async () => {
     await attach()
-    await host.hold(SESSION, SURFACE)
     const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
 
     await host.handleAdapterEvent({
@@ -663,7 +649,6 @@ describe('an unexpected provider exit', () => {
 
   it('recovers after a failed lifecycle barrier and dispatches a distinct next message', async () => {
     await attach()
-    await host.hold(SESSION, SURFACE)
     dispatch.mockRejectedValueOnce(new Error('provider delivery became unknown'))
     const unknownBody = hostTestMessage('message with unknown delivery')
     const unknownParams = {
@@ -674,8 +659,8 @@ describe('an unexpected provider exit', () => {
       ok: true,
       value: { submission: { dispatchState: 'pending' } }
     })
-    await vi.waitFor(() =>
-      expect(submissionState(unknownParams.envelope.clientOperationId)).toBe('unknown')
+    await vi.waitFor(async () =>
+      expect(await submissionState(unknownParams.envelope.clientOperationId)).toBe('unknown')
     )
     const runtimeState = (
       host as unknown as {
@@ -698,14 +683,13 @@ describe('an unexpected provider exit', () => {
     })
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'live',
-      runtimeFence: exitedFence + 2,
-      ownerProcess: { pid: 4242 }
+      claimStatus: 'released',
+      runtimeFence: exitedFence + 1
     })
-    expect(acquire).toHaveBeenCalledTimes(2)
+    expect(acquire).toHaveBeenCalledOnce()
     expect(dispatch).toHaveBeenCalledOnce()
     expect(hostErrors).toContainEqual(expect.objectContaining({ message: 'journal failed' }))
-    const history = host.history({ sessionId: SESSION, direction: 'tail' })
+    const history = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.ok && history.page.submissions[0]?.dispatchState).toBe('unknown')
     // A send whose delivery outcome is unknown IS work in progress, so the reassuring outcome is
     // written — carrying the cause, and never the old bare `Provider exited: <reason>` row.
@@ -725,13 +709,14 @@ describe('an unexpected provider exit', () => {
       ok: true,
       value: { submission: { dispatchState: 'pending' } }
     })
-    await vi.waitFor(() => expect(submissionState(nextEnvelope.clientOperationId)).toBe('accepted'))
+    await vi.waitFor(async () =>
+      expect(await submissionState(nextEnvelope.clientOperationId)).toBe('accepted')
+    )
     expect(dispatch).toHaveBeenCalledTimes(2)
   })
 
   it('latches a failed exit settlement and blocks attach until the terminal batch is written', async () => {
     await attach()
-    await host.hold(SESSION, SURFACE)
     emitTurnLifecycle('running', 1)
     await host.flushStreamedEvents(SESSION)
     const runtimeState = (

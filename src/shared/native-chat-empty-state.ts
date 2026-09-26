@@ -19,6 +19,11 @@ export const NATIVE_CHAT_EMPTY_STATE_COPY = {
     title: 'Could not load conversation',
     subtitle: 'The transcript could not be read. Toggle back to the terminal to keep working.'
   },
+  // The structured chat's read reconnects on its own; the terminal-backed read does not.
+  retryingError: {
+    title: 'Could not load conversation',
+    subtitle: 'The transcript could not be read. Orca keeps trying to load it.'
+  },
   notAgent: {
     title: 'No conversation here',
     subtitle: 'This terminal is not running a recognized coding agent.'

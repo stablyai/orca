@@ -41,8 +41,6 @@ describe('the restart continuation waits for its delivery (W18)', () => {
     const surfaces = structuredAgentSessionRestartResumeSurfaces(
       {
         revealSession: async () => ({ readable: true }),
-        hold: async () => undefined,
-        release: () => undefined,
         send: async () => {
           throw new Error('not used')
         },
@@ -59,5 +57,56 @@ describe('the restart continuation waits for its delivery (W18)', () => {
     await expect(verdict).resolves.toMatchObject({
       value: { submission: { dispatchState: 'accepted' } }
     })
+  })
+})
+
+describe('a restart batch holds a chat until its continuation is handed over', () => {
+  function surfacesOver(settlement: StructuredAgentSessionSendSettlement) {
+    return structuredAgentSessionRestartResumeSurfaces(
+      {
+        revealSession: async () => ({ readable: true }),
+        send: async () => {
+          throw new Error('not used')
+        },
+        waitForSendSettlement: settlement.wait
+      },
+      () => 0
+    )
+  }
+
+  it('keeps waiting through a slow start and resolves once the agent takes the message', async () => {
+    const settlement = new StructuredAgentSessionSendSettlement(() => journal)
+    let released = false
+    const handedOver = surfacesOver(settlement)
+      .awaitSendHandedOver(SESSION, MESSAGE)
+      .then((result) => {
+        released = true
+        return result
+      })
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    expect(released).toBe(false)
+    // Handed over: still pending at the provider, no longer queued.
+    submission = { ...submission, handedOverAt: 2 }
+    settlement.publish(SESSION, journal)
+    await expect(handedOver).resolves.toMatchObject({
+      value: { submission: { dispatchState: 'pending', handedOverAt: 2 } }
+    })
+  })
+
+  it('resolves once the start fails and the message is rejected', async () => {
+    const settlement = new StructuredAgentSessionSendSettlement(() => journal)
+    const handedOver = surfacesOver(settlement).awaitSendHandedOver(SESSION, MESSAGE)
+    submission = { ...submission, dispatchState: 'rejected', reason: 'Codex could not start.' }
+    settlement.publish(SESSION, journal)
+    await expect(handedOver).resolves.toMatchObject({
+      value: { submission: { dispatchState: 'rejected' } }
+    })
+  })
+
+  it('resolves undefined when the session closes first', async () => {
+    const settlement = new StructuredAgentSessionSendSettlement(() => journal)
+    const handedOver = surfacesOver(settlement).awaitSendHandedOver(SESSION, MESSAGE)
+    settlement.closeSession(SESSION)
+    await expect(handedOver).resolves.toBeUndefined()
   })
 })

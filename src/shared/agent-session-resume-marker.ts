@@ -6,8 +6,9 @@
 // the stop, because that fact exists only in memory at that moment — the provider rewrites the
 // journal in its own words on reattach.
 //
-// A marker has no expiry. It ends only by the user's own actions: a newer message in that chat, a
-// successful resume, a dismissal, or closing the chat — each of which deletes it.
+// A marker has no expiry. It ends when the chat's agent is started again other than by its own
+// continuation, or by a successful resume, a dismissal, or closing the chat — each of which
+// deletes it.
 
 import { z } from 'zod'
 import { AGENT_STATUS_STATES } from './agent-status-types'
@@ -18,6 +19,7 @@ import {
   AGENT_SESSION_RESTART_ACTIVITY_MAX_TASKS
 } from './agent-session-restart-activity'
 import type { AgentSessionRestartActivity } from './agent-session-restart-activity'
+import type { AgentJournalCursor } from './agent-session-journal-types'
 
 /** Why the app went away. Recorded because an update install is a restart the user did not choose,
  *  and the surface that offers the resume says so. */
@@ -48,8 +50,9 @@ export type AgentSessionResumeMarker = {
   /** The work in flight when teardown observed it — a running turn, or a send that had not yet
    *  become one. */
   work: AgentSessionResumeWork
-  /** The user message observed at teardown; a newer one supersedes this offer before its turn opens. */
-  latestUserItemId: string | null
+  /** The user message observed at teardown. Nothing reads it; still written for one release so the
+   *  previous build, whose parser requires it, can read this marker after a downgrade. */
+  latestUserItemId?: string | null
   /** Execution host's clock at teardown. */
   recordedAt: number
   trigger: AgentSessionResumeTrigger
@@ -66,6 +69,18 @@ export type AgentSessionResumeMarker = {
   /** Stable teardown identity for continuation deduplication, not launch ancestry. */
   teardownId: string
   /**
+   * Where the chat's journal stood when the offer was taken. A message accepted after it, or a
+   * journal on another epoch, means the chat moved on. Absent on markers from builds that did not
+   * record it.
+   */
+  journalCursor?: AgentJournalCursor
+  /**
+   * The client message ids of the continuations this offer's resume actions sent, newest last.
+   * A rejected one never reached the agent, so it is not the chat moving on and a retry still
+   * runs. On the offer itself, so the ids end with it. Absent until an action runs.
+   */
+  continuations?: string[]
+  /**
    * What the session was doing, captured at the same stop-time snapshot that decided the offer.
    * The dialog row, the status bar and the wire candidate read ONLY this; nothing re-reads the
    * journal after the restart for the description.
@@ -81,6 +96,9 @@ const MAX_FIELD_LENGTH = 512
 
 /** Bounded because a marker is read back from a file this process did not necessarily write. */
 const markerField = z.string().min(1).max(MAX_FIELD_LENGTH)
+
+/** Retries an offer remembers; an older rejected one past this counts as the chat moving on. */
+export const AGENT_SESSION_RESUME_MAX_CONTINUATIONS = 16
 
 const agentSessionResumeWorkSchema = z.object({
   kind: z.enum(['turn', 'submission']),
@@ -114,11 +132,20 @@ const agentSessionRestartActivitySchema = z.object({
 const agentSessionResumeMarkerSchema = z.object({
   sessionId: markerField,
   work: agentSessionResumeWorkSchema,
-  latestUserItemId: markerField.nullable(),
+  latestUserItemId: markerField.nullable().optional(),
   recordedAt: z.number().int().nonnegative(),
   trigger: z.enum(AGENT_SESSION_RESUME_TRIGGERS),
   providerHandleRoot: markerField,
   teardownId: markerField,
+  journalCursor: z
+    .object({ epoch: markerField, sequence: z.number().int().nonnegative() })
+    .optional()
+    .catch(undefined),
+  continuations: z
+    .array(markerField)
+    .max(AGENT_SESSION_RESUME_MAX_CONTINUATIONS)
+    .optional()
+    .catch(undefined),
   activity: agentSessionRestartActivitySchema.optional().catch(undefined)
 })
 
@@ -129,6 +156,11 @@ export function parseAgentSessionResumeMarker(value: unknown): AgentSessionResum
   if (!parsed.success) {
     return null
   }
-  const { activity, ...marker } = parsed.data
-  return activity === undefined ? marker : { ...marker, activity }
+  const { activity, journalCursor, continuations, ...marker } = parsed.data
+  return {
+    ...marker,
+    ...(journalCursor === undefined ? {} : { journalCursor }),
+    ...(continuations === undefined ? {} : { continuations }),
+    ...(activity === undefined ? {} : { activity })
+  }
 }

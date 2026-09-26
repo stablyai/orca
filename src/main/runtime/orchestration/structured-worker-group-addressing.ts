@@ -16,8 +16,13 @@
  */
 
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { observeStructuredWorker, structuredWorkerAgent } from '../structured-worker-authority'
-import { structuredWorkerIdentities } from '../structured-worker-identity'
+import { structuredWorkerAgent } from '../structured-worker-authority'
+import { structuredWorkerAddressable } from '../structured-worker-custody'
+import {
+  STRUCTURED_WORKER_INCARNATION_PREFIX,
+  structuredWorkerIdentityFromRow
+} from '../structured-worker-identity'
+import type { OrchestrationDb } from './db'
 import { readStructuredSessionGateFacts } from './structured-mailbox-pointer-host'
 
 /** The only facts group addressing reads off a recipient. */
@@ -29,15 +34,29 @@ export type OrchestrationAddressableAgent = {
 }
 
 /**
- * Live structured workers of this runtime, as group-address candidates.
+ * Structured workers this runtime owns, as group-address candidates.
  *
- * Liveness-gated on the same observation the rest of the structured surface uses: a settled or
- * handed-off worker is not a recipient, and addressing one would store mail no lane will deliver.
+ * Read from the durable worker-terminal rows, which outlive a settled dispatch and a restart, and
+ * gated on ownership and on the orchestration not having released it — the same answer direct mail
+ * routes on — never on liveness: a worker at rest is a recipient, and the mail starts it. A retired
+ * or released one is not.
  */
-export function listAddressableStructuredWorkers(): OrchestrationAddressableAgent[] {
-  return structuredWorkerIdentities
-    .list()
-    .filter((identity) => observeStructuredWorker(identity).status === 'live')
+export function listAddressableStructuredWorkers(
+  db: OrchestrationDb | null
+): OrchestrationAddressableAgent[] {
+  const seen = new Set<string>()
+  return (
+    db?.listWorkerTerminalResourcesByIncarnationPrefix(STRUCTURED_WORKER_INCARNATION_PREFIX) ?? []
+  )
+    .flatMap((row) => {
+      const identity = structuredWorkerIdentityFromRow(row)
+      // Newest row first: a session is one recipient, under its latest handle.
+      if (!identity || seen.has(identity.sessionId)) {
+        return []
+      }
+      seen.add(identity.sessionId)
+      return structuredWorkerAddressable(db, identity.sessionId, row) === true ? [identity] : []
+    })
     .map((identity) => ({
       handle: identity.handle,
       worktreeId: identity.worktreeId,
@@ -52,8 +71,8 @@ export function listAddressableStructuredWorkers(): OrchestrationAddressableAgen
  * would wake a worker mid-turn — which Codex coalesces into the running turn and Claude queues
  * behind it.
  */
-export function structuredWorkerAgentStatus(sessionId: string): string | null {
-  const facts = readStructuredSessionGateFacts(sessionId)
+export async function structuredWorkerAgentStatus(sessionId: string): Promise<string | null> {
+  const facts = await readStructuredSessionGateFacts(sessionId)
   if (!facts) {
     return null
   }

@@ -1,12 +1,13 @@
-// The host's half of a session's lifetime: what a close does, and what a hold is wired to.
+// The host's half of a session's lifetime: stopping its agent, and closing its conversation.
 //
-// Lifted out of the host for the same reason attaching was — the host is a coordinator, and the
-// sequence that stops a provider child and hands its lease back reads better next to the holder
-// bookkeeping that decides when to run it than buried among the twenty other things a session can
-// do.
+// Two operations, because they end two different things. Stopping the agent ends the provider
+// child and hands the lease back; the conversation — its open journal, its status row and its
+// readers — stays, and the next send starts a new child. Closing the conversation drops the open
+// journal handle, a cache the next read or write reopens.
+//
+// Both are written for a caller already inside the session's serialize: the queue is not
+// reentrant, so every public entry point takes it once and calls these.
 
-import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { DISPATCH_REJECTED_PROVIDER_CLOSED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import {
@@ -15,7 +16,6 @@ import {
   type StructuredAgentSessionEvictionContext
 } from './structured-agent-session-eviction'
 import { withStructuredAgentSessionEvictionDeadline } from './structured-agent-session-eviction-deadline'
-import { StructuredAgentSessionHolds } from './structured-agent-session-holds'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type {
   StructuredAgentSessionChildEndCause,
@@ -28,8 +28,6 @@ import {
   structuredAgentSessionConversationFence
 } from './structured-agent-session-provider-child'
 import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
-import { resumeHeldStructuredAgentSession } from './structured-agent-session-hold-resume'
-import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
 
 export type StructuredAgentSessionLifetimeContext = {
@@ -37,8 +35,6 @@ export type StructuredAgentSessionLifetimeContext = {
   runtimeState: StructuredAgentSessionHostRuntimeState
   sessions: Map<string, StructuredAgentSessionHostSession>
   now: () => number
-  /** Drops the session's row from the agent-status store; see `forgetStructuredAgentSession`. */
-  forgetStatus: (sessionId: string) => void
   /** Re-projects the session's status after its agent stopped and the chat stays. */
   publishStatus?: (sessionId: string) => void
   /** Quit-only snapshot taken immediately before the provider child is stopped. */
@@ -68,30 +64,6 @@ export async function abandonQueuedStructuredAgentSessionMessages(
     .catch((error: unknown) => deps.onEventSinkError?.({ sessionId, error }))
 }
 
-/** Dropping a session and dropping its status row are ONE operation: the store keeps the row until
- *  told, so a caller that only deletes strands a live-looking row no reader can ever decay. */
-export async function forgetStructuredAgentSession(
-  context: Pick<StructuredAgentSessionLifetimeContext, 'sessions' | 'forgetStatus'> & {
-    deps: ConversationCloseDeps
-  },
-  sessionId: string
-): Promise<void> {
-  const session = context.sessions.get(sessionId)
-  if (session) {
-    await abandonQueuedStructuredAgentSessionMessages(context.deps, sessionId, session.journal)
-  }
-  await session?.journal.close()
-  context.sessions.delete(sessionId)
-  context.forgetStatus(sessionId)
-}
-
-function hasProviderChild(
-  context: StructuredAgentSessionLifetimeContext,
-  sessionId: string
-): boolean {
-  return (context.sessions.get(sessionId)?.child ?? null) !== null
-}
-
 /** The wind-down this host owes for the session's child. A live child always owes one, whatever a
  *  previous childless eviction recorded: a remembered tombstone must never outrank the child in
  *  front of it. */
@@ -107,7 +79,7 @@ function owedProviderChildWindDown(
  * The agent goes to rest; the conversation stays. Runs the eviction steps under a deadline. A step
  * that fails — or runs out of time — aborts the rest and leaves the wind-down owed, so the next
  * stop is a real retry. `ending` is how the child's end is told: a user's Stop, the host stopping it
- * for a cause (with its text), or an eviction whose close forgets the conversation next.
+ * for a cause (with its text), or an eviction the conversation's close follows.
  */
 export async function stopStructuredAgentSessionAgentUnderSerialize(
   context: StructuredAgentSessionLifetimeContext,
@@ -171,7 +143,7 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         }
       })
       if (!settled) {
-        // Without the cause the quit log names the step and nothing else.
+        // Without the cause the log names the step and nothing else.
         throw new Error('dead generation work settlement failed', { cause: settlementError })
       }
     },
@@ -186,11 +158,8 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
         })
       }
       session.owesProviderChildWindDown = undefined
-      if (ending.cause === 'evict') {
-        context.forgetStatus(sessionId)
-        return
-      }
-      // The conversation stays: its readers keep their own fence, and only the status moves.
+      // Whatever ended the child, the row belongs to the conversation: it shows not-running, and
+      // only the conversation's close forgets it.
       context.publishStatus?.(sessionId)
     }
   }
@@ -200,17 +169,39 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
   )
 }
 
-/** Ends the conversation's resources, not the conversation: its child stops, and then its handle
- *  closes and it leaves the map. A stop that fails throws first, leaving it indexed for a retry. */
-export async function evictHeldStructuredAgentSession(
-  context: StructuredAgentSessionLifetimeContext,
+/** Whether the conversation's handle is only a cache now: no child, no wind-down owed, and nothing
+ *  queued or waiting on the provider. */
+export function structuredAgentSessionConversationClosable(
+  session: StructuredAgentSessionHostSession
+): boolean {
+  return (
+    owedProviderChildWindDown(session) === undefined &&
+    !session.journal.submissions().some(isQueuedAgentJournalSubmission) &&
+    session.journal.pendingSubmissions().length === 0
+  )
+}
+
+/**
+ * Drops the conversation's open handle. The entry leaves the map BEFORE the handle closes, so a
+ * lock-free reader sees an open handle or none — never one that is closing — and one arriving
+ * after the delete waits behind this step and reopens. Answers false, closing nothing, when the
+ * handle is still more than a cache.
+ */
+export async function closeStructuredAgentSessionConversationUnderSerialize(
+  context: Pick<StructuredAgentSessionLifetimeContext, 'sessions'> & {
+    /** The status row outlives the handle; see `StructuredAgentSessionClientDelivery`. */
+    closeStatus: (sessionId: string) => void
+  },
   sessionId: string
-): Promise<void> {
-  if (!context.sessions.has(sessionId)) {
-    return
+): Promise<boolean> {
+  const session = context.sessions.get(sessionId)
+  if (!session || !structuredAgentSessionConversationClosable(session)) {
+    return false
   }
-  await stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, { cause: 'evict' })
-  await forgetStructuredAgentSession(context, sessionId)
+  context.sessions.delete(sessionId)
+  context.closeStatus(sessionId)
+  await session.journal.close()
+  return true
 }
 
 /** Stops every provider child owned by this host while keeping failed evictions reachable. A
@@ -225,7 +216,7 @@ export async function evictOwnedStructuredAgentSessions(
   const ownedSessionIds = [...context.sessions]
     .filter(([, session]) => owedProviderChildWindDown(session) !== undefined)
     .map(([sessionId]) => sessionId)
-  // Retained up front and cleared only once an eviction settles: the quit phase is bounded, and a
+  // Retained up front and cleared only once a stop settles: the quit phase is bounded, and a
   // timeout leaves these still running. Closing their journals underneath them is the one outcome
   // the retain set exists to prevent.
   for (const sessionId of ownedSessionIds) {
@@ -236,7 +227,7 @@ export async function evictOwnedStructuredAgentSessions(
     ownedSessionIds.map(async (sessionId) => {
       try {
         await context.serialize(sessionId, () =>
-          evictHeldStructuredAgentSession(context, sessionId)
+          stopStructuredAgentSessionAgentUnderSerialize(context, sessionId)
         )
         retainOnFailure.delete(sessionId)
       } catch (error) {
@@ -247,52 +238,4 @@ export async function evictOwnedStructuredAgentSessions(
   if (failures.length > 0) {
     throw new AggregateError(failures, 'structured agent-session child eviction failed')
   }
-}
-
-/** The holds resume through the host's own attach, inside the session's serialize: a hold's
- *  resume and a send's ensure-owner step are the same serialized attach with a different asker. */
-export function createStructuredAgentSessionHolds(
-  attachContext: () => StructuredAgentSessionAttachContext,
-  close: (sessionId: string) => Promise<void>,
-  deliveryActive: (sessionId: string) => boolean
-): StructuredAgentSessionHolds {
-  const context = attachContext()
-  return new StructuredAgentSessionHolds({
-    resume: (sessionId, attachOptions) =>
-      resumeHeldStructuredAgentSession({
-        sessionId,
-        context: attachContext(),
-        callerKey: attachOptions?.admitRecoveryTicket
-          ? 'trusted-local:provider-exit-recovery'
-          : 'trusted-local:surface-hold',
-        ...(attachOptions ? { attachOptions } : {})
-      }),
-    // Tracked from enqueue: a quit drains a queued resume before it evicts, so no child is
-    // spawned behind the eviction and orphaned.
-    serialize: (sessionId, task) => {
-      const current = attachContext()
-      return current.tasks.trackAttach(current.serialize(sessionId, task))
-    },
-    evict: close,
-    hasProviderChild: (sessionId) => hasProviderChild(context, sessionId),
-    // A message accepted and not yet handed over is owed to this child, and so is one pending while
-    // the child still starts. Any other pending send may wait on an echo that never comes, so
-    // eviction retires it. Subagents, commands and monitors outlive the lead's turn inside the
-    // child, so the live roster the sidebar shows as working is owed too; stopping the child would
-    // end them silently.
-    hasOwedWork: (sessionId) => {
-      const session = context.sessions.get(sessionId)
-      return session
-        ? activeStructuredAgentSessionTurnId(session.journal.snapshot().items) !== null ||
-            deliveryActive(sessionId) ||
-            session.journal.submissions().some(isQueuedAgentJournalSubmission) ||
-            (session.child?.phase === 'starting' &&
-              session.journal.pendingSubmissions().length > 0) ||
-            agentChildWorkLiveness(context.deps.adapter.backgroundTaskState?.(sessionId)?.tasks) !==
-              null
-        : false
-    },
-    onError: (error) => context.deps.onEventSinkError?.(error),
-    ...(context.deps.releaseGraceMs === undefined ? {} : { graceMs: context.deps.releaseGraceMs })
-  })
 }

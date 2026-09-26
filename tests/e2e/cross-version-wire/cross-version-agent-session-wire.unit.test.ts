@@ -835,11 +835,11 @@ describe('cross-version structured agent sessions', () => {
         result: { value: { submission: { dispatchState: 'pending', handoverRecorded: true } } }
       })
       open()
-      await vi.waitFor(() =>
+      await vi.waitFor(async () =>
         expect(
-          restarted
-            .journalSnapshot(SESSION)
-            .submissions.every((row) => row.dispatchState !== 'pending' || row.handedOverAt)
+          (await restarted.journalSnapshot(SESSION)).submissions.every(
+            (row) => row.dispatchState !== 'pending' || row.handedOverAt
+          )
         ).toBe(true)
       )
     })

@@ -8,8 +8,8 @@
 // It does not owe a provider child. This used to resume every record whose lease was `released`,
 // which is the normal end state of a chat the user closed cleanly — so a
 // healthy profile started an app-server per session it had ever used, in parallel, at every launch,
-// with no client attached and nothing on screen. A child now exists because a surface asked for the
-// session (see `structured-agent-session-holds`), not because a record survived on disk.
+// with no client attached and nothing on screen. A child now exists because work asked for it — a
+// send, through the delivery loop — not because a record survived on disk.
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
@@ -39,14 +39,8 @@ export type StructuredAgentSessionReadRestoreDeps = {
   retrySettlement: (sessionId: string, params: AgentSessionAttachParams) => Promise<boolean>
 }
 
-/**
- * One session's share of the restart restore, and the whole of an on-demand one.
- *
- * Startup maps this over every supported record; a surface asking for a session it cannot see
- * calls it for one id. The CALLER decides which records are eligible — startup filters by
- * `supportsRecord` before mapping, so an on-demand caller owes the same check.
- */
-export async function restoreOneStructuredAgentSessionRead(
+/** One session's share of the restart restore. Startup maps this over every supported record. */
+async function restoreOneStructuredAgentSessionRead(
   input: StructuredAgentSessionReadRestoreDeps,
   sessionId: string
 ): Promise<void> {
@@ -60,9 +54,8 @@ export async function restoreOneStructuredAgentSessionRead(
   )
 }
 
-/** The serialized half of the restore, for a caller already inside the session's serialize — a
- *  send replaying into a session this host has closed, which needs the journal and no child. */
-export async function restoreOneStructuredAgentSessionReadUnderSerialize(
+/** The serialized half of the restore. */
+async function restoreOneStructuredAgentSessionReadUnderSerialize(
   input: Pick<
     StructuredAgentSessionReadRestoreDeps,
     'openDeps' | 'hasSession' | 'onReadable' | 'retrySettlement'
@@ -70,7 +63,7 @@ export async function restoreOneStructuredAgentSessionReadUnderSerialize(
   sessionId: string
 ): Promise<void> {
   if (input.hasSession(sessionId)) {
-    // A surface that took a hold mid-restore already attached this one.
+    // A read or a send mid-restore already opened this one.
     return
   }
   const opened = await restoreStructuredAgentSessionRead(input.openDeps, sessionId)

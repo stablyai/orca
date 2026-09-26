@@ -213,7 +213,7 @@ export class RpcClientStreamRegistry {
         this.sendRpc('terminal.unsubscribe', params)
       }
     } else {
-      const unsubscribe = buildStreamUnsubscribe(stream?.method, stream?.params)
+      const unsubscribe = buildStreamUnsubscribe(stream?.method, stream?.params, id)
       if (unsubscribe) {
         this.sendRpc(unsubscribe.method, unsubscribe.params)
       }

@@ -48,13 +48,18 @@ export function markProviderChildStarted(
 
 export function endProviderChild(
   session: ChildBearer,
-  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt'>
+  ended: Omit<StructuredAgentSessionEndedChild, 'endedAt' | 'startedFor'>
 ): boolean {
-  if (!matchingChild(session, ended)) {
+  const child = matchingChild(session, ended)
+  if (!child) {
     return false
   }
   session.child = null
-  session.lastEndedChild = { ...ended, endedAt: session.journal.cursor() }
+  session.lastEndedChild = {
+    ...ended,
+    ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),
+    endedAt: session.journal.cursor()
+  }
   return true
 }
 

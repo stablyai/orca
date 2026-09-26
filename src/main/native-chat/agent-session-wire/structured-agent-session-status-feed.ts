@@ -58,6 +58,8 @@ export type StructuredAgentSessionStatusFeedDeps = {
   /** Live provider-owned background tasks for the summary, so session lists can
    *  render subagent children. Optional: a provider without the hook projects none. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null | undefined
+  /** The session's agent proved a start: its row's phase became `ready`. */
+  onAgentStarted?: (sessionId: string) => void
 }
 
 function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSummary): boolean {
@@ -115,6 +117,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
   }
+  onAgentStarted?: (sessionId: string) => void
 }): StructuredAgentSessionStatusFeed {
   return new StructuredAgentSessionStatusFeed({
     sessions: args.sessions,
@@ -124,7 +127,8 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     readBackgroundTasks: (sessionId) => args.deps().adapter.backgroundTaskState?.(sessionId),
     // Resolved per call for the same reason the other deps are: the host builds this feed in a
     // field initializer, before its constructor parameters are assigned.
-    statusSink: () => args.deps().statusSink
+    statusSink: () => args.deps().statusSink,
+    ...(args.onAgentStarted ? { onAgentStarted: args.onAgentStarted } : {})
   })
 }
 
@@ -221,6 +225,9 @@ export class StructuredAgentSessionStatusFeed {
     this.published.set(sessionId, summary)
     this.sink(summary, session.params.location)
     this.broadcast({ type: 'status', session: summary })
+    if (summary.hostExecutionPhase === 'ready' && previous?.hostExecutionPhase !== 'ready') {
+      this.deps.onAgentStarted?.(sessionId)
+    }
     try {
       this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
     } catch (error) {

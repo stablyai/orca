@@ -125,6 +125,11 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
+/** The host starting the agent with no message to deliver, as an operation that needs it does. */
+function startAgent(): Promise<unknown> {
+  return host['serialize'](SESSION, () => host['mutationContext']().ensureAgent(SESSION))
+}
+
 describe('settled attach retry', () => {
   it('settles a post-acquisition journal failure and retries without a restart', async () => {
     const historyFilePath = vi
@@ -297,7 +302,7 @@ describe('settled attach retry', () => {
     ).toEqual({ status: 'pending' })
 
     reservationUnused = true
-    await host.hold(SESSION, 'desktop-chat:retry')
+    await startAgent()
     expect(mintSpawnToken).toHaveBeenCalledTimes(2)
     expect(spawnTokens).toEqual(['spawn-1', 'spawn-2'])
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -337,7 +342,7 @@ describe('settled attach retry', () => {
       now: () => NOW
     })
     await host.restoreReadableSessions()
-    await host.hold(SESSION, 'desktop-chat:restart')
+    await startAgent()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'live',
       handoffStage: null,
@@ -354,7 +359,7 @@ describe('settled attach retry', () => {
       throw new Error(`unexpected restored send refusal: ${sent.refusal.message}`)
     }
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2))
-    const restoredHistory = host.history({ sessionId: SESSION, direction: 'tail' })
+    const restoredHistory = await host.history({ sessionId: SESSION, direction: 'tail' })
     if (!restoredHistory.ok) {
       throw new Error(`unexpected restored history reset: ${restoredHistory.reset}`)
     }

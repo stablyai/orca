@@ -48,7 +48,7 @@ let host: StructuredAgentSessionHost
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let adapterExtras: Partial<StructuredAgentSessionAdapter>
-let releaseGraceMs: number
+let idleMs: number
 
 const spawnChild: StructuredAgentSessionAdapter['acquire'] = async ({ fence, spawnToken }) => ({
   process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
@@ -80,7 +80,7 @@ async function startHost(): Promise<void> {
     journalRoot: root,
     claimKeyId: 'key-1',
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
-    releaseGraceMs,
+    idleSweep: { intervalMs: 5, idleMs },
     now: () => NOW
   })
 }
@@ -89,7 +89,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-accept-deliver-'))
   resetHostTestOperationIds()
   adapterExtras = {}
-  releaseGraceMs = 60_000
+  idleMs = 60 * 60_000
   acquire = vi.fn(spawnChild)
   dispatch = vi.fn(async () => ({
     state: 'accepted' as const,
@@ -154,8 +154,10 @@ function stop() {
   })
 }
 
-function submission(id: string): AgentJournalSubmission | undefined {
-  return host.journalSnapshot(SESSION).submissions.find((entry) => entry.clientMessageId === id)
+async function submission(id: string): Promise<AgentJournalSubmission | undefined> {
+  return (await host.journalSnapshot(SESSION)).submissions.find(
+    (entry) => entry.clientMessageId === id
+  )
 }
 
 /** Read back after the conversation was closed, through the same open any reader takes. */
@@ -164,21 +166,19 @@ async function reopened(id: string): Promise<AgentJournalSubmission | undefined>
   return submission(id)
 }
 
-function errorRows(): string[] {
-  return host
-    .journalSnapshot(SESSION)
-    .items.flatMap((item) =>
-      item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.text] : []
-    )
+async function errorRows(): Promise<string[]> {
+  return (await host.journalSnapshot(SESSION)).items.flatMap((item) =>
+    item.body.kind === 'status' && item.body.tone === 'error' ? [item.body.text] : []
+  )
 }
 
 let subscriptions = 0
 
-function subscribe(): AgentSessionSubscribeEvent[] {
+async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
   const events: AgentSessionSubscribeEvent[] = []
   subscriptions += 1
   // Cloned as received: a frame shares the journal's live objects, which later rows revise.
-  host.subscribe({
+  await host.subscribe({
     id: `sub-${subscriptions}`,
     sessionId: SESSION,
     emit: (event) => events.push(structuredClone(event))
@@ -263,14 +263,16 @@ describe('a send is answered at acceptance', () => {
     })
 
     const id = await accept('hello')
-    const events = subscribe()
-    await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
+    const events = await subscribe()
+    await eventually(async () => expect(acquire).toHaveBeenCalledTimes(2))
     expect(dispatch).not.toHaveBeenCalled()
 
     starting.resolve()
-    await eventually(() => expect(framedStates(events, id)).toEqual(['handed-over']))
+    await eventually(async () => expect(framedStates(events, id)).toEqual(['handed-over']))
     answering.resolve()
-    await eventually(() => expect(framedStates(events, id)).toEqual(['handed-over', 'accepted']))
+    await eventually(async () =>
+      expect(framedStates(events, id)).toEqual(['handed-over', 'accepted'])
+    )
   })
 
   it('accepts a second send while the first one starts the child, before handing either over (W6)', async () => {
@@ -281,7 +283,7 @@ describe('a send is answered at acceptance', () => {
       return spawnChild(input)
     })
     const first = await accept('first')
-    await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
+    await eventually(async () => expect(acquire).toHaveBeenCalledTimes(2))
     const second = host.send(CALLER, sendParams('second'))
 
     starting.resolve()
@@ -290,11 +292,15 @@ describe('a send is answered at acceptance', () => {
       throw new Error('the second send was refused')
     }
     const secondId = secondResult.value.clientMessageId
-    await eventually(() => expect(submission(secondId)?.dispatchState).toBe('accepted'))
+    await eventually(async () =>
+      expect((await submission(secondId))?.dispatchState).toBe('accepted')
+    )
     expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([first, secondId])
     // The second was accepted while the start held the queue — before the first was handed over.
-    expect(submission(secondId)!.submittedAt).toBeLessThanOrEqual(submission(first)!.handedOverAt!)
-    const rows = host.journalSnapshot(SESSION).submissions
+    expect((await submission(secondId))!.submittedAt).toBeLessThanOrEqual(
+      (await submission(first))!.handedOverAt!
+    )
+    const rows = (await host.journalSnapshot(SESSION)).submissions
     expect(rows.map((row) => row.clientMessageId)).toEqual([first, secondId])
   })
 })
@@ -306,16 +312,16 @@ describe('a start the chat needed and did not get', () => {
     const first = await accept('first')
     const second = await accept('second')
 
-    await eventually(() => expect(submission(second)?.dispatchState).toBe('rejected'))
-    const rows = errorRows()
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
+    const rows = await errorRows()
     expect(rows).toHaveLength(1)
     expect(rows[0]).toContain('spawn codex ENOENT')
-    expect(submission(first)).toMatchObject({ dispatchState: 'rejected', reason: rows[0] })
-    expect(submission(second)).toMatchObject({ dispatchState: 'rejected', reason: rows[0] })
+    expect(await submission(first)).toMatchObject({ dispatchState: 'rejected', reason: rows[0] })
+    expect(await submission(second)).toMatchObject({ dispatchState: 'rejected', reason: rows[0] })
 
     const next = await accept('after the fix')
-    await eventually(() => expect(submission(next)?.dispatchState).toBe('accepted'))
-    expect(errorRows()).toHaveLength(1)
+    await eventually(async () => expect((await submission(next))?.dispatchState).toBe('accepted'))
+    expect(await errorRows()).toHaveLength(1)
   })
 
   it.each([
@@ -345,11 +351,11 @@ describe('a start the chat needed and did not get', () => {
     await host.flushAllStreamedEvents()
     await startHost()
     const id = await accept('hello')
-    const events = subscribe()
+    const events = await subscribe()
 
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
-    expect(errorRows()).toHaveLength(1)
-    expect(errorRows()[0]).toContain(cause)
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    expect(await errorRows()).toHaveLength(1)
+    expect((await errorRows())[0]).toContain(cause)
     const framedRows = events.flatMap((event) =>
       event.type === 'batch' || event.type === 'snapshot'
         ? (event.type === 'batch' ? event.batch.items : event.page.items).filter(
@@ -385,7 +391,7 @@ describe('a start the chat needed and did not get', () => {
       dispatchState: 'rejected',
       reason: expect.stringContaining('record store write failed')
     })
-    expect(errorRows()).toEqual([settled?.reason])
+    expect(await errorRows()).toEqual([settled?.reason])
   })
 })
 
@@ -411,7 +417,7 @@ describe('an attach that fails after indexing its child', () => {
       }
       return AgentSessionRecordStore.prototype.recordOperationOutcome.call(store, input)
     })
-    await eventually(() => expect(submission(first)?.dispatchState).toBe('rejected'))
+    await eventually(async () => expect((await submission(first))?.dispatchState).toBe('rejected'))
     // Nothing was indexed, so nothing had to be taken back: no list ever showed a child.
     expect(host['sessions'].get(SESSION)?.child).toBeNull()
     expect(owned).not.toContain(true)
@@ -419,7 +425,7 @@ describe('an attach that fails after indexing its child', () => {
 
     const next = await accept('after the failure')
 
-    await eventually(() => expect(submission(next)?.dispatchState).toBe('accepted'))
+    await eventually(async () => expect((await submission(next))?.dispatchState).toBe('accepted'))
     expect(acquire).toHaveBeenCalledTimes(acquiresBefore + 1)
     expect(dispatch.mock.calls.map(([input]) => input.clientMessageId)).toEqual([next])
   })
@@ -433,7 +439,7 @@ describe('what an earlier host process left behind', () => {
 
     await host.revealSession(SESSION)
 
-    expect(submission('queued')).toMatchObject({
+    expect(await submission('queued')).toMatchObject({
       dispatchState: 'rejected',
       reason: DISPATCH_REJECTED_HOST_RESTARTED
     })
@@ -453,8 +459,8 @@ describe('what an earlier host process left behind', () => {
 
     await host.revealSession(SESSION)
 
-    expect(submission('legacy')).toMatchObject({ dispatchState: 'unknown', recovered: true })
-    expect(submission('handed')).toMatchObject({ dispatchState: 'unknown', recovered: true })
+    expect(await submission('legacy')).toMatchObject({ dispatchState: 'unknown', recovered: true })
+    expect(await submission('handed')).toMatchObject({ dispatchState: 'unknown', recovered: true })
     // Deciding them from provider history waits for a won lease (W4′d).
     expect(providerHistoryWindow).not.toHaveBeenCalled()
     expect(dispatch).not.toHaveBeenCalled()
@@ -480,8 +486,8 @@ describe('a child that exits before its message is handed over', () => {
 
     const id = await accept('hello')
 
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
-    expect(submission(id)?.reason).toContain('codex app-server crashed')
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    expect((await submission(id))?.reason).toContain('codex app-server crashed')
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(dispatch).not.toHaveBeenCalled()
   })
@@ -496,7 +502,7 @@ describe('Stop withdraws what is queued', () => {
     // Stop's own open wakes the delivery loop, whose first step queues behind this Stop.
     expect(await stop()).toMatchObject({ ok: true })
 
-    expect(submission('leftover')).toMatchObject({
+    expect(await submission('leftover')).toMatchObject({
       dispatchState: 'rejected',
       reason: DISPATCH_REJECTED_CANCELLED
     })
@@ -511,14 +517,14 @@ describe('Stop withdraws what is queued', () => {
       return spawnChild(input)
     })
     const id = await accept('hello')
-    await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
+    await eventually(async () => expect(acquire).toHaveBeenCalledTimes(2))
     const stopped = stop()
 
     starting.resolve()
     expect(await stopped).toMatchObject({ ok: true })
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('rejected'))
-    expect(submission(id)).toMatchObject({ reason: DISPATCH_REJECTED_CANCELLED })
-    expect(submission(id)?.handedOverAt).toBeUndefined()
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('rejected'))
+    expect(await submission(id)).toMatchObject({ reason: DISPATCH_REJECTED_CANCELLED })
+    expect((await submission(id))?.handedOverAt).toBeUndefined()
     expect(dispatch).not.toHaveBeenCalled()
   })
 
@@ -537,7 +543,7 @@ describe('Stop withdraws what is queued', () => {
       providerChildPhase: 'starting' as const
     }))
     const id = await accept('hello')
-    await eventually(() => expect(awaitStarted).toHaveBeenCalled())
+    await eventually(async () => expect(awaitStarted).toHaveBeenCalled())
 
     expect(await stop()).toMatchObject({ ok: true, value: { cancelled: true } })
 
@@ -549,7 +555,7 @@ describe('Stop withdraws what is queued', () => {
     // A loop still waiting on that start would swallow this send; it starts a new child instead.
     awaitStarted.mockImplementation(async () => undefined)
     const next = await accept('after stop')
-    await eventually(() => expect(submission(next)?.dispatchState).toBe('accepted'))
+    await eventually(async () => expect((await submission(next))?.dispatchState).toBe('accepted'))
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 })
@@ -560,9 +566,8 @@ describe('an eviction between acceptance and handover', () => {
     adapterExtras = { awaitStarted: () => started.promise }
     await host.close(SESSION)
     await startHost()
-    await host.hold(SESSION, 'surface-1')
     const id = await accept('hello')
-    await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
+    await eventually(async () => expect(acquire).toHaveBeenCalledTimes(2))
     // Between the delivery loop's start step and its handover step.
     await host.close(SESSION)
     started.resolve()
@@ -580,13 +585,12 @@ describe('an eviction between acceptance and handover', () => {
     adapterExtras = { awaitStarted }
     await host.close(SESSION)
     await startHost()
-    await host.hold(SESSION, 'surface-1')
     dispatch.mockResolvedValueOnce({ state: 'admitted' })
     const handed = await accept('handed over')
-    await eventually(() => expect(submission(handed)?.handedOverAt).toBeDefined())
+    await eventually(async () => expect((await submission(handed))?.handedOverAt).toBeDefined())
     awaitStarted.mockImplementation(() => second.promise)
     const queued = await accept('still queued')
-    await eventually(() => expect(awaitStarted).toHaveBeenCalledTimes(2))
+    await eventually(async () => expect(awaitStarted).toHaveBeenCalledTimes(2))
 
     await host.close(SESSION)
     second.resolve()
@@ -595,25 +599,24 @@ describe('an eviction between acceptance and handover', () => {
       dispatchState: 'rejected',
       reason: DISPATCH_REJECTED_PROVIDER_CLOSED
     })
-    expect(submission(handed)).toMatchObject({ dispatchState: 'unknown' })
+    expect(await submission(handed)).toMatchObject({ dispatchState: 'unknown' })
     expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
-  it('does not evict an idle child while a message is still queued for it (W24)', async () => {
-    releaseGraceMs = 0
+  it('does not stop an idle child while a message is still queued for it (W24)', async () => {
+    idleMs = 0
     const started = deferred<void>()
     adapterExtras = { awaitStarted: () => started.promise }
     await host.close(SESSION)
     await startHost()
-    await host.hold(SESSION, 'surface-1')
     const id = await accept('hello')
-    await eventually(() => expect(acquire).toHaveBeenCalledTimes(2))
-    host.release(SESSION, 'surface-1')
+    await eventually(async () => expect(acquire).toHaveBeenCalledTimes(2))
+    // The idle sweep ticks every few milliseconds meanwhile.
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     started.resolve()
     // Handed to the child it was queued for; the eviction may follow once nothing is owed.
-    await eventually(() => expect(dispatch).toHaveBeenCalledTimes(1))
+    await eventually(async () => expect(dispatch).toHaveBeenCalledTimes(1))
     expect(dispatch.mock.calls[0]?.[0].clientMessageId).toBe(id)
     expect(acquire).toHaveBeenCalledTimes(2)
   })
@@ -642,7 +645,7 @@ describe('a compaction or rewind an earlier child left prepared', () => {
 
     const id = await accept('after the compaction')
 
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('accepted'))
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
     expect(store.getRecord(SESSION)?.conversationCommand).toMatchObject({
       phase: 'committed',
       state: 'unknown'
@@ -665,7 +668,7 @@ describe('a compaction or rewind an earlier child left prepared', () => {
 
     const id = await accept('after the rewind')
 
-    await eventually(() => expect(submission(id)?.dispatchState).toBe('accepted'))
+    await eventually(async () => expect((await submission(id))?.dispatchState).toBe('accepted'))
     expect(store.getRecord(SESSION)?.rewind).toMatchObject({ phase: 'completed' })
   })
 })

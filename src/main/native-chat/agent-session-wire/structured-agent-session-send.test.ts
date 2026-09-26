@@ -75,7 +75,7 @@ describe('send', () => {
       dispatchState: 'accepted'
     })
     expect(dispatch).toHaveBeenCalledTimes(1)
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(1)
     expect(page.ok && page.page.fence).toBe(1)
     expect(page.page.hostNow).toBe(NOW)
@@ -140,7 +140,7 @@ describe('send', () => {
       value: { submission: { dispatchState: 'unknown' } }
     })
     expect(dispatch).toHaveBeenCalledTimes(1)
-    const state = host.history({ sessionId: SESSION, direction: 'tail' })
+    const state = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(state.ok && state.page.submissions).toHaveLength(1)
   })
 
@@ -167,7 +167,7 @@ describe('send', () => {
       }
     })
     expect(dispatch).toHaveBeenCalledTimes(1)
-    const state = host.history({ sessionId: SESSION, direction: 'tail' })
+    const state = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(state.ok && state.page.submissions).toHaveLength(1)
   })
 
@@ -196,7 +196,7 @@ describe('send', () => {
       dispatchState: 'accepted'
     })
     expect(dispatch).toHaveBeenCalledTimes(2)
-    const state = host.history({ sessionId: SESSION, direction: 'tail' })
+    const state = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(state.ok && state.page.submissions).toHaveLength(2)
   })
 

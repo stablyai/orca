@@ -47,7 +47,7 @@ async function withPhaseTimeout(run: () => Promise<void>, timeoutMs: number): Pr
 
 /** The quit-path phase order, which is load-bearing rather than incidental. */
 export function structuredAgentSessionHostTeardownPhases(collaborators: {
-  holds: { dispose: () => Promise<void> | void }
+  idleSweep: { dispose: () => Promise<void> | void }
   runtimeState: {
     stopLeaseRenewal: () => void
     flushAllEventSinks: () => Promise<void>
@@ -69,7 +69,7 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
         }
       }
     },
-    { name: 'dispose-holds', run: () => collaborators.holds.dispose() },
+    { name: 'dispose-idle-sweep', run: () => collaborators.idleSweep.dispose() },
     { name: 'stop-lease-renewal', run: () => collaborators.runtimeState.stopLeaseRenewal() },
     { name: 'drain-attaches', run: () => collaborators.tasks.drainAttaches() },
     {
@@ -141,7 +141,7 @@ export async function tearDownStructuredAgentSessionHost(input: {
 
 export async function flushStructuredAgentSessionHost(
   context: StructuredAgentSessionLifetimeContext &
-    Pick<Parameters<typeof structuredAgentSessionHostTeardownPhases>[0], 'holds' | 'tasks'> & {
+    Pick<Parameters<typeof structuredAgentSessionHostTeardownPhases>[0], 'idleSweep' | 'tasks'> & {
       restartResume: StructuredAgentSessionRestartResume
       serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
       trigger: AgentSessionResumeTrigger

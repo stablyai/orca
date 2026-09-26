@@ -6,9 +6,9 @@
 // conversation — the journal, the provider handle chain, and the recorded evidence all survive.
 //
 // "Usable" means ACQUIRABLE, not acquired. Startup no longer resumes a provider child for a record
-// nobody is looking at; a surface taking a hold is what spawns one. So the migration's job is to
-// leave the lease in a state a hold can claim, and these tests prove that by adjudicating it rather
-// than by reading fields off it.
+// nobody is looking at; work that needs the agent is what spawns one. So the migration's job is to
+// leave the lease in a state an attach can claim, and these tests prove that by adjudicating it
+// rather than by reading fields off it.
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -284,14 +284,19 @@ describe('already-wedged profiles become usable on load', () => {
     }
   )
 
-  it('settles restart eviction through attach when a hold arrives before the boot sweep', async () => {
+  it('settles restart eviction through attach when a start arrives before the boot sweep', async () => {
     await seedStore(
       wedgedRecord({ claimStatus: 'live', handoffStage: null, ownerProcess: DEAD_OWNER })
     )
     await seedRunningTurn()
     openHost()
 
-    await host.hold(SESSION, 'desktop-chat:restart')
+    // The attach adjudicates the dead owner first, which moves the fence; like a client's ensure,
+    // it is retried at the fence the refusal names.
+    const stale = await host.attach(CALLER, hostTestAttachParams(13))
+    const fence = stale.ok ? 13 : (stale.refusal.currentFence ?? 13)
+    expect(stale.ok || stale.refusal.code === 'agent_session_checkpoint_stale').toBe(true)
+    expect(stale.ok || (await host.attach(CALLER, hostTestAttachParams(fence))).ok).toBe(true)
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(activeStructuredAgentSessionTurnId(restoredJournal().snapshot().items)).toBe(null)
@@ -523,7 +528,8 @@ describe('already-wedged profiles become usable on load', () => {
     await host.restoreReadableSessions()
     expect(order).toEqual([])
     expect(scan).not.toHaveBeenCalled()
-    await host.hold(SESSION, 'holder-1')
+    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? null
+    expect(await host.attach(CALLER, hostTestAttachParams(fence))).toMatchObject({ ok: true })
 
     expect(order).toEqual(['acquire'])
   })

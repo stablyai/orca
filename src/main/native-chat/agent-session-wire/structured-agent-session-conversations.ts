@@ -8,15 +8,21 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
  *
  * Delivery runs a microtask after the commit, so a reader that throws cannot fail a write that is
  * already durable. A handle this map has since replaced or dropped delivers nothing.
+ *
+ * Each entry also carries when it last saw activity — its open, then every journal publish — which
+ * is the idle sweep's clock. In memory only, so it dies with the entry.
  */
 export class StructuredAgentSessionConversations extends Map<
   string,
   StructuredAgentSessionHostSession
 > {
+  private readonly activity = new Map<string, number>()
+
   constructor(
     private readonly delivery: {
       deliver: (sessionId: string, journal: AgentSessionJournal) => void
       onDeliveryError: (sessionId: string, error: unknown) => void
+      now: () => number
     }
   ) {
     super()
@@ -42,6 +48,22 @@ export class StructuredAgentSessionConversations extends Map<
         }
       })
     })
+    this.activity.set(sessionId, this.delivery.now())
     return super.set(sessionId, session)
+  }
+
+  override delete(sessionId: string): boolean {
+    this.activity.delete(sessionId)
+    return super.delete(sessionId)
+  }
+
+  touch(sessionId: string): void {
+    if (this.has(sessionId)) {
+      this.activity.set(sessionId, this.delivery.now())
+    }
+  }
+
+  lastActivityAt(sessionId: string): number | undefined {
+    return this.activity.get(sessionId)
   }
 }

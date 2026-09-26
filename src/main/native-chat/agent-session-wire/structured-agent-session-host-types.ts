@@ -19,7 +19,7 @@ export type StructuredAgentSessionCaller = { callerKey: string }
 /** What the host believes about a session it just made addressable again. The workspace and agent
  *  come from the record, so a caller publishes the host's view rather than a client's assertion.
  *  `readable` is false when the journal could not be opened — the tab is still worth publishing,
- *  because attach recovers what read restore cannot. */
+ *  because the chat shows that failure and its Retry. */
 export type StructuredAgentSessionReveal = {
   sessionId: string
   workspaceId: string
@@ -39,6 +39,9 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   /** A publish-first acquire is `starting` until the adapter's `started` event; only then are its
    *  reported options fact. */
   phase: StructuredAgentSessionProviderChildPhase
+  /** The queued message whose delivery started this child, fixed when the start is made; absent
+   *  for any other start. In memory only: it tells a restart offer its own start from another. */
+  readonly startedFor?: string
 }
 
 /** What ending a child established about its provider root. A stop's comes only from
@@ -62,6 +65,7 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
     /** Descriptive text only — the provider's diagnostic, or the host's cause. Decides nothing. */
     reason: string | null
     duringStartup: boolean
+    startedFor?: string
     /** Where the conversation's journal stood when the child ended, to order the end against a
      *  message's acceptance. */
     endedAt: AgentJournalCursor
@@ -106,8 +110,10 @@ export type StructuredAgentSessionHostDeps = {
     provider: AgentSessionRecord['provider']
   ) => Promise<Record<string, string> | undefined> | Record<string, string> | undefined
   now?: () => number
-  /** How long a session outlives its last surface. Tests drive this; production takes the default. */
-  releaseGraceMs?: number
+  /** The idle sweep's period and window. Tests drive these; production takes the defaults. */
+  idleSweep?: { intervalMs?: number; idleMs?: number }
+  /** Whether an orchestration dispatch still owns this session's worker; absent answers no. */
+  hasOpenDispatch?: (record: AgentSessionRecord) => boolean
   onEventSinkError?: (input: { sessionId: string; error: unknown }) => void
   /** Every status projection this host publishes. `replay` marks a re-projection of state the host
    *  already knew (restore, an arriving subscriber) rather than a fresh journal edge. */

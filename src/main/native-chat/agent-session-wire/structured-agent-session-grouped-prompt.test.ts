@@ -96,7 +96,7 @@ async function seedGroupedQuestion(): Promise<{ itemId: string; revision: number
   })
   await host.flushStreamedEvents(SESSION)
   const itemId = agentJournalItemKey(identity)
-  const page = host.history({ sessionId: SESSION, direction: 'tail' })
+  const page = await host.history({ sessionId: SESSION, direction: 'tail' })
   const appended = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
   if (!appended) {
     throw new Error('provider question was not written to the journal')

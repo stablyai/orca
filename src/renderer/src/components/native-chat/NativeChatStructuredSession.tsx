@@ -100,7 +100,7 @@ export function NativeChatStructuredSession(
     }),
     [controller, props.agent, props.sessionId]
   )
-  const viewState = selectNativeChatViewState(session)
+  const viewState = selectNativeChatViewState(session, { readRetries: true })
   const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
@@ -217,7 +217,7 @@ export function NativeChatStructuredSession(
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
         ) : viewState.kind === 'error' ? (
-          <NativeChatEmptyState kind="error" message={viewState.message} />
+          <NativeChatEmptyState kind="error" message={viewState.message} retrying />
         ) : viewState.kind === 'empty' ? (
           <NativeChatEmptyState kind="empty" agent={props.agent} />
         ) : (

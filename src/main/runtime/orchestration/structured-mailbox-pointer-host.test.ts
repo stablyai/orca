@@ -38,7 +38,7 @@ describe('structured mailbox pointer host', () => {
     hostRef.current = null
   })
 
-  it('reads the gate facts from the FULL timeline, never a bounded tail', () => {
+  it('reads the gate facts from the FULL timeline, never a bounded tail', async () => {
     // The defect this pins: a running turn is announced by ONE lifecycle item, and settlement
     // tombstones it rather than rewriting it. A long tool-calling turn pushes that item arbitrarily
     // far from the tail, so any page-sized read reports a busy worker as idle — and the pointer is
@@ -46,22 +46,22 @@ describe('structured mailbox pointer host', () => {
     // it -- either way folded into work already in flight rather than read as a new instruction.
     const items = [runningTurn(), ...transcript(500)]
     hostRef.current = { journalSnapshot: () => ({ items }) }
-    expect(createStructuredMailboxPointerHost().readGateFacts('s1')).toEqual({
+    expect(await createStructuredMailboxPointerHost().readGateFacts('s1')).toEqual({
       turnRunning: true,
       awaitingHuman: false
     })
   })
 
-  it('answers null rather than idle when the session cannot be read', () => {
+  it('answers null rather than idle when the session cannot be read', async () => {
     // Null retains the pointer; `{turnRunning:false}` would deliver a nudge into a session this
     // runtime cannot see at all.
-    expect(createStructuredMailboxPointerHost().readGateFacts('s1')).toBeNull()
+    expect(await createStructuredMailboxPointerHost().readGateFacts('s1')).toBeNull()
     hostRef.current = {
       journalSnapshot: () => {
         throw new Error('agent_session_ownership_unknown')
       }
     }
-    expect(createStructuredMailboxPointerHost().readGateFacts('s1')).toBeNull()
+    expect(await createStructuredMailboxPointerHost().readGateFacts('s1')).toBeNull()
   })
 
   it('reports an unattached host rather than a rejection when nothing can be sent', async () => {

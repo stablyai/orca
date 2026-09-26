@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type {
   AgentSessionHistoryPage,
@@ -87,7 +87,6 @@ describe('turn item capability at the RPC boundary', () => {
   it.each(['snapshot', 'batch', 'reset'] as const)(
     'downgrades the %s stream only for a legacy reader',
     async (type) => {
-      hostCalls.hold = vi.fn(async () => undefined)
       hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
         const base = { sessionId: SESSION, fence: 1 }
         if (type === 'batch') {

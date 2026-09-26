@@ -1,11 +1,9 @@
 // Giving a session its provider child back.
 //
-// This is the replacement for the startup resume, and the difference is only in WHO asks: the same
-// eligibility rule, run when a surface binds, when a send finds the owner gone, or when a child
-// exits under an open surface — never when the app launches. It runs inside the session's
+// Only work starts one: the delivery loop for a queued message, and the few operations that need
+// the provider itself — never a view, and never the app launching. It runs inside the session's
 // serialize, with the attach it is given, so the eligibility it reads is the one the attach acts
-// on. A write-capable hold must fail when acquisition is refused so the surface never mistakes a
-// readable journal for a live provider child.
+// on.
 
 import type {
   AgentSessionAttachResult,
@@ -14,12 +12,10 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { isAgentSessionWireRefusalCode } from '../../../shared/agent-session-wire-refusals'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import {
-  attachStructuredAgentSessionUnderSerialize,
-  type StructuredAgentSessionAttachOptions
-} from './structured-agent-session-attach-orchestration'
+import { attachStructuredAgentSessionUnderSerialize } from './structured-agent-session-attach-orchestration'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import {
   structuredAgentSessionResumeOperationId,
   structuredAgentSessionResumeParams
@@ -31,14 +27,55 @@ export type StructuredAgentSessionResumeOutcome =
   | { ok: true }
   | { ok: false; refusal: AgentSessionWireRefusal }
 
-export async function resumeHeldStructuredAgentSession(input: {
+/** The attach's caller key: the ledger row a start settles is Orca's own. */
+const AGENT_START_CALLER_KEY = 'trusted-local:agent-start'
+
+/**
+ * Gives the session a provider child if it has none, for a caller inside its serialize — which is
+ * what makes "if it has none" exact: two askers run this in turn, and the second finds the first
+ * one's child. A failed start leaves the next asker to make its own.
+ */
+export async function ensureStructuredAgentSessionAgent(
+  context: StructuredAgentSessionAttachContext,
+  sessionId: string,
+  startedFor?: string
+): Promise<StructuredAgentSessionResumeOutcome> {
+  if (context.sessions.get(sessionId)?.child) {
+    return { ok: true }
+  }
+  const started = await startStructuredAgentSessionAgent(context, sessionId, startedFor)
+  if (!started.ok || context.sessions.get(sessionId)?.child) {
+    return started
+  }
+  return {
+    ok: false,
+    refusal: {
+      code: 'agent_session_ownership_unknown',
+      message: 'The session attached without a provider child to write to.'
+    }
+  }
+}
+
+/** The same, for an operation's admission: a start that throws is that operation's refusal. */
+export function ensureStructuredAgentSessionAgentForOperation(
+  context: StructuredAgentSessionAttachContext,
   sessionId: string
-  context: StructuredAgentSessionAttachContext
-  /** Who is asking; the attach keys the ledger row it settles by it. */
-  callerKey: string
-  attachOptions?: StructuredAgentSessionAttachOptions
-}): Promise<StructuredAgentSessionResumeOutcome> {
-  const { sessionId, context, callerKey } = input
+): Promise<StructuredAgentSessionResumeOutcome> {
+  return ensureStructuredAgentSessionAgent(context, sessionId).catch((error: unknown) => ({
+    ok: false,
+    refusal: {
+      code: 'agent_session_owner_restart_failed',
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }))
+}
+
+async function startStructuredAgentSessionAgent(
+  context: StructuredAgentSessionAttachContext,
+  sessionId: string,
+  startedFor: string | undefined
+): Promise<StructuredAgentSessionResumeOutcome> {
+  const callerKey = AGENT_START_CALLER_KEY
   // The record is read only once this host has adjudicated it and exited any recovery stage a
   // failed attempt latched — a lease left in `manual-recovery` by an unproven exit is one the
   // resolver hands back, and the eligibility below must see it that way.
@@ -47,6 +84,15 @@ export async function resumeHeldStructuredAgentSession(input: {
     return { ok: false, refusal: unreconciled }
   }
   await context.runtimeState.resolveRecovery(sessionId)
+  // An exit whose journal settlement failed latches the lease until a retry lands, and the recovery
+  // resolver never clears that latch. The start is that retry, so the send that needs the agent
+  // settles it.
+  await retryPendingStructuredAgentSessionSettlement({
+    deps: context.deps,
+    sessionId,
+    openJournal: async () => (await context.openConversation(sessionId))?.journal ?? null,
+    now: () => context.now()
+  })
   const record = context.deps.store.getRecord(sessionId)
   if (!record) {
     return refuse('agent_session_identity_required', 'No structured session exists by that id.')
@@ -80,7 +126,7 @@ export async function resumeHeldStructuredAgentSession(input: {
       context,
       callerKey,
       params,
-      input.attachOptions
+      startedFor === undefined ? {} : { startedFor }
     )
   } catch (error) {
     // The attach settles an acquisition that failed — the ledger row, the released lease — before

@@ -38,9 +38,7 @@ export type StructuredAgentSessionAttachContext = {
   reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
-  /** Paired with `sessions.delete` by `forgetStructuredAgentSession`, which a close runs. */
-  forgetStatus: (sessionId: string) => void
-  publishStatus?: (sessionId: string) => void
+  publishStatus: (sessionId: string) => void
   /** The conversation's one open journal, opened when closed; see `conversation-open`. */
   openConversation: (sessionId: string) => Promise<StructuredAgentSessionHostSession | null>
 }

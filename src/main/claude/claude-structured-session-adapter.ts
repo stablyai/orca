@@ -244,7 +244,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     )
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
-  recordsContextUsage = (sessionId: string): boolean => this.sessions.has(sessionId)
+  // Provider-level: a session at rest still reports the usage its journal recorded.
+  recordsContextUsage = (): boolean => true
 
   readOptionRestoreFailures = (sessionId: string): readonly string[] => [
     ...(this.sessions.get(sessionId)?.restoreSkippedOptions ?? [])

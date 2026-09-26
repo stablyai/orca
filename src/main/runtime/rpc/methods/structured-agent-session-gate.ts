@@ -73,10 +73,9 @@ export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSe
   return host
 }
 
-/** Builds the host for the calls that address a session by durable record rather than by live
- *  state: attach, which is the only way a session comes into being, plus hold and reveal, which
- *  each reach for a record on disk this process may not have opened yet. Every other method
- *  addresses a session that must already be attached, and correctly reports absent when none is. */
+/** Builds the host for a call that may be the first this process sees. Every session is addressed
+ *  by its durable record — a read opens a conversation at rest — so each call that reaches for one
+ *  may meet a host nothing has built yet. */
 export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<void> {
   // Gated first: a client that cannot read structured sessions must not be able
   // to make the host exist, which is an observable side effect of the surface.
@@ -87,6 +86,14 @@ export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<vo
     return
   }
   await ctx.runtime.ensureStructuredAgentSessionHost()
+}
+
+/** The host for a read, built first when this process has none: the read RPCs share this one. */
+export async function requireInstalledStructuredHost(
+  ctx: RpcContext
+): Promise<StructuredAgentSessionHost> {
+  await ensureStructuredHostInstalled(ctx)
+  return requireStructuredHost(ctx)
 }
 
 /** Mirrors the existing agent-session host-authority derivation so one client

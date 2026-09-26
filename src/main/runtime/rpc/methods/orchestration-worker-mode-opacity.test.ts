@@ -254,10 +254,14 @@ describe('a worker cannot tell which mode it is running in', () => {
         source: 'terminal'
       })
 
-    expect(read).toThrow(/has no terminal output/)
+    const refusal = await read().then(
+      () => '',
+      (error: unknown) => (error instanceof Error ? error.message : String(error))
+    )
+    expect(refusal).toMatch(/has no terminal output/)
     // The refusal names a source that works instead of naming the worker's kind.
-    expect(read).toThrow(/--source auto or --source transcript/)
-    expect(read).not.toThrow(/structured/i)
+    expect(refusal).toMatch(/--source auto or --source transcript/)
+    expect(refusal).not.toMatch(/structured/i)
   })
 
   it('never claims a structured worker was checked for a human-answerable prompt', async () => {

@@ -208,7 +208,7 @@ describe('cancel', () => {
       turnId: 'turn-1'
     })
     expect(result).toMatchObject({ ok: true, value: { cancelled: true } })
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items[0]?.body).toMatchObject({
       kind: 'status',
       text: 'Cancellation requested.'
@@ -332,7 +332,7 @@ describe('cancel', () => {
       refusal: { code: 'agent_session_operation_unknown' }
     })
     expect(cancelTurn).toHaveBeenCalledTimes(1)
-    expect(host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
+    expect(await host.history({ sessionId: SESSION, direction: 'tail' })).toMatchObject({
       ok: true,
       page: {
         items: [
@@ -395,7 +395,7 @@ describe('respondToPrompt', () => {
       ...fields
     })
 
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     const answered = page.ok ? page.page.items.find((item) => item.itemId === itemId) : null
     expect(answered).toMatchObject({
       revision: 2,
@@ -490,7 +490,7 @@ describe('respondToPrompt', () => {
       ...fields
     })
     expect(result.ok).toBe(true)
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     const statusId = agentJournalItemKey({
       provider: 'orca',
       clientMessageId: `${prompt.itemId}#delivery`
@@ -520,7 +520,7 @@ describe('setOption', () => {
     })
     expect(setOption).toHaveBeenCalledTimes(1)
     expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5', effort: 'high' })
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(0)
   })
 
@@ -602,13 +602,13 @@ describe('restart', () => {
     expect(host.listSessionTabs()).toEqual([
       { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'codex' }
     ])
-    const history = host.history({ sessionId: SESSION, direction: 'tail' })
+    const history = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.ok && history.page.items).not.toHaveLength(0)
     expect(acquire).not.toHaveBeenCalled()
     expect(listRecords).toHaveBeenCalledTimes(restoreReads)
   })
 
-  it('clears a stale conflicted recovery at restart, and reacquires the native owner when a surface holds it', async () => {
+  it('clears a stale conflicted recovery at restart, and reacquires the native owner on the next start', async () => {
     await attach()
     await store.transitionHandoff(SESSION, (record) => ({
       ...record,
@@ -623,9 +623,10 @@ describe('restart', () => {
     acquire.mockClear()
 
     await host.restoreReadableSessions()
-    // The recovery stage clears on evidence at startup; the child comes back only once a surface
-    // holds the session (see structured-agent-session-surface-lifetime.test.ts).
-    await host.hold(SESSION, 'surface-1')
+    // The recovery stage clears on evidence at startup; the child comes back only once work
+    // starts it — here the explicit attach a send's delivery would make.
+    const fence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+    expect(await host.attach(CALLER, ensureParams(fence))).toMatchObject({ ok: true })
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -657,12 +658,15 @@ describe('restart', () => {
       return settled(input)
     })
 
-    const hold = host.hold(SESSION, 'surface-1')
+    const start = host.attach(
+      CALLER,
+      ensureParams(store.getRecord(SESSION)?.lease.runtimeFence ?? 0)
+    )
     await started.promise
     const claimMidStart = store.getRecord(SESSION)?.lease.claimStatus
     const status = host.handoffStatus(SESSION)
     release.resolve()
-    await hold
+    await start
 
     // Mid-start the lease is only reserved; ownership does not wait for the agent.
     expect(claimMidStart).toBe('reserved')
@@ -712,7 +716,7 @@ describe('subscribe', () => {
   it('opens with a snapshot and then streams cursor-qualified batches', async () => {
     await attach()
     const events: AgentSessionSubscribeEvent[] = []
-    const dispose = host.subscribe({
+    const dispose = await host.subscribe({
       id: 'sub-1',
       sessionId: SESSION,
       emit: (event) => events.push(event)
@@ -742,7 +746,7 @@ describe('subscribe', () => {
     }
 
     const events: AgentSessionSubscribeEvent[] = []
-    host.subscribe({
+    await host.subscribe({
       id: 'sub-2',
       sessionId: SESSION,
       emit: (event) => events.push(event),
@@ -763,14 +767,14 @@ describe('subscribe', () => {
   it('drops a failed transport without aborting the mutation or other subscribers', async () => {
     await attach()
     const events: AgentSessionSubscribeEvent[] = []
-    host.subscribe({
+    await host.subscribe({
       id: 'dead-sub',
       sessionId: SESSION,
       emit: () => {
         throw new Error('socket closed')
       }
     })
-    host.subscribe({
+    await host.subscribe({
       id: 'live-sub',
       sessionId: SESSION,
       emit: (event) => events.push(event)
@@ -800,7 +804,7 @@ describe('subscribe', () => {
   it('resets a subscriber whose epoch is gone', async () => {
     await attach()
     const events: AgentSessionSubscribeEvent[] = []
-    host.subscribe({
+    await host.subscribe({
       id: 'sub-3',
       sessionId: SESSION,
       emit: (event) => events.push(event),
@@ -812,7 +816,7 @@ describe('subscribe', () => {
   it('publishes the replacement fence when the owner generation changes', async () => {
     const record = await attach()
     const events: AgentSessionSubscribeEvent[] = []
-    host.subscribe({
+    await host.subscribe({
       id: 'sub-4',
       sessionId: SESSION,
       emit: (event) => events.push(event)

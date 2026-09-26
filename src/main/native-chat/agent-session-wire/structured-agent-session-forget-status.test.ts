@@ -186,7 +186,7 @@ function attachContext(
     reconcileLeases: async () => null,
     serialize: <T>(_sessionId: string, task: () => Promise<T>) => task(),
     now: () => 1,
-    forgetStatus: (sessionId: string) => feed.forget(sessionId)
+    publishStatus: (sessionId: string) => feed.publish(sessionId)
   } as unknown as StructuredAgentSessionAttachContext
 }
 

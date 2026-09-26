@@ -43,17 +43,17 @@ import {
 } from '../../observability/agent-session-instrumentation'
 
 export type StructuredAgentSessionAttachOptions = {
-  /** Provider-exit recovery: refuses once the ticket the restart was issued for is stale. */
-  admitRecoveryTicket?: () => boolean
   recordPhase?: AgentSessionCreatePhaseRecorder
+  /** The queued message a start is for; see `StructuredAgentSessionProviderChild.startedFor`. */
+  startedFor?: string
 }
 
 /**
  * The attach itself, for a caller already inside the session's serialize.
  *
- * That is every caller that has to know what the session looks like RIGHT NOW: a hold, a send
- * making sure it has an owner, provider-exit recovery. They run their
- * check and this attach in one serialized step, so "the session has no child" is still true when
+ * That is every caller that has to know what the session looks like RIGHT NOW: the delivery loop,
+ * and an operation that needs the provider. They run their check and this attach in one serialized
+ * step, so "the session has no child" is still true when
  * the attach starts. `attachStructuredAgentSession` is this under `serialize`, for a client.
  */
 export function attachStructuredAgentSessionUnderSerialize(
@@ -106,12 +106,6 @@ async function runAttach(
   const fenceBefore = context.sessions.has(sessionId)
     ? structuredAgentSessionConversationFence(context.deps.store, sessionId)
     : null
-  if (options.admitRecoveryTicket && !options.admitRecoveryTicket()) {
-    return refuseAgentSessionMutation({
-      code: 'agent_session_checkpoint_stale',
-      message: 'The provider-exit recovery ticket is no longer current.'
-    })
-  }
   const unreconciled = await withAgentSessionCreatePhase('reconcile_leases', recordPhase, () =>
     context.reconcileLeases(sessionId)
   )
@@ -186,6 +180,7 @@ async function runAttach(
       onAttached: async (attached, acquisitionGeneration, acquiredOwner, providerChildPhase) => {
         const fence = structuredAgentSessionConversationFence(context.deps.store, sessionId)
         const current = context.sessions.get(sessionId)?.child ?? null
+        const startedFor = acquiredOwner ? options.startedFor : current?.startedFor
         // A re-attach to a live child keeps the sink that child already writes through.
         const eventSink = acquiredOwner
           ? attemptSink
@@ -207,8 +202,9 @@ async function runAttach(
           child: {
             generation: acquisitionGeneration ?? current?.generation ?? null,
             fence,
-            // A re-attach to a live child keeps what that child already proved.
-            phase: acquiredOwner ? providerChildPhase : (current?.phase ?? 'ready')
+            // A re-attach to a live child keeps what that child already proved, and its cause.
+            phase: acquiredOwner ? providerChildPhase : (current?.phase ?? 'ready'),
+            ...(startedFor === undefined ? {} : { startedFor })
           }
         }
         await recoverStructuredRewind(
