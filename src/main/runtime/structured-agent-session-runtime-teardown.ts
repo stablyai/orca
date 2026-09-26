@@ -10,6 +10,8 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 export type InstalledRuntime = {
   host: StructuredAgentSessionHost
   adapter: { closeAll(): Promise<void> }
+  /** Flushed and closed last, so the settled statuses teardown itself wrote are saved. */
+  savedStatus?: { close(): void }
   /** Resolves after every observed adapter exit has published, and every
    *  recovery callback it raised has settled. */
   waitForRecovery: () => Promise<void>
@@ -65,6 +67,7 @@ export async function tearDownRuntime(
   } catch (error) {
     failures.push(error)
   }
+  installed.savedStatus?.close()
   if (failures.length === 1) {
     throw failures[0]
   }

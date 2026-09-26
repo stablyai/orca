@@ -94,6 +94,8 @@ async function restartWithPersistedTurn(): Promise<StructuredAgentSessionHost> {
   const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
   const host = createHost(store)
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  // A restart owes a row to every listed chat; an unlisted one waits for its first read.
+  await store.setSessionTabVisibility(SESSION, true)
   const body = hostTestMessage('persisted conversation')
   await host.send(CALLER, { envelope: sendEnvelope(store, { body }), body })
   await host.flushAllStreamedEvents()
@@ -112,7 +114,7 @@ describe('structured session restart status publication', () => {
   it('projects the persisted turn of a session restored without a provider', async () => {
     const restarted = await restartWithPersistedTurn()
 
-    await restarted.restoreReadableSessions()
+    await restarted.restoreStartupSessions()
     const events: AgentSessionStatusEvent[] = []
     restarted.subscribeStatus({ id: 'session-list', emit: (event) => events.push(event) })
 
@@ -138,7 +140,7 @@ describe('structured session restart status publication', () => {
     restarted.subscribeStatus({ id: 'session-list', emit: (event) => events.push(event) })
     expect(events).toEqual([{ type: 'snapshot', sessions: [] }])
 
-    await restarted.restoreReadableSessions()
+    await restarted.restoreStartupSessions()
 
     // The restore wiring publishes; without it this list never hears about the session at all.
     expect(events.at(-1)).toEqual({

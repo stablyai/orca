@@ -1,5 +1,10 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithCloseMobileSessionTab } from './orca-runtime-close-mobile-session-tab'
+import { adjudicateAbsentMobileSessionTabClose } from './mobile-session-lifecycle-close-adjudication'
+import {
+  committedMobileSessionTabClose,
+  type MobileSessionTabCloseOutcome
+} from './mobile-session-tab-close-outcome'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
@@ -17,7 +22,7 @@ import { retireStructuredAgentSessionTabFrom } from './structured-agent-session-
 
 export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithCloseMobileSessionTab {
   protected async closeStructuredAgentSessionTab(tab: RuntimeMobileSessionAgentTab): Promise<void> {
-    const host = getStructuredAgentSessionHost()
+    const host = await this.structuredAgentSessionHostForTabClose()
     if (host) {
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(tab.sessionId, false)
@@ -28,6 +33,51 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     if (typeof host?.close === 'function') {
       await host.close(tab.sessionId)
     }
+  }
+
+  /** A close whose tab the runtime snapshot lacks. A restored chat the renderer shows from its saved
+   *  session before the host has published it is still real: its durable record says so, and
+   *  refusing it would leave the next listing to revive the tab the user closed. */
+  protected async adjudicateAbsentSessionTabClose(
+    args: Parameters<typeof adjudicateAbsentMobileSessionTabClose>[0] & { tabId: string }
+  ): Promise<MobileSessionTabCloseOutcome> {
+    const userClose = args.reason === undefined || args.reason === 'user'
+    if (
+      userClose &&
+      !args.addressedByPtyCloseAuthority &&
+      args.tabId.startsWith('agent-session:')
+    ) {
+      const sessionId = args.tabId.slice('agent-session:'.length)
+      const host = await this.structuredAgentSessionHostForTabClose()
+      const record = host?.deps?.store?.getRecord?.(sessionId)
+      // Only a chat the index still lists, in the workspace the close names; anything else is unknown.
+      if (
+        record?.location?.workspaceId === args.worktreeId &&
+        host.getPersistedVisibleSessionTabIndex?.().sessionIds.includes(sessionId) === true
+      ) {
+        await this.closeStructuredAgentSessionTab({
+          type: 'agent-session',
+          id: args.tabId,
+          sessionId
+        })
+        return committedMobileSessionTabClose(this.clientSessionTabSelections, args.worktreeId, [
+          args.tabId
+        ])
+      }
+    }
+    return adjudicateAbsentMobileSessionTabClose(args)
+  }
+
+  /** A close before startup builds the host still owes the durable index its removal, or the tab
+   *  returns at every launch. Bookkeeping only: a failed install must not keep the tab open. */
+  private async structuredAgentSessionHostForTabClose() {
+    if (getStructuredAgentSessionHost() || !this.hasPersistedStructuredAgentSessionStore()) {
+      return getStructuredAgentSessionHost()
+    }
+    await this.ensureStructuredAgentSessionHost().catch((error) => {
+      console.warn('[structured-agent-session] host install failed before a tab close', error)
+    })
+    return getStructuredAgentSessionHost()
   }
 
   /**

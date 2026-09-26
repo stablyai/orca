@@ -19,6 +19,7 @@ import {
   type InstalledRuntime
 } from './structured-agent-session-runtime-teardown'
 import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
+import { AgentSessionSavedStatusStore } from './agent-session-saved-status-store'
 import { createCodexStructuredLaunchResolver } from '../codex/codex-structured-launch-resolution'
 import type { CodexStructuredPermissionPolicy } from '../codex/codex-structured-permission-policy'
 import {
@@ -294,10 +295,12 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude }, async () => {
     await Promise.all([codex.closeAll(), claude.closeAll()])
   })
+  const savedStatus = AgentSessionSavedStatusStore.open(deps.stateDirectory)
   host = new StructuredAgentSessionHost({
     store,
     adapter,
     recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
+    savedStatus,
     journalRoot: deps.stateDirectory,
     claimKeyId: deps.claimKeyId,
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
@@ -319,6 +322,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   return {
     host,
     adapter,
+    savedStatus,
     waitForRecovery: lifecycle.drain
   }
 }

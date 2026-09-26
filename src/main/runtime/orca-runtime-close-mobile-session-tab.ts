@@ -6,7 +6,6 @@ import type {
 } from '../../shared/runtime-types'
 import type { RuntimePtyTabCloseAuthority } from './runtime-terminal-state-records'
 import {
-  adjudicateAbsentMobileSessionTabClose,
   resolveMobileSessionLifecycleCloseContext,
   type MobileSessionLifecycleCloseHost
 } from './mobile-session-lifecycle-close-adjudication'
@@ -86,10 +85,11 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
       observedPtyIds
     })
     if (!snapshot || !tab) {
-      return adjudicateAbsentMobileSessionTabClose({
+      return this.adjudicateAbsentSessionTabClose({
         host: this.getMobileSessionLifecycleCloseHost(),
         context: lifecycleClose,
         worktreeId,
+        tabId,
         snapshot,
         reason: options.reason,
         addressedByPtyCloseAuthority: options.expectedPtyCloseAuthority !== undefined

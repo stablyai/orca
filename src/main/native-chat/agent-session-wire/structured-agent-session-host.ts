@@ -14,10 +14,12 @@ import { createRestartReconciler } from './structured-agent-session-restart-reco
 import type { AgentSessionSubscribeInput } from './structured-agent-session-subscribers'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import * as providerSupport from './structured-agent-session-provider-support'
+import { revealStructuredAgentSession } from './structured-agent-session-reveal'
 import {
-  createStructuredAgentSessionHostRestore,
-  revealStructuredAgentSession
-} from './structured-agent-session-reveal'
+  createStructuredAgentSessionHostStartupPass,
+  type StructuredAgentSessionStartupPass,
+  type StructuredAgentSessionStartupPriority
+} from './structured-agent-session-restart-restore'
 import { structuredAgentSessionOwnerStatus } from './structured-agent-session-owner-status'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
@@ -83,7 +85,7 @@ export class StructuredAgentSessionHost {
   private readonly reconcileLeases: (
     sessionId: string
   ) => Promise<SessionWire.AgentSessionWireRefusal | null>
-  private readonly restore: ReturnType<typeof createStructuredAgentSessionHostRestore>
+  private readonly startupPass: StructuredAgentSessionStartupPass
   private readonly lifetime: StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: ReturnType<
     typeof createStructuredAgentSessionConversationDelivery
@@ -108,7 +110,8 @@ export class StructuredAgentSessionHost {
       store: deps.store,
       probe: (record) => this.runtimeState.probeRecord(record),
       ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
-      now: () => this.now()
+      now: () => this.now(),
+      onReconciled: () => this.startupPass.onReconciled()
     })
     this.conversationDelivery = createStructuredAgentSessionConversationDelivery({
       deps,
@@ -126,15 +129,6 @@ export class StructuredAgentSessionHost {
           structuredAgentSessionConversationFence(deps.store, sessionId)
         ),
       publishRestored: this.clientDelivery.publishRestored
-    })
-    this.restore = createStructuredAgentSessionHostRestore(deps, this.sessions, () => this.now(), {
-      reconcile: this.reconcileLeases,
-      resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
-      serialize: (sessionId, task) => this.serialize(sessionId, task),
-      hasSession: this.hasSession,
-      // Site 10: cannot overwrite a live entry — the restorer returns early on
-      // `hasSession` inside the same serialized step as this `set`.
-      onReadable: this.conversationDelivery.adoptOpened
     })
     this.eventRecovery = new StructuredAgentSessionEventRecovery({
       deps,
@@ -164,6 +158,15 @@ export class StructuredAgentSessionHost {
       open: (sessionId) => this.conversationDelivery.open(sessionId),
       deliveryActive: (sessionId) => this.conversationDelivery.loop.isRunning(sessionId),
       closeStatus: (sessionId, options) => this.clientDelivery.closeSession(sessionId, options)
+    })
+    this.startupPass = createStructuredAgentSessionHostStartupPass(deps, {
+      sessions: this.sessions,
+      step: this.lifetime.startupStep,
+      seed: (sessionId, saved) => this.clientDelivery.seedStatus(sessionId, saved),
+      reconcile: () => this.reconcileLeases('startup'),
+      resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
+      open: (sessionId) => this.conversationDelivery.open(sessionId),
+      now: () => this.now()
     })
     this.runtimeState.startLeaseRenewal()
     this.lifetime.idleSweep.start()
@@ -204,7 +207,9 @@ export class StructuredAgentSessionHost {
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
     providerSupport.adapterSupportsCreate(this.deps.adapter, location, agent)
 
-  listSessionTabs = () => sessionTabs.listStructuredAgentSessionTabs(this.sessions)
+  /** The tabs the durable index lists, from records alone: no journal is read. */
+  listPersistedSessionTabs = (sessionIds: readonly string[]) =>
+    sessionTabs.listPersistedStructuredAgentSessionTabs(this.deps, sessionIds)
   getPersistedVisibleSessionTabIndex = () => this.deps.store.getVisibleSessionTabIndex()
 
   setSessionTabVisibility = async (sessionId: string, visible: boolean): Promise<void> => {
@@ -222,8 +227,9 @@ export class StructuredAgentSessionHost {
     }
   }
 
-  restoreReadableSessions = (sessionIds?: readonly string[]): Promise<void> =>
-    this.restore.restoreReadableSessions(sessionIds)
+  /** The one startup pass: list status from saved copies, then settle and open what that left. */
+  restoreStartupSessions = (priority?: StructuredAgentSessionStartupPriority): Promise<void> =>
+    this.startupPass.run(priority)
 
   /** Make one persisted session addressable again; see `structured-agent-session-reveal`. */
   revealSession = (sessionId: string): Promise<StructuredAgentSessionReveal> =>

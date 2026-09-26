@@ -224,7 +224,7 @@ describe('structured session runtime provider-exit wiring', () => {
       openCodexConnection: openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
-    await restarted.restoreReadableSessions()
+    await restarted.restoreStartupSessions()
     const history = await restarted.history({ sessionId: SESSION, direction: 'tail' })
     expect(history.ok && history.page.items.some((item) => item.body.kind === 'status')).toBe(false)
     expect(restarted.deps.store.getRecord(SESSION)?.providerHandleChain.at(-1)?.handle).toEqual({

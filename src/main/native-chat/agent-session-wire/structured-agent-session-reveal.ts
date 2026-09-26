@@ -11,14 +11,10 @@
 // Retry, so the tab is worth publishing either way.
 
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
-import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
-import { StructuredAgentSessionRestartRestoreGate } from './structured-agent-session-restart-restore-gate'
 import type {
   StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession,
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
-import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 
 /** Throws its refusal as the code itself. */
 export async function revealStructuredAgentSession(
@@ -47,36 +43,5 @@ export async function revealStructuredAgentSession(
     workspaceId: record.location.workspaceId,
     agent: record.provider,
     readable
-  }
-}
-
-/** The host's startup readable-restore sweep: reconcile, resolve, then open each chat's journal. */
-export function createStructuredAgentSessionHostRestore(
-  deps: StructuredAgentSessionHostDeps,
-  sessions: Map<string, StructuredAgentSessionHostSession>,
-  now: () => number,
-  wiring: Omit<
-    ConstructorParameters<typeof StructuredAgentSessionReadableRestorer>[0],
-    'openDeps' | 'supportsRecord' | 'retrySettlement'
-  >
-): {
-  restoreReadableSessions: (sessionIds?: readonly string[]) => Promise<void>
-} {
-  const restorer = new StructuredAgentSessionReadableRestorer({
-    openDeps: deps,
-    supportsRecord: (record) => adapterSupportsRecord(deps.adapter, record),
-    // Runs once the restorer indexed the conversation, so it retries into that one handle.
-    retrySettlement: (sessionId) =>
-      retryPendingStructuredAgentSessionSettlement({
-        deps,
-        sessionId,
-        openJournal: async () => sessions.get(sessionId)?.journal ?? null,
-        now
-      }),
-    ...wiring
-  })
-  const gate = new StructuredAgentSessionRestartRestoreGate()
-  return {
-    restoreReadableSessions: (sessionIds) => gate.run(() => restorer.restore(sessionIds))
   }
 }

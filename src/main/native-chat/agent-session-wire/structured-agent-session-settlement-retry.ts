@@ -1,3 +1,4 @@
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLeaseStore } from './structured-agent-session-lease-release'
@@ -8,6 +9,16 @@ import {
   unfinishedStructuredAgentSessionWorkWasInterrupted,
   type DeadGenerationJournal
 } from './structured-agent-session-dead-generation-settlement'
+
+/** Whether a restart or an exit left this record's turn owed a settlement. The one definition:
+ *  every trigger that retries (the attach, a start, the startup pass) asks this. */
+export function structuredAgentSessionOwesSettlement(
+  record: AgentSessionRecord | null
+): record is AgentSessionRecord & {
+  lease: AgentSessionRecord['lease'] & { settlementRetryId: string }
+} {
+  return record?.lease.settlementRetryRequired === true && !!record.lease.settlementRetryId
+}
 
 /** Retries a durable provider-exit settlement against the conversation's own journal. The retry is
  *  for an earlier child, so it writes at the record's fence and leaves the conversation — and any
@@ -20,7 +31,7 @@ export async function retryPendingStructuredAgentSessionSettlement(input: {
   now: () => number
 }): Promise<boolean> {
   const record = input.deps.store.getRecord(input.sessionId)
-  if (!record?.lease.settlementRetryRequired || !record.lease.settlementRetryId) {
+  if (!structuredAgentSessionOwesSettlement(record)) {
     return true
   }
   let journal: AgentSessionJournal | null
@@ -50,7 +61,7 @@ export async function retryLoadedStructuredAgentSessionSettlement(input: {
   now: () => number
 }): Promise<boolean> {
   const record = input.deps.store.getRecord(input.sessionId)
-  if (!record?.lease.settlementRetryRequired || !record.lease.settlementRetryId) {
+  if (!structuredAgentSessionOwesSettlement(record)) {
     return true
   }
   const { journal } = input

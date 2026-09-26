@@ -122,7 +122,7 @@ it('keeps the offer when a tabbed chat is restored at boot (R-05)', async () => 
   const { host, store, root, acquire } = await offered()
   await store.setSessionTabVisibility(SESSION, true)
 
-  await host.restoreReadableSessions([SESSION])
+  await host.restoreStartupSessions()
 
   expect(acquire).not.toHaveBeenCalled()
   expect(await host.restartResume.list()).toHaveLength(1)
