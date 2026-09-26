@@ -61,6 +61,7 @@ export function createWorkspaceTerminalReconnectActions(
         if (tabsToReconnect.length === 0) {
           continue
         }
+        const reconnectPtyIdByTabId = new Map<string, string>()
         for (const tab of tabsToReconnect) {
           const tabId = tab.id
           const layout = terminalLayoutsByTabId[tabId]
@@ -87,15 +88,15 @@ export function createWorkspaceTerminalReconnectActions(
             reconnectedPtyIdsByTabId[tabId] = allPtyIds
           }
           if (tabLevelPtyId) {
-            reconnectedTabsByWorktree ??= { ...tabsByWorktree }
-            const nextTabs = reconnectedTabsByWorktree[worktreeId]
-            if (!nextTabs) {
-              continue
-            }
-            reconnectedTabsByWorktree[worktreeId] = nextTabs.map((t) =>
-              t.id === tabId ? { ...t, ptyId: tabLevelPtyId } : t
-            )
+            reconnectPtyIdByTabId.set(tabId, tabLevelPtyId)
           }
+        }
+        if (reconnectPtyIdByTabId.size > 0) {
+          reconnectedTabsByWorktree ??= { ...tabsByWorktree }
+          reconnectedTabsByWorktree[worktreeId] = tabs.map((tab) => {
+            const ptyId = reconnectPtyIdByTabId.get(tab.id)
+            return ptyId ? { ...tab, ptyId } : tab
+          })
         }
       }
       // Why: keep deferred SSH session IDs for post-cleanup reconnect.
