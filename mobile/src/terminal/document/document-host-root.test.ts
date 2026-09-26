@@ -224,3 +224,110 @@ describe('two terminal documents on one page', () => {
     two.started.stop()
   })
 })
+
+/** A started document over a measured grid whose cells scale with the font, as xterm's do. */
+function startMeasuredDocument() {
+  document.body.innerHTML = ''
+  const host = plantHost('pinch-host')
+  const engine = terminalDocumentDouble()
+  const parsedWrites: Array<() => void> = []
+  const grid = Object.assign(engine.terminal, {
+    cols: 80,
+    rows: 24,
+    _core: {
+      _renderService: {
+        get dimensions() {
+          const k = grid.options.fontSize / 13
+          return { css: { cell: { width: 7.5 * k, height: 15 * k } } }
+        }
+      }
+    }
+  })
+  grid.resize = (cols: number, rows: number) => {
+    grid.cols = cols
+    grid.rows = rows
+  }
+  grid.onWriteParsed = (listener: () => void) => {
+    parsedWrites.push(listener)
+    return { dispose() {} }
+  }
+  const posted: Array<Record<string, unknown>> = []
+  const started = createTerminalDocument({
+    root: host,
+    postToHost: (message) => {
+      posted.push(message)
+    },
+    hasEngine: () => true,
+    installHostTransport: () => () => {},
+    installErrorReporter: () => () => {},
+    paintDocumentBackground: () => {},
+    viewportRect: () => ({ left: 0, top: 0, width: 412, height: 600 }),
+    createTerminal: () => grid,
+    createUnicode11Addon: () => null,
+    createWebglAddon: () => null
+  })
+  started.send({ type: 'init', cols: 80, rows: 24, initialData: '', preserveScroll: false })
+  const write = () => parsedWrites.forEach((listener) => listener())
+  return { started, posted, surface: surfaceOf(host), write }
+}
+
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+async function settle() {
+  for (let frame = 0; frame < 10; frame++) {
+    await nextFrame()
+  }
+}
+
+const metricsOf = (posted: Array<Record<string, unknown>>) =>
+  posted.filter((message) => message.type === 'keyboard-avoidance-metrics')
+
+/** A touch on the surface itself, where the pinch listeners are; `fireTouch` reaches only `document`. */
+function fireSurfaceTouch(type: string, surface: HTMLElement, xs: number[]) {
+  const event = new Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperty(event, 'touches', {
+    value: xs.map((x, identifier) => ({ identifier, clientX: x, clientY: 10, target: surface }))
+  })
+  surface.dispatchEvent(event)
+}
+
+/** Two fingers 20px apart, spread to `spread`px, a parsed write mid-gesture, then both lift. */
+function pinchTo(doc: ReturnType<typeof startMeasuredDocument>, spread: number) {
+  fireSurfaceTouch('touchstart', doc.surface, [10, 30])
+  fireSurfaceTouch('touchmove', doc.surface, [10, 10 + spread])
+  doc.write()
+  fireSurfaceTouch('touchend', doc.surface, [])
+}
+
+/**
+ * The lift's row pitch is read off the scale as drawn, and a pinch moves that scale with no fit
+ * to report it. A write mid-gesture emits the transient pitch; the release must replace it.
+ */
+describe('keyboard-avoidance metrics across a pinch', () => {
+  it('reports the at-rest pitch after a pinch that releases onto the same preset', async () => {
+    const doc = startMeasuredDocument()
+    await settle()
+    const atRest = metricsOf(doc.posted).at(-1)?.rowPitch
+    expect(atRest).toBeGreaterThan(0)
+
+    pinchTo(doc, 21)
+    await settle()
+
+    const metrics = metricsOf(doc.posted)
+    expect(metrics.at(-1)?.rowPitch).toBe(atRest)
+    doc.started.stop()
+  })
+
+  it('reports a release that changes the preset once, through the refit', async () => {
+    const doc = startMeasuredDocument()
+    await settle()
+    const before = metricsOf(doc.posted).length
+
+    pinchTo(doc, 30)
+    const afterWrite = metricsOf(doc.posted).length
+    await settle()
+
+    expect(afterWrite).toBe(before + 1)
+    expect(metricsOf(doc.posted).length).toBe(afterWrite + 1)
+    doc.started.stop()
+  })
+})

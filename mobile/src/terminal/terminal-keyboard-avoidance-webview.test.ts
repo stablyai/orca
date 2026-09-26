@@ -197,19 +197,21 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     // Four places change the buffer's geometry, and each owes a fresh emit after it: a stale
     // content-bottom row is what lifts the keyboard over the wrong line. Read from each module's
     // own source, so a fifth site added in a new module is not silently uncovered.
+    // A text-scale resize reports through the fit it schedules, whose commit emits (pinned below).
+    const directEmit = 'emitKeyboardAvoidanceMetrics(scope)'
     const blocks = [
-      ['terminal-init', 'export function resize('],
-      ['reflow', 'export function reflow('],
-      ['host-message-router', "} else if (msg.type === 'clear') {"],
-      ['text-scaling', 'export function applyTextScale(']
+      ['terminal-init', 'export function resize(', directEmit],
+      ['reflow', 'export function reflow(', directEmit],
+      ['host-message-router', "} else if (msg.type === 'clear') {", directEmit],
+      ['text-scaling', 'export function applyTextScale(', 'applyFitScale(scope']
     ] as const
 
-    for (const [module, opener] of blocks) {
+    for (const [module, opener, emit] of blocks) {
       const source = documentModuleSource(module)
       const start = source.indexOf(opener)
       expect(start, `${module} no longer carries ${opener}`).toBeGreaterThanOrEqual(0)
       const block = source.slice(start, source.indexOf('\n}', start))
-      const emitAt = block.indexOf('emitKeyboardAvoidanceMetrics(scope)')
+      const emitAt = block.indexOf(emit)
       const geometryAt = block.includes('.resize(')
         ? block.indexOf('.resize(')
         : block.indexOf('.reset(')

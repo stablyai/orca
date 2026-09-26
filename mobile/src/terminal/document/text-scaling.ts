@@ -4,7 +4,6 @@ import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
 import { applyFitScale, getCellHeight, MIN_FIT_COLS } from './fit-scale'
 import { getCellWidth } from './viewport-transform'
-import { emitKeyboardAvoidanceMetrics } from './keyboard-avoidance-metrics'
 
 // Why: init() flips ready false on every re-init (live width reflow included)
 // while the old surface stays visible; a document-scoped latch drives the
@@ -56,15 +55,16 @@ const TERMINAL_FONT_FALLBACKS =
 // the new cell metrics so the text shows at its true size immediately. RN's
 // refit (measure → updateViewport) then makes the server reflow the PTY to the
 // same column count so the shell rewraps. cell metrics update on the frame
-// after fontSize changes, so the resize/fit is deferred one rAF.
+// after fontSize changes, so the resize/fit is deferred one rAF. Returns whether that refit (which
+// reports the keyboard-avoidance metrics) was scheduled.
 export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
   scope.currentTextScale = scale
   if (!scope.term) {
-    return
+    return false
   }
   const px = fontPxForScale(scale)
   if (scope.term.options.fontSize === px) {
-    return
+    return false
   }
   scope.term.options.fontSize = px
   // Ruling 21: the generation this frame was scheduled under. `scope.term` alone is not enough —
@@ -85,10 +85,10 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
       }
       const rows = Math.max(8, Math.floor(scope.viewportRect().height / cellH))
       scope.term.resize(cols, rows)
-      emitKeyboardAvoidanceMetrics(scope)
     }
     applyFitScale(scope, 'text-scale')
   })
+  return true
 }
 
 export function startTextScaling(scope: TerminalDocumentScope) {
