@@ -156,7 +156,13 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'storage',
     mutation: false,
-    panel: false,
+    // Why panel-callable: a panel currently has no way to read ANY state its own worker computed,
+    // so a plugin panel can only ever render static markup. This is the narrowest possible fix —
+    // read-only, plugin-private scope, already gated on the `storage` capability, and strictly
+    // less powerful than `terminal.sendText`, which panels may already call and which mutates a
+    // terminal. Writes (`storage.set`/`delete`) deliberately stay worker-only, so a panel can
+    // observe state but never author it.
+    panel: true,
     params: storageGetParams,
     result: storageGetResult
   }),
