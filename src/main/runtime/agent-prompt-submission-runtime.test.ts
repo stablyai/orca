@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
+import { listRegisteredPtys, registerPty, unregisterPty } from '../memory/pty-registry'
 import {
   AGENT_PROMPT_TEST_WORKTREE_PATH,
   createAgentPromptSubmissionRuntime
@@ -8,6 +9,11 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
 const createPromptRuntime = createAgentPromptSubmissionRuntime
+
+/** Prompt activity the OpenCode session binder reads; absent until one arrives. */
+function promptActivityAt(ptyId: string): number | undefined {
+  return listRegisteredPtys().find((pty) => pty.ptyId === ptyId)?.lastInputAtMs
+}
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -48,6 +54,72 @@ describe('agent prompt submission runtime', () => {
 
     await expect(submission).resolves.toMatchObject({ accepted: true })
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('records an Orca-delivered prompt as prompt activity on the pane', async () => {
+    vi.useFakeTimers()
+    // The fixture's fake pty controller bypasses the spawn path that normally
+    // registers a pane, so register it here — the stamp only lands on a pane
+    // the registry knows, exactly as in production.
+    registerPty({
+      ptyId: 'pty-prompt',
+      worktreeId: null,
+      sessionId: null,
+      paneKey: 'tab:leaf',
+      pid: 1
+    })
+    try {
+      const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+        if (data === '\r') {
+          runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+        }
+      })
+
+      const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+      await vi.runAllTimersAsync()
+
+      await expect(submission).resolves.toMatchObject({ accepted: true })
+      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+      // A prompt Orca delivers is not a keystroke, so nothing in the renderer
+      // path records it. Without this the pane that submitted the prompt shows
+      // no prompt activity and OpenCode's same-directory tie could hand its
+      // session to a sibling pane that merely happened to be typed into.
+      expect(promptActivityAt('pty-prompt')).toBeTypeOf('number')
+    } finally {
+      unregisterPty('pty-prompt')
+    }
+  })
+
+  it('does not record prompt activity when the prompt is pasted but never submitted', async () => {
+    vi.useFakeTimers()
+    registerPty({
+      ptyId: 'pty-prompt',
+      worktreeId: null,
+      sessionId: null,
+      paneKey: 'tab:leaf',
+      pid: 1
+    })
+    try {
+      const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+        if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+          runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
+        }
+      })
+      const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+      const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
+
+      await vi.runAllTimersAsync()
+
+      await rejected
+      // The paste reached the PTY but the Enter never did, so nothing was
+      // submitted. Crediting this pane would let it win a same-directory tie
+      // for a session it never created — the wrong-pane outcome this exists
+      // to prevent.
+      expect(writes).not.toContain('\r')
+      expect(promptActivityAt('pty-prompt')).toBeUndefined()
+    } finally {
+      unregisterPty('pty-prompt')
+    }
   })
 
   it('accepts a working-to-idle cycle completed before the first poll', async () => {

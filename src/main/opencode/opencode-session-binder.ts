@@ -5,6 +5,7 @@ import {
 } from '../../shared/agent-hook-listener/opencode-session-registry'
 import {
   correlateOpenCodeSessionOwners,
+  openCodeDirectoryMatches,
   type CorrelatedClient,
   type CorrelatedPane,
   type CorrelatedSession,
@@ -35,6 +36,14 @@ export type BinderPaneSnapshot = {
   directory: string | null
   worktreeId: string | null
   shellPid: number | null
+  /**
+   * ms epoch of the pane's last prompt activity (renderer keystroke, or a
+   * prompt Orca delivered host-side), null when neither has happened since it
+   * registered. Breaks same-directory ties.
+   */
+  lastInputAtMs: number | null
+  /** The stamp `lastInputAtMs` replaced; see `PtyRegistration`. */
+  previousInputAtMs: number | null
 }
 
 /** One session store row feeding a binder round. */
@@ -157,6 +166,22 @@ function toCorrelatedClients(
   return clients
 }
 
+/**
+ * The two newest stamps among the rows describing one pane, newest first. A
+ * remint can leave two rows for the same pane and the live one starts with no
+ * history, so the replaced row's stamps are the only record of what the human
+ * typed there.
+ */
+function newestTwoStamps(...values: readonly (number | null | undefined)[]): {
+  last: number | null
+  previous: number | null
+} {
+  const sorted = values
+    .filter((value): value is number => typeof value === 'number')
+    .sort((left, right) => right - left)
+  return { last: sorted[0] ?? null, previous: sorted[1] ?? null }
+}
+
 /** Pure round core: correlate unbound sessions against panes and clients. */
 export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult {
   // Why dedupe by key, newest wins: remints and reattachments can leave a
@@ -166,7 +191,26 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
   // worktree.
   const paneByKey = new Map<string, CorrelatedPane>()
   for (const pane of deps.panes) {
-    paneByKey.set(pane.paneKey, { paneKey: pane.paneKey, directory: pane.directory })
+    const previous = paneByKey.get(pane.paneKey)
+    // Why the directory check: a pane that moved (detached into another tab,
+    // reminted against a different root) must not inherit input recorded under
+    // its old directory, or a session in the new one could win a tie on
+    // keystrokes that never happened there.
+    const carriedInput =
+      previous && openCodeDirectoryMatches(previous.directory, pane.directory)
+        ? newestTwoStamps(
+            previous.lastInputAtMs,
+            previous.previousInputAtMs,
+            pane.lastInputAtMs,
+            pane.previousInputAtMs
+          )
+        : { last: pane.lastInputAtMs, previous: pane.previousInputAtMs }
+    paneByKey.set(pane.paneKey, {
+      paneKey: pane.paneKey,
+      directory: pane.directory,
+      lastInputAtMs: carriedInput.last,
+      previousInputAtMs: carriedInput.previous
+    })
   }
   const panes = [...paneByKey.values()]
   const clients = toCorrelatedClients(deps.processes, deps.panes, deps.nowMs)
@@ -303,7 +347,9 @@ export function listBinderPaneSnapshots(): BinderPaneSnapshot[] {
       paneKey: pty.paneKey,
       directory: parsed?.worktreePath ?? null,
       worktreeId: pty.worktreeId,
-      shellPid: pty.pid
+      shellPid: pty.pid,
+      lastInputAtMs: pty.lastInputAtMs ?? null,
+      previousInputAtMs: pty.previousInputAtMs ?? null
     })
   }
   return snapshots

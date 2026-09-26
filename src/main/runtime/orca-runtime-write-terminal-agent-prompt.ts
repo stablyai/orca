@@ -20,6 +20,7 @@ import {
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
+import { notePtyInput } from '../memory/pty-registry'
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
   protected async writeTerminalAgentPrompt(
@@ -65,6 +66,16 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       if (!this.ptyController?.write(ptyId, initialWrite)) {
         throw new Error('terminal_not_writable')
       }
+      // Why: a prompt Orca delivers is not a keystroke, so the renderer path
+      // never records it. Without this the pane that submitted the prompt shows
+      // no prompt activity, and OpenCode's same-directory tie could hand its
+      // session to a sibling pane that merely happened to be typed into.
+      // Joined frame only: on the separate-submit path nothing is submitted
+      // until the Enter below, and a failure in between must not credit a pane
+      // that never submitted anything.
+      if (submitWithPaste) {
+        notePtyInput(ptyId, Date.now())
+      }
     } catch (error) {
       renderGate?.dispose()
       throw error
@@ -106,6 +117,9 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT)) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
+      // The prompt is submitted by this write, so this is the first moment the
+      // pane can honestly claim prompt activity.
+      notePtyInput(ptyId, Date.now())
     }
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
     if (!options.acceptQueued || !options.requestId) {
