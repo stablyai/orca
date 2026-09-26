@@ -38,6 +38,12 @@ import {
   type AgentSessionRestartTask
 } from '../../../shared/agent-session-restart-activity'
 import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
+import {
+  isStructuredAgentSessionCommandEntry,
+  isStructuredAgentSessionCommandTurn
+} from '../../../shared/structured-agent-session-command-entry'
 import {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn
@@ -84,12 +90,31 @@ function structuredAgentSessionResumeWork(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[]
 ): AgentSessionResumeWork | null {
+  const bodies = new Map(items.map((item) => [item.itemId, item.body]))
+  const bodyOf = (itemId: string) => bodies.get(itemId)
+  // A conversation command in flight is nothing to resume: the user ran it, not the agent.
+  const newest = newestStructuredAgentSessionTurn(items)
+  const inFlightSubmission = pendingSubmissionInFlight(submissions)
+  if (
+    (newest?.state === 'running' && isStructuredAgentSessionCommandTurn(newest, bodyOf)) ||
+    (inFlightSubmission &&
+      isStructuredAgentSessionCommandEntry(
+        bodyOf(agentJournalSubmissionKey(inFlightSubmission.clientMessageId))
+      ))
+  ) {
+    return null
+  }
   const inFlight = structuredAgentSessionWorkInFlight(items, submissions)
   if (inFlight) {
     return inFlight
   }
-  const newest = newestStructuredAgentSessionTurn(items)
-  return newest ? { kind: 'turn', id: newest.turnId } : null
+  // A settled lead whose children were the work anchors on its last real turn.
+  const lastRequest = items.findLast((item) => {
+    const turn = readAgentJournalTurn(item.body)
+    return turn !== null && !isStructuredAgentSessionCommandTurn(turn, bodyOf)
+  })
+  const turn = readAgentJournalTurn(lastRequest?.body)
+  return turn ? { kind: 'turn', id: turn.turnId } : null
 }
 
 function boundedLabel(text: string | undefined): string {

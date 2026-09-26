@@ -3,7 +3,7 @@
 //
 // A request is either a turn, whose record carries the provider's verdict, or a send that never
 // became one because the agent or its start refused it. A send inside a running turn (a steer)
-// is not a request of its own: the turn it joined answers for it.
+// is not a request of its own: the turn it joined answers for it. Nor is a conversation command.
 
 import type {
   AgentJournalRenderItem,
@@ -16,6 +16,10 @@ import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
 import { dispatchRejectionVerdict } from './structured-agent-session-dispatch-rejection'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
+import {
+  isStructuredAgentSessionCommandEntry,
+  structuredAgentSessionCommandTurnItemIds
+} from './structured-agent-session-command-entry'
 
 export type StructuredAgentSessionLatestRequest = {
   /** Null while the turn runs, and for a turn whose end carried no verdict. */
@@ -32,9 +36,16 @@ export function latestStructuredAgentSessionRequest(
   submissions: readonly AgentJournalSubmission[]
 ): StructuredAgentSessionLatestRequest | null {
   const rejected = rejectedSubmissionsByItem(submissions)
+  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
-    if (!item || !isRootAgentJournalItem(item)) {
+    // A conversation command is not a request: the verdict stays the last real request's.
+    if (
+      !item ||
+      !isRootAgentJournalItem(item) ||
+      commandTurns.has(item.itemId) ||
+      isStructuredAgentSessionCommandEntry(item.body)
+    ) {
       continue
     }
     const turn = readAgentJournalTurn(item.body)

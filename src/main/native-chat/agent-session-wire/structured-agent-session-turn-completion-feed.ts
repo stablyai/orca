@@ -10,6 +10,7 @@
 // needs, a completion is an edge that has already passed. Keeping a queue would create a durable
 // obligation with nothing to retire it.
 
+import { isStructuredAgentSessionCommandTurn } from '../../../shared/structured-agent-session-command-entry'
 import type { AgentJournalTurnLifecycle } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { readAgentJournalTurnOutcome } from '../../../shared/agent-session-turn-record'
@@ -27,7 +28,7 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
 /** Only the newest-turn reader and cursor are needed here; asking for the whole journal would overstate it. */
 type CompletionFeedCursor = { epoch: string; sequence: number }
 
-type CompletionFeedJournal = Pick<AgentSessionJournal, 'newestTurn' | 'cursor'>
+type CompletionFeedJournal = Pick<AgentSessionJournal, 'newestTurn' | 'cursor' | 'itemBody'>
 
 type CompletionFeedSession = {
   journal: CompletionFeedJournal
@@ -115,6 +116,11 @@ export class StructuredAgentSessionTurnCompletionFeed {
       return
     }
     baseline.sequence = cursor.sequence
+    // A conversation command is no request of the user's: it neither announces nor moves the mark
+    // off the last real turn.
+    if (isStructuredAgentSessionCommandTurn(turn, source.itemBody)) {
+      return
+    }
     if (!settled) {
       // A running turn clears the mark, so this detector fires on each running → settled
       // transition rather than on an id it happens not to have seen.

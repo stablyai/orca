@@ -1,4 +1,9 @@
 import {
+  isStructuredAgentSessionCommandEntry,
+  isStructuredAgentSessionCommandRow,
+  structuredAgentSessionCommandTurnItemIds
+} from './structured-agent-session-command-entry'
+import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,
   normalizePromptField
@@ -253,7 +258,8 @@ export function latestStructuredAgentSessionUserItem(
     if (
       item?.body.kind === 'message' &&
       item.body.role === 'user' &&
-      isRootAgentJournalItem(item)
+      isRootAgentJournalItem(item) &&
+      !isStructuredAgentSessionCommandEntry(item.body)
     ) {
       return item
     }
@@ -268,10 +274,12 @@ export function latestStructuredAgentSessionUserItem(
 export function latestStructuredAgentSessionAssistantMessage(
   items: readonly AgentJournalRenderItem[]
 ): string {
+  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     const body = item?.body
-    if (!isRootAgentJournalItem(item)) {
+    // A command and what its turn produced are not the conversation's latest answer.
+    if (!isRootAgentJournalItem(item) || isStructuredAgentSessionCommandRow(item, commandTurns)) {
       continue
     }
     if (body?.kind === 'message' && body.role === 'user') {

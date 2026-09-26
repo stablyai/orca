@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentJournalTurnLifecycle } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalTurnLifecycle
+} from '../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-wire'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
 
@@ -9,6 +12,8 @@ const LOCATION = {
   workspaceId: 'workspace-1',
   workspaceKind: 'git-worktree'
 } as const
+
+const COMMAND_ENTRY = 'orca:command-entry'
 
 function turn(
   turnId: string,
@@ -30,7 +35,12 @@ function harness(): {
   let cursor = { epoch: 'epoch-1', sequence: 0 }
   const journal = {
     newestTurn: () => current,
-    cursor: () => cursor
+    cursor: () => cursor,
+    // The only entry a turn here names by `userItemId` is the `/compact` command's.
+    itemBody: (itemId: string): AgentJournalItemBody | null =>
+      itemId === COMMAND_ENTRY
+        ? { kind: 'message', role: 'user', blocks: [], command: { name: 'compact' } }
+        : null
   }
   const sessions = new Map([['session-1', { journal, params: { location: LOCATION } }]])
   const feed = new StructuredAgentSessionTurnCompletionFeed({ sessions, now: () => 1_700 })
@@ -259,5 +269,26 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
     h.feed.subscribe({ id: 'other', emit })
     h.feed.observe('session-unknown')
     expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('announces no /compact turn and keeps its mark on the last real turn (B6)', () => {
+    const h = harness()
+    h.listen()
+    h.setTurn(turn('turn-1', 'completed', 'success'))
+    h.setCursor({ epoch: 'epoch-1', sequence: 1 })
+    h.observe()
+    const command = { ...turn('compact:1', 'running'), userItemId: COMMAND_ENTRY }
+    h.setTurn(command)
+    h.setCursor({ epoch: 'epoch-1', sequence: 2 })
+    h.observe()
+    h.setTurn({ ...command, state: 'completed', outcome: 'success' })
+    h.setCursor({ epoch: 'epoch-1', sequence: 3 })
+    h.observe()
+    expect(h.events).toEqual([])
+    // The real turn is still the one on record, so its republish announces nothing either.
+    h.setTurn(turn('turn-1', 'completed', 'success'))
+    h.setCursor({ epoch: 'epoch-1', sequence: 4 })
+    h.observe()
+    expect(h.events).toEqual([])
   })
 })
