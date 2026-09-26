@@ -10,6 +10,10 @@ export type AgentSkillSetupPanelProps = {
   description: ReactNode
   command: string
   installedCommand?: string
+  terminalCommands?: {
+    install?: string
+    update?: string
+  }
   terminalTitle: string
   terminalAriaLabel: string
   terminalWorktreeId: string

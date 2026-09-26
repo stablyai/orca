@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/computer-use-permissions-types'
 import {
   buildAgentFeatureSkillInstallCommand,
+  buildUnattendedAgentFeatureSkillInstallCommand,
   COMPUTER_USE_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME,
@@ -16,9 +17,12 @@ import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY
 } from '@/lib/orchestration-setup-state'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
   buildOnboardingFeatureSetupClipboardText,
+  buildOnboardingFeatureSetupTerminalCommand,
   createOnboardingFeatureSetupDeps,
   onboardingFeatureSetupRunTelemetry,
   onboardingFeatureSetupTelemetryFeature,
@@ -36,6 +40,15 @@ const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_LINEAR_SKILL_NAME
 ])
 const ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+  ORCHESTRATION_SKILL_NAME
+])
+const ALL_SKILL_TERMINAL_COMMAND = buildUnattendedAgentFeatureSkillInstallCommand([
+  ORCA_CLI_SKILL_NAME,
+  COMPUTER_USE_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME,
+  ORCA_LINEAR_SKILL_NAME
+])
+const ORCHESTRATION_ONLY_SKILL_TERMINAL_COMMAND = buildUnattendedAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME
 ])
 
@@ -129,6 +142,38 @@ describe('onboarding feature setup runner', () => {
     )
   })
 
+  it('keeps clipboard interactive and prepares an unattended terminal command', () => {
+    const selection: OnboardingFeatureSetupSelection = {
+      browserUse: true,
+      computerUse: true,
+      orchestration: true,
+      linearTickets: true
+    }
+
+    expect(buildOnboardingFeatureSetupClipboardText(selection)).toBe(ALL_SKILL_INSTALL_COMMAND)
+    expect(buildOnboardingFeatureSetupClipboardText(selection)).not.toContain('-y')
+    expect(buildOnboardingFeatureSetupTerminalCommand(selection)).toBe(ALL_SKILL_TERMINAL_COMMAND)
+    expect(buildOnboardingFeatureSetupTerminalCommand(selection)).toBe(
+      `${ALL_SKILL_INSTALL_COMMAND} --agent universal -y`
+    )
+  })
+
+  it('routes the unattended command through feature-wall inline terminals', () => {
+    const browserAction = readFileSync(
+      join(import.meta.dirname, '../feature-wall/FeatureWallBrowserAction.tsx'),
+      'utf8'
+    )
+    const capabilitiesAction = readFileSync(
+      join(import.meta.dirname, '../feature-wall/AgentCapabilitiesSetupAction.tsx'),
+      'utf8'
+    )
+
+    expect(browserAction).toContain('setCommand(result.skillTerminalCommand)')
+    expect(browserAction).toContain('command={command}')
+    expect(capabilitiesAction).toContain('setFeatureSetupCommand(result.skillTerminalCommand)')
+    expect(capabilitiesAction).toContain('command={props.featureSetupCommand}')
+  })
+
   it('keeps the copied command valid for the WSL target shell', () => {
     const text = buildOnboardingFeatureSetupClipboardText(
       { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
@@ -216,6 +261,7 @@ describe('onboarding feature setup runner', () => {
         cliTouched: true,
         skillCommandsCopied: false,
         skillInstallCommand: ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND,
+        skillTerminalCommand: ORCHESTRATION_ONLY_SKILL_TERMINAL_COMMAND,
         computerUsePermissionsOpened: false,
         warnings: [{ featureId: 'skills', message: 'Clipboard unavailable' }]
       })
@@ -258,6 +304,7 @@ describe('onboarding feature setup runner', () => {
       cliTouched: false,
       skillCommandsCopied: true,
       skillInstallCommand: ALL_SKILL_INSTALL_COMMAND,
+      skillTerminalCommand: ALL_SKILL_TERMINAL_COMMAND,
       computerUsePermissionsOpened: true,
       warnings: []
     })
@@ -287,6 +334,7 @@ describe('onboarding feature setup runner', () => {
     expect(result.selectedIds).toEqual(['orchestration'])
     expect(result.skillCommandsCopied).toBe(true)
     expect(result.skillInstallCommand).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
+    expect(result.skillTerminalCommand).toBe(ORCHESTRATION_ONLY_SKILL_TERMINAL_COMMAND)
     expect(result.computerUsePermissionsOpened).toBe(false)
     expect(deps.getCliStatus).toHaveBeenCalledTimes(1)
     expect(deps.showCliRegistrationPrompt).not.toHaveBeenCalled()
@@ -311,6 +359,7 @@ describe('onboarding feature setup runner', () => {
       cliTouched: false,
       skillCommandsCopied: false,
       skillInstallCommand: null,
+      skillTerminalCommand: null,
       computerUsePermissionsOpened: false,
       warnings: []
     })
@@ -336,6 +385,7 @@ describe('onboarding feature setup runner', () => {
 
     expect(result.skillCommandsCopied).toBe(false)
     expect(result.skillInstallCommand).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
+    expect(result.skillTerminalCommand).toBe(ORCHESTRATION_ONLY_SKILL_TERMINAL_COMMAND)
     expect(result.warnings).toEqual([
       {
         featureId: 'skills',
