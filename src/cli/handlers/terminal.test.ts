@@ -351,9 +351,54 @@ describe('terminal send CLI', () => {
       json: true
     })
 
-    expect(JSON.parse(String(log.mock.calls[0]?.[0])).result.warnings).toEqual([
-      expect.stringContaining('no turn start was observed')
-    ])
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      result: {
+        warnings: [expect.stringContaining('no turn start was observed')],
+        send: { accepted: true },
+        delivery: { verdict: 'input_accepted' }
+      }
+    })
+    expect(process.exitCode).not.toBe(1)
+  })
+
+  it('names a proven turn in JSON without treating acceptance as that proof', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        send: {
+          handle: 'term-1',
+          accepted: true,
+          bytesWritten: 7,
+          prompt: {
+            requestId: 'prompt-started',
+            stages: ['input_accepted', 'turn_started'],
+            provider: 'codex',
+            observation: 'supported',
+            processIncarnation: 'inc-1',
+            generation: 1,
+            baselineWorkingSequence: 0
+          }
+        }
+      }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    process.exitCode = undefined
+
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'review'],
+        ['enter', true]
+      ]),
+      client: promptClient(call, true),
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      result: { delivery: { verdict: 'turn_started' } }
+    })
+    expect(JSON.parse(String(log.mock.calls[0]?.[0])).result.warnings).toBeUndefined()
+    expect(process.exitCode).toBeUndefined()
   })
 
   it("reports an older host's lease refusal as a plain refused send", async () => {
@@ -541,7 +586,7 @@ describe('terminal send CLI', () => {
     const call = vi.fn().mockResolvedValue({
       result: { send: { handle: 'term-1', accepted: true, bytesWritten: 7 } }
     })
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await TERMINAL_HANDLERS['terminal send']({
       flags: new Map<string, string | true>([
@@ -570,6 +615,13 @@ describe('terminal send CLI', () => {
       generation: 0,
       baselineWorkingSequence: 0
     })
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      result: {
+        send: { accepted: true },
+        delivery: { verdict: 'unverifiable' }
+      }
+    })
+    expect(process.exitCode).not.toBe(1)
   })
 
   it('does not fabricate an accepted prompt receipt for an old-host refusal', async () => {

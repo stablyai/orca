@@ -1,7 +1,12 @@
 import type { RuntimeTerminalSend } from '../../shared/runtime-types'
 import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { CommandHandler } from '../dispatch'
-import { formatTerminalSend, printResult, terminalSendWarnings } from '../format'
+import {
+  formatTerminalSend,
+  printResult,
+  terminalSendDeliveryVerdict,
+  terminalSendWarnings
+} from '../format'
 import { getOptionalPositiveIntegerFlag, getOptionalStringFlag } from '../flags'
 import { readRetryRequestFlag } from '../retry-request-flag'
 import { RuntimeClientError } from '../runtime-client'
@@ -102,11 +107,24 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
   }
   // Why: the delivery warnings only existed in the text formatter, so --json callers never saw them.
   const warnings = terminalSendWarnings(result.result.send)
+  const deliveryVerdict = terminalSendDeliveryVerdict(result.result.send)
   printResult(
-    warnings.length > 0 ? { ...result, result: { ...result.result, warnings } } : result,
+    warnings.length > 0 || deliveryVerdict
+      ? {
+          ...result,
+          result: {
+            ...result.result,
+            ...(warnings.length > 0 ? { warnings } : {}),
+            ...(deliveryVerdict ? { delivery: { verdict: deliveryVerdict } } : {})
+          }
+        }
+      : result,
     json,
     formatTerminalSend
   )
+  // `accepted` is input acceptance. An unproven turn stays exit 0 because a default
+  // send is expected to stop at input_accepted, and unsupported observation is
+  // unverifiable rather than a failed execution. Refusal is the failure exit.
   if (!result.result.send.accepted) {
     process.exitCode = 1
   }
