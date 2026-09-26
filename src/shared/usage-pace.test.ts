@@ -7,6 +7,13 @@ const NOW = 1_700_000_000_000
 const WEEK_MINUTES = 10_080
 const SESSION_MINUTES = 300
 
+function present<T>(value: T | null | undefined): T {
+  if (value === null || value === undefined) {
+    throw new Error('expected a value')
+  }
+  return value
+}
+
 function weekly(usedPercent: number, elapsedFraction: number): RateLimitWindow {
   const durationMs = WEEK_MINUTES * 60_000
   return {
@@ -146,8 +153,8 @@ describe('getUsagePaceNextChangeAt', () => {
     const at = getUsagePaceNextChangeAt(window, NOW)
     expect(at).not.toBeNull()
     // Just before the boundary the reading still matches; at it, it has moved.
-    expect(readingAt(window, (at as number) - 1000)).toBe(readingAt(window, NOW))
-    expect(readingAt(window, at as number)).not.toBe(readingAt(window, NOW))
+    expect(readingAt(window, present(at) - 1000)).toBe(readingAt(window, NOW))
+    expect(readingAt(window, present(at))).not.toBe(readingAt(window, NOW))
   })
 
   it('names an instant the countdown grid would have missed', () => {
@@ -155,12 +162,12 @@ describe('getUsagePaceNextChangeAt', () => {
     // by the reset time, so it lands after the pace reading has already turned
     // over — which is the staleness this exists to close.
     const window = weekly(10, 2 / 7)
-    const changeAt = getUsagePaceNextChangeAt(window, NOW) as number
+    const changeAt = present(getUsagePaceNextChangeAt(window, NOW))
     let countdownTick = NOW
     while (countdownTick < changeAt) {
-      countdownTick += getResetCountdownNextTickDelay(countdownTick, [
-        window.resetsAt as number
-      ]) as number
+      countdownTick += present(
+        getResetCountdownNextTickDelay(countdownTick, [present(window.resetsAt)])
+      )
     }
     expect(countdownTick).toBeGreaterThan(changeAt)
   })
@@ -168,8 +175,8 @@ describe('getUsagePaceNextChangeAt', () => {
   it('waits for the window to become old enough to read', () => {
     const at = getUsagePaceNextChangeAt(weekly(0, 0.02), NOW)
     // 2% elapsed against a 3% floor leaves 1% of the week to wait.
-    expect((at as number) - NOW).toBeCloseTo(WEEK_MS * 0.01, -3)
-    expect(getUsagePace(weekly(0, 0.02), at as number)).not.toBeNull()
+    expect(present(at) - NOW).toBeCloseTo(WEEK_MS * 0.01, -3)
+    expect(getUsagePace(weekly(0, 0.02), present(at))).not.toBeNull()
   })
 
   it('is silent for windows that carry no readable timing', () => {
@@ -214,6 +221,6 @@ describe('getUsagePaceNextChangeAt', () => {
     // Heavy spend: the projection moves fast, so it is the earlier boundary.
     const window = weekly(75, 0.5)
     const at = getUsagePaceNextChangeAt(window, NOW)
-    expect(readingAt(window, at as number)).not.toBe(readingAt(window, NOW))
+    expect(readingAt(window, present(at))).not.toBe(readingAt(window, NOW))
   })
 })
