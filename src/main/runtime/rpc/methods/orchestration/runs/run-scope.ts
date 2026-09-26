@@ -6,11 +6,19 @@ import type {
   OrcaRuntimeService,
   OrchestrationCompatibilityCallerAuthority
 } from '../../../../orca-runtime'
+import {
+  hasRunBindingKey,
+  type OrchestrationCallerIdentity,
+  type OrchestrationSessionCaller
+} from '../../../../orchestration/orchestration-caller-identity'
+import { resolveDeclaredCallerParty } from '../../../../orchestration/orchestration-party'
 
 export type RunScopeParams = {
   runId?: string
   callerTerminalHandle?: string
   callerPaneKey?: string
+  /** Resolved at the dispatch entry; when set it is the caller, whatever the declared handle. */
+  callerSession: OrchestrationSessionCaller | undefined
   requireCurrentConsumer: boolean
   legacyCoordinatorRunId?: string
   // Why: the caller's declared handle is a user param; this is the attested one to check it against.
@@ -36,10 +44,30 @@ export function assertCallerHandleMatchesEvidence(
   }
 }
 
+/**
+ * The caller as Run binding and mail routing see it. A session the dispatch entry resolved is the
+ * caller outright; otherwise it is the party the declared handle names, at the pane it resolved to.
+ */
+export function orchestrationCallerIdentity(
+  runtime: OrcaRuntimeService,
+  caller: {
+    handle: string
+    paneKey: string | null | undefined
+    session: OrchestrationSessionCaller | undefined
+  }
+): OrchestrationCallerIdentity {
+  if (caller.session) {
+    return caller.session
+  }
+  const party = resolveDeclaredCallerParty(caller.handle, runtime.getOrchestrationDb())
+  return { ...party, paneKey: caller.paneKey ?? null }
+}
+
 export type OrchestrationCallerParams = {
   callerTerminalHandle: string
   callerEvidence?: OrchestrationCompatibilityEvidence
   callerAuthority?: OrchestrationCompatibilityCallerAuthority
+  callerSession: OrchestrationSessionCaller | undefined
   /** Preserve legacy callers that treated a missing pane as an ordinary fence. */
   requireStablePane?: boolean
   /**
@@ -50,33 +78,42 @@ export type OrchestrationCallerParams = {
   evidenceAssertedByCaller?: boolean
 }
 
-/** Resolve the caller's runtime pane and, by default, attest its declared handle. */
+/** Resolve the caller's identity and, by default, attest its declared handle. */
 export function resolveOrchestrationCaller(
   runtime: OrcaRuntimeService,
   params: OrchestrationCallerParams & { requireStablePane: true }
-): string
+): OrchestrationCallerIdentity
 export function resolveOrchestrationCaller(
   runtime: OrcaRuntimeService,
   params: OrchestrationCallerParams
-): string | null
+): OrchestrationCallerIdentity | null
 export function resolveOrchestrationCaller(
   runtime: OrcaRuntimeService,
   params: OrchestrationCallerParams
-): string | null {
+): OrchestrationCallerIdentity | null {
   if (!params.evidenceAssertedByCaller) {
     assertCallerHandleMatchesEvidence(runtime, params.callerTerminalHandle, params.callerEvidence)
   }
-  const paneKey =
-    params.callerAuthority?.terminalHandle === params.callerTerminalHandle
-      ? params.callerAuthority.paneKey
-      : runtime.getTerminalPaneKey(params.callerTerminalHandle)
-  if (!paneKey && params.requireStablePane) {
-    throw new OrchestrationError(
-      'stable_pane_required',
-      'The coordinator terminal has no stable pane identity. Run this command inside a live Orca terminal.'
-    )
+  const caller = orchestrationCallerIdentity(runtime, {
+    handle: params.callerTerminalHandle,
+    session: params.callerSession,
+    paneKey:
+      params.callerSession === undefined
+        ? params.callerAuthority?.terminalHandle === params.callerTerminalHandle
+          ? params.callerAuthority.paneKey
+          : runtime.getTerminalPaneKey(params.callerTerminalHandle)
+        : undefined
+  })
+  if (!hasRunBindingKey(caller)) {
+    if (params.requireStablePane) {
+      throw new OrchestrationError(
+        'stable_pane_required',
+        'The coordinator terminal has no stable pane identity. Run this command inside a live Orca terminal.'
+      )
+    }
+    return null
   }
-  return paneKey ?? null
+  return caller
 }
 
 // Why: task and gate mutations must share one Run-binding rule.
@@ -101,14 +138,21 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
   if (explicit && params.legacyCoordinatorRunId === explicit.id) {
     return explicit
   }
-  const paneKey = params.callerPaneKey ?? runtime.getTerminalPaneKey(params.callerTerminalHandle)
-  if (!paneKey) {
+  const caller = orchestrationCallerIdentity(runtime, {
+    handle: params.callerTerminalHandle,
+    session: params.callerSession,
+    paneKey:
+      params.callerSession === undefined
+        ? (params.callerPaneKey ?? runtime.getTerminalPaneKey(params.callerTerminalHandle))
+        : undefined
+  })
+  if (!hasRunBindingKey(caller)) {
     throw new OrchestrationError(
       'stable_pane_required',
       'The coordinator terminal has no stable pane identity.'
     )
   }
-  const current = db.getCurrentRunForPane(paneKey)
+  const current = db.getCurrentRunForCoordinator(caller)
   if (!current) {
     if (explicit) {
       throw new OrchestrationError(

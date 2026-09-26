@@ -25,6 +25,7 @@ type CaptureTerminalShutdownLayoutArgs = {
   paneTransports: ReadonlyMap<number, Pick<PtyTransport, 'getPtyId'>>
   paneTitlesByPaneId: Record<number, string>
   existingLayout: TerminalLayoutSnapshot | undefined
+  chatLeafId?: string | null
   /** Merge prior for buffers, resolved across both scrollback homes; defaults to the shared layout's. */
   priorBuffersByLeafId?: Record<string, string>
   captureBuffers?: boolean
@@ -98,6 +99,7 @@ export function captureTerminalShutdownLayout({
   paneTransports,
   paneTitlesByPaneId,
   existingLayout,
+  chatLeafId,
   priorBuffersByLeafId = existingLayout?.buffersByLeafId,
   captureBuffers = true,
   clearedScrollbackLeafIds
@@ -141,6 +143,9 @@ export function captureTerminalShutdownLayout({
     new Map(panes.map((pane) => [pane.id, pane.leafId]))
   )
   const currentLeafIds = new Set(panes.map((p) => p.leafId))
+  if (chatLeafId && panes.some((pane) => pane.leafId === chatLeafId)) {
+    layout.chatLeafId = chatLeafId
+  }
   const livePtyIdsByLeafId: Record<string, string> = {}
   const preservedPtyIdsByLeafId: Record<string, string> = {}
   for (const pane of panes) {

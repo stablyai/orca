@@ -14,11 +14,11 @@ import type {
 import { AgentHookServer, _internals } from '../../agent-hooks/server'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
 import {
-  settleStaleSessionStateOnAcquire,
-  type StructuredAgentSessionTurnVerdict
-} from './structured-agent-session-stale-turn-verdict'
+  settleStaleStructuredAgentSessionState,
+  settleStructuredAgentSessionDeadGeneration
+} from './structured-agent-session-dead-generation-settlement'
+import type { StructuredAgentSessionTurnVerdict } from './structured-agent-session-stale-turn-verdict'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
 import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-session-turn-completion-feed'
@@ -157,11 +157,12 @@ describe('a turn recovery settled after its host went away', () => {
   it('is dated the same way when a new provider child finds the turn still running', async () => {
     const session = await sessionWithRunningTurn()
     session.recoverAt(RECOVERED)
-    await settleStaleSessionStateOnAcquire({
+    await settleStaleStructuredAgentSessionState({
       journal: session.journal,
       sessionId: SESSION,
       fence: 2,
-      acquisitionGeneration: 'generation-2'
+      acquisitionGeneration: 'generation-2',
+      deathEvidence: null
     })
     session.publish()
 

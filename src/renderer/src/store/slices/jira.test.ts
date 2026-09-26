@@ -10,6 +10,7 @@ import {
 import { credentialDecryptionMessage } from '../../../../shared/integration-credential-errors'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { createJiraSlice } from './jira'
+import { beginJiraMutation } from './jira-read-coordination'
 
 const jiraStatus = vi.fn()
 const jiraConnect = vi.fn()
@@ -210,6 +211,146 @@ describe('createJiraSlice runtime context', () => {
     expect(jiraListIssues).toHaveBeenCalledWith(sourceContext, 'assigned', 30, 'site-1')
     expect(Object.values(store.getState().jiraSearchCache)).toHaveLength(1)
     expect(store.getState().jiraSearchCache['site-1::list::assigned::30']).toBeUndefined()
+  })
+
+  it('forces fresh list and search reads while keeping ordinary cache reads', async () => {
+    const store = createTestStore()
+    store.setState({
+      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' },
+      jiraSearchCache: {
+        'site-1::list::assigned::30': { data: [issue('ALP-OLD')], fetchedAt: Date.now() },
+        'site-1::project = ALP::30': { data: [issue('ALP-OLD')], fetchedAt: Date.now() }
+      }
+    })
+    jiraListIssues.mockResolvedValueOnce([issue('ALP-LIST-FRESH')])
+    jiraSearchIssues.mockResolvedValueOnce([issue('ALP-SEARCH-FRESH')])
+
+    await expect(store.getState().listJiraIssues('assigned', 30)).resolves.toMatchObject([
+      { key: 'ALP-OLD' }
+    ])
+    await expect(
+      store.getState().listJiraIssues('assigned', 30, { force: true })
+    ).resolves.toMatchObject([{ key: 'ALP-LIST-FRESH' }])
+    await expect(store.getState().searchJiraIssues('project = ALP', 30)).resolves.toMatchObject([
+      { key: 'ALP-OLD' }
+    ])
+    await expect(
+      store.getState().searchJiraIssues('project = ALP', 30, { force: true })
+    ).resolves.toMatchObject([{ key: 'ALP-SEARCH-FRESH' }])
+
+    expect(jiraListIssues).toHaveBeenCalledTimes(1)
+    expect(jiraSearchIssues).toHaveBeenCalledTimes(1)
+    expect(store.getState().jiraSearchCache['site-1::list::assigned::30']?.data).toMatchObject([
+      { key: 'ALP-LIST-FRESH' }
+    ])
+    expect(store.getState().jiraSearchCache['site-1::project = ALP::30']?.data).toMatchObject([
+      { key: 'ALP-SEARCH-FRESH' }
+    ])
+  })
+
+  it('reuses ordinary in-flight reads but force starts a fresh list and search request', async () => {
+    const store = createTestStore()
+    store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
+    const listOld = deferred<JiraIssue[]>()
+    const listFresh = deferred<JiraIssue[]>()
+    const searchOld = deferred<JiraIssue[]>()
+    const searchFresh = deferred<JiraIssue[]>()
+    jiraListIssues.mockReturnValueOnce(listOld.promise).mockReturnValueOnce(listFresh.promise)
+    jiraSearchIssues.mockReturnValueOnce(searchOld.promise).mockReturnValueOnce(searchFresh.promise)
+
+    const listRequest = store.getState().listJiraIssues('assigned', 30)
+    const listReuse = store.getState().listJiraIssues('assigned', 30)
+    const searchRequest = store.getState().searchJiraIssues('project = ALP', 30)
+    const searchReuse = store.getState().searchJiraIssues('project = ALP', 30)
+    await Promise.resolve()
+    expect(jiraListIssues).toHaveBeenCalledTimes(1)
+    expect(jiraSearchIssues).toHaveBeenCalledTimes(1)
+
+    const listRefresh = store.getState().listJiraIssues('assigned', 30, { force: true })
+    const searchRefresh = store.getState().searchJiraIssues('project = ALP', 30, { force: true })
+    await Promise.resolve()
+    expect(jiraListIssues).toHaveBeenCalledTimes(2)
+    expect(jiraSearchIssues).toHaveBeenCalledTimes(2)
+
+    listFresh.resolve([issue('ALP-LIST-FRESH')])
+    searchFresh.resolve([issue('ALP-SEARCH-FRESH')])
+    await expect(listRefresh).resolves.toMatchObject([{ key: 'ALP-LIST-FRESH' }])
+    await expect(searchRefresh).resolves.toMatchObject([{ key: 'ALP-SEARCH-FRESH' }])
+    listOld.resolve([issue('ALP-LIST-LATE')])
+    searchOld.resolve([issue('ALP-SEARCH-LATE')])
+    await expect(listRequest).resolves.toMatchObject([{ key: 'ALP-LIST-LATE' }])
+    await expect(listReuse).resolves.toMatchObject([{ key: 'ALP-LIST-LATE' }])
+    await expect(searchRequest).resolves.toMatchObject([{ key: 'ALP-SEARCH-LATE' }])
+    await expect(searchReuse).resolves.toMatchObject([{ key: 'ALP-SEARCH-LATE' }])
+
+    expect(store.getState().jiraSearchCache['site-1::list::assigned::30']?.data).toMatchObject([
+      { key: 'ALP-LIST-FRESH' }
+    ])
+    expect(store.getState().jiraSearchCache['site-1::project = ALP::30']?.data).toMatchObject([
+      { key: 'ALP-SEARCH-FRESH' }
+    ])
+  })
+
+  it.each(['list', 'search'] as const)(
+    'ignores an older %s auth failure after a forced refresh succeeds',
+    async (kind) => {
+      const store = createTestStore()
+      store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
+      let rejectOld: (error: Error) => void = () => {}
+      const old = new Promise<JiraIssue[]>((_resolve, reject) => {
+        rejectOld = reject
+      })
+      const service = kind === 'list' ? jiraListIssues : jiraSearchIssues
+      service.mockReturnValueOnce(old).mockResolvedValueOnce([issue('ALP-FRESH')])
+      const read = (force = false) =>
+        kind === 'list'
+          ? store.getState().listJiraIssues('assigned', 30, { force })
+          : store.getState().searchJiraIssues('project = ALP', 30, { force })
+      const previous = read()
+      await expect(read(true)).resolves.toMatchObject([{ key: 'ALP-FRESH' }])
+      rejectOld(new Error('401 Unauthorized'))
+      await expect(previous).resolves.toEqual([])
+      expect(store.getState().jiraStatus.connected).toBe(true)
+      expect(store.getState().jiraConnectionRevisions).toEqual({})
+    }
+  )
+
+  it('rejects a forced late write after the Jira mutation generation changes', async () => {
+    const store = createTestStore()
+    store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
+    const pending = deferred<JiraIssue[]>()
+    jiraListIssues.mockReturnValueOnce(pending.promise)
+
+    const request = store.getState().listJiraIssues('assigned', 30, { force: true })
+    await Promise.resolve()
+    beginJiraMutation()
+    pending.resolve([issue('ALP-STALE')])
+    await expect(request).resolves.toMatchObject([{ key: 'ALP-STALE' }])
+    expect(store.getState().jiraSearchCache['site-1::list::assigned::30']).toBeUndefined()
+  })
+
+  it('does not cache a late abortable search response', async () => {
+    const store = createTestStore()
+    store.setState({ jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' } })
+    const pending = deferred<JiraIssue[]>()
+    let signal: AbortSignal | undefined
+    jiraSearchIssues.mockImplementationOnce(
+      (_settings: unknown, _jql: string, _limit: number, _site: string, provided: AbortSignal) => {
+        signal = provided
+        return pending.promise
+      }
+    )
+    const controller = new AbortController()
+    const request = store
+      .getState()
+      .searchJiraIssues('project = ALP', 30, { signal: controller.signal })
+    await Promise.resolve()
+    const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' })
+    controller.abort()
+    pending.resolve([issue('ALP-LATE')])
+    await rejection
+    expect(signal?.aborted).toBe(true)
+    expect(store.getState().jiraSearchCache['site-1::project = ALP::30']).toBeUndefined()
   })
 
   it('keeps isolated status failures from mutating the focused Jira Settings state', async () => {

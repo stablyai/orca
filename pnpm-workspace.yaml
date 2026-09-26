@@ -57,7 +57,7 @@ allowBuilds:
   '@orca/windows-registry': false
 
 overrides:
-  monaco-editor>dompurify: 3.4.14
+  monaco-editor>dompurify: 3.4.15
 
 patchedDependencies:
   '@xterm/addon-image@0.10.0-beta.300': config/patches/@xterm__addon-image@0.10.0-beta.300.patch

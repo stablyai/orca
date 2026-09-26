@@ -1,4 +1,4 @@
-import * as monaco from 'monaco-editor'
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { vi } from 'vitest'
 import { createEditorModelRegistry } from '@/lib/editor-model-registry'
 import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'

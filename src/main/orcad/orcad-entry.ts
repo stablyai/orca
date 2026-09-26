@@ -1,13 +1,12 @@
 /**
- * `orcad` — the Orca runtime served from plain Node, with no Electron.
+ * `orcad` — the Orca runtime served without Electron.
  *
  * Installs the Node host adapters, constructs the same `OrcaRuntimeService` the
  * desktop uses, installs a PTY controller via `registerHeadlessPtyRuntime`, and
  * serves runtime RPC. See docs/design/node-only-runtime-backend.html.
  *
- * Desktop UI surfaces stay uninstalled: no native notifications, no renderer window. The
- * renderer window is faked as a destroyed one because `registerPtyHandlers` takes a
- * non-null `BrowserWindow`. Browser automation is different — it is installed through
+ * Desktop UI surfaces stay uninstalled: no native notifications or renderer delivery.
+ * Browser automation is installed through
  * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
  * Chromium proves available at startup.
  */
@@ -15,16 +14,13 @@ import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
-import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
-import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
+import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
 import {
-  describeOrcadBindExposure,
-  OrcadBindAddressError,
-  resolveOrcadBindHost
-} from './orcad-bind-address'
-import { acquireOrcadInstanceLock, OrcadInstanceLockError } from './orcad-instance-lock'
-import { startOrcadWithLifecycle } from './orcad-lifecycle'
+  flushOrcadProfileStoreForShutdown,
+  installOrcadShutdownSignals,
+  startOrcadWithHost
+} from './orcad-lifecycle'
 import { parseArgs } from './orcad-command-arguments'
 import {
   changedAiVaultSearchSettings,
@@ -110,27 +106,10 @@ export type OrcadHandle = {
  */
 export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandle> {
   installOrcadHostAdapters()
-  const userDataPath = resolveUserDataPath()
-  // Why before anything else touches the root: the profile index, the store and the daemon
-  // runtime dir all live under it, and two orcads sharing them corrupt state silently. This
-  // is also the last point at which refusing costs nothing.
-  const instanceLock = acquireOrcadInstanceLock(userDataPath)
-  const browserProvider = await resolveOrcadBrowserProvider({ userDataPath })
-  setRuntimeBrowserCommandsFactory(browserProvider?.factory ?? null, {
-    headless: browserProvider !== null,
-    ...(browserProvider ? { isAvailable: () => browserProvider.isAvailable() } : {})
-  })
-  return startOrcadWithLifecycle(
+  return startOrcadWithHost(
+    resolveUserDataPath(),
     (registerCleanup) => startOrcadRuntime(options, registerCleanup),
-    async () => {
-      try {
-        await browserProvider?.stop()
-      } finally {
-        setRuntimeBrowserCommandsFactory(null)
-        runOrcadQuitHandlers()
-        instanceLock.release()
-      }
-    }
+    () => runOrcadQuitHandlers()
   )
 }
 
@@ -145,10 +124,7 @@ async function startOrcadRuntime(
   const { getAppEnvironment } = await import('../../shared/app-environment')
   const { resolveAdvertisedPairingEndpoint } = await import('../runtime/pairing-endpoint')
   const { ServeReadinessPublisher } = await import('../server/serve-readiness')
-  const { Store } = await import('../persistence/loading-store/store')
-  const { ensureActiveOrcaProfile, initOrcaProfilePaths } =
-    await import('../orca-profiles/profile-index-store')
-  const { initSshHostKeyStoreFile } = await import('../ssh/ssh-host-key-store')
+  const { createOrcadProfileStateStartup } = await import('./orcad-profile-state-startup')
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
   const { collectOrcadHealth } = await import('./orcad-health')
@@ -162,6 +138,9 @@ async function startOrcadRuntime(
     await import('../runtime/agent-status-observed-pane-identity')
 
   let rpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
+  let profileStoreForShutdown:
+    | { flushFinalOrThrowAsync(): Promise<void>; freezeWritesAsync(): Promise<void> }
+    | undefined
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
   registerCleanup(async () => {
@@ -169,13 +148,21 @@ async function startOrcadRuntime(
       await rpc?.stop()
     } finally {
       try {
-        // Why disconnect and not shut down: the daemon must outlive this process, or an
-        // orcad restart goes back to killing every running terminal.
-        await stopOrcadDaemon()
+        // Stop accepting RPC writes before the final persistence barrier. A SQLite-backed
+        // orcad has no JSON mirror to absorb a debounced write after SIGTERM.
+        if (profileStoreForShutdown) {
+          await flushOrcadProfileStoreForShutdown(profileStoreForShutdown)
+        }
       } finally {
-        uninstallObservedStatusIdentity()
-        uninstallHookStatusRepublish()
-        agentHookServer.stop()
+        try {
+          // Why disconnect and not shut down: the daemon must outlive this process, or an
+          // orcad restart goes back to killing every running terminal.
+          await stopOrcadDaemon()
+        } finally {
+          uninstallObservedStatusIdentity()
+          uninstallHookStatusRepublish()
+          agentHookServer.stop()
+        }
       }
     }
   })
@@ -183,8 +170,8 @@ async function startOrcadRuntime(
   const { resolvePushGatewayOrigin } = await import('../runtime/push/push-gateway-origin')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
-  initOrcaProfilePaths()
-  const profile = ensureActiveOrcaProfile(runtimeUserDataPath)
+  const { store: profileStore, authority: profileStateAuthority } =
+    await createOrcadProfileStateStartup(runtimeUserDataPath)
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const observedStatusCapture = new AgentStatusObservedPaneIdentityCapture(observedPaneIdentities)
   // Why a real Store: without one every persistence-backed RPC throws `runtime_unavailable`
@@ -192,15 +179,14 @@ async function startOrcadRuntime(
   // a server that pairs and lists nothing looks healthy and is not.
   // Why: orcad IS the runtime authority — loading as 'desktop' would classify its
   // own runtime-scheduled automations as ambiguous mirrors and orphan them.
-  const store = new Store({ dataFile: profile.dataFile, storageAuthority: 'runtime' })
+  profileStoreForShutdown = profileStore
   // Why: every SSH connect consults this sidecar. Left unbound it reports nothing trusted,
   // which is safe but silently discards accept records on every launch.
-  initSshHostKeyStoreFile(profile.dataFile)
 
   uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
     observedStatusCapture.observe(enriched)
   )
-  if (isAgentStatusHooksEnabled(store.getSettings())) {
+  if (isAgentStatusHooksEnabled(profileStore.getSettings())) {
     await agentHookServer.start({ env: 'production', userDataPath: runtimeUserDataPath })
   }
 
@@ -213,7 +199,7 @@ async function startOrcadRuntime(
   // constructed, and the deps hook is only ever called later, from an RPC.
   let sessionSearch: { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null = null
 
-  const runtime = new OrcaRuntimeService(store, undefined, {
+  const runtime = new OrcaRuntimeService(profileStore, undefined, {
     // Why lazy: a daemon swap replaces the provider after construction, so an eager
     // reference would freeze the pre-daemon one.
     getLocalProvider: () => getLocalPtyProvider(),
@@ -252,7 +238,7 @@ async function startOrcadRuntime(
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
       agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
     buildAgentHookPtyEnv: () =>
-      isAgentStatusHooksEnabled(store.getSettings()) ? agentHookServer.buildPtyEnv() : {},
+      isAgentStatusHooksEnabled(profileStore.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     // Why the dedupe here and not in the instance: `apply` closes and reconstructs
     // unconditionally, so an unchanged value would restart a healthy index.
     applySessionSearchSettings: (before, after) => {
@@ -266,7 +252,7 @@ async function startOrcadRuntime(
   const { installOrcadSessionSearchService } = await import('./orcad-session-search')
   sessionSearch = await installOrcadSessionSearchService({
     userDataPath: runtimeUserDataPath,
-    getSettings: () => store.getSettings()
+    getSettings: () => profileStore.getSettings()
   })
   getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
 
@@ -284,7 +270,13 @@ async function startOrcadRuntime(
   // Codex-home and Claude-auth preparation are left unset: both are desktop account
   // flows. A launch that needs one fails with its own message rather than silently
   // spawning an unauthenticated agent.
-  await registerHeadlessPtyRuntime(runtime, undefined, () => store.getSettings(), undefined, store)
+  await registerHeadlessPtyRuntime(
+    runtime,
+    undefined,
+    () => profileStore.getSettings(),
+    undefined,
+    profileStore
+  )
 
   // Why: same post-registration reconciliation `--serve` performs. Skipping it leaves
   // restored orchestration rows claiming an authority this host never took over.
@@ -356,7 +348,7 @@ async function startOrcadRuntime(
     // Why in the readiness payload: this is the one message a supervisor and a deploy
     // transaction both read, and a green orcad with a dead daemon is exactly the
     // looks-healthy-but-useless state they must not activate.
-    health: await collectOrcadHealth(getAppEnvironment().getVersion())
+    health: await collectOrcadHealth(getAppEnvironment().getVersion(), profileStateAuthority)
   }
 
   await new ServeReadinessPublisher().publish(readiness, {
@@ -374,50 +366,18 @@ async function startOrcadRuntime(
  * supervision contract has to prevent, so systemd's `RestartPreventExitStatus` needs a code
  * that means "do not retry" and nothing else does.
  */
-export const ORCAD_EXIT_OK = 0
-export const ORCAD_EXIT_FAILED = 1
-export const ORCAD_EXIT_CONFIGURATION = 78
+export {
+  ORCAD_EXIT_OK,
+  ORCAD_EXIT_FAILED,
+  ORCAD_EXIT_CONFIGURATION,
+  resolveOrcadExitCode
+} from './orcad-exit-code'
 
 /** Bounded so a wedged transport cannot hold a supervisor's stop past its own deadline. */
-export const ORCAD_SHUTDOWN_DEADLINE_MS = 15_000
-
-export function resolveOrcadExitCode(error: unknown): number {
-  return error instanceof OrcadInstanceLockError || error instanceof OrcadBindAddressError
-    ? ORCAD_EXIT_CONFIGURATION
-    : ORCAD_EXIT_FAILED
-}
+export { ORCAD_SHUTDOWN_DEADLINE_MS } from './orcad-lifecycle'
 
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
-  const handle = await startOrcad(parseArgs(argv))
-  let stopping = false
-  const shutdown = (signal: NodeJS.Signals): void => {
-    if (stopping) {
-      // Why escalate rather than ignore: a supervisor's second signal means the first
-      // deadline elapsed. Continuing to wait silently is what makes a stop hang until
-      // SIGKILL, which is the one teardown that skips the daemon handoff entirely.
-      console.error(`orcad: second ${signal} during shutdown — exiting immediately`)
-      process.exit(ORCAD_EXIT_FAILED)
-    }
-    stopping = true
-    // Why a self-imposed deadline as well: the supervisor's SIGKILL leaves no exit code and
-    // no log line. Exiting ourselves keeps the failure attributable.
-    const deadline = setTimeout(() => {
-      console.error(
-        `orcad: shutdown after ${signal} exceeded ${ORCAD_SHUTDOWN_DEADLINE_MS}ms — exiting`
-      )
-      process.exit(ORCAD_EXIT_FAILED)
-    }, ORCAD_SHUTDOWN_DEADLINE_MS)
-    deadline.unref()
-    handle
-      .stop()
-      .then(() => process.exit(ORCAD_EXIT_OK))
-      // Why not rethrow: we are already tearing down on a signal, and an exit code is
-      // the only thing a supervisor can act on.
-      .catch((error) => {
-        console.error(`orcad: shutdown after ${signal} failed:`, error)
-        process.exit(ORCAD_EXIT_FAILED)
-      })
-  }
-  process.on('SIGINT', () => shutdown('SIGINT'))
-  process.on('SIGTERM', () => shutdown('SIGTERM'))
+  const startup = startOrcad(parseArgs(argv))
+  installOrcadShutdownSignals(async () => (await startup).stop())
+  await startup
 }

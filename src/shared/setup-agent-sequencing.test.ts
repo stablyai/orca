@@ -122,6 +122,20 @@ describe('createSequencedSetupAgentCommands', () => {
     )
   })
 
+  it('doubles typographic single quotes in native Windows gate literals', () => {
+    const commands = createSequencedSetupAgentCommands({
+      runnerScriptPath: 'C:\\O\u2019Brien\\.git\\orca\\setup-runner.cmd',
+      platform: 'windows',
+      startupCommand: 'codex',
+      nonce: 'nonce-3'
+    })
+    const decoded = Buffer.from(
+      commands.setupCommand.split('-EncodedCommand ')[1] ?? '',
+      'base64'
+    ).toString('utf16le')
+    expect(decoded).toContain("$runner = 'C:\\O\u2019\u2019Brien\\.git\\orca\\setup-runner.cmd'")
+  })
+
   it('leaves the failure and timeout messages as the only other outcomes', () => {
     const script =
       createSequencedSetupAgentCommands({

@@ -12,7 +12,7 @@ export type PtyShutdownOperation = {
 }
 
 export type PendingLocalPtySpawn = {
-  canceled: boolean
+  cancellation: AbortController
 }
 
 export type DataCallback = (payload: {

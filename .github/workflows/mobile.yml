@@ -6,7 +6,6 @@ on:
       - opened
       - synchronize
       - reopened
-      - ready_for_review
     paths:
       - 'mobile/**'
       # Mobile launch contracts exercise the real host dispatcher and durable receipt store.
@@ -38,6 +37,9 @@ on:
       - '.github/workflows/mobile.yml'
       - '.github/actions/install-node-dependencies/**'
       - '.github/workflows/mobile-ios-release.yml'
+      - 'config/scripts/mobile-release-check-scope*'
+      - 'config/scripts/pr-code-change-scope.mjs'
+      - 'config/scripts/mobile-recording-pin-checkout.test.mjs'
   # Why main too: a behaviour-change branch legitimately pins its own last fenced commit, and that
   # commit only stops being reachable when the branch squash-merges. The pull_request run cannot
   # see that; this one is where the pin guard finds it.
@@ -73,6 +75,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -80,10 +84,23 @@ jobs:
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
 
+      - name: Detect Ruby release inputs
+        id: ruby-scope
+        shell: bash
+        working-directory: .
+        run: |
+          # Keep deletions when release files move into an application directory.
+          if ! git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/mobile-release-changes"; then
+            echo 'should_run=true' >> "$GITHUB_OUTPUT"
+          elif ! node config/scripts/mobile-release-check-scope.mjs "$RUNNER_TEMP/mobile-release-changes"; then
+            echo 'should_run=true' >> "$GITHUB_OUTPUT"
+          fi
+
       # bundler-cache installs mobile/Gemfile.lock, so this job is also what
       # proves the pinned fastlane the release workflow depends on still
       # resolves — before a release run finds out.
       - name: Setup Ruby and fastlane
+        if: steps.ruby-scope.outputs.should_run != 'false'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
@@ -113,9 +130,11 @@ jobs:
         run: pnpm test
 
       - name: Test iOS release version resolution
+        if: steps.ruby-scope.outputs.should_run != 'false'
         run: ruby fastlane/ios_release_version_test.rb
 
       - name: Test TestFlight lane arguments
+        if: steps.ruby-scope.outputs.should_run != 'false'
         run: ruby fastlane/fastfile_testflight_arguments_test.rb
 
       # Why: nothing else in CI loads the Fastfile, so a syntax error, a broken
@@ -124,6 +143,7 @@ jobs:
       # loads and lists, so it needs no App Store Connect credentials and makes
       # no network calls to Apple.
       - name: Smoke-check the Fastfile
+        if: steps.ruby-scope.outputs.should_run != 'false'
         env:
           FASTLANE_SKIP_UPDATE_CHECK: '1'
           FASTLANE_OPT_OUT_USAGE: '1'
@@ -152,6 +172,8 @@ jobs:
           # answer at all rather than reporting a pass it has no evidence for -- and the pinned tree
           # below has to be checkable out.
           fetch-depth: 0
+          # Ancestry needs commits; the pinned worktree fetches its historical blobs on demand.
+          filter: blob:none
 
       - uses: ./.github/actions/install-node-dependencies
         with:

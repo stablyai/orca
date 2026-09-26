@@ -1,9 +1,44 @@
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
+
 const MANAGED_MARKER = '# Orca managed WSL CLI launcher'
 const BRIDGE_MANAGED_MARKER = '# Orca managed WSL CLI PowerShell bridge'
+
+const FIND_INTEROP_POWERSHELL = `if command -v powershell.exe >/dev/null 2>&1; then
+  ORCA_POWERSHELL=powershell.exe
+elif [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; then
+  ORCA_POWERSHELL=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
+else
+  echo "Orca WSL CLI requires Windows interop and could not find powershell.exe." >&2
+  exit 1
+fi`
 
 export function buildWslLauncher(
   windowsLauncherPath: string,
   bridgePath = '${XDG_DATA_HOME:-$HOME/.local/share}/orca/orca-wsl-bridge.ps1'
+): string {
+  return buildLauncher(windowsLauncherPath, quoteShell(bridgePath), FIND_INTEROP_POWERSHELL)
+}
+
+/** Launcher that finds its bridge beside itself and PowerShell by Windows path, independent of guest PATH. */
+export function buildColocatedWslLauncher(
+  windowsLauncherPath: string,
+  windowsPowerShellPath: string
+): string {
+  return buildLauncher(
+    windowsLauncherPath,
+    '"$(dirname -- "$0")/orca-wsl-bridge.ps1"',
+    `ORCA_POWERSHELL=$(wslpath -u ${quoteShell(windowsPowerShellPath)})
+if [ ! -x "$ORCA_POWERSHELL" ]; then
+  echo "Orca WSL CLI requires Windows interop and access to $ORCA_POWERSHELL." >&2
+  exit 1
+fi`
+  )
+}
+
+function buildLauncher(
+  windowsLauncherPath: string,
+  bridgePathExpression: string,
+  resolvePowerShell: string
 ): string {
   const encodedTarget = Buffer.from(windowsLauncherPath, 'utf8').toString('base64')
   return `#!/usr/bin/env bash
@@ -11,15 +46,8 @@ set -euo pipefail
 ${MANAGED_MARKER}
 # ORCA_WIN_LAUNCHER_B64=${encodedTarget}
 ORCA_WIN_LAUNCHER=${quoteShell(windowsLauncherPath)}
-ORCA_BRIDGE_PS1=${quoteShell(bridgePath)}
-if command -v powershell.exe >/dev/null 2>&1; then
-  ORCA_POWERSHELL=powershell.exe
-elif [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; then
-  ORCA_POWERSHELL=/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
-else
-  echo "Orca WSL CLI requires Windows interop and could not find powershell.exe." >&2
-  exit 1
-fi
+ORCA_BRIDGE_PS1=${bridgePathExpression}
+${resolvePowerShell}
 # Why: a shell can outlive a deleted worktree; keep explicit CLI selectors and
 # help usable, and repair cwd before any WSL interop tool tries to resolve it.
 ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
@@ -28,12 +56,28 @@ ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
 }
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
 ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
+if [ -n "\${WSL_DISTRO_NAME:-}" ]; then
+  set -- -WslDistro "$WSL_DISTRO_NAME" "$@"
+fi
 exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"
 `
 }
 
-export function buildWslBridgeScript(): string {
-  return `${BRIDGE_MANAGED_MARKER}
+/** `app` pins the bridge to one Orca instance; the guest-registered bridge omits it. */
+export function buildWslBridgeScript(app?: {
+  userDataPath: string
+  cliEntryPath?: string
+}): string {
+  const setAppEnv = app
+    ? [
+        `$env:ORCA_USER_DATA_PATH = ${quotePowerShellLiteral(app.userDataPath)}`,
+        // Why: WSLENV /p maps this guest-only dir back; an app the CLI starts must not inherit it.
+        'Remove-Item Env:ORCA_WSL_CLI_DIR -ErrorAction SilentlyContinue',
+        ...(app.cliEntryPath ? buildDevCliEnv(app.cliEntryPath) : [])
+      ]
+    : []
+  // Why the BOM: PowerShell 5.1 reads BOM-less scripts as ANSI, garbling non-ASCII embedded paths.
+  return `${app ? '\uFEFF' : ''}${BRIDGE_MANAGED_MARKER}
 function ConvertTo-NativeCommandLineArgument {
   param([AllowEmptyString()][string]$Value)
 
@@ -71,6 +115,7 @@ try {
   }
   [string]$OrcaLauncher = $args[0]
   [string]$WslCwd = ''
+  [string]$WslDistro = ''
   [int]$ForwardArgStart = 1
   if ($args.Count -ge 2 -and $args[1] -eq '-WslCwd') {
     if ($args.Count -lt 3) {
@@ -78,6 +123,13 @@ try {
     }
     $WslCwd = $args[2]
     $ForwardArgStart = 3
+  }
+  if ($ForwardArgStart -eq 3 -and $args.Count -ge 4 -and $args[3] -eq '-WslDistro') {
+    if ($args.Count -lt 5) {
+      throw 'Invalid Orca WSL CLI bridge invocation.'
+    }
+    $WslDistro = $args[4]
+    $ForwardArgStart = 5
   }
   [string[]]$ForwardArgs = @()
   if ($args.Count -gt $ForwardArgStart) {
@@ -88,12 +140,18 @@ try {
   } else {
     $env:ORCA_CLI_CWD = $WslCwd
   }
+  # Do not let an inherited Windows environment choose the caller's account location.
+  if ([string]::IsNullOrEmpty($WslDistro)) {
+    Remove-Item Env:ORCA_CLI_WSL_DISTRO -ErrorAction SilentlyContinue
+  } else {
+    $env:ORCA_CLI_WSL_DISTRO = $WslDistro
+  }
   $LauncherDirectory = Split-Path -Parent $OrcaLauncher
   Push-Location -LiteralPath $LauncherDirectory
   # Why: Windows PowerShell 5.1 cannot losslessly splat strings to native argv.
   $StartInfo = [System.Diagnostics.ProcessStartInfo]::new()
   $StartInfo.FileName = $OrcaLauncher
-  $StartInfo.Arguments = (($ForwardArgs | ForEach-Object {
+${bridgeLines(setAppEnv)}  $StartInfo.Arguments = (($ForwardArgs | ForEach-Object {
     ConvertTo-NativeCommandLineArgument $_
   }) -join ' ')
   $StartInfo.UseShellExecute = $false
@@ -117,6 +175,22 @@ try {
 }
 exit $exitCode
 `
+}
+
+/** Runs the dev CLI directly (its .cmd launcher adds a cmd.exe quoting boundary) with that launcher's env. */
+function buildDevCliEnv(cliEntryPath: string): string[] {
+  return [
+    "$env:ELECTRON_RUN_AS_NODE = '1'",
+    "if (-not $env:ORCA_APP_EXECUTABLE) { $env:ORCA_APP_EXECUTABLE = $OrcaLauncher; $env:ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT = '1' }",
+    '$env:ORCA_NODE_OPTIONS = $env:NODE_OPTIONS',
+    '$env:ORCA_NODE_REPL_EXTERNAL_MODULE = $env:NODE_REPL_EXTERNAL_MODULE',
+    'Remove-Item Env:NODE_OPTIONS, Env:NODE_REPL_EXTERNAL_MODULE -ErrorAction SilentlyContinue',
+    `$ForwardArgs = @(${quotePowerShellLiteral(cliEntryPath)}) + $ForwardArgs`
+  ]
+}
+
+function bridgeLines(lines: readonly string[]): string {
+  return lines.map((line) => `  ${line}\n`).join('')
 }
 
 export function getBridgePathFromCommandPath(commandPath: string): string {

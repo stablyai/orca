@@ -6,6 +6,7 @@ import {
   formatOrcaSessionAddress,
   parseOrcaSessionAddress
 } from '../../../shared/orca-session-address'
+import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -14,9 +15,9 @@ import {
 import { OrchestrationDb } from './db'
 import { backfillStructuredWorkerOrcaSessionIds } from './db/schema/structured-worker-orca-session-backfill'
 
-const CHAT_SESSION_ID = '3a5c7e9b-1d4f-4a6c-8b0e-2f4a6c8e0b14'
+const CHAT_SESSION_ID = testOrcaSessionId('3a5c7e9b-1d4f-4a6c-8b0e-2f4a6c8e0b14')
 const CHAT_ADDRESS = formatOrcaSessionAddress(CHAT_SESSION_ID)
-const WORKER_SESSION_ID = '4b6d8f0c-2e5a-4b7d-9c1f-3a5b7d9f1c25'
+const WORKER_SESSION_ID = testOrcaSessionId('4b6d8f0c-2e5a-4b7d-9c1f-3a5b7d9f1c25')
 const WORKER_ADDRESS = formatOrcaSessionAddress(WORKER_SESSION_ID)
 const PTY_PANE = 'tab_pty:66666666-6666-4666-8666-666666666666'
 

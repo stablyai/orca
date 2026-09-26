@@ -186,6 +186,7 @@ describe('sendGroupMessage actually composes structured workers in', () => {
     const db = {
       getLegacyAdoptedRunMailboxOwner: () => null,
       getCurrentRunForPane: () => undefined,
+      getCurrentRunForCoordinator: () => undefined,
       getActiveDispatchMailboxOwners: () => [],
       getRunMailboxOwnerIdsForHandle: () => [],
       insertMessages: (rows: { to: string }[]) => {
@@ -227,6 +228,7 @@ describe('sendGroupMessage actually composes structured workers in', () => {
     const db = {
       getLegacyAdoptedRunMailboxOwner: () => null,
       getCurrentRunForPane: () => undefined,
+      getCurrentRunForCoordinator: () => undefined,
       getActiveDispatchForIdentity: () => ({ run_id: 'run_1' }),
       getActiveDispatchMailboxOwners: () => [],
       getRunMailboxOwnerIdsForHandle: () => [],
@@ -262,12 +264,19 @@ describe('sendGroupMessage actually composes structured workers in', () => {
       getOrchestrationDb: () => db,
       notifyMessageArrived: () => {}
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub cast is unchanged; the gate flags it only because this diff adds the sender field inside its span.
     await sendGroupMessage({
       params: { subject: 's', body: 'b', type: 'status', priority: 'normal' },
       runtime: runtime as never,
       db: db as never,
       from: 'term_sender',
       groupAddress: '@codex',
+      sender: {
+        address: 'term_sender',
+        terminalHandle: 'term_sender',
+        paneKey: null,
+        orcaSessionId: null
+      },
       senderPaneKey: undefined,
       senderRunId: 'run_1',
       explicitRunId: undefined,
