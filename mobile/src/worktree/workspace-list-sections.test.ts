@@ -802,4 +802,100 @@ describe('buildSections', () => {
     expect(sections[0]?.data[0]?.lineageChildCount).toBe(1)
     expect(sections[0]?.data[0]?.lineageCollapsed).toBe(true)
   })
+
+  it('nests child workspaces under a pinned parent in the Pinned section (#20674)', () => {
+    const parent = worktree({ worktreeId: 'parent', isPinned: true })
+    const child = worktree({ worktreeId: 'child', parentWorktreeId: 'parent' })
+    const grandchild = worktree({ worktreeId: 'grandchild', parentWorktreeId: 'child' })
+    const sibling = worktree({ worktreeId: 'sibling' })
+
+    const sections = buildSections(
+      [parent, child, grandchild, sibling],
+      'manual',
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      '',
+      'none',
+      new Set()
+    )
+
+    expect(sections[0]?.key).toBe('pinned')
+    expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual([
+      'parent',
+      'child',
+      'grandchild'
+    ])
+    expect(sections[0]?.data.map((worktree) => worktree.lineageDepth)).toEqual([0, 1, 2])
+    expect(sections[0]?.data[0]?.lineageChildCount).toBe(1)
+    // The overlay keeps the pinned subtree and the unrelated row in the canonical All group.
+    expect(sections[1]?.key).toBe('all')
+    expect(sections[1]?.data.map((worktree) => worktree.worktreeId)).toEqual([
+      'parent',
+      'child',
+      'grandchild',
+      'sibling'
+    ])
+  })
+
+  it('keeps a client-side pinned parent and its child together in the Pinned section', () => {
+    const parent = worktree({ worktreeId: 'parent' })
+    const child = worktree({ worktreeId: 'child', parentWorktreeId: 'parent' })
+
+    const sections = buildSections(
+      [parent, child],
+      'manual',
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      '',
+      'none',
+      new Set(['parent'])
+    )
+
+    expect(sections[0]?.key).toBe('pinned')
+    expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['parent', 'child'])
+    expect(sections[0]?.data.map((worktree) => worktree.lineageDepth)).toEqual([0, 1])
+  })
+
+  it("does not pull a pinned child's unpinned parent into the Pinned section", () => {
+    const parent = worktree({ worktreeId: 'parent' })
+    const pinnedChild = worktree({
+      worktreeId: 'child',
+      parentWorktreeId: 'parent',
+      isPinned: true
+    })
+
+    const sections = buildSections(
+      [parent, pinnedChild],
+      'manual',
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      '',
+      'none',
+      new Set()
+    )
+
+    expect(sections[0]?.key).toBe('pinned')
+    expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['child'])
+    expect(sections[0]?.data[0]?.lineageDepth).toBe(0)
+    expect(sections[1]?.data.map((worktree) => worktree.worktreeId)).toEqual(['parent', 'child'])
+  })
+
+  it('collapses children under a pinned parent using the shared lineage collapse state', () => {
+    const parent = worktree({ worktreeId: 'parent', isPinned: true })
+    const child = worktree({ worktreeId: 'child', parentWorktreeId: 'parent' })
+
+    const sections = buildSections(
+      [parent, child],
+      'manual',
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      '',
+      'none',
+      new Set(),
+      new Map(),
+      DEFAULT_MOBILE_WORKSPACE_STATUSES,
+      new Set([getMobileWorkspaceLineageGroupKey(parent)])
+    )
+
+    expect(sections[0]?.key).toBe('pinned')
+    expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['parent'])
+    expect(sections[0]?.data[0]?.lineageChildCount).toBe(1)
+    expect(sections[0]?.data[0]?.lineageCollapsed).toBe(true)
+  })
 })
