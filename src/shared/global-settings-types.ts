@@ -193,6 +193,8 @@ export type GlobalSettings = {
   terminalFocusFollowsMouse: boolean
   /** X11/gnome-terminal "copy on select": selecting text auto-copies to the clipboard; default off. */
   terminalClipboardOnSelect: boolean
+  /** Drag selects text even while a TUI reports the mouse (Option/Alt-drag reaches the app instead); default off. */
+  terminalSelectionOverMouseReporting: boolean
   /** Drops the left gutter agent CLIs paint their output behind when copying a terminal selection; default on. */
   terminalCopyTrimsGutter: boolean
   /** Enables OSC 52 clipboard writes for TUIs (tmux/Zellij/nvim, incl. over SSH); default on. Clipboard *queries* stay blocked and payload size is capped, so this is write-only exposure. */

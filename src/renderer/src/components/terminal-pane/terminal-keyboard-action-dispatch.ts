@@ -2,6 +2,8 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { PtyTransport } from './pty-transport'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { maybeShowMouseReportingCopyHint } from './terminal-mouse-reporting-copy-hint'
+import { isMacPlatform } from './terminal-link-open-hints'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import {
   markTerminalFollowOutput,
@@ -85,7 +87,11 @@ export function dispatchTerminalShortcutAction(
 
   if (action.type === 'copySelection') {
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
-    if (!pane || !pane.terminal.getSelection()) {
+    if (!pane) {
+      return
+    }
+    if (!pane.terminal.getSelection()) {
+      maybeShowMouseReportingCopyHint(pane.terminal, isMacPlatform())
       return
     }
     event.preventDefault()

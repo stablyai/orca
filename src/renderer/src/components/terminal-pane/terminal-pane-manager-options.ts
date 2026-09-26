@@ -156,6 +156,8 @@ export function createTerminalPaneManagerOptions(
         ),
         macOptionIsMeta: context.deps.effectiveMacOptionAsAltRef.current === 'true',
         lineHeight: normalizeTerminalLineHeight(currentSettings?.terminalLineHeight),
+        // Why: a TUI that reports the mouse otherwise owns every drag, so xterm never has a selection for Cmd/Ctrl+C.
+        mouseEventsRequireAlt: currentSettings?.terminalSelectionOverMouseReporting === true,
         wordSeparator: currentSettings?.terminalWordSeparator
       }
     },
