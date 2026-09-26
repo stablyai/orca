@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
 import { buildPaneActivityEvents } from '@/components/activity/activity-pane-events'
 import { makeTab, makeWorktree } from '@/components/activity/ActivityPrototypePage-test-fixtures'
 import type { AppState } from '../types'
@@ -21,6 +22,7 @@ import {
 // Every copy of a row's verdict carries it: history, sleep records and their equality checks.
 // A copy that kept only `interrupted` would read a failure as a clean finish.
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+const FAILED_MAIN_AGENT = { state: 'done', outcome: 'failure', stateStartedAt: 2_000 } as const
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these readers touch only the three maps given; every tab lookup is answered by the tab the caller passes.
 const STATE = {
   sleepingAgentSessionsByPaneKey: {},
@@ -65,13 +67,22 @@ describe('a failed done keeps its verdict in every copy', () => {
       { state: 'working' },
       3_000
     )
-    expect(history.at(-1)).toMatchObject({ state: 'done', outcome: 'failure' })
+    expect(history.at(-1)).toMatchObject({
+      state: 'done',
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 2_000 }
+    })
   })
 
-  it('draws a history done as failed, not with the live row verdict', () => {
+  it('draws a history done as failed from its own main agent status, not the live row', () => {
+    // The main agent failed before the row settled, so its clock differs from the row's.
+    const mainAgent = { ...FAILED_MAIN_AGENT, stateStartedAt: 1_500 }
     const entry: AgentStatusEntry = {
       ...failedDone({ state: 'working', stateStartedAt: 3_000, mainAgent: undefined }),
-      stateHistory: [{ state: 'done', prompt: 'ship it', startedAt: 2_000, outcome: 'failure' }]
+      stateHistory: resolveAgentStatusLiveEntryStateHistory(
+        failedDone({ mainAgent }),
+        { state: 'working' },
+        3_000
+      ).history
     }
     const events = buildPaneActivityEvents({
       entry,
@@ -85,6 +96,7 @@ describe('a failed done keeps its verdict in every copy', () => {
       liveState: null
     })
     const done = events.find((event) => event.state === 'done')
+    expect(done?.entry.mainAgent).toEqual(mainAgent)
     expect(done && agentTitle(done)).toBe('Agent failed')
     expect(done && agentMeta(done)).toBe('Claude failed')
   })
@@ -98,11 +110,43 @@ describe('a failed done keeps its verdict in every copy', () => {
       capturedAt: 3_000,
       origin: 'live'
     })
-    expect(sleeping).toMatchObject({ outcome: 'failure' })
+    expect(sleeping?.mainAgent).toEqual({
+      state: 'done',
+      outcome: 'failure',
+      stateStartedAt: 2_000
+    })
     expect(isValidCompletedAgentHibernationEntry(failedDone())).toBe(false)
     // A live checkpoint of a turn that failed is still work the user owns.
-    expect(isPassiveCompletedHibernationEvidence(record({ outcome: 'failure' }))).toBe(false)
+    expect(isPassiveCompletedHibernationEvidence(record({ mainAgent: FAILED_MAIN_AGENT }))).toBe(
+      false
+    )
     expect(isPassiveCompletedHibernationEvidence(record())).toBe(true)
+  })
+
+  it('keeps the main agent status through persistence, and drops only a malformed one', () => {
+    const hydrate = (sleeping: unknown) => {
+      const result = parseWorkspaceSession({
+        activeRepoId: null,
+        activeWorktreeId: null,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        sleepingAgentSessionsByPaneKey: { [PANE_KEY]: sleeping }
+      })
+      return result.ok ? result.value.sleepingAgentSessionsByPaneKey?.[PANE_KEY] : undefined
+    }
+    const sleeping = sleepingRecordFromEntry({
+      state: STATE,
+      entry: failedDone(),
+      worktreeId: 'wt-1',
+      tab: makeTab(),
+      capturedAt: 3_000,
+      origin: 'live'
+    })
+    expect(hydrate(sleeping)?.mainAgent).toEqual(FAILED_MAIN_AGENT)
+    const malformed = hydrate({ ...sleeping, mainAgent: { state: 'done', outcome: 'failure' } })
+    expect(malformed).toMatchObject({ paneKey: PANE_KEY, state: 'done', origin: 'live' })
+    expect(malformed?.mainAgent).toBeUndefined()
   })
 
   it('leaves the verdict behind when the user sleeps the workspace', () => {
@@ -140,8 +184,8 @@ describe('a failed done keeps its verdict in every copy', () => {
   })
 
   it('treats a verdict change as a different record even when interrupted did not move', () => {
-    const clean = record({ outcome: 'success' })
-    const failed = record({ outcome: 'failure' })
+    const clean = record({ mainAgent: { ...FAILED_MAIN_AGENT, outcome: 'success' } })
+    const failed = record({ mainAgent: FAILED_MAIN_AGENT })
     expect(sleepingRecordsEquivalentIgnoringCaptureTime(clean, failed)).toBe(false)
     expect(recoveryRecordMatches(clean, failed)).toBe(false)
     expect(sleepingRecordsEquivalentIgnoringCaptureTime(failed, { ...failed })).toBe(true)

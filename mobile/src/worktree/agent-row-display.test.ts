@@ -10,10 +10,16 @@ import {
   agentDisplayLabel,
   agentDotState,
   agentIdentityLabel,
+  agentRowTimeAt,
   agentRowVerdict,
   agentRowVerdictMark,
   formatTimeAgo
 } from './agent-row-display'
+
+type Outcome = (typeof AGENT_JOURNAL_TURN_OUTCOMES)[number]
+const mainAgentDone = (outcome: Outcome, stateStartedAt = 0) => ({
+  mainAgent: { state: 'done' as const, outcome, stateStartedAt }
+})
 
 function row(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktreeAgentRow {
   return {
@@ -46,29 +52,43 @@ describe('agentDotState', () => {
 
   it('reports the verdict of a done row: failed, interrupted, or an old host legacy flag', () => {
     expect(agentDotState(row({ state: 'done', interrupted: true }), 0)).toBe('interrupted')
-    expect(agentDotState(row({ state: 'done', outcome: 'failure' }), 0)).toBe('failed')
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('failure') }), 0)).toBe('failed')
     expect(
-      agentDotState(row({ state: 'done', outcome: 'cancellation', interrupted: true }), 0)
+      agentDotState(row({ state: 'done', ...mainAgentDone('cancellation'), interrupted: true }), 0)
     ).toBe('interrupted')
-    expect(agentDotState(row({ state: 'done', outcome: 'success' }), 0)).toBe('done')
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('success') }), 0)).toBe('done')
   })
 
   it('shows a main agent that failed while its subagents still run as failed', () => {
-    expect(agentDotState(row({ state: 'working', outcome: 'failure' }), 0)).toBe('failed')
-    expect(agentDotState(row({ state: 'waiting', outcome: 'failure' }), 0)).toBe('failed')
+    expect(agentDotState(row({ state: 'working', ...mainAgentDone('failure') }), 0)).toBe('failed')
+    expect(agentDotState(row({ state: 'waiting', ...mainAgentDone('failure') }), 0)).toBe('failed')
     // Only a failure outranks live work; a success or a stop with live subagents reads working.
-    expect(agentDotState(row({ state: 'working', outcome: 'success' }), 0)).toBe('working')
+    expect(agentDotState(row({ state: 'working', ...mainAgentDone('success') }), 0)).toBe('working')
     expect(
-      agentDotState(row({ state: 'working', outcome: 'cancellation', interrupted: true }), 0)
+      agentDotState(
+        row({ state: 'working', ...mainAgentDone('cancellation'), interrupted: true }),
+        0
+      )
     ).toBe('working')
   })
 
   // The shared accessor cannot be imported by app code here, so this mirror must not drift from it.
   it('agrees with the desktop verdict accessor on every row shape', () => {
-    for (const state of ['working', 'blocked', 'waiting', 'done'] as const) {
-      for (const outcome of [undefined, ...AGENT_JOURNAL_TURN_OUTCOMES]) {
+    const states = ['working', 'blocked', 'waiting', 'done'] as const
+    const mainAgents = [
+      undefined,
+      ...states.flatMap((state) =>
+        [undefined, ...AGENT_JOURNAL_TURN_OUTCOMES].map((outcome) => ({
+          state,
+          ...(outcome ? { outcome } : {}),
+          stateStartedAt: 0
+        }))
+      )
+    ]
+    for (const state of states) {
+      for (const mainAgent of mainAgents) {
         for (const interrupted of [false, true]) {
-          const shape = { state, interrupted, ...(outcome ? { outcome } : {}) }
+          const shape = { state, interrupted, ...(mainAgent ? { mainAgent } : {}) }
           expect(agentRowVerdict(shape), JSON.stringify(shape)).toBe(agentMainAgentVerdict(shape))
           expect(agentRowVerdictMark(shape), JSON.stringify(shape)).toBe(
             agentVerdictDisplayMark(shape)
@@ -93,6 +113,28 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'done', updatedAt: 0, interrupted: true }), stale)).toBe(
       'interrupted'
     )
+  })
+})
+
+describe('agentRowTimeAt', () => {
+  it('dates a main agent that failed while its subagents run by its own failure', () => {
+    expect(
+      agentRowTimeAt(
+        row({ state: 'working', stateStartedAt: 100, ...mainAgentDone('failure', 900) })
+      )
+    ).toBe(900)
+  })
+
+  it('dates every other row by when its state began', () => {
+    expect(
+      agentRowTimeAt(
+        row({ state: 'working', stateStartedAt: 100, ...mainAgentDone('success', 900) })
+      )
+    ).toBe(100)
+    expect(
+      agentRowTimeAt(row({ state: 'done', stateStartedAt: 100, ...mainAgentDone('failure', 900) }))
+    ).toBe(100)
+    expect(agentRowTimeAt(row({ state: 'working', stateStartedAt: 100 }))).toBe(100)
   })
 })
 

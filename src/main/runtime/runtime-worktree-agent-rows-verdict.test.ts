@@ -138,7 +138,11 @@ describe('a request that failed reads as failed through the feed, the ingest and
       mainAgent: { state: 'done', outcome: 'failure' }
     })
     expect(status?.interrupted).not.toBe(true)
-    expect(ps).toMatchObject({ state: 'done', outcome: 'failure', interrupted: false })
+    expect(ps).toMatchObject({
+      state: 'done',
+      mainAgent: { state: 'done', outcome: 'failure' },
+      interrupted: false
+    })
   })
 
   it('reads a cancelled structured turn as interrupted for readers that predate the verdict', async () => {
@@ -157,7 +161,10 @@ describe('a request that failed reads as failed through the feed, the ingest and
 
     const { status, ps } = ingest(publishedSummary(journal))
     expect(status).toMatchObject({ state: 'done', interrupted: true })
-    expect(ps).toMatchObject({ outcome: 'cancellation', interrupted: true })
+    expect(ps).toMatchObject({
+      mainAgent: { state: 'done', outcome: 'cancellation' },
+      interrupted: true
+    })
   })
 
   it('publishes a main agent that failed while its subagent runs, on the row that still works', async () => {
@@ -177,7 +184,16 @@ describe('a request that failed reads as failed through the feed, the ingest and
       state: 'working',
       mainAgent: { state: 'done', outcome: 'failure' }
     })
-    expect(ps).toMatchObject({ state: 'working', outcome: 'failure', interrupted: false })
+    // The row carries the main agent's own clock, which dates the failure apart from the working row.
+    expect(ps).toMatchObject({
+      state: 'working',
+      mainAgent: {
+        state: 'done',
+        outcome: 'failure',
+        stateStartedAt: status?.mainAgent?.stateStartedAt
+      },
+      interrupted: false
+    })
   })
 
   it('lists nothing for a chat whose only send the user withdrew', async () => {

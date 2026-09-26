@@ -21,6 +21,13 @@ function agent(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktre
   }
 }
 
+function done(
+  outcome: 'success' | 'failure',
+  stateStartedAt = 1
+): NonNullable<RuntimeWorktreeAgentRow['mainAgent']> {
+  return { state: 'done', outcome, stateStartedAt }
+}
+
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   const worktreePath = join('/tmp', 'orca', 'worktrees', 'manta')
   return {
@@ -161,17 +168,28 @@ describe('areWorktreeListsEqual', () => {
   })
 
   it('detects a verdict change that leaves the interrupted flag as it was', () => {
-    const first = [worktree({ agents: [agent({ state: 'done', outcome: 'success' })] })]
-    const second = [worktree({ agents: [agent({ state: 'done', outcome: 'failure' })] })]
+    const first = [worktree({ agents: [agent({ state: 'done', mainAgent: done('success') })] })]
+    const second = [worktree({ agents: [agent({ state: 'done', mainAgent: done('failure') })] })]
 
     expect(areWorktreeListsEqual(first, second)).toBe(false)
   })
 
   it('detects a main agent failing while its subagents keep the row working', () => {
     const first = [worktree({ agents: [agent({ state: 'working' })] })]
-    const second = [worktree({ agents: [agent({ state: 'working', outcome: 'failure' })] })]
+    const second = [worktree({ agents: [agent({ state: 'working', mainAgent: done('failure') })] })]
 
     expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
+  it('detects the main agent clock moving, which dates a failure', () => {
+    const at = (stateStartedAt: number) => [
+      worktree({
+        agents: [agent({ state: 'working', mainAgent: done('failure', stateStartedAt) })]
+      })
+    ]
+
+    expect(areWorktreeListsEqual(at(1), at(2))).toBe(false)
+    expect(areWorktreeListsEqual(at(1), at(1))).toBe(true)
   })
 
   it('detects monitoring mode changes within working', () => {

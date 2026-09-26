@@ -1,5 +1,5 @@
 import type { AgentStatusState } from './agent-status-types'
-import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
+import type { AgentMainAgentStatus } from './main-agent-status'
 
 /** A snapshot of a previous agent state, used to render activity blocks.
  *  Why: intentionally narrower than AgentStatusEntry — tool/assistant context is
@@ -17,9 +17,9 @@ export type AgentStateHistoryEntry = {
   /** True when this `done` was a cancellation (agent hook like Claude `is_interrupt`,
    *  or Orca's guarded fallback). Always falsy for non-`done` states so retention logic can preserve it. */
   interrupted?: boolean
-  /** The main agent's verdict on this `done`, copied with `interrupted`; read it through
-   *  `agentMainAgentVerdict`. Absent on entries older clients recorded. */
-  outcome?: AgentJournalTurnOutcome
+  /** The main agent's own status when this state was left, copied with `interrupted` by
+   *  `agentVerdictFields`; read the verdict through `agentMainAgentVerdict`. */
+  mainAgent?: AgentMainAgentStatus
 }
 
 /** Maximum number of history entries kept per agent to bound memory. */

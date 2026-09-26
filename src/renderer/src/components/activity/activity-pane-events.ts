@@ -28,10 +28,8 @@ function historyEntrySnapshot(
     toolInput: undefined,
     lastAssistantMessage: undefined,
     interrupted: history.interrupted,
-    // The live row's main agent belongs to its current state; this snapshot keeps only its own verdict.
-    mainAgent: history.outcome
-      ? { state: history.state, outcome: history.outcome, stateStartedAt: history.startedAt }
-      : undefined
+    // The live row's main agent belongs to its current state, not to this snapshot.
+    mainAgent: history.mainAgent
   }
 }
 

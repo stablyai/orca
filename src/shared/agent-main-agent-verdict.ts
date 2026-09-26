@@ -1,22 +1,38 @@
 import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { AgentStatusState } from './agent-status-types'
+import type { AgentMainAgentStatus } from './main-agent-status'
 
 export type AgentMainAgentVerdictSource = {
   state: AgentStatusState
   interrupted?: boolean
   mainAgent?: { state: AgentStatusState; outcome?: AgentJournalTurnOutcome }
-  /** History entries, sleep records and `worktree ps` rows carry the main agent's verdict at the
-   *  top level; every writer records it only for a main agent that is itself done. */
-  outcome?: AgentJournalTurnOutcome
+}
+
+/** The fields that carry the verdict. History entries, sleep records and `worktree ps` rows copy
+ *  them through {@link agentVerdictFields}, so no copy keeps one form and drops the other. */
+export type AgentVerdictFields = {
+  interrupted?: true
+  mainAgent?: AgentMainAgentStatus
+}
+
+/** The verdict-bearing fields to copy from a row onto another record. */
+export function agentVerdictFields(row: {
+  interrupted?: boolean
+  mainAgent?: AgentMainAgentStatus
+}): AgentVerdictFields {
+  return {
+    ...(row.interrupted === true ? { interrupted: true } : {}),
+    ...(row.mainAgent ? { mainAgent: row.mainAgent } : {})
+  }
 }
 
 /**
  * The recorded verdict on the main agent's latest finished turn. One fact at two fidelities:
- * `mainAgent.outcome` (or its top-level copy), and the legacy `interrupted` flag, which only ever
- * meant a cancellation. Read from the main agent's own state, not the combined row's: a main agent
- * that failed while its subagents still work has a verdict. Null while the main agent is not done,
- * and when no verdict was recorded. Only the legacy flag needs the combined `done`, because a row
- * without `mainAgent` has nothing else that says the main agent itself finished.
+ * `mainAgent.outcome`, and the legacy `interrupted` flag, which only ever meant a cancellation.
+ * Read from the main agent's own state, not the combined row's: a main agent that failed while its
+ * subagents still work has a verdict. Null while the main agent is not done, and when no verdict
+ * was recorded. Only the legacy flag needs the combined `done`, because a row without `mainAgent`
+ * has nothing else that says the main agent itself finished.
  */
 export function agentMainAgentVerdict(
   row: AgentMainAgentVerdictSource
@@ -26,7 +42,6 @@ export function agentMainAgentVerdict(
   }
   return (
     row.mainAgent?.outcome ??
-    row.outcome ??
     (row.state === 'done' && row.interrupted === true ? 'cancellation' : null)
   )
 }

@@ -13,6 +13,10 @@ import {
 // under test so a drifted constant cannot make this reference silently disagree for a reason
 // unrelated to the change.
 const BUCKET_MS = AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS
+type MainAgentStatus = AppState['agentStatusByPaneKey'][string]['mainAgent']
+function mainAgentKey(mainAgent: MainAgentStatus) {
+  return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
+}
 function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
   return JSON.stringify(
     Object.entries(map)
@@ -32,7 +36,7 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
           prompt: history.prompt,
           startedAt: history.startedAt,
           interrupted: history.interrupted ?? null,
-          outcome: history.outcome ?? null
+          mainAgent: mainAgentKey(history.mainAgent)
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
@@ -40,7 +44,7 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
         interrupted: entry.interrupted ?? null,
-        outcome: entry.mainAgent?.outcome ?? null
+        mainAgent: mainAgentKey(entry.mainAgent)
       }))
   )
 }
@@ -155,7 +159,14 @@ describe('mobile agent-status projection equivalence', () => {
         'tab-0:leaf-0': makeEntry(0, {
           state: 'done',
           mainAgent: { state: 'done', outcome: live, stateStartedAt: 1740000000000 },
-          stateHistory: [{ state: 'done', prompt: 'p', startedAt: 1, outcome: history }]
+          stateHistory: [
+            {
+              state: 'done',
+              prompt: 'p',
+              startedAt: 1,
+              mainAgent: { state: 'done', outcome: history, stateStartedAt: 1 }
+            }
+          ]
         })
       })
     expect(project('failure', 'success')).not.toBe(project('success', 'success'))
@@ -164,17 +175,15 @@ describe('mobile agent-status projection equivalence', () => {
 
   it('republishes a main agent failing while its subagents keep the row working', () => {
     resetRuntimeMobileAgentStatusProjectionCacheForTests()
-    const project = (outcome?: 'failure'): string =>
+    const project = (outcome?: 'failure', stateStartedAt = 1740000000000): string =>
       buildRuntimeMobileAgentStatusProjectionForTests({
         'tab-0:leaf-0': makeEntry(0, {
           state: 'working',
-          mainAgent: {
-            state: 'done',
-            ...(outcome ? { outcome } : {}),
-            stateStartedAt: 1740000000000
-          }
+          mainAgent: { state: 'done', ...(outcome ? { outcome } : {}), stateStartedAt }
         })
       })
     expect(project('failure')).not.toBe(project())
+    // The main agent's own clock dates the failure on mobile, so moving it republishes too.
+    expect(project('failure', 1740000001000)).not.toBe(project('failure'))
   })
 })

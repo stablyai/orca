@@ -35,6 +35,11 @@ const { AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS } = await import('./sync-runtime-
 
 // ── Reference implementations: the pre-change bodies, kept verbatim ────────────────────
 
+type MainAgentStatus = AppState['agentStatusByPaneKey'][string]['mainAgent']
+function mainAgentKey(mainAgent: MainAgentStatus) {
+  return mainAgent ? [mainAgent.state, mainAgent.outcome ?? null, mainAgent.stateStartedAt] : null
+}
+
 function referenceEditorDraftsProjection(editorDrafts: AppState['editorDrafts']): string {
   return JSON.stringify(
     Object.fromEntries(
@@ -113,7 +118,7 @@ function referenceAgentStatusProjection(map: AppState['agentStatusByPaneKey']): 
           prompt: history.prompt,
           startedAt: history.startedAt,
           interrupted: history.interrupted ?? null,
-          outcome: history.outcome ?? null
+          mainAgent: mainAgentKey(history.mainAgent)
         })),
         toolName: entry.toolName ?? null,
         toolInput: entry.toolInput ?? null,
@@ -121,7 +126,7 @@ function referenceAgentStatusProjection(map: AppState['agentStatusByPaneKey']): 
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
         interrupted: entry.interrupted ?? null,
-        outcome: entry.mainAgent?.outcome ?? null
+        mainAgent: mainAgentKey(entry.mainAgent)
       }))
   )
 }

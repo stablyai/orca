@@ -324,7 +324,7 @@ function normalizeSubagentsField(value: unknown): AgentSubagentSnapshot[] | unde
 
 /** A malformed `mainAgent` drops the FIELD, never the row: the combined `state` is still valid
  *  evidence, and readers fall back to it exactly as they do for a host that predates the field. */
-function normalizeMainAgentStatusField(value: unknown): AgentMainAgentStatus | undefined {
+export function normalizeMainAgentStatusField(value: unknown): AgentMainAgentStatus | undefined {
   if (typeof value !== 'object' || value === null) {
     return undefined
   }
