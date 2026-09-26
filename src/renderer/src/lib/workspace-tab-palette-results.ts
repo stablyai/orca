@@ -107,7 +107,8 @@ function resolveWorkspaceTabLastActiveAt(entry: SearchableWorkspaceTab): number 
   ])
 }
 
-function baseResult(
+/** The unmatched row for a tab: identity, labels and position, with no match ranges or rank. */
+export function buildWorkspaceTabBaseResult(
   entry: SearchableWorkspaceTab,
   context: PaletteSearchContext
 ): WorkspaceTabPaletteSearchResult {
@@ -165,7 +166,7 @@ function matchEntry(
       return null
     }
     return {
-      ...baseResult(entry, context),
+      ...buildWorkspaceTabBaseResult(entry, context),
       secondaryText: snippet.text,
       secondaryRanges: snippet.ranges,
       qualityClass: 'fuzzy-evidence',
@@ -192,7 +193,7 @@ function matchEntry(
     match.typeAlias !== null ? (entry.typeSearchAliases ?? [])[match.typeAlias.index] : undefined
 
   return {
-    ...baseResult(entry, context),
+    ...buildWorkspaceTabBaseResult(entry, context),
     secondaryText,
     secondaryMatches: match.secondaryMatches.map((secondary) => ({
       text: entry.secondarySearchTexts[secondary.index] ?? '',
@@ -229,7 +230,9 @@ export function searchWorkspaceTabs(
   }
   const prepared = preparePaletteTabQuery(query)
   if (!prepared) {
-    return entries.map((entry) => baseResult(entry, context)).sort(compareEmptyQueryResults)
+    return entries
+      .map((entry) => buildWorkspaceTabBaseResult(entry, context))
+      .sort(compareEmptyQueryResults)
   }
 
   const results: WorkspaceTabPaletteSearchResult[] = []

@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import type { WorkspaceTabPaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import {
+  HighlightedText,
   PaletteHostBadgeChip,
   PaletteLocationChip,
   PaletteOpenTabPrimaryLine,
@@ -96,6 +97,17 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
                 </>
               }
             />
+            {entry.transcriptSnippet ? (
+              <div
+                data-slot="palette-open-tab-transcript-snippet"
+                className="mt-0.5 truncate text-[12px] text-muted-foreground"
+              >
+                <HighlightedText
+                  text={entry.transcriptSnippet.text}
+                  matchRanges={entry.transcriptSnippet.ranges}
+                />
+              </div>
+            ) : null}
             {result.typeAliasMatches.length ? (
               <span className="sr-only">
                 {result.typeAliasMatches.map((match) => match.text).join(', ')}

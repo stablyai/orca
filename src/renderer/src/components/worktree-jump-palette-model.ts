@@ -1,5 +1,5 @@
 import type { BrowserPaletteSearchResult } from '@/lib/browser-palette-search'
-import type { PaletteSearchResult } from '@/lib/worktree-palette-search'
+import type { MatchRange, PaletteSearchResult } from '@/lib/worktree-palette-search'
 import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search'
 import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace-tab-palette-search'
 import type {
@@ -35,10 +35,14 @@ export type SimulatorPaletteItem = {
   result: SimulatorPaletteSearchResult
 }
 
+export type PaletteTranscriptSnippet = { text: string; ranges: readonly MatchRange[] }
+
 export type WorkspaceTabPaletteItem = {
   id: string
   type: 'workspace-tab'
   result: WorkspaceTabPaletteSearchResult
+  /** Evidence from the session index when this chat's transcript matched the query. */
+  transcriptSnippet?: PaletteTranscriptSnippet
 }
 
 export type SettingsPaletteItem = {

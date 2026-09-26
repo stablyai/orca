@@ -2,30 +2,31 @@ import type React from 'react'
 import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import { translate } from '@/i18n/i18n'
 import { conversationRoleLabel } from './ai-vault-session-row-display'
+import { parseAiVaultSnippetMarks } from './ai-vault-search-snippet-marks'
 
 export function highlightedSearchSnippet(snippet: string): React.ReactNode[] {
+  const { text, ranges } = parseAiVaultSnippetMarks(snippet)
   const parts: React.ReactNode[] = []
-  const marker = /\[\[([\s\S]*?)\]\]/g
   let offset = 0
 
-  for (const match of snippet.matchAll(marker)) {
-    const index = match.index
-    if (index > offset) {
-      parts.push(snippet.slice(offset, index))
+  for (const range of ranges) {
+    if (range.start > offset) {
+      parts.push(text.slice(offset, range.start))
     }
+    const marked = text.slice(range.start, range.end)
     parts.push(
       <mark
-        key={`${index}:${match[1]}`}
+        key={`${range.start}:${marked}`}
         className="rounded-sm bg-sidebar-accent px-0.5 font-medium text-sidebar-accent-foreground"
       >
-        {match[1]}
+        {marked}
       </mark>
     )
-    offset = index + match[0].length
+    offset = range.end
   }
 
-  if (offset < snippet.length) {
-    parts.push(snippet.slice(offset))
+  if (offset < text.length) {
+    parts.push(text.slice(offset))
   }
   return parts
 }

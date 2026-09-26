@@ -40,7 +40,8 @@ type SearchPage = {
 export function useAiVaultSearch(
   request: AiVaultSearchRequest | null,
   scope: ExecutionHostScope | null,
-  policyKey: string
+  policyKey: string,
+  debounceMs = 250
 ) {
   const [page, setPage] = useState<SearchPage | null>(null)
   const [revision, setRevision] = useState(0)
@@ -104,13 +105,13 @@ export function useAiVaultSearch(
       }
     }
     loadPage.current = (cursor) => void run(cursor)
-    const timer = setTimeout(() => void run(), 250)
+    const timer = setTimeout(() => void run(), debounceMs)
     return () => {
       cancelled = true
       loadPage.current = null
       clearTimeout(timer)
     }
-  }, [identity])
+  }, [identity, debounceMs])
 
   const current = page?.identity === identity ? page : null
   return {
@@ -133,6 +134,16 @@ export function useAiVaultSearch(
   }
 }
 
+/** This desktop's own index answers only once the user has turned indexing on; other hosts decide for themselves. */
+export function aiVaultSearchNeedsLocalConsent(
+  executionHostScope: ExecutionHostScope,
+  localPolicyEnabled: boolean
+): boolean {
+  return (
+    executionHostScope === LOCAL_EXECUTION_HOST_ID && !isWebClientLocation() && !localPolicyEnabled
+  )
+}
+
 /** Under `all` every hit names its own host; a single-host answer belongs to the host we addressed. */
 function hitExecutionHostId(hit: AiVaultSearchHit, host: ExecutionHostId | null): ExecutionHostId {
   return host ?? parseExecutionHostId(hit.executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID
@@ -153,8 +164,7 @@ export function useAiVaultPanelSearch(
     executionHostScope === ALL_EXECUTION_HOSTS_SCOPE ? ALL_EXECUTION_HOSTS_SCOPE : host
   const trimmed = query.trim()
   const hasQuery = trimmed.length > 0
-  const needsLocalConsent =
-    executionHostScope === 'local' && !isWebClientLocation() && !policy.enabled
+  const needsLocalConsent = aiVaultSearchNeedsLocalConsent(executionHostScope, policy.enabled)
   // Until indexing is on the box is still the legacy title filter, not index search.
   const searching = hasQuery && !needsLocalConsent
   // `within` is memoized by the caller; a fresh object per render would restart

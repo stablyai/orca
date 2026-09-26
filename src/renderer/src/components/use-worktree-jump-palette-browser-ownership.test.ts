@@ -52,6 +52,7 @@ it('keeps same-id browser results on their owner with recency, and follows owner
     repoByHostIdentity: new Map(),
     worktreeOrder: new Map(),
     worktreeMatches: [],
+    transcriptMatches: [],
     hasQuery: true,
     deferredQuery: 'Browser proof',
     browserTabsByWorktree: { 'same-id': [workspace] },
