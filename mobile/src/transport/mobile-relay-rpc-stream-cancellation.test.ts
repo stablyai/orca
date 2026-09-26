@@ -200,7 +200,8 @@ describe('mobile relay subscription cancellation', () => {
       const older = vi.fn()
       const newer = vi.fn()
       const cancelOlder = streams.subscribe(method, params, older)
-      const cancelNewer = streams.subscribe(method, { ...params }, newer)
+      // A non-slot param differs, which must not split the siblings.
+      const cancelNewer = streams.subscribe(method, { ...params, limit: 5 }, newer)
       await Promise.resolve()
       expect(sendFrame).toHaveBeenCalledTimes(2)
       cancelOlder()
@@ -217,6 +218,84 @@ describe('mobile relay subscription cancellation', () => {
       )
     }
   )
+
+  it('sends no terminal unsubscribe when the listener disposes on end', async () => {
+    const { streams, sendFrame } = createStreams()
+    const events: unknown[] = []
+    let dispose = (): void => {}
+    dispose = streams.subscribe(
+      'terminal.subscribe',
+      { terminal: 'term', client: { id: 'phone', type: 'mobile' } },
+      (event) => {
+        events.push(event)
+        // The host already ended it; a slot-named unsubscribe would retire a newer same-slot stream.
+        dispose()
+      }
+    )
+    await Promise.resolve()
+
+    expect(streams.handleResponse(response('request-1', { type: 'end' }))).toBe(true)
+    dispose()
+
+    expect(events).toEqual([{ type: 'end' }])
+    expect(sendFrame).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['nativeChat.subscribe', { agent: 'claude', sessionId: 's1', subscriptionId: 'claude:s1' }],
+    ['terminal.subscribe', { terminal: 'term', client: { id: 'phone' } }]
+  ])(
+    'unsubscribes the newer %s while the evicted older one is still live',
+    async (method, params) => {
+      const { streams, sendFrame } = createStreams()
+      streams.subscribe(method, params, vi.fn())
+      const cancelNewer = streams.subscribe(method, { ...params }, vi.fn())
+      await Promise.resolve()
+      expect(sendFrame).toHaveBeenCalledTimes(2)
+
+      // The newer registration evicted the older on the host; the older's end is still in flight.
+      cancelNewer()
+
+      expect(sendFrame).toHaveBeenCalledTimes(3)
+      expect(sendFrame).toHaveBeenLastCalledWith(
+        expect.objectContaining({ method: method.replace(/\.subscribe$/, '.unsubscribe') })
+      )
+    }
+  )
+
+  it('orders same-slot terminal siblings by when they were sent, not when they subscribed', async () => {
+    const connection = Promise.withResolvers<void>()
+    let waits = 0
+    // The first subscriber waits for the connection; the second is sent at once, so it is older.
+    const { streams, sendFrame } = createStreams(() =>
+      ++waits === 1 ? connection.promise : Promise.resolve()
+    )
+    const cancelSentLast = streams.subscribe(
+      'terminal.subscribe',
+      { terminal: 'term', client: { id: 'phone' }, viewport: { cols: 40, rows: 20 } },
+      vi.fn()
+    )
+    const cancelSentFirst = streams.subscribe(
+      'terminal.subscribe',
+      { terminal: 'term', client: { id: 'phone' }, viewport: { cols: 60, rows: 30 } },
+      vi.fn()
+    )
+    await Promise.resolve()
+    connection.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(sendFrame.mock.calls.map(([request]) => request.id)).toEqual(['request-2', 'request-1'])
+
+    cancelSentFirst()
+    expect(sendFrame).toHaveBeenCalledTimes(2)
+    cancelSentLast()
+    expect(sendFrame).toHaveBeenCalledTimes(3)
+    expect(sendFrame).toHaveBeenLastCalledWith({
+      id: 'request-3',
+      method: 'terminal.unsubscribe',
+      params: { subscriptionId: 'term:phone', client: { id: 'phone' } }
+    })
+  })
 
   it('still unsubscribes a shared-token nativeChat stream when the sibling is unsent', async () => {
     const wait = Promise.withResolvers<void>()
