@@ -316,7 +316,8 @@ export type StructuredAgentSessionAdapter = {
   forceCloseSession?(sessionId: string): Promise<boolean>
   /** Stops a provider child for teardown without requiring a future-resume cursor. */
   disposeSession?(sessionId: string): Promise<boolean>
-  /** Host acknowledgement that the proven-dead child, lease and journal owner are released. */
+  /** Host acknowledgement that it no longer drives this child: its lease is released, or handed to
+   *  recovery when the stop could not prove the exit. */
   acknowledgeSessionRelease?(sessionId: string): void
 }
 
@@ -358,8 +359,8 @@ function provenExitAcquisitionFailure(cause: unknown): unknown {
 }
 
 /** Whether a stop left the provider root gone. The lease follows the root, so a first-hand root
- *  exit or a processless child ends the session whatever its descendants did; any other
- *  failure still throws. */
+ *  exit or a processless child ends the session whatever its descendants did, and an exit the
+ *  stop could not prove reads `false` however the adapter reported it; any other failure throws. */
 export async function stopAgentSessionProviderRoot(stop: () => Promise<boolean>): Promise<boolean> {
   try {
     return (await stop()) === true
@@ -369,6 +370,9 @@ export async function stopAgentSessionProviderRoot(stop: () => Promise<boolean>)
       isAgentSessionPreSpawnError(error)
     ) {
       return true
+    }
+    if (error instanceof AgentSessionAcquisitionExitUnprovenError) {
+      return false
     }
     throw error
   }

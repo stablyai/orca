@@ -106,14 +106,19 @@ function owedProviderChildWindDown(
 /**
  * The agent goes to rest; the conversation stays. Runs the eviction steps under a deadline. A step
  * that fails — or runs out of time — aborts the rest and leaves the wind-down owed, so the next
- * stop is a real retry. `ending` is how the child's end is told: a user's Stop, the host stopping it
- * for a cause (with its text), or an eviction whose close forgets the conversation next.
+ * stop is a real retry. A stop that cannot prove the exit still ends the child, and hands the lease
+ * to recovery. `ending` is how the child's end is told: a user's Stop, the host stopping it for a
+ * cause (with its text), a start the child was seen to die in, or an eviction whose close forgets
+ * the conversation next.
  */
 export async function stopStructuredAgentSessionAgentUnderSerialize(
   context: StructuredAgentSessionLifetimeContext,
   sessionId: string,
   ending: {
-    cause: Extract<StructuredAgentSessionChildEndCause, 'user-stop' | 'host-stop' | 'evict'>
+    cause: Extract<
+      StructuredAgentSessionChildEndCause,
+      'user-stop' | 'host-stop' | 'exit' | 'evict'
+    >
     reason?: string
   } = { cause: 'user-stop' }
 ): Promise<void> {
@@ -150,7 +155,9 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
           ...verdict
         })
       }
-      context.restartWitness?.stopped(sessionId)
+      if (verdict.rootGone) {
+        context.restartWitness?.stopped(sessionId)
+      }
     },
     acknowledgeRelease: () => context.deps.adapter.acknowledgeSessionRelease?.(sessionId),
     discardSink: () => context.runtimeState.discardEventSink(sessionId),
@@ -182,7 +189,10 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
           sessionId,
           hasProviderChild: true,
           expectedFence: owed.fence,
-          now: context.now()
+          now: context.now(),
+          // Read from the ended child, so a retry after a later step failed keeps the verdict.
+          rootGone: endedChildRootGone(session, owed),
+          ...(ending.reason ? { reason: ending.reason } : {})
         })
       }
       session.owesProviderChildWindDown = undefined
@@ -198,6 +208,14 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     eviction,
     withStructuredAgentSessionEvictionDeadline(STRUCTURED_AGENT_SESSION_EVICTION_STEPS)
   )
+}
+
+function endedChildRootGone(
+  session: StructuredAgentSessionHostSession,
+  owed: StructuredAgentSessionProviderChildIdentity
+): boolean {
+  const ended = session.lastEndedChild
+  return ended?.generation !== owed.generation || ended.fence !== owed.fence || ended.rootGone
 }
 
 /** Ends the conversation's resources, not the conversation: its child stops, and then its handle

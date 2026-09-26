@@ -9,7 +9,10 @@ import {
   openStructuredAgentSessionConversation,
   type OpenedStructuredAgentSessionConversation
 } from './structured-agent-session-conversation-open'
-import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
+import {
+  StructuredAgentSessionDeliveryLoop,
+  type StructuredAgentSessionDeliveryLoopDeps
+} from './structured-agent-session-delivery-loop'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-hold-resume'
 import type {
   StructuredAgentSessionHostDeps,
@@ -37,6 +40,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   trackStart: <T>(start: Promise<T>) => Promise<T>
   ensureProviderChild: (sessionId: string) => Promise<StructuredAgentSessionResumeOutcome>
+  stopAgent: StructuredAgentSessionDeliveryLoopDeps['stopAgent']
   reset: (sessionId: string, journal: AgentSessionJournal, reset: AgentJournalResetReason) => void
   publishRestored: (sessionId: string) => void
 }): StructuredAgentSessionConversationDelivery {
@@ -47,6 +51,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     serialize: input.serialize,
     trackStart: input.trackStart,
     ensureProviderChild: input.ensureProviderChild,
+    stopAgent: input.stopAgent,
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(deps.store, sessionId),
     startFailureText: (sessionId, cause) =>

@@ -389,6 +389,37 @@ describe('a structured Claude session over agentSession.*', () => {
     expect(claude.connections).toHaveLength(1)
   })
 
+  it('starts a new Claude for a Retry sent while the one that died starting is still closing', async () => {
+    await ok('agentSession.create', createIntentParams())
+    const host = getStructuredAgentSessionHost()
+    await host?.close(SESSION)
+    // The next child dies starting, and its close ladder runs until the gate opens.
+    claude.setInitializeAccount({ apiProvider: 'firstParty', tokenSource: 'none' })
+    let openGate = (): void => {}
+    claude.holdClose(new Promise<void>((resolve) => (openGate = resolve)))
+    const send = (text: string) => {
+      const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+      const envelopeFence = leaseOf(SESSION).runtimeFence
+      return ok<{ submission: { clientMessageId: string } }>('agentSession.send', {
+        envelope: envelope('agentSession.send', { body }, envelopeFence),
+        body
+      })
+    }
+    const submission = (id: string) =>
+      host?.journalSnapshot(SESSION).submissions.find((entry) => entry.clientMessageId === id)
+
+    const first = (await send('first')).submission.clientMessageId
+    await vi.waitFor(() => expect(submission(first)?.dispatchState).toBe('rejected'))
+    claude.setInitializeAccount(undefined)
+    const retry = send('retry')
+    openGate()
+    const retried = (await retry).submission.clientMessageId
+
+    await vi.waitFor(() => expect(submission(retried)?.dispatchState).toBe('accepted'))
+    expect(claude.connections).toHaveLength(3)
+    claude.holdClose(null)
+  })
+
   // The root's death is first-hand. Its descendants were never snapshottable, or one was seen
   // alive; either way the lease follows the root, so the reservation goes with it.
   it.each(['unverifiable', 'live'] as const)(

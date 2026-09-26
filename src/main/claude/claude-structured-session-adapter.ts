@@ -121,7 +121,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   /** Resolves once a published session's startup has landed, faulted, or been ended by a close;
    *  with the reason when it did not land. */
   awaitStarted = async (sessionId: string): Promise<void | string> => {
-    const session = this.sessions.get(sessionId)
+    // An exit still closing is the host's child until it publishes, so its failed start answers.
+    const session = this.sessions.get(sessionId) ?? this.exits.get(sessionId)?.session
     if (!session) {
       return
     }

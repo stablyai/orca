@@ -38,6 +38,8 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   ensureProviderChild: (sessionId: string) => Promise<StructuredAgentSessionResumeOutcome>
   /** The fence the conversation's own writes carry; see `structuredAgentSessionConversationFence`. */
   conversationFence: (sessionId: string) => number
+  /** Stops the conversation's child; for a caller inside `serialize`. */
+  stopAgent: (sessionId: string, ending: { cause: 'exit'; reason?: string }) => Promise<void>
   /** What the chat says when the session could not be made ready. */
   startFailureText: (sessionId: string, cause: AgentSessionWireRefusal) => string
   onError: (sessionId: string, error: unknown) => void
@@ -175,10 +177,17 @@ export class StructuredAgentSessionDeliveryLoop {
       if (ended?.cause === 'user-stop') {
         return 'continue'
       }
-      return this.fail(sessionId, {
+      const step = await this.fail(sessionId, {
         startKey: awaited?.generation ?? null,
         text: ended ? endedChildRejection(ended) : (startFailure ?? providerStartupFailureOutcome())
       })
+      if (awaitedChild) {
+        // Seen to die starting: it takes no writes, so it ends now, not when its exit is published.
+        await this.deps
+          .stopAgent(sessionId, { cause: 'exit', reason: startFailure ?? undefined })
+          .catch((error: unknown) => this.deps.onError(sessionId, error))
+      }
+      return step
     }
     const next = oldestQueuedSubmission(session)
     if (!next) {

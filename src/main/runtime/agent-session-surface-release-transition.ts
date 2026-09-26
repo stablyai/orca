@@ -55,6 +55,27 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   })
 }
 
+/** The host stopped its own owner and could not prove the root gone. It no longer drives that
+ *  process, so the lease goes to recovery, which concludes about the recorded owner at the next
+ *  start; the owner stays recorded so recovery can stop it by identity. */
+export function recoverAgentSessionOwnerAfterUnprovenStop(args: {
+  record: AgentSessionRecord
+  expectedFence: number
+  now: number
+}): AgentSessionRecord {
+  const { record } = args
+  assertFence(record.lease, args.expectedFence)
+  if (!isSurfaceReleasableAgentSessionRecord(record)) {
+    throw new Error('agent_session_ownership_unknown')
+  }
+  return withLease(record, {
+    ...record.lease,
+    handoffStage: 'recovering',
+    handoffOperationId: null,
+    lastRenewedAt: args.now
+  })
+}
+
 /** Applied through the store's generic transition, the same way handoff records move. */
 export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
   store: AgentSessionRecordTransitionStore,

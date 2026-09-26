@@ -4,8 +4,11 @@ import {
 } from './structured-agent-session-adapter'
 import type {
   StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession
+  StructuredAgentSessionHostSession,
+  StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
+import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
+import { endProviderChild } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHolds } from './structured-agent-session-holds'
 import { settleStructuredAgentSessionProviderStarted } from './structured-agent-session-provider-started'
@@ -49,14 +52,19 @@ export class StructuredAgentSessionEventRecovery {
           return null
         }
         const { fence, generation: acquisitionGeneration } = child
+        const reason = `journal sink failure: ${error instanceof Error ? error.message : String(error)}`
         const stopped = await stopAgentSessionProviderRoot(() => stop(sessionId))
-        if (!stopped || !acquisitionGeneration) {
+        if (!stopped) {
+          await this.endUnprovenChild(sessionId, child, reason)
+          return null
+        }
+        if (!acquisitionGeneration) {
           return null
         }
         return {
           type: 'ended',
           sessionId,
-          reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
+          reason,
           cause: 'unexpected-exit',
           fence,
           acquisitionGeneration
@@ -65,6 +73,41 @@ export class StructuredAgentSessionEventRecovery {
       .then((event) => (event ? this.handle(event) : undefined))
       .catch((recoveryError) => this.context.onBarrierError(sessionId, recoveryError))
       .finally(() => this.sinkFailures.delete(sessionId))
+  }
+
+  /** The force-close could not prove the exit, but the child is closing and takes no writes: it
+   *  ends here, and its lease goes to recovery. */
+  private async endUnprovenChild(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChild,
+    reason: string
+  ): Promise<void> {
+    const session = this.context.sessions.get(sessionId)
+    if (
+      !session ||
+      !endProviderChild(session, {
+        generation: child.generation,
+        fence: child.fence,
+        cause: 'host-stop',
+        reason,
+        duringStartup: child.phase === 'starting',
+        rootGone: false
+      })
+    ) {
+      return
+    }
+    try {
+      await releaseStoredStructuredAgentSessionOwner({
+        store: this.context.store,
+        sessionId,
+        hasProviderChild: true,
+        expectedFence: child.fence,
+        now: this.context.now(),
+        rootGone: false
+      })
+    } finally {
+      this.context.publishStatus?.(sessionId)
+    }
   }
 
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {
