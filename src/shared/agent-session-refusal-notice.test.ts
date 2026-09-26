@@ -87,11 +87,11 @@ describe('agentSessionRefusalNotice', () => {
   it('tells the phone to send a refused message again rather than press Retry', () => {
     expect(
       agentSessionRefusalNotice(
-        { code: 'agent_session_operation_capacity', message: HOST_TEXT },
+        { code: 'agent_session_checkpoint_stale', message: HOST_TEXT },
         'composer-send'
       )
     ).toBe(
-      'Orca is handling too many requests for this chat. Your message was not sent. Send it again.'
+      "Orca couldn't confirm which agent process owns this chat. Your message was not sent. Send it again."
     )
     expect(agentSessionWriteFailureNotice('composer-send')).toBe(
       "Orca couldn't reach the agent. Send it again."

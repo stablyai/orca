@@ -68,7 +68,7 @@ export function mobileStructuredSendDelivery(
     return {
       outcome: 'rejected',
       operationIdSpent: true,
-      error: structuredAgentSessionRejectionNotice(submission.reason)
+      error: structuredAgentSessionRejectionNotice(submission.reason, 'composer-send')
     }
   }
   if (retained) {

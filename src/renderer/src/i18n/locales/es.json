@@ -14845,15 +14845,13 @@
         "tryAgainGoal": "Vuelva a establecer el objetivo.",
         "restartFailed": "El agente no pudo reiniciarse.",
         "ownerUnconfirmed": "Orca no pudo confirmar qué proceso del agente controla este chat.",
-        "capacity": "Orca está procesando demasiadas solicitudes para este chat.",
+        "capacity": "Orca ha recibido demasiadas solicitudes en el último día.",
         "outcomeUnknown": "Orca no pudo confirmar si se completó. Revise el chat antes de volver a intentarlo.",
         "questionChanged": "Esta pregunta ya se respondió o ha cambiado.",
         "sessionMissing": "Orca no pudo encontrar la sesión del agente de este chat.",
         "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
         "unsupported": "La versión de Orca que ejecuta este chat no lo admite. Actualice Orca y vuelva a intentarlo.",
-        "unreachable": "Orca no pudo comunicarse con el agente.",
-        "rejectedUnreachable": "No se pudo comunicar con el agente. Su mensaje no se envió: pulse Reintentar para volver a enviarlo.",
-        "rejectedInternal": "Orca no pudo enviar su mensaje: pulse Reintentar para volver a enviarlo."
+        "unreachable": "Orca no pudo comunicarse con el agente."
       },
       "composer": {
         "imageUnsupported": "Este agente no admite pegar imágenes.",

@@ -84,7 +84,7 @@ describe('what a rejection shows the user', () => {
     expect(shown).not.toContain('broken pipe')
     // And it says the message is safe to send again, which it is: the frame never left.
     expect(shown).toBe(
-      "Couldn't reach the agent. Your message was not sent — Retry to send it again."
+      "Orca couldn't reach the agent. Your message was not sent. Retry to send it again."
     )
   })
 
@@ -111,7 +111,7 @@ describe('what a rejection shows the user', () => {
     // ourselves. It has no user-facing meaning, so it gets copy rather than the token.
     const shown = notice(DISPATCH_REJECTED_QUEUE_FULL)
     expect(shown).not.toContain('queue is full')
-    expect(shown).toBe('Orca could not send your message — Retry to send it again.')
+    expect(shown).toBe('Your message was not sent. Retry to send it again.')
   })
 })
 

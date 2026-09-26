@@ -12,6 +12,7 @@ import {
   agentSessionRefusalFailure,
   agentSessionWriteNoticeEnglish,
   agentSessionWriteNoticeParts,
+  agentSessionWriteRetryParts,
   type AgentSessionWriteNoticePart
 } from './agent-session-refusal-notice'
 import {
@@ -108,22 +109,28 @@ function refusedRedelivery(
  * Exported because a client without an outbox needs the same copy: the rule about
  * which reasons a person may read is a property of the reason, not of the queue.
  */
-export function structuredAgentSessionRejectionNotice(reason: string | null): string {
-  return agentSessionWriteNoticeEnglish(structuredAgentSessionRejectionParts(reason))
+export function structuredAgentSessionRejectionNotice(
+  reason: string | null,
+  write: 'send' | 'composer-send'
+): string {
+  return agentSessionWriteNoticeEnglish(structuredAgentSessionRejectionParts(reason, write))
 }
 
 export function structuredAgentSessionRejectionParts(
-  reason: string | null
+  reason: string | null,
+  write: 'send' | 'composer-send'
 ): AgentSessionWriteNoticePart[] {
   if (reason === null) {
     return ['messageNotSent']
   }
   if (dispatchRejectionWasTransportWriteFailure(reason)) {
-    return ['rejectedUnreachable']
+    return ['unreachable', ...agentSessionWriteRetryParts(write)]
   }
   // Any other reason we minted is an internal cause with no user-facing meaning;
   // only a provider's own explanation is worth reading verbatim.
-  return dispatchRejectionReasonIsInternal(reason) ? ['rejectedInternal'] : [{ text: reason }]
+  return dispatchRejectionReasonIsInternal(reason)
+    ? agentSessionWriteRetryParts(write)
+    : [{ text: reason }]
 }
 
 /** What the Retry row says about why its message did not go through. */
@@ -131,7 +138,7 @@ export function structuredAgentSessionAttemptFailureParts(
   failure: StructuredAgentSessionAttemptFailure
 ): AgentSessionWriteNoticePart[] {
   return failure.kind === 'rejected'
-    ? structuredAgentSessionRejectionParts(failure.reason)
+    ? structuredAgentSessionRejectionParts(failure.reason, 'send')
     : agentSessionWriteNoticeParts(failure, 'send')
 }
 

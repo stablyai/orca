@@ -17240,15 +17240,13 @@
         "tryAgainGoal": "请重新设置目标。",
         "restartFailed": "智能体无法重新启动。",
         "ownerUnconfirmed": "Orca 无法确认哪个智能体进程拥有此聊天。",
-        "capacity": "Orca 正在为此聊天处理过多请求。",
+        "capacity": "Orca 在过去一天内收到的请求过多。",
         "outcomeUnknown": "Orca 无法确认操作是否完成。重试前请先查看聊天。",
         "questionChanged": "此问题已被回答或已更改。",
         "sessionMissing": "Orca 找不到此聊天的智能体会话。",
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录。",
         "unsupported": "运行此聊天的 Orca 不支持此操作。请更新 Orca 后重试。",
-        "unreachable": "Orca 无法连接到智能体。",
-        "rejectedUnreachable": "无法连接到智能体。您的消息未发送——点击重试以重新发送。",
-        "rejectedInternal": "Orca 无法发送您的消息——点击重试以重新发送。"
+        "unreachable": "Orca 无法连接到智能体。"
       },
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",

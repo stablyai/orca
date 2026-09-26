@@ -2717,7 +2717,7 @@
         "usedOneSummary": "Used 1 tool"
       },
       "writeNotice": {
-        "capacity": "Orca is handling too many requests for this chat.",
+        "capacity": "Orca has received too many requests in the last day.",
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "notDoneAnswer": "Your answer was not sent.",
         "notDoneCommand": "The command didn't run.",
@@ -2728,8 +2728,6 @@
         "outcomeUnknown": "Orca couldn't confirm whether that went through. Check the chat before trying again.",
         "ownerUnconfirmed": "Orca couldn't confirm which agent process owns this chat.",
         "questionChanged": "This question was already answered or has changed.",
-        "rejectedInternal": "Orca could not send your message — Retry to send it again.",
-        "rejectedUnreachable": "Couldn't reach the agent. Your message was not sent — Retry to send it again.",
         "restartFailed": "The agent couldn't restart.",
         "sessionMissing": "Orca couldn't find this chat's agent session.",
         "tryAgainAnswer": "Answer it again.",

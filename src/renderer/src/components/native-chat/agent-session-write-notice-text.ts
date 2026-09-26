@@ -55,11 +55,7 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate(
       'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
       COPY.messageNotSent
-    ),
-  rejectedUnreachable: () =>
-    translate('components.native-chat.writeNotice.rejectedUnreachable', COPY.rejectedUnreachable),
-  rejectedInternal: () =>
-    translate('components.native-chat.writeNotice.rejectedInternal', COPY.rejectedInternal)
+    )
 }
 
 export function agentSessionWriteNoticeText(parts: readonly AgentSessionWriteNoticePart[]): string {

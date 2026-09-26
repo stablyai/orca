@@ -17275,15 +17275,13 @@
         "tryAgainGoal": "もう一度目標を設定してください。",
         "restartFailed": "Agent を再起動できませんでした。",
         "ownerUnconfirmed": "Orca はこのチャットを所有する Agent プロセスを確認できませんでした。",
-        "capacity": "Orca はこのチャットで処理中のリクエストが多すぎます。",
+        "capacity": "Orca が過去 1 日に受け取ったリクエストが多すぎます。",
         "outcomeUnknown": "Orca は処理が完了したか確認できませんでした。もう一度試す前にチャットを確認してください。",
         "questionChanged": "この質問はすでに回答済みか、変更されています。",
         "sessionMissing": "Orca はこのチャットの Agent セッションを見つけられませんでした。",
         "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
         "unsupported": "このチャットを実行している Orca はこの操作に対応していません。Orca を更新してから、もう一度お試しください。",
-        "unreachable": "Orca は Agent に接続できませんでした。",
-        "rejectedUnreachable": "Agent に接続できませんでした。メッセージは送信されませんでした。再試行を押して再送信してください。",
-        "rejectedInternal": "Orca はメッセージを送信できませんでした。再試行を押して再送信してください。"
+        "unreachable": "Orca は Agent に接続できませんでした。"
       },
       "composer": {
         "imageUnsupported": "この Agent では画像の貼り付けはサポートされていません。",

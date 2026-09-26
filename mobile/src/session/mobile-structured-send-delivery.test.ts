@@ -58,7 +58,7 @@ describe('mobileStructuredSendDelivery', () => {
     ).toEqual({
       outcome: 'rejected',
       operationIdSpent: true,
-      error: "Couldn't reach the agent. Your message was not sent — Retry to send it again."
+      error: "Orca couldn't reach the agent. Your message was not sent. Send it again."
     })
   })
 

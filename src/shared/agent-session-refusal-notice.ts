@@ -87,7 +87,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   tryAgainGoal: 'Set the goal again.',
   restartFailed: "The agent couldn't restart.",
   ownerUnconfirmed: "Orca couldn't confirm which agent process owns this chat.",
-  capacity: 'Orca is handling too many requests for this chat.',
+  capacity: 'Orca has received too many requests in the last day.',
   outcomeUnknown:
     "Orca couldn't confirm whether that went through. Check the chat before trying again.",
   questionChanged: 'This question was already answered or has changed.',
@@ -95,10 +95,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   historyUnreadable: "Orca couldn't read this chat's saved history.",
   unsupported: "The Orca running this chat doesn't support this. Update Orca, then try again.",
   unreachable: "Orca couldn't reach the agent.",
-  messageNotSent: 'Message was not sent.',
-  rejectedUnreachable:
-    "Couldn't reach the agent. Your message was not sent — Retry to send it again.",
-  rejectedInternal: 'Orca could not send your message — Retry to send it again.'
+  messageNotSent: 'Message was not sent.'
 } as const
 
 export type AgentSessionWriteNoticeSentence = keyof typeof AGENT_SESSION_WRITE_NOTICE_COPY
@@ -125,14 +122,20 @@ const TRY_AGAIN: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> 
   goal: 'tryAgainGoal'
 }
 
+/** That the write did not happen, and how to try it again on this surface. */
+export function agentSessionWriteRetryParts(
+  write: AgentSessionWriteKind
+): AgentSessionWriteNoticeSentence[] {
+  return [NOT_DONE[write], TRY_AGAIN[write]]
+}
+
 export function agentSessionWriteNoticeParts(
   failure: AgentSessionWriteFailure,
   write: AgentSessionWriteKind
 ): AgentSessionWriteNoticePart[] {
   const notDone = NOT_DONE[write]
-  const tryAgain = TRY_AGAIN[write]
   if (failure.kind === 'unreachable') {
-    return ['unreachable', tryAgain]
+    return ['unreachable', TRY_AGAIN[write]]
   }
   switch (failure.code) {
     // The cause is in the chat's own status row. Some restarts can be retried and some need a new
@@ -143,12 +146,14 @@ export function agentSessionWriteNoticeParts(
     case 'agent_session_conflict':
     case 'agent_session_ownership_unknown':
     case 'execution_owner_reconciling':
-      return ['ownerUnconfirmed', notDone, tryAgain]
+      return ['ownerUnconfirmed', ...agentSessionWriteRetryParts(write)]
+    // Counted across every chat and freed only as a day's requests age out, so trying again now
+    // would likely be refused again.
     case 'agent_session_operation_capacity':
-      return ['capacity', notDone, tryAgain]
+      return ['capacity', notDone]
     case 'agent_session_operation_conflict':
     case 'agent_session_operation_expired':
-      return [notDone, tryAgain]
+      return agentSessionWriteRetryParts(write)
     // Refused for a reason the code does not name (a cleared conversation, a pending question, a
     // provider's own rejection...), so any next step could be false.
     case 'agent_session_operation_invalid':

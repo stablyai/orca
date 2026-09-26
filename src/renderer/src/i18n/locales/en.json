@@ -17474,15 +17474,13 @@
         "tryAgainGoal": "Set the goal again.",
         "restartFailed": "The agent couldn't restart.",
         "ownerUnconfirmed": "Orca couldn't confirm which agent process owns this chat.",
-        "capacity": "Orca is handling too many requests for this chat.",
+        "capacity": "Orca has received too many requests in the last day.",
         "outcomeUnknown": "Orca couldn't confirm whether that went through. Check the chat before trying again.",
         "questionChanged": "This question was already answered or has changed.",
         "sessionMissing": "Orca couldn't find this chat's agent session.",
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "unsupported": "The Orca running this chat doesn't support this. Update Orca, then try again.",
-        "unreachable": "Orca couldn't reach the agent.",
-        "rejectedUnreachable": "Couldn't reach the agent. Your message was not sent — Retry to send it again.",
-        "rejectedInternal": "Orca could not send your message — Retry to send it again."
+        "unreachable": "Orca couldn't reach the agent."
       },
       "taskList": {
         "title": "Tasks",

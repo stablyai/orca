@@ -17275,15 +17275,13 @@
         "tryAgainGoal": "목표를 다시 설정하세요.",
         "restartFailed": "에이전트를 다시 시작하지 못했습니다.",
         "ownerUnconfirmed": "Orca가 이 채팅을 소유한 에이전트 프로세스를 확인하지 못했습니다.",
-        "capacity": "Orca가 이 채팅에 대해 너무 많은 요청을 처리하고 있습니다.",
+        "capacity": "Orca가 지난 하루 동안 너무 많은 요청을 받았습니다.",
         "outcomeUnknown": "Orca가 처리 여부를 확인하지 못했습니다. 다시 시도하기 전에 채팅을 확인하세요.",
         "questionChanged": "이 질문은 이미 답변되었거나 변경되었습니다.",
         "sessionMissing": "Orca가 이 채팅의 에이전트 세션을 찾지 못했습니다.",
         "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
         "unsupported": "이 채팅을 실행 중인 Orca가 이 기능을 지원하지 않습니다. Orca를 업데이트한 후 다시 시도하세요.",
-        "unreachable": "Orca가 에이전트에 연결하지 못했습니다.",
-        "rejectedUnreachable": "에이전트에 연결할 수 없습니다. 메시지가 전송되지 않았습니다. 다시 시도를 눌러 다시 보내세요.",
-        "rejectedInternal": "Orca가 메시지를 보내지 못했습니다. 다시 시도를 눌러 다시 보내세요."
+        "unreachable": "Orca가 에이전트에 연결하지 못했습니다."
       },
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
