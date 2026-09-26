@@ -20,14 +20,16 @@ const { runtimeCall, refreshSessionTabsSnapshot, resetRemoteRuntimeTransport } =
   })
 
 describe('createRemoteRuntimePtyTransport', () => {
-  it.each([
-    { supported: true, resume: false },
-    { supported: true, resume: true },
-    { supported: false, resume: false },
-    { supported: false, resume: true }
-  ])(
-    'gates keyboard fields for host support $supported, resume $resume',
-    async ({ supported, resume }) => {
+  it.each(
+    [
+      { supported: true, resume: false },
+      { supported: true, resume: true },
+      { supported: false, resume: false },
+      { supported: false, resume: true }
+    ].flatMap((entry) => [true, false].map((colorSupported) => ({ ...entry, colorSupported })))
+  )(
+    'gates keyboard and color fields for host support $supported, colors $colorSupported, resume $resume',
+    async ({ supported, colorSupported, resume }) => {
       runtimeCall.mockImplementation(async (args: { method?: string }) =>
         args.method === 'status.get'
           ? {
@@ -37,7 +39,8 @@ describe('createRemoteRuntimePtyTransport', () => {
                 minCompatibleRuntimeClientVersion: 2,
                 capabilities: [
                   'agent-session.host-authority.v1',
-                  ...(supported ? ['agent-session.keyboard.v1'] : [])
+                  ...(supported ? ['agent-session.keyboard.v1'] : []),
+                  ...(colorSupported ? ['agent-session.color-query-replies.v1'] : [])
                 ]
               }
             }
@@ -50,6 +53,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         leafId: 'pane:1',
         launchAgent: 'codex',
         terminalKittyKeyboardProtocol: true,
+        terminalColorQueryReplies: { foreground: '#eeeeee', background: '#282c34' },
         ...(resume
           ? { resumeProviderSession: { key: 'session_id' as const, id: 'session-1' } }
           : {})
@@ -58,6 +62,14 @@ describe('createRemoteRuntimePtyTransport', () => {
       const method = resume ? 'terminal.ensureAgentSession' : 'terminal.createAgentSession'
       const call = runtimeCall.mock.calls.find(([args]) => args.method === method)?.[0]
       expect(call).toBeDefined()
+      if (colorSupported) {
+        expect(call?.params).toHaveProperty('terminalColorQueryReplies', {
+          foreground: '#eeeeee',
+          background: '#282c34'
+        })
+      } else {
+        expect(call?.params).not.toHaveProperty('terminalColorQueryReplies')
+      }
       if (supported) {
         expect(call?.params).toHaveProperty('terminalKittyKeyboardProtocol', true)
       } else {
