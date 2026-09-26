@@ -271,7 +271,8 @@ describe('gitlab RPC methods', () => {
       'id:repo-1',
       8,
       'mr',
-      projectRef
+      projectRef,
+      { includeImages: undefined, maxReplyBytes: undefined }
     )
     expect(runtime.getGitLabRepoWorkItemByPath).toHaveBeenCalledWith(
       'id:repo-1',

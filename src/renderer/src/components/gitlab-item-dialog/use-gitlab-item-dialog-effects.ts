@@ -1,9 +1,10 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: GitLab item dialogs reset draft/provider state and hydrate details from GitLab IPC when the selected item identity changes. */
 import { useEffect } from 'react'
-import type { GitLabWorkItem, GitLabWorkItemDetails } from '../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
 
+/** Show text immediately and merge previews only while the selected item is current. */
 export function useGitLabItemDetailsEffect(
   item: GitLabWorkItem | null,
   repoSelector: GitLabDialogRepoSelector | null,
@@ -31,7 +32,30 @@ export function useGitLabItemDetailsEffect(
           setError('Item not found.')
           return
         }
-        setDetails(data as GitLabWorkItemDetails)
+        setDetails(data)
+        if (
+          ![data.body, ...data.comments.map((comment) => comment.body)].some((body) =>
+            body.includes('/uploads/')
+          )
+        ) {
+          return
+        }
+        // Preview failures must not replace already-visible text or a newer item.
+        void window.api.gl
+          .workItemDetails({
+            ...repoSelector,
+            iid: item.number,
+            type: item.type,
+            includeImages: true
+          })
+          .then((preview) => {
+            if (!stale && preview?.imageSources) {
+              setDetails((current) =>
+                current ? { ...current, imageSources: preview.imageSources } : current
+              )
+            }
+          })
+          .catch(() => {})
       })
       .catch((err) => {
         if (!stale) {

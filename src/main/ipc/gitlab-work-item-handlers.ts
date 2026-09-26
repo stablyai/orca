@@ -13,6 +13,7 @@ import type { ProjectRef } from '../gitlab/gl-utils'
 import type { GitLabRepoSelectorArgs } from './gitlab-repo-access'
 import { assertRegisteredRepo, localGitOptionArgs, repoConnectionId } from './gitlab-repo-access'
 
+/** Route item requests through the selected repository execution options. */
 export function registerGitLabWorkItemHandlers(store: Store): void {
   // Why: combined MR + issue list — Tasks screen and any future picker
   // that wants a unified view. Centralizes the merge / sort logic so
@@ -49,7 +50,10 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
   // Powers GitLabItemDialog's tabs.
   ipcMain.handle(
     'gitlab:workItemDetails',
-    async (_event, args: GitLabRepoSelectorArgs & { iid: number; type: 'issue' | 'mr' }) => {
+    async (
+      _event,
+      args: GitLabRepoSelectorArgs & { iid: number; type: 'issue' | 'mr'; includeImages?: boolean }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       return getWorkItemDetails(
         repo.path,
@@ -58,7 +62,8 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
         repo.issueSourcePreference,
         repoConnectionId(repo),
         undefined,
-        ...localGitOptionArgs(store, repo)
+        localGitOptionArgs(store, repo)[0] ?? {},
+        { includeImages: args.includeImages }
       )
     }
   )

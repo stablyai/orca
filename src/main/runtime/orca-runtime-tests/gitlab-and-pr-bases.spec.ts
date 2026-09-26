@@ -240,6 +240,8 @@ describe('OrcaRuntimeService', () => {
       'mr',
       'origin',
       'ssh-1',
+      undefined,
+      {},
       undefined
     )
     expect(updateGitLabMRReviewersMock).toHaveBeenCalledWith(
@@ -436,7 +438,8 @@ describe('OrcaRuntimeService', () => {
       undefined,
       null,
       undefined,
-      localGitOptions
+      localGitOptions,
+      undefined
     )
     expect(updateGitLabMRMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,

@@ -580,7 +580,8 @@ describe('GitLab IPC handlers', () => {
       undefined,
       null,
       undefined,
-      localGitOptions
+      localGitOptions,
+      { includeImages: undefined }
     )
     expect(closeMRMock).toHaveBeenCalledWith(
       '/local/orca',
