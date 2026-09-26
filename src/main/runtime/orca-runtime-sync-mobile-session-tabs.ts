@@ -155,32 +155,7 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
       ) {
         continue
       }
-      this.nativeChatDraftResolutions.reconcile(snapshot)
-      const launchDraftFencedSnapshot = this.nativeChatDraftResolutions.applyFence(snapshot)
-      const fencedSnapshot = this.applyMobileSessionRetirementFences(launchDraftFencedSnapshot)
-      this.releaseRuntimeSessionOwnershipForRendererRetiredTabs(fencedSnapshot, existing)
-      const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(fencedSnapshot, existing)
-      // Why: clients drop same-epoch frames whose version isn't strictly newer,
-      // and main-local touches may already have emitted a higher version than
-      // the renderer's counter — keep the stored version strictly monotonic so
-      // the accepted content is never discarded as stale downstream.
-      const storedVersion = existing
-        ? Math.max(nextSnapshot.snapshotVersion, existing.snapshotVersion + 1)
-        : nextSnapshot.snapshotVersion
-      this.storeMobileSessionSnapshot(
-        snapshot.worktree,
-        storedVersion === nextSnapshot.snapshotVersion
-          ? nextSnapshot
-          : { ...nextSnapshot, snapshotVersion: storedVersion }
-      )
-      this.acceptedRendererMobileSnapshotByWorktree.set(snapshot.worktree, {
-        publicationEpoch: snapshot.publicationEpoch,
-        rendererVersion: snapshot.snapshotVersion,
-        rendererTabCount: fencedSnapshot.tabs.length,
-        rendererTabIdentityKeys: new Set(
-          fencedSnapshot.tabs.flatMap((tab) => getMobileSessionSnapshotTabIdentityKeys(tab))
-        )
-      })
+      this.mergeRendererMobileSnapshot(snapshot)
     }
     for (const [worktreeId, existing] of [...this.mobileSessionTabsByWorktree.entries()]) {
       if (!nextWorktrees.has(worktreeId)) {
@@ -217,5 +192,63 @@ export class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOr
       }
     }
     return changedWorktreeIds
+  }
+
+  // Why: a surface fenced out of the accepted frame before its PTY registered stays out, because the
+  // renderer never resends unchanged content; re-merge the frame once that PTY binds. D1 (main as the
+  // single membership writer) absorbs this gate.
+  protected rederiveFencedRendererSurface(
+    worktreeId: string,
+    ptyId: string,
+    tabId: string,
+    leafId: string
+  ): void {
+    const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
+    if (
+      !accepted ||
+      accepted.rendererTabIdentityKeys.has(`${tabId}::${leafId}`) ||
+      !accepted.frame.tabs.some(
+        (tab) =>
+          tab.type === 'terminal' &&
+          tab.parentTabId === tabId &&
+          tab.leafId === leafId &&
+          tab.ptyId === ptyId
+      )
+    ) {
+      return
+    }
+    this.mergeRendererMobileSnapshot(accepted.frame)
+    this.notifyMobileSessionTabsChanged(worktreeId)
+  }
+
+  protected mergeRendererMobileSnapshot(snapshot: RuntimeMobileSessionTabsSnapshot): void {
+    const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
+    this.nativeChatDraftResolutions.reconcile(snapshot)
+    const launchDraftFencedSnapshot = this.nativeChatDraftResolutions.applyFence(snapshot)
+    const fencedSnapshot = this.applyMobileSessionRetirementFences(launchDraftFencedSnapshot)
+    this.releaseRuntimeSessionOwnershipForRendererRetiredTabs(fencedSnapshot, existing)
+    const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(fencedSnapshot, existing)
+    // Why: clients drop same-epoch frames whose version isn't strictly newer,
+    // and main-local touches may already have emitted a higher version than
+    // the renderer's counter — keep the stored version strictly monotonic so
+    // the accepted content is never discarded as stale downstream.
+    const storedVersion = existing
+      ? Math.max(nextSnapshot.snapshotVersion, existing.snapshotVersion + 1)
+      : nextSnapshot.snapshotVersion
+    this.storeMobileSessionSnapshot(
+      snapshot.worktree,
+      storedVersion === nextSnapshot.snapshotVersion
+        ? nextSnapshot
+        : { ...nextSnapshot, snapshotVersion: storedVersion }
+    )
+    this.acceptedRendererMobileSnapshotByWorktree.set(snapshot.worktree, {
+      frame: snapshot,
+      publicationEpoch: snapshot.publicationEpoch,
+      rendererVersion: snapshot.snapshotVersion,
+      rendererTabCount: fencedSnapshot.tabs.length,
+      rendererTabIdentityKeys: new Set(
+        fencedSnapshot.tabs.flatMap((tab) => getMobileSessionSnapshotTabIdentityKeys(tab))
+      )
+    })
   }
 }

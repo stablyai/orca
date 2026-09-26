@@ -138,6 +138,8 @@ export class OrcaRuntimeWithRuntimeId {
   protected acceptedRendererMobileSnapshotByWorktree = new Map<
     string,
     {
+      /** The renderer's frame as received, so its fence can be re-derived when the fence's inputs change. */
+      frame: RuntimeMobileSessionTabsSnapshot
       publicationEpoch: string
       rendererVersion: number
       rendererTabCount: number

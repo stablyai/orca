@@ -144,6 +144,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
+      this.rederiveFencedRendererSurface(worktreeId, ptyId, binding.tabId, binding.leafId)
     }
   }
 
