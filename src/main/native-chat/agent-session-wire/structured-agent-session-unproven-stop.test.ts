@@ -11,6 +11,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
+import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   AgentSessionAcquisitionRootExitObservedError,
@@ -421,5 +422,77 @@ describe('a re-attach that fails after it bound the live child', () => {
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'attach-failed' })
     expect(question()?.body).toMatchObject({ resolution: { state: 'cancelled' } })
+  })
+})
+
+const OPEN_TURN = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-r', ordinal: 20 }
+const OPEN_QUESTION = {
+  provider: 'codex' as const,
+  threadId: THREAD,
+  turnId: 'turn-r',
+  ordinal: 21
+}
+
+function item(identity: typeof OPEN_TURN) {
+  return host
+    .journalSnapshot(SESSION)
+    .items.find((entry) => entry.itemId === agentJournalItemKey(identity))
+}
+
+/** The live child took a send it has not answered, and left a turn and a question open. */
+async function childLeftWorkOpen(start: () => Promise<void> = deliveredOnce): Promise<string> {
+  await start()
+  dispatch.mockResolvedValueOnce({ state: 'admitted' })
+  const handed = await accept('handed')
+  await eventually(() => expect(submission(handed)?.handedOverAt).toBeDefined())
+  const events = acquire.mock.calls.at(-1)?.[0].events
+  events?.appendItem(
+    OPEN_TURN,
+    agentJournalTurnBody({ turnId: 'turn-r', state: 'running', startedAt: NOW })
+  )
+  events?.appendItem(OPEN_QUESTION, {
+    kind: 'question',
+    question: 'Which target?',
+    options: [{ id: 'web', label: 'Web' }],
+    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+  })
+  await host.flushStreamedEvents(SESSION)
+  expect(submission(handed)?.dispatchState).toBe('pending')
+  return handed
+}
+
+describe('a new child never inherits a wait on the one before it', () => {
+  it('re-derives what an ended child left unsettled, in the conversation that stayed open', async () => {
+    const handed = await childLeftWorkOpen()
+    const journal = conversation()?.journal
+    if (!journal) {
+      throw new Error('conversation not open')
+    }
+    // The ended child's own settlement never lands; its lease moves all the same.
+    vi.spyOn(journal, 'markPendingSubmissionsUnknown').mockRejectedValueOnce(new Error('disk full'))
+    host['deps'].adapter.forceCloseSession = vi.fn(async () => false)
+
+    host['eventRecovery'].recoverAfterSinkFailure(SESSION, new Error('disk full'))
+
+    await eventually(() => expect(lease()).toMatchObject({ handoffStage: 'recovering' }))
+    expect(submission(handed)?.dispatchState).toBe('pending')
+    expect(item(OPEN_QUESTION)?.body).toMatchObject({ resolution: { state: 'pending' } })
+    await expectNextSendStartsAfterRecovery()
+    expect(submission(handed)).toMatchObject({ dispatchState: 'unknown', recovered: true })
+    expect(item(OPEN_TURN)?.body).toMatchObject({ state: 'unverifiable' })
+    expect(item(OPEN_QUESTION)?.body).toMatchObject({ resolution: { state: 'cancelled' } })
+  })
+
+  it('leaves a live child its own unanswered send when its attach is retried', async () => {
+    const params = hostTestAttachParams(lease()?.runtimeFence ?? null)
+    const handed = await childLeftWorkOpen(async () => {
+      expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+    })
+
+    // The retry replays onto the child it started; no new one is acquired.
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+
+    expect(acquire).toHaveBeenCalledTimes(2)
+    expect(submission(handed)?.dispatchState).toBe('pending')
   })
 })

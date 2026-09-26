@@ -213,6 +213,7 @@ export async function performAttach(
       journalRoot: input.journalRoot,
       adapter: input.adapter,
       openConversation: input.openConversation,
+      acquiredOwner,
       providerHistoryWindow
     })
     await importAdoptedTranscript(params, attached, record, preparedTranscript.items)

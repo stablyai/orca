@@ -37,6 +37,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { reconcileJournalSubmissionsAgainstHistory } from '../agent-session-journal/journal-restart-reconciliation'
+import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { structuredAgentSessionRefusalMessage } from './structured-agent-session-refusal-message'
@@ -183,6 +184,9 @@ export async function attachJournal(input: {
   adapter: StructuredAgentSessionAdapter
   /** The host's open conversation, whose journal the attach adopts. */
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
+  /** This attach started the child. False for a re-attach to a live one, whose handed-over sends
+   *  are still its own to answer. */
+  acquiredOwner: boolean
   /** Provider history sampled before a new child is acquired. `null` means the
    *  adapter had no usable history; omit to read lazily for direct callers. */
   providerHistoryWindow?: ProviderHistoryWindow | null
@@ -190,6 +194,11 @@ export async function attachJournal(input: {
   const identity = journalIdentityFor(input.record, input.params)
   const fence = input.record.lease.runtimeFence
   const journal = await input.openConversation(input.record)
+  if (input.acquiredOwner) {
+    // The open's crash boundary, for a conversation that stayed open: a send handed to an earlier
+    // child is in doubt, even when that child's own settlement never landed.
+    await journal.markPendingSubmissionsUnknown(fence, DISPATCH_DOUBT_PROVIDER_EXITED)
+  }
   const settled = await reconcileAgainstProviderHistory({
     adapter: input.adapter,
     identity,

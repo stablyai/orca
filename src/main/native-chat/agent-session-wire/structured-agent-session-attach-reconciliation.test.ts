@@ -87,6 +87,7 @@ async function attach(adapter: StructuredAgentSessionAdapter) {
     params: PARAMS,
     journalRoot: root,
     openConversation: openTestAttachConversation(root),
+    acquiredOwner: true,
     adapter
   })
   journals.track(attached.journal)
@@ -172,7 +173,7 @@ describe('attachJournal restart reconciliation', () => {
       record: RECORD,
       params: PARAMS,
       journalRoot: root,
-
+      acquiredOwner: true,
       adapter,
       openConversation: async () => journal
     })
