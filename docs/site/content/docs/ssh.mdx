@@ -64,13 +64,13 @@ This is a desktop-only action — the web client doesn't expose Download because
 
 ## Open a remote workspace in VS Code
 
-For SSH worktrees, the worktree menu's **Open in** list can hand the remote path to VS Code Remote-SSH when your configured app is VS Code or VS Code Insiders (`code` / `code-insiders`, or a direct path to those launchers).
+For SSH worktrees, the worktree menu's **Open in** list can hand the remote path to VS Code Remote-SSH when your configured app is VS Code, VS Code Insiders, or Cursor (`code` / `code-insiders` / `cursor` / `cursor-insiders`, or a direct path to those launchers). Cursor is VS Code-derived and accepts the same Remote-SSH arguments.
 
-1. Configure **Settings → General → Open in menu** so VS Code is listed (preset or custom command).
+1. Configure **Settings → General → Open in menu** so VS Code (or Cursor) is listed (preset or custom command).
 1. Right-click the SSH worktree (or use the worktree overflow menu) → **Open in** → **VS Code**.
-1. Orca launches VS Code with Remote-SSH against that host and the worktree path (`--remote ssh-remote+<host> <path>`). The menu entry may show a **Remote SSH** badge.
+1. Orca launches the editor with Remote-SSH against that host and the worktree path (`--remote ssh-remote+<host> <path>`). The menu entry may show a **Remote SSH** badge.
 
-**Not supported for this remote path:** Cursor, Zed, compound shell commands, or opening via a **Remote Orca Server** active runtime (those stay **Local only**). Use the Finder/Explorer item only for local paths.
+**Not supported for this remote path:** Zed and other non-VS Code editors, compound shell commands, or opening via a **Remote Orca Server** active runtime (those stay **Local only**). Use the Finder/Explorer item only for local paths.
 
 ## Kerberos / GSSAPI
 
