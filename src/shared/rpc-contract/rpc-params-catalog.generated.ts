@@ -138,6 +138,7 @@ import {
   TypeText
 } from './computer-schemas-params'
 import {
+  CrossMachineRecoveryActivityParams,
   CrossMachineRecoveryDescribeParams,
   CrossMachineRecoveryExportParams,
   CrossMachineRecoveryImportParams,
@@ -735,6 +736,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.scroll': ScrollOfComputerSchemasParams,
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
+  'crossMachineRecovery.activity': CrossMachineRecoveryActivityParams,
   'crossMachineRecovery.describe': CrossMachineRecoveryDescribeParams,
   'crossMachineRecovery.export': CrossMachineRecoveryExportParams,
   'crossMachineRecovery.import': CrossMachineRecoveryImportParams,

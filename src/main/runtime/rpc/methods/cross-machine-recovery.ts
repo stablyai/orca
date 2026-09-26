@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/cross-machine-recovery-descriptor'
 import { pairedDevicePresentationClientKey } from '../../../../shared/cross-machine-recovery-presentation-types'
 import {
+  CrossMachineRecoveryActivityParams,
   CrossMachineRecoveryDescribeParams,
   CrossMachineRecoveryExportParams,
   CrossMachineRecoveryImportParams,
@@ -16,6 +17,7 @@ import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-p
 import { mainProcessState } from '../../../startup/main-process-state'
 import { ensureLocalClientInstanceId } from '../../cross-machine-recovery/local-client-instance'
 import { getCrossMachineRecoveryPresentationStore } from '../../cross-machine-recovery/presentation-store-instance'
+import { readRecoveryActivity } from '../../cross-machine-recovery/recovery-activity'
 import { exportRecoveryWorkspace } from '../../cross-machine-recovery/recovery-export'
 import { importRecoveryWorkspace } from '../../cross-machine-recovery/recovery-import'
 import { listRecoveryBindings } from '../../cross-machine-recovery/recovery-list'
@@ -83,6 +85,14 @@ export const CROSS_MACHINE_RECOVERY_METHODS = [
     handler: async (params, ctx) => {
       assertLocalRecoveryCaller(ctx)
       return await listRecoveryBindings(ctx.runtime, params.worktree)
+    }
+  }),
+  defineMethod({
+    name: 'crossMachineRecovery.activity',
+    params: CrossMachineRecoveryActivityParams,
+    handler: async (_params, ctx) => {
+      assertLocalRecoveryCaller(ctx)
+      return await readRecoveryActivity(ctx.runtime, Date.now())
     }
   }),
   defineMethod({

@@ -217,6 +217,8 @@ export const CrossMachineRecoveryListParams = z
   .object({ worktree: WorktreeSelector.optional() })
   .strict()
 
+export const CrossMachineRecoveryActivityParams = z.object({}).strict().optional().default({})
+
 const MsAge = z.number().finite().nonnegative()
 
 export const RecoveryPresentationWorkspaceRefSchema: z.ZodType<RecoveryPresentationWorkspaceRef> =

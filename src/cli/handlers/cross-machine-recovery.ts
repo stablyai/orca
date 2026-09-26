@@ -8,6 +8,7 @@ import {
   type RecoveryPathMapping,
   type RecoveryResumeResult
 } from '../../shared/cross-machine-recovery-descriptor'
+import type { RecoveryActivityResult } from '../../shared/cross-machine-recovery-presentation-types'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
@@ -119,6 +120,10 @@ export const CROSS_MACHINE_RECOVERY_HANDLERS: Record<string, CommandHandler> = {
       'crossMachineRecovery.list',
       worktree ? { worktree } : {}
     )
+    printResult(result, json, formatRecoveryJson)
+  },
+  'recovery activity': async ({ client, json }) => {
+    const result = await client.call<RecoveryActivityResult>('crossMachineRecovery.activity', {})
     printResult(result, json, formatRecoveryJson)
   }
 }

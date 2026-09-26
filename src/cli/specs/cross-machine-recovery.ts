@@ -63,5 +63,13 @@ export const CROSS_MACHINE_RECOVERY_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
     notes: [LOCAL_ONLY_NOTE],
     examples: ['orca recovery list --json']
+  },
+  {
+    path: ['recovery', 'activity'],
+    summary: 'Report the latest human input and focus per workspace for capture scheduling',
+    usage: 'orca recovery activity --json',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [LOCAL_ONLY_NOTE],
+    examples: ['orca recovery activity --json']
   }
 ]

@@ -77,6 +77,12 @@ export type RecoveryPresentationWorkspaceViews = {
   preferredClientKey: string | null
 }
 
+export type RecoveryPresentationWorkspaceActivity = {
+  workspace: RecoveryPresentationWorkspaceRef
+  lastHumanInputAt: number | null
+  lastHumanFocusAt: number | null
+}
+
 function fitsWithin(value: unknown, maxBytes: number): boolean {
   try {
     stringifyJsonWithinByteLimit(value, maxBytes)
@@ -93,7 +99,7 @@ function stampAge(hostReceivedAt: number, msSince: number | null): number | null
   return msSince === null ? null : Math.max(0, hostReceivedAt - msSince)
 }
 
-function matchesWorkspace(
+export function presentationRefMatchesWorkspace(
   ref: RecoveryPresentationWorkspaceRef,
   key: RecoveryPresentationWorkspaceKey
 ): boolean {
@@ -110,14 +116,14 @@ function matchesWorkspace(
   )
 }
 
-function newest(values: readonly (number | null)[]): number | null {
+export function newestStamp(values: readonly (number | null)[]): number | null {
   const present = values.filter((value) => value !== null)
   return present.length === 0 ? null : Math.max(...present)
 }
 
 function preferredClientKey(views: readonly RecoveryPresentationViewExport[]): string | null {
   const byStamp = (stamp: (view: RecoveryPresentationViewExport) => number | null) => {
-    const best = newest(views.map(stamp))
+    const best = newestStamp(views.map(stamp))
     return best === null ? undefined : views.find((view) => stamp(view) === best)
   }
   const preferred =
@@ -202,7 +208,7 @@ export class CrossMachineRecoveryPresentationStore {
     return withFileTransactionLock(this.filePath, async () => {
       const views = this.retained(await this.readClients(), now).flatMap((client) =>
         client.workspaces
-          .filter((workspace) => matchesWorkspace(workspace.workspace, key))
+          .filter((workspace) => presentationRefMatchesWorkspace(workspace.workspace, key))
           .map((workspace): RecoveryPresentationViewExport => ({
             clientKey: client.clientKey,
             clientInstanceId: client.clientInstanceId,
@@ -217,6 +223,19 @@ export class CrossMachineRecoveryPresentationStore {
       )
       return { views, preferredClientKey: preferredClientKey(views) }
     })
+  }
+
+  /** One row per retained client view: who last saw human input or focus on which workspace. */
+  listActivity(now: number): Promise<RecoveryPresentationWorkspaceActivity[]> {
+    return withFileTransactionLock(this.filePath, async () =>
+      this.retained(await this.readClients(), now).flatMap((client) =>
+        client.workspaces.map(({ workspace, lastHumanInputAt, lastHumanFocusAt }) => ({
+          workspace,
+          lastHumanInputAt,
+          lastHumanFocusAt
+        }))
+      )
+    )
   }
 
   private retained(clients: StoredClient[], now: number): StoredClient[] {

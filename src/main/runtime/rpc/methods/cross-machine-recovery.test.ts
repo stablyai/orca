@@ -96,6 +96,7 @@ describe('crossMachineRecovery local-only gate', () => {
     ['crossMachineRecovery.describe', {}],
     ['crossMachineRecovery.export', { worktree: 'id:repo-1::/work/repo' }],
     ['crossMachineRecovery.list', {}],
+    ['crossMachineRecovery.activity', {}],
     [
       'crossMachineRecovery.import',
       { descriptor: {}, checkoutPath: '/work/repo', checkpointId: 'checkpoint-1' }
@@ -118,6 +119,13 @@ describe('crossMachineRecovery local-only gate', () => {
       })
     }
   }
+
+  it('takes no activity params', () => {
+    const params = method('crossMachineRecovery.activity').params
+
+    expect(params?.parse(undefined)).toEqual({})
+    expect(() => params?.parse({ worktree: 'id:repo-1::/work/repo' })).toThrow()
+  })
 
   it('describes this desktop with a persisted client instance id', async () => {
     const first = await call('crossMachineRecovery.describe', {}, {})

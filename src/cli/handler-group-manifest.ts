@@ -195,7 +195,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'recovery export',
       'recovery import',
       'recovery resume',
-      'recovery list'
+      'recovery list',
+      'recovery activity'
     ],
     load: async () =>
       (await import('./handlers/cross-machine-recovery.js')).CROSS_MACHINE_RECOVERY_HANDLERS
