@@ -127,6 +127,13 @@ export class RuntimeAccountController {
     return this.requireServices().claudeAccounts.removeAccount(accountId)
   }
 
+  updateClaudeDisplayName(
+    accountId: string,
+    displayName: string | null
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.requireServices().claudeAccounts.updateDisplayName(accountId, displayName)
+  }
+
   addClaudeFromConfigDir(
     configDir: string,
     options?: {

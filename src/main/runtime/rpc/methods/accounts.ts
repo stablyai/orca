@@ -7,7 +7,8 @@ import {
   ListAccountsParams,
   RemoveAccountParams,
   SelectAccountParams,
-  SelectCodexAccountForTargetParams
+  SelectCodexAccountForTargetParams,
+  UpdateClaudeDisplayNameParams
 } from '../../../../shared/rpc-contract/accounts-params'
 
 // Why: monotonically increasing per-process counter avoids the Date.now()
@@ -67,6 +68,12 @@ export const ACCOUNT_METHODS = [
     name: 'accounts.removeClaude',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeClaudeAccount(params.accountId)
+  }),
+  defineMethod({
+    name: 'accounts.updateClaudeDisplayName',
+    params: UpdateClaudeDisplayNameParams,
+    handler: async (params, { runtime }) =>
+      runtime.updateClaudeAccountDisplayName(params.accountId, params.displayName)
   }),
   defineMethod({
     name: 'accounts.removeCodex',

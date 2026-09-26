@@ -1,5 +1,6 @@
-import { Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { Loader2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { getClaudeManagedAccountLabel } from '../../../../shared/claude-managed-account-label'
 import { selectClaudeProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -25,6 +26,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     remoteAccountScopeNotice,
     runClaudeAccountAction,
     setRemoveClaudeTarget,
+    setRenameClaudeTarget,
     settings,
     systemClaudeActive,
     visibleClaudeAccounts,
@@ -212,7 +214,9 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                       className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
                     >
                       <div className="flex min-w-0 items-center gap-2">
-                        <span className="truncate text-sm font-medium">{account.email}</span>
+                        <span className="truncate text-sm font-medium">
+                          {getClaudeManagedAccountLabel(account)}
+                        </span>
                         <Badge
                           variant="outline"
                           className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/70"
@@ -232,12 +236,31 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                         ) : null}
                       </div>
                       <span className="truncate text-[11px] text-muted-foreground">
-                        {account.organizationName
-                          ? `${account.organizationName} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
+                        {account.displayName?.trim() && account.organizationName?.trim()
+                          ? `${account.organizationName.trim()} · ${formatAccountTimestamp(account.lastAuthenticatedAt)}`
                           : formatAccountTimestamp(account.lastAuthenticatedAt)}
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setRenameClaudeTarget({
+                            id: account.id,
+                            runtime: getProviderAccountRuntime(account)
+                          })
+                        }}
+                        disabled={isBusy}
+                        className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="size-3" />
+                        {translate(
+                          'auto.components.settings.AccountsPane.renameClaudeAccount',
+                          'Rename'
+                        )}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="xs"

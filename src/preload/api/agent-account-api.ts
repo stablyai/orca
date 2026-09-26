@@ -56,6 +56,10 @@ export type ClaudeAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<ClaudeRateLimitAccountsState>
+  updateDisplayName: (args: {
+    accountId: string
+    displayName: string | null
+  }) => Promise<ClaudeRateLimitAccountsState>
 }
 
 export type GrokAccountsApi = {

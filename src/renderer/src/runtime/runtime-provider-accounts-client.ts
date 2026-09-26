@@ -285,6 +285,23 @@ export async function removeClaudeProviderAccount(
   return window.api.claudeAccounts.remove({ accountId })
 }
 
+export async function updateClaudeProviderAccountDisplayName(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  accountId: string,
+  displayName: string | null
+): Promise<ClaudeRateLimitAccountsState> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
+      target,
+      'accounts.updateClaudeDisplayName',
+      { accountId, displayName },
+      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
+    )
+  }
+  return window.api.claudeAccounts.updateDisplayName({ accountId, displayName })
+}
+
 export async function removeCodexProviderAccount(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   accountId: string

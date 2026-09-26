@@ -35,7 +35,7 @@ export type CodexAccountAction =
   | `remove:${string}`
   | `select:${string}`
 
-export type ClaudeAccountAction = CodexAccountAction
+export type ClaudeAccountAction = CodexAccountAction | `rename:${string}`
 
 export type RemoveAccountTarget = {
   id: string
@@ -82,6 +82,7 @@ export type AccountsPaneSectionModel = {
   visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
+  setRenameClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runClaudeAccountAction: ClaudeAccountActionRunner
   codexAccounts: CodexRateLimitAccountsState
   codexAction: CodexAccountAction

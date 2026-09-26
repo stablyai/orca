@@ -31,6 +31,11 @@ export const RemoveAccountParams = z.object({
   accountId: z.string().min(1, 'Missing accountId')
 })
 
+export const UpdateClaudeDisplayNameParams = z.object({
+  accountId: z.string().min(1, 'Missing accountId'),
+  displayName: z.string().max(200).nullable()
+})
+
 export const CodexResetExpectedScope = z
   .object({
     target: CodexResetTarget,
@@ -66,7 +71,7 @@ export const AddCodexFromHomeParams = z.object({
   wslDistro: z.string().nullish()
 })
 
-// Why: `orca account list` prints only emails and the active ids, so it opts out
+// Why: `orca account list` prints account labels and the active ids, so it opts out
 // of the forced all-provider usage refresh below — that lane bypasses the poll
 // throttle and Retry-After gate and costs one serial round-trip per account.
 export const ListAccountsParams = z.object({

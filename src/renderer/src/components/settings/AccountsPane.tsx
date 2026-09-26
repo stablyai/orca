@@ -60,6 +60,7 @@ import {
   renderOpenCodeAccountsSection
 } from './accounts-pane-provider-setting-sections'
 import { renderMiniMaxAccountsSection } from './accounts-pane-minimax-section'
+import { ClaudeAccountRenameDialog } from './accounts-pane-claude-rename-dialog'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
 export { getAccountsPaneSearchEntries }
@@ -150,6 +151,7 @@ export function AccountsPane({
   // can change underneath an open dialog and lose the slot to diff for restarts.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
+  const [renameClaudeTarget, setRenameClaudeTarget] = useState<RemoveAccountTarget | null>(null)
   const accountVisibilityOptions = {
     remoteOwner: isRemoteAccountScope,
     ownerPlatform: accountOwnerPlatform
@@ -328,6 +330,7 @@ export function AccountsPane({
     visibleClaudeAccounts,
     systemClaudeActive,
     setRemoveClaudeTarget,
+    setRenameClaudeTarget,
     runClaudeAccountAction,
     codexAccounts,
     codexAction,
@@ -390,6 +393,7 @@ export function AccountsPane({
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget)}
+      <ClaudeAccountRenameDialog model={model} renameClaudeTarget={renameClaudeTarget} />
       {visibleSections.map((section, index) => (
         <div key={index} className="space-y-8">
           {index > 0 ? <Separator /> : null}

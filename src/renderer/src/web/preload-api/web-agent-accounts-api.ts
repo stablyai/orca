@@ -70,7 +70,8 @@ export function createClaudeAccountsApi(): PreloadApi['claudeAccounts'] {
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),
-    select: () => Promise.resolve(empty)
+    select: () => Promise.resolve(empty),
+    updateDisplayName: () => Promise.resolve(empty)
   }
 }
 

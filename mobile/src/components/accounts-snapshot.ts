@@ -113,6 +113,7 @@ const ClaudeAccountSummarySchema = z
     authMethod: z.enum(['subscription-oauth', 'unknown']).optional(),
     organizationUuid: z.string().nullable().optional(),
     organizationName: z.string().nullable().optional(),
+    displayName: z.string().nullable().optional(),
     createdAt: TimestampSchema.optional(),
     updatedAt: TimestampSchema.optional(),
     lastAuthenticatedAt: TimestampSchema.optional()

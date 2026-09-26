@@ -71,6 +71,23 @@ describe('account RPC methods', () => {
     expect(runtime.addCodexAccountFromHome).not.toHaveBeenCalled()
   })
 
+  it('updates a Claude display name on the owning host', async () => {
+    const updateClaudeAccountDisplayName = vi.fn().mockResolvedValue({ accounts: [] })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this RPC handler only calls updateClaudeAccountDisplayName.
+    const runtime = { updateClaudeAccountDisplayName } as unknown as OrcaRuntimeService
+    const update = method('accounts.updateClaudeDisplayName')
+    if (isStreamingMethod(update)) {
+      throw new Error('accounts.updateClaudeDisplayName must be a request method')
+    }
+
+    await expect(
+      update.handler(update.params?.parse({ accountId: 'account-1', displayName: 'Work org' }), {
+        runtime
+      })
+    ).resolves.toEqual({ accounts: [] })
+    expect(updateClaudeAccountDisplayName).toHaveBeenCalledWith('account-1', 'Work org')
+  })
+
   it('keeps explicit account-list refreshes on the forced refresh lane', async () => {
     const snapshot = { claude: null, codex: null }
     const runtime = {

@@ -9,6 +9,7 @@ import {
   removeCodexProviderAccount,
   selectClaudeProviderAccount,
   selectCodexProviderAccount,
+  updateClaudeProviderAccountDisplayName,
   watchProviderAccounts,
   type ProviderAccountsSnapshot
 } from './runtime-provider-accounts-client'
@@ -57,6 +58,7 @@ const codexListLocal = vi.fn()
 const claudeSelectLocal = vi.fn()
 const codexSelectLocal = vi.fn()
 const claudeRemoveLocal = vi.fn()
+const claudeUpdateDisplayNameLocal = vi.fn()
 const codexRemoveLocal = vi.fn()
 const unsubscribe = vi.fn()
 
@@ -74,6 +76,7 @@ beforeEach(() => {
     claudeSelectLocal,
     codexSelectLocal,
     claudeRemoveLocal,
+    claudeUpdateDisplayNameLocal,
     codexRemoveLocal,
     unsubscribe
   ]) {
@@ -100,7 +103,8 @@ beforeEach(() => {
       claudeAccounts: {
         list: claudeListLocal,
         select: claudeSelectLocal,
-        remove: claudeRemoveLocal
+        remove: claudeRemoveLocal,
+        updateDisplayName: claudeUpdateDisplayNameLocal
       },
       codexAccounts: {
         list: codexListLocal,
@@ -403,6 +407,7 @@ describe('provider account mutations', () => {
   it('routes select through local IPC with the full runtime target when local', async () => {
     codexSelectLocal.mockResolvedValue(emptyCodexState())
     claudeSelectLocal.mockResolvedValue(emptyClaudeState())
+    claudeUpdateDisplayNameLocal.mockResolvedValue(emptyClaudeState())
 
     await selectCodexProviderAccount(LOCAL, {
       accountId: 'acc-1',
@@ -410,6 +415,7 @@ describe('provider account mutations', () => {
       wslDistro: 'Ubuntu'
     })
     await selectClaudeProviderAccount(LOCAL, { accountId: null, runtime: 'host', wslDistro: null })
+    await updateClaudeProviderAccountDisplayName(LOCAL, 'acc-1', 'Work org')
 
     expect(codexSelectLocal).toHaveBeenCalledWith({
       accountId: 'acc-1',
@@ -420,6 +426,10 @@ describe('provider account mutations', () => {
       accountId: null,
       runtime: 'host',
       wslDistro: null
+    })
+    expect(claudeUpdateDisplayNameLocal).toHaveBeenCalledWith({
+      accountId: 'acc-1',
+      displayName: 'Work org'
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
@@ -443,6 +453,7 @@ describe('provider account mutations', () => {
     })
     await removeCodexProviderAccount(REMOTE, 'server-codex-1')
     await removeClaudeProviderAccount(REMOTE, 'server-claude-1')
+    await updateClaudeProviderAccountDisplayName(REMOTE, 'server-claude-1', 'Work org')
 
     const methods = runtimeEnvironmentCall.mock.calls.map(
       (call) => (call[0] as { method: string; params: unknown }).method
@@ -451,7 +462,8 @@ describe('provider account mutations', () => {
       'accounts.selectCodex',
       'accounts.selectClaude',
       'accounts.removeCodex',
-      'accounts.removeClaude'
+      'accounts.removeClaude',
+      'accounts.updateClaudeDisplayName'
     ])
     expect(runtimeEnvironmentCall.mock.calls[0]?.[0]).toMatchObject({
       selector: 'env-1',
@@ -463,5 +475,6 @@ describe('provider account mutations', () => {
     expect(claudeSelectLocal).not.toHaveBeenCalled()
     expect(codexRemoveLocal).not.toHaveBeenCalled()
     expect(claudeRemoveLocal).not.toHaveBeenCalled()
+    expect(claudeUpdateDisplayNameLocal).not.toHaveBeenCalled()
   })
 })

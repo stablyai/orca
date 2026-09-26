@@ -32,7 +32,8 @@ import {
   ListAccountsParams,
   RemoveAccountParams,
   SelectAccountParams,
-  SelectCodexAccountForTargetParams
+  SelectCodexAccountForTargetParams,
+  UpdateClaudeDisplayNameParams
 } from './accounts-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
@@ -562,6 +563,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
   'accounts.subscribe': null,
   'accounts.unsubscribe': AccountsUnsubscribeParams,
+  'accounts.updateClaudeDisplayName': UpdateClaudeDisplayNameParams,
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,

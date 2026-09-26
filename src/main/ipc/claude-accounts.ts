@@ -23,4 +23,9 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
       return claudeAccounts.selectAccountForTarget(args.accountId, args)
     }
   )
+  ipcMain.handle(
+    'claudeAccounts:updateDisplayName',
+    (_event, args: { accountId: string; displayName: string | null }) =>
+      claudeAccounts.updateDisplayName(args.accountId, args.displayName)
+  )
 }
