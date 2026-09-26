@@ -19,7 +19,7 @@ const kindAt = (index: number, receiver?: RegExp): RequiredCallArgument => ({
   ...(receiver ? { receiver } : {}),
   acceptsObjectLiteral: namesInputKind
 })
-const CONTROLLER = /ptyController\??\s*$/
+const CONTROLLER = /[Cc]ontroller\??\s*$/
 
 const KIND_ARGUMENT_BY_METHOD: Record<string, RequiredCallArgument> = {
   write: kindAt(2, CONTROLLER),
@@ -33,8 +33,9 @@ const KIND_ARGUMENT_BY_METHOD: Record<string, RequiredCallArgument> = {
   writeChunks: kindAt(2)
 }
 
+// Why multiline: some unchecked files open with a lint directive before `@ts-nocheck`.
 const uncheckedSources = scanSourceTree(MAIN_ROOT).filter((file) =>
-  file.source.startsWith('// @ts-nocheck')
+  /^\/\/ @ts-nocheck\b/m.test(file.source)
 )
 
 describe('PTY write call sites the compiler cannot check', () => {
@@ -43,7 +44,8 @@ describe('PTY write call sites the compiler cannot check', () => {
       expect.arrayContaining([
         'runtime/orca-runtime-deliver-pending-messages.ts',
         'runtime/orca-runtime-create-pty-headless-terminal-state.ts',
-        'runtime/orca-runtime-write-terminal-agent-prompt.ts'
+        'runtime/orca-runtime-write-terminal-agent-prompt.ts',
+        'runtime/orca-runtime-sync-window-graph.ts'
       ])
     )
   })
@@ -55,12 +57,14 @@ describe('PTY write call sites the compiler cannot check', () => {
       "this.ptyController.write(ptyId, '\\r', 'launch')",
       "await this.sendTerminal(handle, { text: 'a, b' }, { beforeWrite })",
       'await this.sendTerminalAgentPrompt(handle, prompt, { ...options })',
-      'other.write(ptyId, data)'
+      'other.write(ptyId, data)',
+      'const controller = this.ptyController; controller.write(ptyId, data)'
     ].join('\n')
 
     expect(findCallsMissingArgument(planted, KIND_ARGUMENT_BY_METHOD)).toEqual([
       '2: .write(ptyId, reply)',
-      "4: .sendTerminal(handle, { text: 'a, b' }, { beforeWrite })"
+      "4: .sendTerminal(handle, { text: 'a, b' }, { beforeWrite })",
+      '7: .write(ptyId, data)'
     ])
   })
 
