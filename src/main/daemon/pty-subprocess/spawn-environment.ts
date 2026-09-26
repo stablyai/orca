@@ -21,6 +21,7 @@ import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
 } from '../../../shared/windows-environment-expansion'
+import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { PtySubprocessOptions } from '../pty-subprocess'
 
@@ -171,6 +172,9 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   delete env.ELECTRON_RUN_AS_NODE
   removeAppImageRuntimeEnv(env)
   removeInheritedNoColor(env)
+  // Why last: the aliases mirror pane identity AFTER every strip above has settled, so an
+  // alias can never outlive the value it mirrors.
+  applyScrubSafeAgentEnvAliases(env)
   env.LANG ??= 'en_US.UTF-8'
   return env
 }

@@ -1,5 +1,8 @@
 import type { AgentStatus } from '../../shared/agent-detection'
-import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-freshness'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isFreshNonDoneAgentStatus
+} from '../../shared/agent-status-freshness'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import { getSyntheticAgentTerminalTitle } from '../../shared/synthetic-agent-title'
 import { resolveExplicitTerminalTitleAgentType } from '../../shared/terminal-title-agent-type'
@@ -53,6 +56,34 @@ export function hasExplicitIdleTitle(
     }
   }
   return false
+}
+
+/**
+ * Tier 1, first-party: the agent's own hook says the turn ENDED.
+ *
+ * Why DSH needs its own lane: the other tiers all read the title, and DSH cannot carry idle
+ * there. Its rest prefix is `✦`, which is Gemini's WORKING glyph, so the title detector
+ * deliberately reports no status for a DSH pane at all (see agent-title-status.ts) — which
+ * left `tui-idle` with nothing to settle on, and a supervised worker waiting on a ready
+ * composer until its timeout.
+ *
+ * Why a hook `done` is trustworthy here where a title would not be: it is the agent's own
+ * account of its own turn, and `normalizeDshEvent` drops SubagentStart/SubagentStop, so a
+ * `done` row for a DSH pane is the LEAD's, never a child's finishing early.
+ *
+ * Scoped rather than general: for agents whose hooks do report child turns, a `done` row
+ * can arrive mid-turn, and settling on it is exactly the #6011 class this file exists to
+ * prevent.
+ */
+export function hasFreshDoneFirstPartyStatus(
+  agent: TuiAgent | null | undefined,
+  status: FirstPartyAgentStatus,
+  staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
+): boolean {
+  if (agent !== 'dsh' || status?.state !== 'done') {
+    return false
+  }
+  return Date.now() - status.updatedAt <= staleAfterMs
 }
 
 /** Tier 2: the agent's own status stream says this turn is still open. */
@@ -163,6 +194,11 @@ export function isTuiIdleSatisfied(input: TuiIdleSatisfactionInput): boolean {
   // Why the title before the body: both are tier 1, so either settles, but the title is a
   // memoized lookup and the body is a fresh multi-KB scan. Same verdict, cheaper order.
   if (hasExplicitIdleTitle(input.record, input.rendererTitle) || input.readPositiveBodyEvidence()) {
+    return true
+  }
+  // Why beside the title lane, not after the veto: both are tier 1, and a first-party `done`
+  // and a fresh `working` cannot both hold — the same row carries one state.
+  if (hasFreshDoneFirstPartyStatus(input.agent, input.firstPartyStatus)) {
     return true
   }
   if (hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)) {

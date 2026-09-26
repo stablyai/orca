@@ -67,6 +67,16 @@ const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySi
     // the main-process caller drops the draft when readiness never resolves.
     quietAnchor: DECSET_BRACKETED_PASTE
   },
+  // Why: DSH-TUI draws the same U+276F composer glyph inside the alternate screen, and
+  // animates its intro continuously behind it, so it needs grok's marker-plus-quiet shape
+  // rather than the default quiet window. Its own entry (not grok's) so the two agents'
+  // evidence — and any future divergence — stay separable.
+  'dsh-composer-prompt': {
+    markerAnchor: DECSET_ALT_SCREEN,
+    markerAnchorEnd: DECRST_ALT_SCREEN,
+    marker: GROK_COMPOSER_PROMPT,
+    quietAnchor: DECSET_BRACKETED_PASTE
+  },
   'zcode-composer-prompt': {
     markerAnchor: DECSET_ALT_SCREEN,
     markerAnchorEnd: DECRST_ALT_SCREEN,
@@ -126,6 +136,10 @@ export type DraftPasteReadyScanResult = {
  *     that keeps those launches on the pre-existing delivery path. The alt-screen
  *     anchor is revoked on `\x1b[?1049l`: leaving it hands the terminal back to
  *     the shell, so a glyph after that is the shell's prompt, not grok's composer.
+ *   - `dsh-composer-prompt`: the grok shape applied to DSH-TUI, whose composer draws the
+ *     same `❯` inside the alternate screen. The committed
+ *     `dsh-tui-ready-no-key.txt` transcript is the evidence: DECSET 2004 at byte 6,
+ *     `\x1b[?1049h` at byte 40, and the first `❯` at byte 5910.
  *   - `zcode-composer-prompt`: ready when ZCode's composer box corner (`╭`) renders
  *     after the alternate-screen switch. ZCode repaints its animated ASCII banner
  *     indefinitely — the captured transcript is still repainting 30s after the composer

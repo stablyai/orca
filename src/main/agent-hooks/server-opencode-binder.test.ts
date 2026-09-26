@@ -70,7 +70,13 @@ describe('opencode binder loop', () => {
         { paneKey: PANE_A, directory: DIR, worktreeId: `repo::${DIR}`, shellPid: 111 }
       ],
       sweep: async () => [
-        { pid: 112, ppid: 111, startedAtMs: Date.now() - 120_000, executable: 'opencode', argv: ['opencode'] }
+        {
+          pid: 112,
+          ppid: 111,
+          startedAtMs: Date.now() - 120_000,
+          executable: 'opencode',
+          argv: ['opencode']
+        }
       ]
     })
   })

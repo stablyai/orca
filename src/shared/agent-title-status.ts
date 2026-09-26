@@ -19,6 +19,7 @@ import {
   containsQuarterCircleSpinner,
   containsLegacyAgentName,
   isClaudeManagementTitle,
+  isDshTerminalTitle,
   isGeminiTerminalTitle,
   isPiAgentTitle,
   isPiTerminalTitle
@@ -198,14 +199,20 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
     return piStateStatus
   }
 
-  if (title.includes(GEMINI_PERMISSION)) {
-    return 'permission'
-  }
-  if (title.includes(GEMINI_WORKING) || title.includes(GEMINI_SILENT_WORKING)) {
-    return 'working'
-  }
-  if (title.includes(GEMINI_IDLE)) {
-    return 'idle'
+  // Why the guard: DSH-TUI prefixes its title with `✦` while it is at REST, and that is
+  // Gemini's WORKING glyph. Reading it here made a finished DSH pane report working
+  // forever. DSH's own spinner prefixes are braille, which the spinner check below
+  // already covers, and its hooks are the authority either way.
+  if (!isDshTerminalTitle(title)) {
+    if (title.includes(GEMINI_PERMISSION)) {
+      return 'permission'
+    }
+    if (title.includes(GEMINI_WORKING) || title.includes(GEMINI_SILENT_WORKING)) {
+      return 'working'
+    }
+    if (title.includes(GEMINI_IDLE)) {
+      return 'idle'
+    }
   }
 
   // Why: resolve synthetic Pi/OMP permission/idle labels before the broader

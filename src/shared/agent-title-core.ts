@@ -21,6 +21,17 @@ export const CLAUDE_MANAGEMENT_TITLE_RE = new RegExp(
   'i'
 )
 
+/** DSH-TUI titles are always `<prefix> 🐋 <session title>` (its Chat screen's
+ *  `useTerminalTitle`), and the whale is the only part no other agent emits. It has to
+ *  outrank the Gemini glyphs below: DSH's IDLE prefix is `✦`, which is Gemini's WORKING
+ *  glyph, so without this a resting DSH pane reads as a working Gemini — wrong agent,
+ *  wrong state. Evidence: src/main/runtime/__fixtures__/dsh-tui-ready-no-key.txt. */
+export const DSH_WHALE = '\u{1F40B}' // 🐋
+
+export function isDshTerminalTitle(title: string): boolean {
+  return title.includes(DSH_WHALE)
+}
+
 export const GEMINI_WORKING = '\u2726' // ✦
 export const GEMINI_SILENT_WORKING = '\u23f2' // ⏲
 export const GEMINI_IDLE = '\u25c7' // ◇
@@ -56,6 +67,10 @@ export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 export const QUARTER_CIRCLE_SPINNER_RE = /[\u25d0-\u25d3]/g
 
 function computeIsGeminiTerminalTitle(title: string): boolean {
+  // Why first: see isDshTerminalTitle — the two agents share the `✦` glyph.
+  if (isDshTerminalTitle(title)) {
+    return false
+  }
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
     title.includes(GEMINI_PERMISSION) ||

@@ -22,6 +22,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   ante: 'antigma.ai',
   trae: 'www.trae.cn',
   muse: 'dev.meta.ai',
+  dsh: 'deepseek.com',
   zcode: 'zcode.z.ai',
   omp: 'omp.sh',
   'prime-agent': 'primeintellect.ai',
