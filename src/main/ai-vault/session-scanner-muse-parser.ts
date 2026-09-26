@@ -40,7 +40,7 @@ type MuseRecord = {
 // Why: `recorded_at` is microseconds since epoch; the shared timeline helpers
 // take milliseconds (or ISO strings), so convert here. Values below the
 // microsecond floor fall through to the shared parser (seconds/ISO).
-function museTimestampMs(value: unknown): number | null {
+export function museTimestampMs(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value) && value >= 1e14) {
     return Math.floor(value / 1000)
   }

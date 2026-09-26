@@ -177,7 +177,14 @@ export function withTrackedNativeChatModel(
     return [...models]
   }
   const seeded = catalog.models.find((model) => model.id === trackedId)
-  return [...models, seeded ?? { id: trackedId, label: trackedId, options: [] }]
+  // Why: an unlisted-but-tracked id is exactly what `unknownModelOptions` is
+  // for — without it a reported model renders its pill with no options, even
+  // when the catalog defines some (Muse reports raw account-scoped ids and
+  // seeds no models at all). Agents without unknown options keep `[]`.
+  return [
+    ...models,
+    seeded ?? { id: trackedId, label: trackedId, options: catalog.unknownModelOptions ?? [] }
+  ]
 }
 
 /** Why: no tracked model means no `-m` was ever emitted, so the CLI is running its

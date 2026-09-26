@@ -7,6 +7,10 @@ import {
 } from '../../shared/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import {
+  museSessionIdFromFilePath,
+  resolveMuseSessionsDir
+} from '../ai-vault/session-scanner-muse-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 import { resolveOmpSessionsDir } from '../ai-vault/omp-session-root'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
@@ -74,6 +78,8 @@ export type ResolveSessionFileOptions = {
   grokSessionsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
+  /** Override the Muse sessions root (`~/.local/share/muse/sessions`). */
+  museSessionsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -192,6 +198,13 @@ async function resolveSessionFileById(
     return resolveOmpSessionFile(
       trimmedId,
       resolveOmpSessionsDir({ sessionsDir: options.ompSessionsDir }),
+      signal
+    )
+  }
+  if (transcriptAgent === 'muse') {
+    return resolveMuseSessionFile(
+      trimmedId,
+      resolveMuseSessionsDir(options.museSessionsDir),
       signal
     )
   }
@@ -330,6 +343,27 @@ async function resolveOmpSessionFile(
       const name = basename(path, extname(path))
       return name === sessionId || name.endsWith(`_${sessionId}`)
     },
+    signal
+  })
+  return files[0] ?? null
+}
+
+async function resolveMuseSessionFile(
+  sessionId: string,
+  sessionsDir: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  if (!sessionsDir) {
+    return null
+  }
+  const files = await walkSessionFiles(sessionsDir, 'muse', [], {
+    extensions: new Set(['.jsonl']),
+    // Why: the session id is the parent directory name
+    // (<root>/YYYY/MM/DD/<uuid>/session.jsonl), and a subagent log nests one
+    // deeper, so its parent dir is the child id — the predicate matches the
+    // parent file for a parent id and the child file for a child id, never
+    // crossing between them.
+    filePredicate: (path) => museSessionIdFromFilePath(path) === sessionId,
     signal
   })
   return files[0] ?? null
