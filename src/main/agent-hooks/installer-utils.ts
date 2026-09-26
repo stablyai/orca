@@ -12,7 +12,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { quotePowerShellLiteral as quotePowerShellString } from '../../shared/powershell-native-argument'
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
@@ -109,8 +109,6 @@ export function getSharedManagedScriptPath(scriptFileName: string): string {
 
 export { wrapPosixHookCommand } from './posix-hook-command'
 
-export { quotePowerShellString }
-
 export {
   wrapWindowsPowerShellEncodedCommand,
   WINDOWS_POWERSHELL_HOOK_SWITCHES
@@ -133,14 +131,14 @@ export function buildWindowsHookPowerShellCommand(
   options: { fallbackStdout?: string } = {}
 ): string {
   // Why: the encoded launcher protects paths across Windows shells and drains stdin when the config points at a missing script.
-  const quoted = quotePowerShellString(scriptPath)
+  const quoted = quotePowerShellLiteral(scriptPath)
   const envPrefix = Object.entries(env)
-    .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
+    .map(([key, value]) => `$env:${key} = ${quotePowerShellLiteral(value)}; `)
     .join('')
   const fallback =
     options.fallbackStdout === undefined
       ? ''
-      : `Write-Output ${quotePowerShellString(options.fallbackStdout)}; `
+      : `Write-Output ${quotePowerShellLiteral(options.fallbackStdout)}; `
   // Why the order: answer first (a gate event reads silence as deny), then the shared
   // env guard, and only then own stdin — outside an Orca pane the caller may abandon the
   // pipe, and ReadToEnd would strand the launcher there forever (#11549).
