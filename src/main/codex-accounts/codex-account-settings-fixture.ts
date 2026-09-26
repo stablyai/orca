@@ -32,6 +32,7 @@ export function createCodexAccountSettings(
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily: overrides.appFontFamily ?? 'Geist',
     agentStatusHooksEnabled: overrides.agentStatusHooksEnabled ?? true,
+    codexCredentialMirrorConsent: overrides.codexCredentialMirrorConsent ?? false,
     tabAutoGenerateTitle: overrides.tabAutoGenerateTitle ?? false
   })
 }

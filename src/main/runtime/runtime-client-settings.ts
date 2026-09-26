@@ -17,6 +17,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { clearMirroredCodexCredentials } from '../codex-accounts/codex-credential-mirror-consent-revocation'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type RuntimeClientSettings = Pick<
@@ -27,6 +28,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultArgs'
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
+  | 'codexCredentialMirrorConsent'
   | 'terminalCopyTrimsGutter'
   | 'defaultTaskSource'
   | 'defaultTaskViewPreset'
@@ -59,6 +61,7 @@ export type RuntimeHostDisplayLabelOverrides = Partial<
 export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
+  | 'codexCredentialMirrorConsent'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'
   | 'agentDefaultArgs'
@@ -100,6 +103,7 @@ export class RuntimeClientSettingsController {
       agentDefaultArgs: settings.agentDefaultArgs ?? {},
       agentDefaultEnv: settings.agentDefaultEnv ?? {},
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
+      codexCredentialMirrorConsent: settings.codexCredentialMirrorConsent === true,
       // Why projected: mobile's terminal Copy honours this, and a host predating
       // the setting sends no key, which the client reads as on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,
@@ -153,6 +157,12 @@ export class RuntimeClientSettingsController {
         !haveSameDisabledTuiAgents(beforeSettings.disabledTuiAgents, settings.disabledTuiAgents))
     ) {
       await this.reconcileManagedAgentHooks()
+    }
+    // Why not gated on credentialMirrorConsentBefore: clearMirroredCodexCredentials is
+    // idempotent (rmSync with force), and gating on the true->false edge meant an interrupted
+    // clear never retried on a later false->false apply, leaving orphaned copies (G1).
+    if (updates.codexCredentialMirrorConsent === false) {
+      clearMirroredCodexCredentials()
     }
     return this.get()
   }

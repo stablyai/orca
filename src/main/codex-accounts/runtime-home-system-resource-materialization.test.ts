@@ -173,7 +173,7 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(join(systemCodexHome, 'skills', 'system.md'), 'system\n', 'utf-8')
     writeFileSync(join(getRuntimeCodexHomePath(), 'hooks.json'), '{"hooks":{"Stop":[]}}\n', 'utf-8')
     writeFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), '{"id":"runtime"}\n', 'utf-8')
-    const store = createStore(createSettings())
+    const store = createStore(createSettings({ codexCredentialMirrorConsent: true }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
