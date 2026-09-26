@@ -52,6 +52,7 @@ describe('worker-list decodes a chat worker row like any other', () => {
           : { result: { run: null } }
     }
 
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these context fields.
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
       flags: new Map([['run', 'run_1']]),
       client,
