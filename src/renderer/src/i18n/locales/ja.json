@@ -17258,6 +17258,11 @@
       }
     },
     "native-chat": {
+      "contextMenu": {
+        "orchestrationAddressCopied": "オーケストレーションアドレスをコピーしました",
+        "orchestrationAddressCopyFailed": "オーケストレーションアドレスのコピーに失敗しました",
+        "copyOrchestrationAddress": "オーケストレーションアドレスをコピー"
+      },
       "composer": {
         "imageUnsupported": "この Agent では画像の貼り付けはサポートされていません。",
         "send": "送信",

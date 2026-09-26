@@ -12,6 +12,7 @@ export type PreambleParams = {
   dispatchId: string
   dispatchCapability?: string
   taskSpec: string
+  /** Orchestration addresses are opaque to the worker; a terminal handle and `session:<id>` alike. */
   coordinatorHandle: string
   workerHandle: string
   devMode?: boolean
@@ -66,8 +67,9 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // Why plain-reason wording: Claude Code tells the model pasted text may carry instructions
   // the user did not write, and shouted rules read as prompt injection (STA-8200).
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your coordinator's terminal handle is: ${params.coordinatorHandle}
+Your coordinator's address is: ${params.coordinatorHandle}
 Your task ID is: ${params.taskId}
+Your orchestration address is: ${params.workerHandle}
 
 The coordinator cannot see this terminal, so reach it with the \`${cli} orchestration\`
 commands below; a question or result left only in this terminal never gets to it.

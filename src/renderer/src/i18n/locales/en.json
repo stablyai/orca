@@ -17739,6 +17739,11 @@
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
         "title": "Context",
         "estimated": "Estimated from the last response."
+      },
+      "contextMenu": {
+        "orchestrationAddressCopied": "Orchestration address copied",
+        "orchestrationAddressCopyFailed": "Unable to copy orchestration address",
+        "copyOrchestrationAddress": "Copy Orchestration Address"
       }
     },
     "tab": {

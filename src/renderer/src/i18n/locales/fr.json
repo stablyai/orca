@@ -17322,6 +17322,11 @@
   },
   "components": {
     "native-chat": {
+      "contextMenu": {
+        "orchestrationAddressCopied": "Adresse d'orchestration copiée",
+        "orchestrationAddressCopyFailed": "Impossible de copier l'adresse d'orchestration",
+        "copyOrchestrationAddress": "Copier l'adresse d'orchestration"
+      },
       "composer": {
         "imageUnsupported": "Le collage d'image n'est pas pris en charge pour cet agent.",
         "send": "Envoyer",

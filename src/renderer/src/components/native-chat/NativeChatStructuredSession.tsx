@@ -2,6 +2,8 @@ import { useMemo, useRef, useState } from 'react'
 import { agentSessionPromptQuestions } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
+import { isOrcaSessionId } from '../../../../shared/orca-session-address'
+import { resolveStructuredSessionOrchestrationAddress } from '../../runtime/structured-session-orchestration-address'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
@@ -63,13 +65,21 @@ export function NativeChatStructuredSession(
   )
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
+  const resolveOrchestrationAddress = useMemo(
+    () =>
+      isOrcaSessionId(props.sessionId)
+        ? () => resolveStructuredSessionOrchestrationAddress(props.target, props.sessionId)
+        : undefined,
+    [props.sessionId, props.target]
+  )
   const paneCommands = useStructuredNativeChatPaneCommands({
     tabId: props.tabId,
     groupId: props.groupId,
     isVisible: props.isVisible,
     rootRef,
     composerRef,
-    terminalPaneActions: props.contextMenuActions
+    terminalPaneActions: props.contextMenuActions,
+    resolveOrchestrationAddress
   })
   const session = useMemo<NativeChatLiveSession>(
     () => ({

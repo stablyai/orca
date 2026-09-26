@@ -403,3 +403,17 @@ describe('sub-dispatch section', () => {
     expect(preamble.indexOf('=== SUB-DISPATCH ===')).toBeLessThan(preamble.indexOf('=== TASK ==='))
   })
 })
+
+describe('the worker is told its own orchestration address', () => {
+  it('names the worker and its coordinator by their addresses, whatever they are', () => {
+    const preamble = buildDispatchPreamble(
+      baseParams({ workerHandle: 'session:4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37' })
+    )
+
+    expect(preamble).toContain(
+      'Your orchestration address is: session:4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37\n'
+    )
+    expect(preamble).toContain("Your coordinator's address is: term_coord\n")
+    expect(cliFence(preamble)).toContain('--from session:4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37 ')
+  })
+})

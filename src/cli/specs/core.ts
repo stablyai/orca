@@ -19,6 +19,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Show app/runtime/graph readiness',
     usage: 'orca status [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      "caller is this agent's orchestration address, as Orca resolved it from its environment; null outside an Orca agent."
+    ],
     examples: ['orca status', 'orca status --json']
   },
   {

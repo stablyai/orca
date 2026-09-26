@@ -65,6 +65,7 @@ non-Orca subagent tool when Orca orchestration provenance was requested.
 - Use the executable you used to run `skills get` for the entire run. In the
   examples below, replace `ORCA` with it; do not create a shell variable or run
   `ORCA` literally. If it fails, report that exact error instead of switching.
+- `ORCA status --json` shows your own orchestration address as `caller.address`.
 - A successful `orchestration send` proves durable enqueue; its wake or nudge is
   best-effort attention only and does not prove the recipient read or accepted it.
 
@@ -72,9 +73,8 @@ non-Orca subagent tool when Orca orchestration provenance was requested.
 
 The injected preamble is authoritative. A dispatched worker must:
 
-1. Do only the current Task and use the preamble's `ask` command for a blocking
-   coordinator question. Never open a local question TUI the coordinator cannot
-   answer. Resume the same message ID after an ask timeout.
+1. Do only the current Task. Ask the coordinator only with the preamble's `ask`
+   command, never a local question TUI; resume its message ID after a timeout.
 2. Send heartbeats only at the cadence in the preamble. A heartbeat proves
    liveness, not completion.
 3. Read coordinator follow-ups at each natural checkpoint — before starting a

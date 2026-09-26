@@ -26,12 +26,14 @@ export type OrchestrationSessionParty = OrchestrationParty &
 const NO_EFFECTS = { effectsApplied: false } as const
 
 /** Every param naming a party other than the caller; a new one is added here with its own test. */
-export const ORCHESTRATION_TARGET_PARAM: Readonly<Record<string, 'to' | 'terminal'>> = {
-  'orchestration.send': 'to',
-  'orchestration.ask': 'to',
-  'orchestration.dispatch': 'to',
-  'orchestration.inbox': 'terminal'
-}
+export const ORCHESTRATION_TARGET_PARAM: Readonly<Record<string, 'to' | 'terminal' | 'sessionId'>> =
+  {
+    'orchestration.send': 'to',
+    'orchestration.ask': 'to',
+    'orchestration.dispatch': 'to',
+    'orchestration.inbox': 'terminal',
+    'orchestration.sessionAddress': 'sessionId'
+  }
 
 /** The party an Orca session id names. Throws when it is a worker this host lost the identity of. */
 export function resolveOrcaSessionParty(

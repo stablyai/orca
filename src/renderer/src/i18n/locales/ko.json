@@ -17258,6 +17258,11 @@
       }
     },
     "native-chat": {
+      "contextMenu": {
+        "orchestrationAddressCopied": "오케스트레이션 주소를 복사했습니다",
+        "orchestrationAddressCopyFailed": "오케스트레이션 주소를 복사하지 못했습니다",
+        "copyOrchestrationAddress": "오케스트레이션 주소 복사"
+      },
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",
         "send": "보내기",

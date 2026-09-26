@@ -10,6 +10,7 @@ import {
   runCoordinatorKey
 } from '../../../../orchestration/orchestration-caller-identity'
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { capSessionCallerWaitMs } from '../../../../orchestration/session-caller-wait-cap'
 
 export const ORCHESTRATION_ASK_METHODS = [
   defineMethod({
@@ -17,7 +18,7 @@ export const ORCHESTRATION_ASK_METHODS = [
     params: AskParams,
     handler: async (
       params,
-      { runtime, signal, orchestrationCapability, recordMutationReceipt }
+      { runtime, signal, orchestrationCapability, orchestrationCaller, recordMutationReceipt }
     ) => {
       // Why: group addresses have no unambiguous first-answer authority.
       if (params.to && isGroupAddress(params.to)) {
@@ -30,7 +31,10 @@ export const ORCHESTRATION_ASK_METHODS = [
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
       // Why: echoed on every return so a clamped caller reports the budget actually waited, not the one it asked for.
-      const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
+      const timeoutMs = capSessionCallerWaitMs(
+        clampOrchestrationAskTimeoutMs(params.timeoutMs),
+        orchestrationCaller
+      )
       const paneKey = runtime.getTerminalPaneKey(from) ?? undefined
       const remoteAttachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
       if (remoteAttachment) {

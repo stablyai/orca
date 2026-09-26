@@ -2,8 +2,9 @@
 
 exports[`buildDispatchPreamble > renders a stable snapshot of the full preamble 1`] = `
 "You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your coordinator's terminal handle is: term_COORD
+Your coordinator's address is: term_COORD
 Your task ID is: task_SNAP
+Your orchestration address is: term_WORKER
 
 The coordinator cannot see this terminal, so reach it with the \`orca orchestration\`
 commands below; a question or result left only in this terminal never gets to it.

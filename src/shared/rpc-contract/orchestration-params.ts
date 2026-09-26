@@ -106,6 +106,11 @@ export const DispatchParams = z.object({
   run: OptionalString
 })
 
+/** An Orca agent session id; the answer is the address its conversation is reached at. */
+export const SessionAddressParams = z.object({
+  sessionId: requiredString('Missing sessionId')
+})
+
 export const DispatchShowParams = z.object({
   task: OptionalString,
   preamble: OptionalBoolean,

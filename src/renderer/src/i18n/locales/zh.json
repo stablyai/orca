@@ -17223,6 +17223,11 @@
   },
   "components": {
     "native-chat": {
+      "contextMenu": {
+        "orchestrationAddressCopied": "已复制编排地址",
+        "orchestrationAddressCopyFailed": "复制编排地址失败",
+        "copyOrchestrationAddress": "复制编排地址"
+      },
       "composer": {
         "imageUnsupported": "此智能体不支持粘贴图片。",
         "send": "发送",

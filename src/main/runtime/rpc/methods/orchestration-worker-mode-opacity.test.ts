@@ -3,9 +3,9 @@
  *
  * Two properties are pinned here, because both were false at some point in this lane:
  *
- * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once the handle and
- *   dispatch id are normalised. The sub-dispatch section used to be withheld from a structured
- *   worker, which is a two-tier capability model dressed as a preamble tweak;
+ * - a worker is TAUGHT the same thing whichever mode it runs in, byte for byte once its address
+ *   and the per-dispatch ids are normalised. The sub-dispatch section used to be withheld from a
+ *   structured worker, which is a two-tier capability model dressed as a preamble tweak;
  * - a structured worker can actually BE a coordinator. `worker-start` used to resolve `--from`
  *   through `showTerminal`, which needs a PTY, so the capability the preamble withheld was in fact
  *   missing rather than merely unadvertised.
@@ -88,7 +88,7 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
             runtimeFence: 1
           }
         }),
-        // No committed /clear: each session is its own lineage's root.
+        // No committed /clear: each session is its own conversation's root.
         listRecords: () => []
       }
     }
@@ -96,7 +96,7 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
   return paneKey
 }
 
-/** Strips the ids that legitimately differ per dispatch, leaving what the agent is taught. */
+/** Strips the address and ids that legitimately differ per worker, leaving what it is taught. */
 function normalizePreamble(preamble: string, handle: string, dispatchId: string): string {
   return preamble
     .split(handle)
@@ -188,7 +188,7 @@ describe('a worker cannot tell which mode it is running in', () => {
     return result
   }
 
-  it('teaches byte-identical instructions in both modes', async () => {
+  it('teaches byte-identical instructions in both modes, but for the address', async () => {
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
       handle: 'term_coord',
       worktreeId: WORKTREE,
@@ -210,9 +210,13 @@ describe('a worker cannot tell which mode it is running in', () => {
     expect(terminal.mode.mode).toBe('terminal')
     const structuredPreamble = structuredPreambles[0] as string
     const terminalPreamble = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] as string
-    expect(normalizePreamble(structuredPreamble, STRUCTURED_HANDLE, structured.dispatchId)).toBe(
-      normalizePreamble(terminalPreamble, TERMINAL_HANDLE, terminal.dispatchId)
-    )
+    expect(
+      normalizePreamble(structuredPreamble, 'session:sess_worker', structured.dispatchId)
+    ).toBe(normalizePreamble(terminalPreamble, TERMINAL_HANDLE, terminal.dispatchId))
+    // One agent-visible address: the minted handle is the mailbox key, never taught.
+    expect(structuredPreamble).not.toContain(STRUCTURED_HANDLE)
+    expect(structuredPreamble).toContain('Your orchestration address is: session:sess_worker\n')
+    expect(terminalPreamble).toContain(`Your orchestration address is: ${TERMINAL_HANDLE}\n`)
     // The section the structured lane used to withhold, asserted by name so the equality above
     // cannot pass by both preambles losing it.
     expect(structuredPreamble).toContain('=== SUB-DISPATCH ===')
@@ -233,6 +237,10 @@ describe('a worker cannot tell which mode it is running in', () => {
 
     expect(result).toMatchObject({ state: 'ready' })
     expect(showTerminal).not.toHaveBeenCalled()
+    // Its sub-worker is told the coordinator's one address, not the handle it was minted.
+    expect(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
+      "Your coordinator's address is: session:sess_coord\n"
+    )
     expect(vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1]).toContain(
       '=== SUB-DISPATCH ==='
     )

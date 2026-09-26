@@ -18,7 +18,8 @@ export function useStructuredNativeChatPaneCommands({
   isVisible,
   rootRef,
   composerRef,
-  terminalPaneActions
+  terminalPaneActions,
+  resolveOrchestrationAddress
 }: {
   tabId: string
   groupId?: string
@@ -26,6 +27,7 @@ export function useStructuredNativeChatPaneCommands({
   rootRef: RefObject<HTMLDivElement | null>
   composerRef: RefObject<NativeChatComposerHandle | null>
   terminalPaneActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
+  resolveOrchestrationAddress?: () => Promise<string | null>
 }) {
   const keybindings = useAppStore((state) => state.keybindings)
   const pasteClipboardIntoComposer = useNativeChatPasteBridge({ rootRef, composerRef })
@@ -37,6 +39,7 @@ export function useStructuredNativeChatPaneCommands({
       onPaste: pasteClipboardIntoComposer
     },
     enabled: isVisible,
+    resolveOrchestrationAddress,
     showTerminalPaneActions: terminalPaneActions !== undefined,
     splitShortcutLabels: {
       right: formatShortcutLabel('terminal.splitRight', keybindings),

@@ -26,6 +26,7 @@ import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
 import { createOrchestrationCompatibilityEnvelope } from './runtime/orchestration-compatibility-envelope'
 import { formatCliError, reportCliError } from './cli-error'
 import { RuntimeRpcFailureError } from './runtime/types'
+import { orchestrationCallerLabel } from './handlers/orchestration/terminal-identity'
 
 const SESSION = 'f7a1c0de-1111-4222-8333-444455556666'
 const IDENTITY_ENV = [
@@ -414,6 +415,12 @@ describe('the identity a session presents', () => {
     setEnv({ ORCA_AGENT_SESSION_ID: SESSION, ORCA_TERMINAL_HANDLE: 'structworker_self' })
     expect(await preview({})).toBe('structworker_self')
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
+  })
+
+  it("labels a structured worker's check by its session address, not its minted handle", () => {
+    setEnv({ ORCA_AGENT_SESSION_ID: SESSION, ORCA_TERMINAL_HANDLE: 'structworker_self' })
+
+    expect(orchestrationCallerLabel(undefined)).toBe(`session:${SESSION}`)
   })
 
   it('resumes a timed-out ask as the session, without naming a terminal', async () => {

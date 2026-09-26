@@ -8,6 +8,7 @@ import { checkDirectMailbox } from './check-direct'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
 import { hasRunBindingKey } from '../../../../orchestration/orchestration-caller-identity'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
+import { capSessionCallerWaitMs } from '../../../../orchestration/session-caller-wait-cap'
 import {
   callerHoldsDispatchPane,
   dispatchFenced,
@@ -19,7 +20,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
     name: 'orchestration.check',
     params: CheckParams,
     handler: async (
-      params,
+      requested,
       {
         orchestrationCompatibilityEvidence,
         orchestrationCaller,
@@ -30,6 +31,16 @@ export const ORCHESTRATION_CHECK_METHODS = [
         recordMutationReceipt
       }
     ) => {
+      const params =
+        requested.wait && orchestrationCaller
+          ? {
+              ...requested,
+              timeoutMs: capSessionCallerWaitMs(
+                requested.timeoutMs ?? undefined,
+                orchestrationCaller
+              )
+            }
+          : requested
       const db = runtime.getOrchestrationDb()
       const handle = params.terminal ?? 'unknown'
       const typeFilter = parseMessageTypes(params.types)

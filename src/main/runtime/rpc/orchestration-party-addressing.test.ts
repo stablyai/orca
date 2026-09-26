@@ -105,7 +105,8 @@ describe('every target param resolves both spellings of a party to one canonical
         'orchestration.send',
         'orchestration.ask',
         'orchestration.dispatch',
-        'orchestration.inbox'
+        'orchestration.inbox',
+        'orchestration.sessionAddress'
       ].sort()
     )
   })
@@ -207,6 +208,15 @@ describe('every target param resolves both spellings of a party to one canonical
     await as(undefined, 'orchestration.send', { from: WORKER_HANDLE, to: ADDRESS_Z, subject: 'z' })
     const { messages } = await as(undefined, 'orchestration.inbox', { terminal: ADDRESS_Z })
     expect(messages).toEqual([expect.objectContaining({ subject: 'z' })])
+  })
+
+  it('sessionAddress: a chat is its session address, and a worker is the one it is taught', async () => {
+    expect(await as(undefined, 'orchestration.sessionAddress', { sessionId: SESSION_Z })).toEqual({
+      address: ADDRESS_Z
+    })
+    expect(await as(undefined, 'orchestration.sessionAddress', { sessionId: SESSION_Y })).toEqual({
+      address: ADDRESS_Y
+    })
   })
 })
 

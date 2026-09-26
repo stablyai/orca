@@ -14,6 +14,7 @@ import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalClientTab
 } from './runtime-mobile-session-tab-contracts'
+import type { CliStatusCaller } from './orchestration-caller-status'
 
 export type * from './runtime-mobile-session-tab-contracts'
 
@@ -127,6 +128,8 @@ export type CliStatusResult = {
   graph: {
     state: RuntimeGraphStatus | 'not_running' | 'starting'
   }
+  /** This process's orchestration address, resolved by the host; see `CliStatusCaller`. */
+  caller?: CliStatusCaller
 }
 
 export type RuntimeSyncedTab = {
