@@ -173,6 +173,7 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
         await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
           allowMissingPersistedTab: Boolean(ptyCloseAuthority),
           force: options.force,
+          reason: options.reason,
           killPtys:
             options.localPtyTeardownOwnedExternally !== true &&
             (options.reason === undefined || options.reason === 'user'),

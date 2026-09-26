@@ -12,7 +12,9 @@ import type { Tab } from '../../shared/tab-types'
 import {
   resolveTerminalCloseTarget,
   terminalSurfaceCloseMutation,
-  type PaneCloseResolution
+  type PaneCloseResolution,
+  type RendererTerminalClose,
+  type TerminalSurfaceCloseOptions
 } from './terminal-surface-close'
 import type {
   TerminalPaneCloseTarget,
@@ -113,8 +115,7 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   protected async closeTerminalSurface(
     worktreeId: string,
     target: TerminalSurfaceCloseTarget,
-    // closedByLayoutOwner goes away with D1, once main owns the terminal layout.
-    options: { allowMissing?: boolean; force?: boolean; closedByLayoutOwner?: boolean } = {}
+    options: TerminalSurfaceCloseOptions = {}
   ): Promise<string[]> {
     const store = this.store
     if (!store?.getWorkspaceSession || !store.setWorkspaceSession || !store.runDurableMutation) {
@@ -153,8 +154,8 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   }
 
   /** The desktop renderer's close intent: it already guarded, removed and killed; this only reports. */
-  async closeTerminalSurfaceFromRenderer(worktreeId: string, target: TerminalSurfaceCloseTarget) {
-    const options = { allowMissing: true, force: true, closedByLayoutOwner: true }
+  async closeTerminalSurfaceFromRenderer({ worktreeId, target, reason }: RendererTerminalClose) {
+    const options = { allowMissing: true, force: true, closedByLayoutOwner: true, reason }
     await this.closeTerminalSurface(worktreeId, target, options)
   }
 

@@ -33,32 +33,28 @@ function sessionState(overrides: Partial<WorkspaceSessionState> = {}): Workspace
   } as WorkspaceSessionState
 }
 
+// Records ride on `current` here for brevity; the caller passes the renderer's read-only mirror.
 function merge(
   current: WorkspaceSessionState,
   remote: WorkspaceSessionState,
-  liveTabs: AppState['tabsByWorktree'] = {},
-  remoteRevision?: number
+  liveTabs: AppState['tabsByWorktree'] = {}
 ): WorkspaceSessionState {
   return mergeDirectSshRemoteWorkspaceSession(
-    current,
+    { ...current, closedTerminalTabTombstonesByTabId: undefined },
     remote,
     new Set([WORKTREE]),
     liveTabs,
     new Set(),
     undefined,
-    remoteRevision
+    current.closedTerminalTabTombstonesByTabId
   )
 }
 
-function tombstone(tabId: string, ackRevision?: number): WorkspaceSessionState {
+function tombstone(tabId: string): WorkspaceSessionState {
   return sessionState({
     tabsByWorktree: { [WORKTREE]: [] },
     closedTerminalTabTombstonesByTabId: {
-      [tabId]: {
-        closedAt: Date.now(),
-        worktreeId: WORKTREE,
-        ...(ackRevision ? { ackRevision } : {})
-      }
+      [tabId]: { closedAt: Date.now(), worktreeId: WORKTREE }
     }
   })
 }
@@ -77,7 +73,7 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
       remoteSessionIdsByTabId: { toString: 'session-1' }
     })
 
-    const merged = merge(current, remote, {}, 2)
+    const merged = merge(current, remote, {})
 
     expect(merged.tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual(['toString'])
     expect(Object.hasOwn(merged.terminalLayoutsByTabId, 'toString')).toBe(true)
@@ -96,7 +92,7 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     })
     const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [terminalTab('tab-x')] } })
 
-    const merged = merge(current, remote, {}, 2)
+    const merged = merge(current, remote, {})
 
     expect(merged.tabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual(['tab-x'])
   })
@@ -109,12 +105,11 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
       remoteSessionIdsByTabId: { ghost: 'pty-1' }
     })
 
-    const merged = merge(tombstone('ghost'), remote, { [WORKTREE]: [] }, 3)
+    const merged = merge(tombstone('ghost'), remote, { [WORKTREE]: [] })
 
     expect(merged.tabsByWorktree[WORKTREE]).toEqual([])
     expect(merged.terminalLayoutsByTabId.ghost).toBeUndefined()
     expect(merged.remoteSessionIdsByTabId?.ghost).toBeUndefined()
-    expect(merged.closedTerminalTabTombstonesByTabId?.ghost).toBeDefined()
   })
 
   it('does not re-add a tombstoned tab through the host-unknown branch', () => {
@@ -127,7 +122,7 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     })
     const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [] } })
 
-    const merged = merge(current, remote, {}, 3)
+    const merged = merge(current, remote, {})
 
     expect(merged.tabsByWorktree[WORKTREE]).toEqual([])
   })
@@ -143,7 +138,7 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
       activeTabIdByWorktree: { [WORKTREE]: 'ghost' }
     })
 
-    const merged = merge(tombstone('ghost'), remote, { [WORKTREE]: [] }, 3)
+    const merged = merge(tombstone('ghost'), remote, { [WORKTREE]: [] })
 
     expect(merged.tabsByWorktree[WORKTREE].map((tab) => tab.id)).toEqual(['survivor'])
   })
@@ -156,7 +151,7 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     })
     const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [live] } })
 
-    const merged = merge(current, remote, { [WORKTREE]: [live] }, 3)
+    const merged = merge(current, remote, { [WORKTREE]: [live] })
 
     expect(merged.tabsByWorktree[WORKTREE].map((tab) => tab.id)).toEqual(['live'])
   })
@@ -169,24 +164,20 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     const current = sessionState({ tabsByWorktree: { [WORKTREE]: [agent, closedElsewhere] } })
     const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [agent] } })
 
-    const merged = merge(current, remote, { [WORKTREE]: [agent, closedElsewhere] }, 3)
+    const merged = merge(current, remote, { [WORKTREE]: [agent, closedElsewhere] })
 
     expect(merged.tabsByWorktree[WORKTREE].map((tab) => tab.id)).toContain('closed-elsewhere')
   })
 
-  it('retires the tombstone once a newer snapshot stops listing the tab', () => {
-    const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [] } })
-
-    const merged = merge(tombstone('ghost', 3), remote, { [WORKTREE]: [] }, 4)
+  it('neither retires nor writes back a record once the host stops listing the tab', () => {
+    // Main alone writes records; an acknowledgement used to delete them here, which made a workspace
+    // the user emptied read as never initialized as soon as the host caught up.
+    const current = tombstone('ghost')
+    const merged = merge(current, sessionState({ tabsByWorktree: { [WORKTREE]: [] } }), {
+      [WORKTREE]: []
+    })
 
     expect(merged.closedTerminalTabTombstonesByTabId).toBeUndefined()
-  })
-
-  it('keeps the tombstone when the snapshot omits the worktree entirely', () => {
-    // A snapshot that says nothing about the worktree — including one whose path never resolved —
-    // is not evidence the host saw the close.
-    const merged = merge(tombstone('ghost', 3), sessionState(), {}, 4)
-
-    expect(merged.closedTerminalTabTombstonesByTabId?.ghost).toBeDefined()
+    expect(current.closedTerminalTabTombstonesByTabId?.ghost).toBeDefined()
   })
 })

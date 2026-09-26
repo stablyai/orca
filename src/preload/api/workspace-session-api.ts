@@ -24,6 +24,7 @@ export type WorkspaceSessionApi = {
     closeTerminalSurface: (args: {
       worktreeId: string
       target: TerminalSurfaceCloseTarget
+      reason?: 'user' | 'cleanup'
     }) => Promise<void>
     flush: () => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null

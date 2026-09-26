@@ -21,8 +21,11 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
   })
 
-  it('does not recreate a terminal after an explicit empty state was persisted', () => {
-    const store = createMockStore({ tabsByWorktree: { 'wt-1': [] } })
+  it('does not recreate a terminal after the user closed the last one', () => {
+    const store = createMockStore({
+      tabsByWorktree: { 'wt-1': [] },
+      closedTerminalTabTombstonesByTabId: { closed: { closedAt: Date.now(), worktreeId: 'wt-1' } }
+    })
 
     ensureWorktreeHasInitialTerminal(store, 'wt-1')
 

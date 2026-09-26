@@ -48,6 +48,19 @@ describe('Store SSH pending PTY kills', () => {
     ])
   })
 
+  it('keeps an epoch-scoped intent with no incarnation across a restart, and drops a legacy one', async () => {
+    const store = await createStore()
+    for (const ptyId of ['pty2:epoch-a:1', 'pty-2']) {
+      store.recordSshRemotePtyKillIntent('ssh-1', ptyId, { requestedAt: NOW, attempts: 0 })
+    }
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getSshRemotePtyKillIntents('ssh-1', NOW)).toEqual([
+      { ptyId: 'pty2:epoch-a:1', intent: { requestedAt: NOW, attempts: 0 } }
+    ])
+  })
+
   // A kill issued while the provider was already unregistered writes no lease of its own, and that
   // offline close is the case most likely to strand a remote shell.
   it('records an intent for a PTY that has no lease row yet', async () => {

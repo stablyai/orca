@@ -10,6 +10,7 @@ import {
   type ParkedTerminalTabWatcherSyncEntry
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { useAppStore } from '@/store'
+import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../shared/closed-terminal-tab-tombstones'
 import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
 import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
@@ -183,10 +184,16 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
 
   const startupActivationGateWorktreeIdsRef = useRef(new Set<string>())
-  // Why (main): a missing row means never initialized, an explicit empty row means the user
-  // closed the last terminal — so the gate must not re-seed one in the second case.
+  const closedTerminalTabTombstonesByTabId = useAppStore(
+    (state) => state.closedTerminalTabTombstonesByTabId
+  )
+  // Why (main): only a workspace emptied by a recorded close stays empty; an empty row with no
+  // record is unknown and seeds.
   const activeWorktreeHasTerminalState = activeWorktreeId
-    ? Object.hasOwn(tabsByWorktree, activeWorktreeId)
+    ? isTerminalWorkspaceEmptiedOnPurpose(
+        { tabsByWorktree, closedTerminalTabTombstonesByTabId },
+        activeWorktreeId
+      )
     : false
   // Why a store subscription rather than a read inside the effects: the verdict flips to `none` the
   // moment the execution host answers, and that transition is what re-runs the passes below.

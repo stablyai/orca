@@ -15,8 +15,10 @@ function readSource(relativePath: string): string {
 describe('Terminal auto-create wiring', () => {
   const source = readSource(TERMINAL_PATH)
 
-  it('derives the tombstone from the active worktree row', () => {
-    expect(source).toContain('Object.hasOwn(tabsByWorktree, activeWorktreeId)')
+  it('derives the tombstone from the active worktree row and its close records', () => {
+    expect(source).toMatch(
+      /isTerminalWorkspaceEmptiedOnPurpose\(\s*\{ tabsByWorktree, closedTerminalTabTombstonesByTabId \},\s*activeWorktreeId\s*\)/
+    )
   })
 
   it('passes that derivation into shouldAutoCreateInitialTerminal', () => {

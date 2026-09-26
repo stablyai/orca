@@ -458,13 +458,21 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
   })
 
   it.each([
-    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'local' },
-    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'host' },
-    { relay: 'legacy', incarnationId: undefined, tombstonePartition: 'local' },
-    { relay: 'legacy', incarnationId: undefined, tombstonePartition: 'host' }
+    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'local', retiredBy: 'surface' },
+    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'host', retiredBy: 'surface' },
+    {
+      relay: 'legacy',
+      incarnationId: undefined,
+      tombstonePartition: 'local',
+      retiredBy: 'surface'
+    },
+    { relay: 'legacy', incarnationId: undefined, tombstonePartition: 'host', retiredBy: 'surface' },
+    // A closed tab whose pane is in no tab: the close record is the backstop.
+    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'local', retiredBy: 'close' },
+    { relay: 'current', incarnationId: 'inc-1', tombstonePartition: 'host', retiredBy: 'close' }
   ])(
-    'suppresses a $tombstonePartition-partition retired surface from a $relay relay',
-    async ({ incarnationId, tombstonePartition }) => {
+    'suppresses a $tombstonePartition-partition $retiredBy retirement from a $relay relay',
+    async ({ incarnationId, tombstonePartition, retiredBy }) => {
       const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
       const attachForReconnect = vi.fn().mockResolvedValue({
         ...(incarnationId ? { incarnationId } : {}),
@@ -514,10 +522,16 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
           }
         }
       }
+      const closedTab: ReturnType<typeof getDefaultWorkspaceSession> = {
+        ...getDefaultWorkspaceSession(),
+        closedTerminalTabTombstonesByTabId: { [tabId]: { closedAt: 1, worktreeId } }
+      }
       vi.mocked(mockStore.getWorkspaceSession).mockImplementation((hostId) =>
-        (hostId ? 'host' : 'local') === tombstonePartition
-          ? sessionWithTombstone
-          : getDefaultWorkspaceSession()
+        (hostId ? 'host' : 'local') !== tombstonePartition
+          ? getDefaultWorkspaceSession()
+          : retiredBy === 'close'
+            ? closedTab
+            : sessionWithTombstone
       )
       const runtime = { registerPty: vi.fn(), onPtySpawned: vi.fn() }
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)

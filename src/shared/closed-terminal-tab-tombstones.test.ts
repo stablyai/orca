@@ -2,37 +2,21 @@ import { describe, expect, it } from 'vitest'
 import {
   CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS,
   MAX_CLOSED_TERMINAL_TAB_TOMBSTONES,
+  closedTerminalTabTombstoneSchema,
+  isTerminalWorkspaceEmptiedOnPurpose,
   pruneClosedTerminalTabTombstones,
   recordClosedTerminalTabTombstone,
-  reconcileClosedTerminalTabTombstones,
   type ClosedTerminalTabTombstonesByTabId
 } from './closed-terminal-tab-tombstones'
 
 const NOW = 1_800_000_000_000
 const WT = 'repo-1::/srv/app'
 
-function reconcile(
-  tombstones: ClosedTerminalTabTombstonesByTabId,
-  args: {
-    acknowledgedWorktreeIds?: string[]
-    hostKnownTabIds?: string[]
-    hostRevision?: number
-  }
-): ClosedTerminalTabTombstonesByTabId {
-  return reconcileClosedTerminalTabTombstones({
-    tombstones,
-    acknowledgedWorktreeIds: new Set(args.acknowledgedWorktreeIds ?? [WT]),
-    hostKnownTabIds: new Set(args.hostKnownTabIds ?? []),
-    hostRevision: args.hostRevision,
-    now: NOW
-  })
-}
-
-describe('closed terminal tab tombstones', () => {
-  it('records the closing worktree and time', () => {
-    expect(recordClosedTerminalTabTombstone({}, 'tab-1', WT, NOW)).toEqual({
-      'tab-1': { closedAt: NOW, worktreeId: WT }
-    })
+describe('closed terminal tab records', () => {
+  it('records the closing worktree, reason and time', () => {
+    expect(
+      recordClosedTerminalTabTombstone({}, 'tab-1', { worktreeId: WT, reason: 'cleanup' }, NOW)
+    ).toEqual({ 'tab-1': { closedAt: NOW, worktreeId: WT, reason: 'cleanup' } })
   })
 
   it('prunes past the TTL and caps at the newest entries', () => {
@@ -57,53 +41,46 @@ describe('closed terminal tab tombstones', () => {
     expect(capped['tab-0']).toBeDefined()
     expect(capped[`tab-${MAX_CLOSED_TERMINAL_TAB_TOMBSTONES + 9}`]).toBeUndefined()
   })
+
+  it('reads an older build record as a close, and an unknown reason as no reason', () => {
+    expect(closedTerminalTabTombstoneSchema.parse({ closedAt: 1, worktreeId: WT })).toEqual({
+      closedAt: 1,
+      worktreeId: WT
+    })
+    expect(
+      closedTerminalTabTombstoneSchema.parse({ closedAt: 1, worktreeId: WT, reason: 'later' })
+    ).toEqual({ closedAt: 1, worktreeId: WT, reason: undefined })
+  })
 })
 
-describe('closed terminal tab tombstone acknowledgement', () => {
-  const tombstones = { 'tab-1': { closedAt: NOW, worktreeId: WT } }
+describe('emptied on purpose', () => {
+  const closed: ClosedTerminalTabTombstonesByTabId = { 'tab-1': { closedAt: NOW, worktreeId: WT } }
 
-  it('a snapshot carrying no revision acknowledges nothing', () => {
-    expect(reconcile(tombstones, { hostRevision: undefined })).toEqual(tombstones)
-  })
-
-  it('a snapshot with no row for the tombstone worktree acknowledges nothing', () => {
-    const kept = reconcile(tombstones, { acknowledgedWorktreeIds: [], hostRevision: 9 })
-    expect(kept['tab-1']).toEqual({ closedAt: NOW, worktreeId: WT })
-  })
-
-  it('the first omitting snapshot only stamps the revision — it could predate the close', () => {
-    const kept = reconcile(tombstones, { hostRevision: 4 })
-    expect(kept['tab-1']).toEqual({ closedAt: NOW, worktreeId: WT, ackRevision: 4 })
-  })
-
-  it('a strictly newer omitting snapshot retires the tombstone', () => {
-    const stamped = reconcile(tombstones, { hostRevision: 4 })
-    expect(reconcile(stamped, { hostRevision: 5 })['tab-1']).toBeUndefined()
-  })
-
-  it('a repeat of the same revision does not retire it', () => {
-    const stamped = reconcile(tombstones, { hostRevision: 4 })
-    expect(reconcile(stamped, { hostRevision: 4 })['tab-1']).toBeDefined()
-  })
-
-  it('a host that still lists the tab re-arms the watermark instead of retiring', () => {
-    const stamped = reconcile(tombstones, { hostRevision: 4 })
-    const stillListed = reconcile(stamped, { hostRevision: 7, hostKnownTabIds: ['tab-1'] })
-    expect(stillListed['tab-1']).toEqual({ closedAt: NOW, worktreeId: WT, ackRevision: 7 })
-    expect(reconcile(stillListed, { hostRevision: 7 })['tab-1']).toBeDefined()
-    expect(reconcile(stillListed, { hostRevision: 8 })['tab-1']).toBeUndefined()
-  })
-
-  it('a host revision that went backwards never retires', () => {
-    const stamped = reconcile(tombstones, { hostRevision: 40 })
-    const rewound = reconcile(stamped, { hostRevision: 1 })
-    expect(rewound['tab-1']).toEqual({ closedAt: NOW, worktreeId: WT, ackRevision: 40 })
-  })
-
-  it('a tab listed under a different worktree still counts as known to the host', () => {
-    const stamped = reconcile(tombstones, { hostRevision: 4 })
+  it('an empty row with a close record in that workspace was emptied on purpose', () => {
     expect(
-      reconcile(stamped, { hostRevision: 5, hostKnownTabIds: ['tab-1'] })['tab-1']
-    ).toBeDefined()
+      isTerminalWorkspaceEmptiedOnPurpose(
+        { tabsByWorktree: { [WT]: [] }, closedTerminalTabTombstonesByTabId: closed },
+        WT
+      )
+    ).toBe(true)
+  })
+
+  it('an empty row with no record is unknown, as is a missing row', () => {
+    expect(isTerminalWorkspaceEmptiedOnPurpose({ tabsByWorktree: { [WT]: [] } }, WT)).toBe(false)
+    expect(
+      isTerminalWorkspaceEmptiedOnPurpose(
+        { tabsByWorktree: {}, closedTerminalTabTombstonesByTabId: closed },
+        WT
+      )
+    ).toBe(false)
+  })
+
+  it('a record for another workspace does not count', () => {
+    expect(
+      isTerminalWorkspaceEmptiedOnPurpose(
+        { tabsByWorktree: { other: [] }, closedTerminalTabTombstonesByTabId: closed },
+        'other'
+      )
+    ).toBe(false)
   })
 })

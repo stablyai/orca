@@ -92,7 +92,10 @@ export class PtyBindingPersistenceOperations {
         const paneKey = `${args.tabId}:${args.leafId}`
         const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
         const session = sessions.getWorkspaceSession(resolvedHostId)
-        if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey)) {
+        const partitions = sessions
+          .getWorkspaceSessionHostIds()
+          .map((hostId) => sessions.getWorkspaceSession(hostId))
+        if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey, partitions)) {
           outcome = 'refused'
           return { value: false, persist: false }
         }

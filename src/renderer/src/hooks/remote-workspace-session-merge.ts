@@ -1,6 +1,9 @@
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { reconcileClosedTerminalTabTombstones } from '../../../shared/closed-terminal-tab-tombstones'
+import {
+  hasClosedTerminalTabRecord,
+  type ClosedTerminalTabTombstonesByTabId
+} from '../../../shared/closed-terminal-tab-tombstones'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
@@ -33,7 +36,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
   liveTabsByWorktree: AppState['tabsByWorktree'],
   preserveLocalTerminalTabIds: ReadonlySet<string>,
   replaceExecutionHostId?: ExecutionHostId,
-  remoteRevision?: number,
+  closedTabRecords?: ClosedTerminalTabTombstonesByTabId,
   preserveLocalLayoutTabIds: ReadonlySet<string> = new Set()
 ): WorkspaceSessionState {
   // Live tabs across the worktrees this snapshot replaces. Close-suppression consults it so a tab
@@ -45,7 +48,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
   //      (terminal-tab-close.ts), so a tombstoned id is not live anywhere;
   //   2. isSuppressedByClose matches the tombstone's own worktreeId, so it cannot reach another
   //      workspace's tab even if an id somehow recurred;
-  //   3. only closeReason === 'user' ever writes a tombstone.
+  //   3. only a tab close writes a record; nothing infers one from a tab's absence.
   // A final sweep of suppression over the assembled tabsByWorktree — including worktrees
   // omitTargetWorktrees passes through verbatim — is still deliberately absent.
   const currentTabsById = new Map(
@@ -56,10 +59,10 @@ export function mergeDirectSshRemoteWorkspaceSession(
   const locallyPreservedTabIds = new Set<string>()
   const localTabsFor = (worktreeId: string): TerminalTab[] =>
     liveTabsByWorktree[worktreeId] ?? current.tabsByWorktree[worktreeId] ?? []
-  // Why presence and not length: an explicit empty row is the record that the user closed the last
-  // terminal (initial-terminal.ts), and localTabsFor cannot tell it from an absent one. Admitting
-  // only non-empty rows dropped the key, which reads downstream as "never initialized" and seeds a
-  // fresh terminal on every reconnect.
+  // Why presence and not length: an explicit empty row, with a close record for the worktree, is how
+  // a workspace the user emptied reads (initial-terminal.ts), and localTabsFor cannot tell it from an
+  // absent one. Admitting only non-empty rows dropped the key, which reads downstream as "never
+  // initialized" and seeds a fresh terminal on every reconnect.
   const hasLocalTabsRow = (worktreeId: string): boolean =>
     Object.hasOwn(liveTabsByWorktree, worktreeId) ||
     Object.hasOwn(current.tabsByWorktree, worktreeId)
@@ -116,36 +119,13 @@ export function mergeDirectSshRemoteWorkspaceSession(
       .filter(([tabId]) => remoteKnownTabIds.has(tabId))
       .map(([, sessionId]) => sessionId)
   )
-  // The other half of the trade below. Absence still cannot say "closed", so this says it instead:
-  // a tab THIS client watched the user close, whose close never reached the host. Only ids the user
-  // closed are ever in here, and only until the host's own snapshot stops listing them.
-  const closedTerminalTabTombstonesByTabId = reconcileClosedTerminalTabTombstones({
-    tombstones: current.closedTerminalTabTombstonesByTabId,
-    acknowledgedWorktreeIds: new Set(
-      [...replaceWorktreeIds].filter((worktreeId) =>
-        Object.hasOwn(remote.tabsByWorktree, worktreeId)
-      )
-    ),
-    hostKnownTabIds: remoteKnownTabIds,
-    hostRevision: remoteRevision,
-    now: Date.now()
-  })
-  // Why Object.hasOwn and not `in`: the map is a plain object from Object.fromEntries, so `in`
-  // answers true for every Object.prototype key on an EMPTY map — a host tab whose id is
-  // `toString` would be filtered, blocked from the host-unknown branch, and stripped of its layout
-  // and session id. Tab ids are validated only as non-empty and colon-free, and createTab honours
-  // caller-supplied id hints, so that id is reachable. This is the one place either direction could
-  // delete a tab the user never closed.
-  // Why the worktree comparison: the tombstone already carries the worktree it was closed in, so
-  // scoping on it makes "this suppression cannot reach another workspace's tab" structural rather
-  // than a property of where the call sites happen to sit.
-  // Why a live local tab still overrides its own tombstone: an id that is live here means the
-  // tombstone is stale (a close undone before it persisted), not a revival. Deleting a live pane is
-  // the one outcome this whole function exists to avoid.
+  // The other half of the trade below. Absence still cannot say "closed", so main's close record
+  // says it instead. Read only here: main alone writes records, and nothing acknowledges them away.
+  // Scoped to the record's own worktree, so suppression cannot reach another workspace's tab.
+  // Why a live local tab still overrides its record: an id that is live here means the record is
+  // stale, not a revival. Deleting a live pane is the one outcome this function exists to avoid.
   const isSuppressedByClose = (tabId: string, worktreeId: string): boolean =>
-    Object.hasOwn(closedTerminalTabTombstonesByTabId, tabId) &&
-    closedTerminalTabTombstonesByTabId[tabId]?.worktreeId === worktreeId &&
-    !currentTabsById.has(tabId)
+    hasClosedTerminalTabRecord(closedTabRecords, tabId, worktreeId) && !currentTabsById.has(tabId)
   // Ids this merge actually suppressed, recorded as it walks the worktrees. The layout and
   // session-id sweeps below have no worktree in scope, so they consult decisions already made
   // rather than re-deriving one without the scope that makes it safe.
@@ -348,11 +328,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
       // tabs. Removal is the worktree-teardown path's job, not a reconnect's.
       ...current.defaultTerminalTabsAppliedByWorktreeId,
       ...remote.defaultTerminalTabsAppliedByWorktreeId
-    },
-    closedTerminalTabTombstonesByTabId:
-      Object.keys(closedTerminalTabTombstonesByTabId).length > 0
-        ? closedTerminalTabTombstonesByTabId
-        : undefined
+    }
   }
 }
 

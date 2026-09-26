@@ -1,4 +1,6 @@
+import type { RuntimeSessionTabCloseReason } from '../../shared/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import { recordClosedTerminalTabTombstone } from '../../shared/closed-terminal-tab-tombstones'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
@@ -91,12 +93,18 @@ export type TerminalSurfaceCloseResult = WorkspaceSessionTerminalTabCloseResult 
  * The membership half of every explicit terminal close: removes a tab, or one pane of a split
  * tab, and advances the repo's topology revision so a stale renderer save cannot restore it.
  * A pane close only ever removes that pane; the resolution says why anything else was a no-op.
+ * Every tab close is recorded in the session it was removed from, the owning host's partition.
  */
 export function closeTerminalSurfaceInWorkspaceSession(
   session: WorkspaceSessionState,
   worktreeId: string,
   target: TerminalSurfaceCloseTarget,
-  options: { force?: boolean; paneIncarnationId?: string } = {}
+  options: {
+    force?: boolean
+    paneIncarnationId?: string
+    reason: RuntimeSessionTabCloseReason
+    now?: number
+  }
 ): TerminalSurfaceCloseResult {
   if (target.kind === 'pane') {
     const layout = session.terminalLayoutsByTabId[target.tabId]
@@ -128,20 +136,48 @@ export function closeTerminalSurfaceInWorkspaceSession(
   const result = closeTerminalTabInWorkspaceSession(session, worktreeId, target.tabId, {
     force: options.force
   })
+  // Why a tab this session never listed is still recorded: its spawn may commit later and graft it.
+  if (result.pinned) {
+    return { ...result, resolution: 'tab' }
+  }
+  const recorded: WorkspaceSessionState = {
+    ...result.session,
+    closedTerminalTabTombstonesByTabId: recordClosedTerminalTabTombstone(
+      result.session.closedTerminalTabTombstonesByTabId,
+      target.tabId,
+      { worktreeId, reason: options.reason },
+      options.now ?? Date.now()
+    )
+  }
   return {
     ...result,
-    ...(result.closed
-      ? { session: advanceTerminalTopologyRevision(result.session, worktreeId) }
-      : {}),
+    session: result.closed ? advanceTerminalTopologyRevision(recorded, worktreeId) : recorded,
     resolution: 'tab'
   }
+}
+
+/** How one close commits; `reason` is recorded only when the close resolves to the whole tab. */
+export type TerminalSurfaceCloseOptions = {
+  allowMissing?: boolean
+  force?: boolean
+  reason?: RuntimeSessionTabCloseReason
+  /** The desktop renderer's own close: its layout owner already removed the tab. Goes away with
+   *  D1, once main owns the terminal layout. */
+  closedByLayoutOwner?: boolean
+}
+
+/** The desktop renderer's close intent as its IPC delivers it; main alone passes 'pty-exit'. */
+export type RendererTerminalClose = {
+  worktreeId: string
+  target: TerminalSurfaceCloseTarget
+  reason?: 'user' | 'cleanup'
 }
 
 /** What one close's durable mutation reads and writes, resolved when the writer admits it. */
 export type TerminalSurfaceCloseCommit = {
   worktreeId: string
   target: TerminalSurfaceCloseTarget
-  options: { allowMissing?: boolean; force?: boolean }
+  options: TerminalSurfaceCloseOptions
   /** The session as it was when the close was asked, before the writer admitted it. */
   requestedSession: WorkspaceSessionState | null | undefined
   /** The tab's owner identity still matches the one the close was asked against. */
@@ -175,12 +211,18 @@ export function terminalSurfaceCloseMutation(
     }
     const result = closeTerminalSurfaceInWorkspaceSession(session, commit.worktreeId, target, {
       force: commit.options.force,
-      paneIncarnationId
+      paneIncarnationId,
+      reason: commit.options.reason ?? 'user'
     })
     if (result.pinned) {
       return { value: new Error('terminal_tab_pinned'), persist: false }
     }
     if (!result.closed) {
+      // Why: a tab this session never listed still records its close, so its late spawn is refused.
+      if (commit.options.allowMissing && result.session !== session) {
+        commit.setSession(result.session, hostId)
+        return { value: undefined }
+      }
       return {
         value: commit.options.allowMissing ? undefined : new Error('tab_not_found'),
         persist: false
