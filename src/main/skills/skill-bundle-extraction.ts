@@ -17,8 +17,8 @@ import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../shared/skill-install-fail
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 import { observeSkillPackage } from './skill-package-identity'
 import {
-  openSkillTarGzip,
   parseSkillTarHeader,
+  readSkillTarGzip,
   SKILL_TAR_BLOCK_BYTES,
   type TarByteReader
 } from './skill-package-tar'
@@ -176,52 +176,56 @@ export async function extractSkillBundleArchive(input: {
   signal?: AbortSignal
   platform?: NodeJS.Platform
 }): Promise<SkillBundleExtractionResult> {
-  const archive = await openSkillTarGzip(input.archivePath)
   let destinationCreated = false
   try {
-    throwIfCancelled(input.signal)
-    await mkdir(input.destinationDirectory, { mode: 0o700 })
-    destinationCreated = true
-    const pluginManifest = parseAgentPluginManifest(
-      await readJsonEntry(archive.reader, AGENT_PLUGIN_MANIFEST_PATH, input.signal)
-    )
-    const manifest = parseSkillBundleManifest(
-      await readJsonEntry(archive.reader, ORCA_SKILL_BUNDLE_MANIFEST_PATH, input.signal)
-    )
-    if (
-      pluginManifest.name !== manifest.bundleName ||
-      pluginManifest.version !== manifest.versionId ||
-      (input.expectedBundleDigest && input.expectedBundleDigest !== manifest.bundleDigest) ||
-      (input.expectedPackageId && input.expectedPackageId !== manifest.packageId) ||
-      (input.expectedVersionId && input.expectedVersionId !== manifest.versionId)
-    ) {
-      throw new Error('skill-bundle-identity-mismatch')
-    }
-    const skillsDirectory = join(input.destinationDirectory, 'skills')
-    await mkdir(skillsDirectory, { mode: 0o700 })
-    for (const skill of manifest.skills) {
-      for (const file of skill.files) {
-        throwIfCancelled(input.signal)
-        const archivePath = `skills/${skill.name}/${file.path}`
-        const header = parseSkillTarHeader(await archive.reader.readExact(SKILL_TAR_BLOCK_BYTES))
-        if (
-          !header ||
-          header.path !== archivePath ||
-          header.size !== file.size ||
-          header.executable !== file.executable
-        ) {
-          throw new Error('skill-bundle-file-envelope-mismatch')
-        }
-        await extractFile(
-          archive.reader,
-          join(skillsDirectory, skill.name, ...file.path.split('/')),
-          file,
-          input.signal
-        )
+    const {
+      value: { pluginManifest, manifest, skillsDirectory },
+      ...archiveIdentity
+    } = await readSkillTarGzip(input.archivePath, async (reader) => {
+      throwIfCancelled(input.signal)
+      await mkdir(input.destinationDirectory, { mode: 0o700 })
+      destinationCreated = true
+      const pluginManifest = parseAgentPluginManifest(
+        await readJsonEntry(reader, AGENT_PLUGIN_MANIFEST_PATH, input.signal)
+      )
+      const manifest = parseSkillBundleManifest(
+        await readJsonEntry(reader, ORCA_SKILL_BUNDLE_MANIFEST_PATH, input.signal)
+      )
+      if (
+        pluginManifest.name !== manifest.bundleName ||
+        pluginManifest.version !== manifest.versionId ||
+        (input.expectedBundleDigest && input.expectedBundleDigest !== manifest.bundleDigest) ||
+        (input.expectedPackageId && input.expectedPackageId !== manifest.packageId) ||
+        (input.expectedVersionId && input.expectedVersionId !== manifest.versionId)
+      ) {
+        throw new Error('skill-bundle-identity-mismatch')
       }
-    }
-    await requireArchiveEnd(archive.reader, input.signal)
-    const archiveIdentity = await archive.archiveIdentity
+      const skillsDirectory = join(input.destinationDirectory, 'skills')
+      await mkdir(skillsDirectory, { mode: 0o700 })
+      for (const skill of manifest.skills) {
+        for (const file of skill.files) {
+          throwIfCancelled(input.signal)
+          const archivePath = `skills/${skill.name}/${file.path}`
+          const header = parseSkillTarHeader(await reader.readExact(SKILL_TAR_BLOCK_BYTES))
+          if (
+            !header ||
+            header.path !== archivePath ||
+            header.size !== file.size ||
+            header.executable !== file.executable
+          ) {
+            throw new Error('skill-bundle-file-envelope-mismatch')
+          }
+          await extractFile(
+            reader,
+            join(skillsDirectory, skill.name, ...file.path.split('/')),
+            file,
+            input.signal
+          )
+        }
+      }
+      await requireArchiveEnd(reader, input.signal)
+      return { pluginManifest, manifest, skillsDirectory }
+    })
     if (
       input.expectedArchiveSha256 &&
       archiveIdentity.archiveSha256 !== input.expectedArchiveSha256
@@ -253,8 +257,6 @@ export async function extractSkillBundleArchive(input: {
       : error instanceof Error
         ? error
         : new Error(String(error))
-    archive.abort(failure)
-    await archive.archiveIdentity.catch(() => undefined)
     if (destinationCreated) {
       await rm(input.destinationDirectory, { recursive: true, force: true })
     }

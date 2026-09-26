@@ -997,7 +997,8 @@ jobs:
         env:
           ORCA_REAL_PROCESS_SKILL_TEST: '1'
           ORCA_REAL_WINDOWS_SKILL_TEST: ${{ runner.os == 'Windows' && '1' || '0' }}
-        run: pnpm test:skill-sharing:release --reporter=json --outputFile=skill-sharing-release-results.json
+        # Why default: the JSON report omits errors raised outside a test, yet they still fail the step.
+        run: pnpm test:skill-sharing:release --reporter=default --reporter=json --outputFile=skill-sharing-release-results.json
 
       - name: Archive bounded skill-sharing results
         if: always()
@@ -1048,7 +1049,8 @@ jobs:
       - name: Run skill package, transaction, and compatibility suites
         env:
           ORCA_REAL_PROCESS_SKILL_TEST: '1'
-        run: pnpm test:skill-sharing:release --reporter=json --outputFile=skill-sharing-release-results.json
+        # Why default: the JSON report omits errors raised outside a test, yet they still fail the step.
+        run: pnpm test:skill-sharing:release --reporter=default --reporter=json --outputFile=skill-sharing-release-results.json
 
       - name: Archive bounded skill-sharing results
         if: always()
