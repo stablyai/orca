@@ -125,12 +125,13 @@ describe('non-mac Ctrl+Left/Right word-nav', () => {
     ).toBeNull()
   })
 
-  it('does not intercept Ctrl+Alt+Arrow (different chord)', () => {
+  it('claims Ctrl+Alt+Arrow as spatial pane focus, not word-nav', () => {
+    // Why: on Linux/Windows, Mod+Alt+Arrow is Ctrl+Alt+Arrow (focusPaneLeft).
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, altKey: true }),
         false
       )
-    ).toBeNull()
+    ).toEqual({ type: 'focusPane', direction: 'left' })
   })
 })

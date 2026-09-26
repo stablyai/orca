@@ -566,13 +566,13 @@ describe('resolveTerminalShortcutAction', () => {
       )
     ).toBeNull()
 
-    // Ctrl+Alt+Arrow (Linux workspace switching on some desktops) must pass through on non-Mac.
+    // Ctrl+Alt+Arrow is terminal.focusPaneLeft on non-Mac (Mod+Alt+Arrow).
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'ArrowLeft', code: 'ArrowLeft', ctrlKey: true, altKey: true }),
         false
       )
-    ).toBeNull()
+    ).toEqual({ type: 'focusPane', direction: 'left' })
 
     // Regression guard: plain ArrowLeft must still pass through untouched.
     expect(
