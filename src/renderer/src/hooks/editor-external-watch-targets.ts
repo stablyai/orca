@@ -5,7 +5,12 @@ import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import { parentDirForWatchPath } from '@/components/right-sidebar/file-explorer-watch-path'
+import {
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison
+} from '../../../shared/cross-platform-path'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -176,6 +181,31 @@ export function selectEditorExternalWatchTargets(
 
   const nextTargets: EditorExternalWatchTarget[] = []
   const parts: string[] = []
+  // Why: floating documents have no repo/folder-workspace entry and can live in different folders.
+  const floatingRoots = new Map<string, string>()
+  for (const file of state.openFiles) {
+    if (
+      file.worktreeId !== FLOATING_TERMINAL_WORKTREE_ID ||
+      getOpenFileRuntimeOwner(file) !== null ||
+      file.externalSshTargetId
+    ) {
+      continue
+    }
+    const root = parentDirForWatchPath(file.filePath)
+    floatingRoots.set(normalizeRuntimePathForComparison(root), root)
+  }
+  for (const [, worktreePath] of [...floatingRoots].sort(([left], [right]) =>
+    left.localeCompare(right)
+  )) {
+    const target: EditorExternalWatchTarget = {
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      worktreePath,
+      connectionId: undefined,
+      runtimeEnvironmentId: null
+    }
+    nextTargets.push(target)
+    parts.push(getEditorExternalWatchTargetKey(target))
+  }
   const sortedWorktreeIds = Array.from(targetOwnersByWorktreeId.keys()).sort()
   for (const id of sortedWorktreeIds) {
     const worktree = findWorktreeById(state.worktreesByRepo, id)

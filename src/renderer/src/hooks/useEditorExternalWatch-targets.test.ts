@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { joinPath } from '@/lib/path'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   getEditorExternalWatchTargets,
   type EditorExternalWatchTargetState
@@ -103,6 +105,46 @@ describe('getEditorExternalWatchTargets', () => {
       }
     ])
   })
+
+  it('watches floating notes outside registered workspaces and deduplicates their folders', () => {
+    const repo = makeRepo('repo-1')
+    const state = makeState({
+      repo,
+      worktree: makeWorktree(repo.id),
+      runtimeEnvironmentId: 'remote-runtime',
+      openFiles: ['/notes/docs.md', '/notes/su.md', '/other/cudoc.md'].map((filePath) => ({
+        ...makeOpenFile(FLOATING_TERMINAL_WORKTREE_ID),
+        id: filePath,
+        filePath,
+        runtimeEnvironmentId: null
+      }))
+    })
+    expect(getEditorExternalWatchTargets(state).targets).toEqual(
+      ['/notes', '/other'].map((worktreePath) => ({
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        worktreePath,
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      }))
+    )
+    expect(getEditorExternalWatchTargets({ ...state, openFiles: [] }).targets).toEqual([])
+  })
+
+  it.each(['C:\\notes.md', 'C:/notes.md', '\\\\server\\share\\notes.md', '/notes.md'])(
+    'preserves the original path when joining the floating root for %s',
+    (filePath) => {
+      const repo = makeRepo('repo-1')
+      const { targets } = getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree: makeWorktree(repo.id),
+          openFiles: [{ ...makeOpenFile(FLOATING_TERMINAL_WORKTREE_ID), filePath }]
+        })
+      )
+      expect(targets).toHaveLength(1)
+      expect(joinPath(targets[0].worktreePath, 'notes.md')).toBe(filePath)
+    }
+  )
 
   it('enables WSL aliases for a proven-local Windows drive watcher', () => {
     const repo = makeRepo('repo-local-drive', null, 'local')

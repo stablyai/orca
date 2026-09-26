@@ -77,6 +77,7 @@ describe('remote filesystem watcher re-arm', () => {
     // senderOne's watch really died with the old transport, so its resync must survive the merge.
     expect(retryWatchMock).toHaveBeenCalledTimes(1)
     expect(senderOne.send).toHaveBeenCalledWith('fs:changed', {
+      connectionId: 'conn-1',
       worktreePath: '/home/me/repo',
       events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
     })

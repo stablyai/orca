@@ -61,6 +61,12 @@ import {
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
 import { WATCH_BATCH_TRAILING_MS } from '../../shared/filesystem-watch-batch-window'
 
+const REMOTE_OVERFLOW = {
+  connectionId: 'conn-1',
+  worktreePath: '/home/me/repo',
+  events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
+}
+
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 /** Remote fs:changed rides the shared debounce window, so drain it before asserting sends. */
@@ -246,6 +252,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     const onEvents = watchMock.mock.calls[0][1]
     await emitRemote(onEvents, [{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendMock).toHaveBeenCalledWith('fs:changed', {
+      connectionId: 'conn-1',
       worktreePath: '/home/me/repo',
       events: [{ path: '/home/me/repo/file.txt', type: 'update' }]
     })
@@ -342,6 +349,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     await emitRemote(recoveredEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(senderOne.send).not.toHaveBeenCalled()
     expect(senderTwo.send).toHaveBeenCalledWith('fs:changed', {
+      connectionId: 'conn-1',
       worktreePath: '/home/me/repo',
       events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
     })
@@ -371,16 +379,12 @@ describe('registerFilesystemWatcherHandlers', () => {
     expect(staleUnwatch).toHaveBeenCalledTimes(1)
 
     // Events missed while the watch was down are unrecoverable, so consumers are told to resync.
-    await vi.waitFor(() =>
-      expect(sender.send).toHaveBeenCalledWith('fs:changed', {
-        worktreePath: '/home/me/repo',
-        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
-      })
-    )
+    await vi.waitFor(() => expect(sender.send).toHaveBeenCalledWith('fs:changed', REMOTE_OVERFLOW))
 
     const reinstalledEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
     await emitRemote(reinstalledEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      connectionId: 'conn-1',
       worktreePath: '/home/me/repo',
       events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
     })
@@ -429,10 +433,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     await vi.advanceTimersByTimeAsync(1_000)
 
     expect(retryWatchMock).toHaveBeenCalledTimes(1)
-    expect(sender.send).toHaveBeenCalledWith('fs:changed', {
-      worktreePath: '/home/me/repo',
-      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
-    })
+    expect(sender.send).toHaveBeenCalledWith('fs:changed', REMOTE_OVERFLOW)
 
     warnSpy.mockRestore()
     await closeAllWatchers()
@@ -500,10 +501,7 @@ describe('registerFilesystemWatcherHandlers', () => {
     await vi.waitFor(() => expect(senderTwo.send).toHaveBeenCalled())
     expect(watchMock).toHaveBeenCalledTimes(2)
     for (const sender of [senderOne, senderTwo]) {
-      expect(sender.send).toHaveBeenCalledWith('fs:changed', {
-        worktreePath: '/home/me/repo',
-        events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
-      })
+      expect(sender.send).toHaveBeenCalledWith('fs:changed', REMOTE_OVERFLOW)
     }
 
     await closeAllWatchers()
@@ -626,13 +624,11 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     expect(closeWatch).toHaveBeenCalledWith('/home/me/repo')
     expect(watchMock).toHaveBeenCalledTimes(2)
-    expect(sender.send).toHaveBeenCalledWith('fs:changed', {
-      worktreePath: '/home/me/repo',
-      events: [{ kind: 'overflow', absolutePath: '/home/me/repo' }]
-    })
+    expect(sender.send).toHaveBeenCalledWith('fs:changed', REMOTE_OVERFLOW)
     const replacementEvents = watchMock.mock.calls[1][1] as (events: unknown[]) => void
     await emitRemote(replacementEvents, [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }])
     expect(sender.send).toHaveBeenLastCalledWith('fs:changed', {
+      connectionId: 'conn-1',
       worktreePath: '/home/me/repo',
       events: [{ kind: 'update', absolutePath: '/home/me/repo/file.ts' }]
     })

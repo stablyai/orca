@@ -47,6 +47,7 @@ vi.mock('./editor-external-watch-disk-verification', () => ({
 }))
 
 import { useEditorExternalWatch } from './useEditorExternalWatch'
+import { buildEditorExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
 
 function WatchProbe(): null {
   useEditorExternalWatch()
@@ -132,6 +133,75 @@ describe('useEditorExternalWatch subscriptions', () => {
     })
     expect(unsubscribeFsEvents).toHaveBeenCalledTimes(1)
     expect(subscriptionState.disposeEventHandler).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a shared local folder watched until its last editor owner closes', async () => {
+    const project = { ...runtimeTarget(), runtimeEnvironmentId: null, connectionId: undefined }
+    const floating = { ...project, worktreeId: 'global-floating-terminal' }
+    subscriptionState.snapshot = { targets: [project, floating], targetsKey: 'both' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(watchWorktree).toHaveBeenCalledTimes(1)
+
+    subscriptionState.snapshot = { targets: [floating], targetsKey: 'floating-only' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(unwatchWorktree).not.toHaveBeenCalled()
+    expect(watchWorktree).toHaveBeenCalledTimes(1)
+
+    subscriptionState.snapshot = { targets: [], targetsKey: '' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(unwatchWorktree).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes shared paths only to owners on the event connection', async () => {
+    const base = { ...runtimeTarget(), runtimeEnvironmentId: null }
+    const local = { ...base, worktreeId: 'project', connectionId: undefined }
+    const floating = { ...local, worktreeId: 'global-floating-terminal' }
+    const first = { ...base, worktreeId: 'ssh-a', connectionId: 'ssh-a' }
+    const second = { ...base, worktreeId: 'ssh-b', connectionId: 'ssh-b' }
+    subscriptionState.snapshot = { targets: [floating, first, local, second], targetsKey: 'mixed' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    const findTargets = vi.mocked(buildEditorExternalWatchEventHandler).mock.calls[0][0]
+    expect(findTargets(base.worktreePath, null, undefined)).toEqual([floating, local])
+    expect(findTargets(base.worktreePath, null, 'ssh-a')).toEqual([first])
+    expect(findTargets(base.worktreePath, null, 'ssh-b')).toEqual([second])
+    expect(findTargets(base.worktreePath, null, 'unknown')).toEqual([])
+  })
+
+  it('retains subscription ownership when a paired runtime omits the connection field', async () => {
+    subscriptionState.subscribeRuntimeFileChanges.mockResolvedValue(vi.fn())
+    const target = runtimeTarget()
+    subscriptionState.snapshot = { targets: [target], targetsKey: 'legacy-runtime' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    const callback = subscriptionState.subscribeRuntimeFileChanges.mock.calls[0][1]
+    const payload = { worktreePath: target.worktreePath, events: [] }
+    callback(payload)
+    const handler = vi.mocked(buildEditorExternalWatchEventHandler).mock.results[0].value
+    expect(handler.handleFsChanged).toHaveBeenCalledWith(
+      { ...payload, connectionId: target.connectionId },
+      target.runtimeEnvironmentId
+    )
+  })
+
+  it('moves a floating subscription while retaining the project subscription', async () => {
+    const project = { ...runtimeTarget(), runtimeEnvironmentId: null, connectionId: undefined }
+    const floating = { ...project, worktreeId: 'global-floating-terminal' }
+    subscriptionState.snapshot = { targets: [project, floating], targetsKey: 'original' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    const moved = { ...floating, worktreePath: '/other' }
+    subscriptionState.snapshot = { targets: [project, moved], targetsKey: 'moved' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(watchWorktree).toHaveBeenCalledTimes(2)
+    expect(watchWorktree).toHaveBeenLastCalledWith({
+      worktreePath: '/other',
+      connectionId: undefined
+    })
+    expect(unwatchWorktree).not.toHaveBeenCalled()
+    subscriptionState.snapshot = { targets: [project], targetsKey: 'closed' }
+    await act(async () => root.render(createElement(WatchProbe)))
+    expect(unwatchWorktree).toHaveBeenCalledExactlyOnceWith({
+      worktreePath: '/other',
+      connectionId: undefined
+    })
   })
 
   it('disposes a runtime subscription that resolves after unmount', async () => {

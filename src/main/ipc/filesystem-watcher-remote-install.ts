@@ -169,6 +169,7 @@ async function doInstallRemoteWatcher(
         }
         try {
           listener.send('fs:changed', {
+            connectionId,
             worktreePath,
             events
           } satisfies FsChangedPayload)
