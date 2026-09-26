@@ -171,10 +171,13 @@ const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f342345
 // 529 -> 530, and the host-JSX hash: `key="terminal-frame"`, so the page's frame mounts with its
 // onLayout rather than reusing the loading View. Native measured 47 rows before and after: its
 // frame reported either way, and its window is its frame, so both measure paths agree there.
+// 531 -> 533, and the host-JSX hash: the tab bar and the accessory bar take a ref that gives the
+// page `keyboardShouldPersistTaps` ('handled', 'always'), which react-native-web ignores. Natively
+// the ref is undefined.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '1be5398cdbdf96b6f7738b63a0e19f536496844140a947939a7f71824b08fe50'
+  '110e263e0c43e5200c35a30f67769d4545e39019c7936d03e22a920e90e5d62d'
 // Moved by both of the dock's fields: their refs, and the live one's submit handler, are the seam's now.
-const HEAD_HOST_JSX_SHA256 = 'ca4c8b46af86a05cb671de91c22111c9e4aaeefd4a04c7b8b09976ca01a31c9b'
+const HEAD_HOST_JSX_SHA256 = '3a1c72c513a000b677ae7ba09e58db1b5ccc99345e41addcf075f111f455b841'
 const HEAD_LEAF_JSX_SHA256 = 'c7e1a4b90197697f1eaa640c38da63281b4f7b84fb036ae2152f00c2f7d7cb77'
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
@@ -611,7 +614,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(531)
+    expect(strings).toHaveLength(533)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)

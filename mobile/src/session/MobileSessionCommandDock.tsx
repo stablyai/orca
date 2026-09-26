@@ -19,6 +19,7 @@ import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
+import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
@@ -65,6 +66,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     activeBrowserTab,
     keyboardLift
   } = controller
+  const accessoryBarKeepsKeyboard = useKeyboardPersistingTaps('always')
   return (
     !activeMarkdownTab &&
     !activeFileTab &&
@@ -77,7 +79,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
         ]}
       >
         {/* Accessory keys */}
-        <View style={styles.accessoryBar}>
+        <View ref={accessoryBarKeepsKeyboard} style={styles.accessoryBar}>
           {/* Why: fixed keyboard escape hatch; outside ScrollView + shortcut path so it can't scroll away or be hidden (#5106). */}
           {keyboardLift > 0 && (
             <Pressable
