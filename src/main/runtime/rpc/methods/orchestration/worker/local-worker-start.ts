@@ -68,10 +68,12 @@ export async function startLocalWorker(args: {
   if (params.terminal) {
     await assertExplicitWorkerTerminalUsable({
       runtime,
+      db,
       terminal: params.terminal,
       from: params.from,
       coordinatorPane,
-      resolvedWorktreeId: resolvedWorktree?.id
+      resolvedWorktreeId: resolvedWorktree?.id,
+      ...(params.retryOf ? { retryOf: params.retryOf } : {})
     })
   }
   let mode = await resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)

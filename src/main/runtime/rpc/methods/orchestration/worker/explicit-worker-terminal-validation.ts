@@ -1,22 +1,29 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
 
 /**
  * Admits a caller-supplied `--terminal` as this dispatch's worker pane.
  *
- * Three refusals, all of which must happen before anything is created: a coordinator adopted as its
+ * Four refusals, all of which must happen before anything is created: a coordinator adopted as its
  * own worker answers its own dispatch preamble forever, a pane in another worktree is not this
- * dispatch's to take, and a pane with no agent cannot read a preamble at all.
+ * dispatch's to take, a pane with no agent cannot read a preamble at all, and a pane that already
+ * owns an active Dispatch cannot take a second assignment. `--retry-of` keeps its own
+ * `task_not_startable` precondition in `createStartingWorkerDispatch`, so that path skips the
+ * ownership check.
  */
 export async function assertExplicitWorkerTerminalUsable(args: {
   runtime: OrcaRuntimeService
+  db: OrchestrationDb
   terminal: string
   from: string
   coordinatorPane: string | null
   resolvedWorktreeId: string | undefined
+  /** When set, skip the active-Dispatch ownership check so retry preconditions stay authoritative. */
+  retryOf?: string
 }): Promise<void> {
-  const { runtime, terminal, from, coordinatorPane, resolvedWorktreeId } = args
+  const { runtime, db, terminal, from, coordinatorPane, resolvedWorktreeId, retryOf } = args
   const explicitTerminal = await runtime.showTerminal(terminal)
   const targetPane = runtime.getTerminalPaneKey(terminal)
   const callerPane = coordinatorPane ?? runtime.getTerminalPaneKey(from)
@@ -44,6 +51,16 @@ export async function assertExplicitWorkerTerminalUsable(args: {
     throw new OrchestrationError(
       'agent_unconfigured',
       `Terminal ${terminal} is not running a recognized agent.`
+    )
+  }
+  if (retryOf) {
+    return
+  }
+  const activeDispatch = db.getActiveDispatchForIdentity(terminal, targetPane ?? undefined)
+  if (activeDispatch) {
+    throw new OrchestrationError(
+      'terminal_already_attached',
+      `Terminal ${terminal} is already attached to active Dispatch ${activeDispatch.id}. Send follow-up work to dispatch:${activeDispatch.id}, or wait for it to settle before using worker-start on this terminal.`
     )
   }
 }

@@ -297,3 +297,24 @@ describe('structured worker dispatch preamble errors', () => {
     })
   })
 })
+
+describe('terminal_already_attached RPC passthrough', () => {
+  it('preserves the ownership refusal code across runtime RPC', () => {
+    const failure = mapRuntimeError(
+      'rpc_terminal_attached',
+      { runtimeId: 'runtime-1' },
+      new OrchestrationError(
+        'terminal_already_attached',
+        'Terminal term_worker is already attached to active Dispatch ctx_1.'
+      )
+    )
+
+    expect(failure).toMatchObject({
+      ok: false,
+      error: {
+        code: 'terminal_already_attached',
+        message: 'Terminal term_worker is already attached to active Dispatch ctx_1.'
+      }
+    })
+  })
+})

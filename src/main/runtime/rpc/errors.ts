@@ -124,6 +124,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worker_prompt_too_large',
   'terminal_worktree_mismatch',
   'terminal_is_coordinator',
+  'terminal_already_attached',
   'request_mismatch',
   'mutation_ledger_full',
   'legacy_read_only',

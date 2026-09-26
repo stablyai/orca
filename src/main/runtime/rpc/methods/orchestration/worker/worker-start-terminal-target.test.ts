@@ -41,6 +41,30 @@ describe('worker-start --terminal target', () => {
     const started = await harness.startWorker({ terminal: 'term_worker' })
     expect(started.dispatchId).toEqual(expect.any(String))
   })
+
+  it('refuses a terminal that already owns an active Dispatch before waiting for readiness', async () => {
+    const first = await harness.startWorker({ terminal: 'term_worker' })
+    const secondTask = harness.db.createTask({
+      spec: 'second assignment',
+      runId: harness.activeRunId
+    })
+    vi.mocked(harness.runtime.waitForTerminal).mockClear()
+    vi.mocked(harness.runtime.sendTerminalAgentPrompt).mockClear()
+
+    await expect(
+      harness.call('orchestration.workerStart', {
+        task: secondTask.id,
+        from: 'term_coord',
+        terminal: 'term_worker'
+      })
+    ).rejects.toMatchObject({
+      code: 'terminal_already_attached',
+      message: expect.stringContaining(`dispatch:${first.dispatchId}`)
+    })
+    expect(harness.db.getDispatchContext(secondTask.id)).toBeUndefined()
+    expect(harness.runtime.waitForTerminal).not.toHaveBeenCalled()
+    expect(harness.runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
 })
 
 // The other door into the same self-adoption: manual dispatch never compared `to` to the caller.
