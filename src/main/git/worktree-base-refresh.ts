@@ -22,7 +22,9 @@ export async function refreshLocalBaseRefForWorktreeCreate(
     baseBranch,
     remoteTrackingRef,
     remoteTrackingBase,
-    options
+    options,
+    // Why: a current local ref has nothing to refresh, so skip owner inspection; a dirty checkout must not raise a false "not refreshed" warning.
+    (behind) => behind > 0
   )
   if (!evaluation) {
     return undefined

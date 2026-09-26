@@ -285,6 +285,23 @@ describe('addWorktree', () => {
     ])
   })
 
+  it('does not warn when local main is current even if the owning worktree is dirty', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
+      .mockResolvedValueOnce({ stdout: '0\t0\n' }) // rev-list --left-right --count (local main is current)
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add
+      .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
+
+    const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
+
+    expect(result.localBaseRefRefresh).toBeUndefined()
+    expect(gitExecFileAsyncMock.mock.calls).toHaveLength(6)
+    // No status/worktree-list probes for the refresh — the checkout's dirty state is irrelevant when there is nothing to refresh.
+    expect(gitExecFileAsyncMock.mock.calls.some((call) => call[0]?.[0] === 'status')).toBe(false)
+  })
+
   it('skips update when the owning worktree is dirty', async () => {
     const worktreeListOutput = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
     gitExecFileAsyncMock
