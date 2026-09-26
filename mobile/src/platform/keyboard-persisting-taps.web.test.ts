@@ -67,6 +67,17 @@ describe('keepTextFocusThroughTaps', () => {
     expect(pressKeepsFocus(field)).toBe(false)
   })
 
+  it('does not count a focusable ancestor above the container as a pressable in the bar', () => {
+    const outer = document.createElement('div')
+    outer.tabIndex = 0
+    const { container, gap, liveInput } = plant()
+    outer.append(container)
+    document.body.prepend(outer)
+    keepTextFocusThroughTaps(container, 'handled')
+    liveInput.focus()
+    expect(pressKeepsFocus(gap)).toBe(false)
+  })
+
   it('stops when released', () => {
     const { container, label, liveInput } = plant()
     keepTextFocusThroughTaps(container, 'always')()

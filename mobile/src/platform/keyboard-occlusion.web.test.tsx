@@ -228,7 +228,7 @@ describe('the keyboard as events, for a sheet', () => {
     expect(lift).toBe(0)
   })
 
-  it('stays silent when nothing is covered, which is the shell shortening the WebView', () => {
+  it('stays silent while the visual viewport covers nothing', () => {
     const calls: string[] = []
     const unsubscribe = subscribeSoftKeyboard(
       () => calls.push('show'),
