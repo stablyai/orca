@@ -339,7 +339,7 @@ describe('orca skills CLI', () => {
     await main(['skills', 'install', '--skill', 'alpha', '--dry-run'], '/tmp/repo')
 
     expect(stdoutText(stdoutSpy)).toBe(
-      'npx --yes skills add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y\n\n' +
+      'npx --yes skills@latest add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y\n\n' +
         'Rerun without --dry-run to install now.\n'
     )
     expect(spawnMock).not.toHaveBeenCalled()
@@ -354,7 +354,7 @@ describe('orca skills CLI', () => {
       `${JSON.stringify(
         {
           command:
-            'npx --yes skills add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y',
+            'npx --yes skills@latest add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y',
           skills: ['alpha'],
           global: true,
           executed: false
@@ -371,7 +371,7 @@ describe('orca skills CLI', () => {
     await main(['skills', 'install', '--skill', 'alpha', '--local', '--dry-run'], '/tmp/repo')
 
     expect(stdoutText(stdoutSpy)).toBe(
-      'npx --yes skills add https://github.com/stablyai/orca --skill alpha --agent claude-code --agent universal -y\n\n' +
+      'npx --yes skills@latest add https://github.com/stablyai/orca --skill alpha --agent claude-code --agent universal -y\n\n' +
         'Rerun without --dry-run to install now.\n'
     )
 
@@ -385,7 +385,7 @@ describe('orca skills CLI', () => {
       `${JSON.stringify(
         {
           command:
-            'npx --yes skills add https://github.com/stablyai/orca --skill alpha --agent claude-code --agent universal -y',
+            'npx --yes skills@latest add https://github.com/stablyai/orca --skill alpha --agent claude-code --agent universal -y',
           skills: ['alpha'],
           global: false,
           executed: false
@@ -410,7 +410,7 @@ describe('orca skills CLI', () => {
       'npx',
       [
         '--yes',
-        'skills',
+        'skills@latest',
         'add',
         'https://github.com/stablyai/orca',
         '--skill',
@@ -445,7 +445,7 @@ describe('orca skills CLI', () => {
         '/c',
         'C:\\Program Files\\nodejs\\npx.cmd',
         '--yes',
-        'skills',
+        'skills@latest',
         'add',
         'https://github.com/stablyai/orca',
         '--skill',
@@ -493,7 +493,7 @@ describe('orca skills CLI', () => {
       'npx',
       [
         '--yes',
-        'skills',
+        'skills@latest',
         'add',
         'https://github.com/stablyai/orca',
         '--skill',
@@ -523,7 +523,7 @@ describe('orca skills CLI', () => {
       'npx',
       [
         '--yes',
-        'skills',
+        'skills@latest',
         'add',
         'https://github.com/stablyai/orca',
         '--skill',
@@ -587,7 +587,7 @@ describe('orca skills CLI', () => {
     await main(['skills', 'update', '--skill', 'legacy-alpha', '--dry-run'], '/tmp/repo')
 
     expect(stdoutText(stdoutSpy)).toBe(
-      'npx --yes skills update alpha --global -y\n\nRerun without --dry-run to update now.\n'
+      'npx --yes skills@latest update alpha --global -y\n\nRerun without --dry-run to update now.\n'
     )
     expect(spawnMock).not.toHaveBeenCalled()
   })
@@ -603,7 +603,7 @@ describe('orca skills CLI', () => {
     expect(stdoutText(stdoutSpy)).toBe(
       `${JSON.stringify(
         {
-          command: 'npx --yes skills update alpha --project -y',
+          command: 'npx --yes skills@latest update alpha --project -y',
           skills: ['alpha'],
           global: false,
           executed: false
@@ -626,7 +626,7 @@ describe('orca skills CLI', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'npx',
-      ['--yes', 'skills', 'update', 'alpha', '--project', '-y'],
+      ['--yes', 'skills@latest', 'update', 'alpha', '--project', '-y'],
       expect.objectContaining({ stdio: 'inherit' })
     )
   })
@@ -895,7 +895,7 @@ describe('orca skills CLI', () => {
       'npx',
       [
         '--yes',
-        'skills',
+        'skills@latest',
         'add',
         'https://github.com/stablyai/orca',
         '--skill',
@@ -922,7 +922,7 @@ describe('orca skills CLI', () => {
     )
 
     expect(stdoutText(stdoutSpy)).toBe(
-      'npx --yes skills add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y\n\n' +
+      'npx --yes skills@latest add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y\n\n' +
         'Rerun without --dry-run to install now.\n'
     )
     expect(spawnMock).not.toHaveBeenCalled()
@@ -940,11 +940,11 @@ describe('orca skills CLI', () => {
 
     // Why: stdout belongs to the child, so this record has to go to stderr.
     expect(stderrSpy).toHaveBeenCalledWith(
-      'Running: npx --yes skills add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y\n'
+      'Running: npx --yes skills@latest add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y\n'
     )
   })
 
-  it('runs npx skills update for --all and forwards its exit code', async () => {
+  it('runs npx skills@latest update for --all and forwards its exit code', async () => {
     const child = createFakeChild()
     spawnMock.mockReturnValue(child)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
@@ -956,7 +956,7 @@ describe('orca skills CLI', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'npx',
-      ['--yes', 'skills', 'update', 'alpha', 'gamma', 'zeta', '--global', '-y'],
+      ['--yes', 'skills@latest', 'update', 'alpha', 'gamma', 'zeta', '--global', '-y'],
       expect.objectContaining({ stdio: 'inherit' })
     )
     expect(process.exitCode).toBe(2)
