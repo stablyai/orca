@@ -4,9 +4,9 @@
 // The step list is ordered, and each step's failure policy is set for reasons that have nothing to
 // do with time; a deadline must not disturb either. Wrapping each step's `run` keeps both, and a
 // timeout surfaces as that step failing — which, for the stop, is exactly the behavior wanted
-// here: the rest of the eviction aborts, the session stays indexed, and the child stays LOADED. A stuck app-server that
-// is still holding a conversation is a better outcome than one killed out from under it; the next
-// close retries.
+// here: the rest of the eviction aborts, the session stays indexed, and the child stays LOADED. A
+// stuck app-server that is still holding a conversation is a better outcome than one killed out
+// from under it; the next close retries.
 
 import type { StructuredAgentSessionEvictionStep } from './structured-agent-session-eviction'
 
