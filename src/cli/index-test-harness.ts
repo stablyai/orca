@@ -118,6 +118,7 @@ export function useWorktreeAwarenessEnvironment(mocks: WorktreeAwarenessMocks): 
   const originalEnvironment = process.env.ORCA_ENVIRONMENT
   const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
   const originalWorktreeId = process.env.ORCA_WORKTREE_ID
+  const originalExecutionHostId = process.env.ORCA_CLI_EXECUTION_HOST_ID
 
   beforeEach(() => {
     mocks.callMock.mockReset()
@@ -126,6 +127,7 @@ export function useWorktreeAwarenessEnvironment(mocks: WorktreeAwarenessMocks): 
     delete process.env.ORCA_DEV_CLI_INVOCATION
     delete process.env.ORCA_WORKSPACE_ID
     delete process.env.ORCA_WORKTREE_ID
+    delete process.env.ORCA_CLI_EXECUTION_HOST_ID
     // Isolate the pane key so claude-teams tests that set it don't leak a
     // senderPaneKey into later orchestration.send assertions.
     delete process.env.ORCA_PANE_KEY
@@ -197,6 +199,11 @@ export function useWorktreeAwarenessEnvironment(mocks: WorktreeAwarenessMocks): 
       delete process.env.ORCA_WORKTREE_ID
     } else {
       process.env.ORCA_WORKTREE_ID = originalWorktreeId
+    }
+    if (originalExecutionHostId === undefined) {
+      delete process.env.ORCA_CLI_EXECUTION_HOST_ID
+    } else {
+      process.env.ORCA_CLI_EXECUTION_HOST_ID = originalExecutionHostId
     }
   })
 }

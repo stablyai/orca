@@ -13,6 +13,7 @@ import { parseWslUncPath } from '../shared/wsl-paths'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
+import { normalizeExecutionHostId, ORCA_CLI_EXECUTION_HOST_ID_ENV } from '../shared/execution-host'
 
 export type BrowserCliTarget = {
   worktree?: string
@@ -89,7 +90,7 @@ export async function normalizeWorktreeSelectorForCaller(
   )
 }
 
-function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient): void {
+export function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient): void {
   if (!client.isRemote) {
     return
   }
@@ -108,12 +109,16 @@ export async function resolveCurrentWorktreeSelector(
   assertLocalCwdWorktreeSelector('current', client)
 
   const currentPath = resolvePath(cwd)
+  const executionHostId = normalizeExecutionHostId(process.env[ORCA_CLI_EXECUTION_HOST_ID_ENV])
   const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', {
     limit: 10_000
   })
   let enclosingWorktree: RuntimeWorktreeRecord | undefined
   let enclosingPathLength = -1
   for (const worktree of worktrees.result.worktrees) {
+    if (executionHostId !== null && normalizeExecutionHostId(worktree.hostId) !== executionHostId) {
+      continue
+    }
     const worktreePath = resolvePath(worktree.path)
     if (
       !isPathInsideOrEqual(worktreePath, currentPath) ||
@@ -126,9 +131,26 @@ export async function resolveCurrentWorktreeSelector(
   }
 
   if (!enclosingWorktree) {
+    const enclosingWorktreeOnAnotherHost =
+      executionHostId === null
+        ? undefined
+        : worktrees.result.worktrees.find((worktree) => {
+            if (normalizeExecutionHostId(worktree.hostId) === executionHostId) {
+              return false
+            }
+            const worktreePath = resolvePath(worktree.path)
+            return isPathInsideOrEqual(worktreePath, currentPath)
+          })
+    if (enclosingWorktreeOnAnotherHost) {
+      throw new RuntimeClientError(
+        'selector_host_mismatch',
+        `The current directory belongs to an Orca-managed worktree on another execution host, but the CLI is scoped to ${executionHostId}: ${currentPath}`
+      )
+    }
+    const hostDescription = executionHostId ? ` on execution host ${executionHostId}` : ''
     throw new RuntimeClientError(
       'selector_not_found',
-      `No Orca-managed worktree contains the current directory: ${currentPath}`
+      `No Orca-managed worktree${hostDescription} contains the current directory: ${currentPath}`
     )
   }
 
@@ -194,7 +216,12 @@ export async function getBrowserWorktreeSelector(
   // Default: auto-resolve from cwd
   try {
     return await resolveCurrentWorktreeSelector(cwd, client)
-  } catch {
+  } catch (error) {
+    // Why: a same-path worktree on another relay host must not be replaced with
+    // an unscoped request, while an unmanaged cwd preserves server-side focus.
+    if (!(error instanceof RuntimeClientError) || error.code !== 'selector_not_found') {
+      throw error
+    }
     // Not inside a managed worktree — no filter
     return undefined
   }
@@ -271,59 +298,4 @@ export async function getComputerCommandTarget(
     app,
     worktree: await getBrowserWorktreeSelector(flags, cwd, client)
   }
-}
-
-// Match browser targeting: workspace by default, explicit device/emulator/worktree overrides.
-export type EmulatorCliTarget = {
-  worktree?: string
-  device?: string
-  emulator?: string // Orca id from list
-}
-
-export async function getEmulatorWorktreeSelector(
-  flags: Map<string, string | boolean>,
-  cwd: string,
-  client: RuntimeClient
-): Promise<string | undefined> {
-  const explicit = getOptionalStringFlag(flags, 'worktree')
-  if (explicit === 'all') {
-    return undefined
-  }
-  if (explicit) {
-    if (explicit === 'active' || explicit === 'current') {
-      assertLocalCwdWorktreeSelector(explicit, client)
-      return resolveCurrentWorktreeSelector(cwd, client)
-    }
-    return explicit
-  }
-  if (client.isRemote) {
-    return undefined
-  }
-  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
-  if (terminalWorktreeId?.trim()) {
-    return terminalWorktreeId
-  }
-  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
-  if (folderWorkspaceId?.startsWith('folder:')) {
-    return folderWorkspaceId
-  }
-  try {
-    return await resolveCurrentWorktreeSelector(cwd, client)
-  } catch {
-    return undefined
-  }
-}
-
-export async function getEmulatorCommandTarget(
-  flags: Map<string, string | boolean>,
-  cwd: string,
-  client: RuntimeClient
-): Promise<EmulatorCliTarget> {
-  const device = getOptionalStringFlag(flags, 'device')
-  const emulator = getOptionalStringFlag(flags, 'emulator')
-  const worktree = await getEmulatorWorktreeSelector(flags, cwd, client)
-  if (device || emulator) {
-    return { device: device || undefined, emulator: emulator || undefined, worktree }
-  }
-  return { worktree }
 }

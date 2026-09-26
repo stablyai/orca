@@ -29,6 +29,7 @@ import {
   ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
 } from '../../shared/orchestration-compatibility-evidence'
 import { REMOTE_ARTIFACT_INPUT_ENV } from '../../shared/artifact-cli-bridge'
+import { ORCA_CLI_EXECUTION_HOST_ID_ENV, toSshExecutionHostId } from '../../shared/execution-host'
 
 type FakeChild = EventEmitter & {
   stdout: EventEmitter
@@ -86,6 +87,7 @@ describe('buildHostCliEnv', () => {
       },
       userDataPath: '/host/user-data',
       remoteCwd: '/home/alice/wt/sub',
+      executionHostId: toSshExecutionHostId('saved-target'),
       runtimeAuthority: {
         kind: 'ssh',
         targetId: 'saved-target',
@@ -106,6 +108,7 @@ describe('buildHostCliEnv', () => {
     expect(env.PATH).toBe('/host/bin')
     expect(env.ORCA_USER_DATA_PATH).toBe('/host/user-data')
     expect(env.ORCA_CLI_CWD).toBe('/home/alice/wt/sub')
+    expect(env[ORCA_CLI_EXECUTION_HOST_ID_ENV]).toBe('ssh:saved-target')
     expect(env.ORCA_CLI_COMMAND).toBe('orca')
     expect(env.ELECTRON_RUN_AS_NODE).toBe('1')
     expect(env.NODE_OPTIONS).toBeUndefined()

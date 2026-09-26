@@ -9,7 +9,7 @@ import {
   getRequiredFiniteNumber,
   getRequiredStringFlag
 } from '../flags'
-import { getEmulatorCommandTarget } from '../selectors'
+import { getEmulatorCommandTarget } from '../emulator-target-selector'
 import { RuntimeClientError } from '../runtime-client'
 
 type EmulatorAttachResult = {
