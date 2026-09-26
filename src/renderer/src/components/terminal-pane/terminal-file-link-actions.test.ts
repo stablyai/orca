@@ -85,6 +85,26 @@ describe('terminal file link actions', () => {
     })
   })
 
+  it('uses the resolved path instead of a raw OSC destination for file actions', () => {
+    const request = vi.fn()
+    handleTerminalFileLink(
+      '/repo/src/main.ts',
+      42,
+      null,
+      plainEvent(),
+      deps,
+      context(request),
+      'file:///repo/src/main.ts#L42'
+    )
+
+    expect(request.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        destination: '/repo/src/main.ts',
+        kind: 'file'
+      })
+    )
+  })
+
   it('labels workspace switching and omits an impossible remote alternate', () => {
     mocks.worktreeRoot = true
     mocks.canOpenWithSystemDefault = false

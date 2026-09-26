@@ -3253,9 +3253,12 @@
             "orcaBrowser": "Orca Browser",
             "terminalLinkSettings": "Terminal link settings",
             "copyLink": "Copy link",
+            "copyFilePath": "Copy file path",
             "copied": "Copied",
             "copiedLink": "Copied link",
+            "copiedFilePath": "Copied file path",
             "copyLinkFailed": "Failed to copy link",
+            "copyFilePathFailed": "Failed to copy file path",
             "downloadOpenWithDefaultApp": "Download & open with default app",
             "downloadOpenFailed": "Failed to download '{{value0}}'."
           },
