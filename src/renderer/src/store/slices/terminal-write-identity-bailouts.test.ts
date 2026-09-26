@@ -151,6 +151,7 @@ describe('setTabLayout identity bailout', () => {
     const mutations: Partial<TerminalLayoutSnapshot>[] = [
       { activeLeafId: 'leaf-b' },
       { expandedLeafId: 'leaf-a' },
+      { chatLeafId: 'leaf-b' },
       { titlesByLeafId: { 'leaf-a': 'test' } },
       { ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-c' } },
       { buffersByLeafId: { 'leaf-a': 'scrollback' } },
