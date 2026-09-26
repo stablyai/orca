@@ -84,6 +84,8 @@ export type TaskResumeState = {
   }
   jiraPreset?: 'assigned' | 'reported' | 'all' | 'done'
   jiraQuery?: string
+  businessmapPreset?: 'assigned' | 'all' | 'done'
+  businessmapQuery?: string
 }
 
 export type RightSidebarTab =

@@ -1,10 +1,10 @@
-import type { TaskPageJiraListStateModel } from './use-task-page-jira-list-state'
+import type { TaskPageBusinessmapListStateModel } from './use-task-page-businessmap-list-state'
 import { useEffect } from 'react'
 import { resolveVisibleTaskProvider } from '../../../shared/task-providers'
 import { normalizeGitHubTaskPreset } from '@/components/task-page-github-task-kind'
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import { loadLinearIssueView } from './linear-issue-view-storage'
-export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) {
+export function useTaskPageResumeRestoration(model: TaskPageBusinessmapListStateModel) {
   const {
     settings,
     persistedUIReady,
@@ -47,7 +47,10 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     linearContextResumeAttemptedRef,
     setJiraSearchInput,
     setAppliedJiraSearch,
-    setActiveJiraPreset
+    setActiveJiraPreset,
+    setBusinessmapSearchInput,
+    setAppliedBusinessmapSearch,
+    setActiveBusinessmapPreset
   } = model
   useEffect(() => {
     if (taskResumeAppliedRef.current || !persistedUIReady || !settings) {
@@ -91,6 +94,11 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     setActiveJiraPreset(jiraPreset)
     setJiraSearchInput(jiraQuery)
     setAppliedJiraSearch(jiraQuery)
+    const businessmapPreset = taskResumeState?.businessmapPreset ?? 'assigned'
+    const businessmapQuery = taskResumeState?.businessmapQuery ?? ''
+    setActiveBusinessmapPreset(businessmapPreset)
+    setBusinessmapSearchInput(businessmapQuery)
+    setAppliedBusinessmapSearch(businessmapQuery)
 
     // Why: settings/UI hydrate async; apply the restored Tasks context exactly once so later source/filter clicks stay local.
     taskResumeAppliedRef.current = true
@@ -119,6 +127,9 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
     setGithubMode,
     setLinearTeamPropertyTouched,
     setAppliedJiraSearch,
+    setActiveBusinessmapPreset,
+    setBusinessmapSearchInput,
+    setAppliedBusinessmapSearch,
     setTaskResumeApplied,
     setLinearGroupBy,
     setLinearViewMode

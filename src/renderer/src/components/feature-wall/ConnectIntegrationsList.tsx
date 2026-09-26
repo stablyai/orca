@@ -7,6 +7,7 @@ import {
   GitLabIntegrationCard
 } from '@/components/settings/source-control-integration-cards'
 import {
+  BusinessmapIntegrationCard,
   JiraIntegrationCard,
   LinearIntegrationCard
 } from '@/components/settings/task-tracker-integration-cards'
@@ -174,6 +175,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
           <IntegrationCardGroup>
             <LinearIntegrationCard />
             <JiraIntegrationCard />
+            <BusinessmapIntegrationCard />
           </IntegrationCardGroup>
           <p className="px-1 pt-0.5 text-[12px] leading-snug text-muted-foreground">
             {translate(

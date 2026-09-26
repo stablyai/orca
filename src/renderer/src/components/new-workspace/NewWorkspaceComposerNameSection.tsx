@@ -20,11 +20,13 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'onSmartBranchSelect'
   | 'onSmartLinearIssueSelect'
   | 'onSmartJiraIssueSelect'
+  | 'onSmartBusinessmapCardSelect'
   | 'onOpenJiraSettings'
   | 'smartNameSelection'
   | 'onClearSmartNameSelection'
   | 'smartNameGitHubSourceContext'
   | 'smartNameJiraSourceContext'
+  | 'smartNameBusinessmapSourceContext'
   | 'selectedRepoRequiresConnection'
   | 'selectedRepoIsGit'
   | 'branchesEnabled'
@@ -32,8 +34,6 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'repoBackedSearchRepos'
   | 'allowSmartNameAddProject'
   | 'smartNameRepoSwitchTarget'
-  | 'onSmartNameModeChange'
-  | 'smartNameMode'
   | 'forkPushWarning'
   | 'canReuseSelectedBranch'
   | 'reuseSelectedBranch'
@@ -57,11 +57,13 @@ export function NewWorkspaceComposerNameSection({
   onSmartBranchSelect,
   onSmartLinearIssueSelect,
   onSmartJiraIssueSelect,
+  onSmartBusinessmapCardSelect,
   onOpenJiraSettings,
   smartNameSelection,
   onClearSmartNameSelection,
   smartNameGitHubSourceContext,
   smartNameJiraSourceContext,
+  smartNameBusinessmapSourceContext,
   selectedRepoRequiresConnection,
   selectedRepoIsGit,
   branchesEnabled = true,
@@ -69,8 +71,6 @@ export function NewWorkspaceComposerNameSection({
   repoBackedSearchRepos,
   allowSmartNameAddProject = true,
   smartNameRepoSwitchTarget = 'project',
-  onSmartNameModeChange,
-  smartNameMode,
   onNamePlainEnter,
   forkPushWarning,
   canReuseSelectedBranch,
@@ -85,7 +85,7 @@ export function NewWorkspaceComposerNameSection({
     shouldShowComposerBaseRefPicker({
       selectedRepoIsGit,
       branchesEnabled,
-      smartNameMode: smartNameMode ?? 'smart',
+      smartNameMode: 'smart',
       smartNameSelectionKind: smartNameSelection?.kind ?? null
     })
   return (
@@ -124,11 +124,13 @@ export function NewWorkspaceComposerNameSection({
         onBranchSelect={onSmartBranchSelect}
         onLinearIssueSelect={onSmartLinearIssueSelect}
         onJiraIssueSelect={onSmartJiraIssueSelect}
+        onBusinessmapCardSelect={onSmartBusinessmapCardSelect}
         onOpenJiraSettings={onOpenJiraSettings}
         selectedSource={smartNameSelection}
         onClearSelectedSource={onClearSmartNameSelection}
         githubSourceContext={smartNameGitHubSourceContext}
         jiraSourceContext={smartNameJiraSourceContext}
+        businessmapSourceContext={smartNameBusinessmapSourceContext}
         disabled={selectedRepoRequiresConnection}
         disabledPlaceholder={translate(
           'auto.components.NewWorkspaceComposerCard.connectProjectFirst',
@@ -140,7 +142,6 @@ export function NewWorkspaceComposerNameSection({
         repoBackedSearchRepos={repoBackedSearchRepos}
         allowCrossRepoProjectAdd={allowSmartNameAddProject}
         crossRepoSwitchTarget={smartNameRepoSwitchTarget}
-        onActiveSourceModeChange={onSmartNameModeChange}
         onPlainEnter={onNamePlainEnter}
       />
       {forkPushWarning ? (

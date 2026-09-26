@@ -24,6 +24,7 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     selectedRepos,
     selectedLinearWorkspace,
     selectedJiraSite,
+    selectedBusinessmapSite,
     sourceOptions,
     taskSource,
     runtimePreflightStatusByHostId,
@@ -100,6 +101,13 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      businessmap:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('businessmap'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
         }) ?? undefined
     }
   }, [
@@ -119,9 +127,8 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     return getTaskSourceContextSummary({
       provider: taskSource,
       providerLabel,
-      repoContexts: taskSourceRepoContexts,
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'businessmap'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       accountHostId: accountBackedTaskSourceHostId,
@@ -129,9 +136,15 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
       selectedRepoCount: selectedRepos.length,
       linearWorkspaceName:
         selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null,
-      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null,
+      businessmapSiteName:
+        selectedBusinessmapSite?.displayName ??
+        selectedBusinessmapSite?.accountName ??
+        selectedBusinessmapSite?.subdomain ??
+        null
     })
   }, [
+    selectedBusinessmapSite,
     selectedJiraSite,
     selectedLinearWorkspace,
     selectedRepos.length,
@@ -140,8 +153,7 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     accountBackedTaskSourceHostAvailability,
     accountBackedTaskSourceHostId,
     hostLabelById,
-    taskSourceHostAvailability,
-    taskSourceRepoContexts
+    taskSourceHostAvailability
   ])
   const taskSourceAvailabilityNotice = useMemo(() => {
     const providerLabel =
@@ -149,11 +161,11 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     return getTaskSourceAvailabilityNotice({
       providerLabel,
       sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'businessmap'
           ? 1
           : Math.max(1, taskSourceRepoContexts.length),
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'businessmap'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       hostLabelById

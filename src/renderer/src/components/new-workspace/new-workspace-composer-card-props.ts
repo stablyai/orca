@@ -13,6 +13,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { BusinessmapCard } from '../../../../shared/businessmap-types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
@@ -79,6 +80,7 @@ export type NewWorkspaceComposerCardProps = {
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
+  onSmartBusinessmapCardSelect?: (card: BusinessmapCard, sourceContext: TaskSourceContext) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   canReuseSelectedBranch: boolean
@@ -89,6 +91,7 @@ export type NewWorkspaceComposerCardProps = {
   onCreateMultipleChange?: (next: boolean) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   smartNameJiraSourceContext?: TaskSourceContext | null
+  smartNameBusinessmapSourceContext?: TaskSourceContext | null
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
   onOpenAgentSettings: () => void

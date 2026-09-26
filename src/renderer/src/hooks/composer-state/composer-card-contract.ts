@@ -74,9 +74,11 @@ export type ComposerCardActionProps = {
   onSmartNameModeChange?: ComposerModel['setSmartNameMode']
   onSmartLinearIssueSelect: ComposerModel['handleSmartLinearIssueSelect']
   onSmartJiraIssueSelect: ComposerModel['handleSmartJiraIssueSelect']
+  onSmartBusinessmapCardSelect: ComposerModel['handleSmartBusinessmapCardSelect']
   onOpenJiraSettings: ComposerModel['handleOpenJiraSettings']
   smartNameGitHubSourceContext?: ComposerModel['selectedRepoGitHubSourceContext']
   smartNameJiraSourceContext?: ComposerModel['smartNameJiraSourceContext']
+  smartNameBusinessmapSourceContext?: ComposerModel['smartNameBusinessmapSourceContext']
   onBaseBranchMrSelect?: ComposerModel['handleBaseBranchMrSelect']
   onClearSmartNameSelection: ComposerModel['handleClearSmartNameSelection']
   canReuseSelectedBranch: boolean

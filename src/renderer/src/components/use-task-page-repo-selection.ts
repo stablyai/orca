@@ -18,6 +18,7 @@ import {
   getGitHubModeButtons,
   getLinearModeOptions,
   getJiraPresets,
+  getBusinessmapPresets,
   getGitLabIssueFilters,
   getGitLabMRFilters,
   getLinearViewOptions,
@@ -38,6 +39,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     linearStatus,
     preflightStatus,
     jiraStatus,
+    businessmapStatus,
     preflightStatusCurrent,
     linearConnected
   } = model
@@ -129,6 +131,16 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     selectedJiraSiteId && selectedJiraSiteId !== 'all'
       ? (jiraSites.find((site) => site.id === selectedJiraSiteId) ?? null)
       : null
+  const businessmapSites = useMemo(() => businessmapStatus.sites ?? [], [businessmapStatus.sites])
+  const selectedBusinessmapSiteId =
+    businessmapStatus.selectedSiteId ??
+    businessmapStatus.activeSiteId ??
+    businessmapSites[0]?.id ??
+    null
+  const selectedBusinessmapSite =
+    selectedBusinessmapSiteId != null
+      ? (businessmapSites.find((site) => site.id === selectedBusinessmapSiteId) ?? null)
+      : null
   const preferredVisibleTaskProviders = useMemo(
     () => normalizeVisibleTaskProviders(settings?.visibleTaskProviders),
     [settings?.visibleTaskProviders]
@@ -156,6 +168,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   const githubModeButtons = getGitHubModeButtons()
   const linearModeOptions = getLinearModeOptions()
   const jiraPresets = getJiraPresets()
+  const businessmapPresets = getBusinessmapPresets()
   const gitLabIssueFilters = getGitLabIssueFilters()
   const gitLabMRFilters = getGitLabMRFilters()
   const linearViewOptions = getLinearViewOptions()
@@ -210,6 +223,9 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     jiraSites: typeof jiraSites
     selectedJiraSiteId: typeof selectedJiraSiteId
     selectedJiraSite: typeof selectedJiraSite
+    businessmapSites: typeof businessmapSites
+    selectedBusinessmapSiteId: typeof selectedBusinessmapSiteId
+    selectedBusinessmapSite: typeof selectedBusinessmapSite
     preferredVisibleTaskProviders: typeof preferredVisibleTaskProviders
     defaultTaskSource: typeof defaultTaskSource
     visibleTaskProviders: typeof visibleTaskProviders
@@ -217,6 +233,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     githubModeButtons: typeof githubModeButtons
     linearModeOptions: typeof linearModeOptions
     jiraPresets: typeof jiraPresets
+    businessmapPresets: typeof businessmapPresets
     gitLabIssueFilters: typeof gitLabIssueFilters
     gitLabMRFilters: typeof gitLabMRFilters
     linearViewOptions: typeof linearViewOptions
@@ -242,6 +259,9 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   nextModel.jiraSites = jiraSites
   nextModel.selectedJiraSiteId = selectedJiraSiteId
   nextModel.selectedJiraSite = selectedJiraSite
+  nextModel.businessmapSites = businessmapSites
+  nextModel.selectedBusinessmapSiteId = selectedBusinessmapSiteId
+  nextModel.selectedBusinessmapSite = selectedBusinessmapSite
   nextModel.preferredVisibleTaskProviders = preferredVisibleTaskProviders
   nextModel.defaultTaskSource = defaultTaskSource
   nextModel.visibleTaskProviders = visibleTaskProviders
@@ -249,6 +269,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
   nextModel.githubModeButtons = githubModeButtons
   nextModel.linearModeOptions = linearModeOptions
   nextModel.jiraPresets = jiraPresets
+  nextModel.businessmapPresets = businessmapPresets
   nextModel.gitLabIssueFilters = gitLabIssueFilters
   nextModel.gitLabMRFilters = gitLabMRFilters
   nextModel.linearViewOptions = linearViewOptions

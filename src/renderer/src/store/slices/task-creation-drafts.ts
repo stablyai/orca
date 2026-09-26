@@ -1,10 +1,11 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 
-/** Session-only text drafts for Linear/Jira creation dialogs; picker selections stay fresh. */
+/** Session-only text drafts for Linear/Jira/Businessmap creation dialogs; picker selections stay fresh. */
 export type NewLinearIssueDraft = { title: string; body: string }
 export type NewLinearProjectDraft = { name: string; description: string; content: string }
 export type NewJiraIssueDraft = { title: string; body: string }
+export type NewBusinessmapCardDraft = { title: string; body: string }
 
 /** Empty forms do not replace a later open with a meaningless draft. */
 export function isTaskCreationDraftContentful(fields: Record<string, string>): boolean {
@@ -21,6 +22,9 @@ export type TaskCreationDraftsSlice = {
   newJiraIssueDraft: NewJiraIssueDraft | null
   setNewJiraIssueDraft: (draft: NewJiraIssueDraft) => void
   clearNewJiraIssueDraft: () => void
+  newBusinessmapCardDraft: NewBusinessmapCardDraft | null
+  setNewBusinessmapCardDraft: (draft: NewBusinessmapCardDraft) => void
+  clearNewBusinessmapCardDraft: () => void
 }
 
 export const createTaskCreationDraftsSlice: StateCreator<
@@ -37,5 +41,8 @@ export const createTaskCreationDraftsSlice: StateCreator<
   clearNewLinearProjectDraft: () => set({ newLinearProjectDraft: null }),
   newJiraIssueDraft: null,
   setNewJiraIssueDraft: (draft) => set({ newJiraIssueDraft: draft }),
-  clearNewJiraIssueDraft: () => set({ newJiraIssueDraft: null })
+  clearNewJiraIssueDraft: () => set({ newJiraIssueDraft: null }),
+  newBusinessmapCardDraft: null,
+  setNewBusinessmapCardDraft: (draft) => set({ newBusinessmapCardDraft: draft }),
+  clearNewBusinessmapCardDraft: () => set({ newBusinessmapCardDraft: null })
 })

@@ -25,6 +25,7 @@ export function renderSmartWorkspaceSourceResults(
     searchResultRows,
     linearStatusChecked,
     linearStatus,
+    businessmapConnectionStatus,
     showJiraSiteContext,
     jiraConnectionStatus,
     reserveLinearLoadingResults,
@@ -123,7 +124,12 @@ export function renderSmartWorkspaceSourceResults(
                     'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
                     'Connect Linear in Settings to search issues.'
                   )
-                : getSmartWorkspaceEmptyHint(mode)}
+                : mode === 'businessmap' && !businessmapConnectionStatus?.connected
+                  ? translate(
+                      'auto.components.new.workspace.SmartWorkspaceNameField.businessmapDisconnected',
+                      'Connect Businessmap in Settings to search cards.'
+                    )
+                  : getSmartWorkspaceEmptyHint(mode)}
           </div>
         ) : searchResultRows.length > 0 ? (
           <CommandGroup className="p-1">

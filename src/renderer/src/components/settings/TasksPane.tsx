@@ -8,12 +8,13 @@ import {
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { BusinessmapIcon } from '@/components/icons/BusinessmapIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
-import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
+import { CodeHostSetupSteps, BusinessmapSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
@@ -21,6 +22,7 @@ import {
   resolveStickyAutoExpandedTaskProvider
 } from './task-source-setup-state'
 import {
+  BUSINESSMAP_INTEGRATION_SECTION_ID,
   JIRA_INTEGRATION_SECTION_ID,
   LINEAR_INTEGRATION_SECTION_ID
 } from './task-provider-integration-section-ids'
@@ -89,6 +91,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  businessmap: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.businessmapLabel', 'Businessmap')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.businessmapDescription',
+        'Connect Businessmap and show its cards in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <BusinessmapIcon className={className} />
   }
 }
 
@@ -97,11 +111,12 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const checkBusinessmapConnection = useAppStore((s) => s.checkBusinessmapConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const readinessByProvider = useTaskSourceProviderReadiness(visibleProviders)
   useIntegrationProviderStatusRefresh()
-
   // Warn only about started-then-stalled setup; untouched providers are the default.
+
   const stalledVisible = getStalledVisibleTaskProviders(TASK_PROVIDERS, readinessByProvider)
   // Sticky across rechecks so expanded Linear install terminals are not unmounted.
   // Claim during render (not an effect): a layout effect elsewhere can force a
@@ -116,23 +131,19 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
   if (autoExpandedProvider !== null && previousAutoExpanded === null) {
     setPreviousAutoExpanded(autoExpandedProvider)
   }
-
   const toggleProvider = (provider: TaskProvider): void => {
     const isVisible = visibleProviders.includes(provider)
     if (isVisible && visibleProviders.length === 1) {
       return
     }
-
     const nextProviders = isVisible
       ? visibleProviders.filter((entry) => entry !== provider)
       : TASK_PROVIDERS.filter((entry) => entry === provider || visibleProviders.includes(entry))
-
     updateSettings({
       visibleTaskProviders: nextProviders,
       defaultTaskSource: resolveVisibleTaskProvider(settings.defaultTaskSource, nextProviders)
     })
   }
-
   const openIntegrations = (sectionId?: string): void => {
     openSettingsPage()
     openSettingsTarget({
@@ -141,7 +152,6 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
       ...(sectionId ? { sectionId } : {})
     })
   }
-
   return (
     <div className="space-y-6">
       <section className="space-y-3">
@@ -226,6 +236,16 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                     onToggleVisible={() => toggleProvider('jira')}
                     onConnected={() => void checkJiraConnection()}
                     onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
+                  />
+                ) : provider === 'businessmap' ? (
+                  <BusinessmapSetupSteps
+                    connected={readiness.connected}
+                    checking={readiness.checking}
+                    visible={visible}
+                    canHide={canHide}
+                    onToggleVisible={() => toggleProvider('businessmap')}
+                    onConnected={() => void checkBusinessmapConnection()}
+                    onOpenIntegrations={() => openIntegrations(BUSINESSMAP_INTEGRATION_SECTION_ID)}
                   />
                 ) : (
                   <CodeHostSetupSteps

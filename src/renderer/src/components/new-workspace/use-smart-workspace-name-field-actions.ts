@@ -9,7 +9,7 @@ import {
   type WorkspaceEmojiSuggestion
 } from '@/lib/workspace-emoji-shortcodes'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo, normalizeTaskSourceContext } from '../../../../shared/task-source-context'
 import { bindJiraIssueSourceContext } from './use-jira-url-source'
 import type { RepoOption, RowEntry } from './smart-workspace-name-field-model'
 import { getRepoSlugCached, sameSlug } from './smart-workspace-repo-slug'
@@ -35,13 +35,17 @@ export function useSmartWorkspaceNameFieldActions(
   foundation: Foundation,
   presentation: Presentation
 ) {
+  const { selectJiraAccount, jiraBoundSourceContext, activeEmojiShortcode } = presentation
   const {
     jiraConnectionStatus,
     jiraSourceContext,
+    businessmapConnectionStatus,
+    businessmapSourceContext,
     onBranchSelect,
     onGitHubItemSelect,
     onGitLabItemSelect,
     onJiraIssueSelect,
+    onBusinessmapCardSelect,
     onLinearIssueSelect,
     onValueChange,
     setOpen,
@@ -62,7 +66,6 @@ export function useSmartWorkspaceNameFieldActions(
     addRepo,
     repoSlugCacheRef
   } = foundation
-  const { selectJiraAccount, jiraBoundSourceContext, activeEmojiShortcode } = presentation
 
   const handleSelect = useCallback(
     (row: RowEntry) => {
@@ -99,6 +102,31 @@ export function useSmartWorkspaceNameFieldActions(
           return
         }
         onJiraIssueSelect?.(row.issue, sourceContext)
+      } else if (row.kind === 'businessmap') {
+        const sourceContext =
+          businessmapSourceContext?.provider === 'businessmap'
+            ? normalizeTaskSourceContext({
+                ...businessmapSourceContext,
+                providerIdentity: {
+                  provider: 'businessmap',
+                  subdomain:
+                    businessmapSourceContext.providerIdentity?.provider === 'businessmap'
+                      ? (businessmapSourceContext.providerIdentity.subdomain ?? null)
+                      : null,
+                  boardId: row.card.boardId
+                }
+              })
+            : null
+        if (!sourceContext || !businessmapConnectionStatus?.connected) {
+          toast.error(
+            translate(
+              'auto.components.new.workspace.SmartWorkspaceNameField.businessmapSelectBindFailed',
+              'Couldn’t link this Businessmap card. Reconnect Businessmap, then try again.'
+            )
+          )
+          return
+        }
+        onBusinessmapCardSelect?.(row.card, sourceContext)
       } else {
         onLinearIssueSelect(row.issue)
       }
@@ -108,10 +136,13 @@ export function useSmartWorkspaceNameFieldActions(
       jiraBoundSourceContext,
       jiraConnectionStatus?.sites,
       jiraSourceContext,
+      businessmapConnectionStatus?.connected,
+      businessmapSourceContext,
       onBranchSelect,
       onGitHubItemSelect,
       onGitLabItemSelect,
       onJiraIssueSelect,
+      onBusinessmapCardSelect,
       onLinearIssueSelect,
       onValueChange,
       setOpen,

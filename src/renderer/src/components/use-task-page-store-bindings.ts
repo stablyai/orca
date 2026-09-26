@@ -69,6 +69,18 @@ export function useTaskPageStoreBindings() {
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const businessmapStatus = useAppStore((s) => s.businessmapStatus)
+  const businessmapStatusChecked = useAppStore((s) => s.businessmapStatusChecked)
+  const businessmapStatusContextKey = useAppStore((s) => s.businessmapStatusContextKey)
+  const selectBusinessmapSite = useAppStore((s) => s.selectBusinessmapSite)
+  const searchBusinessmapCards = useAppStore((s) => s.searchBusinessmapCards)
+  const listBusinessmapCards = useAppStore((s) => s.listBusinessmapCards)
+  const listBusinessmapBoards = useAppStore((s) => s.listBusinessmapBoards)
+  const createBusinessmapCard = useAppStore((s) => s.createBusinessmapCard)
+  const updateBusinessmapCard = useAppStore((s) => s.updateBusinessmapCard)
+  const addBusinessmapCardComment = useAppStore((s) => s.addBusinessmapCardComment)
+  const fetchBusinessmapCard = useAppStore((s) => s.fetchBusinessmapCard)
+  const checkBusinessmapConnection = useAppStore((s) => s.checkBusinessmapConnection)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const providerRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
   // Submit handlers must fence against the current provider context immediately.
@@ -76,11 +88,14 @@ export function useTaskPageStoreBindings() {
   providerRuntimeContextKeyRef.current = providerRuntimeContextKey
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const businessmapStatusCurrent = businessmapStatusContextKey === providerRuntimeContextKey
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const linearStatusReady = linearStatusCurrent && linearStatusChecked
   const jiraStatusReady = jiraStatusCurrent && jiraStatusChecked
+  const businessmapStatusReady = businessmapStatusCurrent && businessmapStatusChecked
   const linearConnected = linearStatusCurrent && linearStatus.connected
   const jiraConnected = jiraStatusCurrent && jiraStatus.connected
+  const businessmapConnected = businessmapStatusCurrent && businessmapStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   return {
     settings,
@@ -142,15 +157,30 @@ export function useTaskPageStoreBindings() {
     searchJiraIssues,
     listJiraIssues,
     checkJiraConnection,
+    businessmapStatus,
+    businessmapStatusChecked,
+    businessmapStatusContextKey,
+    selectBusinessmapSite,
+    searchBusinessmapCards,
+    listBusinessmapCards,
+    listBusinessmapBoards,
+    createBusinessmapCard,
+    updateBusinessmapCard,
+    addBusinessmapCardComment,
+    fetchBusinessmapCard,
+    checkBusinessmapConnection,
     providerRuntimeContextKey,
     providerRuntimeContextKeyRef,
     linearStatusCurrent,
     jiraStatusCurrent,
+    businessmapStatusCurrent,
     preflightStatusCurrent,
     linearStatusReady,
     jiraStatusReady,
+    businessmapStatusReady,
     linearConnected,
     jiraConnected,
+    businessmapConnected,
     submitShortcutLabel
   }
 }

@@ -4,14 +4,16 @@ import { TaskPageGitHubIssueDialog } from './github/IssueDialog'
 import { TaskPageLinearProjectDialog } from './linear/ProjectDialog'
 import { TaskPageLinearIssueDialog } from './linear/IssueDialog'
 import { TaskPageJiraIssueDialog } from './jira/IssueDialog'
+import { TaskPageBusinessmapCardDialog } from './businessmap/CardDialog'
 import { TaskPageGitLabDialog } from './gitlab/Dialog'
 import { TaskPageLinearConnectDialog } from './linear/ConnectDialog'
 import { TaskPageJiraConnectDialog } from './jira/ConnectDialog'
+import { TaskPageBusinessmapConnectDialog } from './businessmap/ConnectDialog'
 export function TaskPageSurface({
   model
 }: {
   model: TaskPageComposerActionsModel
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   return (
     <div className="relative flex h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
       <TaskPageFrame model={model} />
@@ -24,11 +26,15 @@ export function TaskPageSurface({
 
       <TaskPageJiraIssueDialog model={model} />
 
+      <TaskPageBusinessmapCardDialog model={model} />
+
       <TaskPageGitLabDialog model={model} />
 
       <TaskPageLinearConnectDialog model={model} />
 
       <TaskPageJiraConnectDialog model={model} />
+
+      <TaskPageBusinessmapConnectDialog model={model} />
     </div>
   )
 }

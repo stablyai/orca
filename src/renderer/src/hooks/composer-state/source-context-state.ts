@@ -105,14 +105,15 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
 
   const initialLinkedWorkItemSeed =
     normalizedInitialLinkedWorkItem &&
-    getLinkedWorkItemProvider(normalizedInitialLinkedWorkItem) === 'jira' &&
+    (getLinkedWorkItemProvider(normalizedInitialLinkedWorkItem) === 'jira' ||
+      getLinkedWorkItemProvider(normalizedInitialLinkedWorkItem) === 'businessmap') &&
     !initialLinkedTaskSourceContext
       ? null
       : normalizedInitialLinkedWorkItem
-
   const draftLinkedWorkItemSeed =
     normalizedDraftLinkedWorkItem &&
-    getLinkedWorkItemProvider(normalizedDraftLinkedWorkItem) === 'jira' &&
+    (getLinkedWorkItemProvider(normalizedDraftLinkedWorkItem) === 'jira' ||
+      getLinkedWorkItemProvider(normalizedDraftLinkedWorkItem) === 'businessmap') &&
     !draftLinkedTaskSourceContext
       ? null
       : normalizedDraftLinkedWorkItem
@@ -219,6 +220,38 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     selectedRepo,
     selectedWorkspaceTarget
   ])
+  // Why: mirrors smartNameJiraSourceContext — same project/host scope, provider switched so card search stays isolated per runtime.
+  const smartNameBusinessmapSourceContext = useMemo(() => {
+    if (!selectedProjectId) {
+      return null
+    }
+    const sourceRepo = isProjectGroupTarget
+      ? (folderSourceRepos.find((repo) => repo.id === repoId) ?? null)
+      : selectedRepo
+    return normalizeTaskSourceContext({
+      provider: 'businessmap',
+      projectId: selectedProjectGroup?.id ?? selectedProjectId,
+      hostId: resolveJiraSourceHostId({
+        workspaceHostId:
+          selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null,
+        groupExecutionHostId: selectedProjectGroup?.executionHostId,
+        groupConnectionId: selectedProjectGroup?.connectionId
+      }),
+      projectHostSetupId: selectedProjectGroup ? null : selectedProjectHostSetupId,
+      repoId: sourceRepo?.id ?? null,
+      providerIdentity: null,
+      accountLabel: null
+    })
+  }, [
+    folderSourceRepos,
+    isProjectGroupTarget,
+    repoId,
+    selectedProjectGroup,
+    selectedProjectHostSetupId,
+    selectedProjectId,
+    selectedRepo,
+    selectedWorkspaceTarget
+  ])
 
   return {
     setRepoId,
@@ -246,6 +279,7 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     derivedGitHubTaskSourceContext,
     taskSourceContext,
     selectedRepoGitHubSourceContext,
-    smartNameJiraSourceContext
+    smartNameJiraSourceContext,
+    smartNameBusinessmapSourceContext
   }
 }

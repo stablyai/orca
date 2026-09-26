@@ -27,6 +27,8 @@ export const TaskResumeState = z
       .strict()
       .optional(),
     jiraPreset: z.enum(['assigned', 'reported', 'all', 'done']).optional(),
-    jiraQuery: z.string().optional()
+    jiraQuery: z.string().optional(),
+    businessmapPreset: z.enum(['assigned', 'all', 'done']).optional(),
+    businessmapQuery: z.string().optional()
   })
   .strict()

@@ -1,12 +1,13 @@
-import type { TaskPageJiraListProjectionModel } from './use-task-page-jira-list-projection'
+import type { TaskPageBusinessmapListProjectionModel } from './use-task-page-businessmap-list-projection'
 import { useState, useMemo, useEffect, type SetStateAction } from 'react'
 import { useTeamMembers, useTeamLabels, useTeamStates } from '@/hooks/useIssueMetadata'
+import { useTaskPageLinearProjectDraftState } from './use-task-page-linear-project-draft-state'
 import { useTaskCreationDraftRetention } from '@/components/use-task-creation-draft-retention'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import { linearListProjects } from '@/runtime/runtime-linear-project-client'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
-import { writeNewLinearIssueDraft, writeNewLinearProjectDraft } from './task-page-draft-storage'
-export function useTaskPageLinearCreationState(model: TaskPageJiraListProjectionModel) {
+import { writeNewLinearIssueDraft } from './task-page-draft-storage'
+export function useTaskPageLinearCreationState(model: TaskPageBusinessmapListProjectionModel) {
   const {
     settings,
     activeModal,
@@ -20,48 +21,8 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     selectedLinearProject,
     availableTeams
   } = model
-  // New Linear project dialog state
-  const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
-  const [newLinearProjectName, setNewLinearProjectName] = useState('')
-  const [newLinearProjectDescription, setNewLinearProjectDescription] = useState('')
-  const [newLinearProjectContent, setNewLinearProjectContent] = useState('')
-  const [newLinearProjectTeamId, setNewLinearProjectTeamIdState] = useState<string | null>(null)
-  const [newLinearProjectLeadId, setNewLinearProjectLeadId] = useState<string | null>(null)
-  const [newLinearProjectMemberIds, setNewLinearProjectMemberIds] = useState<string[]>([])
-  const [newLinearProjectLabelIds, setNewLinearProjectLabelIds] = useState<string[]>([])
-  const [newLinearProjectPriority, setNewLinearProjectPriority] = useState<number>(0)
-  const [newLinearProjectStartDate, setNewLinearProjectStartDate] = useState('')
-  const [newLinearProjectTargetDate, setNewLinearProjectTargetDate] = useState('')
-  const [newLinearProjectSubmitting, setNewLinearProjectSubmitting] = useState(false)
-  const newLinearProjectTargetTeam = useMemo(
-    () => availableTeams.find((t) => t.id === newLinearProjectTeamId) ?? availableTeams[0] ?? null,
-    [availableTeams, newLinearProjectTeamId]
-  )
-  const newLinearProjectMembers = useTeamMembers(
-    newLinearProjectOpen ? (newLinearProjectTargetTeam?.id ?? null) : null,
-    settings,
-    newLinearProjectTargetTeam?.workspaceId
-  )
-  const newLinearProjectLabels = useTeamLabels(
-    newLinearProjectOpen ? (newLinearProjectTargetTeam?.id ?? null) : null,
-    settings,
-    newLinearProjectTargetTeam?.workspaceId
-  )
-  const setNewLinearProjectTeamId = (id: string | null): void => {
-    setNewLinearProjectTeamIdState(id)
-    setNewLinearProjectLeadId(null)
-    setNewLinearProjectMemberIds([])
-    setNewLinearProjectLabelIds([])
-  }
-  const discardNewLinearProjectDraft = useTaskCreationDraftRetention({
-    open: newLinearProjectOpen,
-    draft: {
-      name: newLinearProjectName,
-      description: newLinearProjectDescription,
-      content: newLinearProjectContent
-    },
-    writeDraft: writeNewLinearProjectDraft
-  })
+  const linearProjectDraft = useTaskPageLinearProjectDraftState({ settings, availableTeams })
+  const { newLinearProjectOpen } = linearProjectDraft
 
   // New Linear issue dialog state
   const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
@@ -163,6 +124,7 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
   }, [newLinearStates.data, newLinearIssueStateId])
   const [linearConnectOpen, setLinearConnectOpen] = useState(false)
   const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
+  const [businessmapConnectOpen, setBusinessmapConnectOpen] = useState(false)
   useContextualTour(
     'tasks',
     !dialogWorkItem &&
@@ -173,38 +135,11 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
       !newLinearIssueOpen &&
       !linearConnectOpen &&
       !jiraConnectOpen &&
+      !businessmapConnectOpen &&
       activeModal === 'none',
     'tasks_open'
   )
   const nextModel = model as typeof model & {
-    newLinearProjectOpen: typeof newLinearProjectOpen
-    setNewLinearProjectOpen: typeof setNewLinearProjectOpen
-    newLinearProjectName: typeof newLinearProjectName
-    setNewLinearProjectName: typeof setNewLinearProjectName
-    newLinearProjectDescription: typeof newLinearProjectDescription
-    setNewLinearProjectDescription: typeof setNewLinearProjectDescription
-    newLinearProjectContent: typeof newLinearProjectContent
-    setNewLinearProjectContent: typeof setNewLinearProjectContent
-    newLinearProjectTeamId: typeof newLinearProjectTeamId
-    setNewLinearProjectTeamId: typeof setNewLinearProjectTeamId
-    newLinearProjectLeadId: typeof newLinearProjectLeadId
-    setNewLinearProjectLeadId: typeof setNewLinearProjectLeadId
-    newLinearProjectMemberIds: typeof newLinearProjectMemberIds
-    setNewLinearProjectMemberIds: typeof setNewLinearProjectMemberIds
-    newLinearProjectLabelIds: typeof newLinearProjectLabelIds
-    setNewLinearProjectLabelIds: typeof setNewLinearProjectLabelIds
-    newLinearProjectPriority: typeof newLinearProjectPriority
-    setNewLinearProjectPriority: typeof setNewLinearProjectPriority
-    newLinearProjectStartDate: typeof newLinearProjectStartDate
-    setNewLinearProjectStartDate: typeof setNewLinearProjectStartDate
-    newLinearProjectTargetDate: typeof newLinearProjectTargetDate
-    setNewLinearProjectTargetDate: typeof setNewLinearProjectTargetDate
-    newLinearProjectSubmitting: typeof newLinearProjectSubmitting
-    setNewLinearProjectSubmitting: typeof setNewLinearProjectSubmitting
-    newLinearProjectTargetTeam: typeof newLinearProjectTargetTeam
-    newLinearProjectMembers: typeof newLinearProjectMembers
-    newLinearProjectLabels: typeof newLinearProjectLabels
-    discardNewLinearProjectDraft: typeof discardNewLinearProjectDraft
     newLinearIssueOpen: typeof newLinearIssueOpen
     setNewLinearIssueOpen: typeof setNewLinearIssueOpen
     newLinearIssueTitle: typeof newLinearIssueTitle
@@ -238,35 +173,10 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     setLinearConnectOpen: typeof setLinearConnectOpen
     jiraConnectOpen: typeof jiraConnectOpen
     setJiraConnectOpen: typeof setJiraConnectOpen
-  }
-  nextModel.newLinearProjectOpen = newLinearProjectOpen
-  nextModel.setNewLinearProjectOpen = setNewLinearProjectOpen
-  nextModel.newLinearProjectName = newLinearProjectName
-  nextModel.setNewLinearProjectName = setNewLinearProjectName
-  nextModel.newLinearProjectDescription = newLinearProjectDescription
-  nextModel.setNewLinearProjectDescription = setNewLinearProjectDescription
-  nextModel.newLinearProjectContent = newLinearProjectContent
-  nextModel.setNewLinearProjectContent = setNewLinearProjectContent
-  nextModel.newLinearProjectTeamId = newLinearProjectTeamId
-  nextModel.setNewLinearProjectTeamId = setNewLinearProjectTeamId
-  nextModel.newLinearProjectLeadId = newLinearProjectLeadId
-  nextModel.setNewLinearProjectLeadId = setNewLinearProjectLeadId
-  nextModel.newLinearProjectMemberIds = newLinearProjectMemberIds
-  nextModel.setNewLinearProjectMemberIds = setNewLinearProjectMemberIds
-  nextModel.newLinearProjectLabelIds = newLinearProjectLabelIds
-  nextModel.setNewLinearProjectLabelIds = setNewLinearProjectLabelIds
-  nextModel.newLinearProjectPriority = newLinearProjectPriority
-  nextModel.setNewLinearProjectPriority = setNewLinearProjectPriority
-  nextModel.newLinearProjectStartDate = newLinearProjectStartDate
-  nextModel.setNewLinearProjectStartDate = setNewLinearProjectStartDate
-  nextModel.newLinearProjectTargetDate = newLinearProjectTargetDate
-  nextModel.setNewLinearProjectTargetDate = setNewLinearProjectTargetDate
-  nextModel.newLinearProjectSubmitting = newLinearProjectSubmitting
-  nextModel.setNewLinearProjectSubmitting = setNewLinearProjectSubmitting
-  nextModel.newLinearProjectTargetTeam = newLinearProjectTargetTeam
-  nextModel.newLinearProjectMembers = newLinearProjectMembers
-  nextModel.newLinearProjectLabels = newLinearProjectLabels
-  nextModel.discardNewLinearProjectDraft = discardNewLinearProjectDraft
+    businessmapConnectOpen: typeof businessmapConnectOpen
+    setBusinessmapConnectOpen: typeof setBusinessmapConnectOpen
+  } & typeof linearProjectDraft
+  Object.assign(nextModel, linearProjectDraft)
   nextModel.newLinearIssueOpen = newLinearIssueOpen
   nextModel.setNewLinearIssueOpen = setNewLinearIssueOpen
   nextModel.newLinearIssueTitle = newLinearIssueTitle
@@ -298,7 +208,12 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
   nextModel.newLinearLabels = newLinearLabels
   nextModel.linearConnectOpen = linearConnectOpen
   nextModel.setLinearConnectOpen = setLinearConnectOpen
-  Object.assign(nextModel, { jiraConnectOpen, setJiraConnectOpen })
+  Object.assign(nextModel, {
+    jiraConnectOpen,
+    setJiraConnectOpen,
+    businessmapConnectOpen,
+    setBusinessmapConnectOpen
+  })
   return nextModel
 }
 export type TaskPageLinearCreationStateModel = ReturnType<typeof useTaskPageLinearCreationState>

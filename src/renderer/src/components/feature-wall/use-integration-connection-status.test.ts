@@ -38,6 +38,9 @@ function statusFacts(overrides: Partial<StatusFacts> = {}): StatusFacts {
     jiraStatus: { connected: false },
     jiraStatusChecked: true,
     jiraStatusContextKey: 'local#0',
+    businessmapStatus: { connected: false },
+    businessmapStatusChecked: true,
+    businessmapStatusContextKey: 'local#0',
     providerRuntimeContextKey: 'local#0',
     ...overrides
   }
@@ -178,6 +181,10 @@ describe('deriveIntegrationConnectionStatus', () => {
       {
         jiraStatus: { connected: true },
         jiraStatusChecked: false
+      },
+      {
+        businessmapStatus: { connected: true },
+        businessmapStatusChecked: false
       }
     ]
 

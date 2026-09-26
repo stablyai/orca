@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildBusinessmapWorkspaceSource,
   buildJiraWorkspaceSource,
   buildLinearWorkspaceSource,
   buildWorkspaceSourceSelection,
@@ -50,6 +51,31 @@ describe('workspace source policy', () => {
     })
   })
 
+  it('builds a Businessmap source keyed by card id', () => {
+    expect(
+      buildBusinessmapWorkspaceSource({
+        id: 42,
+        title: 'Fix card details',
+        url: 'https://acme.businessmap.io/cards/42'
+      })
+    ).toEqual({
+      provider: 'businessmap',
+      type: 'issue',
+      number: 42,
+      title: 'Fix card details',
+      url: 'https://acme.businessmap.io/cards/42'
+    })
+    expect(
+      buildWorkspaceSourceSelection({
+        linkedWorkItem: buildBusinessmapWorkspaceSource({
+          id: 42,
+          title: 'Fix card details',
+          url: 'https://acme.businessmap.io/cards/42'
+        })
+      })
+    ).toMatchObject({ kind: 'businessmap', label: 'Fix card details' })
+  })
+
   it('preserves global work-item sources across repo changes', () => {
     expect(shouldPreserveWorkspaceSourceOnRepoChange(linear)).toBe(true)
     expect(
@@ -59,6 +85,15 @@ describe('workspace source policy', () => {
         number: 0,
         title: 'Workspace scoped',
         url: 'https://acme.atlassian.net/browse/FUS-1'
+      })
+    ).toBe(true)
+    expect(
+      shouldPreserveWorkspaceSourceOnRepoChange({
+        provider: 'businessmap',
+        type: 'issue',
+        number: 42,
+        title: 'Global card',
+        url: 'https://acme.businessmap.io/cards/42'
       })
     ).toBe(true)
     // Why: Jira items picked from smart search may arrive without an explicit

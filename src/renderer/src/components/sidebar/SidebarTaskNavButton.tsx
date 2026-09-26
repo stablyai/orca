@@ -1,5 +1,6 @@
 import React from 'react'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
+import { BusinessmapIcon } from '@/components/icons/BusinessmapIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import {
@@ -226,6 +227,17 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'jira' })}
               >
                 <JiraIcon className="size-3.5" />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('businessmap') ? (
+              <TaskProviderShortcut
+                label={translate(
+                  'auto.components.sidebar.SidebarNav.businessmapTasks',
+                  'Open Businessmap tasks'
+                )}
+                onOpen={() => openTaskPage({ taskSource: 'businessmap' })}
+              >
+                <BusinessmapIcon className="size-3.5" />
               </TaskProviderShortcut>
             ) : null}
           </span>

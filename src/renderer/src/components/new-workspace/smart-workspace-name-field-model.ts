@@ -4,6 +4,7 @@ import type { parseGitHubIssueOrPRLink, RepoSlug } from '@/lib/github-links'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { BusinessmapCard } from '../../../../shared/businessmap-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
@@ -23,11 +24,13 @@ export type SmartWorkspaceNameFieldProps = {
   onBranchSelect: (refName: string, localBranchName: string) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
   onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onBusinessmapCardSelect?: (card: BusinessmapCard, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
   githubSourceContext?: TaskSourceContext | null
   jiraSourceContext?: TaskSourceContext | null
+  businessmapSourceContext?: TaskSourceContext | null
   inputRef?: React.RefObject<HTMLInputElement | null>
   onPlainEnter?: () => void
   disabled?: boolean
@@ -44,6 +47,7 @@ export type SmartWorkspaceNameFieldProps = {
 export type NormalizedSmartWorkspaceNameFieldProps = Omit<
   SmartWorkspaceNameFieldProps,
   | 'jiraSourceContext'
+  | 'businessmapSourceContext'
   | 'disabled'
   | 'textOnly'
   | 'branchesEnabled'
@@ -53,6 +57,7 @@ export type NormalizedSmartWorkspaceNameFieldProps = Omit<
   | 'crossRepoSwitchTarget'
 > & {
   jiraSourceContext: TaskSourceContext | null
+  businessmapSourceContext: TaskSourceContext | null
   disabled: boolean
   textOnly: boolean
   branchesEnabled: boolean
@@ -63,7 +68,15 @@ export type NormalizedSmartWorkspaceNameFieldProps = Omit<
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
+  kind:
+    | 'github-pr'
+    | 'github-issue'
+    | 'gitlab-mr'
+    | 'gitlab-issue'
+    | 'branch'
+    | 'linear'
+    | 'jira'
+    | 'businessmap'
   label: string
   url?: string
 }
@@ -87,7 +100,6 @@ export type RepoSlugTarget = {
   repo: RepoOption
   sourceContext: TaskSourceContext | null | undefined
 }
-
 export type SmartWorkspaceNameFieldSearchState = {
   debouncedQuery: string
   githubItems: GitHubWorkItem[]
@@ -96,8 +108,8 @@ export type SmartWorkspaceNameFieldSearchState = {
   branchResultsSource: { repoId: string; query: string } | null
   linearIssues: LinearIssue[]
   jiraIssues: JiraIssue[]
+  businessmapCards: BusinessmapCard[]
 }
-
 export type CachedRepoSlug = RepoSlug
 
 export const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []

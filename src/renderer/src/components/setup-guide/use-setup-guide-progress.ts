@@ -1,5 +1,5 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: setup-guide readiness is driven by bounded IPC probes and browser focus events; the state cannot be derived synchronously from render inputs. */
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
@@ -23,8 +23,8 @@ import {
 } from '../feature-wall/feature-wall-setup-progress'
 import { deriveIntegrationConnectionStatus } from '../feature-wall/use-integration-connection-status'
 import { useSetupGuideBrowserMilestoneProgress } from './setup-guide-browser-milestone-progress'
+import { useSetupGuideComputerUsePermissions } from './use-setup-guide-computer-use-permissions'
 import {
-  getComputerUsePermissionSetupState,
   getCurrentSetupScriptProbeState,
   getSetupGuideProgressReady,
   getSetupScriptProbeSignature
@@ -60,6 +60,10 @@ export function useSetupGuideProgress(
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const businessmapStatus = useAppStore((s) => s.businessmapStatus)
+  const businessmapStatusChecked = useAppStore((s) => s.businessmapStatusChecked)
+  const businessmapStatusContextKey = useAppStore((s) => s.businessmapStatusContextKey)
+  const checkBusinessmapConnection = useAppStore((s) => s.checkBusinessmapConnection)
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const expectedPreflightContextKey = useAppStore((s) =>
@@ -70,10 +74,6 @@ export function useSetupGuideProgress(
     readSetupScriptProbeCache,
     readSetupScriptProbeCache
   )
-  const [computerUsePermissionsReady, setComputerUsePermissionsReady] = useState(false)
-  const [computerUsePermissionStatusChecked, setComputerUsePermissionStatusChecked] =
-    useState(false)
-  const [computerUseUnavailable, setComputerUseUnavailable] = useState(false)
   const { installed: detectedBrowserUseSkillInstalled, loading: detectedBrowserUseSkillLoading } =
     useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
       enabled: shouldRefreshCoreState,
@@ -94,9 +94,14 @@ export function useSetupGuideProgress(
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+  const computerUsePermissions = useSetupGuideComputerUsePermissions(
+    shouldRefreshCoreState,
+    computerUseSkillInstalled
+  )
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const businessmapStatusCurrent = businessmapStatusContextKey === providerRuntimeContextKey
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
 
   useEffect(() => {
@@ -112,7 +117,14 @@ export function useSetupGuideProgress(
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!businessmapStatusCurrent || !businessmapStatusChecked) {
+      void checkBusinessmapConnection()
+    }
   }, [
+    businessmapStatusChecked,
+    businessmapStatusContextKey,
+    businessmapStatusCurrent,
+    checkBusinessmapConnection,
     checkJiraConnection,
     checkLinearConnection,
     jiraStatusCurrent,
@@ -189,52 +201,6 @@ export function useSetupGuideProgress(
     }
   }, [orderedGitRepos, settings, setupScriptProbeSignature, shouldRefreshCoreState])
 
-  const readComputerUsePermissions = useCallback(async (isStale: () => boolean): Promise<void> => {
-    const status = await window.api.computerUsePermissions.getStatus().catch(() => null)
-    if (isStale()) {
-      return
-    }
-    const permissionState = getComputerUsePermissionSetupState(status)
-    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- Why: async permission checks update setup progress after external OS state changes.
-    setComputerUsePermissionStatusChecked(true)
-    setComputerUsePermissionsReady(permissionState.ready)
-    setComputerUseUnavailable(permissionState.unavailable)
-  }, [])
-
-  useEffect(() => {
-    if (!shouldRefreshCoreState || !computerUseSkillInstalled) {
-      // Why: unavailable setup-guide steps must clear stale permission state before
-      // readiness is derived for the visible checklist.
-      setComputerUsePermissionStatusChecked(false)
-      setComputerUsePermissionsReady(false)
-      setComputerUseUnavailable(false)
-      return
-    }
-    let stale = false
-    const refreshComputerUsePermissions = (): void => {
-      void readComputerUsePermissions(() => stale)
-    }
-    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- Why: refresh the setup checklist when the permission step becomes active.
-    refreshComputerUsePermissions()
-    const handleFocus = (): void => {
-      void refreshComputerUsePermissions()
-    }
-    const handleVisibilityChange = (): void => {
-      if (document.visibilityState === 'visible') {
-        void refreshComputerUsePermissions()
-      }
-    }
-    // Why: users grant Computer Use permissions outside the setup guide. Refresh
-    // on return so the checklist updates without requiring a remount.
-    window.addEventListener('focus', handleFocus)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => {
-      stale = true
-      window.removeEventListener('focus', handleFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [computerUseSkillInstalled, readComputerUsePermissions, shouldRefreshCoreState])
-
   const taskSourceStatus = deriveIntegrationConnectionStatus({
     preflightStatus,
     preflightStatusChecked,
@@ -248,6 +214,9 @@ export function useSetupGuideProgress(
     jiraStatus,
     jiraStatusChecked,
     jiraStatusContextKey,
+    businessmapStatus,
+    businessmapStatusChecked,
+    businessmapStatusContextKey,
     providerRuntimeContextKey
   })
   const hasConnectedTaskSource = taskSourceStatus.trackerConnected
@@ -256,12 +225,6 @@ export function useSetupGuideProgress(
     setupScriptProbe,
     setupScriptProbeSignature
   )
-  const currentComputerUsePermissionStatusChecked =
-    shouldRefreshCoreState && computerUseSkillInstalled ? computerUsePermissionStatusChecked : false
-  const currentComputerUsePermissionsReady =
-    shouldRefreshCoreState && computerUseSkillInstalled ? computerUsePermissionsReady : false
-  const currentComputerUseUnavailable =
-    shouldRefreshCoreState && computerUseSkillInstalled ? computerUseUnavailable : false
   const ready = getSetupGuideProgressReady({
     refreshEnabled: shouldRefreshCoreState,
     settingsLoaded: settings !== null,
@@ -275,7 +238,7 @@ export function useSetupGuideProgress(
     orchestrationSkillDiscoveryLoading: detectedOrchestrationSkillLoading,
     setupScriptProbeReady: currentSetupScriptProbe.ready,
     computerUseSkillInstalled,
-    computerUsePermissionStatusChecked: currentComputerUsePermissionStatusChecked
+    computerUsePermissionStatusChecked: computerUsePermissions.statusChecked
   })
 
   const rawProgress = useMemo(
@@ -287,8 +250,8 @@ export function useSetupGuideProgress(
         hasConnectedTaskSource,
         browserUseSkillInstalled: browserUseSkillInstalled || detectedBrowserUseSkillInstalled,
         computerUseSkillInstalled,
-        computerUsePermissionsReady: currentComputerUsePermissionsReady,
-        computerUseUnavailable: currentComputerUseUnavailable,
+        computerUsePermissionsReady: computerUsePermissions.ready,
+        computerUseUnavailable: computerUsePermissions.unavailable,
         orchestrationSkillInstalled:
           orchestrationSkillInstalled || detectedOrchestrationSkillInstalled,
         gitRepoCount,
@@ -298,8 +261,8 @@ export function useSetupGuideProgress(
     [
       browserUseSkillInstalled,
       ready,
-      currentComputerUseUnavailable,
-      currentComputerUsePermissionsReady,
+      computerUsePermissions.unavailable,
+      computerUsePermissions.ready,
       computerUseSkillInstalled,
       detectedBrowserUseSkillInstalled,
       detectedOrchestrationSkillInstalled,

@@ -1,6 +1,6 @@
-import type { TaskPageJiraIssueCreationModel } from './use-task-page-jira-issue-creation'
+import type { TaskPageBusinessmapCardCreationModel } from './use-task-page-businessmap-card-creation'
 import { useEffect } from 'react'
-export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) {
+export function useTaskPageGlobalEffects(model: TaskPageBusinessmapCardCreationModel) {
   const {
     closeTaskPage,
     activeModal,
@@ -12,10 +12,13 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     expectedPreflightContextKey,
     jiraStatusContextKey,
     checkJiraConnection,
+    businessmapStatusContextKey,
+    checkBusinessmapConnection,
     providerRuntimeContextKey,
     preflightStatusCurrent,
     linearStatusReady,
     jiraStatusReady,
+    businessmapStatusReady,
     tasksLoading,
     tasksRefreshing,
     tasksFiltering,
@@ -23,8 +26,10 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     newIssueOpen,
     selectedLinearIssue,
     selectedJiraIssue,
+    selectedBusinessmapCard,
     newLinearIssueOpen,
-    newJiraIssueOpen
+    newJiraIssueOpen,
+    newBusinessmapCardOpen
   } = model
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
   useEffect(() => {
@@ -32,10 +37,12 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     if (
       dialogWorkItem ||
       selectedJiraIssue ||
+      selectedBusinessmapCard ||
       selectedLinearIssue ||
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
+      newBusinessmapCardOpen ||
       activeModal !== 'none'
     ) {
       return
@@ -86,8 +93,10 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
+    newBusinessmapCardOpen,
     selectedLinearIssue,
-    selectedJiraIssue
+    selectedJiraIssue,
+    selectedBusinessmapCard
   ])
   useEffect(() => {
     if (!preflightStatusCurrent || !preflightStatusChecked) {
@@ -99,9 +108,15 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraIssueCreationModel) 
     if (!jiraStatusReady) {
       void checkJiraConnection()
     }
+    if (!businessmapStatusReady) {
+      void checkBusinessmapConnection()
+    }
   }, [
+    checkBusinessmapConnection,
     checkJiraConnection,
     checkLinearConnection,
+    businessmapStatusContextKey,
+    businessmapStatusReady,
     expectedPreflightContextKey,
     jiraStatusContextKey,
     jiraStatusReady,

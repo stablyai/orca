@@ -47,7 +47,7 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   useInstalledAgentSkillNames: () => mocks.skill
 }))
 
-const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira', 'businessmap']
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -85,6 +85,9 @@ beforeEach(() => {
     jiraStatus: { connected: true },
     jiraStatusChecked: true,
     jiraStatusContextKey: 'local',
+    businessmapStatus: { connected: true },
+    businessmapStatusChecked: true,
+    businessmapStatusContextKey: 'local',
     linearStatusChecked: true,
     linearStatusContextKey: 'local',
     linearConnected: true
@@ -120,6 +123,7 @@ describe('useTaskSourceProviderReadiness', () => {
     expect(latest?.github).toMatchObject({ connected: true, checking: false })
     expect(latest?.gitlab).toMatchObject({ connected: true, checking: false })
     expect(latest?.jira).toMatchObject({ connected: true, checking: false })
+    expect(latest?.businessmap).toMatchObject({ connected: true, checking: false })
     expect(latest?.linear).toMatchObject({
       connected: true,
       checking: false,
@@ -164,6 +168,7 @@ describe('useTaskSourceProviderReadiness', () => {
     expect(latest?.linear.visible).toBe(true)
     expect(latest?.gitlab.visible).toBe(false)
     expect(latest?.jira.visible).toBe(false)
+    expect(latest?.businessmap.visible).toBe(false)
   })
 
   it('recomputes visibility when the provider list changes', async () => {

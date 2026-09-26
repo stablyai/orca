@@ -1,5 +1,6 @@
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { BusinessmapCard } from '../../../../shared/businessmap-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { JiraIssue } from '../../../../shared/jira-types'
@@ -55,6 +56,10 @@ export type ComposerSourceModel = {
   handleSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   handleSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   handleSmartJiraIssueSelect: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  handleSmartBusinessmapCardSelect: (
+    card: BusinessmapCard,
+    sourceContext: TaskSourceContext
+  ) => void
   handleSmartLinearIssueSelect: (issue: LinearIssue) => void
   handleSparseSelectPreset: (preset: SparsePreset | null) => void
   insertComposerFolderPaths: (folderPaths: string[]) => void
