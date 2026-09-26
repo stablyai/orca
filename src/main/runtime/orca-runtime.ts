@@ -46,8 +46,13 @@ export type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fet
 export {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason,
+  tailGainedNewerUsageLimitStall,
   type TerminalTailWaitState
 } from './terminal-wait-tail-state'
+export type {
+  UsageLimitStallEvent,
+  UsageLimitStallSnapshot
+} from './runtime-usage-limit-stall-contracts'
 export { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
 export { appendNormalizedToMultilineTailBufferUnwindowed } from './terminal-tail-redraw-buffer'
 export { buildPreview } from './terminal-tail-state'

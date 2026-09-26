@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
@@ -26,6 +27,8 @@ export const PARENT_PICKER_EXIT_ANIMATION_MS = 200
 // teardown set() churn. Module-level (one allocation, never recreated per render) so
 // the reference is constant and Zustand's Object.is equality short-circuits.
 export const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
+export const EMPTY_RATE_LIMIT_WATCHER_TAB_IDS: string[] = []
+export const EMPTY_WORKSPACE_TABS: TerminalTab[] = []
 export const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 export const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 export const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeId'] = {}

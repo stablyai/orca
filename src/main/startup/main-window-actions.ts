@@ -10,6 +10,9 @@ import {
 } from '../tray/system-tray'
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-existing-window'
+import { getTrustedUIRendererWindow } from '../ipc/ui'
+import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { mainProcessState as state } from './main-process-state'
 import { loadMainWindow } from '../window/createMainWindow'
 import {
@@ -123,6 +126,29 @@ export function createSystemTrayDeferred(
       onCreated?.()
     }
   }
+}
+
+/** Reveals Orca on a worktree, for notifications main raises itself (auto-resume, scheduled messages). */
+export function focusWorktreeFromMain(worktreeId: string): void {
+  if (!worktreeId.includes('::')) {
+    return
+  }
+  // Why the trusted lookup rather than getAllWindows()[0]: a devtools or child
+  // window can be first, and this sends an IPC the renderer acts on. The reveal
+  // sequence is the shared one the native-notification click handler uses
+  // (src/main/ipc/native-notification-delivery.ts).
+  const win = getTrustedUIRendererWindow()
+  if (!win || win.isDestroyed()) {
+    return
+  }
+  if (process.platform === 'darwin' && !isBackgroundLaunch()) {
+    app.focus({ steal: true })
+  }
+  safelyRevealWindow(win)
+  win.webContents.send('ui:activateWorktree', {
+    repoId: getRepoIdFromWorktreeId(worktreeId),
+    worktreeId
+  })
 }
 
 export function sendOpenFeatureTour(targetWindow?: BrowserWindow | null): void {

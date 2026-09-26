@@ -239,6 +239,25 @@
     "copy": "Copy",
     "selectAll": "Select All"
   },
+  "agentAutoResume": {
+    "notification": {
+      "resetTimeUnknown": "the reset time",
+      "detected": {
+        "title": "Agent rate-limited",
+        "bodyAt": "Orca will auto-resume it at {{when}}.",
+        "bodyMenuAt": "Orca will answer the rate-limit prompt at {{when}}, then wait out the limit.",
+        "bodyUnknownReset": "Orca will auto-resume it when the limit resets."
+      },
+      "deadPty": {
+        "title": "Rate-limited agent exited",
+        "body": "The agent process exited while rate-limited. Reopen its worktree to resume the session."
+      },
+      "failed": {
+        "title": "Auto-resume failed",
+        "body": "Orca couldn't resume the rate-limited agent. Resume it manually."
+      }
+    }
+  },
   "tray": {
     "openOrca": "Open Orca",
     "quit": "Quit",
@@ -572,6 +591,9 @@
       }
     },
     "lib": {
+      "worktreeStatus": {
+        "rateLimited": "Rate-limited"
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -1009,6 +1031,10 @@
       },
       "clipboardWriteFailure": {
         "tooLarge": "The text is too large to copy."
+      },
+      "auto-resume": {
+        "rate-limited-resumes": "Rate-limited · resumes {{time}}",
+        "rate-limited-waiting": "Rate-limited · waiting for reset"
       }
     },
     "hooks": {
@@ -5741,7 +5767,9 @@
           "deleteWorktree": "Delete Worktree",
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
-          "deleteWithDescendants": "Delete with Descendants…"
+          "deleteWithDescendants": "Delete with Descendants…",
+          "rateLimitWatcher": "Rate limit watcher",
+          "rateLimitWatcherDescription": "Wait for the provider usage limit to reset and resume this workspace's agent automatically."
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -17354,6 +17382,16 @@
             "hostOnly": "Cursor sign-in details are only readable on the computer running Orca."
           }
         }
+      },
+      "status-bar": {
+        "auto-resume": {
+          "agent": "agent",
+          "agents": "agents",
+          "label": "{{n}} paused",
+          "resumes": "resumes {{time}}",
+          "tooltip": "{{n}} {{noun}} paused · {{detail}}",
+          "waiting": "waiting for reset"
+        }
       }
     },
     "i18n": {
@@ -17810,7 +17848,8 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Switch to terminal view",
           "switchToChatView": "Switch to chat view",
-          "closeTabsToLeft": "Close Tabs To The Left"
+          "closeTabsToLeft": "Close Tabs To The Left",
+          "rateLimitWatcher": "Rate limit watcher"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",

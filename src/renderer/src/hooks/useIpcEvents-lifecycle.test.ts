@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { createHarnessStoreState } from './ipc-events-test-harness'
 const EXPECTED_DIRECT_CALLBACK_METHODS = [
+  'agentAutoResume.onUpdate',
   'agentStatus.onClear',
   'agentStatus.onLegacyWorkerTerminalRecovery',
   'agentStatus.onMigrationUnsupported',
@@ -187,6 +188,7 @@ const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
   'ui.onSwitchTerminalTab',
   'rateLimits.onUpdate',
   'workspaceSpace.onProgress',
+  'agentAutoResume.onUpdate',
   'ssh.onCredentialRequest',
   'ssh.onCredentialResolved',
   'ssh.onPortForwardsChanged',

@@ -11,6 +11,7 @@ import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 import type { TerminalTailWaitState } from './terminal-wait-tail-state'
+import type { PtyUsageLimitStall } from './runtime-usage-limit-stall-contracts'
 import type { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
@@ -87,6 +88,10 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   title: string | null
   titleUpdatedAt: number | null
   lastOutputAt: number | null
+  // Why: the live usage-limit stall this PTY is currently in, stamped when a
+  // *newer* banner/menu appears in the tail. Feeds AgentAutoResumeService via
+  // the usage-limit-stall event; cleared when the agent goes back to working.
+  usageLimitStall: PtyUsageLimitStall | null
 }
 
 export type RuntimePtyTabCloseAuthority = {

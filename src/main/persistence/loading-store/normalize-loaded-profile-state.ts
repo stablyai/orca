@@ -3,6 +3,7 @@ import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
+import { normalizeRateLimitWatcherTabs } from '../../../shared/rate-limit-watcher-types'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
 import {
   normalizeSshRemotePtyLease,
@@ -104,6 +105,10 @@ export function normalizeLoadedProfileState(
       parsed.migrationUnsupportedPtyEntries
     ),
     legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
+    // Conditional so a file that never armed the watcher does not gain the key.
+    ...(parsed.rateLimitWatcherTabs === undefined
+      ? {}
+      : { rateLimitWatcherTabs: normalizeRateLimitWatcherTabs(parsed.rateLimitWatcherTabs) }),
     automations: Array.isArray(parsed.automations) ? parsed.automations : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
     onboarding: normalizedOnboarding

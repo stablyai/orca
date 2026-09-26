@@ -51,6 +51,8 @@ import { createFeedbackDraftSlice } from './feedback-draft'
 import { createTaskCreationDraftsSlice } from './task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-hosts'
+import { createAutoResumeSlice } from './auto-resume'
+import { createRateLimitWatcherSlice } from './rate-limit-watcher'
 import { translate } from '@/i18n/i18n'
 
 export const TEST_REPO = {
@@ -107,7 +109,9 @@ export function createTestStore() {
     ...createFeedbackDraftSlice(...a),
     ...createTaskCreationDraftsSlice(...a),
     ...createRemoteServerUpdatesSlice(...a),
-    ...createTerminalQuickCommandHostsSlice(...a)
+    ...createTerminalQuickCommandHostsSlice(...a),
+    ...createAutoResumeSlice(...a),
+    ...createRateLimitWatcherSlice(...a)
   }))
 }
 

@@ -9,9 +9,14 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
+import { selectHasRateLimitedForWorktree } from '@/store/slices/auto-resume'
 
 type WorktreeActivityStatusState = Pick<
   AppState,
+  // Why included here and not only in the single-worktree hook: both hooks feed
+  // resolveWorktreeStatus, and omitting it made the parent picker show a paused
+  // workspace as done while the sidebar card beside it said "Rate-limited".
+  | 'autoResumeEntries'
   | 'tabsByWorktree'
   | 'browserTabsByWorktree'
   | 'runtimePaneTitlesByTabId'
@@ -55,7 +60,8 @@ export function selectWorktreeActivityStatuses(
         hasLiveMonitoring,
         hasInterrupted,
         hasLiveDone,
-        hasRetainedDone
+        hasRetainedDone,
+        hasRateLimited: selectHasRateLimitedForWorktree(statusInputs, worktreeId)
       })
     )
   }

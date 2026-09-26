@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -19,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
+import { selectIsRateLimitWatcherArmed } from '../../store/slices/rate-limit-watcher'
 import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
@@ -145,6 +147,12 @@ export function SortableTabContextMenu({
   canSplitTerminal = true
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
+  // Gated on `open` because one of these menus is mounted per tab; an ungated
+  // selector would resubscribe the whole tab strip on every store change.
+  const watcherArmed = useAppStore((state) =>
+    open ? selectIsRateLimitWatcherArmed(state, tab.id) : false
+  )
+  const toggleRateLimitWatcher = useAppStore((state) => state.toggleRateLimitWatcher)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
   const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
 
@@ -204,6 +212,18 @@ export function SortableTabContextMenu({
             ? translate('auto.components.tab.bar.SortableTabContextMenu.417722e9c2', 'Unpin Tab')
             : translate('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem
+          checked={watcherArmed}
+          onCheckedChange={(next) => {
+            void toggleRateLimitWatcher(tab.id, next)
+          }}
+        >
+          {translate(
+            'components.tab.bar.SortableTabContextMenu.rateLimitWatcher',
+            'Rate limit watcher'
+          )}
+        </DropdownMenuCheckboxItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
           <X className="size-3.5" />
