@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   createHourlyBuildVersion,
   formatHourlyReleaseName,
@@ -7,11 +6,6 @@ import {
   nextHourlyBuildNumber
 } from './hourly-build-version.mjs'
 import { compareAppVersions } from '../../src/shared/app-version'
-
-vi.mock('node:fs', async (importOriginal) => {
-  const original = await importOriginal()
-  return { ...original, readFileSync: vi.fn(original.readFileSync) }
-})
 
 describe('createHourlyBuildVersion', () => {
   it('stamps the version with a zero-padded UTC timestamp', () => {
@@ -134,8 +128,8 @@ describe('getHourlyBuildIdentity', () => {
   // hourly keeps the next build on 1.4.203 so electron-updater will still
   // install it.
   it('stays on the already-shipped hourly base after a buggy main release is unpublished', () => {
-    vi.mocked(readFileSync).mockReturnValueOnce(JSON.stringify({ version: '1.4.201' }))
     const identity = getHourlyBuildIdentity(new Date('2026-09-14T20:00:00Z'), {
+      packageVersion: '1.4.201',
       publishedVersions: [
         'v1.4.201',
         'v1.4.202',
