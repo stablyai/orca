@@ -131,8 +131,7 @@ export function MountedBottomDrawer({
   // Why: KeyboardAvoidingView and useAnimatedKeyboard are both unreliable
   // inside Modal (iOS ignores KAV; Android needs adjustNothing for
   // useAnimatedKeyboard). The keyboard seam's events work on both platforms
-  // and give the exact height; inside the shell's page none fire, because
-  // the shell shortens the WebView above the IME.
+  // and give the exact height; inside the shell's page they are the shell's.
   useEffect(() => {
     // Pinned-under sheets stay visible for size but must not ride the keyboard —
     // only the top interactive sheet owns inset/lift.
