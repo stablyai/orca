@@ -217,6 +217,8 @@ export const CrossMachineRecoveryListParams = z
   .object({ worktree: WorktreeSelector.optional() })
   .strict()
 
+export const CrossMachineRecoveryActivityParams = z.object({}).strict().optional().default({})
+
 const MsAge = z.number().finite().nonnegative()
 
 export const RecoveryPresentationWorkspaceRefSchema: z.ZodType<RecoveryPresentationWorkspaceRef> =
@@ -224,7 +226,7 @@ export const RecoveryPresentationWorkspaceRefSchema: z.ZodType<RecoveryPresentat
     z
       .object({ kind: z.literal('worktree'), worktreeId: PathId, instanceId: Id.optional() })
       .strict(),
-    z.object({ kind: z.literal('folder'), folderWorkspaceId: Id }).strict()
+    z.object({ kind: z.literal('folder'), folderWorkspaceId: PathId }).strict()
   ])
 
 // Why the byte caps are not here: an oversized publish must answer {ok:false, reason:'too-large'}

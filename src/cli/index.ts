@@ -39,7 +39,9 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context' ||
-    commandPath[0] === 'profile'
+    commandPath[0] === 'profile' ||
+    // Why: cross-machine recovery imports into and exports from this computer only.
+    commandPath[0] === 'recovery'
   )
 }
 

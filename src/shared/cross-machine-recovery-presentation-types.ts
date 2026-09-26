@@ -45,3 +45,13 @@ export type RecoveryPresentationPublishResult =
       reason: 'stale-revision' | 'too-large' | 'unavailable'
       acknowledgedRevision?: number
     }
+
+/** Newest human input and focus any client reported for one local workspace, on the host clock. */
+export type RecoveryWorkspaceActivity = {
+  worktreeId: string
+  path: string
+  lastHumanInputAt: number | null
+  lastHumanFocusAt: number | null
+}
+
+export type RecoveryActivityResult = { workspaces: RecoveryWorkspaceActivity[] }
