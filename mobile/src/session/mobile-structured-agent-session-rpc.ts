@@ -10,8 +10,11 @@ import type {
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import {
   agentSessionRefusalNotice,
+  agentSessionRpcErrorFailure,
   agentSessionWriteFailureNotice,
   agentSessionWriteKindForMethod,
+  agentSessionWriteNoticeEnglish,
+  agentSessionWriteNoticeParts,
   type AgentSessionWriteKind
 } from '../../../src/shared/agent-session-refusal-notice'
 import { structuredSessionOperationId } from './structured-session-operation-id'
@@ -51,13 +54,6 @@ class AgentSessionRpcResponseError extends Error {
     super(message)
   }
 }
-
-const PRE_HANDLER_RPC_REFUSALS = new Set([
-  'invalid_argument',
-  'method_not_found',
-  'method_not_supported',
-  'unauthorized'
-])
 
 export async function callAgentSession<TResult>(
   client: RpcClient,
@@ -181,19 +177,14 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
           message: agentSessionRefusalNotice(result.refusal, phoneWriteKind(fingerprintMethod))
         }
   } catch (error) {
-    if (error instanceof AgentSessionRpcResponseError && PRE_HANDLER_RPC_REFUSALS.has(error.code)) {
+    const answered =
+      error instanceof AgentSessionRpcResponseError ? agentSessionRpcErrorFailure(error.code) : null
+    if (answered && answered.kind !== 'unconfirmed') {
       // The host turned the request away before running it; its text is written for a log.
       return {
         status: 'failed',
-        message: agentSessionRefusalNotice(
-          {
-            code:
-              error.code === 'method_not_found' || error.code === 'method_not_supported'
-                ? 'structured_agent_session_unsupported'
-                : 'agent_session_operation_invalid',
-            message: ''
-          },
-          phoneWriteKind(fingerprintMethod)
+        message: agentSessionWriteNoticeEnglish(
+          agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod))
         )
       }
     }

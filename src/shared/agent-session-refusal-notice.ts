@@ -45,17 +45,31 @@ export function agentSessionWriteKindForMethod(fingerprintMethod: string): Agent
   return 'command'
 }
 
-/** Why a write did not happen. */
+/** Why a write did not happen, or that nothing proves it did not. */
 export type AgentSessionWriteFailure =
   | { kind: 'refused'; code: AgentSessionWireRefusalCode }
-  /** The request failed without a refusal (a transport, compatibility or host error), so nothing
-   *  is known about why. */
+  /** The request failed without a refusal before the host ran it, so nothing is known about why. */
   | { kind: 'failed' }
+  /** The request failed where the host may already have run it (a timeout, a lost connection, an
+   *  error inside the method). */
+  | { kind: 'unconfirmed' }
 
 export function agentSessionRefusalFailure(
   refusal: Pick<AgentSessionWireRefusal, 'code'>
 ): AgentSessionWriteFailure {
   return { kind: 'refused', code: refusal.code }
+}
+
+/** A request that threw, from the RPC error code the host answered with (undefined when none came
+ *  back). Only a host that turned it away before running the method proves the write did not
+ *  happen. */
+export function agentSessionRpcErrorFailure(code: string | undefined): AgentSessionWriteFailure {
+  if (code === 'method_not_found' || code === 'method_not_supported') {
+    return { kind: 'refused', code: 'structured_agent_session_unsupported' }
+  }
+  return code === 'invalid_argument' || code === 'unauthorized'
+    ? { kind: 'refused', code: 'agent_session_operation_invalid' }
+    : { kind: 'unconfirmed' }
 }
 
 /** A saved failure, or undefined when it is not one this build wrote. */
@@ -122,6 +136,9 @@ export function agentSessionWriteNoticeParts(
   const notDone = NOT_DONE[write]
   if (failure.kind === 'failed') {
     return agentSessionWriteNotDoneParts(write)
+  }
+  if (failure.kind === 'unconfirmed') {
+    return ['outcomeUnknown']
   }
   switch (failure.code) {
     // The cause is in the chat's own status row. Some restarts can be retried and some need a new

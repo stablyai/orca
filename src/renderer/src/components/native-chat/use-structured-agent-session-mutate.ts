@@ -12,11 +12,13 @@ import * as conversationCommands from './structured-conversation-command-send'
 import type { AgentSessionMutationResult } from '../../../../shared/agent-session-wire'
 import {
   agentSessionRefusalFailure,
+  agentSessionRpcErrorFailure,
   agentSessionWriteKindForMethod as writeKind
 } from '../../../../shared/agent-session-refusal-notice'
 import { agentSessionRefusalOperationState } from '../../../../shared/agent-session-refusal-retry'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { structuredSessionOperationId } from './use-structured-agent-session-outbox'
 import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
@@ -91,11 +93,16 @@ export function useStructuredAgentSessionMutate(args: {
           },
           ...fields
         })
-      } catch {
+      } catch (error) {
         return enabledRef.current && stateRef.current.fence === targetFence
           ? {
               kind: 'not-done',
-              notice: agentSessionWriteFailureText({ kind: 'failed' }, writeKind(fingerprintMethod))
+              notice: agentSessionWriteFailureText(
+                agentSessionRpcErrorFailure(
+                  error instanceof RuntimeRpcCallError ? error.code : undefined
+                ),
+                writeKind(fingerprintMethod)
+              )
             }
           : { kind: 'dropped' }
       }

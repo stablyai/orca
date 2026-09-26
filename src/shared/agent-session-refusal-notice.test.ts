@@ -5,6 +5,7 @@ import {
 } from './agent-session-wire-refusals'
 import {
   agentSessionRefusalNotice,
+  agentSessionRpcErrorFailure,
   agentSessionWriteFailureNotice,
   agentSessionWriteNoticeEnglish,
   agentSessionWriteNoticeParts,
@@ -31,7 +32,8 @@ const WRITES: AgentSessionWriteKind[] = [
 const HOST_TEXT = 'Expected runtime fence 1; the session is at 3.'
 const FAILURES: AgentSessionWriteFailure[] = [
   ...AGENT_SESSION_WIRE_REFUSAL_CODES.map((code) => ({ kind: 'refused' as const, code })),
-  { kind: 'failed' }
+  { kind: 'failed' },
+  { kind: 'unconfirmed' }
 ]
 
 // A cause is named only where every host emitter of the code means it; any other code says only
@@ -136,6 +138,31 @@ describe('agentSessionRefusalNotice', () => {
       'Your message was not sent. Send it again.'
     )
     expect(agentSessionWriteFailureNotice('stop')).toBe("The agent wasn't stopped.")
+  })
+
+  // A request that may have run must not say it did not happen.
+  it.each(['runtime_timeout', 'runtime_error', undefined])(
+    'claims nothing about a request that threw with %s',
+    (code) => {
+      for (const write of WRITES) {
+        expect(
+          agentSessionWriteNoticeEnglish(
+            agentSessionWriteNoticeParts(agentSessionRpcErrorFailure(code), write)
+          )
+        ).toBe("Orca couldn't confirm what happened. Check the chat.")
+      }
+    }
+  )
+
+  it('says what did not happen when the host turned the request away before running it', () => {
+    expect(agentSessionRpcErrorFailure('invalid_argument')).toEqual({
+      kind: 'refused',
+      code: 'agent_session_operation_invalid'
+    })
+    expect(agentSessionRpcErrorFailure('method_not_found')).toEqual({
+      kind: 'refused',
+      code: 'structured_agent_session_unsupported'
+    })
   })
 
   it('says an agent could not restart without promising a retry will work', () => {

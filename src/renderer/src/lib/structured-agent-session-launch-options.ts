@@ -9,6 +9,7 @@ import {
   structuredAgentSessionPayloadFingerprint
 } from '../../../shared/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   StructuredAgentSessionLaunchCancelledError,
@@ -22,6 +23,7 @@ import {
 } from './structured-agent-session-launch-registry'
 import {
   agentSessionRefusalFailure,
+  agentSessionRpcErrorFailure,
   type AgentSessionWriteFailure
 } from '../../../shared/agent-session-refusal-notice'
 
@@ -105,8 +107,13 @@ async function setLaunchOption(
     return result.ok
       ? { kind: 'accepted', options: result.value.options ?? { [key]: value } }
       : { kind: 'refused', failure: agentSessionRefusalFailure(result.refusal) }
-  } catch {
-    return { kind: 'refused', failure: { kind: 'failed' } }
+  } catch (error) {
+    return {
+      kind: 'refused',
+      failure: agentSessionRpcErrorFailure(
+        error instanceof RuntimeRpcCallError ? error.code : undefined
+      )
+    }
   }
 }
 

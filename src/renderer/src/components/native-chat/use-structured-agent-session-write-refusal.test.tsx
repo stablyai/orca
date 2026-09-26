@@ -42,6 +42,7 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
 }))
 
 import { useStructuredAgentSession } from './use-structured-agent-session'
+import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 const OPTIONS = { models: [], current: {} }
@@ -78,6 +79,40 @@ describe('a chat write the host refused', () => {
 
     expect(mocks.toastError).toHaveBeenCalledWith("The agent wasn't stopped.")
     expect(result.current.error).toBeNull()
+  })
+
+  it('does not say a Stop failed when its request timed out after it may have run', async () => {
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.options'
+        ? Promise.resolve(OPTIONS)
+        : Promise.reject(
+            new RuntimeRpcCallError({
+              id: 'request-1',
+              ok: false,
+              error: {
+                code: 'runtime_timeout',
+                message: 'Timed out waiting for the remote Orca runtime to respond.'
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          )
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'claude',
+        isVisible: true
+      })
+    )
+
+    await act(async () => {
+      await expect(result.current.cancel('turn-1')).resolves.toBeNull()
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      "Orca couldn't confirm what happened. Check the chat."
+    )
   })
 
   it('answers a refused conversation command inline, where the command was typed', async () => {
