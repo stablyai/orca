@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Github, Gitlab } from 'lucide-react'
+import { Github, Gitlab, ListTodo } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
@@ -15,6 +15,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
+import { TaskSourceRedmineSetup } from './TaskSourceRedmineSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
   getStalledVisibleTaskProviders,
@@ -89,6 +90,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  redmine: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.redmineLabel', 'Redmine')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.redmineDescription',
+        'Connect a self-hosted Redmine and show its issues in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <ListTodo className={className} />
   }
 }
 
@@ -226,6 +239,14 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                     onToggleVisible={() => toggleProvider('jira')}
                     onConnected={() => void checkJiraConnection()}
                     onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
+                  />
+                ) : provider === 'redmine' ? (
+                  <TaskSourceRedmineSetup
+                    connected={readiness.connected}
+                    checking={readiness.checking}
+                    visible={visible}
+                    canHide={canHide}
+                    onToggleVisible={() => toggleProvider('redmine')}
                   />
                 ) : (
                   <CodeHostSetupSteps
