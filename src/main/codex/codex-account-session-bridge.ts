@@ -3,7 +3,17 @@ import { dirname, join, relative } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { listCodexSessionRolloutFilesIncrementally } from './codex-session-file-listing'
 import type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
+import {
+  createCodexAccountStateDb,
+  healCodexAccountSessionIndex
+} from './codex-account-session-index-heal'
+import { parseCodexRolloutThreadId } from './codex-session-index-heal-state'
 import { linkCodexSessionFile } from './codex-session-link'
+import {
+  countCodexSessionFilesUpTo,
+  findNewestCodexStateDbPath,
+  readCodexStateDbBackfillStatus
+} from './codex-state-db'
 
 /**
  * Bridges Codex history between Orca-managed Codex homes.
@@ -19,9 +29,62 @@ import { linkCodexSessionFile } from './codex-session-link'
 export type CodexAccountSessionBridgeSummary = {
   scannedFiles: number
   linkedFiles: number
+  /** Threads whose rollout is present in the target home via this bridge. */
+  bridgedThreadIds: Set<string>
 }
 
 const backgroundBridgeTasksByTargetHome = new Map<string, Promise<void>>()
+
+type BackgroundBridgeDependencies = {
+  createStateDb: typeof createCodexAccountStateDb
+  healIndex: typeof healCodexAccountSessionIndex
+}
+
+const defaultBackgroundBridgeDependencies: BackgroundBridgeDependencies = {
+  createStateDb: createCodexAccountStateDb,
+  healIndex: healCodexAccountSessionIndex
+}
+
+let backgroundBridgeDependencies = defaultBackgroundBridgeDependencies
+
+/**
+ * Why: Codex indexes every rollout present when it first creates a home's state
+ * DB, and the TUI gives up waiting after 30s. Linking history into a fresh home
+ * first turns its first launch into a minutes-long backfill (#20669), so history
+ * only enters a home Codex has already indexed; the heal indexes it afterwards.
+ */
+async function isReadyForBridgedHistory(
+  targetCodexHomePath: string,
+  sourceCodexHomePaths: readonly string[]
+): Promise<boolean> {
+  if (!findNewestCodexStateDbPath(targetCodexHomePath)) {
+    // Why: only an empty home indexes instantly; one holding its own history
+    // is left to the TUI, and the next launch bridges.
+    if (
+      hasSessionRollouts(targetCodexHomePath) ||
+      !sourceCodexHomePaths.some(hasSessionRollouts) ||
+      !(await backgroundBridgeDependencies.createStateDb(targetCodexHomePath))
+    ) {
+      return false
+    }
+  }
+  const status = readCodexStateDbBackfillStatus(targetCodexHomePath)
+  if (status.kind === 'unreadable') {
+    // Why: contention clears by the next launch; corruption would skip every launch, so surface it.
+    console.warn(
+      '[codex-account-session-bridge] Skipping history bridge; Codex state DB is unreadable:',
+      status.error
+    )
+    return false
+  }
+  // Why: `missing` means Codex ran and keeps no state DB here, so nothing can stall;
+  // `not-tracked` is a pre-backfill schema that Codex migrates to `pending`.
+  return status.kind === 'complete' || status.kind === 'missing'
+}
+
+function hasSessionRollouts(codexHomePath: string): boolean {
+  return countCodexSessionFilesUpTo(join(codexHomePath, 'sessions'), 1) > 0
+}
 
 /**
  * Starts one background bridge per target home, sharing in-flight work.
@@ -36,7 +99,18 @@ export function startCodexAccountSessionBridgeInBackground(args: {
   if (inFlight) {
     return inFlight
   }
-  const task = bridgeCodexSessionsIntoAccountHome(args)
+  const task = isReadyForBridgedHistory(args.targetCodexHomePath, args.sourceCodexHomePaths)
+    .then(async (ready) => {
+      // Why: skip rather than feed a running backfill; the next launch retries.
+      if (!ready) {
+        return
+      }
+      const summary = await bridgeCodexSessionsIntoAccountHome(args)
+      await backgroundBridgeDependencies.healIndex(
+        args.targetCodexHomePath,
+        summary.bridgedThreadIds
+      )
+    })
     .catch((error: unknown) => {
       console.warn('[codex-account-session-bridge] Background session bridge failed:', error)
     })
@@ -58,7 +132,11 @@ export async function bridgeCodexSessionsIntoAccountHome(args: {
   sourceCodexHomePaths: readonly string[]
   options?: CodexSessionBridgeIncrementalOptions
 }): Promise<CodexAccountSessionBridgeSummary> {
-  const summary: CodexAccountSessionBridgeSummary = { scannedFiles: 0, linkedFiles: 0 }
+  const summary: CodexAccountSessionBridgeSummary = {
+    scannedFiles: 0,
+    linkedFiles: 0,
+    bridgedThreadIds: new Set()
+  }
   const targetSessionsRoot = join(args.targetCodexHomePath, 'sessions')
   for (const sourceHomePath of dedupeSourceHomes(
     args.sourceCodexHomePaths,
@@ -73,8 +151,17 @@ export async function bridgeCodexSessionsIntoAccountHome(args: {
       args.options ?? {}
     )) {
       summary.scannedFiles += 1
-      if (bridgeRolloutIntoAccountHome(sourceSessionsRoot, targetSessionsRoot, sourceFilePath)) {
+      const result = bridgeRolloutIntoAccountHome(
+        sourceSessionsRoot,
+        targetSessionsRoot,
+        sourceFilePath
+      )
+      if (result === 'linked') {
         summary.linkedFiles += 1
+      }
+      const threadId = parseCodexRolloutThreadId(sourceFilePath)?.threadId
+      if (result !== 'failed' && threadId) {
+        summary.bridgedThreadIds.add(threadId)
       }
     }
   }
@@ -88,20 +175,20 @@ function bridgeRolloutIntoAccountHome(
   sourceSessionsRoot: string,
   targetSessionsRoot: string,
   sourceFilePath: string
-): boolean {
+): 'linked' | 'existing' | 'failed' {
   const targetFilePath = join(targetSessionsRoot, relative(sourceSessionsRoot, sourceFilePath))
   // Why: rollout names carry the session UUID, so an existing target path is the
   // same conversation already bridged (often the same inode) — never a conflict.
   if (existsSync(targetFilePath)) {
-    return false
+    return 'existing'
   }
   try {
     mkdirSync(dirname(targetFilePath), { recursive: true })
   } catch (error) {
     console.warn('[codex-account-session-bridge] Failed to create session directory:', error)
-    return false
+    return 'failed'
   }
-  return linkCodexSessionFile(sourceFilePath, targetFilePath)
+  return linkCodexSessionFile(sourceFilePath, targetFilePath) ? 'linked' : 'failed'
 }
 
 /**
@@ -127,5 +214,9 @@ function dedupeSourceHomes(
 export const _internals = {
   resetBackgroundBridgeTasks: (): void => {
     backgroundBridgeTasksByTargetHome.clear()
+    backgroundBridgeDependencies = defaultBackgroundBridgeDependencies
+  },
+  setBackgroundBridgeDependencies: (overrides: Partial<BackgroundBridgeDependencies>): void => {
+    backgroundBridgeDependencies = { ...defaultBackgroundBridgeDependencies, ...overrides }
   }
 }

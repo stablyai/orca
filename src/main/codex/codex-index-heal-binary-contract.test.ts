@@ -6,7 +6,7 @@ import { promisify } from 'node:util'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import { runCodexAppServerSession, type CodexAppServerRpc } from './codex-app-server-session'
-import { findNewestCodexStateDbPath } from './codex-state-db'
+import { findNewestCodexStateDbPath, readCodexStateDbBackfillStatus } from './codex-state-db'
 
 // Why this file exists: every other index-heal test drives a stub app-server and
 // asserts "healed" as "the `thread/read` call did not error". That pins Orca's half
@@ -83,6 +83,8 @@ describeCodexContract(
       mkdirSync(join(home, 'sessions'), { recursive: true })
       // An app-server session over an empty sessions tree is what stamps the backfill complete.
       await runAppServerSession(home, async () => undefined)
+      // Why: the account bridge links history only after this no-request session stamps it.
+      expect(readCodexStateDbBackfillStatus(home).kind).toBe('complete')
       expect(readThreadRows(home)).toEqual([])
       return home
     }

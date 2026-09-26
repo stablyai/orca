@@ -32,11 +32,11 @@ export type { CodexSessionIndexHealPaths } from './codex-session-index-heal-stat
 // Why: one server session per batch bounds child memory and keeps a wedged
 // server from stalling the whole pass; small in-session concurrency keeps the
 // disk/CPU cost background-grade instead of a thundering read storm.
-const HEAL_READS_PER_SERVER_SESSION = 50
-const HEAL_READ_CONCURRENCY = 2
-const HEAL_INTER_BATCH_DELAY_MS = 500
-const HEAL_BATCH_TIMEOUT_BASE_MS = 15_000
-const HEAL_BATCH_TIMEOUT_PER_READ_MS = 2_000
+export const HEAL_READS_PER_SERVER_SESSION = 50
+export const HEAL_READ_CONCURRENCY = 2
+export const HEAL_INTER_BATCH_DELAY_MS = 500
+export const HEAL_BATCH_TIMEOUT_BASE_MS = 15_000
+export const HEAL_BATCH_TIMEOUT_PER_READ_MS = 2_000
 
 export type CodexSessionIndexHealSummary = {
   outcome: 'completed' | 'stopped' | 'unsupported' | 'aborted' | 'up-to-date'
@@ -259,8 +259,8 @@ function resolveHealWorkLimit(value: number | undefined, maximum: number): numbe
   return Math.min(Math.floor(value), maximum)
 }
 
-function buildNativeHealInvocation(
-  systemCodexHomePath: string,
+export function buildNativeHealInvocation(
+  codexHomePath: string,
   timeoutMs: number
 ): CodexAppServerInvocation {
   const command = resolveCodexCommand()
@@ -272,7 +272,7 @@ function buildNativeHealInvocation(
     // Why: pin the real home explicitly — nested Orca launches can inherit a
     // managed CODEX_HOME from the daemon environment, which would index the
     // wrong sqlite DB.
-    env: { CODEX_HOME: systemCodexHomePath },
+    env: { CODEX_HOME: codexHomePath },
     timeoutMs
   }
 }

@@ -6,6 +6,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as NodeOs from 'node:os'
 import { readHookTrustEntries } from '../codex/config-toml-trust'
+import { writeCodexStateDbBackfillStatus } from '../codex/codex-state-db-test-fixture'
 
 const testState = { userData: '', home: '' }
 const previousEnv: Record<string, string | undefined> = {}
@@ -212,6 +213,8 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     const siblingRollout = join('2026', '07', '21', 'rollout-2026-07-21T10-00-00-bbbb.jsonl')
     writeRollout(systemHome(), systemRollout, '{"session":"real-home"}\n')
     writeRollout(accountOne.managedHomePath, siblingRollout, '{"session":"account-one"}\n')
+    // Why: history is linked only once Codex has indexed the new home (#20669).
+    writeCodexStateDbBackfillStatus(accountTwo.managedHomePath, 'complete')
     const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const bridge = await import('../codex/codex-account-session-bridge')
