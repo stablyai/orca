@@ -17,6 +17,16 @@ class BrowserGuestRouteTest {
     assertEquals(profile, BrowserGuestRoute.parse(route().put("proxyUrl", "http://127.0.0.1:9999").toString()).profile)
   }
 
+  @Test fun socksRoutePreservesProfileAndProtocol() {
+    val http = BrowserGuestRoute.parse(route().toString())
+    val socks = BrowserGuestRoute.parse(route().put("proxyUrl", "socks://127.0.0.1:9999").toString())
+    assertEquals(http.profile, socks.profile)
+    assertEquals("socks://127.0.0.1:9999", socks.proxy)
+    for (url in listOf("socks://localhost:1234", "socks://10.0.2.2:1234", "socks://127.0.0.1", "socks://u@127.0.0.1:1", "socks://127.0.0.1:1/path", "socks://127.0.0.1:1?x", "socks://127.0.0.1:1#x")) {
+      assertThrows(IllegalArgumentException::class.java) { BrowserGuestRoute.parse(route().put("proxyUrl", url).toString()) }
+    }
+  }
+
   @Test fun onlyExplicitLoopbackProxyIsAdmitted() {
     for (url in listOf("http://localhost:1234", "http://10.0.2.2:1234", "https://127.0.0.1:1234", "http://127.0.0.1", "http://u@127.0.0.1:1", "http://127.0.0.1:1/path")) {
       assertThrows(IllegalArgumentException::class.java) { BrowserGuestRoute.parse(route().put("proxyUrl", url).toString()) }

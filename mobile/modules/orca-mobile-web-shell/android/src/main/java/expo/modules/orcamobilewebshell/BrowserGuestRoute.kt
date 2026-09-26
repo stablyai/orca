@@ -17,11 +17,11 @@ internal data class BrowserGuestRoute(val profile: String, val proxy: String) {
         identity.put(value)
       }
       val proxy = URI(json.getString("proxyUrl"))
-      require(proxy.scheme == "http" && proxy.host == "127.0.0.1" && proxy.port in 1..65535 &&
+      require(proxy.scheme in listOf("http", "socks") && proxy.host == "127.0.0.1" && proxy.port in 1..65535 &&
         proxy.rawUserInfo == null && proxy.rawQuery == null && proxy.rawFragment == null &&
         (proxy.rawPath.isNullOrEmpty() || proxy.rawPath == "/")) { "fixture_loopback_proxy_required" }
       val digest = MessageDigest.getInstance("SHA-256").digest(identity.toString().toByteArray())
-      return BrowserGuestRoute("orca_browser_" + digest.joinToString("") { "%02x".format(it) }, "http://127.0.0.1:${proxy.port}")
+      return BrowserGuestRoute("orca_browser_" + digest.joinToString("") { "%02x".format(it) }, "${proxy.scheme}://127.0.0.1:${proxy.port}")
     }
 
     fun navigationUrl(value: String): String {
