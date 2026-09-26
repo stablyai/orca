@@ -33,6 +33,17 @@ on:
         description: Trace installer process checks in this disposable build
         type: boolean
         default: false
+      policy:
+        description: Execution policy inherited by harness child processes
+        type: choice
+        default: inherited
+        options:
+          - inherited
+          - Restricted
+      from_release:
+        description: Optional base release tag; blank uses this branch build
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -43,7 +54,7 @@ concurrency:
 
 jobs:
   survival:
-    name: survival (branch build over itself)
+    name: update ${{ inputs.from_release || 'branch' }} to branch (${{ inputs.expect || 'survival' }}, policy=${{ inputs.policy || 'inherited' }})
     runs-on: windows-2022
     timeout-minutes: 50
     env:
@@ -104,11 +115,7 @@ jobs:
           path: dist/orca-windows-setup.exe
           key: ${{ steps.cache-installer.outputs.cache-primary-key }}
 
-      # Why: install the branch build, open a terminal, update the SAME build
-      # over it, and assert the relocated daemon survives. Same build on both
-      # sides isolates the survival mechanism (NSIS kill sweep + userData daemon
-      # + adoption) from cross-version staleness policy. No --install-dir: a CI
-      # runner has no real Orca to protect.
+      # A released base also exercises its old uninstaller; default runs isolate this branch.
       - name: Run survival harness
         id: harness
         shell: pwsh
@@ -117,23 +124,30 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
           DEBUG: 'pw:browser'
           ORCA_E2E_NSIS_TRACE: ${{ github.workspace }}\artifacts\nsis-process-trace.log
+          ORCA_E2E_PROCESS_POLICY: ${{ inputs.policy || 'inherited' }}
+          FROM_RELEASE: ${{ inputs.from_release }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           $exe = "dist/orca-windows-setup.exe"
           if (-not (Test-Path $exe)) { throw "Installer not found at $exe" }
           $log = "artifacts/survival-output.log"
-          # Replay the x86 installer's probe without changing its process execution policy.
-          $probeExe = Join-Path $env:SystemRoot 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
-          & $probeExe -C 'if (Get-Command Get-CimInstance -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }'
-          $availabilityCode = $LASTEXITCODE
-          & $probeExe -C "if ((Get-ExecutionPolicy -Scope Process) -eq 'Restricted') { exit 1 } else { exit 0 }"
-          $policyCode = $LASTEXITCODE
-          "installer probe replay: availability=$availabilityCode policy=$policyCode inheritedPolicy=$env:PSExecutionPolicyPreference" | Tee-Object -FilePath $log
-          node tests/tools/win-update-e2e/run.mjs `
-            --from "$exe" `
-            --to "$exe" `
-            --expect "$env:EXPECT" `
-            --soak-seconds 60 2>&1 | Tee-Object -FilePath $log -Append
+          $harnessArgs = @('--to', $exe, '--expect', $env:EXPECT, '--soak-seconds', '60')
+          if ($env:FROM_RELEASE) {
+            $harnessArgs += @('--from-release', $env:FROM_RELEASE)
+          } else {
+            $harnessArgs += @('--from', $exe)
+          }
+          # Only the harness and its children inherit the test policy.
+          $launch = @'
+          if (process.env.ORCA_E2E_PROCESS_POLICY === 'Restricted') {
+            process.env.PSExecutionPolicyPreference = 'Restricted'
+          }
+          console.log('Harness child process policy: ' + (process.env.PSExecutionPolicyPreference || 'inherited'))
+          process.argv.splice(1, 0, 'tests/tools/win-update-e2e/run.mjs')
+          await import('./tests/tools/win-update-e2e/run.mjs')
+          '@
+          node --input-type=module -e $launch -- @harnessArgs 2>&1 | Tee-Object -FilePath $log
           exit $LASTEXITCODE
 
       - name: Upload survival output

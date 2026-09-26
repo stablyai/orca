@@ -11,7 +11,7 @@ Read this before changing the copy plan, the host exe name, the LOCALAPPDATA lay
 
 ## What the relocation actually escapes
 
-The killer is **electron-builder's process sweep, matched on image path** — not file deletion.
+The killer is **electron-builder's process sweep** — not file deletion.
 Windows will not delete a running image, so `RMDir /r "$INSTDIR"` cannot end the daemon on its own.
 
 In app-builder-lib's `allowOnlyOneInstallerInstance.nsh`, `FIND_PROCESS` / `KILL_PROCESS` have two
@@ -22,15 +22,22 @@ branches:
 | Primary  | `powershell.exe` runs, `Get-CimInstance` resolves, and `Get-ExecutionPolicy -Scope Process` is not `Restricted` | `Win32_Process` where `$_.Path.StartsWith('$INSTDIR', 'CurrentCultureIgnoreCase')` — **path-scoped**                                                                  |
 | Fallback | otherwise                                                                                                       | per-user: `taskkill /F /IM "<AppName>.exe" /FI "PID ne $pid" /FI "USERNAME eq %USERNAME%"`; per-machine: the same without the username filter — **image-name-scoped** |
 
-The probe reads the **process** scope, not the effective policy, and Group Policy writes
-`MachinePolicy`/`UserPolicy` — so a GPO-managed host whose effective policy is `Restricted` still
-exits 0 and takes the primary branch. The fallback is reached only when `powershell.exe` is absent,
-`Get-CimInstance` does not resolve, PowerShell is blocked outright (WDAC/AppLocker, Server Core), or
-an inherited `PSExecutionPolicyPreference=Restricted` is in the environment.
+The upstream policy check can select the image-name fallback even when the inline process query
+works. `Restricted` disallows script files, not inline commands. A packaged trace for #22872
+showed that fallback successfully killing the relocated `Orca.exe` during an update; the
+genuine-uninstall cleanup guard was not responsible.
 
-So on essentially every machine the sweep is path-scoped, and a daemon whose image lives under
-`%LOCALAPPDATA%` is out of range regardless of what the file is called. **Survival is a property of
-the path.** The name only matters on the fallback branch.
+Orca's `customCheckAppRunning` in `config/nsis/orca-process-check.nsh` tests the actual inline
+`Get-CimInstance Win32_Process` query with terminating errors. Success selects the path-scoped
+branch; any other result retains the upstream fallback. The hook reuses upstream process
+selection, retry, permission and installation-mode handling. It neither overrides execution
+policy nor assumes PowerShell is available.
+
+A daemon outside `$INSTDIR` survives the path-scoped sweep. A genuinely unavailable process query
+still permits an image-name sweep and cold restore. Updates also run the **old installed
+uninstaller**, whose old capability check cannot be repaired by the new installer: the first
+upgrade can still cold-restore on an affected host. Once both binaries contain the hook, later
+updates use the actual capability test on both sides.
 
 ## Why the exe is copied verbatim (and not renamed)
 
@@ -113,7 +120,8 @@ naming, marker/atomic publish, fail-open, prune veto). Nothing in unit tests can
 any change to this file or to the NSIS macro needs the packaged harnesses:
 
 - `.github/workflows/win-update-survival-e2e.yml` — builds an installer from the branch and updates
-  it over itself with `--expect survival`. The primary proof.
+  it over itself with `--expect survival`. Verify normal and child-scoped `Restricted` policy;
+  also verify released-to-branch migration with the expected cold-restore limitation.
 - `.github/workflows/win-crash-survival-e2e.yml` — proves the daemon survives a main-process crash.
 - `.github/workflows/windows-terminal-restart-e2e.yml` — terminal restart behaviour.
 - `.github/workflows/win-update-e2e.yml` — release-tag-to-release-tag update, both `survival` and

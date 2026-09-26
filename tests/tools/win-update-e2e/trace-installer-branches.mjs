@@ -13,6 +13,9 @@ const processChecks = path.join(
 const hooks = fileURLToPath(
   new URL('../../../config/nsis/orca-installer-hooks.nsh', import.meta.url)
 )
+const capabilityCheck = fileURLToPath(
+  new URL('../../../config/nsis/orca-process-check.nsh', import.meta.url)
+)
 
 // CI-only patch: the installer and its embedded uninstaller share these macros.
 const traceMacro = `
@@ -57,21 +60,6 @@ let checks = readFileSync(processChecks, 'utf8').replaceAll('\r\n', '\n')
 checks = traceMacro + checks
 checks = insertAfter(
   checks,
-  '  Pop $0  # Return code (0 = success, other = error)',
-  '  !insertmacro ORCA_E2E_TRACE "availability=$0 powershell=$PowerShellPath"'
-)
-checks = replaceOnce(
-  checks,
-  '    Pop $0\n  ${endIf}\n\n  ${if} $0 != 0',
-  '    Pop $0\n    !insertmacro ORCA_E2E_TRACE "policy=$0"\n  ${endIf}\n\n  ${if} $0 != 0'
-)
-checks = insertAfter(
-  checks,
-  '  StrCpy $IsPowerShellAvailable $0',
-  '  !insertmacro ORCA_E2E_TRACE "selected-branch=$IsPowerShellAvailable (0=path,1=image)"'
-)
-checks = insertAfter(
-  checks,
   '!macro FIND_PROCESS _FILE _RETURN',
   '  !insertmacro ORCA_E2E_TRACE "find image=${_FILE} branch=$IsPowerShellAvailable"'
 )
@@ -104,6 +92,17 @@ uninstall = insertAfter(
   '  ${ifNot} ${isUpdated}',
   '    !insertmacro ORCA_E2E_TRACE "genuine-uninstall daemon sweep"'
 )
+let capability = readFileSync(capabilityCheck, 'utf8').replaceAll('\r\n', '\n')
+capability = insertAfter(
+  capability,
+  '  Pop $0',
+  '  !insertmacro ORCA_E2E_TRACE "capability=$0 powershell=$PowerShellPath"'
+)
+capability = replaceOnce(
+  capability,
+  '  !insertmacro _CHECK_APP_RUNNING',
+  '  !insertmacro ORCA_E2E_TRACE "selected-branch=$IsPowerShellAvailable (0=path,1=image)"\n  !insertmacro _CHECK_APP_RUNNING'
+)
 
 if (!process.argv.includes('--check')) {
   if (process.env.GITHUB_ACTIONS !== 'true' || process.platform !== 'win32') {
@@ -111,5 +110,6 @@ if (!process.argv.includes('--check')) {
   }
   writeFileSync(processChecks, checks)
   writeFileSync(hooks, uninstall)
+  writeFileSync(capabilityCheck, capability)
 }
 console.log('Validated installer/uninstaller branch-trace anchors')
