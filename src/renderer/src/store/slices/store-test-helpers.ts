@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create, type StoreApi, type UseBoundStore } from 'zustand'
 import type { AppState } from '../types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -61,7 +61,11 @@ export const TEST_REPO = {
   addedAt: 0
 }
 
-export function createTestStore() {
+/** The store shape `createTestStore` hands out, named here so suites don't reach
+ *  back through `ReturnType<typeof createTestStore>` for it. */
+export type TestAppStore = UseBoundStore<StoreApi<AppState>>
+
+export function createTestStore(): TestAppStore {
   return create<AppState>()((...a) => ({
     ...createRepoSlice(...a),
     ...createSparsePresetsSlice(...a),

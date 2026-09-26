@@ -22,6 +22,7 @@ import {
   remapHostAgentStatus,
   updateBatchAgentPaneKey
 } from './agent-status-primitives'
+import { isReleasedClientWrittenAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
 import {
   agentStatusEntryEqual,
   isAgentStatusFresh,
@@ -171,6 +172,21 @@ export function buildMirroredAgentStatusPatch(
       continue
     }
     if (nextByPaneKey.has(paneKey)) {
+      continue
+    }
+    // Why: unmount cedes renderer ownership (session-reconcile-dispose), so the
+    // ownership gate below stops covering a pane the moment the user switches
+    // tabs. For a row THIS renderer wrote from bytes the host publishes nothing
+    // in the first place, so its silence is not a resolution and deleting an
+    // unanswered question drops it from the sidebar (#22445). A row the host
+    // minted is not covered: there, absence IS the host withdrawing it, which is
+    // how a host-side dismissal or a closed leaf still retires immediately.
+    const pendingBlocker = state.agentStatusByPaneKey[paneKey]
+    if (
+      (pendingBlocker.state === 'blocked' || pendingBlocker.state === 'waiting') &&
+      isReleasedClientWrittenAgentStatusPane(paneKey, now) &&
+      isAgentStatusFresh(pendingBlocker, now)
+    ) {
       continue
     }
     // Why: the host surface carrying no status is not proof the agent stopped —
