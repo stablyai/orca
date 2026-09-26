@@ -66,7 +66,7 @@ function hostCommandResult(command: string): string {
     return frame('published')
   }
   if (command.includes('status:')) {
-    return mocks.warm ? frame('ready', binary) : frame('staged')
+    return mocks.warm ? frame('ready', binary) : frame('missing')
   }
   if (mocks.cleanupError && command.includes('claim_identity') && !command.includes('old=')) {
     throw Object.assign(new Error('Cleanup teardown is unconfirmed'), {
@@ -229,17 +229,59 @@ describe('SSH OpenCode runtime setup', () => {
     expect(mocks.exec).toHaveBeenCalledOnce()
   })
 
+  it.each(['deadline', 'caller'] as const)(
+    'allows retry after local download cancellation by %s without reserving a stage',
+    async (cause) => {
+      const controller = new AbortController()
+      let finish!: (path: string) => void
+      mocks.materialize.mockReturnValueOnce(
+        new Promise<string>((resolve) => {
+          finish = resolve
+        })
+      )
+      if (cause === 'deadline') {
+        vi.useFakeTimers()
+      }
+      const conn = connection()
+      const pending = ensureRemoteOpenCodeRuntime(conn, host, remoteHome, {
+        ...options(),
+        signal: controller.signal
+      })
+      await vi.waitFor(() => expect(mocks.materialize).toHaveBeenCalledOnce())
+      expect(mocks.exec).toHaveBeenCalledTimes(2)
+      if (cause === 'deadline') {
+        await vi.advanceTimersByTimeAsync(180_000)
+      } else {
+        controller.abort()
+      }
+      expect(await pending).toBe('failed')
+      finish(runtime)
+      vi.useRealTimers()
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(mocks.exec).toHaveBeenCalledTimes(2)
+      expect(mocks.upload).not.toHaveBeenCalled()
+      expect(mocks.write).not.toHaveBeenCalled()
+      expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe('ready')
+      expect(mocks.upload).toHaveBeenCalledOnce()
+    }
+  )
+
   it('retains the upload stage when a failed transfer may still be running', async () => {
     mocks.upload.mockRejectedValue(
       Object.assign(new Error('Upload teardown is unconfirmed'), {
         sshChannelCloseConfirmed: false
       })
     )
-    expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
+    const conn = connection()
+    expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe(
       'teardown-unconfirmed'
     )
     expect(mocks.exec).toHaveBeenCalledTimes(4)
     expect(mocks.write).not.toHaveBeenCalled()
+    expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe(
+      'teardown-unconfirmed'
+    )
+    expect(mocks.exec).toHaveBeenCalledTimes(4)
   })
 
   it('reports an unconfirmed stage cleanup to the deployment command queue', async () => {
@@ -248,7 +290,7 @@ describe('SSH OpenCode runtime setup', () => {
     expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
       'teardown-unconfirmed'
     )
-    expect(mocks.exec).toHaveBeenCalledTimes(6)
+    expect(mocks.exec).toHaveBeenCalledTimes(5)
   })
 
   it('skips installation without data and retries when a database appears on the same connection', async () => {
@@ -262,13 +304,12 @@ describe('SSH OpenCode runtime setup', () => {
     expect(mocks.upload).toHaveBeenCalledOnce()
   })
 
-  it('fails optionally without downloading or uploading when all bounded stages are occupied', async () => {
+  it('fails optionally without uploading when all bounded stages are occupied', async () => {
     mocks.reservationError = true
     expect(await ensureRemoteOpenCodeRuntime(connection(), host, remoteHome, options())).toBe(
       'failed'
     )
-    expect(mocks.exec).toHaveBeenCalledTimes(3)
-    expect(mocks.materialize).not.toHaveBeenCalled()
+    expect(mocks.exec).toHaveBeenCalledTimes(4)
     expect(mocks.upload).not.toHaveBeenCalled()
   })
 

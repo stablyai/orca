@@ -8,7 +8,7 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 import {
   parseOpenCodeRuntimeResult,
-  prepareOpenCodeRuntimeStageCommand,
+  probeOpenCodeRuntimeCacheCommand,
   probeOpenCodeNodeSqliteCommand,
   promoteOpenCodeRuntimeCommand,
   publishOpenCodeRuntimeReferenceCommand
@@ -74,16 +74,15 @@ describe.skipIf(process.platform === 'win32')('host-owned SQLite setup commands'
     const stageDir = stage.slotDir
     const executable = join(root, expectedHash, 'bun')
     const prepared = await command(
-      prepareOpenCodeRuntimeStageCommand({
+      probeOpenCodeRuntimeCacheCommand({
         host,
         nodePath,
-        stageDir,
-        markerName,
         executable,
-        expectedHash
+        expectedHash,
+        reference: join(root, 'runtime.json')
       })
     )
-    expect(parseOpenCodeRuntimeResult(prepared.stdout).status).toBe('staged')
+    expect(parseOpenCodeRuntimeResult(prepared.stdout).status).toBe('missing')
     expect((await stat(join(stageDir, markerName))).isFile()).toBe(true)
     const stagedBinary = join(stageDir, 'payload', 'bun')
     await writeFile(stagedBinary, 'verified runtime')
@@ -162,13 +161,10 @@ describe.skipIf(process.platform === 'win32')('host-owned SQLite setup commands'
     expect(await readFile(executable, 'utf8')).toBe('old binary still owned by another process')
     const reference = join(root, 'runtime.json')
     await writeFile(reference, JSON.stringify({ protocol: 1, executable: repaired }))
-    const stage = await reserveStage(root)
     const prepared = await command(
-      prepareOpenCodeRuntimeStageCommand({
+      probeOpenCodeRuntimeCacheCommand({
         host,
         nodePath,
-        stageDir: stage.slotDir,
-        markerName,
         executable,
         expectedHash,
         reference

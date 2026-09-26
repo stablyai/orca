@@ -25,7 +25,7 @@ import {
 } from './ssh-relay-upload-stage-commands'
 import {
   parseOpenCodeRuntimeResult,
-  prepareOpenCodeRuntimeStageCommand,
+  probeOpenCodeRuntimeCacheCommand,
   probeOpenCodeNodeSqliteCommand,
   promoteOpenCodeRuntimeCommand,
   publishOpenCodeRuntimeReferenceCommand
@@ -49,6 +49,7 @@ type SetupOptions = {
   signal?: AbortSignal
   cacheRoot?: string
 }
+type RemoteOperation = <T>(operation: () => Promise<T>) => Promise<T>
 
 /** Optional companion setup; the host's relay and terminals never depend on it. */
 export function ensureRemoteOpenCodeRuntime(
@@ -73,13 +74,30 @@ export function ensureRemoteOpenCodeRuntime(
   )
   timer.unref()
   const signal = options.signal ? AbortSignal.any([options.signal, timeout.signal]) : timeout.signal
-  const pending = waitForPromiseWithSignal(install(conn, host, remoteHome, options, signal), signal)
+  let remotePending = false
+  let remoteUnconfirmed = false
+  const remote: RemoteOperation = async (operation) => {
+    signal.throwIfAborted()
+    remotePending = true
+    try {
+      return await operation()
+    } catch (error) {
+      remoteUnconfirmed ||= signal.aborted || isUnconfirmedSshCommandTermination(error)
+      throw error
+    } finally {
+      remotePending = false
+    }
+  }
+  const pending = waitForPromiseWithSignal(
+    install(conn, host, remoteHome, options, signal, remote),
+    signal
+  )
     .catch((error: unknown) => {
       console.warn(
         '[ssh-relay] OpenCode history runtime setup did not finish:',
         error instanceof Error ? error.message : String(error)
       )
-      return signal.aborted || isUnconfirmedSshCommandTermination(error)
+      return remotePending || remoteUnconfirmed || isUnconfirmedSshCommandTermination(error)
         ? ('teardown-unconfirmed' as const)
         : ('failed' as const)
     })
@@ -100,14 +118,17 @@ async function install(
   host: RemoteHostPlatform,
   remoteHome: string,
   options: SetupOptions,
-  signal: AbortSignal
+  signal: AbortSignal,
+  remote: RemoteOperation
 ): Promise<RemoteOpenCodeRuntimeOutcome> {
   const exec = async (command: string): Promise<string> => {
     signal.throwIfAborted()
-    const output = await execCommand(conn, command, {
-      signal,
-      wrapCommand: !isWindowsRemoteHost(host)
-    })
+    const output = await remote(() =>
+      execCommand(conn, command, {
+        signal,
+        wrapCommand: !isWindowsRemoteHost(host)
+      })
+    )
     signal.throwIfAborted()
     return output
   }
@@ -122,10 +143,10 @@ async function install(
   }
   let executable = node.executable
   let target: OrcadBunTarget | undefined
-  let expectedHash: string | undefined
+  let localRuntime: string | undefined
   if (node.status === 'unsupported') {
-    target = await resolveOrcadDeploymentTarget({ conn, host, signal })
-    expectedHash = ORCAD_BUN_RELEASE_ASSETS[target].executableSha256
+    target = await remote(() => resolveOrcadDeploymentTarget({ conn, host, signal }))
+    const expectedHash = ORCAD_BUN_RELEASE_ASSETS[target].executableSha256
     executable = joinRemotePath(
       host,
       remoteHome,
@@ -134,6 +155,27 @@ async function install(
       expectedHash,
       isWindowsRemoteHost(host) ? 'bun.exe' : 'bun'
     )
+    const cached = parseOpenCodeRuntimeResult(
+      await exec(
+        probeOpenCodeRuntimeCacheCommand({
+          host,
+          nodePath: options.nodePath,
+          executable,
+          expectedHash,
+          reference: joinRemotePath(host, options.relayDir, 'opencode-sqlite-runtime.json')
+        })
+      )
+    )
+    if (cached.status === 'ready' && cached.executable) {
+      executable = cached.executable
+    } else if (cached.status === 'missing') {
+      const cacheRoot =
+        options.cacheRoot ?? join(getAppEnvironment().getPath('userData'), 'orcad-artifacts')
+      localRuntime = await cachedRuntime(target, cacheRoot, signal)
+      signal.throwIfAborted()
+    } else {
+      throw new Error('The host did not confirm its SQLite runtime cache.')
+    }
   }
   if (!executable) {
     throw new Error('The host did not identify its SQLite executable.')
@@ -157,48 +199,18 @@ async function install(
       : undefined
   let cleanupAllowed = true
   try {
-    const staged = parseOpenCodeRuntimeResult(
-      await exec(
-        prepareOpenCodeRuntimeStageCommand({
-          host,
-          nodePath: options.nodePath,
-          stageDir,
-          markerName: namespace.markerFileName,
-          ...(target
-            ? {
-                executable,
-                expectedHash,
-                reference: joinRemotePath(host, options.relayDir, 'opencode-sqlite-runtime.json')
-              }
-            : {})
-        })
-      )
-    )
-    if (staged.status !== 'staged' && staged.status !== 'ready') {
-      throw new Error('The host did not create the SQLite upload stage.')
-    }
-    if (staged.status === 'ready') {
-      if (!staged.executable) {
-        throw new Error('The host did not identify its verified SQLite runtime.')
-      }
-      executable = staged.executable
-    }
-    if (target && staged.status !== 'ready') {
-      const cacheRoot =
-        options.cacheRoot ?? join(getAppEnvironment().getPath('userData'), 'orcad-artifacts')
-      const localRuntime = await cachedRuntime(target, cacheRoot, signal)
+    if (target && localRuntime) {
       const localStage = await mkdtemp(join(dirname(localRuntime), '.vault-upload-'))
       try {
         const binaryName = isWindowsRemoteHost(host) ? 'bun.exe' : 'bun'
         const localBinary = join(localStage, binaryName)
         await link(localRuntime, localBinary).catch(() => copyFile(localRuntime, localBinary))
         signal.throwIfAborted()
-        await uploadRelayDirectory(
-          conn,
-          localStage,
-          joinRemotePath(host, stageDir, 'payload'),
-          host,
-          { signal, sftpNamespace: mapping() }
+        await remote(() =>
+          uploadRelayDirectory(conn, localStage, joinRemotePath(host, stageDir, 'payload'), host, {
+            signal,
+            sftpNamespace: mapping()
+          })
         )
         const promoted = parseOpenCodeRuntimeResult(
           await exec(
@@ -223,10 +235,12 @@ async function install(
     const referenceName = 'opencode-sqlite-runtime.json'
     const stagedReference = joinRemotePath(host, stageDir, 'payload', referenceName)
     signal.throwIfAborted()
-    await writeRelayFile(conn, host, stagedReference, JSON.stringify({ protocol: 1, executable }), {
-      signal,
-      sftpNamespace: mapping(referenceName)
-    })
+    await remote(() =>
+      writeRelayFile(conn, host, stagedReference, JSON.stringify({ protocol: 1, executable }), {
+        signal,
+        sftpNamespace: mapping(referenceName)
+      })
+    )
     const published = parseOpenCodeRuntimeResult(
       await exec(
         publishOpenCodeRuntimeReferenceCommand({

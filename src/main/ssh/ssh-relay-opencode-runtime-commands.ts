@@ -48,34 +48,25 @@ send({status:'ready',executable:process.execPath})}catch{send({status:'unsupport
   )
 }
 
-export function prepareOpenCodeRuntimeStageCommand(args: {
+export function probeOpenCodeRuntimeCacheCommand(args: {
   host: RemoteHostPlatform
   nodePath: string
-  stageDir: string
-  markerName: string
-  executable?: string
-  expectedHash?: string
-  reference?: string
+  executable: string
+  expectedHash: string
+  reference: string
 }): string {
   return nodeCommand(
     args.host,
     args.nodePath,
     `${HASH}${SEND}
-(async()=>{const [stage,marker,executable,expected,reference]=process.argv.slice(1);
-await fsp.access(path.join(stage,marker));
+(async()=>{const [executable,expected,reference]=process.argv.slice(1);
 let candidate=executable;let digest=candidate?await hash(candidate):null;
 if(candidate&&digest!==expected){try{const ref=JSON.parse(await fsp.readFile(reference,'utf8'));
 const relative=path.relative(path.dirname(executable),ref.executable);
 if(ref.protocol===1&&relative&&!relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative)){candidate=ref.executable;digest=await hash(candidate)}}catch{}}
 if(candidate&&digest===expected){if(process.platform!=='win32')await fsp.chmod(candidate,448);send({status:'ready',executable:candidate});return}
-send({status:'staged'})})().catch(error=>{console.error(error.message);process.exitCode=1})`,
-    [
-      args.stageDir,
-      args.markerName,
-      args.executable ?? '',
-      args.expectedHash ?? '',
-      args.reference ?? ''
-    ]
+send({status:'missing'})})().catch(error=>{console.error(error.message);process.exitCode=1})`,
+    [args.executable, args.expectedHash, args.reference]
   )
 }
 

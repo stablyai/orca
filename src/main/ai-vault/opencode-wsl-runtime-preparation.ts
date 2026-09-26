@@ -24,12 +24,13 @@ export async function prepareOpenCodeWslReaders(
   if (process.platform !== 'win32') {
     return []
   }
-  const distros = new Map(
-    roots.flatMap((root) => {
-      const distro = parseWslUncPath(root)?.distro
-      return distro ? [[distro.toLowerCase(), distro] as const] : []
-    })
-  )
+  const distros = new Map<string, string>()
+  for (const root of roots) {
+    const distro = parseWslUncPath(root)?.distro
+    if (distro) {
+      distros.set(distro.toLowerCase(), distro)
+    }
+  }
   for (const [key, entry] of preparation) {
     if (!distros.has(key) && Number.isFinite(entry.expires)) {
       preparation.delete(key)
