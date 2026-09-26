@@ -54,7 +54,13 @@ export function isTerminalPanePasteFocusCurrent({
   if (!requireSameFocusedElement || activeElementAtDispatch === null) {
     return true
   }
-  if (!paneContainer.contains(activeElementAtDispatch)) {
+  // Why: a window-blur/refocus cycle (Cmd+Tab away and back) can leave the dispatch
+  // snapshot on body while regular-terminal-focus-ownership.ts's reclaim is still
+  // deferred to the next frame; only a real, different element proves staleness.
+  if (
+    !isInertDocumentFocus(activeElementAtDispatch) &&
+    !paneContainer.contains(activeElementAtDispatch)
+  ) {
     return false
   }
   if (activeElement === activeElementAtDispatch) {
