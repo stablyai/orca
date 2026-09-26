@@ -44,6 +44,38 @@ describe('resolveWorktreeStatus — interrupted (STA-5357)', () => {
     )
   })
 
+  it('reports a failure above live work and every outcome, below only a pending question', () => {
+    expect(resolveWorktreeStatus({ ...base, hasFailed: true })).toBe('failed')
+    expect(resolveWorktreeStatus({ ...base, hasFailed: true, hasInterrupted: true })).toBe('failed')
+    expect(resolveWorktreeStatus({ ...base, hasFailed: true, hasLiveDone: true })).toBe('failed')
+    expect(resolveWorktreeStatus({ ...base, hasFailed: true, hasLiveWorking: true })).toBe('failed')
+    expect(resolveWorktreeStatus({ ...base, hasFailed: true, hasLiveMonitoring: true })).toBe(
+      'failed'
+    )
+    expect(resolveWorktreeStatus({ ...base, hasFailed: true, hasPermission: true })).toBe(
+      'permission'
+    )
+  })
+
+  it('reports a departed agent failure below live work and above every outcome', () => {
+    expect(resolveWorktreeStatus({ ...base, hasRetainedFailed: true })).toBe('failed')
+    expect(resolveWorktreeStatus({ ...base, hasRetainedFailed: true, hasInterrupted: true })).toBe(
+      'failed'
+    )
+    expect(resolveWorktreeStatus({ ...base, hasRetainedFailed: true, hasRetainedDone: true })).toBe(
+      'failed'
+    )
+    expect(resolveWorktreeStatus({ ...base, hasRetainedFailed: true, hasLiveWorking: true })).toBe(
+      'working'
+    )
+    expect(
+      resolveWorktreeStatus({ ...base, hasRetainedFailed: true, hasLiveMonitoring: true })
+    ).toBe('monitoring')
+    expect(resolveWorktreeStatus({ ...base, hasRetainedFailed: true, hasPermission: true })).toBe(
+      'permission'
+    )
+  })
+
   it('leaves every other combination alone', () => {
     expect(resolveWorktreeStatus({ ...base, hasLiveDone: true })).toBe('done')
     expect(resolveWorktreeStatus({ ...base, hasLiveWorking: true })).toBe('working')

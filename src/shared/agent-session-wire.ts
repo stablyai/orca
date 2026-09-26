@@ -223,7 +223,8 @@ export type AgentSessionStatusEvent =
 // ─── Turn completion feed ───────────────────────────────────────────────────
 
 /**
- * One root turn reaching a terminal outcome, derived by the EXECUTION HOST at journal commit.
+ * The session's latest request reaching a terminal outcome — a root turn, or a send the agent or
+ * its start refused — derived by the EXECUTION HOST at journal commit.
  *
  * This is the EDGE, with turn identity; `AgentSessionStatusSummary.turnOutcome` is the STATE.
  * The summary carries the verdict only while the session is idle, as a fact about the main agent's
@@ -239,11 +240,14 @@ export type AgentSessionTurnCompletion = {
   /** Host-and-workspace scope; a bare provider turn id is not globally unique. */
   scope: AgentSessionExecutionLocation
   sessionId: string
-  /** Root turn identity from the journal turn record; no second identity is minted. */
+  /** The request's identity: the root turn's id, or for a send refused before any turn, that
+   *  send's journal item key. Neither is minted here. */
   turnId: string
   outcome: AgentJournalTurnOutcome
   /** Execution host's clock at journal commit. */
   completedAt: number
+  /** The request settled while a prompt waits on the user. Absent otherwise, and from older hosts. */
+  awaitingUser?: true
 }
 
 /**

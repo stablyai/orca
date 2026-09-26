@@ -10,6 +10,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentJournalTurnOutcome } from '../../../../shared/agent-session-journal-types'
 import type {
+  AgentSessionStatusEvent,
   AgentSessionTurnCompletion,
   AgentSessionTurnCompletionEvent
 } from '../../../../shared/agent-session-wire'
@@ -27,7 +28,9 @@ type TestStore = {
 type BridgeMocks = {
   store: TestStore | null
   emitters: ((event: AgentSessionTurnCompletionEvent) => void)[]
+  statusEmitters: ((event: AgentSessionStatusEvent) => void)[]
   subscribeCompletions: Mock
+  subscribeStatus: Mock
   supportsCapability: Mock
   unsubscribe: Mock
 }
@@ -35,7 +38,9 @@ type BridgeMocks = {
 const mocks = vi.hoisted<BridgeMocks>(() => ({
   store: null,
   emitters: [],
+  statusEmitters: [],
   subscribeCompletions: vi.fn(),
+  subscribeStatus: vi.fn(),
   supportsCapability: vi.fn(),
   unsubscribe: vi.fn()
 }))
@@ -58,11 +63,16 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionTurnCompletions: mocks.subscribeCompletions
+  subscribeStructuredAgentSessionTurnCompletions: mocks.subscribeCompletions,
+  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 
 import { StructuredAgentSessionAttentionBridge } from './StructuredAgentSessionAttentionBridge'
 import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
+import {
+  getStructuredAgentSessionStatusFeed,
+  resetStructuredAgentSessionStatusFeedsForTests
+} from '@/runtime/structured-agent-session-status-feed'
 import {
   makeTabGroup,
   makeUnifiedTab,
@@ -176,7 +186,15 @@ describe('StructuredAgentSessionAttentionBridge', () => {
       }
     })
     resetStructuredAgentSessionTurnCompletionFeedsForTests()
+    resetStructuredAgentSessionStatusFeedsForTests()
     mocks.emitters.length = 0
+    mocks.statusEmitters.length = 0
+    mocks.subscribeStatus.mockImplementation(
+      (_target: unknown, emit: (event: AgentSessionStatusEvent) => void) => {
+        mocks.statusEmitters.push(emit)
+        return Promise.resolve({ unsubscribe: vi.fn() })
+      }
+    )
     mocks.subscribeCompletions.mockImplementation(
       (_target: unknown, emit: (event: AgentSessionTurnCompletionEvent) => void) => {
         mocks.emitters.push(emit)
@@ -215,6 +233,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     cleanup()
     vi.unstubAllGlobals()
     resetStructuredAgentSessionTurnCompletionFeedsForTests()
+    resetStructuredAgentSessionStatusFeedsForTests()
   })
 
   it('lights the unread indicators when the host reports a successful turn', async () => {
@@ -235,14 +254,14 @@ describe('StructuredAgentSessionAttentionBridge', () => {
       worktreeId: WORKSPACE,
       paneKey: CHAT_SUBJECT,
       agentState: 'done',
-      agentInterrupted: false
+      agentTurnOutcome: 'success'
     })
   })
 
   // A settled turn is news whichever way it settled, exactly as the CLI lane treats one. The
-  // difference is wording, and it rides the notification flag that already says "stopped".
+  // difference is wording, which main picks from the verdict.
   it.each(['failure', 'cancellation'] as const)(
-    'lights the indicators and says stopped for a %s the host reports',
+    'lights the indicators and hands main the %s the host reports',
     async (outcome) => {
       render(<StructuredAgentSessionAttentionBridge />)
       await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
@@ -254,7 +273,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
         paneDot: 'agent-completion',
         tabDot: 'agent-completion'
       })
-      expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentInterrupted: true })
+      expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: outcome })
     }
   )
 
@@ -296,6 +315,48 @@ describe('StructuredAgentSessionAttentionBridge', () => {
       // subject it was announced under, which is what this request must carry.
       expect(dismissed.flatMap(({ ids }) => ids)).not.toContain(raised.notificationId)
       expect(dismissed.flatMap(({ paneKeys }) => paneKeys ?? [])).toContain(CHAT_SUBJECT)
+    }
+  )
+
+  // Remote clients receive the status and completion streams over separate sockets, unordered, so
+  // the wording must come from the completion alone. The mirror is set to disagree in each case.
+  function mirrorStatus(status: 'idle' | 'attention'): void {
+    mocks.statusEmitters[0]?.({
+      type: 'status',
+      session: {
+        sessionId: SESSION,
+        workspaceId: 'host-side-workspace',
+        agent: 'claude',
+        status,
+        latestPrompt: 'Ship it',
+        updatedAt: 1
+      }
+    })
+  }
+
+  it.each([
+    { awaitingUser: true, mirror: 'idle', agentState: 'blocked' },
+    { awaitingUser: undefined, mirror: 'attention', agentState: 'done' }
+  ] as const)(
+    'words awaitingUser=$awaitingUser as $agentState whatever the status mirror says ($mirror)',
+    async ({ awaitingUser, mirror, agentState }) => {
+      const stopStatus = getStructuredAgentSessionStatusFeed({ kind: 'local' }).activate()
+      render(<StructuredAgentSessionAttentionBridge />)
+      await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+      await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+      const completion = turnCompletion()
+
+      act(() => {
+        mirrorStatus(mirror)
+        hostStream()({
+          type: 'completion',
+          completion: awaitingUser ? { ...completion, awaitingUser } : completion
+        })
+      })
+
+      expect(indicators().paneDot).toBe('agent-completion')
+      expect(onlyDispatch()).toMatchObject({ agentState, agentTurnOutcome: 'success' })
+      stopStatus()
     }
   )
 

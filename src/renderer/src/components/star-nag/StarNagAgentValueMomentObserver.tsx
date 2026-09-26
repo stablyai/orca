@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { agentTurnEndedUncleanly } from '../../../../shared/agent-main-agent-verdict'
 import { useAppStore } from '@/store'
 
 // Why: leave a short quiet window after agents finish so the prompt does not
@@ -36,7 +37,9 @@ function hasSuccessfulDoneTransition(
       // Why: a session-boundary done is an idle connect (STA-3386), not a value moment —
       // a stale working row + resume would otherwise nag on launch.
       entry.sessionBoundary !== true &&
-      !entry.interrupted &&
+      !agentTurnEndedUncleanly(entry) &&
+      // A new done, not a return to one dated before the work it ended (a command at rest).
+      entry.stateStartedAt >= previousEntry.stateStartedAt &&
       hasMeaningfulPrompt(entry)
     ) {
       return true

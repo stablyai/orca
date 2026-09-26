@@ -18153,6 +18153,7 @@
       "needsInput": "入力待ち",
       "working": "処理中",
       "stopped": "停止",
+      "failed": "失敗",
       "finished": "完了"
     }
   },

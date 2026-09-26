@@ -27,7 +27,9 @@ function historyEntrySnapshot(
     toolName: undefined,
     toolInput: undefined,
     lastAssistantMessage: undefined,
-    interrupted: history.interrupted
+    interrupted: history.interrupted,
+    // The live row's main agent belongs to its current state, not to this snapshot.
+    mainAgent: history.mainAgent
   }
 }
 

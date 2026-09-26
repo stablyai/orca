@@ -110,6 +110,7 @@ function areAgentRowsEqual(
       a.toolName !== b.toolName ||
       a.toolInput !== b.toolInput ||
       a.interrupted !== b.interrupted ||
+      !areMainAgentsEqual(a.mainAgent, b.mainAgent) ||
       a.stateStartedAt !== b.stateStartedAt ||
       a.updatedAt !== b.updatedAt
     ) {
@@ -117,4 +118,21 @@ function areAgentRowsEqual(
     }
   }
   return true
+}
+
+function areMainAgentsEqual(
+  left: RuntimeWorktreeAgentRow['mainAgent'],
+  right: RuntimeWorktreeAgentRow['mainAgent']
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right) {
+    return false
+  }
+  return (
+    left.state === right.state &&
+    left.outcome === right.outcome &&
+    left.stateStartedAt === right.stateStartedAt
+  )
 }

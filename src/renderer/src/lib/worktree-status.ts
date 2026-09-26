@@ -17,6 +17,7 @@ export type WorktreeStatus =
   | 'working'
   | 'monitoring'
   | 'permission'
+  | 'failed'
   | 'interrupted'
   | 'done'
   | 'inactive'
@@ -35,6 +36,7 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
   working: 'Working',
   monitoring: 'Monitoring background tasks',
   permission: 'Needs permission',
+  failed: 'Failed',
   interrupted: 'Interrupted',
   done: 'Done',
   inactive: 'Inactive'
@@ -167,7 +169,7 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  *
  * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
  * `hasLiveDone` are fresh hook entries ({blocked,waiting} / {working} / {done});
- * `hasRetainedDone` is a retained-agent snapshot scoped to this worktreeId.
+ * `hasRetainedDone`/`hasRetainedFailed` are retained-agent snapshots scoped to this worktreeId.
  */
 export function resolveWorktreeStatus(args: {
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
@@ -181,9 +183,11 @@ export function resolveWorktreeStatus(args: {
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveMonitoring?: boolean
+  hasFailed?: boolean
   hasInterrupted?: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  hasRetainedFailed?: boolean
 }): WorktreeStatus {
   const heuristic = getWorktreeStatus(
     args.tabs,
@@ -204,6 +208,11 @@ export function resolveWorktreeStatus(args: {
   if (heuristic === 'permission') {
     return 'permission'
   }
+  // Why: a failure is news, so it outranks live work (a failed main agent's subagents may still
+  // run); only a pending question comes first.
+  if (args.hasFailed) {
+    return 'failed'
+  }
   // Why: restored cards get the hook snapshot before panes mount; trust the explicit working row so they stay yellow on restart.
   if (args.hasLiveWorking || heuristic === 'working') {
     return 'working'
@@ -211,7 +220,11 @@ export function resolveWorktreeStatus(args: {
   if (args.hasLiveMonitoring || heuristic === 'monitoring') {
     return 'monitoring'
   }
-  // Terminal outcomes follow live states, but an interrupted outcome must not collapse into success.
+  // Why: a departed agent's failure has no expiry, so it must not pin the card over live work.
+  if (args.hasRetainedFailed) {
+    return 'failed'
+  }
+  // A stop follows live states, but must not collapse into success.
   if (args.hasInterrupted) {
     return 'interrupted'
   }

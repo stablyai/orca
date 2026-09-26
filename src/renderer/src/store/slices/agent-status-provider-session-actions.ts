@@ -21,6 +21,7 @@ import {
 import { removePaneKeys } from './agent-status-pane-keyed-records'
 import { registryEntryMatchesStatus } from './agent-status-launch-config'
 import { copyLaunchConfig } from './agent-status-sleeping-records'
+import { agentVerdictFields } from '../../../../shared/agent-main-agent-verdict'
 
 export function createAgentStatusProviderSessionActions(
   runtime: AgentStatusRuntime
@@ -113,9 +114,7 @@ export function createAgentStatusProviderSessionActions(
               ? { connectionId: existingRecord.connectionId }
               : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
-          ...(preservesCompletedRecoveryRecord && existingRecord.interrupted !== undefined
-            ? { interrupted: existingRecord.interrupted }
-            : {}),
+          ...(preservesCompletedRecoveryRecord ? agentVerdictFields(existingRecord) : {}),
           origin: preservesQuitOrigin ? 'quit' : 'live'
         }
         removedLiveStatus = existingStatus !== undefined
