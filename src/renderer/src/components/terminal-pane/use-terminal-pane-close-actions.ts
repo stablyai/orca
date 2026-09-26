@@ -51,7 +51,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         clearSessionRestoredBannerForPane(paneId)
         const leafId = manager.getLeafId(paneId)
         if (leafId) {
-          commitTerminalSurfaceClose({ worktreeId, tabId, leafId })
+          commitTerminalSurfaceClose(worktreeId, { kind: 'pane', tabId, leafId })
           retireUnboundIpcTerminalPane({
             getState: useAppStore.getState,
             tabId,

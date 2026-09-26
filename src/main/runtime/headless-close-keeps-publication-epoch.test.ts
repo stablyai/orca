@@ -78,13 +78,13 @@ function closeOneTab(): RuntimeMobileSessionTabsSnapshot {
     closeHeadlessMobileTerminalTab: (
       worktreeId: string,
       snapshot: RuntimeMobileSessionTabsSnapshot,
-      tab: RuntimeMobileSessionTerminalTab,
+      parentTabId: string,
       options?: Record<string, unknown>
     ) => void
     mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
   }
   internals.mobileSessionTabsByWorktree.set(WORKTREE_ID, snapshot)
-  internals.closeHeadlessMobileTerminalTab(WORKTREE_ID, snapshot, closedTab, {
+  internals.closeHeadlessMobileTerminalTab(WORKTREE_ID, snapshot, closedTab.parentTabId, {
     allowMissingPersistedTab: true,
     killPtys: false
   })

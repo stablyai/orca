@@ -250,7 +250,7 @@ export function createTerminalTabCloseActions(
         }
       })
       if (retiresSession && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
-        commitTerminalSurfaceClose({ worktreeId: closingWorktreeId, tabId })
+        commitTerminalSurfaceClose(closingWorktreeId, { kind: 'tab', tabId })
       }
       // Why shared with the paired snapshot apply: every path that removes a tab owes it the same sweep, and a second copy of the list is how one path silently misses a new entry.
       sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)

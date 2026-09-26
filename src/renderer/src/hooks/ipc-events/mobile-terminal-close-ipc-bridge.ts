@@ -52,12 +52,12 @@ export function registerMobileAndTerminalCloseIpcBridge(
   )
 
   unsubs.push(
-    window.api.ui.onCloseTerminal(({ tabId, leafId }) => {
-      if (leafId != null) {
-        applyClosedTerminalLeafNotice(tabId, leafId)
+    window.api.ui.onCloseTerminal((target) => {
+      if (target.kind === 'pane') {
+        applyClosedTerminalLeafNotice(target.tabId, target.leafId)
       } else {
         // Why: the CLI/RPC caller is answered immediately, so it cannot wait on a modal.
-        closeTerminalTab(tabId, { skipRunningProcessConfirm: true })
+        closeTerminalTab(target.tabId, { skipRunningProcessConfirm: true })
       }
     })
   )

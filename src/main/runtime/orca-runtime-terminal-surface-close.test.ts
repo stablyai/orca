@@ -121,7 +121,7 @@ describe('renderer close intents', () => {
   it('keeps a closed tab closed across a renderer save and a reload', async () => {
     const { store, runtime, reload } = createPersistedRuntime(makeSession())
 
-    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: WORKTREE_ID, tabId: TAB_ID })
+    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: TAB_ID })
     store.setWorkspaceSession(rendererSaveWithout(store.getWorkspaceSession()))
 
     expect((await reload()).tabsByWorktree[WORKTREE_ID]).toEqual([])
@@ -130,8 +130,8 @@ describe('renderer close intents', () => {
   it('keeps a closed split pane closed across a renderer save and a reload', async () => {
     const { store, runtime, reload } = createPersistedRuntime(splitSession())
 
-    runtime.closeTerminalSurfaceFromRenderer({
-      worktreeId: WORKTREE_ID,
+    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
+      kind: 'pane',
       tabId: TAB_ID,
       leafId: LEAF_ID
     })
@@ -156,8 +156,8 @@ describe('renderer close intents', () => {
   ])('never widens a pane close into a tab close when %s', async (_case, session) => {
     const { runtime, reload } = createPersistedRuntime(session())
 
-    runtime.closeTerminalSurfaceFromRenderer({
-      worktreeId: WORKTREE_ID,
+    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
+      kind: 'pane',
       tabId: TAB_ID,
       leafId: LEAF_ID
     })
@@ -190,7 +190,7 @@ describe('CLI close of one pane in a split tab', () => {
       ptyIdsByLeafId: { [SIBLING_LEAF_ID]: SIBLING_PTY_ID }
     })
     // No exit arrives to remove the pane, so the desktop renderer is told to drop that leaf.
-    expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
+    expect(harness.closeTerminalPane).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
     expect(harness.closeTerminalTab).not.toHaveBeenCalled()
   })
 
@@ -213,7 +213,7 @@ describe('CLI close of one pane in a split tab', () => {
       type: 'leaf',
       leafId: SIBLING_LEAF_ID
     })
-    expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
+    expect(harness.closeTerminalPane).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
     expect(harness.closeTerminalTab).not.toHaveBeenCalled()
   })
 
@@ -245,7 +245,7 @@ describe('CLI close of one pane in a split tab', () => {
         type: 'leaf',
         leafId: SIBLING_LEAF_ID
       })
-      expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
+      expect(harness.closeTerminalPane).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
       expect(harness.closeTerminalTab).not.toHaveBeenCalled()
       // The owed stop still goes out through the controller's kill, which records SSH pending kills.
       expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
@@ -319,7 +319,7 @@ describe('mobile close of one pane in a split tab', () => {
     expect(harness.getSession().terminalLayoutsByTabId[TAB_ID]).toMatchObject({
       root: { type: 'leaf', leafId: SIBLING_LEAF_ID }
     })
-    expect(harness.closeTerminal).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
+    expect(harness.closeTerminalPane).toHaveBeenCalledExactlyOnceWith(TAB_ID, LEAF_ID)
   })
 })
 

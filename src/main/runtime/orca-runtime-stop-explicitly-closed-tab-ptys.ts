@@ -3,7 +3,6 @@ import { OrcaRuntimeWithFocusTerminal } from './orca-runtime-focus-terminal'
 import { EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS } from './orca-runtime-core'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
 import type { RuntimeTerminalClose } from '../../shared/runtime-types'
-import { countTerminalLayoutLeaves } from './headless-terminal-split-layout'
 import type { RuntimePtyTabCloseAuthority } from './runtime-terminal-state-records'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 
@@ -107,11 +106,13 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
           ? spawnSurface
           : null)
       const tabId = surface?.tab.parentTabId ?? pty.pty.tabId ?? pty.record.tabId
-      // Why: relay recovery can leave stale renderer leaves; the persisted HUB layout defines whether closing this PTY closes the whole surface.
-      const siblingCount = surface?.tab.parentLayout
-        ? countTerminalLayoutLeaves(surface.tab.parentLayout.root)
-        : this.countLeavesInTab(tabId)
-      if (siblingCount <= 1 && surface && this.tabs.has(tabId) && this.notifier?.closeTerminalTab) {
+      const leafId = surface?.tab.leafId ?? parsePaneKey(pty.pty.paneKey ?? '')?.leafId
+      const paneTarget = leafId ? { kind: 'pane' as const, tabId, leafId } : null
+      // Why: a PTY with no pane identity cannot be placed in any tab's layout, so it closes nothing.
+      const closesTab =
+        paneTarget !== null &&
+        this.resolveTerminalCloseTarget(pty.pty.worktreeId, paneTarget) === 'last-pane'
+      if (closesTab && surface && this.tabs.has(tabId) && this.notifier?.closeTerminalTab) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
         try {
           await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
@@ -126,12 +127,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
       }
-      if (
-        siblingCount <= 1 &&
-        surface &&
-        ptyCloseAuthority &&
-        !this.tabs.has(surface.tab.parentTabId)
-      ) {
+      if (closesTab && surface && ptyCloseAuthority && !this.tabs.has(surface.tab.parentTabId)) {
         try {
           await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId, {
             reason: 'user',
@@ -149,19 +145,18 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
         const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
       }
-      if (siblingCount <= 1 && !surface && pty.pty.tabId && this.notifier?.closeTerminalTab) {
+      if (closesTab && !surface && pty.pty.tabId && this.notifier?.closeTerminalTab) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
         await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
         const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
       }
       const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
-      if (siblingCount > 1) {
-        const leafId = surface?.tab.leafId ?? parsePaneKey(pty.pty.paneKey ?? '')?.leafId
+      if (!closesTab) {
         // Why: the pane's removal is this close's own commit, not a side effect of its exit. An
         // unconfirmed stop is unverifiable, never a reason to close the live siblings with it.
-        if (leafId) {
-          this.closeTerminalLeaf(pty.pty.worktreeId, tabId, leafId)
+        if (paneTarget) {
+          this.closeTerminalPane(pty.pty.worktreeId, paneTarget)
         }
       } else if (surface) {
         // Why: paired viewers keep ended streams mounted until the HUB publishes removal, so explicit close uses the durable host-tab transaction instead of viewer-local exit handling.
@@ -182,21 +177,21 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    const siblingCount = this.countLeavesInTab(leaf.tabId)
-    const ptyIdsToKill =
-      siblingCount <= 1
-        ? this.getPtyIdsForExplicitTabClose(leaf.worktreeId, leaf.tabId)
-        : leaf.ptyId
-          ? [leaf.ptyId]
-          : []
-    if (siblingCount <= 1 && this.notifier?.closeTerminalTab) {
+    const paneTarget = { kind: 'pane' as const, tabId: leaf.tabId, leafId: leaf.leafId }
+    const closesTab = this.resolveTerminalCloseTarget(leaf.worktreeId, paneTarget) === 'last-pane'
+    const ptyIdsToKill = closesTab
+      ? this.getPtyIdsForExplicitTabClose(leaf.worktreeId, leaf.tabId)
+      : leaf.ptyId
+        ? [leaf.ptyId]
+        : []
+    if (closesTab && this.notifier?.closeTerminalTab) {
       await this.notifier.closeTerminalTab(leaf.tabId, { localPtyTeardownOwnedExternally: true })
     }
     const ptyKilled = leaf.ptyId
       ? await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, leaf.ptyId)
       : false
-    if (siblingCount > 1) {
-      this.closeTerminalLeaf(leaf.worktreeId, leaf.tabId, leaf.leafId)
+    if (!closesTab) {
+      this.closeTerminalPane(leaf.worktreeId, paneTarget)
     } else if (!this.notifier?.closeTerminalTab) {
       this.notifier?.closeTerminal(leaf.tabId)
     }

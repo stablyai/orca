@@ -198,7 +198,8 @@ export function registerRuntimeWindowLifecycle(
         baseVersion,
         content
       }) as Promise<RuntimeMarkdownSaveTabResult>,
-    closeTerminal: (tabId, leafId) => send('ui:closeTerminal', { tabId, leafId }),
+    closeTerminal: (tabId) => send('ui:closeTerminal', { kind: 'tab', tabId }),
+    closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
     closeTerminalTab: (tabId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
