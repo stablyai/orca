@@ -8,6 +8,7 @@ import type {
   StructuredAgentSessionProviderChild
 } from './structured-agent-session-host-types'
 import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
+import { settleEndedStructuredAgentSessionChildWork } from './structured-agent-session-dead-generation-settlement'
 import { endProviderChild } from './structured-agent-session-provider-child'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionHolds } from './structured-agent-session-holds'
@@ -76,7 +77,8 @@ export class StructuredAgentSessionEventRecovery {
   }
 
   /** The force-close could not prove the exit, but the child is closing and takes no writes: it
-   *  ends here, and its lease goes to recovery. */
+   *  ends here, settles like every ended child, and its lease goes to recovery. Not the stop's
+   *  wind-down, whose settle step would abort ahead of the lease on this same journal failure. */
   private async endUnprovenChild(
     sessionId: string,
     child: StructuredAgentSessionProviderChild,
@@ -97,6 +99,14 @@ export class StructuredAgentSessionEventRecovery {
       return
     }
     try {
+      // Best effort: the lease moves whether or not the failing journal takes it.
+      await settleEndedStructuredAgentSessionChildWork({
+        journal: session.journal,
+        sessionId,
+        child,
+        now: this.context.now(),
+        onError: this.context.onBarrierError
+      })
       await releaseStoredStructuredAgentSessionOwner({
         store: this.context.store,
         sessionId,
@@ -105,6 +115,7 @@ export class StructuredAgentSessionEventRecovery {
         now: this.context.now(),
         rootGone: false
       })
+      this.context.deps.adapter.acknowledgeSessionRelease?.(sessionId)
     } finally {
       this.context.publishStatus?.(sessionId)
     }

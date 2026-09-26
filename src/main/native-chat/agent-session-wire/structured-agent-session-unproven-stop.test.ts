@@ -252,7 +252,18 @@ describe('a stop that cannot prove its child exited (C′ trigger 1)', () => {
   })
 
   it('after a journal sink failure: the force-closed child ends and its lease goes to recovery', async () => {
+    const acknowledgeSessionRelease = vi.fn()
+    adapterExtras = { acknowledgeSessionRelease }
+    await restartHost()
     await deliveredOnce()
+    const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-q', ordinal: 9 }
+    acquire.mock.calls.at(-1)?.[0].events?.appendItem(identity, {
+      kind: 'question',
+      question: 'Which target?',
+      options: [{ id: 'web', label: 'Web' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    })
+    await host.flushStreamedEvents(SESSION)
     const forceCloseSession = vi.fn(async () => false)
     host['deps'].adapter.forceCloseSession = forceCloseSession
 
@@ -266,6 +277,12 @@ describe('a stop that cannot prove its child exited (C′ trigger 1)', () => {
       rootGone: false
     })
     await eventually(() => expect(lease()).toMatchObject({ handoffStage: 'recovering' }))
+    // Settled like every other end: no card is left open with no agent behind it.
+    const question = host
+      .journalSnapshot(SESSION)
+      .items.find((item) => item.itemId === agentJournalItemKey(identity))
+    expect(question?.body).toMatchObject({ resolution: { state: 'cancelled' } })
+    await eventually(() => expect(acknowledgeSessionRelease).toHaveBeenCalledWith(SESSION))
     await expectNextSendStartsAfterRecovery()
   })
 
@@ -317,7 +334,10 @@ describe('a start the child was seen to die in (C′ trigger 2)', () => {
       duringStartup: true,
       rootGone: true
     })
-    expect(lease()).toMatchObject({ claimStatus: 'released', handoffStage: null })
+    // The child ends at the stop step; the lease moves at the end of the same wind-down.
+    await eventually(() =>
+      expect(lease()).toMatchObject({ claimStatus: 'released', handoffStage: null })
+    )
 
     ownerProbe = GONE
     const retry = await accept('retry')
@@ -338,7 +358,9 @@ describe('a start the child was seen to die in (C′ trigger 2)', () => {
     await eventually(() => expect(conversation()?.child).toBeNull())
     expect(submission(first)).toMatchObject({ dispatchState: 'rejected', reason: TEXT })
     expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'exit', rootGone: false })
-    expect(lease()).toMatchObject({ claimStatus: 'live', handoffStage: 'recovering' })
+    await eventually(() =>
+      expect(lease()).toMatchObject({ claimStatus: 'live', handoffStage: 'recovering' })
+    )
     await expectNextSendStartsAfterRecovery()
   })
 })
