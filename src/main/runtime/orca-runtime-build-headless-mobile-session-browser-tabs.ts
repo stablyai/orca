@@ -9,6 +9,7 @@ import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import type { Tab } from '../../shared/tab-types'
 import { closeTerminalSurfaceInWorkspaceSession } from './terminal-surface-close'
 import { collectPersistedTerminalLeafIds } from './mobile-session-layout-projection'
+import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
@@ -144,7 +145,38 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     }
     // Why: no exit may ever arrive to remove the pane. The notice is leaf-addressed, so it and the
     // renderer's exit handling are each a no-op after the other.
+    this.retireClosedTerminalLeafFromMobileSnapshot(worktreeId, tabId, leafId)
     this.notifier?.closeTerminal(tabId, leafId)
+  }
+
+  private retireClosedTerminalLeafFromMobileSnapshot(
+    worktreeId: string,
+    tabId: string,
+    leafId: string
+  ): void {
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const tab = snapshot?.tabs.find(
+      (candidate) =>
+        candidate.type === 'terminal' &&
+        candidate.parentTabId === tabId &&
+        candidate.leafId === leafId
+    )
+    // Why: a renderer that lists the tab republishes its own snapshot once it drops the pane.
+    if (!snapshot || !tab || this.tabs.has(tabId)) {
+      return
+    }
+    const proof = this.getMobileSessionTerminalRetirementProof(worktreeId, tab)
+    const retired = retireTerminalSurfacesFromSnapshot({
+      snapshot,
+      ptyId: tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[leafId] ?? '',
+      exactSurfaces: [{ parentTabId: tabId, leafId }],
+      exactOnly: true,
+      ...(proof ? { retirementProofs: [proof] } : {})
+    })
+    if (retired) {
+      this.storeMobileSessionSnapshot(worktreeId, retired.snapshot)
+      this.notifyMobileSessionTabsChanged(worktreeId)
+    }
   }
 
   protected persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {
