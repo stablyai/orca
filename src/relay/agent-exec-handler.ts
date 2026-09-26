@@ -5,6 +5,7 @@ import { delimiter, join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
+import { getWindowsPowerShellShimSpawn } from '../shared/windows-powershell-shim-spawn'
 import { terminateRelaySubprocessTree } from './subprocess-tree-termination'
 
 const DEFAULT_TIMEOUT_MS = 60_000
@@ -38,7 +39,6 @@ function resolveWindowsCommand(binary: string, env: NodeJS.ProcessEnv): string {
   if (/[\\/]/.test(binary) || /\.[a-z0-9]+$/i.test(binary)) {
     return binary
   }
-
   const pathEnv = env.PATH ?? env.Path
   if (!pathEnv) {
     return binary
@@ -63,6 +63,12 @@ function getWindowsSafeSpawn(
   const resolvedBinary = resolveWindowsCommand(binary, env)
   if (!isWindowsBatchScript(resolvedBinary)) {
     return { spawnCmd: resolvedBinary, spawnArgs: args }
+  }
+  if ([resolvedBinary, ...args].some(hasUnsafeWindowsBatchSyntax)) {
+    const fallback = getWindowsPowerShellShimSpawn(resolvedBinary, args, env)
+    if (fallback) {
+      return fallback
+    }
   }
   const commandLine = [resolvedBinary, ...args].map(quoteWindowsBatchToken).join(' ')
   return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/s', '/c', commandLine] }
