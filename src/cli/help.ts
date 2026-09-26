@@ -3,6 +3,7 @@ import { findCommandSpec, isCommandGroup, matches, supportsBrowserPageFlag } fro
 import { unknownCommandData } from './command-suggestion'
 import { formatCommandScopedFlagHelp } from './command-scoped-flag-help'
 import { FLAG_HELP_TEXT } from './flag-help-text'
+import { formatTerminalCommandFlagHelp } from './terminal-command-flag-help'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
 
@@ -81,12 +82,10 @@ export function formatGroupHelp(specs: CommandSpec[], groupPath: string[]): stri
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
-  const scopedHelp = formatCommandScopedFlagHelp(command, flag)
-  if (scopedHelp) {
-    return scopedHelp
-  }
-  if (command === 'terminal close' && flag === 'tab') {
-    return '--tab                  Close the whole tab and wait for durable persistence'
+  const overrideHelp =
+    formatCommandScopedFlagHelp(command, flag) ?? formatTerminalCommandFlagHelp(command, flag)
+  if (overrideHelp) {
+    return overrideHelp
   }
   if (command === 'linear issue' && flag === 'id') {
     return '--id <id>             Linear issue key, id, or URL'
