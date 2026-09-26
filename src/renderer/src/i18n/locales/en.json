@@ -18289,7 +18289,8 @@
     }
   },
   "quickOpen": {
-    "moreMatchesAvailable": "More matches may be available. Refine your search to narrow the results."
+    "moreMatchesAvailable": "More matches may be available. Refine your search to narrow the results.",
+    "openLiteralPath": "Open {{path}}"
   },
   "checksPanel": {
     "unlinked": {
