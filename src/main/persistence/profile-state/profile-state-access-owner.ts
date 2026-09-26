@@ -138,9 +138,9 @@ function ownerExited(owner: AccessOwner): boolean {
   const sameBoot = Boolean(owner.bootIdentity && owner.bootIdentity === currentBoot)
   const sameMachine = Boolean(owner.machineIdentity && owner.machineIdentity === currentMachine)
   const sameHost = owner.host === hostname()
-  // Windows has no boot UUID here; a hostname alone cannot identify a shared-directory owner.
+  // Windows has no boot UUID to verify a renamed host.
   if (
-    (process.platform === 'win32' && (!sameHost || !sameMachine)) ||
+    (process.platform === 'win32' && !sameHost) ||
     (!sameBoot && !sameHost) ||
     owner.platform !== process.platform ||
     (!sameBoot && owner.machineIdentity && currentMachine && !sameMachine)

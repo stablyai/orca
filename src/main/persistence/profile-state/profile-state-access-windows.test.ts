@@ -126,8 +126,6 @@ it('can reclaim after reboot using the stored absolute creation time', () => {
 it.each([
   { host: 'previous-hostname' },
   { machineIdentity: 'win32-machine-guid:another-machine' },
-  { machineIdentity: null },
-  { machineIdentity: undefined },
   { platform: 'linux' }
 ])(
   'keeps another or unverifiable execution host even when the PID is absent locally: %j',
@@ -149,13 +147,46 @@ it('cannot identify another host from a cloned machine GUID and a renamed hostna
   expect(existsSync(path)).toBe(true)
 })
 
-it('does not infer a shared-directory owner from an unavailable local machine identity', () => {
+it('does not infer PID reuse from an unavailable local machine identity', () => {
   const path = writeOwner()
   identity.machine.mockReturnValue(null)
   expect(() => acquireProfileStateMaintenance(root)).toThrow('unverifiable')
-  expect(process.kill).not.toHaveBeenCalled()
+  expect(process.kill).toHaveBeenCalledWith(12345, 0)
+  expect(identity.process).not.toHaveBeenCalledWith(12345)
   expect(existsSync(path)).toBe(true)
 })
+
+it.each([null, undefined])(
+  'reclaims a legacy same-host owner with an absent PID and machine identity %s',
+  (machineIdentity) => {
+    const path = writeOwner({ machineIdentity })
+    vi.mocked(process.kill).mockImplementation(() => {
+      throw Object.assign(new Error('absent'), { code: 'ESRCH' })
+    })
+    acquireProfileStateMaintenance(root).release()
+    expect(existsSync(path)).toBe(false)
+  }
+)
+
+it('reclaims an absent same-host PID when the reader cannot load machine identity', () => {
+  const path = writeOwner()
+  identity.machine.mockReturnValue(null)
+  vi.mocked(process.kill).mockImplementation(() => {
+    throw Object.assign(new Error('absent'), { code: 'ESRCH' })
+  })
+  acquireProfileStateMaintenance(root).release()
+  expect(existsSync(path)).toBe(false)
+})
+
+it.each([null, undefined])(
+  'does not compare creation times for a legacy live PID without machine identity %s',
+  (machineIdentity) => {
+    const path = writeOwner({ machineIdentity })
+    expect(() => acquireProfileStateMaintenance(root)).toThrow('unverifiable')
+    expect(identity.process).not.toHaveBeenCalledWith(12345)
+    expect(existsSync(path)).toBe(true)
+  }
+)
 
 it.each([
   undefined,
