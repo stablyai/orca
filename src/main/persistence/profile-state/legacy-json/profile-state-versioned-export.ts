@@ -1,7 +1,7 @@
 import { lstatSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
-import { durableWriteTempPath, publishFileDurableSync } from '../../durable-file-write'
+import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../../shared/secure-file'
+import { durableWriteTempPath, publishFileDurableSync } from '../../../durable-file-write'
 import {
   profileStateJsonExportPath,
   profileStateJsonExportPaths

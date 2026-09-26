@@ -122,7 +122,7 @@ describe('profile state startup snapshot handoff', () => {
     const serializedRead = vi.spyOn(ProfileStateSqliteAuthority.prototype, 'readSerializedState')
     const acceptedRead = vi.spyOn(ProfileStateSqliteAuthority.prototype, 'readAcceptedState')
 
-    const result = createProfileStateStore({ ...paths, authorityMode: 'sqlite-established' })
+    const result = createProfileStateStore({ ...paths })
     stores.push(result.store)
 
     expect(open).toHaveBeenCalledTimes(1)
@@ -264,15 +264,14 @@ describe('profile state startup snapshot handoff', () => {
   it('decrypts and normalizes the startup snapshot through the existing Store loader', () => {
     const paths = createPaths()
     writeFileSync(paths.dataFile, '{"settings":{"theme":"dark"}}')
-    const first = createProfileStateStore({ ...paths, authorityMode: 'sqlite-candidate' }).store
+    const first = createProfileStateStore({ ...paths }).store
     stores.push(first)
     first.updateSettings({ opencodeSessionCookie: 'startup-secret' })
     first.flushOrThrow()
     first.freezeWrites()
 
     const reopened = createProfileStateStore({
-      ...paths,
-      authorityMode: 'sqlite-established'
+      ...paths
     }).store
     stores.push(reopened)
     expect(reopened.getSettings().opencodeSessionCookie).toBe('startup-secret')
@@ -280,7 +279,7 @@ describe('profile state startup snapshot handoff', () => {
     reopened.updateSettings({ theme: 'light' })
     reopened.flushOrThrow()
     expect(reopened.prepareProfileStateExport().json).not.toContain('startup-secret')
-    const again = createProfileStateStore({ ...paths, authorityMode: 'sqlite-established' }).store
+    const again = createProfileStateStore({ ...paths }).store
     stores.push(again)
     expect(again.getSettings().opencodeSessionCookie).toBe('startup-secret')
     expect(again.getSettings().theme).toBe('light')

@@ -9,9 +9,9 @@ import { getActiveProfileStateLocation } from './profile-state-active-location'
 import {
   profileStateJsonExportPath,
   profileStateJsonExportPaths
-} from './profile-state-export-path'
+} from './legacy-json/profile-state-export-path'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
-import { restoreProfileStateJsonExport } from './profile-state-recovery'
+import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
 import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
 import type { ProfileStateMaintenance } from './profile-state-access'
 import { readProfileStateDomain } from './profile-state-domain-reader'

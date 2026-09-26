@@ -13,9 +13,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { openProfileStateDatabase, profileStateDatabaseFile } from './profile-state-database'
 import * as profileStateDocuments from './profile-state-documents'
-import { profileStateJsonExportPath } from './profile-state-export-path'
+import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
 import { acquireProfileStateMaintenance } from './profile-state-access'
-import { restoreProfileStateJsonExport } from './profile-state-recovery'
+import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
 import {
   bootstrapProfileStateAuthority as bootstrapProfileStateAuthorityImpl,
   classifyProfileStateStorage,
@@ -228,22 +228,23 @@ describe('profile state authority bootstrap', () => {
     const options = { ...paths(directory), allowEmptyProfileState: true }
     const initializationFailure = new Error('injected initial schema failure')
     const originalExec = Database.prototype.exec
-    const execSpy = vi
-      .spyOn(Database.prototype, 'exec')
-      .mockImplementation(function (this: Database, sql) {
-        originalExec.call(this, sql)
-        if (sql.includes('CREATE TABLE')) {
-          const row = this.prepare('PRAGMA database_list').get()
-          if (typeof row?.file !== 'string') {
-            throw new Error('Expected a file-backed database during initialization')
-          }
-          expect(existsSync(`${row.file}-journal`)).toBe(true)
-          for (const suffix of ['-wal', '-shm']) {
-            writeFileSync(`${row.file}${suffix}`, 'interrupted schema initialization')
-          }
-          throw initializationFailure
+    const execSpy = vi.spyOn(Database.prototype, 'exec').mockImplementation(function (
+      this: Database,
+      sql
+    ) {
+      originalExec.call(this, sql)
+      if (sql.includes('CREATE TABLE')) {
+        const row = this.prepare('PRAGMA database_list').get()
+        if (typeof row?.file !== 'string') {
+          throw new Error('Expected a file-backed database during initialization')
         }
-      })
+        expect(existsSync(`${row.file}-journal`)).toBe(true)
+        for (const suffix of ['-wal', '-shm']) {
+          writeFileSync(`${row.file}${suffix}`, 'interrupted schema initialization')
+        }
+        throw initializationFailure
+      }
+    })
 
     expect(() => bootstrapProfileStateAuthority(options)).toThrowError(
       expect.objectContaining({ cause: initializationFailure })
@@ -469,7 +470,10 @@ describe('profile state authority bootstrap', () => {
 
     writeFileSync(options.databaseFile, 'corrupt sqlite primary')
     writeFileSync(options.dataFile, readFileSync(exportPath))
-    const rollbackStore = new Store({ dataFile: options.dataFile })
+    const rollbackStore = new Store({
+      dataFile: options.dataFile,
+      serializedState: readFileSync(options.dataFile, 'utf8')
+    })
     expect(rollbackStore.getSettings().theme).toBe('dark')
     rollbackStore.freezeWrites()
   })
@@ -507,7 +511,10 @@ describe('profile state authority bootstrap', () => {
       'corrupt wal sidecar'
     )
 
-    const rollbackStore = new Store({ dataFile: options.dataFile })
+    const rollbackStore = new Store({
+      dataFile: options.dataFile,
+      serializedState: readFileSync(options.dataFile, 'utf8')
+    })
     expect(rollbackStore.getSettings().theme).toBe('dark')
     rollbackStore.freezeWrites()
   })
