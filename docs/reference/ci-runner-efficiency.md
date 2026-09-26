@@ -6,8 +6,8 @@
   lookup proves that the same PR head, tested merge commit, and workflow commit
   already completed successfully. A changed base, missing proof, failed lookup,
   or still-running check falls back to the full checks. Advisory tests retain
-  their normal readiness routing. The line-count workflow has no draft-dependent
-  work, so it no longer runs again when a draft becomes ready.
+  their normal readiness routing. The mobile and line-count workflows have no
+  draft-dependent work, so they no longer run again when a draft becomes ready.
 - Route the Bun matrix using the actual headless build and selected tests'
   transitive imports, with conservative inclusion for dynamic workers, native
   inputs, fixtures, and toolchain changes. A graph failure runs the full matrix;

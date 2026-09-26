@@ -6,7 +6,6 @@ on:
       - opened
       - synchronize
       - reopened
-      - ready_for_review
     paths:
       - 'mobile/**'
       # Mobile launch contracts exercise the real host dispatcher and durable receipt store.
