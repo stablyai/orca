@@ -231,6 +231,11 @@ export function eraseRpcMethods(
   return methods as readonly RpcAnyMethod[]
 }
 
+// Unsubscribes that must not retire a registration created after their dispatch began.
+export function isRegistrationFencedUnsubscribe(method: string): boolean {
+  return method === 'terminal.unsubscribe' || method === 'session.tabs.unsubscribe'
+}
+
 export function isStreamingMethod(method: RpcAnyMethod): method is RpcStreamingMethod {
   return 'stream' in method && method.stream === true
 }

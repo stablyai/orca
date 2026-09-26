@@ -53,7 +53,8 @@ function makeHost(options: { structuredChat?: boolean } = {}) {
     registerSubscriptionCleanup: registry.register.bind(registry),
     cleanupSubscription: registry.cleanup.bind(registry),
     cleanupSubscriptionsByPrefix: registry.cleanupByPrefix.bind(registry),
-    cleanupSubscriptionsForConnection: registry.cleanupForConnection.bind(registry)
+    cleanupSubscriptionsForConnection: registry.cleanupForConnection.bind(registry),
+    getSubscriptionRegistrationVersion: registry.getRegistrationVersion.bind(registry)
   } as unknown as OrcaRuntimeService
   const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
   return {
@@ -234,6 +235,30 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
 
     expect(host.isRegistered(KEY('sub-1'))).toBe(true)
     expect(frames(messages)).toEqual(['snapshot'])
+  })
+
+  it('a worktree-wide unsubscribe spares a subscribe that arrives while it resolves', async () => {
+    const host = makeHost()
+    const first: Frame[] = []
+    const second: Frame[] = []
+    await host.dispatch(request('sub-1', 'session.tabs.subscribe', { worktree: 'id:wt-1' }), first)
+    const listing = deferred<RuntimeMobileSessionTabsResult>()
+    host.listMobileSessionTabs.mockReturnValueOnce(listing.promise)
+
+    // Old phones send no request id, so the host sweeps every stream for the worktree.
+    const unsubscribing = host.dispatch(
+      request('unsub-1', 'session.tabs.unsubscribe', { worktree: 'id:wt-1' })
+    )
+    await settle()
+    await host.dispatch(request('sub-2', 'session.tabs.subscribe', { worktree: 'id:wt-1' }), second)
+    listing.resolve(visibleSnapshot())
+    await unsubscribing
+    await settle()
+
+    expect(frames(first)).toEqual(['snapshot', 'end'])
+    expect(frames(second)).toEqual(['snapshot'])
+    expect(host.isRegistered(KEY('sub-1'))).toBe(false)
+    expect(host.isRegistered(KEY('sub-2'))).toBe(true)
   })
 
   it('a request-id unsubscribe ends only its own stream', async () => {

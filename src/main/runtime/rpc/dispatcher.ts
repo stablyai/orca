@@ -1,5 +1,6 @@
 import {
   buildRegistry,
+  isRegistrationFencedUnsubscribe,
   isStreamingMethod,
   type RpcAnyMethodDeclaration,
   type RpcEnvelopeMeta,
@@ -109,10 +110,9 @@ export class RpcDispatcher {
           runtime: this.runtime,
           signal: options?.signal,
           connectionId: options?.connectionId,
-          subscriptionRegistrationVersion:
-            request.method === 'terminal.unsubscribe'
-              ? this.runtime.getSubscriptionRegistrationVersion()
-              : undefined,
+          subscriptionRegistrationVersion: isRegistrationFencedUnsubscribe(request.method)
+            ? this.runtime.getSubscriptionRegistrationVersion()
+            : undefined,
           requestId: request.id,
           clientId: options?.clientId,
           clientKind: options?.clientKind,

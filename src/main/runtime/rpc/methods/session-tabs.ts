@@ -203,7 +203,10 @@ export const SESSION_TAB_METHODS = [
   defineMethod({
     name: 'session.tabs.unsubscribe',
     params: SessionTabsUnsubscribe,
-    handler: async (params, { runtime, connectionId, pairedDeviceId }) => {
+    handler: async (
+      params,
+      { runtime, connectionId, pairedDeviceId, subscriptionRegistrationVersion }
+    ) => {
       const snapshot = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
       const connection = connectionId ?? 'local'
       if (params.subscriptionId) {
@@ -214,7 +217,11 @@ export const SESSION_TAB_METHODS = [
       }
       runtime.cleanupSubscription(`session.tabs:${connection}:${params.worktree}`)
       runtime.cleanupSubscription(`session.tabs:${connection}:${snapshot.worktree}`)
-      runtime.cleanupSubscriptionsByPrefix(`session.tabs:${connection}:${snapshot.worktree}:`)
+      // Why: subscribes register on arrival, so spare any that arrived after this unsubscribe.
+      runtime.cleanupSubscriptionsByPrefix(
+        `session.tabs:${connection}:${snapshot.worktree}:`,
+        subscriptionRegistrationVersion
+      )
       return { unsubscribed: true }
     }
   }),
