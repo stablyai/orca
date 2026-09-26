@@ -1,39 +1,31 @@
+import { z } from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcUncheckedPayloadReader } from '../transport/rpc-reader-payload'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { worktreeSummaryReplySchema } from './worktree-metadata-reply-schema'
 
 export type MobileWorktreeSummary = {
   readonly baseRef: string | null
   readonly linkedPR: number | null
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
 /**
  * One reader for both worktree.show consumers. Branch compare read `worktree.baseRef` behind an
  * `isRecord` guard and the PR sidebar read `worktree.linkedPR` through optional chaining; both
  * yield null on the same inputs, so the fields merge without changing either answer.
+ *
+ * Total on purpose: both callers treat a missing summary as "no hint" and fall back to another
+ * source, so a reply this cannot read is a null summary rather than an incompatible reply. The
+ * schema is what turns a `baseRef` of the wrong type into that null instead of into a string the
+ * branch-compare request would then send to the host.
  */
-const worktreeSummaryReader: RpcCompatibleReader<
-  unknown,
-  'worktree-summary',
-  MobileWorktreeSummary | null
-> = (raw) => {
-  const worktree = isRecord(raw) ? raw.worktree : undefined
-  return {
-    compatible: true,
-    variant: 'worktree-summary',
-    value: isRecord(worktree)
-      ? {
-          baseRef: typeof worktree.baseRef === 'string' ? worktree.baseRef : null,
-          linkedPR: typeof worktree.linkedPR === 'number' ? worktree.linkedPR : null
-        }
-      : null,
-    salvage: { droppedPaths: [], droppedCount: 0 }
-  }
-}
+const worktreeSummarySchema: z.ZodType<MobileWorktreeSummary | null, unknown> =
+  worktreeSummaryReplySchema
+    .transform((value): MobileWorktreeSummary | null =>
+      value.worktree
+        ? { baseRef: value.worktree.baseRef ?? null, linkedPR: value.worktree.linkedPR ?? null }
+        : null
+    )
+    .catch(null)
 
 /** A refused show is a missing hint, not a failure: both callers fall back to another source. */
 export const worktreeSummaryRead = bindDeferredRpcOperation(
@@ -42,7 +34,7 @@ export const worktreeSummaryRead = bindDeferredRpcOperation(
     method: 'worktree.show',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: worktreeSummaryReader
+    read: rpcResultVariant('worktree-summary', worktreeSummarySchema)
   })
 )
 
@@ -53,6 +45,6 @@ export const worktreeLinkSet = bindDeferredRpcOperation(
     method: 'worktree.set',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('link-accepted')
+    read: rpcResultVariant('link-accepted', z.unknown())
   })
 )

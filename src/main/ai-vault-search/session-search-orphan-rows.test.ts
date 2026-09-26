@@ -96,7 +96,7 @@ it('snippets nothing for an orphaned row, even asked for it by rowid', async () 
   const { harness: open, rowids } = await withOrphans()
   const plan = planSessionSearchQuery('marmoset')
   for (const scope of ['all', 'conversation'] as const) {
-    expect(sessionSearchSnippet(open.db, scope, rowids[0]!, plan)).toEqual({
+    expect(sessionSearchSnippet(open.db, scope, rowids[0]!, plan, 'or')).toEqual({
       text: '',
       truncated: false
     })

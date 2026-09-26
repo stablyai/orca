@@ -697,6 +697,78 @@ async function postPath(
   })
 }
 
+describe('cell drain endpoint pacing', () => {
+  function appWithDrain(): {
+    app: ReturnType<typeof createRelayApp>
+    drain: ReturnType<typeof vi.fn>
+  } {
+    const drain = vi.fn()
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: {} as never,
+      drain,
+      cellIncarnation,
+      ready: vi.fn(async () => true)
+    } as Parameters<typeof createRelayApp>[1])
+    return { app, drain }
+  }
+
+  it('drains everything at once when the caller asks for no pacing', async () => {
+    const { app, drain } = appWithDrain()
+    const response = await postPath(app, '/v1/admin/drain', 'deploy-token', { v: 1, graceMs: 0 })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, paceWindowMs: 0 })
+    expect(drain).toHaveBeenCalledWith(0, { paceWindowMs: 0 })
+  })
+
+  it('passes the requested window through and echoes what it accepted', async () => {
+    const { app, drain } = appWithDrain()
+    const response = await postPath(app, '/v1/admin/drain', 'deploy-token', {
+      v: 1,
+      graceMs: 0,
+      paceWindowMs: 120_000
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ ok: true, paceWindowMs: 120_000 })
+    expect(drain).toHaveBeenCalledWith(0, { paceWindowMs: 120_000 })
+  })
+
+  it('refuses a window that is negative, fractional, or past the cap', async () => {
+    for (const paceWindowMs of [-1, 1.5, 300_001]) {
+      const { app, drain } = appWithDrain()
+      const response = await postPath(app, '/v1/admin/drain', 'deploy-token', {
+        v: 1,
+        graceMs: 0,
+        paceWindowMs
+      })
+      expect(response.status).toBe(400)
+      expect(drain).not.toHaveBeenCalled()
+    }
+  })
+
+  it('accepts the cap itself', async () => {
+    const { app, drain } = appWithDrain()
+    const response = await postPath(app, '/v1/admin/drain', 'deploy-token', {
+      v: 1,
+      graceMs: 0,
+      paceWindowMs: 300_000
+    })
+    expect(response.status).toBe(200)
+    expect(drain).toHaveBeenCalledWith(0, { paceWindowMs: 300_000 })
+  })
+
+  it('still rejects an unauthenticated pacing request', async () => {
+    const { app, drain } = appWithDrain()
+    const response = await postPath(app, '/v1/admin/drain', 'wrong-token', {
+      v: 1,
+      graceMs: 0,
+      paceWindowMs: 120_000
+    })
+    expect(response.status).toBe(401)
+    expect(drain).not.toHaveBeenCalled()
+  })
+})
+
 function config(overrides: Partial<RelayConfig> = {}): RelayConfig {
   return {
     port: 8080,

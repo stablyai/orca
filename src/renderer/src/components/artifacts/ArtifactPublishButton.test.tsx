@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   openPopover: null as ((open: boolean) => void) | null,
   state: {
     orcaProfileAuthStatus: { configured: true, state: 'connected' } as Record<string, unknown>,
-    orcaProfileConnecting: false,
     settings: { artifactSharingEnabled: true }
   }
 }))
@@ -83,7 +82,6 @@ describe('ArtifactPublishButton', () => {
     mocks.copyLink.mockResolvedValue(true)
     mocks.openPopover = null
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'connected' }
-    mocks.state.orcaProfileConnecting = false
     mocks.state.settings = { artifactSharingEnabled: true }
   })
 

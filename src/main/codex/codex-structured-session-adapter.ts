@@ -36,6 +36,7 @@ import {
 import { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
+import { changeCodexThreadGoal } from './codex-structured-thread-goal'
 import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn
@@ -58,13 +59,14 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
     this.notificationRetries = createCodexStructuredNotificationRetry({
       sessionFor: (sessionId) => this.sessions.get(sessionId),
-      translate: (sessionId, session, method, params, observedAt) =>
+      translate: (sessionId, session, method, params, observedAt, dispatchSequenceAtReceipt) =>
         translateCodexNotification({
           sessionId,
           session,
           method,
           params,
           observedAt,
+          dispatchSequenceAtReceipt,
           turnCancellation: this.turnCancellation,
           emit: (current, event) => this.emit(current, event)
         })
@@ -85,8 +87,14 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       emit: (session, event) => {
         const admission = this.emit(session, event)
         if (!admission.accepted && event.type === 'notification') {
-          const { sessionId, method, params, observedAt } = event
-          this.notificationRetries.handle(sessionId, method, params, observedAt)
+          const { sessionId, method, params, observedAt, dispatchSequenceAtReceipt } = event
+          this.notificationRetries.handle(
+            sessionId,
+            method,
+            params,
+            observedAt,
+            dispatchSequenceAtReceipt
+          )
         }
         return admission
       }
@@ -203,11 +211,14 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     clientMessageId: string
     body: AgentJournalMessageItem
     fence: number
+    requestedAt?: number
+    beforeDispatch?: () => Promise<void>
   }): Promise<AgentSessionDispatchOutcome> {
     const session = this.session(input.sessionId)
     session.dispatchPending = true
     try {
       await this.turnCancellation.captureBaseline(session)
+      await input.beforeDispatch?.()
       return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
     } finally {
       session.dispatchPending = false
@@ -257,6 +268,16 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       input.turnId
     )
   }
+
+  changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) =>
+    changeCodexThreadGoal(
+      this.session(input.sessionId),
+      input.change,
+      input.replacesGoal,
+      this.deps.requestTimeoutMs
+    )
+
+  supportsThreadGoal = (sessionId: string): boolean => this.sessions.has(sessionId)
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
     answerCodexStructuredPrompt({ request, sessions: this.sessions })

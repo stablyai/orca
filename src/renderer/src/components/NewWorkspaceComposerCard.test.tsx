@@ -395,7 +395,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       '[data-contextual-tour-target="workspace-creation-name"]'
     )
     expect(projectSection?.textContent).not.toContain('Task Source')
-    expect(nameSection?.textContent).toContain("Name or 'Create From'")
+    expect(nameSection?.textContent).toContain('Create From')
     const nameInput = current.container.querySelector('[aria-label="workspace name"]')
     expect(nameInput?.getAttribute('data-repo-backed-search-count')).toBe('2')
     expect(nameInput?.getAttribute('data-repo-backed-search-names')).toBe('Repo A,Repo B')

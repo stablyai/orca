@@ -9,6 +9,7 @@ import type {
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
 import type { Store } from '../persistence'
+import { profileStateWriterFailureOutcome } from '../persistence/profile-state/profile-state-writer-errors'
 
 export type CodexResetCreditAttempt = {
   expectedScope: CodexResetCreditExpectedScope
@@ -45,14 +46,20 @@ export class CodexResetCreditLedger {
   private readonly attemptKeyByOffer = new Map<string, string>()
   private readonly unresolvedKeyByAccountScope = new Map<string, string>()
   private durableLedger: CodexResetCreditAttemptLedger | null = null
-  private loadError: Error | null = null
+  private stateError: Error | null = null
+  private mutationQueue: Promise<void> = Promise.resolve()
 
-  constructor(private readonly store: Store) {
+  constructor(
+    private readonly store: Pick<
+      Store,
+      'getCodexResetCreditAttemptLedger' | 'replaceCodexResetCreditAttemptLedgerAndFlush'
+    >
+  ) {
     this.hydrate()
   }
 
   get error(): Error | null {
-    return this.loadError
+    return this.stateError
   }
 
   get(idempotencyKey: string): CodexResetCreditAttempt | undefined {
@@ -114,32 +121,40 @@ export class CodexResetCreditLedger {
     )
   }
 
-  markProviderPending(idempotencyKey: string, attempt: CodexResetCreditAttempt): void {
-    this.persist({ idempotencyKey, expectedScope: attempt.expectedScope, state: 'providerPending' })
-    attempt.state = 'providerPending'
-    this.unresolvedKeyByAccountScope.set(attempt.accountScopeKey, idempotencyKey)
+  markProviderPending(idempotencyKey: string, attempt: CodexResetCreditAttempt): Promise<void> {
+    return this.serializeMutation(async () => {
+      await this.persist({
+        idempotencyKey,
+        expectedScope: attempt.expectedScope,
+        state: 'providerPending'
+      })
+      attempt.state = 'providerPending'
+      this.unresolvedKeyByAccountScope.set(attempt.accountScopeKey, idempotencyKey)
+    })
   }
 
   markSettled(
     idempotencyKey: string,
     attempt: CodexResetCreditAttempt,
     outcome: CodexRateLimitResetOutcome
-  ): void {
-    this.persist({
-      idempotencyKey,
-      expectedScope: attempt.expectedScope,
-      state: 'settled',
-      outcome
+  ): Promise<void> {
+    return this.serializeMutation(async () => {
+      await this.persist({
+        idempotencyKey,
+        expectedScope: attempt.expectedScope,
+        state: 'settled',
+        outcome
+      })
+      attempt.state = 'settled'
+      attempt.settledOutcome = outcome
+      if (this.unresolvedKeyByAccountScope.get(attempt.accountScopeKey) === idempotencyKey) {
+        this.unresolvedKeyByAccountScope.delete(attempt.accountScopeKey)
+      }
     })
-    attempt.state = 'settled'
-    attempt.settledOutcome = outcome
-    if (this.unresolvedKeyByAccountScope.get(attempt.accountScopeKey) === idempotencyKey) {
-      this.unresolvedKeyByAccountScope.delete(attempt.accountScopeKey)
-    }
   }
 
   releaseFresh(idempotencyKey: string, attempt: CodexResetCreditAttempt): void {
-    if (attempt.state !== 'fresh') {
+    if (attempt.state !== 'fresh' || this.stateError) {
       return
     }
     this.attemptsByKey.delete(idempotencyKey)
@@ -151,7 +166,11 @@ export class CodexResetCreditLedger {
   // Why: a removed account's managed home is gone, so its unresolved providerPending
   // attempt can never validate or be replayed; drop it so a target-scoped default reset
   // is not wedged forever by hasPendingResetForTarget matching the orphan.
-  discardForRemovedAccount(accountId: string): void {
+  discardForRemovedAccount(accountId: string): Promise<void> {
+    return this.serializeMutation(() => this.discardAccountAttempts(accountId))
+  }
+
+  private async discardAccountAttempts(accountId: string): Promise<void> {
     const staleAttempts = [...this.attemptsByKey].filter(
       ([, attempt]) => attempt.expectedScope.accountId === accountId
     )
@@ -167,7 +186,7 @@ export class CodexResetCreditLedger {
         const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
         // Persist first so a failed durability barrier leaves the in-memory
         // fail-closed guards aligned with the ledger that will reload.
-        this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
+        await this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
         this.durableLedger = structuredClone(nextLedger)
       }
     }
@@ -202,14 +221,34 @@ export class CodexResetCreditLedger {
         }
       }
     } catch (error) {
-      this.loadError =
+      this.stateError =
         error instanceof Error ? error : new Error('Codex reset-credit attempt ledger is corrupt')
     }
   }
 
-  private persist(nextAttempt: DurableCodexResetCreditAttempt): void {
+  private serializeMutation(operation: () => Promise<void>): Promise<void> {
+    const next = this.mutationQueue.then(async () => {
+      if (this.stateError) {
+        throw this.stateError
+      }
+      try {
+        await operation()
+      } catch (error) {
+        if (profileStateWriterFailureOutcome(error) === 'indeterminate') {
+          this.stateError = new Error('Codex reset-credit attempt durability is unknown', {
+            cause: error
+          })
+        }
+        throw error
+      }
+    })
+    this.mutationQueue = next.catch(() => {})
+    return next
+  }
+
+  private async persist(nextAttempt: DurableCodexResetCreditAttempt): Promise<void> {
     if (!this.durableLedger) {
-      throw this.loadError ?? new Error('Codex reset-credit attempt ledger is unavailable')
+      throw this.stateError ?? new Error('Codex reset-credit attempt ledger is unavailable')
     }
     const index = this.durableLedger.attempts.findIndex(
       (attempt) => attempt.idempotencyKey === nextAttempt.idempotencyKey
@@ -221,7 +260,7 @@ export class CodexResetCreditLedger {
       attempts[index] = nextAttempt
     }
     const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
-    this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
+    await this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
     this.durableLedger = structuredClone(nextLedger)
   }
 }

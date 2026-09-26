@@ -104,7 +104,15 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
             lastActivityAt: () => 2,
             snapshot: () => ({ items: STATUS_ITEMS })
           } as unknown as AgentSessionJournal,
-          params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
+          params: {
+            location: {
+              executionHostId: 'local',
+              wslDistro: null,
+              workspaceId: 'workspace-1',
+              workspaceKind: 'git-worktree' as const
+            },
+            provider: 'codex' as const
+          }
         }
       ]
     ]),
@@ -175,21 +183,7 @@ export function hostStub(): StructuredAgentSessionHost {
     setSessionTabVisibility: vi.fn(async () => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
-    requestHandoff: vi.fn(async () => ({
-      ok: true,
-      replayed: false,
-      fence: 1,
-      cursor: { epoch: 'epoch-a', sequence: 0 },
-      value: {
-        status: {
-          owner: 'native',
-          direction: null,
-          phase: 'idle',
-          stage: null,
-          operationId: null
-        }
-      }
-    })),
+    changeThreadGoal: vi.fn(async () => ({ ok: true, replayed: false })),
     supportsCreate: vi.fn(() => true),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({
@@ -197,6 +191,12 @@ export function hostStub(): StructuredAgentSessionHost {
       current: { model: 'gpt-live' }
     })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
+    journalSnapshot: vi.fn((sessionId: string) => ({
+      sessionId,
+      cursor: { epoch: 'epoch-a', sequence: 0 },
+      items: [],
+      submissions: []
+    })),
     subscribe: vi.fn(() => () => undefined),
     // A real feed, so the snapshot this method hands back is a genuine projection rather
     // than a shape the stub restated.

@@ -1,14 +1,21 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
-  rpcUncheckedMemberReader,
-  rpcUncheckedPayloadReader
-} from '../transport/rpc-reader-payload'
+  taskLinearStatusSchema,
+  taskPreferenceWriteSchema,
+  taskPreflightSchema,
+  taskRuntimeStatusSchema,
+  taskUiStateSchema
+} from './task-runtime-reply-schema'
 
 // What the Tasks screen reads once per host to hydrate, and the preferences it writes back.
+//
+// Readers are checked against task-runtime-reply-schema.ts. The three writes read `z.unknown()`
+// there: no call site interprets their body, so a requirement would have no reader behind it.
 
 /**
- * status.get read for task hydration, the first of two policies on this method. A refused status
- * stops hydration with the host's own message; the create-time probe in
+ * status.get read for task hydration, with its own policy on that method: a refused status stops
+ * hydration with the host's own message, where the create-time probe in
  * mobile-workspace-create-operations.ts degrades instead. One reader serves both.
  */
 export const taskRuntimeStatusRead = bindDeferredRpcOperation(
@@ -17,7 +24,7 @@ export const taskRuntimeStatusRead = bindDeferredRpcOperation(
     method: 'status.get',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('runtime-status')
+    read: rpcResultVariant('runtime-status', taskRuntimeStatusSchema)
   })
 )
 
@@ -31,7 +38,7 @@ export const taskUiStateRead = bindDeferredRpcOperation(
     method: 'ui.get',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedMemberReader('ui-state-member', 'ui')
+    read: rpcResultVariant('ui-state-member', taskUiStateSchema)
   })
 )
 
@@ -42,7 +49,7 @@ export const taskPreflightRead = bindDeferredRpcOperation(
     method: 'preflight.check',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('task-preflight')
+    read: rpcResultVariant('task-preflight', taskPreflightSchema)
   })
 )
 
@@ -53,7 +60,7 @@ export const taskLinearStatusRead = bindDeferredRpcOperation(
     method: 'linear.status',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('linear-status')
+    read: rpcResultVariant('linear-status', taskLinearStatusSchema)
   })
 )
 
@@ -68,7 +75,7 @@ export const taskUiStateWrite = bindDeferredRpcOperation(
     method: 'ui.set',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('ui-state-written')
+    read: rpcResultVariant('ui-state-written', taskPreferenceWriteSchema)
   })
 )
 
@@ -82,6 +89,26 @@ export const taskSettingsWrite = bindDeferredRpcOperation(
     method: 'settings.update',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcUncheckedPayloadReader('setting-written')
+    read: rpcResultVariant('setting-written', taskPreferenceWriteSchema)
+  })
+)
+
+/**
+ * Switching the connected Linear workspace from the filter sheet.
+ *
+ * Declared but never interpreted, and deliberately: the picker chains `loadLinearContext` off the
+ * send without reading the reply, so a refused switch reloads the context exactly as an accepted
+ * one does and only a transport rejection reaches the error copy. Interpreting here would make a
+ * refusal visible for the first time, which is a product change and not this one. See
+ * unvalidated-rpc-request-port-inventory.ts for the ticket. The checked reader keeps that: its
+ * schema is `z.unknown()`, so no payload can make this site fail where main's did not.
+ */
+export const linearWorkspaceSelect = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'linear.select-workspace-or-skip',
+    method: 'linear.selectWorkspace',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('linear-workspace-selection', taskPreferenceWriteSchema)
   })
 )

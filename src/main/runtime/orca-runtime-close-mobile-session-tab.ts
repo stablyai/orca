@@ -20,6 +20,7 @@ import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import { SESSION_TAB_NOT_FOUND_ERROR } from '../../shared/session-tab-close'
+import { rendererPublicationThrottle } from '../window/renderer-publication-throttle'
 
 export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose {
   async closeMobileSessionTab(
@@ -165,7 +166,7 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
       // the relay when no renderer owns the parent: an adopted tab needs the
       // renderer's live pin guard and durable close transaction.
       if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
-        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
+        await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
           allowMissingPersistedTab: Boolean(ptyCloseAuthority),
           force: options.force,
           killPtys:
@@ -177,15 +178,16 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
         return finishCommittedClose()
       }
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
-        // Why: whole-tab close is a lifecycle transaction. The renderer reply
-        // arrives only after canonical retirement and a forced session flush.
+        // The renderer flush can rebase its omission; the host commits the acknowledged identity.
+        const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, tab.parentTabId)
+        // Wait for the renderer's pin guard, retirement and forced session flush.
         const win = this.getAvailableAuthoritativeWindow()
         if (win?.webContents.isDestroyed?.()) {
           throw new Error('runtime_unavailable')
         }
         const releasePublicationThrottle =
           options.clientNavigationId && win
-            ? this.rendererPublicationThrottle.acquire(win.webContents)
+            ? rendererPublicationThrottle.acquire(win.webContents)
             : () => {}
         try {
           await (options.localPtyTeardownOwnedExternally
@@ -200,6 +202,11 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
           releasePublicationThrottle()
         }
         const remainingSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+        const retirement = acknowledgeRetirement()
+        if (!retirement.matches) {
+          this.republishMobileSessionTabsSnapshot(worktreeId)
+          return refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
+        }
         const remainingTab = remainingSnapshot?.tabs.find(
           (candidate): candidate is RuntimeMobileSessionTerminalTab =>
             candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
@@ -213,13 +220,21 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
             ? this.resolvePtyTabCloseSurfaceAuthority(options.expectedPtyCloseAuthority)
             : null
           // Why: after relay recovery the renderer can acknowledge a tab it no longer mirrors; the HUB must still retire its SSH-owned surface.
-          this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
+          await this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
             // Why: the renderer may already have durably removed the tab before acknowledging.
             allowMissingPersistedTab: true,
             force: options.force,
             ...(remainingPtyCloseAuthority ? { authorizedPty: remainingPtyCloseAuthority.pty } : {})
           })
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
+        } else if (retirement.hasPersistedTab) {
+          await this.commitHeadlessTerminalTabRetirement(worktreeId, tab.parentTabId, {
+            force: options.force
+          })
+        }
+        if (!acknowledgeRetirement().matches) {
+          this.republishMobileSessionTabsSnapshot(worktreeId)
+          return refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
         }
         this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
         return finishCommittedClose()
@@ -227,7 +242,7 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
       // Why: notifier implementations without the acknowledged relay may expose
       // only raw pane close. Runtime-owned parents still need de-persist + kill.
       if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
-        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
+        await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
           force: options.force,
           ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
         })
@@ -235,7 +250,7 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
         return finishCommittedClose()
       }
       if (!this.notifier?.closeTerminal) {
-        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
+        await this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
           force: options.force,
           ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
         })

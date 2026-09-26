@@ -14,7 +14,10 @@ export class CapabilityProbeCache<TCapability> {
   private readonly probesByCapability = new Map<TCapability, Promise<CapabilityProbeOutcome>>()
   private readonly supportedCapabilities = new Set<TCapability>()
 
-  constructor(private readonly retryIntervalMs: number) {}
+  constructor(
+    private readonly retryIntervalMs: number,
+    private readonly maxEntries = Number.POSITIVE_INFINITY
+  ) {}
 
   shouldTry(capability: TCapability, nowMs = Date.now()): boolean {
     const retryAfterMs = this.retryAfterByCapability.get(capability)
@@ -34,7 +37,9 @@ export class CapabilityProbeCache<TCapability> {
 
   rememberSupported(capability: TCapability): void {
     this.retryAfterByCapability.delete(capability)
+    this.supportedCapabilities.delete(capability)
     this.supportedCapabilities.add(capability)
+    this.trimSettledEntries()
   }
 
   rememberUnsupported(capability: TCapability, nowMs = Date.now()): void {
@@ -42,6 +47,7 @@ export class CapabilityProbeCache<TCapability> {
     // failure on every poll/search wastes subprocesses and trace space.
     this.supportedCapabilities.delete(capability)
     this.retryAfterByCapability.set(capability, nowMs + this.retryIntervalMs)
+    this.trimSettledEntries()
   }
 
   async runWithFallback<T>(
@@ -97,6 +103,23 @@ export class CapabilityProbeCache<TCapability> {
     this.supportedCapabilities.clear()
   }
 
+  private trimSettledEntries(): void {
+    while (this.supportedCapabilities.size > this.maxEntries) {
+      const oldest = this.supportedCapabilities.values().next()
+      if (oldest.done) {
+        break
+      }
+      this.supportedCapabilities.delete(oldest.value)
+    }
+    while (this.retryAfterByCapability.size > this.maxEntries) {
+      const oldest = this.retryAfterByCapability.keys().next()
+      if (oldest.done) {
+        break
+      }
+      this.retryAfterByCapability.delete(oldest.value)
+    }
+  }
+
   private async runPreferredOrFallback<T>(
     capability: TCapability,
     runPreferred: () => Promise<T>,
@@ -111,7 +134,7 @@ export class CapabilityProbeCache<TCapability> {
       // overwrite that stronger signal.
       const outcome = this.retryAfterByCapability.has(capability) ? 'unsupported' : 'supported'
       if (outcome === 'supported') {
-        this.supportedCapabilities.add(capability)
+        this.rememberSupported(capability)
       }
       settleProbe?.(outcome)
       return result

@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetWorktreeTestSshHostHome } from '../../worktree-removal-test-ssh-host-home'
+
 import {
   MOCK_GIT_WORKTREES,
   ORIGINAL_PLATFORM,
@@ -44,6 +46,10 @@ import {
   syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+
+// Why: these fixtures register an SSH provider, which models a connected relay session — and a
+// connected session has always read the host's `$HOME`. The removal guards refuse without it.
+beforeEach(resetWorktreeTestSshHostHome)
 
 describe('OrcaRuntimeService', () => {
   it('warns that a missing-repo removal only forgot the workspace', async () => {
@@ -298,7 +304,7 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValue([])
 
     try {
-      const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)
+      const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })
 
       expect(result).toEqual({
         preservedBranch: { branchName: 'feature/foo', head: 'abc' },
@@ -340,7 +346,9 @@ describe('OrcaRuntimeService', () => {
     )
 
     try {
-      await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID, true)).rejects.toThrow(
+      await expect(
+        runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true })
+      ).rejects.toThrow(
         `Failed to force delete worktree at ${TEST_WORKTREE_PATH}. error: failed to delete deep/file.txt: Filename too long`
       )
       expect(removePathSpy).not.toHaveBeenCalled()
@@ -387,7 +395,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     try {
-      const result = await runtime.removeManagedWorktree(worktreeId, true)
+      const result = await runtime.removeManagedWorktree(worktreeId, { force: true })
 
       expect(result).toEqual({
         preservedBranch: { branchName: 'feature/foo', head: 'abc' }
@@ -425,9 +433,9 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktreesStrict).mockResolvedValue(registeredWorktrees)
     vi.mocked(removeWorktree).mockResolvedValue({})
 
-    await expect(runtime.removeManagedWorktree(worktreeId, true, false)).rejects.toThrow(
-      'Worktree is locked by Git. Lock reason: active agent session'
-    )
+    await expect(
+      runtime.removeManagedWorktree(worktreeId, { force: true, runHooks: false })
+    ).rejects.toThrow('Worktree is locked by Git. Lock reason: active agent session')
 
     expect(removeWorktree).not.toHaveBeenCalled()
     expect(removeWorktreeMeta).not.toHaveBeenCalled()

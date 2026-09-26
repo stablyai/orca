@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import type { AiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
 import { installInProcessSessionSearchService } from './session-search-in-process-service'
 import {
   openSessionSearchIndexerHarness,
@@ -35,7 +36,7 @@ vi.mock('../ai-vault/cached-session-list', async (importOriginal) => ({
 const ROOT = join(import.meta.dirname, '..', '..', '..')
 
 let harness: SessionSearchIndexerHarness
-let installed: { dispose(): void } | null
+let installed: { apply?(settings: AiVaultSearchSettings): void; dispose(): void } | null
 
 beforeEach(async () => {
   resetSessionParseCacheForTests()
@@ -203,4 +204,38 @@ it('orcad resolves no roots while disabled and discovers late roots when enabled
   if (response.kind === 'results') {
     expect(response.hits.map((hit) => hit.sessionId)).toEqual([id])
   }
+})
+
+// A host with no scanner child has nothing to forward a policy to, so the installed
+// service is itself how a settings write reaches the index.
+it('re-applies consent on an in-process host without reinstalling the service', async () => {
+  installed = installInProcessSessionSearchService({
+    dataRoot: harness.root,
+    roots: harness.roots,
+    settings: { enabled: false, historyDays: null }
+  })
+  expect(await searchSessionService({ query: 'ledger' }, 'relay')).toEqual({
+    kind: 'unavailable',
+    reason: 'disabled'
+  })
+
+  installed?.apply?.({ enabled: true, historyDays: null })
+  expect(await searchSessionService({ query: 'ledger' }, 'relay')).not.toMatchObject({
+    kind: 'unavailable',
+    reason: 'disabled'
+  })
+
+  installed?.apply?.({ enabled: false, historyDays: null })
+  expect(await searchSessionService({ query: 'ledger' }, 'relay')).toEqual({
+    kind: 'unavailable',
+    reason: 'disabled'
+  })
+})
+
+// orcad reaches the index through the deps hook the runtime RPC calls; the wiring is
+// what no unit of either module can show.
+it('wires orcad consent from the runtime hook to the installed service', () => {
+  const source = readFileSync(join(ROOT, 'src/main/orcad/orcad-entry.ts'), 'utf8')
+  expect(source).toContain('applySessionSearchSettings:')
+  expect(source).toContain('sessionSearch?.apply(next)')
 })

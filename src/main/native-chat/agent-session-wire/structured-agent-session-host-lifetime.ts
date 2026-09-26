@@ -5,6 +5,7 @@
 // bookkeeping that decides when to run it than buried among the twenty other things a session can
 // do.
 
+import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import {
   evictStructuredAgentSession,
@@ -20,7 +21,7 @@ import type {
 } from './structured-agent-session-host-types'
 import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
 import { resumeHeldStructuredAgentSession } from './structured-agent-session-hold-resume'
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
 
 export type StructuredAgentSessionLifetimeContext = {
@@ -30,6 +31,11 @@ export type StructuredAgentSessionLifetimeContext = {
   now: () => number
   /** Drops the session's row from the agent-status store; see `forgetStructuredAgentSession`. */
   forgetStatus: (sessionId: string) => void
+  /** Quit-only snapshot taken immediately before the provider child is stopped. */
+  restartWitness?: {
+    beforeStop: (sessionId: string) => void
+    stopped: (sessionId: string) => void
+  }
 }
 
 /** Dropping a session and dropping its status row are ONE operation: the store keeps the row until
@@ -51,8 +57,8 @@ function hasProviderChild(
 }
 
 /** The wind-down this host owes for the session's child. A live child always owes one, whatever a
- *  previous childless eviction recorded — the same session object is re-acquired in place on a
- *  handoff back to native, so a remembered `false` must never outrank the child in front of it. */
+ *  previous childless eviction recorded: a remembered `false` must never outrank the child in front
+ *  of it. */
 function owesProviderChildWindDown(session: StructuredAgentSessionHostSession): boolean {
   return session.hasProviderChild || session.owesProviderChildWindDown === true
 }
@@ -80,9 +86,13 @@ export async function evictHeldStructuredAgentSession(
     owesProviderChildWindDown: owesWindDown,
     eventSink: context.runtimeState.eventSinkFor(sessionId),
     adapter: context.deps.adapter,
+    ...(context.restartWitness
+      ? { beforeProviderChildStop: () => context.restartWitness?.beforeStop(sessionId) }
+      : {}),
     // Host state must not disagree with the adapter for the seven steps in between.
     onProviderChildStopped: () => {
       session.hasProviderChild = false
+      context.restartWitness?.stopped(sessionId)
     },
     forget: async () => {
       await forgetStructuredAgentSession(context, sessionId)
@@ -130,7 +140,9 @@ export async function evictHeldStructuredAgentSession(
  *  session whose child is already stopped but whose wind-down aborted is still in scope — that is
  *  the retry. */
 export async function evictOwnedStructuredAgentSessions(
-  context: StructuredAgentSessionLifetimeContext,
+  context: StructuredAgentSessionLifetimeContext & {
+    serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
+  },
   retainOnFailure: Set<string>
 ): Promise<void> {
   const ownedSessionIds = [...context.sessions]
@@ -146,7 +158,9 @@ export async function evictOwnedStructuredAgentSessions(
   await Promise.all(
     ownedSessionIds.map(async (sessionId) => {
       try {
-        await evictHeldStructuredAgentSession(context, sessionId)
+        await context.serialize(sessionId, () =>
+          evictHeldStructuredAgentSession(context, sessionId)
+        )
         retainOnFailure.delete(sessionId)
       } catch (error) {
         failures.push(error)
@@ -158,48 +172,43 @@ export async function evictOwnedStructuredAgentSessions(
   }
 }
 
-/** The first hold on a childless session: reconcile the lease, settle recovery, then attach. */
-export async function resumeStructuredAgentSessionForHold(
-  context: StructuredAgentSessionLifetimeContext & {
-    reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
-  },
-  sessionId: string,
-  attach: Parameters<typeof resumeHeldStructuredAgentSession>[0]['attach']
-): Promise<void> {
-  const unreconciled = await context.reconcileLeases(sessionId)
-  if (unreconciled) {
-    throw new Error(unreconciled.code)
-  }
-  await context.runtimeState.resolveRecovery(sessionId)
-  await resumeHeldStructuredAgentSession({
-    sessionId,
-    deps: context.deps,
-    now: context.now,
-    attach
-  })
-}
-
+/** The holds resume through the host's own attach, inside the session's serialize: a hold's
+ *  resume and a send's ensure-owner step are the same serialized attach with a different asker. */
 export function createStructuredAgentSessionHolds(
-  context: StructuredAgentSessionLifetimeContext,
-  input: {
-    reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
-    attach: Parameters<typeof resumeHeldStructuredAgentSession>[0]['attach']
-    close: (sessionId: string) => Promise<void>
-  }
+  attachContext: () => StructuredAgentSessionAttachContext,
+  close: (sessionId: string) => Promise<void>
 ): StructuredAgentSessionHolds {
+  const context = attachContext()
   return new StructuredAgentSessionHolds({
-    resume: (sessionId) =>
-      resumeStructuredAgentSessionForHold(
-        { ...context, reconcileLeases: input.reconcileLeases },
+    resume: (sessionId, attachOptions) =>
+      resumeHeldStructuredAgentSession({
         sessionId,
-        input.attach
-      ),
-    evict: input.close,
+        context: attachContext(),
+        callerKey: attachOptions?.admitRecoveryTicket
+          ? 'trusted-local:provider-exit-recovery'
+          : 'trusted-local:surface-hold',
+        ...(attachOptions ? { attachOptions } : {})
+      }),
+    // Tracked from enqueue: a quit drains a queued resume before it evicts, so no child is
+    // spawned behind the eviction and orphaned.
+    serialize: (sessionId, task) => {
+      const current = attachContext()
+      return current.tasks.trackAttach(current.serialize(sessionId, task))
+    },
+    evict: close,
     hasProviderChild: (sessionId) => hasProviderChild(context, sessionId),
-    isTurnActive: (sessionId) => {
+    // A send pending while the child is still starting is held for that start; evicting would
+    // refuse it. Any other pending send may wait on an echo that never comes, so eviction retires it.
+    // Subagents, commands and monitors outlive the lead's turn inside the child, so the live roster
+    // the sidebar shows as working is owed too; stopping the child would end them silently.
+    hasOwedWork: (sessionId) => {
       const session = context.sessions.get(sessionId)
       return session
-        ? activeStructuredAgentSessionTurnId(session.journal.snapshot().items) !== null
+        ? activeStructuredAgentSessionTurnId(session.journal.snapshot().items) !== null ||
+            (session.providerChildPhase === 'starting' &&
+              session.journal.pendingSubmissions().length > 0) ||
+            agentChildWorkLiveness(context.deps.adapter.backgroundTaskState?.(sessionId)?.tasks) !==
+              null
         : false
     },
     onError: (error) => context.deps.onEventSinkError?.(error),

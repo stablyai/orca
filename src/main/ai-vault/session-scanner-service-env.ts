@@ -33,6 +33,9 @@ export const RUNTIME_ENV_ALLOWLIST = [
 // Why: the desktop child resolves agent roots from its own environment, so
 // dropping one hides every session of a user who relocated that agent's home.
 const AGENT_ROOT_ENV_ALLOWLIST = [
+  // Why: Devin's Windows data root resolves under %APPDATA%, which managed
+  // machines relocate away from the profile default.
+  'APPDATA',
   'CODEX_HOME',
   'CLINE_SESSION_DATA_DIR',
   'COPILOT_HOME',
@@ -40,13 +43,16 @@ const AGENT_ROOT_ENV_ALLOWLIST = [
   'GROK_HOME',
   'KIMI_CODE_HOME',
   'OMP_CODING_AGENT_DIR',
+  'OMP_PROFILE',
   'OPENCLAW_STATE_DIR',
   'OPENCODE_DB',
   'PI_CODING_AGENT_DIR',
+  'PI_CONFIG_DIR',
+  'PI_PROFILE',
   'PRIME_AGENT_CODING_AGENT_DIR',
   'PRIME_AGENT_CODING_AGENT_SESSION_DIR',
   'PRIME_AGENT_SESSION_DIR',
-  // Why: OpenCode has no home variable — its store hangs off the XDG data dir,
+  // Why: OpenCode and migrated OMP session stores use the XDG data dir,
   // so this one is an agent root here rather than generic runtime state.
   'XDG_DATA_HOME'
 ] as const

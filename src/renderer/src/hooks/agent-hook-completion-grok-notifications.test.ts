@@ -43,7 +43,6 @@ type MockStoreState = {
   agentLaunchConfigByPaneKey: Record<string, unknown>
   agentStatusByPaneKey: Record<string, unknown>
   getAgentLaunchConfigForStatusEntry: () => undefined
-  getAgentLaunchConfigForStatusMetadata: () => undefined
 }
 
 let mockStoreState: MockStoreState
@@ -78,8 +77,7 @@ describe('Grok hook completion notifications', () => {
       terminalLayoutsByTabId: {},
       agentLaunchConfigByPaneKey: {},
       agentStatusByPaneKey: {},
-      getAgentLaunchConfigForStatusEntry: () => undefined,
-      getAgentLaunchConfigForStatusMetadata: () => undefined
+      getAgentLaunchConfigForStatusEntry: () => undefined
     }
   })
 
@@ -242,6 +240,41 @@ describe('Grok hook completion notifications', () => {
     vi.advanceTimersByTime(1_500)
 
     expect(notifications).toHaveLength(1)
+  })
+
+  it('stays silent while a background subagent outlives the main agent, then announces once', async () => {
+    const turn = (timestamp: string, promptId: string, backgroundTasks: unknown[]) => [
+      { hookEventName: 'UserPromptSubmit', timestamp, sessionId: 'session-1', promptId },
+      {
+        hookEventName: 'Stop',
+        timestamp: timestamp.replace(':00.000Z', ':01.000Z'),
+        sessionId: 'session-1',
+        promptId,
+        reason: 'end_turn',
+        stopHookActive: false,
+        backgroundTasks
+      }
+    ]
+    const early = await play(
+      turn('2026-09-12T03:05:00.000Z', 'prompt-1', [
+        { id: 'task-1', type: 'subagent', status: 'running', agentType: 'general-purpose' }
+      ])
+    )
+    vi.advanceTimersByTime(1_500)
+    expect(early).toHaveLength(0)
+
+    const notifications = await play([
+      ...turn('2026-09-12T03:06:00.000Z', 'prompt-1', [
+        { id: 'task-1', type: 'subagent', status: 'running', agentType: 'general-purpose' }
+      ]),
+      ...turn('2026-09-12T03:07:00.000Z', 'task-completed-task-1', [])
+    ])
+    vi.advanceTimersByTime(1_500)
+    expect(notifications).toHaveLength(1)
+    expect(notifications[0]).toMatchObject({
+      at: Date.parse('2026-09-12T03:07:02.500Z'),
+      snapshot: { state: 'done', agentType: 'grok' }
+    })
   })
 
   it('does not announce a delayed cancellation after the next prompt starts', async () => {

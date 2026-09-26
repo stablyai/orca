@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import type {
-  AgentSessionHandoffStatus,
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
@@ -18,6 +17,7 @@ import { insertJournalRow } from '../agent-session-journal/journal-row-table'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
+import { MAX_RETAINED_SESSION_ACTIVITIES } from './structured-agent-session-activity-retention'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 
 const SESSION = 'subscriber-session'
@@ -35,6 +35,26 @@ afterEach(async () => {
 })
 
 describe('AgentSessionSubscribers', () => {
+  it('bounds retained turn activity across session churn', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      journalDir: join(root, 'activity-churn-journal')
+    })
+    const subscribers = new AgentSessionSubscribers()
+
+    for (let index = 0; index < MAX_RETAINED_SESSION_ACTIVITIES + 4; index += 1) {
+      subscribers.publish(`session-${index}`, journal, { turnId: `turn-${index}`, text: 'working' })
+    }
+
+    expect(subscribers.retainedActivityCountForTests).toBe(MAX_RETAINED_SESSION_ACTIVITIES)
+  })
+
   it('publishes the current fence when a resumed cursor is already caught up', async () => {
     const journal = await journals.open({
       identity: {
@@ -99,7 +119,7 @@ describe('AgentSessionSubscribers', () => {
       { fence: 1 }
     )
     subscribers.publish(SESSION, journal)
-    subscribers.handoff(SESSION, 1, { owner: 'native' } as AgentSessionHandoffStatus)
+    subscribers.backgroundTasks(SESSION, null, 1)
     subscribers.reset(SESSION, journal, 'epoch_changed', 1)
 
     expect(events.map((event) => ('hostNow' in event ? event.hostNow : null))).toEqual([
@@ -184,13 +204,6 @@ describe('AgentSessionSubscribers', () => {
     subscribers.publish(SESSION, journal)
     subscribers.reset(SESSION, journal, 'epoch_changed', 1)
     subscribers.snapshot(SESSION, journal, 1)
-    subscribers.handoff(SESSION, 1, {
-      owner: 'native',
-      direction: null,
-      phase: 'idle',
-      stage: null,
-      operationId: null
-    })
 
     expect(published).toEqual([SESSION, SESSION, SESSION])
   })
@@ -213,7 +226,18 @@ describe('AgentSessionSubscribers', () => {
       sessions: new Map([
         [
           SESSION,
-          { journal, params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' } }
+          {
+            journal,
+            params: {
+              location: {
+                executionHostId: 'local',
+                wslDistro: null,
+                workspaceId: 'workspace-1',
+                workspaceKind: 'git-worktree'
+              },
+              provider: 'codex'
+            }
+          }
         ]
       ]),
       getRecord: () => null,
@@ -249,51 +273,6 @@ describe('AgentSessionSubscribers', () => {
     expect(statuses.at(-1)).toEqual({
       type: 'status',
       session: expect.objectContaining({ status: 'idle' })
-    })
-  })
-
-  it('publishes handoff-only changes without serializing a transcript snapshot', async () => {
-    const journal = await journals.open({
-      identity: {
-        sessionId: SESSION,
-        workspaceId: 'workspace-1',
-        hostId: 'local',
-        agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
-      },
-      journalDir: join(root, 'journal')
-    })
-    const subscribers = new AgentSessionSubscribers()
-    const events: AgentSessionSubscribeEvent[] = []
-    subscribers.open({
-      id: 'subscriber-1',
-      sessionId: SESSION,
-      journal,
-      fence: 1,
-      emit: (event) => events.push(event)
-    })
-    const handoff: AgentSessionHandoffStatus = {
-      owner: 'native',
-      direction: 'to-tui',
-      phase: 'switching',
-      stage: 'preparing',
-      operationId: 'handoff-1'
-    }
-
-    subscribers.handoff(SESSION, 2, handoff)
-
-    expect(events.at(-1)).toEqual({
-      type: 'batch',
-      sessionId: SESSION,
-      batch: {
-        cursor: journal.cursor(),
-        items: [],
-        removedItemIds: [],
-        submissions: []
-      },
-      fence: 2,
-      hostNow: expect.any(Number),
-      handoff
     })
   })
 

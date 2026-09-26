@@ -1,0 +1,46 @@
+{
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "bundleSha256": "7c63ca547aa62570878664f9e0504a8747f4daec2daf7c3cffcfce65ebede6bd",
+  "cases": [
+    {
+      "chunkSize": 65536,
+      "hidden": false,
+      "stalled": {
+        "producedChars": 2686976,
+        "producerPaused": true,
+        "socketBufferedBytes": 131300,
+        "batcherQueuedChars": 2031616,
+        "rssBytes": 62291968
+      },
+      "receivedBytes": 2690244,
+      "afterDrain": { "producerPaused": false, "socketBufferedBytes": 0, "batcherQueuedChars": 0 }
+    },
+    {
+      "chunkSize": 1024,
+      "hidden": false,
+      "stalled": {
+        "producedChars": 3674112,
+        "producerPaused": true,
+        "socketBufferedBytes": 3401200,
+        "batcherQueuedChars": 0,
+        "rssBytes": 92307456
+      },
+      "receivedBytes": 3946800,
+      "afterDrain": { "producerPaused": false, "socketBufferedBytes": 0, "batcherQueuedChars": 0 }
+    },
+    {
+      "chunkSize": 1024,
+      "hidden": true,
+      "stalled": {
+        "producedChars": 8388608,
+        "producerPaused": false,
+        "socketBufferedBytes": 131300,
+        "batcherQueuedChars": 667648,
+        "rssBytes": 105005056
+      },
+      "receivedBytes": 1607892,
+      "afterDrain": { "producerPaused": false, "socketBufferedBytes": 0, "batcherQueuedChars": 0 }
+    }
+  ]
+}

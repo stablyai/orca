@@ -156,6 +156,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       - name: Cache electron-builder downloads
         if: steps.freshness.outputs.should_build == 'true'
@@ -178,6 +181,11 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.freshness.outputs.should_build == 'true'
 
       # Why: signing is what makes a daily installable over an existing Orca, so
       # a missing cert must fail here rather than after a 20-minute build.

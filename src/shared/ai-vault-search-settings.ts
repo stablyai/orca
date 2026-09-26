@@ -63,3 +63,17 @@ export function sameAiVaultSearchSettings(
 ): boolean {
   return a.enabled === b.enabled && a.historyDays === b.historyDays
 }
+
+/**
+ * The policy a settings write moves to, or null when nothing about it changed.
+ *
+ * Every host that owns an index closes and reconstructs on apply, so an unchanged
+ * value has to be filtered here rather than at the indexer.
+ */
+export function changedAiVaultSearchSettings(
+  before: { aiVaultSearch?: unknown } | null | undefined,
+  after: { aiVaultSearch?: unknown } | null | undefined
+): AiVaultSearchSettings | null {
+  const next = resolveAiVaultSearchSettings(after)
+  return sameAiVaultSearchSettings(resolveAiVaultSearchSettings(before), next) ? null : next
+}

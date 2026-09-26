@@ -206,7 +206,8 @@ export function RichMarkdownEditorSurface({
         <div className="relative min-h-0 flex-1">
           <div
             ref={scrollContainerRef}
-            className="relative h-full overflow-auto scrollbar-editor"
+            // Image layout must not anchor-scroll over the restored tab position.
+            className="relative h-full overflow-auto scrollbar-editor [overflow-anchor:none]"
             onMouseDown={(event) => {
               if (!shouldFocusEmptyEditorFromSurfaceClick(event, editor)) {
                 return

@@ -1,0 +1,138 @@
+{
+  "operation": "linear.select-workspace-picker",
+  "family": "linear.select-workspace-picker",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "b65996c152b632d553a31e07e31ea5c76f998eada42cf0966923d730da21908f",
+  "scenarioSha256": "b6eb40d9a91c89179483afec93fbc121b99ef679d3b2433575b26694d0c577d5",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2a8d45397a3b": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "36c0bdbc5f9b": {
+      "contextLoads": 0,
+      "error": "",
+      "selectedWorkspaceId": "workspace-b",
+      "teamCount": 0
+    },
+    "5100209812a4": {
+      "name": "linear.context-reloaded",
+      "ordinal": 3,
+      "value": {
+        "contextLoads": 1
+      }
+    },
+    "87e48df4867a": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.selectWorkspace\",\"params\":{\"workspaceId\":\"workspace-b\"}}"
+    },
+    "d2ade472a8ba": {
+      "contextLoads": 1,
+      "error": "",
+      "selectedWorkspaceId": "workspace-b",
+      "teamCount": 0
+    },
+    "dc6af816d203": {
+      "name": "linear.selectWorkspace#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.selectWorkspace"
+        },
+        {
+          "name": "params",
+          "value": {
+            "workspaceId": "workspace-b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "linear-select-workspace",
+    "checkpoints": [
+      {
+        "id": "selected",
+        "observation": {
+          "sender": ["dc6af816d203"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "36c0bdbc5f9b",
+          "effects": []
+        }
+      },
+      {
+        "id": "switched",
+        "observation": {
+          "sender": ["2a8d45397a3b"],
+          "payloads": ["87e48df4867a"],
+          "settlements": {
+            "select-b": "eb79a9b3682a"
+          },
+          "state": "d2ade472a8ba",
+          "effects": ["5100209812a4"]
+        }
+      }
+    ]
+  }
+}

@@ -81,11 +81,12 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
       adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'sonnet', fence: 7 })
     ).resolves.toEqual({ model: 'sonnet' })
     // The model write pre-flights the catalog first; this CLI lists nothing, which
-    // identifies no model and so refuses none.
-    expect(claude.connections[0].calls.slice(-3)).toEqual([
+    // identifies no model and so refuses none. Then it asks for the new model's window.
+    expect(claude.connections[0].calls.slice(-4)).toEqual([
       { subtype: 'interrupt', params: {} },
       { subtype: 'list_models' },
-      { subtype: 'set_model', params: { model: 'sonnet' } }
+      { subtype: 'set_model', params: { model: 'sonnet' } },
+      { subtype: 'get_context_usage' }
     ])
 
     claude.routes.interrupt = () => {

@@ -111,6 +111,9 @@ export function disposeStructuredAgentSessionSendResult(
 ): StructuredAgentSessionSendDisposition {
   const result = input.result
   if (!result.ok) {
+    const refusedIndex = input.entries.findIndex(
+      (candidate) => candidate.clientMessageId === input.entry.clientMessageId
+    )
     const entries = input.entries.map((candidate) =>
       candidate.clientMessageId === input.entry.clientMessageId
         ? requeueStructuredAgentSessionSendRefusal(
@@ -124,7 +127,9 @@ export function disposeStructuredAgentSessionSendResult(
     return {
       entries,
       error: result.refusal.message,
-      blockedClientMessageId: entries[0]?.clientMessageId ?? null,
+      // Read back by index rather than from the input: a refusal can rotate the id, and the
+      // refused entry is not always the head now that an admitted one no longer holds the queue.
+      blockedClientMessageId: entries[refusedIndex]?.clientMessageId ?? null,
       retryWithFreshClientMessageId: null
     }
   }
@@ -167,8 +172,10 @@ export function disposeStructuredAgentSessionSendResult(
   }
   // `pending` is the host saying the message was written and is awaiting the
   // provider's acknowledgement, which cannot arrive until the turn ahead of it
-  // ends. That is not doubt: the entry stays `dispatching` and the queue behind
-  // it keeps its order until the echo settles it.
+  // ends. That is not doubt, and keeping order is no longer the reason to hold
+  // the entry -- the host fixed the order when it wrote the row. It stays
+  // because a `pending` can still settle `rejected` or `unknown`, and only the
+  // entry carries the retry state that answer needs.
   return {
     entries: replaceEntryState(
       input,

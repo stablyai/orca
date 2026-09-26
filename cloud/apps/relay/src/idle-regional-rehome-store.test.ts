@@ -171,15 +171,64 @@ describe('constrained idle regional assignment transaction', () => {
     )
     const candidates = await store.selectIdleRegionalRehomeCandidates(safety)
     expect(candidates).toHaveLength(capacity === 11 ? 1 : 0)
-    expect(await store.commitIdleRegionalRehome(request, safety)).toEqual({
-      outcome: capacity === 11 ? 'committed' : 'deferred'
-    })
+    expect(await store.commitIdleRegionalRehome(request, safety)).toEqual(
+      capacity === 11
+        ? { outcome: 'committed' }
+        : { outcome: 'deferred', reason: 'candidate-ineligible' }
+    )
     const [target] = await database.query("SELECT reserved_requests FROM relay_cells WHERE cell_id = 'target'")
     expect(Number(target!.reserved_requests)).toBe(capacity === 11 ? 11 : 7)
     expect(await store.resolve(identity)).toMatchObject({
       cellId: capacity === 11 ? 'target' : 'source',
       assignmentEpoch: capacity === 11 ? 2 : 1
     })
+  })
+
+  it.each(['next_dispatch_at', 'paused_until'] as const)(
+    'skips the candidate join while %s holds the durable dispatch budget closed',
+    async (column) => {
+      const { store, database, safety } = await setup()
+      const query = vi.spyOn(database, 'query')
+      // One assignment only: setup leaves both fields at 0, and naming the other
+      // one too would assign this column twice, which Postgres rejects.
+      await database.query(
+        `UPDATE relay_region_rehome_worker_state SET ${column} = ? WHERE worker_id = 'global'`,
+        [safety.observedAt + 1]
+      )
+      for (let tick = 0; tick < 3; tick++) {
+        query.mockClear()
+        expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
+        expect(query).toHaveBeenCalledTimes(2)
+        expect(query.mock.calls[1]![0]).toMatch(/FROM relay_region_rehome_worker_state/s)
+      }
+      await database.query(
+        `UPDATE relay_region_rehome_worker_state SET ${column} = ? WHERE worker_id = 'global'`,
+        [safety.observedAt]
+      )
+      query.mockClear()
+      expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
+      expect(query.mock.calls.length).toBeGreaterThan(2)
+    }
+  )
+
+  it('polls when the worker state row has never been written', async () => {
+    const { store, database, safety } = await setup()
+    await database.query('DELETE FROM relay_region_rehome_worker_state')
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
+  })
+
+  it('leaves the candidate page offset untouched across a closed dispatch budget', async () => {
+    const { store, database, safety } = await setup()
+    const first = await store.selectIdleRegionalRehomeCandidates(safety)
+    await database.query(
+      `UPDATE relay_region_rehome_worker_state SET next_dispatch_at = ? WHERE worker_id = 'global'`,
+      [safety.observedAt + 1]
+    )
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
+    await database.query(
+      `UPDATE relay_region_rehome_worker_state SET next_dispatch_at = 0 WHERE worker_id = 'global'`
+    )
+    expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual(first)
   })
 
   it('progresses past a full page of busy candidates without writing eligibility state', async () => {
@@ -245,7 +294,7 @@ describe('constrained idle regional assignment transaction', () => {
       } finally {
         held.release()
       }
-      expect(await commit).toEqual({ outcome: 'deferred' })
+      expect(await commit).toEqual({ outcome: 'deferred', reason: 'candidate-ineligible' })
       expect(await store.reconcileIdleRegionalRehome(request)).toBe('stale')
       expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
     }
@@ -321,7 +370,7 @@ describe('constrained idle regional assignment transaction', () => {
     const { store, safety, request } = await setup()
     expect(
       await store.commitIdleRegionalRehome({ ...request, targetCellId: 'missing' }, safety)
-    ).toEqual({ outcome: 'deferred' })
+    ).toEqual({ outcome: 'deferred', reason: 'candidate-ineligible' })
     await store.activateControl(identity, {
       cellId: 'source',
       assignmentEpoch: 1,
@@ -335,9 +384,13 @@ describe('constrained idle regional assignment transaction', () => {
 
   it('does not commit without process safety or cohort authorization', async () => {
     const { store, safety, request, database } = await setup()
-    expect(await store.commitIdleRegionalRehome(request)).toEqual({ outcome: 'deferred' })
+    expect(await store.commitIdleRegionalRehome(request)).toEqual({
+      outcome: 'deferred',
+      reason: 'director-safety-stale'
+    })
     expect(await store.commitIdleRegionalRehome(request, safety, 0)).toEqual({
-      outcome: 'deferred'
+      outcome: 'deferred',
+      reason: 'cohort-closed'
     })
     expect(await database.query('SELECT * FROM relay_region_rehome_attempts')).toEqual([])
   })

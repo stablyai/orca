@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PTY_STARTUP_INGRESS_VERSION } from '../shared/pty-startup-ingress'
 import {

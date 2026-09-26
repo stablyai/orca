@@ -412,19 +412,24 @@ describe('resolveAutoAckTabTargets', () => {
     activeTabIdByWorktree: {
       'wt-1': 'tab-1',
       [FLOATING_TERMINAL_WORKTREE_ID]: FLOATING_TAB_ID
-    }
+    },
+    getActiveTab: () => null
   }
 
   it('scans the floating tab alongside the main tab while the panel is visible', () => {
     expect(resolveAutoAckTabTargets(baseState, { floatingPanelVisible: true })).toEqual([
-      { tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID },
-      { tabId: 'tab-1', worktreeId: 'wt-1' }
+      {
+        tabId: FLOATING_TAB_ID,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        surfaceKind: 'terminal'
+      },
+      { tabId: 'tab-1', worktreeId: 'wt-1', surfaceKind: 'terminal' }
     ])
   })
 
   it('skips the floating tab while the panel is closed', () => {
     expect(resolveAutoAckTabTargets(baseState, { floatingPanelVisible: false })).toEqual([
-      { tabId: 'tab-1', worktreeId: 'wt-1' }
+      { tabId: 'tab-1', worktreeId: 'wt-1', surfaceKind: 'terminal' }
     ])
   })
 
@@ -434,7 +439,9 @@ describe('resolveAutoAckTabTargets', () => {
         { ...baseState, activeView: 'activity' },
         { floatingPanelVisible: true }
       )
-    ).toEqual([{ tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }])
+    ).toEqual([
+      { tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID, surfaceKind: 'terminal' }
+    ])
   })
 
   it('scans nothing outside the terminal view with the panel closed', () => {
@@ -452,7 +459,9 @@ describe('resolveAutoAckTabTargets', () => {
         { ...baseState, activeTabId: FLOATING_TAB_ID },
         { floatingPanelVisible: true }
       )
-    ).toEqual([{ tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }])
+    ).toEqual([
+      { tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID, surfaceKind: 'terminal' }
+    ])
   })
 })
 

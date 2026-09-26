@@ -1,10 +1,5 @@
 import type { WorkspaceSourceEffectsModel } from './use-mobile-tasks-workspace-source-effects'
-import {
-  type SparsePreset,
-  type SshConnectionState,
-  useCallback,
-  useEffect
-} from './mobile-tasks-dependencies'
+import { type SparsePreset, useCallback, useEffect } from './mobile-tasks-dependencies'
 import { sortSparsePresetsByName } from './mobile-tasks-legacy-foundation'
 import { repoSparsePresetSaveRun, sshRepoStateRead } from './mobile-workspace-source-operations'
 
@@ -89,7 +84,7 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
         name: workspaceSparseDraftName,
         directories: workspaceSparseDraftParsed.directories
       })
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the preset's `id`, `name` and `directories` — everything the drawer sorts, lowercases or joins — and types the rest; `repoId`, `createdAt` and `updatedAt` are declared non-optional by SparsePreset but absent from the recorded preset, so defaulting them here would put numbers in the drawer's state the host never sent.
       const saved = repoSparsePresetSaveRun.interpret(reply) as SparsePreset | undefined
       if (!saved) {
         throw new Error('Failed to save sparse preset.')
@@ -135,9 +130,7 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
         if (stale) {
           return
         }
-        const state =
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          (sshRepoStateRead.interpret(reply) as SshConnectionState | null | undefined) ?? null
+        const state = sshRepoStateRead.interpret(reply) ?? null
         setWorkspaceSshState(
           state ?? {
             targetId: workspaceCreateTargetConnectionId,

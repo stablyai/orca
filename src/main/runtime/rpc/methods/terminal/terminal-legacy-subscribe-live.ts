@@ -3,6 +3,7 @@ import {
   encodeTerminalStreamJson
 } from '../../../../../shared/terminal-stream-protocol'
 import {
+  mobileSnapshotByteBudget,
   sendMobileResizeRestream,
   sendSnapshotFrames,
   serializeStableMobileRendererSnapshot
@@ -27,7 +28,15 @@ export function activateLegacyBinarySubscription(
           return
         }
         state.outputBatcher?.flush()
-        const recovery = await serializeStableMobileRendererSnapshot(runtime, ptyId)
+        // One object for the budget and the frame it approves: the budget named
+        // `pending-output-overflow` while the send below named `renderer-mount-ready`, which is
+        // four bytes the approving number never counted.
+        const recoveryFrame = { kind: 'resized', reason: 'renderer-mount-ready' } as const
+        const recovery = await serializeStableMobileRendererSnapshot(
+          runtime,
+          ptyId,
+          mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, recoveryFrame)
+        )
         if (state.closed) {
           return
         }
@@ -41,11 +50,10 @@ export function activateLegacyBinarySubscription(
         runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(ptyId, recovery)
         // Why: shipped mobile clients apply resized snapshots in place, so a blank xterm recovers without resubscribe.
         const recoveryStats = sendSnapshotFrames(state.sendFrame, {
-          kind: 'resized',
+          ...recoveryFrame,
           cols: recovery.cols,
           rows: recovery.rows,
           displayMode: state.displayMode,
-          reason: 'renderer-mount-ready',
           source: recovery.source,
           truncated: false,
           truncatedByByteBudget: recovery.truncatedByByteBudget,
@@ -96,7 +104,12 @@ export function activateLegacyBinarySubscription(
         ptyId,
         state.sendFrame,
         event,
-        () => !state.closed && state.resizeGeneration === eventGeneration
+        () => !state.closed && state.resizeGeneration === eventGeneration,
+        mobileSnapshotByteBudget(params.snapshotByteBudget, state.streamId, {
+          kind: 'resized',
+          displayMode: event.displayMode,
+          reason: event.reason
+        })
       )
         .then((restreamed) => {
           if (state.closed || state.resizeGeneration !== eventGeneration) {

@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 /**
  * STA-4593 incident: closing paired-remote tabs "worked briefly" but the tabs
  * returned seconds later and after workspace switches, on a host whose PTYs
@@ -103,7 +104,7 @@ function createHarness() {
     badgeColor: '#000000',
     addedAt: 1
   }
-  const store = {
+  const store = withDurableRuntimeStore({
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
     getAllWorktreeMeta: () => ({}),
@@ -115,7 +116,7 @@ function createHarness() {
       session = next
     },
     flushOrThrow: () => {}
-  }
+  })
   const relayAck = makeDeferred()
   const closeTerminal = vi.fn()
   const closeTerminalTab = vi.fn(() => relayAck.promise)
@@ -277,7 +278,7 @@ function createSplitHarness() {
     badgeColor: '#000000',
     addedAt: 1
   }
-  const store = {
+  const store = withDurableRuntimeStore({
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
     getAllWorktreeMeta: () => ({}),
@@ -289,7 +290,7 @@ function createSplitHarness() {
       session = next
     },
     flushOrThrow: () => {}
-  }
+  })
   const runtime = new OrcaRuntimeService(store as never)
   runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab: vi.fn(async () => {}) } as never)
   runtime.setPtyController({

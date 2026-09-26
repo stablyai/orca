@@ -17,10 +17,12 @@ import {
 } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { restoredSnapshotPaintsPrintableContent } from '../restored-snapshot-coverage'
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import type { HiddenOutputSnapshotResult } from './hidden-output-snapshot-serialize'
+import {
+  classifyHiddenOutputSnapshotReject,
+  type HiddenOutputSnapshotResult
+} from './hidden-output-snapshot-serialize'
 
 export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): void {
   session.requestHiddenOutputRestoreIfNeeded = function (opts?: {
@@ -138,13 +140,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
             )
           })
         } catch {
-          snapshotResult =
-            !isRemoteRuntimePtyId(currentPtyId) ||
-            session.hiddenOutputRestoreLegacyPtyId === currentPtyId ||
-            typeof session.transport.serializeBufferOutcome !== 'function'
-              ? { kind: 'unavailable' }
-              : // Why 'host': the only reject here is the request timeout — the frame went out and the host stayed silent.
-                { kind: 'retry-worthy', source: 'host' }
+          snapshotResult = classifyHiddenOutputSnapshotReject(session, currentPtyId)
         }
         if (session.disposed) {
           return

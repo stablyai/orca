@@ -3,19 +3,16 @@
   "family": "hostedReview.create-chain",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c582ce355b0704b38d7e84cbce352630096c91231bf09aecd1f6dbb409fed17f",
   "scenarioSha256": "7d6099248aa6a2ef19f2e169ff917af794649d9d64d139aa9ffeea6a41355ddc",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "1617f98dc371": {
-      "name": "hostedReview.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}"
-    },
     "2cc2895eb25e": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -27,55 +24,14 @@
         "url": "https://review.test/9"
       }
     },
-    "3827fc206d36": {
-      "outcome": {
-        "existing": true,
-        "number": 9,
-        "ok": true,
-        "url": "https://review.test/9"
-      }
-    },
-    "9fec416f759d": {
+    "3207cb50ecc9": {
       "name": "worktree.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "main",
-            "linkedPR": 9,
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "ok": true
-          }
-        }
-      }
-    },
-    "a6c47567c630": {
-      "name": "worktree.set#1",
+      "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":9}}"
     },
-    "fc66abdd58c9": {
+    "3525176b1e81": {
       "name": "hostedReview.create#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -118,6 +74,55 @@
           }
         }
       }
+    },
+    "38143ba8e1d0": {
+      "name": "hostedReview.create#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}"
+    },
+    "3827fc206d36": {
+      "outcome": {
+        "existing": true,
+        "number": 9,
+        "ok": true,
+        "url": "https://review.test/9"
+      }
+    },
+    "f6555cd41a78": {
+      "name": "worktree.set#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "main",
+            "linkedPR": 9,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
     }
   },
   "recording": {
@@ -126,8 +131,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["fc66abdd58c9", "9fec416f759d"],
-          "payloads": ["1617f98dc371", "a6c47567c630"],
+          "sender": ["3525176b1e81", "f6555cd41a78"],
+          "payloads": ["38143ba8e1d0", "3207cb50ecc9"],
           "settlements": {
             "create": "2cc2895eb25e"
           },

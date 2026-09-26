@@ -3,17 +3,142 @@
   "family": "tasks.workspace-ssh",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "dd25391fdd3dc864ae493f72d013e789884a21e9c71522edc79323bc2b6c7f76",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "12826f529c2a": {
+    "11405363c62d": {
+      "name": "workspaceAgent",
+      "ordinal": 1,
+      "value": "claude"
+    },
+    "263b165043b0": {
+      "name": "workspaceSshState",
+      "ordinal": 11,
+      "value": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "2d313c57ddf7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "decision": "skip",
+        "kind": "decision",
+        "setupTrust": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "38ce16e16515": {
       "name": "ssh.connect#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "55904d40a00f": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": [],
+      "setup": {
+        "decision": "skip",
+        "kind": "decision",
+        "setupTrust": {
+          "$rpc": "undefined"
+        }
+      },
+      "ssh": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "5d9791d21090": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection lost",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "630e2f27face": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 6,
+      "value": []
+    },
+    "84149cfb1467": {
+      "name": "workspaceSshState",
+      "ordinal": 8,
+      "value": {
+        "error": {
+          "$rpc": "null"
+        },
+        "reconnectAttempt": 0,
+        "status": "connecting",
+        "targetId": "ssh-1"
+      }
+    },
+    "8509334ad6ae": {
+      "agent": "claude",
+      "connecting": false,
+      "detected": [],
+      "setup": "unresolved",
+      "ssh": {
+        "error": "",
+        "reconnectAttempt": 0,
+        "status": "error",
+        "targetId": "ssh-1"
+      }
+    },
+    "9637248df9cb": {
+      "name": "workspaceDetectedAgentIds",
+      "ordinal": 3,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "a9ec92743b9e": {
+      "name": "workspaceAgentOverridden",
+      "ordinal": 2,
+      "value": false
+    },
+    "aeb25e836f49": {
+      "name": "ssh.connect#1",
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
@@ -46,116 +171,29 @@
         }
       }
     },
-    "1739575ac53e": {
+    "bf0c0c00caf9": {
+      "name": "repo.hooks#1",
+      "ordinal": 14,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "d68ba9a6772a": {
       "name": "workspaceSshConnecting",
+      "ordinal": 7,
       "value": true
     },
-    "27b09a2898b9": {
+    "d760f20b60ad": {
       "name": "preflight.detectRemoteAgents#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "preflight.detectRemoteAgents"
-        },
-        {
-          "name": "params",
-          "value": {
-            "connectionId": "ssh-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection lost",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "2d313c57ddf7": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "decision": "skip",
-        "kind": "decision",
-        "setupTrust": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "37921d9fdeb7": {
-      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 5,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
     },
-    "41b0d115f434": {
-      "name": "workspaceDetectedAgentIds",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "43fd3e2f4b53": {
+    "e44d3b580ab0": {
       "name": "workspaceSshConnecting",
+      "ordinal": 12,
       "value": false
     },
-    "55904d40a00f": {
-      "agent": "claude",
-      "connecting": false,
-      "detected": [],
-      "setup": {
-        "decision": "skip",
-        "kind": "decision",
-        "setupTrust": {
-          "$rpc": "undefined"
-        }
-      },
-      "ssh": {
-        "error": "",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
-    "7c9498659f58": {
-      "name": "ssh.connect#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
-    },
-    "8509334ad6ae": {
-      "agent": "claude",
-      "connecting": false,
-      "detected": [],
-      "setup": "unresolved",
-      "ssh": {
-        "error": "",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
-    "86cc01b1e541": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": "",
-        "reconnectAttempt": 0,
-        "status": "error",
-        "targetId": "ssh-1"
-      }
-    },
-    "9f152ed6e897": {
-      "name": "workspaceDetectedAgentIds",
-      "value": []
-    },
-    "b302d21e1567": {
+    "e588920b23e8": {
       "name": "repo.hooks#1",
+      "ordinal": 13,
       "args": [
         {
           "name": "method",
@@ -192,35 +230,12 @@
         }
       }
     },
-    "ea709e13f0f0": {
-      "name": "workspaceAgentOverridden",
-      "value": false
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "ed6189938d78": {
-      "name": "workspaceAgent",
-      "value": "claude"
-    },
-    "f0a9f62da106": {
-      "name": "repo.hooks#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\"}}"
-    },
-    "fbfdbb919268": {
-      "name": "workspaceSshState",
-      "value": {
-        "error": {
-          "$rpc": "null"
-        },
-        "reconnectAttempt": 0,
-        "status": "connecting",
-        "targetId": "ssh-1"
       }
     }
   },
@@ -230,30 +245,30 @@
       {
         "id": "connect-refused-empty-message",
         "observation": {
-          "sender": ["27b09a2898b9", "12826f529c2a"],
-          "payloads": ["37921d9fdeb7", "7c9498659f58"],
+          "sender": ["5d9791d21090", "aeb25e836f49"],
+          "payloads": ["d760f20b60ad", "38ce16e16515"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a"
           },
           "state": "8509334ad6ae",
           "effects": [
-            "ed6189938d78",
-            "ea709e13f0f0",
-            "41b0d115f434",
-            "9f152ed6e897",
-            "1739575ac53e",
-            "fbfdbb919268",
-            "86cc01b1e541",
-            "43fd3e2f4b53"
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "263b165043b0",
+            "e44d3b580ab0"
           ]
         }
       },
       {
         "id": "setup-skipped",
         "observation": {
-          "sender": ["27b09a2898b9", "12826f529c2a", "b302d21e1567"],
-          "payloads": ["37921d9fdeb7", "7c9498659f58", "f0a9f62da106"],
+          "sender": ["5d9791d21090", "aeb25e836f49", "e588920b23e8"],
+          "payloads": ["d760f20b60ad", "38ce16e16515", "bf0c0c00caf9"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "connect": "eb79a9b3682a",
@@ -261,14 +276,14 @@
           },
           "state": "55904d40a00f",
           "effects": [
-            "ed6189938d78",
-            "ea709e13f0f0",
-            "41b0d115f434",
-            "9f152ed6e897",
-            "1739575ac53e",
-            "fbfdbb919268",
-            "86cc01b1e541",
-            "43fd3e2f4b53"
+            "11405363c62d",
+            "a9ec92743b9e",
+            "9637248df9cb",
+            "630e2f27face",
+            "d68ba9a6772a",
+            "84149cfb1467",
+            "263b165043b0",
+            "e44d3b580ab0"
           ]
         }
       }

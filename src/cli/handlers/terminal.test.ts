@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
-import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
+  TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import { parseArgs } from '../args'
 import { printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
@@ -353,7 +356,7 @@ describe('terminal send CLI', () => {
     ])
   })
 
-  it('explains that Structured Chat blocked a refused send and how to recover', async () => {
+  it("reports an older host's lease refusal as a plain refused send", async () => {
     const call = vi.fn().mockResolvedValue({
       result: {
         send: {
@@ -387,9 +390,7 @@ describe('terminal send CLI', () => {
     })
 
     expect(client.getCliStatus).toHaveBeenCalledOnce()
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringMatching(/Structured Chat.*Switch it to Terminal.*orca terminal send/s)
-    )
+    expect(console.log).toHaveBeenCalledWith('Input refused by term-1.')
     expect(process.exitCode).toBe(1)
   })
 
@@ -683,5 +684,95 @@ describe('terminal send CLI', () => {
         orchestrationRequestId: '22222222-2222-4222-8222-222222222222'
       }
     ])
+  })
+})
+
+describe('terminal create --shell', () => {
+  const WORKTREE = 'path:C:/src/app'
+
+  const shellClient = (
+    call: ReturnType<typeof vi.fn>,
+    supported: boolean,
+    reachable = true
+  ): RuntimeClient => {
+    const client = {
+      call,
+      isRemote: false,
+      getCliStatus: vi.fn().mockResolvedValue({
+        result: {
+          runtime: reachable
+            ? {
+                reachable: true,
+                runtimeId: 'runtime-current',
+                capabilities: supported ? [TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY] : []
+              }
+            : { reachable: false, runtimeId: null }
+        }
+      })
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `terminal create` reads only `call`, `isRemote`, and `getCliStatus`, all stubbed above; RuntimeClient is a class, so a structural double cannot satisfy it without the cast.
+    return client as unknown as RuntimeClient
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    process.exitCode = ORIGINAL_EXIT_CODE
+  })
+
+  function createTerminal(client: RuntimeClient, shell: string) {
+    return TERMINAL_HANDLERS['terminal create']({
+      flags: new Map([
+        ['worktree', WORKTREE],
+        ['shell', shell]
+      ]),
+      client,
+      cwd: 'C:/src/app',
+      json: true
+    })
+  }
+
+  it('sends the shell selection alongside an empty startup command', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: { terminal: { handle: 'term_1', worktreeId: 'repo::C:/src/app', title: null } }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await createTerminal(shellClient(call, true), 'cmd.exe')
+
+    expect(call).toHaveBeenCalledWith(
+      'terminal.create',
+      expect.objectContaining({ shell: 'cmd.exe', command: undefined })
+    )
+  })
+
+  it('refuses a shell the host cannot spawn without making the round trip', async () => {
+    const call = vi.fn()
+
+    await expect(createTerminal(shellClient(call, true), 'nu.exe')).rejects.toThrow(
+      /--shell must be one of/
+    )
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  // An older host strips the unknown param and answers with its default shell, which reads as a
+  // successful create. Creating the wrong shell silently is worse than refusing.
+  it('refuses rather than creating a default-shell terminal on a host without the capability', async () => {
+    const call = vi.fn()
+
+    await expect(createTerminal(shellClient(call, false), 'cmd.exe')).rejects.toThrow(
+      /does not support --shell/
+    )
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  // A status probe that fails or times out reports no capabilities either; blaming the host
+  // version would send the caller to update a host that may already be current.
+  it('reports an unreachable host as unavailable rather than incompatible', async () => {
+    const call = vi.fn()
+
+    await expect(createTerminal(shellClient(call, false, false), 'cmd.exe')).rejects.toMatchObject({
+      code: 'runtime_unavailable'
+    })
+    expect(call).not.toHaveBeenCalled()
   })
 })

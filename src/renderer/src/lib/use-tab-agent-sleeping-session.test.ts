@@ -111,6 +111,46 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
       })
     ).toBe('codex')
   })
+
+  it('suppresses stale sleeping identity after local shell exit evidence', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: 'zsh',
+        hookAgent: null,
+        processShellForeground: true,
+        sleepingSessionAgent: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBeNull()
+  })
+
+  it('retains sleeping identity for remote panes without local shell evidence', () => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: true,
+        title: 'zsh',
+        hookAgent: null,
+        sleepingSessionAgent: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBe('codex')
+  })
+
+  it.each(['ksh', 'dash', 'fish'] as const)('recognizes %s as shell exit title', (shell) => {
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: shell,
+        hookAgent: null,
+        sleepingSessionAgent: 'codex',
+        launchAgent: 'codex'
+      })
+    ).toBeNull()
+  })
 })
 
 describe('useTabAgent sleeping-session', () => {

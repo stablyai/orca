@@ -1,7 +1,7 @@
-import { accessSync, constants as fsConstants } from 'node:fs'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
+import { enumerateDirectoryOnce } from './directory-enumeration-probe'
 import { normalizePtySize } from './daemon-pty-size'
 import { Session } from './session'
 import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
@@ -110,7 +110,8 @@ async function spawnAndPublishSession(
 ): Promise<CreateOrAttachResult> {
   const { size, wslDistro } = ctx
   // Why before the fork: the shell's own cwd may already have fallen back, so probe the requested path.
-  const cwdReadableByDaemon = opts.cwd && !wslDistro ? isCwdReadableByThisProcess(opts.cwd) : null
+  const cwdReadableByDaemon =
+    opts.cwd && !wslDistro ? await isCwdReadableByThisProcess(opts.cwd) : null
   const subprocess = await deps.spawnSubprocess({
     sessionId: opts.sessionId,
     cols: size.cols,
@@ -122,6 +123,7 @@ async function spawnAndPublishSession(
     startupCommandDelivery: opts.startupCommandDelivery,
     ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
     shellOverride: opts.shellOverride,
+    terminalShellArgs: opts.terminalShellArgs,
     terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
     terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
     isCanceled: opts.isCanceled,
@@ -150,7 +152,11 @@ async function spawnAndPublishSession(
     historySeedChunks: opts.historySeedChunks,
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
     wslDistro,
-    onExit: () => deps.onSessionExit(opts.sessionId, opts.agentSessionGeneration),
+    onExit: createSessionExitHandler(
+      deps.onSessionExit,
+      opts.sessionId,
+      opts.agentSessionGeneration
+    ),
     ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
     ...(opts.shellReadyTimeoutMs !== undefined
       ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
@@ -212,15 +218,17 @@ async function spawnAndPublishSession(
   }
 }
 
-// Why R_OK|X_OK: listing a directory needs read, and entering it needs search — both are what
-// TCC withholds. A non-permission failure (ENOENT, ENOTDIR) reads as readable so it can never
-// masquerade as a permission denial.
-function isCwdReadableByThisProcess(cwd: string): boolean {
-  try {
-    accessSync(cwd, fsConstants.R_OK | fsConstants.X_OK)
-    return true
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    return code !== 'EACCES' && code !== 'EPERM'
-  }
+function createSessionExitHandler(
+  onSessionExit: TerminalHostSessionCreateDependencies['onSessionExit'],
+  sessionId: string,
+  generation: string | undefined
+): () => void {
+  return () => onSessionExit(sessionId, generation)
+}
+
+// Why enumeration: a shell's cwd listing is what TCC withholds, and it can withhold it while
+// `access()` still passes. Only a proven permission refusal reads as denial — a missing path or an
+// unexpected error reads as readable so it can never masquerade as one.
+async function isCwdReadableByThisProcess(cwd: string): Promise<boolean> {
+  return (await enumerateDirectoryOnce(cwd)) !== 'denied'
 }

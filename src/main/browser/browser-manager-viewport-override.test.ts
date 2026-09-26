@@ -12,7 +12,10 @@ const browserMocks = vi.hoisted(() => ({
   guestOpenDevToolsMock: vi.fn(),
   webContentsFromIdMock: vi.fn(),
   screenGetCursorScreenPointMock: vi.fn(() => ({ x: 0, y: 0 })),
-  openPopupWithOriginBarMock: vi.fn()
+  openPopupWithOriginBarMock: vi.fn(),
+  processUserAgentMode: 'clean',
+  processUserAgent:
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36'
 }))
 
 vi.mock('electron', () => ({
@@ -37,6 +40,13 @@ vi.mock('electron', () => ({
 
 vi.mock('./popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
+}))
+
+vi.mock('./browser-process-user-agent', () => ({
+  getBrowserProcessUserAgentIdentity: () => ({
+    mode: browserMocks.processUserAgentMode,
+    userAgent: browserMocks.processUserAgent
+  })
 }))
 
 import { browserManager } from './browser-manager'
@@ -66,6 +76,8 @@ describe('browserManager', () => {
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
     resetBrowserManagerState()
+    browserMocks.processUserAgentMode = 'clean'
+    browserMocks.processUserAgent = GUEST_CLEAN_UA
   })
 
   afterEach(() => {
@@ -117,15 +129,16 @@ describe('browserManager', () => {
     })
 
     it.each([false, true])(
-      'keeps the session UA for native-mode profiles when mobile=%s',
+      'keeps native process identity coherent with mobile=%s',
       async (mobile) => {
+        browserMocks.processUserAgentMode = 'native'
+        browserMocks.processUserAgent = GUEST_ELECTRON_UA
         const { guest, debuggerSendCommand } = makeGuest(mobile ? 4244 : 4243)
         webContentsFromIdMock.mockReturnValue(guest)
         browserManager.attachGuestPolicies(guest as never)
         browserManager.registerGuest({
           browserPageId: `tab-native-${mobile}`,
           sessionProfileId: 'native-profile',
-          userAgentMode: 'native',
           webContentsId: guest.id as number,
           rendererWebContentsId
         })
@@ -139,10 +152,12 @@ describe('browserManager', () => {
           })
         ).resolves.toBe(true)
 
-        expect(debuggerSendCommand).not.toHaveBeenCalledWith(
-          'Emulation.setUserAgentOverride',
-          expect.anything()
-        )
+        const userAgentOverride = lastUserAgentOverride(debuggerSendCommand)
+        if (mobile) {
+          expect(userAgentOverride).toMatchObject({ userAgent: expect.stringContaining('iPhone') })
+        } else {
+          expect(userAgentOverride).toEqual({ userAgent: GUEST_ELECTRON_UA })
+        }
       }
     )
 
@@ -377,7 +392,7 @@ describe('browserManager', () => {
       didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/', true)
       await flushViewportOps()
 
-      expect(guest.setUserAgent).toHaveBeenLastCalledWith(GUEST_ELECTRON_UA)
+      expect(guest.setUserAgent).toHaveBeenLastCalledWith(GUEST_CLEAN_UA)
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
 
       // A later preset must also resolve the committed, non-auth URL.
@@ -776,14 +791,15 @@ describe('browserManager', () => {
       )
     })
 
-    it('leaves the UA override alone on navigation for native-UA profiles', async () => {
+    it('reapplies the native process identity instead of the Google exception', async () => {
+      browserMocks.processUserAgentMode = 'native'
+      browserMocks.processUserAgent = GUEST_ELECTRON_UA
       const { guest, debuggerSendCommand } = makeGuest(4250)
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
       browserManager.registerGuest({
         browserPageId: 'tab-native-nav',
         sessionProfileId: 'native-profile',
-        userAgentMode: 'native',
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
@@ -800,10 +816,9 @@ describe('browserManager', () => {
       debuggerSendCommand.mockClear()
       didStartNavigation(null, 'https://accounts.google.com/', false, true)
       await flushViewportOps()
-      expect(debuggerSendCommand).not.toHaveBeenCalledWith(
-        'Emulation.setUserAgentOverride',
-        expect.anything()
-      )
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+        userAgent: GUEST_ELECTRON_UA
+      })
     })
 
     it('clears device metrics and disables touch for override=null', async () => {

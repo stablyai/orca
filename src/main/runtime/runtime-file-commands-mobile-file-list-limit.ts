@@ -169,6 +169,9 @@ export type TerminalFileGrant = {
   clientId?: string
   expiresAt: number
   statIdentity: string | null
+  // Why: on Linux an unlink+recreate in the same directory reuses the inode and the mtime clock is
+  // tick-quantized, so statIdentity alone cannot see a same-size swap. Local grants pin content too.
+  contentDigest: string | null
   readOnly: boolean
   provenance: 'terminal-output' | 'native-chat'
   expiryTimer?: ReturnType<typeof setTimeout>

@@ -1,4 +1,5 @@
 import type { RpcClient } from '../../transport/rpc-client'
+import type { DeclaredDeviceState } from './declared-device-state'
 import type { RecordedValue } from './recording-values'
 
 export type RpcRequestSender = Pick<RpcClient, 'sendRequest'>
@@ -9,16 +10,24 @@ export type Rejection = {
 }
 /**
  * `optional` belongs to generated steps only: a matrix variant answers one request differently, so
- * the requests scripted after it may never be sent. Skipping one that was not sent records what the
- * operation actually did; a scripted step the manifest declares is never optional.
+ * the requests scripted after it may never be sent. Skipping one the operation never asked for
+ * records what it actually did; a scripted step the manifest declares is never optional. A frame
+ * carries no such flag — the registry routes every streaming response to the id that opened the
+ * stream, so a frame after a divergence is always deliverable.
+ *
+ * `frame` names the subscribe payload it is delivered on and carries a whole host response, which
+ * the real stream registry routes — `ready`, a data event, `end` and a refusal are all one kind.
+ * `params` asserts the subscribe params, the same contract `complete` holds for a request.
  */
 export type ScenarioStep =
   | { action: string; id: string; args?: Record<string, unknown> }
   | { complete: string; params: unknown; reply?: unknown; reject?: Rejection; optional?: true }
+  | { frame: string; params: unknown; reply: unknown }
   | { bind: string; request: string; params: unknown; optional?: true }
   | { advance: number }
   | { checkpoint: string }
-export type RecordingScenario = {
+/** A scenario may declare device state; see `declared-device-state.ts` for what a declaration buys. */
+export type RecordingScenario = DeclaredDeviceState & {
   id: string
   operation: string
   version: number
@@ -39,7 +48,8 @@ export type MountContext = {
 }
 export type MountAdapter = (context: MountContext) => MountedOperation
 export type RecordingScheduler = {
-  start: () => void
+  /** Awaited: the scheduler pays React's one lazy `Math.random()` draw here, off the seeded run. */
+  start: () => Promise<void>
   flush: () => Promise<void>
   advance: (ms: number) => Promise<void>
   /** Virtual milliseconds since the pinned recording epoch. */

@@ -3,7 +3,7 @@ import type {
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
-import type { GrokAccountStatus } from '../../shared/rate-limit-types'
+import type { CursorAccountStatus, GrokAccountStatus } from '../../shared/rate-limit-types'
 
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
@@ -11,6 +11,10 @@ export type CodexAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>
+  cancelPendingLogin: () => Promise<boolean>
+  /** Sign-in link of the login waiting on a browser, or null when none is. */
+  getPendingLoginUrl: () => Promise<string | null>
+  onPendingLoginUrlChanged: (callback: (url: string | null) => void) => () => void
   reauthenticate: (args: {
     accountId: string
     /** Local-only: activate the re-authed account when its runtime lane had no selection. */
@@ -56,6 +60,10 @@ export type ClaudeAccountsApi = {
 
 export type GrokAccountsApi = {
   getStatus: () => Promise<GrokAccountStatus>
+}
+
+export type CursorAccountsApi = {
+  getStatus: () => Promise<CursorAccountStatus>
 }
 
 export type MinimaxCredentialsApi = {

@@ -1,7 +1,7 @@
-import type { CodexSessionCollection } from './codex-session-root-dedup'
+import type { ScannedSessionCollection } from './session-root-dedup'
 import { sessionSortTime } from './session-scanner-accumulator'
 
-type ScanSessions = Pick<CodexSessionCollection, 'size' | 'values'>
+type ScanSessions = Pick<ScannedSessionCollection, 'size' | 'values'>
 
 function sortedCutoffIsNewer(
   times: number[],

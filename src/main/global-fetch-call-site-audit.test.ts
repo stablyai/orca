@@ -42,13 +42,19 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/browser/browser-route-h3-egress-electron-main.ts', 1],
   ['main/browser/browser-route-persisted-worker-fixture.ts', 3],
   ['main/browser/browser-route-tcp-egress-fixture.ts', 1],
+  // Electron-test rig: the CDP poll cancels its unread body and the version probe consumes
+  // the body through response.json(), so neither leaves an unread undici response.
+  ['main/browser/browser-session-ua-cdp-collector.ts', 2],
+  // Every hit is inside an injected page/worker script source string, not a call this
+  // process makes.
+  ['main/browser/browser-session-ua-wire-probe-server.ts', 10],
   ['main/opencode/status-plugin-post-source.ts', 1],
   ['main/pi/agent-status-extension-source.ts', 1],
   // local identifiers named `fetch` (git fetch), not HTTP
   ['main/ipc/worktree-remote.ts', 2],
   ['relay/git-handler-fetch-operations.ts', 1],
   // fetch mentioned only in a comment
-  ['main/ipc/feedback.ts', 1]
+  ['main/ipc/feedback-request.ts', 1]
 ])
 
 // A line is a hit when it calls bare `fetch(` or touches `globalThis.fetch` /

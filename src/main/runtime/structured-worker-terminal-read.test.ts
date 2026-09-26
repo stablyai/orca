@@ -161,12 +161,17 @@ describe('reading a structured worker through the terminal-read path', () => {
     // could be perfect and a peer would still get `terminal_handle_stale` if nothing called it.
     const handle = registerWorker()
     installHost({ items: [message('i1', 'hello')] })
-    const runtime = Object.assign(Object.create(OrcaRuntimeWithResolveTerminalPane.prototype), {
+    const runtime: {
+      readTerminal: (
+        handle: string,
+        opts?: { cursor?: number; limit?: number; screen?: boolean }
+      ) => Promise<{ tail: string[] }>
+    } = Object.assign(Object.create(OrcaRuntimeWithResolveTerminalPane.prototype), {
       getOrchestrationDbIfAvailable: () => null,
       getLivePtyForHandle: () => {
         throw new Error('the PTY lookup must never be reached for a structured worker')
       }
-    }) as { readTerminal: (handle: string, opts?: object) => Promise<{ tail: string[] }> }
+    })
     await expect(runtime.readTerminal(handle)).resolves.toMatchObject({
       tail: ['[assistant] hello'],
       source: 'stream'
@@ -181,8 +186,11 @@ describe('reading a structured worker through the terminal-read path', () => {
     const handle = registerWorker()
     installHost({ items: [message('i1', 'x')] })
     expect(readStructuredWorkerTerminal({ handle: 'term_abc', db: null })).toBeNull()
-    // A lease handed to a TUI owner is no longer this runtime's structured worker.
-    installHost({ items: [message('i1', 'x')], lease: { runtimeKind: 'tui', claimStatus: 'live' } })
+    // A terminal owner an older build recorded loads conflicted: not this runtime's worker.
+    installHost({
+      items: [message('i1', 'x')],
+      lease: { runtimeKind: 'native', claimStatus: 'conflicted' }
+    })
     expect(readStructuredWorkerTerminal({ handle, db: null })).toBeNull()
   })
 })

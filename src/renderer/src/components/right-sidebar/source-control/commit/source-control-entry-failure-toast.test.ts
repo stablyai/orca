@@ -61,7 +61,7 @@ describe('showSourceControlEntryFailureToast', () => {
   it('says "delete" for an entry whose discard removes the file rather than restoring it', () => {
     // Why: untracked and added paths have no HEAD version, so the row button and the confirmation
     // dialog both say "delete" — the failure must not contradict the verb the user pressed.
-    show({ operation: 'discard', deleteShaped: true })
+    show({ operation: 'discard', deletesFile: true })
     expect(lastToast().title).toBe('Failed to delete “src/app.ts”')
   })
 

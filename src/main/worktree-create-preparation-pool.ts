@@ -1,3 +1,4 @@
+import { worktreePreparationGit } from './git/worktree-create-git-executor'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
@@ -50,7 +51,18 @@ export type StartPreparationArgs = {
   options: AddWorktreeOptions
 }
 
+export type DeferredPreparation = {
+  args: StartPreparationArgs
+  kind: 'explicit' | 'automatic'
+}
+
 const preparations = new Map<string, PreparationEntry>()
+export type PreparationClaim = {
+  entry: PreparationEntry
+  requestedKey: string
+  pendingPreparations: Map<string, DeferredPreparation>
+}
+const claims = new Set<PreparationClaim>()
 
 /** One repo on one Git host: the scope a stranded discard is retried under. */
 function preparationHostKey(repoPathKey: string, wslDistro: string): string {
@@ -59,7 +71,7 @@ function preparationHostKey(repoPathKey: string, wslDistro: string): string {
 
 /** A prepared checkout is a create that is either in flight or imminent. */
 export function hasPendingPreparations(): boolean {
-  return preparations.size > 0 || hasPendingStalePreparationCleanup()
+  return preparations.size > 0 || claims.size > 0 || hasPendingStalePreparationCleanup()
 }
 
 function pathOps(path: string): Pick<typeof posix, 'dirname' | 'join'> {
@@ -83,7 +95,7 @@ async function discardEntry(entry: PreparationEntry): Promise<void> {
 
 function discardEntryInBackground(entry: PreparationEntry): void {
   // Tracked, not bare `void`: the test reset must be able to settle it before dropping the registry.
-  trackPreparationDiscard(discardEntry(entry))
+  trackPreparationDiscard(worktreePreparationGit.run(() => discardEntry(entry)))
 }
 
 function expireEntry(entry: PreparationEntry): void {
@@ -146,12 +158,87 @@ export function findPreparation(
 
 /** Removes an entry from the pool so no other create can claim it. Callers must run this in the
  *  same synchronous turn as the selection that produced `entry`. */
-export function takePreparation(entry: PreparationEntry): void {
+export function takePreparation(
+  entry: PreparationEntry,
+  requestedCanonicalBase = entry.canonicalBase
+): PreparationClaim {
   preparations.delete(entry.key)
   clearTimeout(entry.expiration)
+  const requestedKey = preparationEntryKey(
+    entry.repoPathKey,
+    entry.workspaceRootKey,
+    requestedCanonicalBase,
+    entry.wslDistro
+  )
+  const claim = { entry, requestedKey, pendingPreparations: new Map<string, DeferredPreparation>() }
+  claims.add(claim)
+  return claim
 }
 
-export function startPreparation({
+function matchingClaim(args: StartPreparationArgs): PreparationClaim | undefined {
+  const key = preparationEntryKey(
+    preparationPathKey(args.repoPath),
+    preparationPathKey(args.workspaceRoot),
+    args.canonicalBase,
+    args.options.wslDistro ?? ''
+  )
+  return [...claims]
+    .toReversed()
+    .find((claim) => claim.entry.key === key || claim.requestedKey === key)
+}
+
+/** Preserve one request per canonical key, with explicit prefetch taking precedence. */
+function deferPreparationForClaim(
+  args: StartPreparationArgs,
+  kind: DeferredPreparation['kind']
+): boolean {
+  const matching = matchingClaim(args)
+  if (!matching) {
+    return false
+  }
+  const key = preparationEntryKey(
+    preparationPathKey(args.repoPath),
+    preparationPathKey(args.workspaceRoot),
+    args.canonicalBase,
+    args.options.wslDistro ?? ''
+  )
+  if (kind === 'explicit' || !matching.pendingPreparations.has(key)) {
+    matching.pendingPreparations.set(key, { args, kind })
+  }
+  return true
+}
+
+/** A second release is inert, including after a test reset. */
+export function releasePreparationClaim(claim: PreparationClaim): {
+  released: boolean
+  pendingPreparations: DeferredPreparation[]
+} {
+  if (!claims.delete(claim)) {
+    return { released: false, pendingPreparations: [] }
+  }
+  return { released: true, pendingPreparations: [...claim.pendingPreparations.values()] }
+}
+
+export function startPreparation(
+  args: StartPreparationArgs,
+  kind: DeferredPreparation['kind'] = 'explicit'
+): Promise<void> {
+  const existing = findPreparation(
+    preparationPathKey(args.repoPath),
+    preparationPathKey(args.workspaceRoot),
+    args.canonicalBase,
+    args.options.wslDistro ?? ''
+  )
+  if (existing) {
+    return existing.ready
+  }
+  if (deferPreparationForClaim(args, kind)) {
+    return Promise.resolve()
+  }
+  return worktreePreparationGit.run(() => startBackgroundPreparation(args))
+}
+
+function startBackgroundPreparation({
   repoPath,
   workspaceRoot,
   baseBranch,
@@ -222,6 +309,7 @@ export function startPreparation({
 export async function _resetPreparationPoolForTests(): Promise<void> {
   const entries = [...preparations.values()]
   preparations.clear()
+  claims.clear()
   await resetStalePreparationCleanupForTests()
   await Promise.all(
     entries.map(async (entry) => {

@@ -1,3 +1,4 @@
+import { withFreshOmpLaunch } from '../../shared/omp-fresh-launch'
 import { describe, expect, it, vi } from 'vitest'
 import {
   readFileSyncMock,
@@ -293,14 +294,19 @@ describe('registerPtyHandlers', () => {
       })
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/default-pi-agent')
     })
-    it('threads command: "omp" through to piBuildPtyEnv and emits OMP status metadata', async () => {
+    it.each([
+      'omp',
+      withFreshOmpLaunch('omp', 'posix'),
+      withFreshOmpLaunch('omp', 'powershell'),
+      withFreshOmpLaunch('omp', 'cmd')
+    ])('threads OMP command %s through to the host integration', async (command) => {
       // Why: OMP launches emit ORCA_OMP_* shadow vars, not Pi-named ones; only PI_CODING_AGENT_DIR stays (OMP's own binary reads it).
       const env = await spawnAndGetEnv(
         undefined,
         { PI_CODING_AGENT_DIR: '/tmp/user-omp-agent' },
         undefined,
         undefined,
-        'omp'
+        command
       )
       expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
         expect.any(String),

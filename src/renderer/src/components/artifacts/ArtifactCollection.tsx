@@ -37,6 +37,8 @@ export function ArtifactCollection({
   // Why: clamp on the way in so a multi-MB paste never reaches state or filtering.
   const onQueryChange = (next: string): void => setQuery(clampArtifactListSearchQuery(next))
   const matches = useMemo(() => filterArtifactsBySearchQuery(artifacts, query), [artifacts, query])
+  // Why: state, not a ref — the windowed rows need the scroller on their own mount pass.
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-4 md:px-5">
@@ -48,19 +50,22 @@ export function ArtifactCollection({
           isRefreshing={isRefreshing}
         />
         <div
+          ref={setScrollElement}
           className={cn('scrollbar-sleek min-h-0 flex-1 overflow-auto', LIST_TABLE_CONTAINER_CLASS)}
         >
           <ArtifactListTableHeader />
+          {/* Why no width wrapper around the rows: a `w-fit` band sizes to the full scroll width,
+              painting every row's hover and selection wash past the viewport edge (376px -> 468px). */}
           {matches.length > 0 ? (
-            <div className="divide-y divide-border/50">
-              <ArtifactListRows
-                artifacts={matches}
-                deletingId={deletingId}
-                selectedSlug={selectedSlug}
-                selectArtifact={selectArtifact}
-                deleteArtifact={deleteArtifact}
-              />
-            </div>
+            <ArtifactListRows
+              artifacts={matches}
+              deletingId={deletingId}
+              selectedSlug={selectedSlug}
+              scrollElement={scrollElement}
+              hasMore={hasMore}
+              selectArtifact={selectArtifact}
+              deleteArtifact={deleteArtifact}
+            />
           ) : (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
               {translate('auto.components.artifacts.ArtifactCollection.noMatches', 'No matches')}

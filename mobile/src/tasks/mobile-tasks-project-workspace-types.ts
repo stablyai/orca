@@ -87,7 +87,8 @@ export type SetupPrompt = {
   sparseCheckoutOverride?: { directories: string[]; presetId?: string }
   repoName: string
   command: string
-  source: string | null
+  /** Absent as well as null: `repo.hooks` need not report where the setup script came from. */
+  source: string | null | undefined
 }
 
 export type WorkspaceCreateArgs = {

@@ -27,8 +27,15 @@ import {
   subagentGroupFallbackText
 } from '../../../shared/native-chat-subagent-summary'
 import {
+  backgroundTaskFallbackText,
+  isSettledBackgroundTaskState,
+  normalizeBackgroundTaskState
+} from '../../../shared/native-chat-background-task-row'
+import {
+  isBackgroundTaskBlock,
   isSubagentGroupBlock,
   type NativeChatBlock,
+  type NativeChatBackgroundTaskBlock,
   type NativeChatSubagentGroupBlock
 } from '../../../shared/native-chat-types'
 
@@ -45,7 +52,7 @@ export function staleSubagentRosterRevisions(
   const revisions: JournalSubagentLivenessRevision[] = []
   for (const item of items) {
     const body = item.body
-    if (body.kind !== 'message' || !body.blocks.some(hasWorkingChild)) {
+    if (body.kind !== 'message' || !body.blocks.some(hasStaleLiveWork)) {
       continue
     }
     // A key that will not parse cannot be re-addressed, and appending under a
@@ -59,10 +66,21 @@ export function staleSubagentRosterRevisions(
   return revisions
 }
 
-function hasWorkingChild(block: NativeChatBlock): boolean {
+function hasStaleLiveWork(block: NativeChatBlock): boolean {
+  return hasWorkingChild(block) || hasLiveBackgroundTask(block)
+}
+
+function hasWorkingChild(block: NativeChatBlock): block is NativeChatSubagentGroupBlock {
   return (
     isSubagentGroupBlock(block) &&
     block.agents.some((agent) => normalizeSubagentState(agent.state) === 'working')
+  )
+}
+
+function hasLiveBackgroundTask(block: NativeChatBlock): block is NativeChatBackgroundTaskBlock {
+  return (
+    isBackgroundTaskBlock(block) &&
+    !isSettledBackgroundTaskState(normalizeBackgroundTaskState(block.state))
   )
 }
 
@@ -71,18 +89,35 @@ function hasWorkingChild(block: NativeChatBlock): boolean {
  *  ran. Readers already draw an unverifiable child with no stamp as having no
  *  known run length. */
 function settleBlocks(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
-  const settled = blocks.map((block) =>
-    hasWorkingChild(block) ? settleGroup(block as NativeChatSubagentGroupBlock) : block
+  const backgroundTaskTwinText = new Map<string, string>()
+  const settled = blocks.map((block) => {
+    if (hasWorkingChild(block)) {
+      return settleGroup(block)
+    }
+    if (hasLiveBackgroundTask(block)) {
+      const next = settleBackgroundTask(block)
+      backgroundTaskTwinText.set(
+        backgroundTaskFallbackText(block),
+        backgroundTaskFallbackText(next)
+      )
+      return next
+    }
+    return block
+  })
+  const withBackgroundTaskTwins = settled.map((block) =>
+    block.type === 'text'
+      ? { ...block, text: backgroundTaskTwinText.get(block.text) ?? block.text }
+      : block
   )
-  const rosters = settled.filter(isSubagentGroupBlock)
+  const rosters = withBackgroundTaskTwins.filter(isSubagentGroupBlock)
   const only = rosters.length === 1 ? rosters[0] : undefined
   if (!only) {
-    return settled
+    return withBackgroundTaskTwins
   }
   // The plain-text twin is all a client without the block type ever shows, so it
   // has to move with the block or the two would disagree about the same row.
   const twin = subagentGroupFallbackText(only.agents)
-  return settled.map((block) =>
+  return withBackgroundTaskTwins.map((block) =>
     block.type === 'text' && isSubagentGroupFallbackText(block.text)
       ? { ...block, text: twin }
       : block
@@ -98,4 +133,9 @@ function settleGroup(block: NativeChatSubagentGroupBlock): NativeChatSubagentGro
         : agent
     )
   }
+}
+
+function settleBackgroundTask(block: NativeChatBackgroundTaskBlock): NativeChatBackgroundTaskBlock {
+  const { settledAt: _settledAt, ...withoutSettledAt } = block
+  return { ...withoutSettledAt, state: 'unverifiable' }
 }

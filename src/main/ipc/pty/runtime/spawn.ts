@@ -16,6 +16,10 @@ import { buildRuntimePtySpawnOptions } from './spawn-options'
 import { executeRuntimePtySpawn } from './spawn-execute'
 import { commitRuntimePtySpawn } from './spawn-commit'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
+import {
+  commitRuntimeSpawnHiddenDelivery,
+  releaseRuntimeSpawnPreSpawnHiddenMark
+} from './spawn-hidden-delivery'
 
 function toRuntimeSpawnReply(result: {
   id: string
@@ -95,8 +99,11 @@ export async function spawnPtyFromRuntimeController(
       return toRuntimeSpawnReply(earlyReserved)
     }
     await executeRuntimePtySpawn(ctx)
-    return toRuntimeSpawnReply(await commitRuntimePtySpawn(ctx))
+    const committed = await commitRuntimePtySpawn(ctx)
+    commitRuntimeSpawnHiddenDelivery(ctx)
+    return toRuntimeSpawnReply(committed)
   } catch (err) {
+    releaseRuntimeSpawnPreSpawnHiddenMark(ctx)
     if (ctx.pendingRegistrationPtyId) {
       deps.runtime?.cancelPendingPtyRegistration?.(
         ctx.pendingRegistrationPtyId,

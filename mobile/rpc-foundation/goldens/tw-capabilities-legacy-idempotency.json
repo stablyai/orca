@@ -3,20 +3,22 @@
   "family": "worktree.runtime-capabilities",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
   "scenarioSha256": "d73fed49e0a7e3e054d5c2fa75780f98bf78b6fa7e02f1ccb2fdc49465cf2fe5",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "03f6a4ac937a": {
+    "ab209a152529": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
+        "agentLaunch": false,
         "hostPlatform": {
           "$rpc": "null"
         },
@@ -26,23 +28,14 @@
         }
       }
     },
-    "1e5b32902af7": {
+    "d08f74d65ee6": {
       "name": "status.get#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
-    "3b0c9705ec9a": {
-      "capabilities": {
-        "hostPlatform": {
-          "$rpc": "null"
-        },
-        "tasksSupported": false,
-        "worktreeCreateIdempotency": {
-          "dedupeTtlMs": 60000
-        }
-      }
-    },
-    "488c988b5918": {
+    "eaed1eb137b5": {
       "name": "status.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -73,6 +66,18 @@
           }
         }
       }
+    },
+    "f079a530dc44": {
+      "capabilities": {
+        "agentLaunch": false,
+        "hostPlatform": {
+          "$rpc": "null"
+        },
+        "tasksSupported": false,
+        "worktreeCreateIdempotency": {
+          "dedupeTtlMs": 60000
+        }
+      }
     }
   },
   "recording": {
@@ -81,12 +86,12 @@
       {
         "id": "legacy-host-window",
         "observation": {
-          "sender": ["488c988b5918"],
-          "payloads": ["1e5b32902af7"],
+          "sender": ["eaed1eb137b5"],
+          "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "03f6a4ac937a"
+            "probe": "ab209a152529"
           },
-          "state": "3b0c9705ec9a",
+          "state": "f079a530dc44",
           "effects": []
         }
       }

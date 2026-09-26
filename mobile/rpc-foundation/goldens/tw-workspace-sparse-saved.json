@@ -3,21 +3,35 @@
   "family": "tasks.workspace-sparse",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4e567302ac8acffcfd602c9b323ecf8b5b7c0c4692bda1a4c881011a91d98979",
   "scenarioSha256": "124f664e339bfd83a1d892e1cd953a78fdf0dc4b20c4272356d24079c72a3e04",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "1d9a7d969446": {
-      "name": "workspaceSparsePresetsLoaded",
-      "value": true
+    "02daf4600c50": {
+      "name": "repo.saveSparsePreset#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}"
     },
-    "312ed3cbf468": {
+    "1bc7cf6bcbaf": {
+      "name": "workspaceSparsePresets",
+      "ordinal": 8,
+      "value": [
+        {
+          "directories": ["docs"],
+          "id": "p1",
+          "name": "docs"
+        }
+      ]
+    },
+    "3f5e10171cd3": {
       "name": "workspaceSparsePresetId",
+      "ordinal": 10,
       "value": "p1"
     },
     "404305aa2e3a": {
@@ -39,24 +53,9 @@
         "targetId": "ssh-1"
       }
     },
-    "42bbd034563e": {
-      "name": "workspaceSparseDraft",
-      "value": {
-        "$rpc": "null"
-      }
-    },
-    "4856f62b3650": {
-      "name": "workspaceSparsePresets",
-      "value": [
-        {
-          "directories": ["docs"],
-          "id": "p1",
-          "name": "docs"
-        }
-      ]
-    },
-    "5c44ff5f6877": {
+    "4b7e30ea1543": {
       "name": "repo.saveSparsePreset#1",
+      "ordinal": 6,
       "args": [
         {
           "name": "method",
@@ -94,12 +93,19 @@
         }
       }
     },
-    "7fd0cde62993": {
-      "name": "workspaceSparseSaving",
-      "value": false
+    "973f31a4e64b": {
+      "name": "workspaceSparsePresetsError",
+      "ordinal": 5,
+      "value": ""
     },
-    "89aa7a3bd619": {
+    "a11809a84754": {
       "name": "ssh.getState#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "b53739a58194": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -138,8 +144,19 @@
         }
       }
     },
-    "921f72d7827e": {
+    "c1ae182c7519": {
+      "name": "workspaceSparseSaving",
+      "ordinal": 12,
+      "value": false
+    },
+    "c88e803973a6": {
+      "name": "workspaceSparsePresetsLoaded",
+      "ordinal": 9,
+      "value": true
+    },
+    "de95b19c6158": {
       "name": "workspaceSshState",
+      "ordinal": 3,
       "value": {
         "error": {
           "$rpc": "null"
@@ -149,13 +166,10 @@
         "targetId": "ssh-1"
       }
     },
-    "cea9d7e8986e": {
+    "ea6e5bf810d9": {
       "name": "workspaceSparseSaving",
+      "ordinal": 4,
       "value": true
-    },
-    "dba381378b08": {
-      "name": "workspaceSparsePresetsError",
-      "value": ""
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -178,13 +192,12 @@
         "targetId": "ssh-1"
       }
     },
-    "f9dfbe0c0ea7": {
-      "name": "ssh.getState#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
-    },
-    "fd758406cc2c": {
-      "name": "repo.saveSparsePreset#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.saveSparsePreset\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"docs\",\"directories\":[\"docs\"]}}"
+    "f54b3364071f": {
+      "name": "workspaceSparseDraft",
+      "ordinal": 11,
+      "value": {
+        "$rpc": "null"
+      }
     }
   },
   "recording": {
@@ -193,34 +206,34 @@
       {
         "id": "ssh-state-read",
         "observation": {
-          "sender": ["89aa7a3bd619"],
-          "payloads": ["f9dfbe0c0ea7"],
+          "sender": ["b53739a58194"],
+          "payloads": ["a11809a84754"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "ee3a941d5e9c",
-          "effects": ["921f72d7827e"]
+          "effects": ["de95b19c6158"]
         }
       },
       {
         "id": "preset-saved",
         "observation": {
-          "sender": ["89aa7a3bd619", "5c44ff5f6877"],
-          "payloads": ["f9dfbe0c0ea7", "fd758406cc2c"],
+          "sender": ["b53739a58194", "4b7e30ea1543"],
+          "payloads": ["a11809a84754", "02daf4600c50"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "save": "eb79a9b3682a"
           },
           "state": "404305aa2e3a",
           "effects": [
-            "921f72d7827e",
-            "cea9d7e8986e",
-            "dba381378b08",
-            "4856f62b3650",
-            "1d9a7d969446",
-            "312ed3cbf468",
-            "42bbd034563e",
-            "7fd0cde62993"
+            "de95b19c6158",
+            "ea6e5bf810d9",
+            "973f31a4e64b",
+            "1bc7cf6bcbaf",
+            "c88e803973a6",
+            "3f5e10171cd3",
+            "f54b3364071f",
+            "c1ae182c7519"
           ]
         }
       }

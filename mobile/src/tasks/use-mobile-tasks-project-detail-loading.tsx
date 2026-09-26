@@ -1,17 +1,12 @@
 import type { ItemDetailLoadingModel } from './use-mobile-tasks-item-detail-loading'
 import { useEffect } from './mobile-tasks-dependencies'
 import {
-  type DetailComment,
-  type GitHubAssignableUser,
-  type GitHubDetailCheck,
-  type GitHubDetailFile,
-  type GitHubPRReviewSummary,
   editableProjectFields,
-  isSuccess,
   projectFieldDraftValue,
   projectRowType,
   splitRepositorySlug
 } from './mobile-tasks-legacy-foundation'
+import { githubProjectRowDetailRead } from './mobile-task-project-board-operations'
 
 export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel) {
   const {
@@ -86,9 +81,9 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     let stale = false
     setProjectRowDetailLoading(true)
 
-    void client
-      .sendRequest(
-        'github.project.workItemDetailsBySlug',
+    void githubProjectRowDetailRead
+      .request(
+        client,
         {
           owner: slug.owner,
           repo: slug.repo,
@@ -102,41 +97,14 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | {
-              ok: true
-              details: {
-                body?: string
-                comments?: DetailComment[]
-                item?: {
-                  labels?: string[]
-                  reviewDecision?: string | null
-                  reviewRequests?: GitHubAssignableUser[]
-                  latestReviews?: GitHubPRReviewSummary[]
-                }
-                assignees?: string[]
-                headSha?: string
-                baseSha?: string
-                pullRequestId?: string
-                checks?: GitHubDetailCheck[]
-                files?: Array<{
-                  path: string
-                  oldPath?: string
-                  status?: GitHubDetailFile['status']
-                  additions?: number
-                  deletions?: number
-                  isBinary?: boolean
-                  viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
-                }>
-              }
-            }
-          | { ok: false; error: { message: string } }
+        const result = githubProjectRowDetailRead.interpret(response)
         if (!result.ok) {
           throw new Error(result.error.message)
         }
+        // The five collections are typed by the same entity schemas the item sheet reads them
+        // through, so the casts this call site carried are gone. `reviewDecision` is forwarded with
+        // no coalesce: explicit null and absent are different answers to "has this been reviewed",
+        // and collapsing either is a product change.
         setProjectRowDetail({
           provider: 'github',
           body: result.details.body ?? '',

@@ -1,0 +1,1143 @@
+{
+  "operation": "tasks.linear-team-context",
+  "family": "tasks.linear-team-context",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "58ea1553e04017c993aea4753aace41ee664705a3fdb3b18569c5a9d7968cf06",
+  "scenarioSha256": "8ec517c98775f3af0d45776dc74bcaaf99dcc751e85343084e39c557b6ddede1",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "043bc3b21bd9": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "045de1beb41b": {
+      "name": "prFileCommentDrafts",
+      "ordinal": 16,
+      "value": {}
+    },
+    "0b7bf56895e2": {
+      "name": "linearStatesLoading",
+      "ordinal": 24,
+      "value": true
+    },
+    "1e2b9e124f23": {
+      "name": "linearCommentDraft",
+      "ordinal": 25,
+      "value": ""
+    },
+    "20e14786ad6c": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "2388b2964070": {
+      "name": "linearCommentDraft",
+      "ordinal": 2,
+      "value": ""
+    },
+    "269660c94afa": {
+      "name": "expandedPrFilePath",
+      "ordinal": 13,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "2afc4b1311c1": {
+      "createTeamId": "team-1",
+      "states": [],
+      "statesLoading": false,
+      "teams": [
+        {
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "2d7c523e8a27": {
+      "name": "itemCommentDraft",
+      "ordinal": 6,
+      "value": ""
+    },
+    "337ce7504f5b": {
+      "name": "createTeamId",
+      "ordinal": 23,
+      "value": "team-1"
+    },
+    "33dcdd5c0549": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "3e0c86d3ff78": {
+      "name": "prFileLoadingPath",
+      "ordinal": 15,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "4256469e732b": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "4b830d961da2": {
+      "name": "itemReplyDrafts",
+      "ordinal": 12,
+      "value": {}
+    },
+    "4efe2d13d35e": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "542704953557": {
+      "name": "linear.listTeams#1",
+      "ordinal": 21,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listTeams\"}"
+    },
+    "58780d31c844": {
+      "name": "linearSubIssueTitle",
+      "ordinal": 3,
+      "value": ""
+    },
+    "5d0c6c58ff1e": {
+      "name": "linearStates",
+      "ordinal": 29,
+      "value": []
+    },
+    "6cfd8be99e71": {
+      "name": "linearStatesLoading",
+      "ordinal": 30,
+      "value": false
+    },
+    "70cbb5292625": {
+      "name": "linearStates",
+      "ordinal": 1,
+      "value": []
+    },
+    "715b8a858916": {
+      "name": "itemRemoveAssigneesDraft",
+      "ordinal": 10,
+      "value": ""
+    },
+    "77586df9fa2a": {
+      "name": "linearStates",
+      "ordinal": 29,
+      "value": [
+        {
+          "color": "#000000",
+          "id": "state-1",
+          "name": "Todo",
+          "type": "unstarted"
+        }
+      ]
+    },
+    "96b613832e2d": {
+      "name": "expandedResolvedCommentGroups",
+      "ordinal": 17,
+      "value": []
+    },
+    "9ffa64bfd433": {
+      "name": "itemAddLabelsDraft",
+      "ordinal": 7,
+      "value": ""
+    },
+    "ab36ef55f112": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "b2da94d284a1": {
+      "name": "linearSubIssueTitle",
+      "ordinal": 26,
+      "value": ""
+    },
+    "b6bf81e9e237": {
+      "createTeamId": "team-1",
+      "states": [
+        {
+          "color": "#000000",
+          "id": "state-1",
+          "name": "Todo",
+          "type": "unstarted"
+        }
+      ],
+      "statesLoading": false,
+      "teams": [
+        {
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "b8b7d9212631": {
+      "name": "linear.teamStates#1",
+      "ordinal": 28,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.teamStates\",\"params\":{\"teamId\":\"team-1\",\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "b8d6de13d3a3": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": [
+            {
+              "color": "#000000",
+              "id": "state-1",
+              "name": "Todo",
+              "type": "unstarted"
+            }
+          ]
+        }
+      }
+    },
+    "c69b02881ede": {
+      "name": "createTeamId",
+      "ordinal": 19,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "c94e95b05aae": {
+      "name": "itemTitleDraft",
+      "ordinal": 4,
+      "value": ""
+    },
+    "cf1569689f95": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "d4e3e2ea2ca4": {
+      "name": "itemReviewersDraft",
+      "ordinal": 11,
+      "value": ""
+    },
+    "d79a27912054": {
+      "name": "itemRemoveLabelsDraft",
+      "ordinal": 8,
+      "value": ""
+    },
+    "d79e86448837": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "ddf392ecde5d": {
+      "name": "linear.listTeams#1",
+      "ordinal": 20,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.listTeams"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": [
+            {
+              "id": "team-1",
+              "key": "ENG",
+              "name": "Engineering",
+              "workspaceId": "linear-workspace"
+            }
+          ]
+        }
+      }
+    },
+    "e0fdfc89107a": {
+      "name": "itemBodyDraft",
+      "ordinal": 5,
+      "value": ""
+    },
+    "e5809e226618": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "e986d1eb07e5": {
+      "name": "creatingTask",
+      "ordinal": 18,
+      "value": false
+    },
+    "e9df19e2ad7e": {
+      "name": "linearTeams",
+      "ordinal": 22,
+      "value": [
+        {
+          "id": "team-1",
+          "key": "ENG",
+          "name": "Engineering",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "eabd45d970b7": {
+      "name": "prFileContents",
+      "ordinal": 14,
+      "value": {}
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ef99ee625bd8": {
+      "name": "itemAddAssigneesDraft",
+      "ordinal": 9,
+      "value": ""
+    },
+    "fa2a1f56c02c": {
+      "name": "linear.teamStates#1",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.teamStates"
+        },
+        {
+          "name": "params",
+          "value": {
+            "teamId": "team-1",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-tasks.linear-team-context-linear.teamstates-1",
+    "checkpoints": [
+      {
+        "id": "tk-linear-team-context.prelude:open-composer-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d"],
+          "payloads": ["542704953557"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.normal:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "b8d6de13d3a3"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "b6bf81e9e237",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "77586df9fa2a",
+            "6cfd8be99e71"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.result-absent:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "20e14786ad6c"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "5d0c6c58ff1e",
+            "6cfd8be99e71"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.result-null:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "e5809e226618"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "5d0c6c58ff1e",
+            "6cfd8be99e71"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.inner-ok-missing:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "4efe2d13d35e"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "5d0c6c58ff1e",
+            "6cfd8be99e71"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.inner-false-string-error:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "043bc3b21bd9"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "5d0c6c58ff1e",
+            "6cfd8be99e71"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.inner-false-object-error:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "fa2a1f56c02c"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "5d0c6c58ff1e",
+            "6cfd8be99e71"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.outer-refused:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "ab36ef55f112"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "5d0c6c58ff1e",
+            "6cfd8be99e71"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.outer-refused-no-message:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "cf1569689f95"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "5d0c6c58ff1e",
+            "6cfd8be99e71"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.method-not-found:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "33dcdd5c0549"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "5d0c6c58ff1e",
+            "6cfd8be99e71"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.transport-rejection:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "d79e86448837"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "5d0c6c58ff1e",
+            "6cfd8be99e71"
+          ]
+        }
+      },
+      {
+        "id": "tk-linear-team-context.transport-rejection-no-message:select-metadata-item-settled",
+        "observation": {
+          "sender": ["ddf392ecde5d", "4256469e732b"],
+          "payloads": ["542704953557", "b8b7d9212631"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "open-composer-0": "eb79a9b3682a",
+            "select-metadata-item-1": "eb79a9b3682a"
+          },
+          "state": "2afc4b1311c1",
+          "effects": [
+            "70cbb5292625",
+            "2388b2964070",
+            "58780d31c844",
+            "c94e95b05aae",
+            "e0fdfc89107a",
+            "2d7c523e8a27",
+            "9ffa64bfd433",
+            "d79a27912054",
+            "ef99ee625bd8",
+            "715b8a858916",
+            "d4e3e2ea2ca4",
+            "4b830d961da2",
+            "269660c94afa",
+            "eabd45d970b7",
+            "3e0c86d3ff78",
+            "045de1beb41b",
+            "96b613832e2d",
+            "e986d1eb07e5",
+            "c69b02881ede",
+            "e9df19e2ad7e",
+            "337ce7504f5b",
+            "0b7bf56895e2",
+            "1e2b9e124f23",
+            "b2da94d284a1",
+            "5d0c6c58ff1e",
+            "6cfd8be99e71"
+          ]
+        }
+      }
+    ]
+  }
+}

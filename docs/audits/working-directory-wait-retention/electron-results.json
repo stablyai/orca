@@ -1,0 +1,1260 @@
+{
+  "runtime": {
+    "node": "24.21.0",
+    "acorn": "8.18.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.2",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "148",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "0.0.0",
+    "simdjson": "4.6.7",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2025c",
+    "undici": "7.29.1",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "15.0.245.31-electron.0",
+    "zlib": "1.3.2.1-motley",
+    "zstd": "1.6.0",
+    "electron": "43.7.0",
+    "chrome": "150.0.7871.250"
+  },
+  "sourceHashLineEndings": "canonical LF",
+  "crlfLoaderControl": {
+    "syntheticCrlfReads": 2,
+    "identicalSourcesAndHashes": true
+  },
+  "unhandledRejections": 0,
+  "reports": {
+    "before": {
+      "fulfilled": {
+        "beforeSettlement": {
+          "signal": 32,
+          "options": 0,
+          "error": 32
+        },
+        "afterSettlement": {
+          "signal": 0,
+          "options": 0,
+          "error": 0
+        },
+        "nativeCallsBeforeSettlement": 1,
+        "nativeCallsAfterFreshValidation": 2,
+        "lateResult": {
+          "status": "fulfilled"
+        }
+      },
+      "rejected": {
+        "beforeSettlement": {
+          "signal": 32,
+          "options": 0,
+          "error": 32
+        },
+        "afterSettlement": {
+          "signal": 0,
+          "options": 0,
+          "error": 0
+        },
+        "nativeCallsBeforeSettlement": 1,
+        "nativeCallsAfterFreshValidation": 2,
+        "lateResult": {
+          "status": "rejected",
+          "message": "Working directory \"synthetic-validation-true\" does not exist. It may have been deleted or is on an unmounted volume (cwd: synthetic-validation-true, arch: arm64, platform: darwin 25.6.0, orca: synthetic-cwd-validation-audit)."
+        }
+      },
+      "laneOwnership": {
+        "canceledWaits": 3,
+        "nativeCallsWhileBothSlotsOwned": 2,
+        "nativeCallsAfterOneRawCompletion": 3
+      },
+      "alreadyAborted": {
+        "nativeCalls": 1,
+        "noSignalPromiseIdentityPreserved": true
+      },
+      "lateNativeRejection": {
+        "nativeRejectedAfterCallerCanceled": true
+      }
+    },
+    "after": {
+      "fulfilled": {
+        "beforeSettlement": {
+          "signal": 0,
+          "options": 0,
+          "error": 0
+        },
+        "afterSettlement": {
+          "signal": 0,
+          "options": 0,
+          "error": 0
+        },
+        "nativeCallsBeforeSettlement": 1,
+        "nativeCallsAfterFreshValidation": 2,
+        "lateResult": {
+          "status": "fulfilled"
+        }
+      },
+      "rejected": {
+        "beforeSettlement": {
+          "signal": 0,
+          "options": 0,
+          "error": 0
+        },
+        "afterSettlement": {
+          "signal": 0,
+          "options": 0,
+          "error": 0
+        },
+        "nativeCallsBeforeSettlement": 1,
+        "nativeCallsAfterFreshValidation": 2,
+        "lateResult": {
+          "status": "rejected",
+          "message": "Working directory \"synthetic-validation-true\" does not exist. It may have been deleted or is on an unmounted volume (cwd: synthetic-validation-true, arch: arm64, platform: darwin 25.6.0, orca: synthetic-cwd-validation-audit)."
+        }
+      },
+      "laneOwnership": {
+        "canceledWaits": 3,
+        "nativeCallsWhileBothSlotsOwned": 2,
+        "nativeCallsAfterOneRawCompletion": 3
+      },
+      "alreadyAborted": {
+        "nativeCalls": 1,
+        "noSignalPromiseIdentityPreserved": true
+      },
+      "lateNativeRejection": {
+        "nativeRejectedAfterCallerCanceled": true
+      }
+    }
+  },
+  "matrix": [
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 0,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-0-false\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-0-false\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 0,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-0-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-0-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 1,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-1-false\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-1-false\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 1,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-1-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-1-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 2,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-2-false\" was canceled."
+        ],
+        "calls": 2
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-2-false\" was canceled."
+        ],
+        "calls": 2
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 2,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-2-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-2-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 3,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-3-false\" was canceled."
+        ],
+        "calls": 2
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-3-false\" was canceled."
+        ],
+        "calls": 2
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 3,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-3-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-3-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 4,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-4-false\" was canceled."
+        ],
+        "calls": 2
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-4-false\" was canceled."
+        ],
+        "calls": 2
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 4,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-4-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-4-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 8,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-8-false\" was canceled."
+        ],
+        "calls": 2
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-8-false\" was canceled."
+        ],
+        "calls": 2
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": false,
+      "ticks": 8,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-8-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-false-8-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 0,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-0-false\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-0-false\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 0,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-0-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-0-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 1,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-1-false\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-1-false\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 1,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-1-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-1-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 2,
+      "abortFirst": false,
+      "before": {
+        "outcome": ["fulfilled"],
+        "calls": 1
+      },
+      "after": {
+        "outcome": ["fulfilled"],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 2,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-2-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-2-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 3,
+      "abortFirst": false,
+      "before": {
+        "outcome": ["fulfilled"],
+        "calls": 1
+      },
+      "after": {
+        "outcome": ["fulfilled"],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 3,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-3-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-3-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 4,
+      "abortFirst": false,
+      "before": {
+        "outcome": ["fulfilled"],
+        "calls": 1
+      },
+      "after": {
+        "outcome": ["fulfilled"],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 4,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-4-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-4-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 8,
+      "abortFirst": false,
+      "before": {
+        "outcome": ["fulfilled"],
+        "calls": 1
+      },
+      "after": {
+        "outcome": ["fulfilled"],
+        "calls": 1
+      }
+    },
+    {
+      "reject": false,
+      "startedBefore": true,
+      "ticks": 8,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-8-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-false-true-8-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 0,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-0-false\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-0-false\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 0,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-0-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-0-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 1,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-1-false\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-1-false\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 1,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-1-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-1-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 2,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-2-false\" was canceled."
+        ],
+        "calls": 2
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-2-false\" was canceled."
+        ],
+        "calls": 2
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 2,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-2-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-2-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 3,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-3-false\" was canceled."
+        ],
+        "calls": 2
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-3-false\" was canceled."
+        ],
+        "calls": 2
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 3,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-3-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-3-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 4,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-4-false\" was canceled."
+        ],
+        "calls": 2
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-4-false\" was canceled."
+        ],
+        "calls": 2
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 4,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-4-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-4-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 8,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-8-false\" was canceled."
+        ],
+        "calls": 2
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-8-false\" was canceled."
+        ],
+        "calls": 2
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": false,
+      "ticks": 8,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-8-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-false-8-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 0,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-0-false\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-0-false\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 0,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-0-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-0-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 1,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-1-false\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-1-false\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 1,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-1-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-1-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 2,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "Error",
+          "Working directory \"matrix-true-true-2-false\" does not exist. It may have been deleted or is on an unmounted volume (cwd: matrix-true-true-2-false, arch: arm64, platform: darwin 25.6.0, orca: synthetic-cwd-validation-audit)."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "Error",
+          "Working directory \"matrix-true-true-2-false\" does not exist. It may have been deleted or is on an unmounted volume (cwd: matrix-true-true-2-false, arch: arm64, platform: darwin 25.6.0, orca: synthetic-cwd-validation-audit)."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 2,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-2-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-2-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 3,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "Error",
+          "Working directory \"matrix-true-true-3-false\" does not exist. It may have been deleted or is on an unmounted volume (cwd: matrix-true-true-3-false, arch: arm64, platform: darwin 25.6.0, orca: synthetic-cwd-validation-audit)."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "Error",
+          "Working directory \"matrix-true-true-3-false\" does not exist. It may have been deleted or is on an unmounted volume (cwd: matrix-true-true-3-false, arch: arm64, platform: darwin 25.6.0, orca: synthetic-cwd-validation-audit)."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 3,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-3-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-3-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 4,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "Error",
+          "Working directory \"matrix-true-true-4-false\" does not exist. It may have been deleted or is on an unmounted volume (cwd: matrix-true-true-4-false, arch: arm64, platform: darwin 25.6.0, orca: synthetic-cwd-validation-audit)."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "Error",
+          "Working directory \"matrix-true-true-4-false\" does not exist. It may have been deleted or is on an unmounted volume (cwd: matrix-true-true-4-false, arch: arm64, platform: darwin 25.6.0, orca: synthetic-cwd-validation-audit)."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 4,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-4-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-4-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 8,
+      "abortFirst": false,
+      "before": {
+        "outcome": [
+          "rejected",
+          "Error",
+          "Working directory \"matrix-true-true-8-false\" does not exist. It may have been deleted or is on an unmounted volume (cwd: matrix-true-true-8-false, arch: arm64, platform: darwin 25.6.0, orca: synthetic-cwd-validation-audit)."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "Error",
+          "Working directory \"matrix-true-true-8-false\" does not exist. It may have been deleted or is on an unmounted volume (cwd: matrix-true-true-8-false, arch: arm64, platform: darwin 25.6.0, orca: synthetic-cwd-validation-audit)."
+        ],
+        "calls": 1
+      }
+    },
+    {
+      "reject": true,
+      "startedBefore": true,
+      "ticks": 8,
+      "abortFirst": true,
+      "before": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-8-true\" was canceled."
+        ],
+        "calls": 1
+      },
+      "after": {
+        "outcome": [
+          "rejected",
+          "WorkingDirectoryValidationAbortedError",
+          "Working directory validation for \"matrix-true-true-8-true\" was canceled."
+        ],
+        "calls": 1
+      }
+    }
+  ],
+  "observers": [
+    {
+      "position": "before",
+      "reject": false,
+      "before": [["rejected", "WorkingDirectoryValidationAbortedError"]],
+      "after": [["rejected", "WorkingDirectoryValidationAbortedError"]]
+    },
+    {
+      "position": "before",
+      "reject": true,
+      "before": [["rejected", "WorkingDirectoryValidationAbortedError"]],
+      "after": [["rejected", "WorkingDirectoryValidationAbortedError"]]
+    },
+    {
+      "position": "between",
+      "reject": false,
+      "before": [["fulfilled"], ["rejected", "WorkingDirectoryValidationAbortedError"]],
+      "after": [["fulfilled"], ["rejected", "WorkingDirectoryValidationAbortedError"]]
+    },
+    {
+      "position": "between",
+      "reject": true,
+      "before": [
+        ["rejected", "Error"],
+        ["rejected", "WorkingDirectoryValidationAbortedError"]
+      ],
+      "after": [
+        ["rejected", "Error"],
+        ["rejected", "WorkingDirectoryValidationAbortedError"]
+      ]
+    },
+    {
+      "position": "after",
+      "reject": false,
+      "before": [["fulfilled"]],
+      "after": [["fulfilled"]]
+    },
+    {
+      "position": "after",
+      "reject": true,
+      "before": [["rejected", "Error"]],
+      "after": [["rejected", "Error"]]
+    }
+  ],
+  "versions": {
+    "before": {
+      "sourceHashes": {
+        "src/main/providers/working-directory-validation.ts": {
+          "before": "197bcb7ab254d2bca8cdcc7d7f0214dedca825bbb0dc4f0d2dcbb41df4cec043",
+          "after": "0ef75b5d5242ad7e5423bde2cb7fe633a8f437fc545f22ca04612782fc2de212"
+        }
+      },
+      "bundleSha256": "e4757e7593eccc8c48e69cc4a023983a020a25d0e31a90913d415a05030dff57",
+      "dependencies": [
+        {
+          "path": "src/shared/wsl-paths.ts",
+          "sha256": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a"
+        },
+        {
+          "path": "src/shared/priority-semaphore.ts",
+          "sha256": "509693d0132f2365bf1702bcbae7efc4bb0eceeb6ea235456f56a5f784da85a5"
+        },
+        {
+          "path": "src/main/providers/working-directory-validation.ts",
+          "sha256": "197bcb7ab254d2bca8cdcc7d7f0214dedca825bbb0dc4f0d2dcbb41df4cec043"
+        }
+      ]
+    },
+    "after": {
+      "sourceHashes": {
+        "src/main/providers/working-directory-validation.ts": {
+          "before": "197bcb7ab254d2bca8cdcc7d7f0214dedca825bbb0dc4f0d2dcbb41df4cec043",
+          "after": "0ef75b5d5242ad7e5423bde2cb7fe633a8f437fc545f22ca04612782fc2de212"
+        }
+      },
+      "bundleSha256": "d9ddd8e54dcde6b6a33d529b8ba4a6f94318980e469398b81a3a991923dd95b1",
+      "dependencies": [
+        {
+          "path": "src/shared/wsl-paths.ts",
+          "sha256": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a"
+        },
+        {
+          "path": "src/shared/priority-semaphore.ts",
+          "sha256": "509693d0132f2365bf1702bcbae7efc4bb0eceeb6ea235456f56a5f784da85a5"
+        },
+        {
+          "path": "src/main/providers/working-directory-validation.ts",
+          "sha256": "0ef75b5d5242ad7e5423bde2cb7fe633a8f437fc545f22ca04612782fc2de212"
+        }
+      ]
+    }
+  },
+  "scope": "Actual cwd validation and semaphore source. Native stat replaced by one bounded deferred fixture; no filesystem probe, WSL process or app. 32 canceled small signals per case. Native ownership retained until actual fixture settlement, including shared UNC lane. Small per-call reaction/empty-holder metadata still lives until native settlement. No synthetic large payload or incident RSS claim."
+}

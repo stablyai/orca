@@ -1,6 +1,18 @@
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
+import type { StructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
+import { projectStructuredAgentSessionMessages as projectMessages } from '../../../../shared/structured-agent-session-message-projection'
+import { projectStructuredQuestionMessages } from './structured-agent-question-projection'
 
-export { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
+export function projectStructuredAgentSessionMessages(
+  items: readonly AgentJournalRenderItem[],
+  outbox: readonly StructuredAgentSessionOutboxEntry[],
+  submissions: readonly AgentJournalSubmission[]
+) {
+  return projectMessages(items, outbox, submissions, projectStructuredQuestionMessages)
+}
 
 export type StructuredPromptItem = AgentJournalRenderItem & {
   body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' | 'question' }>

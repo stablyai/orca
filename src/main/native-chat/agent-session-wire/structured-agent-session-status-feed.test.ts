@@ -12,6 +12,7 @@ import { createClaudeJournalTranslator } from '../../claude/claude-structured-jo
 import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import { indexedStatusFeedSession as indexed } from './structured-agent-session-status-feed-test-session'
 import {
   StructuredAgentSessionStatusFeed,
   type StructuredAgentSessionStatusFeedDeps,
@@ -58,26 +59,8 @@ async function openJournal(sessionId = SESSION, now?: () => number) {
   })
 }
 
-function indexed(session: {
-  journal: Awaited<ReturnType<typeof openJournal>>
-  hasProviderChild?: boolean
-  fence?: number
-}) {
-  return {
-    journal: session.journal,
-    fence: session.fence ?? 1,
-    ...(session.hasProviderChild !== undefined
-      ? { hasProviderChild: session.hasProviderChild }
-      : {}),
-    params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
-  }
-}
-
 function feedFor(
-  sessions: Map<
-    string,
-    { journal: Awaited<ReturnType<typeof openJournal>>; hasProviderChild?: boolean; fence?: number }
-  >,
+  sessions: Map<string, Parameters<typeof indexed>[0]>,
   record: Partial<AgentSessionRecord> | null = null,
   onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged'],
   readBackgroundTasks?: StructuredAgentSessionStatusFeedDeps['readBackgroundTasks'],
@@ -108,6 +91,24 @@ function feedFor(
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
+  it('projects whether the owned child has proven its start, and nothing once it is not owned', async () => {
+    const journal = await openJournal()
+    const session = { journal, hasProviderChild: true, providerChildPhase: 'starting' as const }
+    const sessions = new Map<string, Parameters<typeof indexed>[0]>([[SESSION, session]])
+    const { feed, events, dispose } = feedFor(sessions)
+    expect(events.at(-1)).toMatchObject({
+      type: 'snapshot',
+      sessions: [{ hostExecutionOwned: true, hostExecutionPhase: 'starting' }]
+    })
+    sessions.set(SESSION, { ...session, providerChildPhase: 'ready' })
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).toMatchObject({ session: { hostExecutionPhase: 'ready' } })
+    sessions.set(SESSION, { ...session, hasProviderChild: false })
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).not.toMatchObject({ session: { hostExecutionPhase: expect.any(String) } })
+    dispose()
+  })
+
   it('publishes provider ownership transitions without changing journal time', async () => {
     const journal = await openJournal()
     const sessions = new Map([[SESSION, { journal, hasProviderChild: true }]])
@@ -782,7 +783,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
 describe('the status sink sees the roster the broadcast cache deliberately lacks', () => {
   function sinkFor() {
     const published: AgentSessionStatusSummary[] = []
-    const forgotten: string[] = []
+    const forgotten: Parameters<StructuredAgentSessionStatusSink['forget']>[0][] = []
     const sink: StructuredAgentSessionStatusSink = {
       publish: (summary) => published.push(summary),
       forget: (sessionId) => forgotten.push(sessionId)
@@ -818,7 +819,16 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
     // Exactly what `close` does after eviction: the cache keeps the projection, the sink does not.
     sessions.delete(SESSION)
     feed.forget(SESSION)
-    expect(forgotten).toEqual([SESSION])
+    expect(forgotten).toEqual([
+      {
+        kind: 'structured-session',
+        sessionId: SESSION,
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: 'workspace-1',
+        workspaceKind: 'git-worktree'
+      }
+    ])
     const late: AgentSessionStatusEvent[] = []
     feed.subscribe({ id: 'list-2', emit: (event) => late.push(event) })
     expect(late).toEqual([

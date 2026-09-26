@@ -130,7 +130,8 @@ function mapPreviewRole(role: string | null): AiVaultSessionPreviewMessage['role
   return 'unknown'
 }
 
-function extractPartText(partData: string): string | null {
+/** The text a `type: 'text'` part carries; null for every other part shape. */
+export function extractPartText(partData: string): string | null {
   try {
     const parsed = JSON.parse(partData) as unknown
     const record =
@@ -233,12 +234,13 @@ export async function parseOpenCodeSqliteSession(args: {
 }): Promise<AiVaultSession | null> {
   return readOpenCodeDatabase({
     dbPath: args.dbPath,
-    read: (db) => readSession({ db, ...args })
+    read: (db) => readOpenCodeSqliteSession({ db, ...args })
   })
 }
 
-// Extracted so the open wrapper owns the handle's lifetime.
-function readSession(args: {
+// Exported so a capture read can take the session and its whole transcript from
+// one open of the database rather than opening it twice.
+export function readOpenCodeSqliteSession(args: {
   db: SyncDatabase
   dbPath: string
   sessionId: string

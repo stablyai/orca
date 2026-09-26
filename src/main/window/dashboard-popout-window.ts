@@ -19,7 +19,6 @@ const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
 const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 720
-const DEFAULT_VIEW = 'board'
 const DASHBOARD_POPOUT_PARTITION = 'orca-dashboard-popout'
 
 // Why: singleton — the dashboard is a companion surface, so a second "Pop Out"
@@ -99,14 +98,13 @@ function broadcastPopoutOpenChanged(open: boolean): void {
   }
 }
 
-function loadDashboardPopout(window: BrowserWindow, view: string): void {
-  const search = `view=${encodeURIComponent(view)}`
+function loadDashboardPopout(window: BrowserWindow): void {
   // Why: mirror loadMainWindow's dev/prod branch — the dev server serves the
   // second HTML entry, prod loads the emitted file.
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
-    void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/popout.html?${search}`)
+    void window.loadURL(`${process.env.ELECTRON_RENDERER_URL}/popout.html`)
   } else {
-    void window.loadFile(join(__dirname, '../renderer/popout.html'), { search })
+    void window.loadFile(join(__dirname, '../renderer/popout.html'))
   }
 }
 
@@ -135,11 +133,10 @@ function resolveRestoredBounds(store: Store | null): {
  * Open the pop-out dashboard window, or focus it if already open. The window is
  * a standalone top-level BrowserWindow with a native frame that reuses the same
  * preload/window.api as the main window but renders its own React root
- * (popout.html?view=…).
+ * (popout.html).
  */
 export function createOrFocusDashboardPopout(
   store: Store | null,
-  view?: string,
   options: { getKeybindings?: () => KeybindingOverrides | undefined } = {}
 ): BrowserWindow {
   if (dashboardPopoutWindow && !dashboardPopoutWindow.isDestroyed()) {
@@ -149,13 +146,8 @@ export function createOrFocusDashboardPopout(
     if (!isBackgroundLaunch()) {
       dashboardPopoutWindow.focus()
     }
-    if (view) {
-      dashboardPopoutWindow.webContents.send('dashboard:viewRequested', view)
-    }
     return dashboardPopoutWindow
   }
-
-  const initialView = view ?? DEFAULT_VIEW
 
   const savedBounds = resolveRestoredBounds(store)
 
@@ -291,7 +283,7 @@ export function createOrFocusDashboardPopout(
     broadcastPopoutOpenChanged(false)
   })
 
-  loadDashboardPopout(window, initialView)
+  loadDashboardPopout(window)
   return window
 }
 

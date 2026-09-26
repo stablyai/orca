@@ -280,13 +280,20 @@ export async function openCodexAppServerConnection(
     close
   }
 
+  let handshaking = false
   try {
+    // A spawn that failed has no pid; the handshake below reports why.
+    if (child.pid !== undefined) {
+      await handlers.onSpawned?.(child.pid)
+    }
+    handshaking = true
     await initializeCodexAppServerConnection(connection)
   } catch (error) {
     if ((await close()) !== true) {
       throw new CodexAppServerHandshakeExitUnprovenError(connection, error)
     }
-    throw error instanceof CodexAppServerUnsupportedError ||
+    throw !handshaking ||
+      error instanceof CodexAppServerUnsupportedError ||
       error instanceof CodexAppServerTimeoutError
       ? error
       : buildExitError(error instanceof Error ? error : new Error(String(error)))

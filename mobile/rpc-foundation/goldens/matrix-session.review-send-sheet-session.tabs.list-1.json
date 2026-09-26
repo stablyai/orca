@@ -1,0 +1,828 @@
+{
+  "operation": "session.diff-review-actions",
+  "family": "session.review-send-sheet",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
+  "scenarioSha256": "a71815661dee6129a1b133c398b37ea89a9e4939b45626dada16889acabb2afe",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1cfc4f5c9474": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "3c1f43884983": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "kind": "error",
+        "message": "outer refused",
+        "terminals": []
+      }
+    },
+    "5431212bcf3d": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "56728a538e3d": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "5d955e001d8c": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "5e68b4616f23": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "697177595a0a": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "kind": "ready",
+        "terminals": [
+          {
+            "id": "tab-1",
+            "terminal": "terminal-1",
+            "title": "codex"
+          }
+        ]
+      }
+    },
+    "6eb439bad25e": {
+      "name": "reply-salvage",
+      "ordinal": 3,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["1"],
+        "method": "session.tabs.list",
+        "operation": "session.review-terminal-list",
+        "variant": "review-terminal-tabs"
+      }
+    },
+    "783e46052655": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "82c19eac1f64": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "kind": "error",
+        "message": "",
+        "terminals": []
+      }
+    },
+    "8414db2cc9a1": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "kind": "error",
+        "message": "transport failure",
+        "terminals": []
+      }
+    },
+    "95726f336386": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "kind": "error",
+        "message": "Unable to load agent sessions",
+        "terminals": []
+      }
+    },
+    "9a3dbd49ee14": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tabs": [
+              {
+                "id": "tab-1",
+                "terminal": "terminal-1",
+                "title": "codex",
+                "type": "terminal"
+              },
+              {
+                "id": "tab-2",
+                "title": "notes.md",
+                "type": "markdown"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "acb5ae38e750": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "c010bb8d5fa5": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "kind": "error",
+        "message": "Unknown method",
+        "terminals": []
+      }
+    },
+    "c080845d54f9": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "c55cf258a4ff": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "cdd3dccc35b1": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d90d19c18333": {
+      "name": "session.tabs.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f3e8e9ab2421": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "kind": "error",
+        "message": "The host sent a reply this app could not read (session.tabs.list)",
+        "terminals": []
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.review-send-sheet-session.tabs.list-1",
+    "checkpoints": [
+      {
+        "id": "review-send-sheet-lists-terminals.normal:listed",
+        "observation": {
+          "sender": ["9a3dbd49ee14"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "697177595a0a",
+          "effects": ["6eb439bad25e"]
+        }
+      },
+      {
+        "id": "review-send-sheet-lists-terminals.result-absent:listed",
+        "observation": {
+          "sender": ["c55cf258a4ff"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "f3e8e9ab2421",
+          "effects": []
+        }
+      },
+      {
+        "id": "review-send-sheet-lists-terminals.result-null:listed",
+        "observation": {
+          "sender": ["5431212bcf3d"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "f3e8e9ab2421",
+          "effects": []
+        }
+      },
+      {
+        "id": "review-send-sheet-lists-terminals.inner-ok-missing:listed",
+        "observation": {
+          "sender": ["783e46052655"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "f3e8e9ab2421",
+          "effects": []
+        }
+      },
+      {
+        "id": "review-send-sheet-lists-terminals.inner-false-string-error:listed",
+        "observation": {
+          "sender": ["56728a538e3d"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "f3e8e9ab2421",
+          "effects": []
+        }
+      },
+      {
+        "id": "review-send-sheet-lists-terminals.inner-false-object-error:listed",
+        "observation": {
+          "sender": ["5e68b4616f23"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "f3e8e9ab2421",
+          "effects": []
+        }
+      },
+      {
+        "id": "review-send-sheet-lists-terminals.outer-refused:listed",
+        "observation": {
+          "sender": ["c080845d54f9"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "3c1f43884983",
+          "effects": []
+        }
+      },
+      {
+        "id": "review-send-sheet-lists-terminals.outer-refused-no-message:listed",
+        "observation": {
+          "sender": ["d90d19c18333"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "95726f336386",
+          "effects": []
+        }
+      },
+      {
+        "id": "review-send-sheet-lists-terminals.method-not-found:listed",
+        "observation": {
+          "sender": ["cdd3dccc35b1"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "c010bb8d5fa5",
+          "effects": []
+        }
+      },
+      {
+        "id": "review-send-sheet-lists-terminals.transport-rejection:listed",
+        "observation": {
+          "sender": ["1cfc4f5c9474"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "8414db2cc9a1",
+          "effects": []
+        }
+      },
+      {
+        "id": "review-send-sheet-lists-terminals.transport-rejection-no-message:listed",
+        "observation": {
+          "sender": ["5d955e001d8c"],
+          "payloads": ["acb5ae38e750"],
+          "settlements": {
+            "open": "eb79a9b3682a"
+          },
+          "state": "82c19eac1f64",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -18,6 +18,7 @@ export type ComposerCardSourceProps = Pick<
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoProjectId'
   | 'smartNameSelection'
+  | 'smartNameMode'
   | 'reuseSelectedBranch'
   | 'createMultiple'
   | 'agentPrompt'

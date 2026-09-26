@@ -303,6 +303,171 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it.each([
+    {
+      label: 'after the split parent for a capable client',
+      supportsSplitGroupPlacement: true,
+      expectedOrder: (createdId: string) => [
+        'split::left',
+        'split::right',
+        createdId,
+        'trailing::leaf'
+      ]
+    },
+    {
+      label: 'at the end for an older client',
+      supportsSplitGroupPlacement: false,
+      expectedOrder: (createdId: string) => [
+        'split::left',
+        'split::right',
+        'trailing::leaf',
+        createdId
+      ]
+    }
+  ])('places a runtime-owned terminal $label', async (testCase) => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-created-after-split' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:split-placement',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'split::left',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'split::left',
+              parentTabId: 'split',
+              leafId: 'left',
+              title: 'Split',
+              isActive: true
+            },
+            {
+              type: 'terminal',
+              id: 'split::right',
+              parentTabId: 'split',
+              leafId: 'right',
+              title: 'Split',
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: 'trailing::leaf',
+              parentTabId: 'trailing',
+              leafId: 'leaf',
+              title: 'Trailing',
+              isActive: false
+            }
+          ]
+        }
+      ]
+    })
+
+    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      afterTabId: 'split::left',
+      clientNavigationId: 'mobile-client',
+      supportsSplitGroupPlacement: testCase.supportsSplitGroupPlacement
+    })
+
+    expect(
+      (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs.map((tab) => tab.id)
+    ).toEqual(testCase.expectedOrder(created.tab.id))
+  })
+
+  it('asks a headed host to append for an older client', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer:legacy-placement',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'split::left',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'split::left',
+              parentTabId: 'split',
+              leafId: 'left',
+              title: 'Split',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    runtime['waitForMobileTerminalSurface'] = vi.fn().mockResolvedValue({
+      tab: {
+        type: 'terminal',
+        id: 'created::leaf',
+        parentTabId: 'created',
+        leafId: 'leaf',
+        title: 'Terminal',
+        status: 'ready',
+        terminal: 'term_created',
+        isActive: false
+      },
+      publicationEpoch: 'renderer:legacy-placement',
+      snapshotVersion: 2
+    })
+    const webContents: {
+      isDestroyed: () => boolean
+      setBackgroundThrottling: ReturnType<typeof vi.fn>
+      send: ReturnType<typeof vi.fn>
+    } = {
+      isDestroyed: () => false,
+      setBackgroundThrottling: vi.fn(),
+      send: vi.fn()
+    }
+    webContents.send.mockImplementation(
+      (_channel: string, payload: { requestId: string; afterTabId?: string }) => {
+        expect(payload.afterTabId).toBeUndefined()
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          { requestId: payload.requestId, tabId: 'created', title: 'Terminal' }
+        )
+      }
+    )
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      afterTabId: 'split::left',
+      clientNavigationId: 'legacy-client',
+      supportsSplitGroupPlacement: false,
+      activate: false
+    })
+
+    expect(webContents.send).toHaveBeenCalledWith(
+      'terminal:requestTabCreate',
+      expect.objectContaining({ afterTabId: undefined })
+    )
+  })
+
   it('leases renderer publication for a paired create and preserves host-owned inventory', async () => {
     const leafId = '91919191-9191-4919-8919-919191919191'
     const spawn = vi.fn()

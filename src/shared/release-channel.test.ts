@@ -324,4 +324,24 @@ describe('release channel', () => {
       '1.4.160-adhoc.20260728090000'
     ])
   })
+
+  it('sorts dev builds by their cut time across different base versions', () => {
+    const build = (version: string): ReleaseBuild => ({
+      tag: `v${version}`,
+      version,
+      channel: 'adhoc',
+      name: null,
+      publishedAt: null,
+      releaseUrl: `https://github.com/stablyai/orca-adhoc/releases/tag/v${version}`,
+      installerUrl: null
+    })
+    const sorted = sortReleaseBuildsNewestFirst([
+      build('1.4.207-adhoc.20260919025813'),
+      build('1.4.206-adhoc.20260919173504')
+    ])
+    expect(sorted.map((entry) => entry.version)).toEqual([
+      '1.4.206-adhoc.20260919173504',
+      '1.4.207-adhoc.20260919025813'
+    ])
+  })
 })

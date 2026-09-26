@@ -55,6 +55,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -67,6 +70,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dist/orca-windows-setup.exe
+          # The mobile page trees are in the key because beforePack builds the mobile web bundle
+          # into the installer; config/** already covers the builder, the verifier and the manifest
+          # writer. A mobile-only change must miss this cache, not reuse a stale exe.
           key: >-
             crash-survival-installer-${{ hashFiles(
               'src/**',
@@ -85,7 +91,12 @@ jobs:
               '.npmrc',
               'package.json',
               'pnpm-lock.yaml',
-              'pnpm-workspace.yaml'
+              'pnpm-workspace.yaml',
+              'mobile/package.json',
+              'mobile/pnpm-lock.yaml',
+              'mobile/app/**',
+              'mobile/src/**',
+              'mobile/web-entry/**'
             ) }}
 
       # Why: production edits miss the installer cache by design, but Electron
@@ -100,6 +111,12 @@ jobs:
           key: crash-survival-electron-builder-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             crash-survival-electron-builder-
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules. Gated with the
+      # build it feeds, so a cache hit does not pay for an install nothing consumes.
+      - uses: ./.github/actions/install-mobile-dependencies
+        if: steps.cache-installer.outputs.cache-hit != 'true'
 
       - name: Build Windows installer (unsigned)
         if: steps.cache-installer.outputs.cache-hit != 'true'

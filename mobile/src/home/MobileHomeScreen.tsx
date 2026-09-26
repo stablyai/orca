@@ -142,10 +142,7 @@ export function MobileHomeScreen() {
           }
           hostAttempts={data.hostAttempts}
           hostLastConnected={data.hostLastConnected}
-          hostPairingRejected={data.hostPairingRejected}
-          hostSignedOut={data.hostSignedOut}
-          hostPaths={data.hostPaths}
-          hostPendingPaths={data.hostPendingPaths}
+          hostConnections={data.hostConnections}
           hosts={data.sortedHostCatalog}
           hostStates={data.hostStates}
           isWideLayout={isWideLayout}
@@ -176,7 +173,7 @@ export function MobileHomeScreen() {
             ? (data.hostLastConnected[actionTarget.id] ?? null) != null
             : false,
           onDismiss: () => setActionTarget(null),
-          onReconnect: (hostId) => void forceReconnectHost(hostId),
+          onReconnect: (hostId) => void forceReconnectHost?.(hostId),
           onDisconnect: disconnectHostClient,
           onDiagnostics: (hostId) =>
             data.router.push({ pathname: '/connection-log', params: { hostId } }),

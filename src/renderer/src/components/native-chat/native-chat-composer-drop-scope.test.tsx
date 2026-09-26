@@ -146,6 +146,8 @@ describe('native chat composer drop scoping', () => {
       value: { ui: { onFileDrop: subscribeNativeFileDrop }, fs: intake }
     })
     installNativeFileDropHandlers()
+    // Repeated preload setup must stay singleton or every OS drop is processed once per install.
+    installNativeFileDropHandlers()
   })
 
   beforeEach(() => {

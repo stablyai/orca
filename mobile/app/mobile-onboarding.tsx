@@ -1,12 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  AccessibilityInfo,
-  Animated,
-  BackHandler,
-  Text,
-  useWindowDimensions,
-  View
-} from 'react-native'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { Animated, BackHandler, Text, useWindowDimensions, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { OrcaLogo } from '../src/components/OrcaLogo'
@@ -17,6 +10,7 @@ import {
   type NotificationOnboardingChoice
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
+import { useReducedMotionEnabled } from '../src/onboarding/use-reduced-motion'
 import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
 import {
   saveDefaultSessionView,
@@ -85,7 +79,7 @@ function MobileOnboardingFlow({
       toValue: nextIndex,
       // Why: the carousel should preserve continuity without overriding the
       // device's reduced-motion preference.
-      duration: reducedMotionEnabled ? 0 : SLIDE_DURATION_MS,
+      duration: reducedMotionEnabled === true ? 0 : SLIDE_DURATION_MS,
       useNativeDriver: true
     }).start(() => {
       // Why: a cancelled cosmetic transition must not leave the next decision
@@ -190,26 +184,4 @@ function MobileOnboardingFlow({
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value
-}
-
-function useReducedMotionEnabled(): boolean {
-  const [enabled, setEnabled] = useState(false)
-
-  useEffect(() => {
-    let mounted = true
-    void AccessibilityInfo.isReduceMotionEnabled()
-      .then((nextEnabled) => {
-        if (mounted) {
-          setEnabled(nextEnabled)
-        }
-      })
-      .catch(() => undefined)
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setEnabled)
-    return () => {
-      mounted = false
-      subscription.remove()
-    }
-  }, [])
-
-  return enabled
 }

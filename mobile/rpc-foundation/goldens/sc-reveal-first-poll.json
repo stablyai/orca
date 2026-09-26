@@ -3,21 +3,19 @@
   "family": "session.tab-reveal",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "5e47c7960b9352753f0751d4ccf5e3ff7fb7b74a63cc4e4df3c3ffdcc6c1e66b",
   "scenarioSha256": "00b26cb279b0a934df98d93ba98a4a0c79e302c7690c582e778dc0156ab4f235",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "0f9f4df04699": {
+    "1da2ff4ec6f6": {
       "name": "session.tabs.activate#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:repo42::/p\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}"
-    },
-    "5fbe284a7387": {
-      "name": "session.tabs.activate#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -41,22 +39,21 @@
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "activeTabId": "tab-1"
+          }
+        }
       }
     },
-    "60ef11dd407d": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": "revealed"
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "92b5192ed75d": {
+    "23b88a48116d": {
       "name": "session.tabs.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -106,8 +103,14 @@
         }
       }
     },
-    "bb3b4ee6b927": {
+    "33d426b99e5c": {
+      "name": "session.tabs.list#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "34cf3d7406a3": {
       "name": "session.tabs.activate#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -131,30 +134,19 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "activeTabId": "tab-1"
-          }
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "bde782b3557a": {
-      "result": "revealed"
+    "60ef11dd407d": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "revealed"
     },
-    "c7a157cde28d": {
-      "result": "unrevealed"
-    },
-    "eb116b4d99bb": {
+    "746bd8b74b60": {
       "name": "session.tabs.list#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.list\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "f884811cfa05": {
-      "name": "session.tabs.list#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -177,6 +169,21 @@
         "status": "pending",
         "startedAt": 0
       }
+    },
+    "83e0f62a8922": {
+      "name": "session.tabs.activate#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.activate\",\"params\":{\"worktree\":\"id:repo42::/p\",\"tabId\":\"tab-1\",\"notifyClients\":false,\"navigation\":\"caller\",\"intent\":\"user\"}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "bde782b3557a": {
+      "result": "revealed"
+    },
+    "c7a157cde28d": {
+      "result": "unrevealed"
     }
   },
   "recording": {
@@ -185,8 +192,8 @@
       {
         "id": "list-pending",
         "observation": {
-          "sender": ["f884811cfa05"],
-          "payloads": ["eb116b4d99bb"],
+          "sender": ["746bd8b74b60"],
+          "payloads": ["33d426b99e5c"],
           "settlements": {
             "reveal": "9270aeb7d9c6"
           },
@@ -197,8 +204,8 @@
       {
         "id": "activate-pending",
         "observation": {
-          "sender": ["92b5192ed75d", "5fbe284a7387"],
-          "payloads": ["eb116b4d99bb", "0f9f4df04699"],
+          "sender": ["23b88a48116d", "34cf3d7406a3"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
           "settlements": {
             "reveal": "9270aeb7d9c6"
           },
@@ -209,8 +216,8 @@
       {
         "id": "settled",
         "observation": {
-          "sender": ["92b5192ed75d", "bb3b4ee6b927"],
-          "payloads": ["eb116b4d99bb", "0f9f4df04699"],
+          "sender": ["23b88a48116d", "1da2ff4ec6f6"],
+          "payloads": ["33d426b99e5c", "83e0f62a8922"],
           "settlements": {
             "reveal": "60ef11dd407d"
           },

@@ -11,7 +11,7 @@ export async function createRemoteTerminalTab(page: Page, worktreeId: string): P
     }
     const tab = state.createTab(id, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
+    state.setActiveTabType('terminal', window.__store?.getState().activeWorktreeId ?? null)
     return tab.id
   }, worktreeId)
   await expect

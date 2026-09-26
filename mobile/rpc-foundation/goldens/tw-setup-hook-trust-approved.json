@@ -3,21 +3,47 @@
   "family": "worktree.setup-hook-trust",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
   "scenarioSha256": "f54f5c6dbbe7dbcf8e85e9bd36b27ca9bea7de65d5e35dabace49b3fc766a403",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "0f68ccbfb8e9": {
+    "86d0d8f71257": {
       "name": "ui.set#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"setup\":{\"contentHash\":\"hash-1\",\"approvedAt\":1767225600000}}}}}"
     },
-    "6f009f61d89f": {
+    "a406b068aeca": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "repo-1": {
+          "setup": {
+            "approvedAt": 1767225600000,
+            "contentHash": "hash-1"
+          }
+        }
+      }
+    },
+    "b2aa9ff12623": {
+      "trust": {
+        "repo-1": {
+          "setup": {
+            "approvedAt": 1767225600000,
+            "contentHash": "hash-1"
+          }
+        }
+      }
+    },
+    "e2089203d4dd": {
       "name": "ui.set#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -55,29 +81,6 @@
           }
         }
       }
-    },
-    "a406b068aeca": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "repo-1": {
-          "setup": {
-            "approvedAt": 1767225600000,
-            "contentHash": "hash-1"
-          }
-        }
-      }
-    },
-    "b2aa9ff12623": {
-      "trust": {
-        "repo-1": {
-          "setup": {
-            "approvedAt": 1767225600000,
-            "contentHash": "hash-1"
-          }
-        }
-      }
     }
   },
   "recording": {
@@ -86,8 +89,8 @@
       {
         "id": "approved",
         "observation": {
-          "sender": ["6f009f61d89f"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["e2089203d4dd"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "a406b068aeca"
           },

@@ -1,9 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
-import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
-import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
 import {
@@ -15,13 +12,17 @@ import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
-import { countReposNeedingNotificationDisambiguation } from './terminal-notification-state'
+import { getNotificationWorkspaceLabels } from './terminal-notification-state'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
 import {
   applyAgentAttention,
   resolveAgentAttention,
   type AgentAttentionDeliveryRequest
 } from '@/attention/agent-attention-policy'
+import {
+  deliverAgentAttentionNotification,
+  readAgentAttentionNotificationSound
+} from '@/attention/agent-attention-notification-delivery'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
 
@@ -134,15 +135,7 @@ export function dispatchTerminalNotification(
 
   // Desktop settings are applied in main after independent mobile delivery.
 
-  // Why: prefer worktree.repoId over string-parsing the worktreeId. The
-  // `${repoId}::${path}` format is an implementation detail of id
-  // construction; coupling the notification dispatcher to it would silently
-  // drop the repo label if that format ever changes. The worktree object
-  // itself is the source of truth for its owning repo.
-  const worktree = getWorktreeMapFromState(state).get(worktreeId)
-  const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
-  const customSoundId = state.settings?.notifications?.customSoundId ?? 'system'
-  const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null
+  const sound = readAgentAttentionNotificationSound(state.settings ?? {})
   // Why: pane keys are reused across turns. A rich OS notification must not
   // expose the previous turn's prompt if the current turn has no fresh hook snapshot yet.
   const agentSnapshot = agentStatus
@@ -169,34 +162,19 @@ export function dispatchTerminalNotification(
       : null
 
   const requestDelivery = (request: AgentAttentionDeliveryRequest): void => {
-    void window.api.notifications
-      .dispatch({
+    deliverAgentAttentionNotification(
+      {
         source: event.source,
         ...(notificationId ? { notificationId } : {}),
         worktreeId: request.workspaceId,
         paneKey: request.subjectKey ?? undefined,
-        repoLabel: repo?.displayName,
-        worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
-        hasMultipleActiveRepos: countReposNeedingNotificationDisambiguation(state) > 1,
+        ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),
         terminalTitle: event.terminalTitle,
         isActiveWorktree: request.workspaceIsActive,
         ...agentSnapshot
-      })
-      .then((result) => {
-        if (result.delivered) {
-          void playDesktopNotificationSound(customSoundId, customSoundVolume)
-          return
-        }
-        // Why: macOS is silently swallowing notifications (permission off or
-        // prompt unanswered) — surface an in-app pointer at the fix instead of
-        // letting the alert vanish without a trace.
-        if (result.reason === 'blocked-by-system') {
-          showBlockedNotificationFallbackToast()
-        }
-      })
-      .catch((err) => {
-        console.warn('Failed to dispatch notification:', err)
-      })
+      },
+      sound
+    )
   }
 
   applyAgentAttention(attentionDecision, {

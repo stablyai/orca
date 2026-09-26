@@ -80,6 +80,7 @@ function hostSession(journal: AgentSessionJournal): StructuredAgentSessionHostSe
     params: {} as StructuredAgentSessionHostSession['params'],
     fence: 1,
     hasProviderChild: false,
+    providerChildPhase: 'ready',
     acquisitionGeneration: null
   }
 }
@@ -91,6 +92,7 @@ function flakyClose(journal: AgentSessionJournal, failures: number): AgentSessio
   return new Proxy(journal, {
     get(target, property, receiver) {
       if (property !== 'close') {
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy `get` trap: only Reflect.get forwards a raw string|symbol key with the proxy receiver.
         return Reflect.get(target, property, receiver)
       }
       return async () => {
@@ -114,11 +116,15 @@ function attachContext(
     bind: () => undefined,
     close: () => undefined
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the attach reads only the members defined here.
   return {
     deps: { store: { getRecord: () => null }, claimKeyId: 'key-1', journalRoot: root },
     runtimeState: {
       resolveRecovery: async () => undefined,
       eventSinkFor: () => eventSink,
+      currentEventSink: () => eventSink,
+      mintEventSink: () => eventSink,
+      adoptEventSink: () => undefined,
       probeOwner: async () => ({ outcome: 'pid-absent' }),
       discardEventSink: () => undefined
     },
@@ -214,8 +220,10 @@ describe('the attach orchestration', () => {
       bind: () => undefined,
       close: () => undefined
     }
-    context.runtimeState.eventSinkFor = (() =>
-      failing) as unknown as typeof context.runtimeState.eventSinkFor
+    // The re-attach binds the sink the live child already writes through.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial sink double; the attach reads only drained/bind/close from it.
+    context.runtimeState.currentEventSink = (() =>
+      failing) as unknown as typeof context.runtimeState.currentEventSink
 
     await expect(attachStructuredAgentSession(context, 'caller-1', attachParams)).rejects.toThrow(
       'sink barrier failed'

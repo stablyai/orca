@@ -230,7 +230,9 @@ function appendWithinUtf8ByteLimit(
   if (deltaBytes <= available) {
     // The caller owns the per-stream array; append in place so each token is
     // amortized O(1) instead of copying the complete prefix on every delta.
-    current.push(delta)
+    if (delta.length > 0) {
+      current.push(delta)
+    }
     return {
       chunks: current,
       retainedBytes: currentBytes + deltaBytes,

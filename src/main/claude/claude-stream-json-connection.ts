@@ -7,6 +7,7 @@ import {
   markClaudeStructuredChildSpawned
 } from '../claude-accounts/live-pty-gate'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
+import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import {
   ClaudeControlRequestError,
   createClaudeControlSurface,
@@ -36,6 +37,10 @@ let claudeAgentSdk: Promise<typeof ClaudeAgentSdk> | null = null
 function loadClaudeAgentSdk(): Promise<typeof ClaudeAgentSdk> {
   claudeAgentSdk ??= import('@anthropic-ai/claude-agent-sdk')
   return claudeAgentSdk
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
 
 export type ClaudeStreamJsonLaunch = {
@@ -78,7 +83,9 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   readonly closed: boolean
   /** What the ladder has observed so far; read after a `close()` that returned false. */
   readonly exitVerdict: ClaudeChildExitVerdict
-  send: (message: Record<string, unknown>) => Promise<void>
+  pauseReading?: () => void
+  resumeReading?: () => void
+  send: (message: Record<string, unknown>, beforeDispatch?: () => Promise<void>) => Promise<void>
   /** Resolves true after processless settlement, or root exit plus observed tree exit. */
   close: () => Promise<boolean>
 }
@@ -115,7 +122,12 @@ export async function openClaudeStreamJsonConnection(
       cwd: launch.cwd,
       // Why env is never omitted: the SDK inherits process.env when it is, which is
       // exactly the ambient ANTHROPIC_* auth leak this lane already shipped once.
-      env: buildClaudeChildProcessEnv(launch.env, { scrubConfiguredChildSessionStamps: true }),
+      // Orca's own CLAUDE_CONFIG_DIR is dropped for the same reason the launch drops the
+      // shell's: the record's pin in `launch.env` must be the only home the child sees.
+      env: buildClaudeChildProcessEnv(launch.env, {
+        inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
+        scrubConfiguredChildSessionStamps: true
+      }),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
       ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),
@@ -141,6 +153,23 @@ export async function openClaudeStreamJsonConnection(
   let faultReported = false
   let exitReported = false
   let closePromise: Promise<boolean> | null = null
+  let readingBarrier: Promise<void> | null = null
+  let releaseReadingBarrier: (() => void) | null = null
+  const pauseReading = (): void => {
+    if (closing || exited || terminalError || readingBarrier) {
+      return
+    }
+    readingBarrier = new Promise<void>((resolve) => {
+      releaseReadingBarrier = resolve
+    })
+  }
+  const resumeReading = (): void => {
+    const release = releaseReadingBarrier
+    readingBarrier = null
+    releaseReadingBarrier = null
+    release?.()
+  }
+  const waitUntilReadable = (): Promise<void> => readingBarrier ?? Promise.resolve()
   // One reaper per child: every close attempt and error-path reap shares its proof.
   const rootSettled = (): boolean => exited || processless
   const tree = createClaudeChildTreeReaper(child, { exited: rootSettled })
@@ -180,6 +209,7 @@ export async function openClaudeStreamJsonConnection(
   })
 
   const handleUnexpectedEnd = (cause?: Error): void => {
+    resumeReading()
     terminalError ??= exitError(spawner.stderrTail, exitStatus, cause)
     inbox.fail(terminalError)
     if (!closing && !faultReported) {
@@ -192,18 +222,38 @@ export async function openClaudeStreamJsonConnection(
     }
   }
 
-  void (async () => {
-    for await (const message of session) {
-      handlers.onMessage?.(message as unknown as Record<string, unknown>)
+  const readerDone = (async () => {
+    try {
+      const iterator = session[Symbol.asyncIterator]()
+      let completed = false
+      try {
+        for (;;) {
+          await waitUntilReadable()
+          const next = await iterator.next()
+          if (next.done) {
+            completed = true
+            break
+          }
+          await waitUntilReadable()
+          if (!isRecord(next.value)) {
+            throw new Error('claude stream-json yielded a non-object message')
+          }
+          handlers.onMessage?.(next.value)
+        }
+      } finally {
+        if (!completed) {
+          await iterator.return?.()
+        }
+      }
+    } catch (error: unknown) {
+      // The SDK ends its generator in error when the child dies or the transport
+      // fails; a transport failure with a live child still has to reap the tree.
+      if (!closing && !exited) {
+        void tree.reap()
+      }
+      handleUnexpectedEnd(error instanceof Error ? error : new Error(String(error)))
     }
-  })().catch((error: unknown) => {
-    // The SDK ends its generator in error when the child dies or the transport
-    // fails; a transport failure with a live child still has to reap the tree.
-    if (!closing && !exited) {
-      void tree.reap()
-    }
-    handleUnexpectedEnd(error instanceof Error ? error : new Error(String(error)))
-  })
+  })()
 
   child.on('error', (error) => {
     if (spawner.pid === undefined) {
@@ -237,7 +287,7 @@ export async function openClaudeStreamJsonConnection(
   // cannot end before the gate is entered.
   markClaudeStructuredChildSpawned(authGateKey)
 
-  const send = (message: Record<string, unknown>): Promise<void> => {
+  const send: ClaudeStreamJsonConnection['send'] = (message, beforeDispatch) => {
     if (closing || exited || terminalError || child.stdin.destroyed || !child.stdin.writable) {
       return Promise.reject(
         claudeUnwrittenUserMessageError(
@@ -245,12 +295,14 @@ export async function openClaudeStreamJsonConnection(
         )
       )
     }
-    return inbox.push(message as unknown as SDKUserMessage)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch constructs the SDK user envelope after mapping every content block.
+    return inbox.push(message as unknown as SDKUserMessage, beforeDispatch)
   }
 
   const close = (): Promise<boolean> => {
     closePromise ??= (async () => {
       closing = true
+      resumeReading()
       // Arm the descendant proof before ending stdin. The SDK may exit the root
       // immediately; a post-exit walk cannot recover descendants that reparented.
       await (tree.refresh?.() ?? tree.capture())
@@ -263,9 +315,16 @@ export async function openClaudeStreamJsonConnection(
       })
       inbox.fail(new Error('claude stream-json connection closed'))
       if (!proven) {
+        if (exited && tree.treeVerdict === 'live') {
+          console.warn('[claude-stream-json] root exited but a descendant survived the close:', {
+            pid: spawner.pid
+          })
+        }
         closePromise = null
+        return false
       }
-      return proven
+      await readerDone
+      return true
     })()
     return closePromise
   }
@@ -284,6 +343,8 @@ export async function openClaudeStreamJsonConnection(
         tree: tree.treeVerdict
       } as const
     },
+    pauseReading,
+    resumeReading,
     send,
     close
   }

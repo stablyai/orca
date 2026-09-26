@@ -137,7 +137,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/paired-quick-open-large-tree.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^(?:src\/main\/ipc\/(?:filesystem-(?:list-files|search-file-paths)|rg-availability)\.ts|src\/main\/providers\/(?:filesystem-provider-contract|ssh-filesystem-provider(?:-capabilities)?)\.ts|src\/main\/runtime\/(?:orca-runtime-files|rpc\/methods\/files)\.ts|src\/relay\/(?:fs-handler(?:-install-rg|-list-files|-ripgrep-fallback)?|fs-list-files-fallback-chain)\.ts|src\/renderer\/src\/(?:components\/(?:QuickOpen|quick-open-file-list|quick-open-search)\.tsx?|runtime\/(?:runtime-file-client|runtime-legacy-quick-open-inventory)\.ts)|src\/shared\/(?:quick-open-(?:install-rg|path-search|transport-budget)|ripgrep-process-availability)\.ts)$/.test(
+      /^(?:src\/main\/ipc\/filesystem-(?:list-files|search-file-paths)\.ts|src\/main\/ripgrep\/bundled-ripgrep-path\.ts|src\/main\/providers\/(?:filesystem-provider-contract|ssh-filesystem-provider(?:-capabilities)?)\.ts|src\/main\/runtime\/(?:orca-runtime-files|rpc\/methods\/files)\.ts|src\/relay\/(?:fs-handler(?:-install-rg|-list-files|-ripgrep-fallback)?|fs-list-files-fallback-chain|relay-bundled-ripgrep)\.ts|src\/renderer\/src\/(?:components\/(?:QuickOpen|quick-open-file-list|quick-open-search)\.tsx?|runtime\/(?:runtime-file-client|runtime-legacy-quick-open-inventory)\.ts)|src\/shared\/(?:quick-open-(?:install-rg|path-search|transport-budget)|ripgrep-process-availability|bundled-ripgrep)\.ts)$/.test(
         file
       )
   },
@@ -147,6 +147,31 @@ export const PR_E2E_SOURCE_ROUTES = [
     matches: (file) =>
       isProductSource(file) &&
       /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:terminal-hidden-view-parking|terminal-tab-park-candidates|terminal-tab-activation-order|terminal-parked-pty-watcher|terminal-parked-tab-watchers|terminal-parked-watcher-registry)\.ts|src\/renderer\/src\/runtime\/sync-runtime-graph\.ts)$/.test(
+        file
+      )
+  },
+  {
+    // Why a route of its own: every other terminal-pane route names what BINDS a pane — the pty
+    // transports, the ssh reconnect ledgers, the park watchers. Nothing named what unbinds one,
+    // so the close/retire lifecycle reached main with e2e skipped outright. Unbinding is the half
+    // that can strand a PTY or leave a retired leaf mounted as a blank pane.
+    //
+    // Deliberately absent: src/renderer/src/runtime/runtime-rpc-client.ts, the transport these
+    // retirements call out through. It carries no close decision and churns ~3x these files, so
+    // routing on it would run this lane on unrelated runtime work.
+    id: 'terminal-pane.close-and-retirement',
+    specs: [
+      // Closing a tab whose pane is parked (never mounted) must retire that exact PTY.
+      'tests/e2e/terminal-parked-close-retirement.spec.ts',
+      // Closing one leaf of a split must leave root leaves, leaf→pty bindings, and live panes
+      // agreeing — the ghost-blank-pane shape a bad unbind produces.
+      'tests/e2e/terminal-pane-close-layout-consistency.spec.ts',
+      // The runtime half: a leaf the host retires must stop being mounted on a paired client.
+      'tests/e2e/paired-remote-split-pane-host-retired-ghost.spec.ts'
+    ],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:retire-unbound-(?:ipc|runtime)-terminal-pane|terminal-pane-(?:close-admission|close-identity|lifecycle-close|pane-closed|retirement-ownership)|use-terminal-pane-close-actions)|src\/renderer\/src\/store\/(?:terminals\/terminal-tab-close(?:-providers)?|slices\/(?:terminal-tab-retirement|terminal-retirement-teardown-reservation|retired-terminal-tab-state-sweep)))\.ts$/.test(
         file
       )
   },
@@ -175,6 +200,17 @@ export const PR_E2E_SOURCE_ROUTES = [
       isProductSource(file) &&
       !file.endsWith('-test-harness.ts') &&
       /^(?:src\/renderer\/src\/components\/terminal-pane\/remote-runtime-pty-transport(?:-[a-z0-9-]+)?\.ts|src\/renderer\/src\/runtime\/remote-runtime-terminal-multiplexer\.ts)$/.test(
+        file
+      )
+  },
+  {
+    // Why: layout resolution is the only place a split direction can be invented, and the
+    // loss is one-way — the guess is published and written back over the real tree.
+    id: 'terminal-session.split-orientation-resolution',
+    specs: ['tests/e2e/desktop-published-split-orientation-legacy-leaf.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/renderer\/src\/runtime\/(?:remote-terminal-layout-resolution\.ts|sync-runtime-graph\/(?:graph-publication|mobile-session-terminal-tabs|mobile-session-surfaces)\.ts|web-session-tabs-sync\/terminal-surfaces\.ts)$/.test(
         file
       )
   },

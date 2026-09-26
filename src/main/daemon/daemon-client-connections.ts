@@ -5,6 +5,10 @@ import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
 import { createNdjsonParser, encodeNdjson } from './ndjson'
 import type { DaemonRequest, HelloMessage } from './types'
 
+// Idle time before the first probe. How long the close then takes is the OS's probe schedule, not
+// ours, which is why the producer-stall watchdog never waits on it.
+const STREAM_SOCKET_KEEPALIVE_DELAY_MS = 30_000
+
 export type ConnectedDaemonClient = {
   clientId: string
   controlSocket: Socket
@@ -229,6 +233,11 @@ export class DaemonClientConnections {
   private installStreamSocket(socket: Socket, client: ConnectedDaemonClient): void {
     const previous = client.streamSocket
     socket.removeAllListeners('data')
+    // A half-open peer (slept laptop, dropped NAT state) stops draining without closing, which would
+    // otherwise hold a session's producer pause open with no event to release it. Kernel probes give
+    // that peer a close. TCP only: a no-op over a local pipe, and over SSH it is the relay's own link
+    // that dies — the producer-stall watchdog, not this, is what bounds those.
+    socket.setKeepAlive(true, STREAM_SOCKET_KEEPALIVE_DELAY_MS)
     client.streamSocket = socket
     socket.on('drain', () => this.options.streamDataBatcher.flush(client.clientId))
     const cleanup = (): void => {
@@ -244,6 +253,8 @@ export class DaemonClientConnections {
     socket.on('error', cleanup)
     if (previous && previous !== socket) {
       previous.destroy()
+      this.options.streamDataBatcher.replaceStream(client.clientId)
+      this.options.streamDataBatcher.flush(client.clientId)
     }
   }
 }

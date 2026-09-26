@@ -5,14 +5,15 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useForceReconnect } from '../transport/client-context'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import { gitCommitCompareRead } from './mobile-git-read-operations'
+import type { MobileGitChangedFile } from './git-compare-reply-schema'
 import {
   fetchMobileGitHistory,
   mapMobileCommitRows,
   type MobileCommitRow
 } from './mobile-git-history'
 import { resolveMobileHistoryScreenView } from './mobile-history-screen-state'
-import type { GitBranchChangeEntry } from '../../../src/shared/git-diff-compare-types'
 
 type Props = {
   client: RpcClient | null
@@ -42,7 +43,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   const [error, setError] = useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [filesById, setFilesById] = useState<Record<string, GitBranchChangeEntry[] | 'loading'>>({})
+  const [filesById, setFilesById] = useState<Record<string, MobileGitChangedFile[] | 'loading'>>({})
 
   // Host or worktree identity change must wipe history immediately — even while
   // disconnected — so a kept-mounted hub segment never shows another tree's commits.
@@ -80,18 +81,23 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     }
   }, [client, connState, reloadNonce, refreshNonce, worktreeId])
 
-  const retry = useCallback(() => {
-    setError(null)
-    // Why: retrying the fetch is useless while the transport's reconnect loop
-    // is parked at its backoff cap — revive the connection instead (mirrors
-    // MobileSourceControlPanel / issue #5049). The load effect re-runs via
-    // connState once the fresh client connects.
-    if (connState !== 'connected' && hostId) {
-      void forceReconnect(hostId)
-      return
-    }
-    setReloadNonce((n) => n + 1)
-  }, [connState, forceReconnect, hostId])
+  // Why: retrying the fetch is useless while the transport's reconnect loop
+  // is parked at its backoff cap — revive the connection instead (mirrors
+  // MobileSourceControlPanel / issue #5049). The load effect re-runs via
+  // connState once the fresh client connects.
+  const retryAction = connectionRetryAction({
+    hostId,
+    needsReconnect: connState !== 'connected',
+    forceReconnect,
+    reload: () => setReloadNonce((n) => n + 1)
+  })
+  const retry =
+    retryAction === null
+      ? null
+      : () => {
+          setError(null)
+          retryAction()
+        }
 
   const toggleCommit = useCallback((row: MobileCommitRow) => {
     setExpanded((current) => (current === row.id ? null : row.id))
@@ -110,8 +116,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
       .request(client, { worktree: `id:${worktreeId}`, commitId })
       .then((reply) => {
         const compared = gitCommitCompareRead.interpret(reply)
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-        const entries = compared.accepted ? (compared.value as GitBranchChangeEntry[]) : []
+        const entries = compared.accepted ? compared.value.entries : []
         if (!stale) {
           setFilesById((prev) => ({ ...prev, [commitId]: entries }))
         }
@@ -195,9 +200,11 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         <Text style={styles.stateText}>
           {view.kind === 'waiting' ? 'Waiting for desktop...' : view.message}
         </Text>
-        <Pressable style={styles.retryButton} onPress={retry} accessibilityLabel="Retry">
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
+        {retry ? (
+          <Pressable style={styles.retryButton} onPress={retry} accessibilityLabel="Retry">
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        ) : null}
       </View>
     )
   }

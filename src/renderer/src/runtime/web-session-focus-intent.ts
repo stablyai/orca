@@ -19,6 +19,8 @@ export type WebSessionFocusIntent = {
   expectedCurrentLocalTabId?: string | null
 }
 
+export const MAX_WEB_SESSION_FOCUS_INTENTS = 512
+
 const pendingFocusByOwnerAndWorktree = new Map<string, WebSessionFocusIntent>()
 
 type WebSessionVisibleTabState = Pick<
@@ -143,11 +145,20 @@ export function recordWebSessionFocusIntent(
     return
   }
   const trimmedLeafId = leafId?.trim()
-  pendingFocusByOwnerAndWorktree.set(focusIntentPartitionKey(owner, worktreeId), {
+  const key = focusIntentPartitionKey(owner, worktreeId)
+  pendingFocusByOwnerAndWorktree.delete(key)
+  pendingFocusByOwnerAndWorktree.set(key, {
     hostTabId: trimmed,
     ...(trimmedLeafId ? { leafId: trimmedLeafId } : {}),
     ...(expectedCurrentLocalTabId !== undefined ? { expectedCurrentLocalTabId } : {})
   })
+  while (pendingFocusByOwnerAndWorktree.size > MAX_WEB_SESSION_FOCUS_INTENTS) {
+    const oldest = pendingFocusByOwnerAndWorktree.keys().next()
+    if (oldest.done || oldest.value === key) {
+      break
+    }
+    pendingFocusByOwnerAndWorktree.delete(oldest.value)
+  }
 }
 
 export function peekWebSessionFocusIntent(

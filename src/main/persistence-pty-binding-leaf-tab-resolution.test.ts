@@ -46,7 +46,7 @@ describe('findTerminalTabIdForLeaf after persistPtyBinding grafts a leaf', () =>
     expect(findTerminalTabIdForLeaf(store.getWorkspaceSession(), TEST_LEAF_1)).toBe('tab1')
 
     expect(
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId: 'wt1',
         tabId: 'tab1',
         leafId: TEST_LEAF_2,
@@ -73,7 +73,7 @@ describe('findTerminalTabIdForLeaf after persistPtyBinding grafts a leaf', () =>
     expect(findTerminalTabIdForLeaf(store.getWorkspaceSession(), TEST_LEAF_1)).toBeUndefined()
 
     expect(
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId: 'wt1',
         tabId: 'tab1',
         leafId: TEST_LEAF_1,

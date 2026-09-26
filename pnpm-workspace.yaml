@@ -17,6 +17,7 @@ minimumReleaseAgeExclude:
   - pdfjs-dist@6.3.289
   - zod@4.5.4
   - electron@43.7.0
+  - '@shadcn/lint@0.1.0'
 shamefullyHoist: true
 
 # Orca always launches the user's own resolved Claude CLI via
@@ -53,12 +54,13 @@ allowBuilds:
   node-pty: true
   sherpa-onnx: true
   ssh2: false
-  "@orca/windows-registry": false
+  '@orca/windows-registry': false
 
 overrides:
-  monaco-editor>dompurify: 3.4.14
+  monaco-editor>dompurify: 3.4.15
 
 patchedDependencies:
+  '@xterm/addon-image@0.10.0-beta.300': config/patches/@xterm__addon-image@0.10.0-beta.300.patch
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.300': config/patches/@xterm__addon-ligatures@0.11.0-beta.300.patch
   '@xterm/addon-webgl@0.20.0-beta.299': config/patches/@xterm__addon-webgl@0.20.0-beta.299.patch

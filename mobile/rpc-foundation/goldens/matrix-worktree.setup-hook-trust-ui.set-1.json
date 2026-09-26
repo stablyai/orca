@@ -3,24 +3,114 @@
   "family": "worktree.setup-hook-trust",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
   "scenarioSha256": "8487fd14ed779708415b264e2b80b26b0d5094e379a04f4f32c2cd75ec469182",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "0f68ccbfb8e9": {
+    "0e645f49b2ec": {
       "name": "ui.set#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"setup\":{\"contentHash\":\"hash-1\",\"approvedAt\":1767225600000}}}}}"
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "approvedAt": 1767225600000,
+                  "contentHash": "hash-1"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
     },
     "229c35d1a4ba": {
       "trust": "unapproved"
     },
-    "255cdc090b8a": {
+    "2a49963ba5f2": {
       "name": "ui.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "approvedAt": 1767225600000,
+                  "contentHash": "hash-1"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "4e1de403016f": {
+      "name": "ui.set#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -52,16 +142,17 @@
         "settledAt": 0,
         "value": {
           "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
+            "code": "refused",
+            "message": "outer refused"
           },
           "id": "frame-1",
           "ok": false
         }
       }
     },
-    "2905cce95e1c": {
+    "7942a3606c42": {
       "name": "ui.set#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -103,56 +194,14 @@
         }
       }
     },
-    "29fc0c5de3b0": {
+    "86d0d8f71257": {
       "name": "ui.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "trustedOrcaHooks": {
-              "repo-1": {
-                "setup": {
-                  "approvedAt": 1767225600000,
-                  "contentHash": "hash-1"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
-      }
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ui.set\",\"params\":{\"trustedOrcaHooks\":{\"repo-1\":{\"setup\":{\"contentHash\":\"hash-1\",\"approvedAt\":1767225600000}}}}}"
     },
-    "32a7c0ae7918": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "outer refused",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "32af950a57cc": {
+    "94bc2d1b8bf5": {
       "name": "ui.set#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -192,8 +241,220 @@
         }
       }
     },
-    "6f009f61d89f": {
+    "9898e3438d26": {
       "name": "ui.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "approvedAt": 1767225600000,
+                  "contentHash": "hash-1"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "a406b068aeca": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "repo-1": {
+          "setup": {
+            "approvedAt": 1767225600000,
+            "contentHash": "hash-1"
+          }
+        }
+      }
+    },
+    "a947768bc0ed": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "transport failure",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "b1985cd18838": {
+      "name": "ui.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "approvedAt": 1767225600000,
+                  "contentHash": "hash-1"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "b2aa9ff12623": {
+      "trust": {
+        "repo-1": {
+          "setup": {
+            "approvedAt": 1767225600000,
+            "contentHash": "hash-1"
+          }
+        }
+      }
+    },
+    "b6040ec7c5de": {
+      "name": "ui.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "approvedAt": 1767225600000,
+                  "contentHash": "hash-1"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "c7584e82c72f": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": true
+      }
+    },
+    "d7e16a29258d": {
+      "name": "ui.set#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ui.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "trustedOrcaHooks": {
+              "repo-1": {
+                "setup": {
+                  "approvedAt": 1767225600000,
+                  "contentHash": "hash-1"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "e2089203d4dd": {
+      "name": "ui.set#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -232,179 +493,19 @@
         }
       }
     },
-    "9deb505f7915": {
-      "name": "ui.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "trustedOrcaHooks": {
-              "repo-1": {
-                "setup": {
-                  "approvedAt": 1767225600000,
-                  "contentHash": "hash-1"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "a406b068aeca": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "repo-1": {
-          "setup": {
-            "approvedAt": 1767225600000,
-            "contentHash": "hash-1"
-          }
-        }
-      }
-    },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
-    },
-    "abd752b10f76": {
-      "name": "ui.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "trustedOrcaHooks": {
-              "repo-1": {
-                "setup": {
-                  "approvedAt": 1767225600000,
-                  "contentHash": "hash-1"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "ac7d2d4aa85c": {
-      "name": "ui.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "trustedOrcaHooks": {
-              "repo-1": {
-                "setup": {
-                  "approvedAt": 1767225600000,
-                  "contentHash": "hash-1"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "b2aa9ff12623": {
-      "trust": {
-        "repo-1": {
-          "setup": {
-            "approvedAt": 1767225600000,
-            "contentHash": "hash-1"
-          }
-        }
-      }
-    },
-    "b948e8307e81": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Unknown method",
-        "isRpcDeliveryUnknown": false
-      }
-    },
-    "c7584e82c72f": {
+    "f3b516f62081": {
       "status": "rejected",
       "startedAt": 0,
       "settledAt": 0,
       "error": {
         "category": "Error",
         "message": "",
-        "isRpcDeliveryUnknown": true
+        "isRpcDeliveryUnknown": false
       }
     },
-    "d1113bd291a2": {
+    "f4ee4ebf876d": {
       "name": "ui.set#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -443,94 +544,6 @@
           }
         }
       }
-    },
-    "e3e6506e1ed0": {
-      "name": "ui.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "trustedOrcaHooks": {
-              "repo-1": {
-                "setup": {
-                  "approvedAt": 1767225600000,
-                  "contentHash": "hash-1"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "e9c010ad58d3": {
-      "name": "ui.set#1",
-      "args": [
-        {
-          "name": "method",
-          "value": "ui.set"
-        },
-        {
-          "name": "params",
-          "value": {
-            "trustedOrcaHooks": {
-              "repo-1": {
-                "setup": {
-                  "approvedAt": 1767225600000,
-                  "contentHash": "hash-1"
-                }
-              }
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "f3b516f62081": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": false
-      }
     }
   },
   "recording": {
@@ -539,8 +552,8 @@
       {
         "id": "tw-setup-hook-trust-approved.normal:approved",
         "observation": {
-          "sender": ["6f009f61d89f"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["e2089203d4dd"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "a406b068aeca"
           },
@@ -551,8 +564,8 @@
       {
         "id": "tw-setup-hook-trust-approved.result-absent:approved",
         "observation": {
-          "sender": ["e9c010ad58d3"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["b1985cd18838"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "a406b068aeca"
           },
@@ -563,8 +576,8 @@
       {
         "id": "tw-setup-hook-trust-approved.result-null:approved",
         "observation": {
-          "sender": ["9deb505f7915"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["0e645f49b2ec"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "a406b068aeca"
           },
@@ -575,8 +588,8 @@
       {
         "id": "tw-setup-hook-trust-approved.inner-ok-missing:approved",
         "observation": {
-          "sender": ["ac7d2d4aa85c"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["2a49963ba5f2"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "a406b068aeca"
           },
@@ -587,8 +600,8 @@
       {
         "id": "tw-setup-hook-trust-approved.inner-false-string-error:approved",
         "observation": {
-          "sender": ["d1113bd291a2"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["f4ee4ebf876d"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "a406b068aeca"
           },
@@ -599,8 +612,8 @@
       {
         "id": "tw-setup-hook-trust-approved.inner-false-object-error:approved",
         "observation": {
-          "sender": ["2905cce95e1c"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["7942a3606c42"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "a406b068aeca"
           },
@@ -611,8 +624,8 @@
       {
         "id": "tw-setup-hook-trust-approved.outer-refused:approved",
         "observation": {
-          "sender": ["e3e6506e1ed0"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["4e1de403016f"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "32a7c0ae7918"
           },
@@ -623,8 +636,8 @@
       {
         "id": "tw-setup-hook-trust-approved.outer-refused-no-message:approved",
         "observation": {
-          "sender": ["32af950a57cc"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["94bc2d1b8bf5"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "f3b516f62081"
           },
@@ -635,8 +648,8 @@
       {
         "id": "tw-setup-hook-trust-approved.method-not-found:approved",
         "observation": {
-          "sender": ["255cdc090b8a"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["d7e16a29258d"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "b948e8307e81"
           },
@@ -647,8 +660,8 @@
       {
         "id": "tw-setup-hook-trust-approved.transport-rejection:approved",
         "observation": {
-          "sender": ["29fc0c5de3b0"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["b6040ec7c5de"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "a947768bc0ed"
           },
@@ -659,8 +672,8 @@
       {
         "id": "tw-setup-hook-trust-approved.transport-rejection-no-message:approved",
         "observation": {
-          "sender": ["abd752b10f76"],
-          "payloads": ["0f68ccbfb8e9"],
+          "sender": ["9898e3438d26"],
+          "payloads": ["86d0d8f71257"],
           "settlements": {
             "approve": "c7584e82c72f"
           },

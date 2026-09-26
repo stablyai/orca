@@ -34,6 +34,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'tabsByWorktree'
   | 'ptyIdsByTabId'
   | 'terminalLayoutsByTabId'
+  | 'localOnlyScrollbackByTabId'
   | 'activeTabIdByWorktree'
   | 'openFiles'
   | 'editorDrafts'
@@ -76,6 +77,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'tabsByWorktree',
   'ptyIdsByTabId',
   'terminalLayoutsByTabId',
+  'localOnlyScrollbackByTabId',
   'activeTabIdByWorktree',
   'openFiles',
   'editorDrafts',
@@ -294,6 +296,7 @@ export function buildWorkspaceSessionPayload(
     activeTabId: snapshot.activeTabId,
     tabsByWorktree: buildSanitizedTabsByWorktree(snapshot.tabsByWorktree),
     terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
+    localOnlyScrollbackByTabId: snapshot.localOnlyScrollbackByTabId,
     // Why: session:set fully replaces the persisted object, so dropping this silently disables eager terminal reconnect on restart.
     activeWorktreeIdsOnShutdown: terminalSessionData.activeWorktreeIdsOnShutdown,
     activeTabIdByWorktree: snapshot.activeTabIdByWorktree,

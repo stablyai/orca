@@ -250,14 +250,13 @@ describe('openCodeBusyTimeoutMs', () => {
 describe('openCodeDatabaseScanIssue', () => {
   const cantOpen = Object.assign(new Error('unable to open database file'), { errcode: 14 })
 
-  it('names the wal-index over a WSL share rather than repeating the driver string', () => {
-    const issue = openCodeDatabaseScanIssue(
-      '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\opencode\\opencode.db',
-      cantOpen
-    )
+  it('states the WSL share as a known limitation rather than an error to act on', () => {
+    const dbPath = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\opencode\\opencode.db'
+    const issue = openCodeDatabaseScanIssue(dbPath, cantOpen)
 
     expect(issue.kind).toBe('scope')
-    expect(issue.message).toContain('\\\\wsl.localhost')
+    expect(issue.path).toBe(dbPath)
+    expect(issue.message).toBe("OpenCode sessions inside WSL can't be searched from Windows yet.")
     // Checkpointing cannot fix a share that refuses SQLite's locks, so the copy
     // must not send the user after the write-ahead log.
     expect(issue.message).not.toContain('write-ahead log')
@@ -282,7 +281,7 @@ describe('openCodeDatabaseScanIssue', () => {
     )
 
     expect(issue.message).not.toContain('is writing to')
-    expect(issue.message).toContain('inside the distro')
+    expect(issue.message).toBe("OpenCode sessions inside WSL can't be searched from Windows yet.")
   })
 
   it('still blames a live writer for the same error on a local path', () => {

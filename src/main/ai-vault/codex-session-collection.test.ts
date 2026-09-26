@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { CodexSessionCollection, dedupeCodexSessionsBySessionId } from './codex-session-root-dedup'
+import { ScannedSessionCollection, dedupeScannedSessions } from './session-root-dedup'
 import { createAccumulator, finalizeSession } from './session-scanner-accumulator'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
@@ -23,10 +23,10 @@ function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
 }
 
 function checkBatches(batches: AiVaultSession[][]): AiVaultSession[] {
-  const collection = new CodexSessionCollection()
+  const collection = new ScannedSessionCollection()
   let expected: AiVaultSession[] = []
   for (const batch of batches) {
-    expected = dedupeCodexSessionsBySessionId([...expected, ...batch])
+    expected = dedupeScannedSessions([...expected, ...batch])
     for (const value of batch) {
       collection.add(value)
     }
@@ -38,7 +38,7 @@ function checkBatches(batches: AiVaultSession[][]): AiVaultSession[] {
   return [...collection.values()]
 }
 
-describe('CodexSessionCollection', () => {
+describe('ScannedSessionCollection', () => {
   it('keeps winner occurrences in input order across replacements and batches', () => {
     const other = session({ agent: 'claude' })
     const real = session()
@@ -141,7 +141,7 @@ describe('CodexSessionCollection', () => {
 
   it('does not rescan retained rows on admission', () => {
     let pathReads = 0
-    const collection = new CodexSessionCollection()
+    const collection = new ScannedSessionCollection()
     for (let index = 0; index < 1000; index++) {
       const value = session({ sessionId: `session-${index}` })
       collection.add({

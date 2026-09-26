@@ -1,0 +1,5 @@
+@import '../../../src/renderer/src/assets/main.css';
+@source './fixture.tsx';
+@source '../../../src/renderer/src/components/settings';
+@source '../../../src/renderer/src/components/source-control';
+@source '../../../src/renderer/src/components/ui';

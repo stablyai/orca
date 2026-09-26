@@ -17,6 +17,7 @@ import { AgentSessionTransitionRecorder } from '../stats/agent-session-transitio
 import { ClaudeUsageStore } from '../claude-usage/store'
 import { CodexUsageStore } from '../codex-usage/store'
 import { OpenCodeUsageStore } from '../opencode-usage/store'
+import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
 
@@ -56,6 +57,16 @@ export function initializeMainProcessObservers(): void {
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
+  const profileStateStartup = state.profileStateStartup
+  if (profileStateStartup) {
+    track('profile_state_authority_selected', {
+      backend: profileStateStartup.backend,
+      classification: profileStateStartup.classification,
+      authority_mode: profileStateStartup.authorityMode,
+      runtime: profileStateStartup.runtime,
+      migrated: profileStateStartup.migrated
+    })
+  }
   // Why: the breadcrumb alone never leaves the machine — it rides crash reports, and a hang is not
   // a crash (the app is force-quit, so no report is ever generated). Without this the incidence
   // number the watchdog exists to produce would sit unread on the user's disk. Must run after
@@ -124,4 +135,5 @@ export function initializeMainProcessObservers(): void {
   state.claudeUsage = new ClaudeUsageStore(store)
   state.codexUsage = new CodexUsageStore(store)
   state.openCodeUsage = new OpenCodeUsageStore(store)
+  state.museUsage = new MuseUsageStore(store)
 }

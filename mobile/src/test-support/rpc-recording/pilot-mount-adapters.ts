@@ -1,241 +1,52 @@
-import { observableModel } from './observable-model'
-import { hostedReviewMountAdapters } from './hosted-review-mount-adapters'
-import { settingsMountAdapters } from './settings-mount-adapters'
-import { sourceControlMountAdapters } from './source-control-mount-adapters'
-import { taskWorkspaceHookMountAdapters } from './task-workspace-hook-mount-adapters'
-import { taskWorkspaceSenderMountAdapters } from './task-workspace-sender-mount-adapters'
-import { workspaceSettingsMounts } from './workspace-settings-mounts'
+import { MOUNTED_OPERATION_MODULES } from './adapters/mounted-operation-modules'
+import { declaredDeviceSubstitutes, type DeclaredDeviceState } from './declared-device-state'
+import { operationModuleLoader, type OperationMutation } from './operation-module-loader'
+import { bindSalvageObserver } from './salvage-observation'
+import type { MountOptions } from './mounted-operation-module'
 import type { MountAdapter } from './recording-scenario'
-import { hookMount, performHookAction } from './hook-mount'
-import { operationModuleLoader, type Mutation } from './operation-module-loader'
 
+/**
+ * The mount table one recording runs against: every registered domain module, merged. Nothing is
+ * mounted here, because an adapter defined in this file would be pinned by `recorderSha256` on
+ * every golden rather than by `adapterSha256` on the goldens that mount it.
+ *
+ * Each module gets its own loader, carrying its own exposures. One recording mounts one adapter, so
+ * a golden is only ever influenced by the exposures its own module declares — which is what lets
+ * `adapterSha256` pin them instead of every golden's `recorderSha256`.
+ */
 export function pilotMountAdapters(
   root: string,
-  options: { reference?: boolean; mutation?: Mutation } = {}
+  options: MountOptions & { mutation?: OperationMutation; device?: DeclaredDeviceState } = {}
 ) {
-  const modules = operationModuleLoader(root, options.mutation)
-  const adapters: Record<string, MountAdapter> = {
-    ...settingsMountAdapters(modules),
-    ...workspaceSettingsMounts(modules),
-    ...sourceControlMountAdapters(modules),
-    ...taskWorkspaceSenderMountAdapters(modules),
-    ...taskWorkspaceHookMountAdapters(modules),
-    ...hostedReviewMountAdapters(modules),
-    'workspace.file-inventory': ({ client }) => {
-      const useSearch = modules.load<
-        typeof import('../../session/use-mobile-native-chat-file-search')
-      >('mobile/src/session/use-mobile-native-chat-file-search.ts').useMobileNativeChatFileSearch
-      const operations = options.reference
-        ? modules
-            .load('mobile/src/session/native-host-session-native-chat-operations.ts')
-            .nativeHostSessionNativeChatOperations(client)
-        : undefined
-      let workspace = 'A'
-      let state: ReturnType<typeof useSearch>
-      const hook = hookMount(() => {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
-        state = useSearch({ client, operations, worktreeId: workspace } as Parameters<
-          typeof useSearch
-        >[0])
-      })
-      return {
-        action(name, args) {
-          if (name === 'mount' || name === 'remount') {
-            return hook.mount()
-          }
-          if (name === 'unmount') {
-            return hook.unmount()
-          }
-          if (name === 'select') {
-            workspace = String(args.workspace)
-            return hook.update()
-          }
-          if (name === 'reset') {
-            const previous = workspace
-            workspace = `${workspace}-reset`
-            hook.update()
-            workspace = previous
-            return hook.update()
-          }
-          if (name === 'query') {
-            return performHookAction(() => state.loadNativeChatFiles(String(args.query)))
-          }
-          if (name === 'blur') {
-            return
-          }
-          throw new Error(`Unknown inventory action: ${name}`)
-        },
-        state: () => ({ files: state?.nativeChatFilePaths ?? [] }),
-        dispose: hook.unmount
+  const device = declaredDeviceSubstitutes(options.device ?? {})
+  const loaders = MOUNTED_OPERATION_MODULES.map((module) => ({
+    module,
+    modules: operationModuleLoader(root, options.mutation, module.exposes ?? [], device.substitutes)
+  }))
+  const adapters: Record<string, MountAdapter> = {}
+  for (const { module, modules } of loaders) {
+    for (const [operation, adapter] of Object.entries(module.mounts(modules, options))) {
+      if (operation in adapters) {
+        throw new Error(`Two adapter modules mount ${operation}`)
       }
-    },
-    'project.update-metadata': (context) => {
-      const useMetadata = modules.load<
-        typeof import('../../tasks/use-mobile-tasks-project-metadata-actions')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-project-metadata-actions.tsx'
-      ).useMobileTasksProjectMetadataActions
-      const row = {
-        id: 'item-1',
-        itemType: 'ISSUE',
-        content: { repository: 'owner/repo', number: 1, labels: [], assignees: [] }
-      }
-      const model = observableModel(context, {
-        projectMutating: false,
-        projectRowDetailError: '',
-        projectRowItem: row,
-        githubProjectTable: { rows: [row] },
-        projectRowDetail: null,
-        projectFieldDrafts: {}
-      })
-      Object.assign(model, {
-        client: context.client,
-        activeGitHubProjectHost: 'github.enterprise.test'
-      })
-      if (options.reference) {
-        model.taskOperations = {
-          projectMutation: modules
-            .load('mobile/src/tasks/native-host-task-project-mutation-operations.ts')
-            .nativeHostTaskProjectMutationOperations(context.client)
-        }
-      }
-      let actions: ReturnType<typeof useMetadata>
-      const hook = hookMount(() => {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
-        actions = useMetadata(model as unknown as Parameters<typeof useMetadata>[0])
-      })
-      return {
-        action(name) {
-          if (name === 'mount') {
-            return hook.mount()
-          }
-          if (name === 'submit') {
-            return actions.mutateProjectRowMetadata(
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the row as JSON, not as a typed model.
-              row as unknown as Parameters<typeof actions.mutateProjectRowMetadata>[0],
-              { addLabels: ['recorded'] }
-            )
-          }
-          throw new Error(`Unknown project action: ${name}`)
-        },
-        state: () => ({
-          mutating: model.projectMutating,
-          error: model.projectRowDetailError,
-          row: model.projectRowItem
-        }),
-        dispose: hook.unmount
-      }
-    },
-    'linear.issue-detail': (context) => {
-      const useDetail = modules.load<
-        typeof import('../../tasks/use-mobile-tasks-item-detail-loading')
-      >('mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx').useMobileTasksItemDetailLoading
-      const model = observableModel(context, {
-        actionItem: {
-          provider: 'linear',
-          source: { id: 'issue-1', workspaceId: 'linear-workspace' }
-        },
-        detailLoading: false,
-        detailError: '',
-        detailPayload: null,
-        items: []
-      })
-      Object.assign(model, { client: context.client, tasksSupported: true, detailRefreshSeq: 0 })
-      if (options.reference) {
-        model.taskOperations = {
-          detail: modules
-            .load('mobile/src/tasks/native-host-task-detail-operations.ts')
-            .nativeHostTaskDetailOperations(context.client)
-        }
-      }
-      const hook = hookMount(() => {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
-        useDetail(model as unknown as Parameters<typeof useDetail>[0])
-      })
-      return {
-        action(name) {
-          if (name === 'mount' || name === 'remount') {
-            return hook.mount()
-          }
-          if (name === 'unmount') {
-            return hook.unmount()
-          }
-          if (name === 'reset') {
-            model.detailRefreshSeq = Number(model.detailRefreshSeq) + 1
-            return hook.update()
-          }
-          if (name === 'blur') {
-            return
-          }
-          throw new Error(`Unknown detail action: ${name}`)
-        },
-        state: () => ({
-          loading: model.detailLoading,
-          error: model.detailError,
-          payload: model.detailPayload
-        }),
-        dispose: hook.unmount
-      }
-    },
-    'settings.new-tab-agents': ({ client }) => {
-      const load = modules.load<typeof import('../../session/mobile-new-tab-agent-loader')>(
-        'mobile/src/session/mobile-new-tab-agent-loader.ts'
-      ).loadMobileNewTabAgentOptions
-      return {
-        action: (_name, args) =>
-          load({ client, worktreeId: String(args.workspace ?? 'repo-1::/folder') }),
-        state: () => ({}),
-        dispose: () => {}
-      }
-    },
-    'settings.task-preferences': (context) => {
-      const usePreferences = modules.load<
-        typeof import('../../tasks/use-mobile-tasks-client-settings-actions')
-      >(
-        'mobile/src/tasks/use-mobile-tasks-client-settings-actions.tsx'
-      ).useMobileTasksClientSettingsActions
-      const model = observableModel(context, {
-        defaultGitHubPreset: 'all',
-        githubProjectSettings: {}
-      })
-      Object.assign(model, {
-        client: context.client,
-        clientRef: { current: context.client },
-        repoSelectionHydratedRef: { current: false },
-        defaultRepoSelectionRef: { current: null },
-        taskUiReady: true,
-        githubProjectFieldVisibilityScope: null,
-        taskResumeRef: { current: {} },
-        trustedOrcaHooks: {}
-      })
-      let actions: ReturnType<typeof usePreferences>
-      const hook = hookMount(() => {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
-        actions = usePreferences(model as unknown as Parameters<typeof usePreferences>[0])
-      })
-      return {
-        action(name, args) {
-          if (name === 'mount') {
-            return hook.mount()
-          }
-          if (name === 'write') {
-            return actions.persistDefaultGitHubPreset(
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preset arrives from the scenario JSON as a string.
-              args.preset as Parameters<typeof actions.persistDefaultGitHubPreset>[0]
-            )
-          }
-          if (name === 'resume') {
-            return actions.persistTaskResumeState({ githubItemsPreset: 'issues' })
-          }
-          if (name === 'trust') {
-            return actions.persistSetupHookTrust('repo-1', 'hash-1', false)
-          }
-          throw new Error(`Unknown preferences action: ${name}`)
-        },
-        state: () => ({ preset: model.defaultGitHubPreset }),
-        dispose: hook.unmount
+      // The declared device writes through the same effect recorder the adapter is handed, so a
+      // scenario records one without its adapter having to wire the sink itself.
+      adapters[operation] = (context) => {
+        device.bind(context.effect)
+        // Same reason as the device sink: the reply classifier is loaded per adapter module, and
+        // the mount is what knows which recording a salvaged read belongs to.
+        bindSalvageObserver(context.effect)
+        return adapter(context)
       }
     }
   }
-  return { adapters, assertMutationApplied: modules.assertMutationApplied }
+  return {
+    adapters,
+    assertMutationApplied: () => {
+      const applied = loaders.reduce((total, { modules }) => total + modules.mutationsApplied(), 0)
+      if (options.mutation && applied !== 1) {
+        throw new Error(`Expected one mutation, applied ${applied}`)
+      }
+    }
+  }
 }

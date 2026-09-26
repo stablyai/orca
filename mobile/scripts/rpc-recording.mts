@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { runProcess } from '../../src/shared/child-process/run-process.ts'
+import { RECORDING_DRIVERS } from '../src/test-support/rpc-recording/recording-drivers.ts'
 import { readScenarios } from '../src/test-support/rpc-recording/scenario-input.ts'
 
 if (process.argv[2] !== '--record' || process.env.RPC_FOUNDATION_RECORD !== '1') {
@@ -50,21 +51,29 @@ if (untracked.stdout.trim() !== '') {
     `Untracked product sources would not be pinned by the baseline:\n${untracked.stdout.trim()}`
   )
 }
+// Ten minutes, not two: the corpus already records in ~110s, so the old 120s budget killed the run
+// on any cold cache and reported it as a truncated failure rather than as a timeout.
+const RECORDING_TIMEOUT_MS = 600_000
+
 const require = createRequire(resolve(root, 'mobile/package.json'))
 const result = await runProcess({
   program: process.execPath,
   args: [
     resolve(require.resolve('vitest/package.json'), '../vitest.mjs'),
     'run',
-    'src/test-support/rpc-recording/pilot-recordings.test.ts',
-    'src/test-support/rpc-recording/family-recordings.test.ts'
+    ...RECORDING_DRIVERS.map((driver) => `src/test-support/rpc-recording/${driver}`)
   ],
   cwd: resolve(root, 'mobile'),
-  timeoutMs: 120_000,
+  timeoutMs: RECORDING_TIMEOUT_MS,
   env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1', RPC_FOUNDATION_MODE: '--record' }
 })
 process.stdout.write(result.stdout)
 process.stderr.write(result.stderr)
+if (result.timedOut) {
+  // Why: a killed run writes a partial reporter line and nothing else, which reads as a failing
+  // test rather than as a run that never finished.
+  throw new Error(`Recording did not finish within ${RECORDING_TIMEOUT_MS / 1000}s and was killed.`)
+}
 if (result.code !== 0) {
   process.exitCode = 1
 }

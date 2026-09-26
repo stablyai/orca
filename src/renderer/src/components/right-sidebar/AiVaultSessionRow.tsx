@@ -24,6 +24,8 @@ import {
   SessionMetadata
 } from './ai-vault-session-row-display'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
+import { AiVaultSearchEvidence } from './AiVaultSearchEvidence'
 
 export function VaultSessionRow({
   session,
@@ -34,6 +36,7 @@ export function VaultSessionRow({
   vaultScope,
   detailsExpanded,
   resumeDisabled,
+  resumeHidden,
   onToggleDetails,
   onJumpToOriginalPane,
   showJumpToWorktree,
@@ -52,7 +55,8 @@ export function VaultSessionRow({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
-  onRequestDelete
+  onRequestDelete,
+  searchHit
 }: {
   session: AiVaultSession
   liveState: AgentStatusState | null
@@ -62,6 +66,7 @@ export function VaultSessionRow({
   vaultScope: AiVaultScope
   detailsExpanded: boolean
   resumeDisabled: boolean
+  resumeHidden?: boolean
   onToggleDetails: () => void
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
@@ -76,18 +81,26 @@ export function VaultSessionRow({
   subagentResume?: AiVaultSubagentResumeActions
   onCopyResume?: () => void
   onCopyId: () => void
-  onCopyPath: () => void
+  onCopyPath?: () => void
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
-  onRequestDelete: (session: AiVaultSession) => void
+  onRequestDelete?: (session: AiVaultSession) => void
+  searchHit?: AiVaultSearchHit
 }) {
   const updatedAt = session.updatedAt ?? session.modifiedAt
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   // Computed once so the dropdown menu and the context menu never disagree.
-  const deleteBlockedReason = aiVaultSessionDeleteBlockedReason(session)
-  const requestDelete = (): void => onRequestDelete(session)
+  const deleteBlockedReason = onRequestDelete
+    ? aiVaultSessionDeleteBlockedReason(session)
+    : translate(
+        'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
+        'The transcript source is unavailable.'
+      )
+  const requestDelete = session.structuredSession
+    ? undefined
+    : (): void => onRequestDelete?.(session)
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
@@ -113,7 +126,7 @@ export function VaultSessionRow({
         ...(resumeStartup.env ? { env: resumeStartup.env } : {}),
         ...(resumeStartup.envToDelete ? { envToDelete: resumeStartup.envToDelete } : {}),
         ...(resumeStartup.launchConfig ? { launchConfig: resumeStartup.launchConfig } : {}),
-        realHomeStartup: realHomeResumeStartup
+        ...(session.structuredSession ? {} : { realHomeStartup: realHomeResumeStartup })
       })
       window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_START_EVENT))
     },
@@ -170,6 +183,7 @@ export function VaultSessionRow({
               detailsId={detailsId}
               detailsTooltip={detailsTooltip}
               resumeDisabled={resumeDisabled}
+              resumeHidden={resumeHidden}
               resumeLabel={resumeLabel}
               worktreeInfo={worktreeInfo}
               onToggleDetails={onToggleDetails}
@@ -189,7 +203,8 @@ export function VaultSessionRow({
               onRequestDelete={requestDelete}
             />
           </div>
-          {!detailsExpanded ? (
+          {searchHit ? <AiVaultSearchEvidence hit={searchHit} /> : null}
+          {!detailsExpanded && !searchHit ? (
             <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
               {latestTurn ? (
                 <>
@@ -234,6 +249,7 @@ export function VaultSessionRow({
         <SessionActionMenuItems
           menuKind="context"
           resumeDisabled={resumeDisabled}
+          resumeHidden={resumeHidden}
           resumeLabel={resumeLabel}
           onJumpToOriginalPane={onJumpToOriginalPane}
           showJumpToWorktree={showJumpToWorktree}

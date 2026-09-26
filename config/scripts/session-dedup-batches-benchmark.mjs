@@ -5,7 +5,7 @@ import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedu
 
 const bundled = await build({
   stdin: {
-    contents: "export * from './src/main/ai-vault/codex-session-root-dedup.ts'",
+    contents: "export * from './src/main/ai-vault/session-root-dedup.ts'",
     resolveDir: process.cwd(),
     loader: 'ts'
   },
@@ -22,14 +22,14 @@ function baseline(input) {
   const sessions = []
   for (let offset = 0; offset < input.length; offset += 8) {
     sessions.push(...input.slice(offset, offset + 8))
-    const unique = production.dedupeCodexSessionsBySessionId(sessions)
+    const unique = production.dedupeScannedSessions(sessions)
     sessions.splice(0, sessions.length, ...unique)
   }
   return sessions
 }
 
 function incremental(input) {
-  const sessions = new production.CodexSessionCollection()
+  const sessions = new production.ScannedSessionCollection()
   for (let offset = 0; offset < input.length; offset += 8) {
     for (const session of input.slice(offset, offset + 8)) {
       sessions.add(session)
@@ -63,11 +63,11 @@ function random(max) {
   return Math.floor((seed / 0x100000000) * max)
 }
 
-if (production.CodexSessionCollection) {
+if (production.ScannedSessionCollection) {
   let batches = 0
   for (let trial = 0; trial < 2000; trial++) {
     const input = []
-    const current = new production.CodexSessionCollection()
+    const current = new production.ScannedSessionCollection()
     let expected = []
     for (let batch = 0; batch < 20; batch++) {
       const added = Array.from({ length: 1 + random(8) }, () => {
@@ -96,7 +96,7 @@ if (production.CodexSessionCollection) {
         })
       })
       input.push(...added)
-      expected = production.dedupeCodexSessionsBySessionId([...expected, ...added])
+      expected = production.dedupeScannedSessions([...expected, ...added])
       added.forEach((session) => current.add(session))
       checkIdentities([...current.values()], expected)
       assert.equal(current.size, expected.length)
@@ -141,7 +141,7 @@ console.log(
 )
 for (const [name, input] of workloads) {
   const expected = baseline(input)
-  const arms = { baseline, ...(production.CodexSessionCollection ? { incremental } : {}) }
+  const arms = { baseline, ...(production.ScannedSessionCollection ? { incremental } : {}) }
   const repeats = Math.max(1, Math.floor(5000 / input.length))
   const samples = { baseline: [], incremental: [] }
   for (const run of Object.values(arms)) {
@@ -173,12 +173,12 @@ for (const [name, input] of workloads) {
   )
 }
 
-if (global.gc && production.CodexSessionCollection) {
+if (global.gc && production.ScannedSessionCollection) {
   for (const count of [1000, 10000]) {
     const input = Array.from({ length: count }, (_, index) => makeSession(index))
     global.gc()
     const before = process.memoryUsage().heapUsed
-    const collection = new production.CodexSessionCollection()
+    const collection = new production.ScannedSessionCollection()
     input.forEach((session) => collection.add(session))
     global.gc()
     const retainedBytes = process.memoryUsage().heapUsed - before

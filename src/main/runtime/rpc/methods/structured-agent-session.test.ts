@@ -8,6 +8,7 @@ import {
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
@@ -150,6 +151,10 @@ describe('capability gating', () => {
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)
+    // Separate from the structured capability on purpose: a host can serve the rest of the
+    // surface and not this stream, and a decoder drops an unknown stream opcode in silence — a
+    // client that subscribed without probing would wait forever and report nothing wrong.
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY)
     // Additive methods do not break an old client; bumping would strand every
     // paired device that has not updated.
     expect(RUNTIME_PROTOCOL_VERSION).toBe(3)
@@ -162,7 +167,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(22)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(29)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -427,6 +432,79 @@ describe('method routing', () => {
     )
   })
 
+  it('records the tab id a client reserved for its chat', async () => {
+    const worktree = 'id:workspace-1'
+    const fields = { worktree, agent: 'codex', tabId: 'chat-tab-1' }
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields
+        })
+      }),
+      ...fields
+    }
+    expect(await call('agentSession.create', params, STRUCTURED_CLIENT)).toMatchObject({
+      ok: true,
+      result: { ok: true }
+    })
+    // Beside `options`, after the attach fingerprint: which tab shows the chat is not which
+    // conversation this attaches to.
+    expect(hostCalls.attach).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ surfaceTabId: 'chat-tab-1' })
+    )
+  })
+
+  it('refuses a create whose declared fingerprint omits the tab it reserved', async () => {
+    // The tab id is part of the intent fingerprint, so a payload whose declared digest omits it
+    // is refused rather than admitted as the blank create it looks like.
+    const worktree = 'id:workspace-1'
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields: { worktree, agent: 'codex' }
+        })
+      }),
+      worktree,
+      agent: 'codex',
+      tabId: 'chat-tab-1'
+    }
+    expect(await call('agentSession.create', params, STRUCTURED_CLIENT)).toMatchObject({
+      ok: true,
+      result: { ok: false, refusal: { code: 'agent_session_operation_conflict' } }
+    })
+    expect(hostCalls.attach).not.toHaveBeenCalled()
+  })
+
+  it.each(['agent-session:with-colon', 'web-terminal-local-surface'])(
+    'refuses a reserved tab id that is not a host tab id: %s',
+    async (tabId) => {
+      const worktree = 'id:workspace-1'
+      const response = await call(
+        'agentSession.create',
+        {
+          // A well-formed digest, so only the tab id can be what the schema refuses.
+          envelope: envelope({ expectedRuntimeFence: null, payloadFingerprint: '0'.repeat(64) }),
+          worktree,
+          agent: 'codex',
+          tabId
+        },
+        STRUCTURED_CLIENT
+      )
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument', message: expect.stringContaining('Invalid chat tab ID') }
+      })
+      expect(hostCalls.attach).not.toHaveBeenCalled()
+    }
+  )
+
   it.each(['claude', 'codex'])(
     'forwards a %s history resume through create preparation',
     async (agent) => {
@@ -618,21 +696,6 @@ describe('method routing', () => {
     expect(response).toMatchObject({ ok: true })
     expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
   })
-
-  it('routes the structured handoff mutation through the host', async () => {
-    const response = await call('agentSession.requestHandoff', {
-      envelope: envelope(),
-      direction: 'to-tui',
-      mode: 'now',
-      action: 'start'
-    })
-
-    expect(response).toMatchObject({ ok: true })
-    expect(hostCalls.requestHandoff).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ direction: 'to-tui', mode: 'now', action: 'start' })
-    )
-  })
 })
 
 describe('parameter validation', () => {
@@ -717,41 +780,6 @@ describe('parameter validation', () => {
       envelope: envelope(),
       itemId: 'item-1',
       optionId: 'allow'
-    })
-  })
-
-  it('accepts the maximum fully encoded Claude choice group and retains a finite bound', async () => {
-    const maximumSelections = Array.from({ length: 4 }, (_, questionIndex) => ({
-      questionId: `q${questionIndex + 1}`,
-      optionIds: Array.from(
-        { length: 4 },
-        (_, optionIndex) => `q${questionIndex + 1}:choice-${optionIndex + 1}`
-      )
-    }))
-    const optionId = `question-group:${encodeURIComponent(JSON.stringify(maximumSelections))}`
-    expect(optionId.length).toBe(610)
-
-    const response = await call(
-      'agentSession.respondToQuestion',
-      {
-        envelope: envelope(),
-        itemId: 'item-1',
-        expectedRevision: 1,
-        optionId
-      },
-      STRUCTURED_CLIENT
-    )
-    expect(response).toMatchObject({ ok: true })
-    expect(hostCalls.respondToPrompt).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ optionId })
-    )
-
-    await rejects('agentSession.respondToQuestion', {
-      envelope: envelope(),
-      itemId: 'item-1',
-      expectedRevision: 1,
-      optionId: 'x'.repeat(1025)
     })
   })
 

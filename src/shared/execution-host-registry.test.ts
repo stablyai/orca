@@ -121,6 +121,7 @@ describe('execution host registry', () => {
         [
           'builder',
           {
+            checkedAt: 0,
             appVersion: '1.8.0',
             status: {
               runtimeId: 'runtime-builder',
@@ -139,6 +140,7 @@ describe('execution host registry', () => {
         [
           'old-server',
           {
+            checkedAt: 0,
             appVersion: '1.6.0',
             status: {
               runtimeId: 'runtime-old',
@@ -187,6 +189,7 @@ describe('execution host registry', () => {
         [
           'dev-box',
           {
+            checkedAt: 0,
             status: {
               runtimeId: 'runtime-dev',
               rendererGraphEpoch: 1,
@@ -229,6 +232,7 @@ describe('execution host registry', () => {
         [
           'dev-box',
           {
+            checkedAt: 0,
             status: null,
             remoteControl: {
               state: 'ready',
@@ -264,6 +268,7 @@ describe('execution host registry', () => {
         [
           'vm-runtime',
           {
+            checkedAt: 0,
             status: {
               runtimeId: 'runtime-vm',
               rendererGraphEpoch: 1,
@@ -340,6 +345,7 @@ describe('execution host registry', () => {
         [
           'gpu',
           {
+            checkedAt: 0,
             appVersion: '1.8.0',
             status: {
               runtimeId: 'runtime-gpu',
@@ -381,6 +387,7 @@ it('keeps an initial unknown-transport verification connecting', () => {
       [
         'host',
         {
+          checkedAt: 0,
           status: null,
           snapshot: {
             environmentId: 'host',

@@ -1,3 +1,5 @@
+import { buildFontFamily } from '@/lib/monospace-font-family'
+
 const EDITOR_FONT_ZOOM_MIN = -6
 const EDITOR_FONT_ZOOM_MAX = 18
 const EDITOR_FONT_ZOOM_STEP = 1
@@ -44,9 +46,12 @@ export function resolveEditorFontFamily(settings?: EditorFontFamilySettings | nu
   return settings?.editorFontFamily?.trim() || settings?.terminalFontFamily || 'monospace'
 }
 
-/** Same resolution, but keeps the notebook shell's "no font set → inherit UI font" fallback. */
-export function resolveEditorFontFamilyOrInherit(
-  settings?: EditorFontFamilySettings | null
-): string | undefined {
-  return settings?.editorFontFamily?.trim() || settings?.terminalFontFamily || undefined
+/**
+ * Fallback-backed stack for code painted outside Monaco. Monaco appends its own fallbacks to a
+ * bare name; a plain element does not, so an unresolvable name like "SF Mono" drops to serif.
+ */
+export function resolveEditorFontStack(settings?: EditorFontFamilySettings | null): string {
+  const family = settings?.editorFontFamily?.trim() || settings?.terminalFontFamily?.trim() || ''
+  // A comma list is already a CSS stack; quoting it would make it one unknown family name.
+  return family.includes(',') ? family : buildFontFamily(family)
 }

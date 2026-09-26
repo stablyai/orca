@@ -5,6 +5,7 @@ import type { StatsCollector } from '../stats/collector'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
+import type { MuseUsageStore } from '../muse-usage/store'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
@@ -44,6 +45,25 @@ import {
 } from '../crash-reporting/gpu-crash-fallback-decision'
 import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
 import { createWebContentsTimedFlag } from './web-contents-timed-flag'
+import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
+import type { ProfileStateStoreAuthorityMode } from '../persistence/profile-state/profile-state-store-factory'
+import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
+
+export type ProfileStateStartupMetadata = {
+  backend: 'json' | 'sqlite'
+  classification: ProfileStateStorageClassification
+  authorityMode: ProfileStateStoreAuthorityMode
+  runtime: 'desktop' | 'orcad'
+  migrated: boolean
+}
+
+function createInitialProfileStateStartup(): ProfileStateStartupMetadata | null {
+  return null
+}
+
+function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | undefined {
+  return undefined
+}
 
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 export const mainProcessState = {
@@ -51,10 +71,14 @@ export const mainProcessState = {
   /** Whether a manual app.quit() (Cmd+Q) is in progress; lets the close handler skip the running-process confirmation and go straight to close. */
   isQuitting: false,
   store: null as Store | null,
+  profileStateStartup: createInitialProfileStateStartup(),
+  profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,
   claudeUsage: null as ClaudeUsageStore | null,
   codexUsage: null as CodexUsageStore | null,
   openCodeUsage: null as OpenCodeUsageStore | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the store type assigned by main-process-observers.
+  museUsage: null as MuseUsageStore | null,
   codexAccounts: null as CodexAccountService | null,
   codexRuntimeHome: null as CodexRuntimeHomeService | null,
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,

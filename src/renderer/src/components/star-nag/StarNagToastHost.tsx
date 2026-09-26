@@ -231,6 +231,11 @@ export function StarNagToastHost(): null {
     return () => {
       unsubscribeShow()
       unsubscribeHide()
+      // The toast has an infinite lifetime; dismiss it when this host unmounts
+      // so its React tree and captured callbacks cannot outlive the surface.
+      dismissActiveToast()
+      activeToastIdRef.current = null
+      activeToastResolvedRef.current = null
     }
   }, [])
 

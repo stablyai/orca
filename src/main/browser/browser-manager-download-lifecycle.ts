@@ -34,6 +34,9 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     if (!download) {
       return
     }
+    const rendererOwner = download.browserTabId
+      ? this.rendererWebContentsIdByTabId.get(download.browserTabId)
+      : undefined
     this.sendDownloadStarted(downloadId)
     if (download.receivedBytes > 0 || download.transientState) {
       this.sendDownloadProgress(download.browserTabId, {
@@ -50,6 +53,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
         browserPageId: download.browserTabId ?? undefined
       })
       this.downloadsById.delete(downloadId)
+      this.releaseRetiredDownloadRenderer(download.browserTabId, rendererOwner)
     }
   }
 
@@ -150,6 +154,9 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     if (!download) {
       return
     }
+    const rendererOwner = download.browserTabId
+      ? this.rendererWebContentsIdByTabId.get(download.browserTabId)
+      : undefined
 
     if (download.cleanup) {
       download.cleanup()
@@ -169,6 +176,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     }
 
     this.downloadsById.delete(downloadId)
+    this.releaseRetiredDownloadRenderer(download.browserTabId, rendererOwner)
   }
 
   protected finishDownloadInternal(
@@ -180,6 +188,9 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
     if (!download || download.terminalEvent) {
       return
     }
+    const rendererOwner = download.browserTabId
+      ? this.rendererWebContentsIdByTabId.get(download.browserTabId)
+      : undefined
 
     if (download.cleanup) {
       download.cleanup()
@@ -205,7 +216,27 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       this.sendDownloadStarted(downloadId)
       this.sendDownloadFinished(download.browserTabId, event)
       this.downloadsById.delete(downloadId)
+      this.releaseRetiredDownloadRenderer(download.browserTabId, rendererOwner)
     }
+  }
+
+  private releaseRetiredDownloadRenderer(
+    browserTabId: string | null,
+    rendererOwner: number | undefined
+  ): void {
+    if (
+      !browserTabId ||
+      this.webContentsIdByTabId.has(browserTabId) ||
+      this.rendererWebContentsIdByTabId.get(browserTabId) !== rendererOwner
+    ) {
+      return
+    }
+    for (const download of this.downloadsById.values()) {
+      if (download.browserTabId === browserTabId) {
+        return
+      }
+    }
+    this.rendererWebContentsIdByTabId.delete(browserTabId)
   }
 
   protected cancelPendingDownloadsForGuest(guestWebContentsId: number): void {

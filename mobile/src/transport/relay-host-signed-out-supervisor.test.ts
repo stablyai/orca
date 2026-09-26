@@ -6,7 +6,8 @@ import {
   dependencies,
   FakeLogicalClient,
   FakeRelaySession,
-  host
+  host,
+  relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 
@@ -37,14 +38,14 @@ describe('a signed-out desktop reaches the phone verdict', () => {
         )
       })
     })
-    return { logical, supervisor: new MobileEndpointSupervisor(logical, host, deps) }
+    return { logical, supervisor: new MobileEndpointSupervisor(logical, host.id, relay, deps) }
   }
 
   it('latches the sign-out the cell reported', async () => {
     const { logical, supervisor } = supervisorOver(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
 
     await supervisor.start()
-    await vi.waitFor(() => expect(logical.isHostSignedOut()).toBe(true))
+    await vi.waitFor(() => expect(logical.getRelayHostReachability()).toBe('signed-out'))
 
     supervisor.stop()
   })
@@ -54,7 +55,7 @@ describe('a signed-out desktop reaches the phone verdict', () => {
 
     await supervisor.start()
 
-    expect(logical.isHostSignedOut()).toBe(false)
+    expect(logical.getRelayHostReachability()).not.toBe('signed-out')
     supervisor.stop()
   })
 })

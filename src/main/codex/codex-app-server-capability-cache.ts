@@ -4,6 +4,7 @@ import { CapabilityProbeCache } from '../../shared/capability-probe-cache'
 // in-place codex upgrade during a long Orca session self-heals after the
 // interval, mirroring GitCapabilityCache's rationale.
 export const CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS = 30 * 60_000
+export const CODEX_APP_SERVER_CAPABILITY_MAX_ENTRIES = 256
 
 /** Execution host that runs the codex binary. WSL distros are isolated from
  *  the native host and from each other — each can carry a different codex. */
@@ -23,7 +24,7 @@ export function getCodexAppServerHostKey(
  */
 export class CodexAppServerCapabilityCache extends CapabilityProbeCache<CodexAppServerHostKey> {
   constructor() {
-    super(CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS)
+    super(CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS, CODEX_APP_SERVER_CAPABILITY_MAX_ENTRIES)
   }
 }
 

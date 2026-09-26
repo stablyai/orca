@@ -3,20 +3,30 @@
   "family": "tasks.paste-lookup",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
-  "scenarioSha256": "1fb1cdc8a2544e25547175760143a61355900a3ed4b87e08a1fa0dd2409e317d",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
+  "scenarioSha256": "81be14c5ec31045004465de4234d1f682f5946d6f8dac7a42263e285b1f24591",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "09b235c17bb0": {
+    "088b54714e03": {
       "by-number": {
+        "author": {
+          "$rpc": "null"
+        },
+        "id": "issue:12",
+        "labels": [],
         "number": 12,
         "repoId": "repo-1",
-        "title": "twelve"
+        "state": "open",
+        "title": "twelve",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
       },
       "cache": []
     },
@@ -32,73 +42,91 @@
         }
       }
     },
-    "11ab96fde6c9": {
-      "name": "gitlab.workItemByPath#1",
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemByPath\",\"params\":{\"repo\":\"id:repo-1\",\"host\":\"gitlab.com\",\"path\":\"group/project\",\"iid\":7,\"type\":\"issue\"}}"
-    },
-    "2113a0cc7708": {
+    "1ffa5b08cd27": {
       "by-number": {
-        "number": 12,
-        "repoId": "repo-1",
-        "title": "twelve"
-      },
-      "by-slug": {
-        "number": 12,
-        "repoId": "repo-1",
-        "title": "twelve"
-      },
-      "cache": [
-        [
-          "repo-1",
-          {
-            "owner": "owner",
-            "repo": "repo"
-          }
-        ]
-      ],
-      "gitlab-path": {
-        "iid": 7,
-        "repoId": "repo-1",
-        "title": "seven"
-      },
-      "repo-slug": {
-        "displayName": "Repo",
-        "id": "repo-1",
-        "slug": {
+        "author": {
           "$rpc": "null"
-        }
-      }
-    },
-    "4a3429622287": {
-      "by-number": {
+        },
+        "id": "issue:12",
+        "labels": [],
         "number": 12,
         "repoId": "repo-1",
-        "title": "twelve"
+        "state": "open",
+        "title": "twelve",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
       },
       "by-slug": {
+        "author": {
+          "$rpc": "null"
+        },
+        "id": "issue:12",
+        "labels": [],
         "number": 12,
         "repoId": "repo-1",
-        "title": "twelve"
+        "state": "open",
+        "title": "twelve",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
       },
       "cache": [],
       "gitlab-path": {
-        "iid": 7,
+        "author": {
+          "$rpc": "null"
+        },
+        "id": "issue:7",
+        "labels": [],
+        "number": 7,
         "repoId": "repo-1",
-        "title": "seven"
+        "state": "opened",
+        "title": "seven",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
       }
     },
-    "65342779da15": {
+    "2689e3903f7b": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "author": {
+          "$rpc": "null"
+        },
+        "id": "issue:7",
+        "labels": [],
+        "number": 7,
+        "repoId": "repo-1",
+        "state": "opened",
+        "title": "seven",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
+      }
+    },
+    "467d1db5ad39": {
       "name": "github.workItem#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItem\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12}}"
+    },
+    "4a91480c91b6": {
+      "name": "github.workItemByOwnerRepo#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "github.workItem"
+          "value": "github.workItemByOwnerRepo"
         },
         {
           "name": "params",
           "value": {
             "number": 12,
-            "repo": "id:repo-1"
+            "owner": "owner",
+            "ownerRepo": "repo",
+            "repo": "id:repo-1",
+            "type": "issue"
           }
         },
         {
@@ -113,27 +141,147 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
+            "author": {
+              "$rpc": "null"
+            },
+            "id": "issue:12",
+            "labels": [],
             "number": 12,
-            "title": "twelve"
+            "state": "open",
+            "title": "twelve",
+            "type": "issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": ""
           }
         }
       }
     },
-    "731507dd2e23": {
+    "53a164add69c": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
+        "author": {
+          "$rpc": "null"
+        },
+        "id": "issue:12",
+        "labels": [],
         "number": 12,
         "repoId": "repo-1",
-        "title": "twelve"
+        "state": "open",
+        "title": "twelve",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
       }
     },
-    "7445a582a9c8": {
+    "64b4674b65a8": {
+      "name": "github.workItemByOwnerRepo#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemByOwnerRepo\",\"params\":{\"repo\":\"id:repo-1\",\"owner\":\"owner\",\"ownerRepo\":\"repo\",\"number\":12,\"type\":\"issue\"}}"
+    },
+    "72a59aa8bee1": {
       "name": "github.repoSlug#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "97bec1f98b89": {
+      "by-number": {
+        "author": {
+          "$rpc": "null"
+        },
+        "id": "issue:12",
+        "labels": [],
+        "number": 12,
+        "repoId": "repo-1",
+        "state": "open",
+        "title": "twelve",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
+      },
+      "by-slug": {
+        "author": {
+          "$rpc": "null"
+        },
+        "id": "issue:12",
+        "labels": [],
+        "number": 12,
+        "repoId": "repo-1",
+        "state": "open",
+        "title": "twelve",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
+      },
+      "cache": [
+        [
+          "repo-1",
+          {
+            "owner": "owner",
+            "repo": "repo"
+          }
+        ]
+      ],
+      "gitlab-path": {
+        "author": {
+          "$rpc": "null"
+        },
+        "id": "issue:7",
+        "labels": [],
+        "number": 7,
+        "repoId": "repo-1",
+        "state": "opened",
+        "title": "seven",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
+      },
+      "repo-slug": {
+        "displayName": "Repo",
+        "id": "repo-1",
+        "slug": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "c8c091106ead": {
+      "by-number": {
+        "author": {
+          "$rpc": "null"
+        },
+        "id": "issue:12",
+        "labels": [],
+        "number": 12,
+        "repoId": "repo-1",
+        "state": "open",
+        "title": "twelve",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
+      },
+      "by-slug": {
+        "author": {
+          "$rpc": "null"
+        },
+        "id": "issue:12",
+        "labels": [],
+        "number": 12,
+        "repoId": "repo-1",
+        "state": "open",
+        "title": "twelve",
+        "type": "issue",
+        "updatedAt": "2020-01-01T00:00:00.000Z",
+        "url": ""
+      },
+      "cache": []
+    },
+    "db48adb41100": {
+      "name": "github.repoSlug#1",
+      "ordinal": 7,
       "args": [
         {
           "name": "method",
@@ -166,30 +314,14 @@
         }
       }
     },
-    "a45a7dd68af6": {
-      "name": "github.repoSlug#1",
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}"
-    },
-    "aaf80675fc49": {
-      "name": "github.workItem#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItem\",\"params\":{\"repo\":\"id:repo-1\",\"number\":12}}"
-    },
-    "bd533f6b0b40": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "iid": 7,
-        "repoId": "repo-1",
-        "title": "seven"
-      }
-    },
-    "e1f537905a65": {
-      "name": "github.workItemByOwnerRepo#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemByOwnerRepo\",\"params\":{\"repo\":\"id:repo-1\",\"owner\":\"owner\",\"ownerRepo\":\"repo\",\"number\":12,\"type\":\"issue\"}}"
-    },
-    "e29333b1693f": {
+    "f4d2080c6e99": {
       "name": "gitlab.workItemByPath#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemByPath\",\"params\":{\"repo\":\"id:repo-1\",\"host\":\"gitlab.com\",\"path\":\"group/project\",\"iid\":7,\"type\":\"issue\"}}"
+    },
+    "f849aeca5336": {
+      "name": "gitlab.workItemByPath#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -220,40 +352,34 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "iid": 7,
-            "title": "seven"
+            "author": {
+              "$rpc": "null"
+            },
+            "id": "issue:7",
+            "labels": [],
+            "number": 7,
+            "state": "opened",
+            "title": "seven",
+            "type": "issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": ""
           }
         }
       }
     },
-    "e970eb27f5ca": {
-      "by-number": {
-        "number": 12,
-        "repoId": "repo-1",
-        "title": "twelve"
-      },
-      "by-slug": {
-        "number": 12,
-        "repoId": "repo-1",
-        "title": "twelve"
-      },
-      "cache": []
-    },
-    "f9ea1f747023": {
-      "name": "github.workItemByOwnerRepo#1",
+    "fa6ca8899e53": {
+      "name": "github.workItem#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
-          "value": "github.workItemByOwnerRepo"
+          "value": "github.workItem"
         },
         {
           "name": "params",
           "value": {
             "number": 12,
-            "owner": "owner",
-            "ownerRepo": "repo",
-            "repo": "id:repo-1",
-            "type": "issue"
+            "repo": "id:repo-1"
           }
         },
         {
@@ -268,11 +394,20 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-2",
+          "id": "frame-1",
           "ok": true,
           "result": {
+            "author": {
+              "$rpc": "null"
+            },
+            "id": "issue:12",
+            "labels": [],
             "number": 12,
-            "title": "twelve"
+            "state": "open",
+            "title": "twelve",
+            "type": "issue",
+            "updatedAt": "2020-01-01T00:00:00.000Z",
+            "url": ""
           }
         }
       }
@@ -284,54 +419,54 @@
       {
         "id": "by-number",
         "observation": {
-          "sender": ["65342779da15"],
-          "payloads": ["aaf80675fc49"],
+          "sender": ["fa6ca8899e53"],
+          "payloads": ["467d1db5ad39"],
           "settlements": {
-            "by-number": "731507dd2e23"
+            "by-number": "53a164add69c"
           },
-          "state": "09b235c17bb0",
+          "state": "088b54714e03",
           "effects": []
         }
       },
       {
         "id": "by-slug",
         "observation": {
-          "sender": ["65342779da15", "f9ea1f747023"],
-          "payloads": ["aaf80675fc49", "e1f537905a65"],
+          "sender": ["fa6ca8899e53", "4a91480c91b6"],
+          "payloads": ["467d1db5ad39", "64b4674b65a8"],
           "settlements": {
-            "by-number": "731507dd2e23",
-            "by-slug": "731507dd2e23"
+            "by-number": "53a164add69c",
+            "by-slug": "53a164add69c"
           },
-          "state": "e970eb27f5ca",
+          "state": "c8c091106ead",
           "effects": []
         }
       },
       {
         "id": "gitlab-path",
         "observation": {
-          "sender": ["65342779da15", "f9ea1f747023", "e29333b1693f"],
-          "payloads": ["aaf80675fc49", "e1f537905a65", "11ab96fde6c9"],
+          "sender": ["fa6ca8899e53", "4a91480c91b6", "f849aeca5336"],
+          "payloads": ["467d1db5ad39", "64b4674b65a8", "f4d2080c6e99"],
           "settlements": {
-            "by-number": "731507dd2e23",
-            "by-slug": "731507dd2e23",
-            "gitlab-path": "bd533f6b0b40"
+            "by-number": "53a164add69c",
+            "by-slug": "53a164add69c",
+            "gitlab-path": "2689e3903f7b"
           },
-          "state": "4a3429622287",
+          "state": "1ffa5b08cd27",
           "effects": []
         }
       },
       {
         "id": "repo-slug-matched",
         "observation": {
-          "sender": ["65342779da15", "f9ea1f747023", "e29333b1693f", "7445a582a9c8"],
-          "payloads": ["aaf80675fc49", "e1f537905a65", "11ab96fde6c9", "a45a7dd68af6"],
+          "sender": ["fa6ca8899e53", "4a91480c91b6", "f849aeca5336", "db48adb41100"],
+          "payloads": ["467d1db5ad39", "64b4674b65a8", "f4d2080c6e99", "72a59aa8bee1"],
           "settlements": {
-            "by-number": "731507dd2e23",
-            "by-slug": "731507dd2e23",
-            "gitlab-path": "bd533f6b0b40",
+            "by-number": "53a164add69c",
+            "by-slug": "53a164add69c",
+            "gitlab-path": "2689e3903f7b",
             "repo-slug": "0e9d6525a582"
           },
-          "state": "2113a0cc7708",
+          "state": "97bec1f98b89",
           "effects": []
         }
       }

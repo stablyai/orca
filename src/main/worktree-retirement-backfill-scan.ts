@@ -20,7 +20,9 @@ type BackfillScan = {
   outstanding: boolean
 }
 
-const scansByStore = new WeakMap<object, Map<string, BackfillScan>>()
+/** Only the store's identity is the memo key — this module never reads from it, and cannot name the
+ *  store's own type without importing its caller. */
+const scansByStore = new WeakMap<WeakKey, Map<string, BackfillScan>>()
 
 /** Monotonic, like the WSL gate's own stuck timer: wall time misjudges a backoff across laptop
  *  sleep or an NTP step, either pinning a namespace in its failure memo or ending it early. */
@@ -59,7 +61,7 @@ function withScanDeadline(scan: Promise<unknown>): Promise<void> {
  *  the rule per namespace rather than process-wide is deliberate: a global budget lets one bad mount
  *  spend it on its own retries and starve every healthy repo. */
 export function runRetirementBackfillScan(
-  store: object,
+  store: WeakKey,
   scanKey: string,
   scan: () => Promise<RetirementScanResult>
 ): Promise<Set<string>> {

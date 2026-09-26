@@ -1,3 +1,7 @@
+/* oxlint-disable anti-slop/no-module-mocking -- This IS the Vitest spec for run-headless-serve-shutdown-docker.mjs, but the rule's test-file
+   override globs only .ts/.tsx, so a .test.mjs spec slips through. The script under test is a
+   top-level CLI module driven via vi.resetModules() + await import(); the only other way to observe
+   its docker argv is to spawn real docker. */
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

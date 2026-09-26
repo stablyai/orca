@@ -11,7 +11,12 @@ import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { ActivityEvent, AgentPaneThread } from './activity-thread-types'
+import { isHistoricalActivityState } from './activity-event-state'
+import type {
+  ActivityEvent,
+  ActivityLiveAgentState,
+  AgentPaneThread
+} from './activity-thread-types'
 
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
 
@@ -117,11 +122,31 @@ export type ActivityThreadStatusId = AgentDotState
 /** Single classifier behind grouping, labels, and clear-completed; the only place the
  *  interrupted predicate is spelled. */
 export function activityThreadStatusId(thread: AgentPaneThread): ActivityThreadStatusId {
-  const state = thread.currentAgentState ?? thread.latestEvent?.state ?? 'done'
-  if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
+  const paneEntry = paneActivityEntry(thread)
+  const state = threadCurrentState(thread) ?? 'done'
+  const interrupted = paneEntry ? paneEntry.interrupted : thread.latestEvent?.entry.interrupted
+  if (!thread.currentAgentState && state === 'done' && interrupted) {
     return 'interrupted'
   }
   return state
+}
+
+// Why the pane's row: an answered ask's done predates the blocked event, and a clear can hide it.
+function paneActivityEntry(thread: AgentPaneThread): AgentStatusEntry | null {
+  return thread.paneEntry && isHistoricalActivityState(thread.paneEntry.state)
+    ? thread.paneEntry
+    : null
+}
+
+function threadCurrentState(
+  thread: AgentPaneThread
+): ActivityLiveAgentState | AgentStatusState | null {
+  return (
+    thread.currentAgentState ??
+    paneActivityEntry(thread)?.state ??
+    thread.latestEvent?.state ??
+    null
+  )
 }
 
 // Interrupted rows deliberately keep the done glyph (#2569).
@@ -197,7 +222,7 @@ export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRo
   const renderedPreview = activityThreadResponseRenderPreview({
     responsePreview: thread.responsePreview
   })
-  const liveState = thread.currentAgentState ?? thread.latestEvent?.state ?? null
+  const liveState = threadCurrentState(thread)
   const toolPreviewState = liveState === 'monitoring' ? null : liveState
   const state = threadAgentState(thread)
   const needsAttention = state === 'waiting' || state === 'blocked' || state === 'permission'

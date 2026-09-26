@@ -414,21 +414,96 @@ function relaySignals(
   return { observedAt, signals }
 }
 
+const ADMIN_RETRY_ATTEMPTS = 3
+const ADMIN_RETRY_INTERVAL_MS = 5_000
+const ADMIN_RETRYABLE_STATUSES = new Set([500, 502, 503, 504])
+const AdminErrorBodySchema = z.object({ error: z.string() })
+// The director's /v1/admin/cell-status maps any thrown operation error onto 404
+// with an {error: message} body, so a Cloud SQL pool connect timeout arrives
+// here as a 404. These are the pool-acquire and transient SQLSTATE messages the
+// relay app's own isRelayDatabaseTransientError treats as re-runnable.
+const ADMIN_TRANSIENT_ERROR_MESSAGES = [
+  'timeout exceeded when trying to connect',
+  'Connection terminated due to connection timeout',
+  'Connection terminated unexpectedly',
+  'database_temporarily_unavailable',
+  'deadlock detected',
+  'canceling statement due to',
+  'too many connections',
+  'the database system is shutting down',
+  'the database system is starting up'
+]
+
+const defaultWait = async (ms: number): Promise<void> =>
+  await new Promise((resolveWait) => setTimeout(resolveWait, ms))
+
+// A dropped socket or the 30 s AbortSignal firing; both leave the request with
+// no verdict, and every admin read here is a plain query.
+function transientFetchFailure(error: unknown): boolean {
+  if (error instanceof TypeError) return true
+  const name = (error as { name?: unknown } | null)?.name
+  return name === 'AbortError' || name === 'TimeoutError'
+}
+
+function retryableAdminStatus(status: number, body: string): boolean {
+  if (ADMIN_RETRYABLE_STATUSES.has(status)) return true
+  // 401/403/400/413 and a 404 for 'director_only' are decisions, not weather.
+  if (status !== 404) return false
+  const parsed = AdminErrorBodySchema.safeParse(
+    ((): unknown => {
+      try {
+        return JSON.parse(body)
+      } catch {
+        return null
+      }
+    })()
+  )
+  return (
+    parsed.success &&
+    ADMIN_TRANSIENT_ERROR_MESSAGES.some((message) => parsed.data.error.includes(message))
+  )
+}
+
 async function adminPost(
   fetchImpl: typeof fetch,
   origin: string,
   token: string,
   path: string,
-  body: unknown
+  body: unknown,
+  wait: (ms: number) => Promise<void> = defaultWait
 ): Promise<unknown> {
-  const response = await fetchImpl(`${origin}${path}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30_000)
-  })
-  if (!response.ok) throw new Error(`Relay admin telemetry returned ${response.status}`)
-  return await response.json()
+  for (let attempt = 1; ; attempt++) {
+    const lastAttempt = attempt >= ADMIN_RETRY_ATTEMPTS
+    let response: Response
+    try {
+      response = await fetchImpl(`${origin}${path}`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000)
+      })
+    } catch (error) {
+      if (lastAttempt || !transientFetchFailure(error)) throw error
+      console.warn(
+        `relay admin telemetry retrying ${path} after network failure` +
+          ` (attempt ${attempt}/${ADMIN_RETRY_ATTEMPTS})`
+      )
+      await wait(ADMIN_RETRY_INTERVAL_MS)
+      continue
+    }
+    if (response.ok) return await response.json()
+    // Status only: the body carries a director error message, which must not
+    // reach the log the way an identity would.
+    const errorBody = await response.text().catch(() => '')
+    if (lastAttempt || !retryableAdminStatus(response.status, errorBody)) {
+      throw new Error(`Relay admin telemetry returned ${response.status}`)
+    }
+    console.warn(
+      `relay admin telemetry retrying ${path} after ${response.status}` +
+        ` (attempt ${attempt}/${ADMIN_RETRY_ATTEMPTS})`
+    )
+    await wait(ADMIN_RETRY_INTERVAL_MS)
+  }
 }
 
 export async function directorSignals(
@@ -436,7 +511,8 @@ export async function directorSignals(
   expectedSelector: AdmissionSelector,
   gcloud: GcloudClient,
   nowMs: number,
-  fetchImpl: typeof fetch
+  fetchImpl: typeof fetch,
+  wait: (ms: number) => Promise<void> = defaultWait
 ): Promise<{
   source: IncidentSource
   selector: AdmissionSelector
@@ -452,7 +528,8 @@ export async function directorSignals(
       environment.directorOrigin,
       token,
       '/v1/admin/admission-selector/status',
-      { v: 1 }
+      { v: 1 },
+      wait
     )
   ).selector
   const selector = {
@@ -467,10 +544,14 @@ export async function directorSignals(
     statuses.push({
       cell,
       status: CellStatusSchema.parse(
-        await adminPost(fetchImpl, environment.directorOrigin, token, '/v1/admin/cell-status', {
-          v: 1,
-          cellId: cell.cellId
-        })
+        await adminPost(
+          fetchImpl,
+          environment.directorOrigin,
+          token,
+          '/v1/admin/cell-status',
+          { v: 1, cellId: cell.cellId },
+          wait
+        )
       ).status
     })
   }
@@ -495,7 +576,8 @@ export async function directorSignals(
               sourceCellId: source.cellId,
               targetCellId: target.cellId,
               completeReady: false
-            }
+            },
+            wait
           )
         )
       })
@@ -571,6 +653,7 @@ export type IncidentSampleCollectorOptions = {
   expectedSelector: AdmissionSelector
   fetchImpl?: typeof fetch
   now?: () => number
+  wait?: (ms: number) => Promise<void>
 }
 
 export function createIncidentSampleCollector(
@@ -610,7 +693,8 @@ export function createIncidentSampleCollector(
         options.expectedSelector,
         gcloud,
         nowMs,
-        fetchImpl
+        fetchImpl,
+        options.wait ?? defaultWait
       ),
       cloudMetricEntries
     ])

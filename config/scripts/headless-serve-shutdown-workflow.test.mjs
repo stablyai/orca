@@ -156,15 +156,21 @@ describe('headless serve shutdown PR gate', () => {
     expect(ownedXvfbUnits[0]).toMatch(/^ExecStart=.*orca-linux\.AppImage serve.*$/m)
     expect(ownedXvfbUnits[0]).toMatch(/^KillMode=mixed$/m)
     expect(managedXvfbUnits).toHaveLength(1)
-    expect(managedXvfbUnits[0]).not.toMatch(/^KillMode=/m)
+    expect(managedXvfbUnits[0]).toMatch(/^KillMode=mixed$/m)
   })
 
   it('distinguishes persisted state from live work during a service restart', () => {
     expect(headlessLinuxProse).toContain(
-      'Every `systemctl stop` or `restart` therefore ends live terminals and agent processes'
+      'The detached terminal daemon is preserved by a different mechanism: it is launched through `systemd-run --user --scope`'
     )
     expect(headlessLinuxProse).toContain(
-      'These guarantees do not preserve live processes. The service restart kills every terminal and agent in its cgroup'
+      'These guarantees preserve live processes only when the daemon is in its own'
+    )
+    expect(headlessLinuxProse).toContain(
+      'The unscoped fallback remains destructive: a service restart kills every terminal'
+    )
+    expect(headlessLinuxProse).toContain(
+      'Treat a stop as destructive unless `health.terminalDaemon.cgroupUnit` names an `orca-daemon-*.scope` on that host'
     )
     expect(headlessLinuxProse).toContain(
       'A separately paired runtime is outside that boundary; local execution and SSH hosts reached through this runtime are not. An affected or unknown omission, missing scope, failed request or lost connection is `unverifiable`'

@@ -1,4 +1,9 @@
-import { paneHasStateClaims } from '../../../shared/agent-hook-listener/listener-state'
+import {
+  admitLegacyAgentStatus,
+  deleteLegacyAgentStatus,
+  paneHasStateClaims
+} from '../../../shared/agent-hook-listener/listener-state'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
 import type { AgentStatusCacheIdentity } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
@@ -35,7 +40,12 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     const retained =
       options?.preserveResumeIdentity === false ? null : this.toRetainedProviderSessionRow(deleted)
     if (retained) {
-      this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
+      admitLegacyAgentStatus(
+        this.state,
+        'main-status-cleanup',
+        retained,
+        AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+      )
     }
     this.commitStatusRowMutation(deleted, retained)
     this.scheduleStatusPersist()
@@ -73,7 +83,12 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       }
       const retained = this.toRetainedProviderSessionRow(deleted)
       if (retained) {
-        this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
+        admitLegacyAgentStatus(
+          this.state,
+          'main-status-cleanup',
+          retained,
+          AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+        )
       }
       this.commitStatusRowMutation(deleted, retained)
       evicted.push(deleted.paneKey)
@@ -126,7 +141,12 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
         | undefined
       this.clearPaneState(resolvedPaneKey, { emitStatusRowMutation: false })
       if (retained) {
-        this.state.lastStatusByPaneKey.set(resolvedPaneKey, retained)
+        admitLegacyAgentStatus(
+          this.state,
+          'main-status-cleanup',
+          retained,
+          AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+        )
         this.scheduleStatusPersist()
         this.notifyStatusChangeListeners()
       }
@@ -208,14 +228,14 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     if (!existing) {
       return null
     }
-    this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
+    deleteLegacyAgentStatus(this.state, resolvedPaneKey)
     this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
     if (!options?.preserveAuthority) {
       this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
       this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
     }
     this.clearAssistantMessageRetry(resolvedPaneKey)
-    this.clearCodexSubagentPoll(resolvedPaneKey)
+    this.clearTranscriptPoll(resolvedPaneKey)
     this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
     this.currentAuthorityObservations.delete(resolvedPaneKey)
     if (existing.payload.state === 'done') {

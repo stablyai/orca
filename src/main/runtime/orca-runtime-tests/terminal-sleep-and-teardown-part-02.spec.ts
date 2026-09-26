@@ -5,6 +5,7 @@ import {
   listWorktrees
 } from '../orca-runtime-test-mocks.spec'
 import type { RuntimeClientEvent } from '../orca-runtime-test-mocks.spec'
+import { refusedMobileSessionTabClose } from '../mobile-session-tab-close-outcome'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -608,5 +609,25 @@ describe('OrcaRuntimeService', () => {
       postStopFailure: 'terminal_liveness_unavailable'
     })
     expect(stopped).toEqual(['pty-1'])
+  })
+
+  it('explains a refused workspace close instead of throwing the raw refusal enum', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    vi.spyOn(runtime, 'closeMobileSessionTab').mockResolvedValue(
+      refusedMobileSessionTabClose('stale-terminal', { snapshotRepublished: true })
+    )
+
+    // Why: this message is what the Sleep-workspace toast and `orca terminal close --all` print.
+    await expect(runtime.closeTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).rejects.toThrow(
+      'A replacement terminal took this tab over while it was closing, so the tab was kept open. Try again.'
+    )
   })
 })

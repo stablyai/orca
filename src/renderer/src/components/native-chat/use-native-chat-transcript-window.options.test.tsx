@@ -52,8 +52,11 @@ function slot(id: string): NativeChatTranscriptSlot {
     },
     turnKey: undefined,
     activeTurnIsWorking: false,
+    trailingRun: false,
     receipt: undefined,
     status: undefined,
+    folded: false,
+    turnFolds: false,
     turnDiff: undefined,
     estimatedHeight: 48
   }
@@ -67,19 +70,30 @@ afterEach(() => {
 })
 
 describe('native chat transcript virtualizer contract', () => {
-  it('configures prepend anchoring and matching bottom-follow behavior', () => {
-    renderHook(() =>
-      useNativeChatTranscriptWindow({
-        scrollRef: { current: null },
-        slots: [],
-        revealIndex: -1
-      })
+  it('retains prepend anchoring without geometry-driven end following', () => {
+    const { rerender } = renderHook(
+      ({ isVisible }) =>
+        useNativeChatTranscriptWindow({
+          scrollRef: { current: null },
+          slots: [],
+          isVisible,
+          revealIndex: -1
+        }),
+      { initialProps: { isVisible: false } }
     )
 
     expect(virtualizerMock.options.current).toMatchObject({
       anchorTo: 'end',
-      followOnAppend: true,
-      scrollEndThreshold: 48
+      followOnAppend: false,
+      scrollEndThreshold: -1
+    })
+
+    rerender({ isVisible: true })
+
+    expect(virtualizerMock.options.current).toMatchObject({
+      anchorTo: 'end',
+      followOnAppend: false,
+      scrollEndThreshold: -1
     })
   })
 
@@ -95,6 +109,7 @@ describe('native chat transcript virtualizer contract', () => {
         useNativeChatTranscriptWindow({
           scrollRef: { current: scrollElement },
           slots: [slot(id)],
+          isVisible: true,
           revealIndex: -1
         }),
       { initialProps: { id: 'message-0' } }
@@ -115,7 +130,12 @@ describe('native chat transcript virtualizer contract', () => {
       ({ text }) => {
         const current = slot('message-0')
         current.message.blocks = [{ type: 'text', text }]
-        return useNativeChatTranscriptWindow({ scrollRef, slots: [current], revealIndex: -1 })
+        return useNativeChatTranscriptWindow({
+          scrollRef,
+          slots: [current],
+          isVisible: true,
+          revealIndex: -1
+        })
       },
       { initialProps: { text: 'first' } }
     )
@@ -145,6 +165,7 @@ describe('native chat transcript virtualizer contract', () => {
       useNativeChatTranscriptWindow({
         scrollRef: { current: scrollElement },
         slots: [slot('message-0')],
+        isVisible: true,
         revealIndex: -1
       })
     )
@@ -156,6 +177,25 @@ describe('native chat transcript virtualizer contract', () => {
     expect(result.current.consumeProgrammaticScroll(new Event('scroll'))).toBe(true)
   })
 
+  it('restores a detached offset through the virtualizer', () => {
+    const scrollElement = document.createElement('div')
+    virtualizerMock.scrollElement.current = scrollElement
+    const { result } = renderHook(() =>
+      useNativeChatTranscriptWindow({
+        scrollRef: { current: scrollElement },
+        slots: [slot('message-0')],
+        isVisible: true,
+        revealIndex: -1
+      })
+    )
+
+    result.current.restoreScrollOffset(320)
+
+    expect(virtualizerMock.scrollToOffset).toHaveBeenCalledExactlyOnceWith(320, {
+      behavior: 'auto'
+    })
+  })
+
   it('lets an explicit reveal supersede a pending reader takeover', () => {
     const scrollElement = document.createElement('div')
     const target = document.createElement('div')
@@ -165,6 +205,7 @@ describe('native chat transcript virtualizer contract', () => {
       useNativeChatTranscriptWindow({
         scrollRef: { current: scrollElement },
         slots: [slot('message-0')],
+        isVisible: true,
         revealIndex: -1
       })
     )

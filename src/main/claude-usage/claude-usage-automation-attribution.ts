@@ -1,6 +1,7 @@
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { ClaudeUsagePersistedState } from './types'
 import { estimateCostUsd } from './claude-model-pricing'
+import { shouldForceAutomationUsageScan } from '../usage/automation-usage-scan-forcing'
 
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
@@ -14,16 +15,7 @@ export type AutomationUsageLookupInput = {
 type ClaudeUsageStateAccess = {
   getState: () => ClaudeUsagePersistedState
   refresh: (force: boolean) => Promise<{ lastScanError: string | null }>
-}
-
-function shouldForceAutomationUsageScan(
-  state: ClaudeUsagePersistedState,
-  completedAt: number
-): boolean {
-  const { lastScanCompletedAt, lastScanError } = state.scanState
-  // Why: attribution needs a scan after the run finishes, but repeated
-  // lookups after that point should not rescan all Claude transcript history.
-  return Boolean(lastScanError) || lastScanCompletedAt === null || lastScanCompletedAt < completedAt
+  isScanning: () => boolean
 }
 
 export async function resolveAutomationRunUsage(
@@ -61,7 +53,11 @@ export async function resolveAutomationRunUsage(
   }
 
   const scanState = await access.refresh(
-    shouldForceAutomationUsageScan(access.getState(), input.completedAt)
+    shouldForceAutomationUsageScan(
+      access.getState().scanState,
+      input.completedAt,
+      access.isScanning()
+    )
   )
   if (scanState.lastScanError) {
     return unavailable('scan_failed', scanState.lastScanError)

@@ -132,6 +132,37 @@ describe('worker transcript wire bounds', () => {
     expect(result.limited).toBe(true)
   })
 
+  it('bounds a background-task kind and state a newer build wrote as open strings', () => {
+    const result = boundWorkerTranscriptMessages([
+      JSON.parse(
+        JSON.stringify({
+          id: 'message-task-state',
+          role: 'system',
+          timestamp: null,
+          source: 'transcript',
+          blocks: [
+            {
+              type: 'background-task',
+              taskId: 'task-1',
+              kind: 'k'.repeat(900),
+              label: 'l'.repeat(900),
+              state: 's'.repeat(900)
+            }
+          ]
+        })
+      )
+    ])
+
+    const block = result.messages[0]?.blocks[0]
+    if (block?.type !== 'background-task') {
+      throw new Error('expected a background-task block')
+    }
+    expect(block.kind).toBe('unknown')
+    expect(block.label).toHaveLength(512)
+    expect(block.state).toBe('unverifiable')
+    expect(result.limited).toBe(true)
+  })
+
   it('keeps complete bounded messages unlimited', () => {
     const result = boundWorkerTranscriptMessages([
       {

@@ -24,6 +24,7 @@ import { bindSettlePaneSerializer } from './pane-serializer-settle'
 import { bindDeferredColdRestoreAndSnapshot } from './deferred-cold-restore-and-snapshot'
 import { bindHiddenOutputSeqAndSkip } from './hidden-output-seq-and-skip'
 import { bindHiddenRestoreStateAndSshProbe } from './hidden-restore-state-and-ssh-probe'
+import { bindParkRevealSnapshotVerdictActions } from './park-reveal-snapshot-verdict'
 
 export function installRunDeferredConnect(session: ConnectPanePtySession): void {
   const cwdPromise = session.deps.cwdPromise
@@ -193,6 +194,7 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
     bindHiddenRestoreStateAndSshProbe(session)
 
     bindPrepaintParkedSshSnapshot(session)
+    bindParkRevealSnapshotVerdictActions(session)
     bindHandleReattachResult(session)
     runDeferredSessionAttach(session)
   }

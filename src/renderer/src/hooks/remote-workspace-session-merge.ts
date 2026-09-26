@@ -4,6 +4,7 @@ import { reconcileClosedTerminalTabTombstones } from '../../../shared/closed-ter
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
+import { retainLocalScrollbackInRemoteLayout } from '@/components/terminal-pane/remote-layout-scrollback-retention'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
@@ -32,7 +33,8 @@ export function mergeDirectSshRemoteWorkspaceSession(
   liveTabsByWorktree: AppState['tabsByWorktree'],
   preserveLocalTerminalTabIds: ReadonlySet<string>,
   replaceExecutionHostId?: ExecutionHostId,
-  remoteRevision?: number
+  remoteRevision?: number,
+  preserveLocalLayoutTabIds: ReadonlySet<string> = new Set()
 ): WorkspaceSessionState {
   // Live tabs across the worktrees this snapshot replaces. Close-suppression consults it so a tab
   // that is still live locally always beats its own tombstone.
@@ -242,16 +244,23 @@ export function mergeDirectSshRemoteWorkspaceSession(
         )
       })
     )
+  const preservedLayoutTabIds = new Set([...locallyPreservedTabIds, ...preserveLocalLayoutTabIds])
   const terminalLayoutsByTabId = {
     ...Object.fromEntries(
       Object.entries(current.terminalLayoutsByTabId).filter(
-        ([tabId]) => !replacedTabIds.has(tabId) || locallyPreservedTabIds.has(tabId)
+        ([tabId]) => !replacedTabIds.has(tabId) || preservedLayoutTabIds.has(tabId)
       )
     ),
     ...Object.fromEntries(
-      Object.entries(remote.terminalLayoutsByTabId).filter(
-        ([tabId]) => !locallyPreservedTabIds.has(tabId) && !suppressedTabIds.has(tabId)
-      )
+      Object.entries(remote.terminalLayoutsByTabId)
+        .filter(([tabId]) => !preservedLayoutTabIds.has(tabId) && !suppressedTabIds.has(tabId))
+        // Why: this replace is wholesale, and a park capture does not bump tab.generation, so a
+        // just-parked tab is not locally preserved and the only client-side copy of its remote
+        // scrollback would go with its layout. Structure stays the host's.
+        .map(([tabId, layout]) => [
+          tabId,
+          retainLocalScrollbackInRemoteLayout(current.terminalLayoutsByTabId[tabId], layout)
+        ])
     )
   }
   const activeOutsideTarget =
@@ -262,10 +271,14 @@ export function mergeDirectSshRemoteWorkspaceSession(
   // the workspace or its path did not resolve to a local id, and taking that literally drops the
   // user onto the home screen while their terminals keep running. So it is only overridden when the
   // workspace they are standing in demonstrably still exists in the merged result.
+  // Why presence and not length, the same reading `hasLocalTabsRow` above already gives: an
+  // explicit empty row is the record that the user closed the last terminal, and a workspace they
+  // emptied still exists in the merged result. Counting rows sent them to the home screen for
+  // having closed their last tab.
   const localActiveWorkspaceSurvives =
     current.activeWorktreeId != null &&
     replaceWorktreeIds.has(current.activeWorktreeId) &&
-    (tabsByWorktree[current.activeWorktreeId]?.length ?? 0) > 0
+    Object.hasOwn(tabsByWorktree, current.activeWorktreeId)
   const preservedActiveWorktreeId = localActiveWorkspaceSurvives ? current.activeWorktreeId : null
   // The three active-* fields have to describe ONE workspace, so they are all derived from whichever
   // worktree wins rather than each choosing a source. Taking the repo from the host while the

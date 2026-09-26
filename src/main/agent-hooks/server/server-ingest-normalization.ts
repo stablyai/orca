@@ -2,9 +2,9 @@ import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import type { NormalizedLocalHook } from './server-types'
-import { AgentHookServerPersistence } from './server-persistence'
+import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
 
-export abstract class AgentHookServerIngestNormalization extends AgentHookServerPersistence {
+export abstract class AgentHookServerIngestNormalization extends AgentHookServerOpenCodeBinder {
   protected setClaudeBackgroundEvidence(
     paneKey: string,
     hasRunningTask: boolean,
@@ -24,7 +24,16 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
 
   protected normalizeLocalHookPayload(source: AgentHookSource, body: unknown): NormalizedLocalHook {
     if (source !== 'claude' || typeof body !== 'object' || body === null) {
-      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+      const event = normalizeHookPayload(this.state, source, body, this.env)
+      if (
+        event &&
+        (source === 'opencode' || source === 'mimo-code') &&
+        event.hookEventName === 'SessionStart'
+      ) {
+        // Why: a birth just arrived; bind it now instead of waiting out the poll interval.
+        this.kickOpenCodeBinder()
+      }
+      return { event }
     }
     const rawPaneKey = (body as Record<string, unknown>).paneKey
     const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''

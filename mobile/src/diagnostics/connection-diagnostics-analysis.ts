@@ -1,4 +1,8 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import {
+  relayHostReachabilityForCloseCode,
+  type RelayHostReachabilityFromCloseCode
+} from '../transport/relay-host-reachability'
 import type {
   ConnectionLogEntry,
   ConnectionState,
@@ -27,9 +31,30 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
       reportability: 'none'
     }
   }
-  const failure = findCurrentDiagnosticFailure(args.entries)
-  const evidence = failure ? `${failure.code ?? ''} ${failure.message} ${failure.detail ?? ''}` : ''
+  const selected = selectDiagnosticFailure(args.entries)
+  const failure = selected?.entry
+  const evidence = failure ? diagnosticEvidence(failure) : ''
+  const diagnosis = diagnoseFailure(args, failure, evidence)
+  if (!selected?.staleSince) {
+    return diagnosis
+  }
+  // Evidence from before the last resume or network change is still the best
+  // account of a host that has not answered since; it is just not a current,
+  // sendable incident.
+  const boundary =
+    selected.staleSince === 'network-changed' ? 'the last network change' : 'the app last resumed'
+  return {
+    likelyCause: `Before ${boundary}: ${diagnosis.likelyCause}`,
+    nextStep: diagnosis.nextStep,
+    reportability: 'none'
+  }
+}
 
+function diagnoseFailure(
+  args: DiagnoseConnectionArgs,
+  failure: ConnectionLogEntry | undefined,
+  evidence: string
+): ConnectionDiagnosis {
   if (/relay director resolve failed \(401\)/i.test(evidence)) {
     return {
       likelyCause: 'Relay rejected the saved resume credential.',
@@ -45,6 +70,12 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
       nextStep: 'Keep Orca open; recovery should retry automatically.',
       reportability: 'none'
     }
+  }
+
+  // After the director branches: a director error also arrives as a relay dial failure.
+  const relayDial = relayDialFailure(failure)
+  if (relayDial) {
+    return relayDial
   }
 
   if (/liveness-timeout|liveness timeout|connection health check failed/i.test(evidence)) {
@@ -117,37 +148,117 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
 }
 
 export function getReportableConnectionIncidentId(args: DiagnoseConnectionArgs): string | null {
-  if (diagnoseConnection(args).reportability !== 'orca-relay') {
+  const selected = selectDiagnosticFailure(args.entries)
+  if (!selected || selected.staleSince) {
     return null
   }
-  return findCurrentDiagnosticFailure(args.entries)?.id ?? null
+  return diagnoseFailure(args, selected.entry, diagnosticEvidence(selected.entry)).reportability ===
+    'orca-relay'
+    ? selected.entry.id
+    : null
 }
 
-function findCurrentDiagnosticFailure(
+// Reads to the relay close code behind a failed dial. Longer than the host
+// row's copy on purpose: this is the line the user pastes into a bug report.
+const RELAY_DIAL_ADVICE: Record<
+  RelayHostReachabilityFromCloseCode,
+  { likelyCause: (code: number) => string; nextStep: string }
+> = {
+  'host-offline': {
+    likelyCause: (code) =>
+      `Relay answered, but the desktop is not connected to it (close code ${code}, host offline).`,
+    nextStep: 'Check the desktop is awake, Orca is running, and it is signed in to Orca Cloud.'
+  },
+  'credential-refused': {
+    likelyCause: (code) => `Relay refused this device’s relay credential (close code ${code}).`,
+    nextStep: 'Re-pair this phone with the desktop.'
+  },
+  unreachable: {
+    likelyCause: (code) => `The phone could not reach the Relay cell (transport close ${code}).`,
+    nextStep: 'Check this phone’s network connection; Relay recovery retries automatically.'
+  },
+  connecting: {
+    likelyCause: (code) =>
+      `Relay closed the dial with code ${code}; recovery re-resolves and retries.`,
+    nextStep: 'Keep Orca open while Relay recovery retries.'
+  }
+}
+
+// The cell's close code names the desktop's state; a direct timeout in the same
+// window only says the phone is off the LAN, so the relay verdict wins. Never
+// reportable: every cause here is the desktop's or the phone's, not Relay's.
+function relayDialFailure(failure: ConnectionLogEntry | undefined): ConnectionDiagnosis | null {
+  if (failure?.code !== 'relay-dial-failed') {
+    return null
+  }
+  const code = failure.relayCloseCode
+  if (code == null) {
+    return {
+      likelyCause: 'The Relay dial failed before the cell answered.',
+      nextStep: RELAY_DIAL_ADVICE.unreachable.nextStep,
+      reportability: 'none'
+    }
+  }
+  const advice = RELAY_DIAL_ADVICE[relayHostReachabilityForCloseCode(code)]
+  return { likelyCause: advice.likelyCause(code), nextStep: advice.nextStep, reportability: 'none' }
+}
+
+// Newest failure since the last resume/network change; failing that, the newest
+// since the last connection or session start, flagged stale. The window used to
+// stop at every resume, and iOS resumes the app often enough that a host that
+// never answers left the window empty and the report cause-less.
+function selectDiagnosticFailure(
   entries: readonly ConnectionLogEntry[]
-): ConnectionLogEntry | undefined {
-  const boundaryIndex = entries.findLastIndex(isDiagnosticBoundary)
-  return entries
-    .slice(boundaryIndex + 1)
-    .toReversed()
-    .find(isDiagnosticFailure)
+): { entry: ConnectionLogEntry; staleSince: ResumeBoundary | null } | undefined {
+  const sessionStart = entries.findLastIndex(isSessionBoundary) + 1
+  const sinceSession = entries.slice(sessionStart)
+  const boundaryIndex = sinceSession.findLastIndex(isResumeBoundary)
+  const current = newestFailure(sinceSession.slice(boundaryIndex + 1))
+  if (current) {
+    return { entry: current, staleSince: null }
+  }
+  const stale = newestFailure(sinceSession.slice(0, boundaryIndex + 1))
+  const boundary = sinceSession[boundaryIndex]?.code
+  return stale && isResumeBoundaryCode(boundary)
+    ? { entry: stale, staleSince: boundary }
+    : undefined
 }
 
-function isDiagnosticBoundary(entry: ConnectionLogEntry): boolean {
+// Relay-path evidence outranks a newer direct failure: off the LAN every direct
+// dial times out, which says nothing, while the relay names the desktop's state.
+// Among relay failures the newest wins, so a fresh session close or director
+// error is never hidden behind an older verdict.
+function newestFailure(entries: readonly ConnectionLogEntry[]): ConnectionLogEntry | undefined {
+  const newestFirst = entries.toReversed().filter(isDiagnosticFailure)
+  return newestFirst.find((entry) => entry.path === 'relay') ?? newestFirst[0]
+}
+
+function isSessionBoundary(entry: ConnectionLogEntry): boolean {
   return (
     entry.code === 'client-session-started' ||
-    entry.code === 'app-resumed' ||
-    entry.code === 'network-changed' ||
     entry.code === 'relay-connected' ||
     entry.code === 'direct-connected' ||
     entry.message === 'Authenticated'
   )
 }
 
+type ResumeBoundary = 'app-resumed' | 'network-changed'
+
+function isResumeBoundaryCode(code: ConnectionLogEntry['code']): code is ResumeBoundary {
+  return code === 'app-resumed' || code === 'network-changed'
+}
+
+function isResumeBoundary(entry: ConnectionLogEntry): boolean {
+  return isResumeBoundaryCode(entry.code)
+}
+
+function diagnosticEvidence(entry: ConnectionLogEntry): string {
+  return `${entry.code ?? ''} ${entry.message} ${entry.detail ?? ''}`
+}
+
 function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
-  const evidence = `${entry.code ?? ''} ${entry.message} ${entry.detail ?? ''}`
-  return /relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
-    evidence
+  return /relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-dial-failed|relay dial failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
+    diagnosticEvidence(entry)
   )
 }
 

@@ -24,7 +24,6 @@ import {
   RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
   RuntimeGraphReloadLifecycle
 } from './runtime-graph-reload-lifecycle'
-import { RendererPublicationThrottle } from '../window/renderer-publication-throttle'
 import { ClientHostedPageReconciliationWindow } from './client-hosted-page-reconciliation-window'
 import { ClientSessionTabSelectionStore } from './client-session-tab-selection'
 import { WorktreeTerminalMutationLock } from './worktree-terminal-mutation-lock'
@@ -92,9 +91,6 @@ export class OrcaRuntimeWithRuntimeId {
     },
     onTimeout: (_revision, windowId) => this.handleGraphReloadTimeout(windowId)
   })
-
-  // Why: paired graph transactions need foreground timer cadence only until their publication settles.
-  protected readonly rendererPublicationThrottle = new RendererPublicationThrottle()
 
   protected tabs = new Map<string, RuntimeSyncedTab>()
 
@@ -277,6 +273,10 @@ export class OrcaRuntimeWithRuntimeId {
   /** One-shot delivery retries, keyed by leaf. See checkDeliverySettledAndArmRecheck. */
   protected deliveryRecheckTimersByLeafKey = new Map<string, ReturnType<typeof setTimeout>>()
 
+  // Why: counts authoritative graph statements so a PTY's recorded surface can be told apart
+  // from one the graph has simply not published yet (pty-recorded-surface-topology.ts).
+  protected graphSequence = 0
+
   protected leaves = new Map<string, RuntimeLeafRecord>()
 
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
@@ -322,7 +322,8 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected readonly terminalWriter = new RuntimeTerminalWriter(
     (ptyId, data) => this.ptyController?.write(ptyId, data) ?? false,
-    (ptyId) => this.getPtyWriteHostPlatform(ptyId)
+    (ptyId) => this.getPtyWriteHostPlatform(ptyId),
+    (ptyId) => this.getPtyAgent(ptyId)
   )
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
@@ -349,8 +350,8 @@ export class OrcaRuntimeWithRuntimeId {
       getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
       getFirstPartyAgentStatus: (ptyId) =>
         (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
-      startVisibleReadProbe: (waiter, waiterTimeoutMs) =>
-        this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
+      startVisibleReadProbe: (waiter, waiterTimeoutMs, agent) =>
+        this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs, agent)
     },
     this.terminalWaiters,
     this.terminalIdlePolls

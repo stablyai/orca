@@ -1,0 +1,632 @@
+{
+  "operation": "nativeChat.session-option-pick",
+  "family": "nativeChat.session-option-pick",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
+  "scenarioSha256": "1305f50c6e838d89d0a9e65d9011d2a532a2f75f7b3aea73f9e33330214f5724",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0aa1124bf746": {
+      "settled": "settled"
+    },
+    "0cbee3f73306": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "23f8f4ed8c86": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "2ea5c2006e3a": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "3284376ef9b6": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.mutateNativeChatSessionOptions\",\"params\":{\"type\":\"apply-picks\",\"agent\":\"claude\",\"picks\":[{\"modelId\":\"opus\",\"optionId\":\"model\",\"value\":\"opus\"}]}}"
+    },
+    "354210cbc979": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "476a2902da3e": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "6b20d3982d7c": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "95cb95961522": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "9964b36724f4": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "9f7b70f2667b": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "baf33df29104": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "applied": true
+          }
+        }
+      }
+    },
+    "d97c721af8a1": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-nativechat.session-option-pick-settings.mutatenativechatsessionoptions-1",
+    "checkpoints": [
+      {
+        "id": "native-chat-session-option-pick-written.normal:written",
+        "observation": {
+          "sender": ["baf33df29104"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      },
+      {
+        "id": "native-chat-session-option-pick-written.result-absent:written",
+        "observation": {
+          "sender": ["9964b36724f4"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      },
+      {
+        "id": "native-chat-session-option-pick-written.result-null:written",
+        "observation": {
+          "sender": ["6b20d3982d7c"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      },
+      {
+        "id": "native-chat-session-option-pick-written.inner-ok-missing:written",
+        "observation": {
+          "sender": ["354210cbc979"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      },
+      {
+        "id": "native-chat-session-option-pick-written.inner-false-string-error:written",
+        "observation": {
+          "sender": ["d97c721af8a1"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      },
+      {
+        "id": "native-chat-session-option-pick-written.inner-false-object-error:written",
+        "observation": {
+          "sender": ["95cb95961522"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      },
+      {
+        "id": "native-chat-session-option-pick-written.outer-refused:written",
+        "observation": {
+          "sender": ["476a2902da3e"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      },
+      {
+        "id": "native-chat-session-option-pick-written.outer-refused-no-message:written",
+        "observation": {
+          "sender": ["2ea5c2006e3a"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      },
+      {
+        "id": "native-chat-session-option-pick-written.method-not-found:written",
+        "observation": {
+          "sender": ["23f8f4ed8c86"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      },
+      {
+        "id": "native-chat-session-option-pick-written.transport-rejection:written",
+        "observation": {
+          "sender": ["0cbee3f73306"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      },
+      {
+        "id": "native-chat-session-option-pick-written.transport-rejection-no-message:written",
+        "observation": {
+          "sender": ["9f7b70f2667b"],
+          "payloads": ["3284376ef9b6"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -9,6 +9,7 @@ import {
   readQuestionIds,
   readQuestionOptionAnswers
 } from './codex-prompt-registry-bounds'
+import { readRecord, readString as readRecordString } from './codex-item-field-readers'
 
 export const CODEX_COMMAND_APPROVAL_METHOD = 'item/commandExecution/requestApproval'
 export const CODEX_FILE_CHANGE_APPROVAL_METHOD = 'item/fileChange/requestApproval'
@@ -36,11 +37,7 @@ export type CodexPromptClaim = {
 }
 
 function readString(params: unknown, key: string): string | null {
-  if (typeof params !== 'object' || params === null) {
-    return null
-  }
-  const value = Reflect.get(params, key)
-  return typeof value === 'string' && value.length > 0 ? value : null
+  return readRecordString(readRecord(params), key)
 }
 
 export function isCodexPromptMethod(method: string): boolean {
@@ -229,7 +226,7 @@ export class CodexPromptRegistry {
 
   clearTurn(threadId: string, turnId: string): void {
     const prompts = new Set(
-      [...this.byAddress.values(), ...this.boundPrompts.values()].filter(
+      [...this.byAddress.values(), ...this.boundPrompts.values(), ...this.claims.keys()].filter(
         (prompt) => prompt.threadId === threadId && codexPromptMatchesTurn(prompt, turnId)
       )
     )

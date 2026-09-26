@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications'
-import type { RpcClient } from '../transport/rpc-client'
+import { pushMissedSinceRead, type MobilePushDismissalRpcSender } from './push-dismissal-operations'
 import { loadHostCatalog } from '../transport/host-store'
 import { resolveHostIdForFingerprint } from './push-host-fingerprint'
 import { readNativeNotificationData } from './native-notification-data'
@@ -40,25 +40,26 @@ async function readDelivered(hostId: string): Promise<Map<string, OrcaPushPayloa
 }
 
 export async function requestNotificationCatchup(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobilePushDismissalRpcSender,
   hostId: string,
   isDisposed: () => boolean
 ): Promise<void> {
   const entries = [...(await readDelivered(hostId)).entries()]
   for (let offset = 0; offset < entries.length && !isDisposed(); offset += 256) {
     const requested = new Map(entries.slice(offset, offset + 256))
-    const reply = await client.sendRequest('notifications.getMissedSince', {
+    const reply = await pushMissedSinceRead.request(client, {
       // Reconcile the tray without requesting historical alerts.
       lastSeenSeq: Number.MAX_SAFE_INTEGER,
       deliveredPushes: [...requested.values()].map((payload) =>
         readPushNotificationIdentity(payload)!
       )
     })
-    if (!reply.ok || isDisposed()) {
+    const missed = pushMissedSinceRead.interpret(reply)
+    if (!missed.accepted || isDisposed()) {
       return
     }
-    const result = reply.result as { dismissedPushes?: unknown } | undefined
-    if (!Array.isArray(result?.dismissedPushes)) {
+    const result = missed.value
+    if (!result?.dismissedPushes) {
       continue
     }
     const confirmed: OrcaPushPayload[] = []

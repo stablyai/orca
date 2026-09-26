@@ -1,10 +1,19 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { operationModuleLoader } from './operation-module-loader'
 import { describe, expect, it } from 'vitest'
 import { captureArguments, captureError, captureValue } from './recording-values'
 import { RECORDER_DIRECTORY, recorderSha256 } from './recorder-digest'
+import { RECORDING_DRIVERS } from './recording-drivers'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import {
@@ -38,7 +47,7 @@ describe('recording boundaries', () => {
 
   it('runs the actual stable-client projection and physical serialization', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const result = transport.client.sendRequest(
@@ -71,7 +80,7 @@ describe('recording boundaries', () => {
 
   it('requires logical bindings plus matching params for concurrent same-method calls', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const left = transport.client.sendRequest('files.list', { worktree: 'A' })
@@ -97,7 +106,7 @@ describe('recording boundaries', () => {
 
   it('records actual deadline ambiguity and leaves peers pending before their deadlines', async () => {
     const clock = vitestRecordingScheduler()
-    clock.start()
+    await clock.start()
     const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       void transport.client.sendRequest('short', {}, { timeoutMs: 5 }).catch(() => {})
@@ -393,25 +402,117 @@ describe('recording boundaries', () => {
       writeFileSync(join(directory, 'runner.ts'), 'export const runner = 1')
       const original = recorderSha256(root)
       writeFileSync(join(directory, 'README.md'), 'prose')
-      expect(recorderSha256(join(root, '.'))).toBe(original)
+      // Each call spells the root differently: `recorderSha256` caches per root string, so reusing
+      // one would assert nothing.
+      expect(recorderSha256(`${root}/`)).toBe(original)
       writeFileSync(join(directory, 'runner.ts'), 'export const runner = 2')
-      expect(recorderSha256(join(root, './'))).not.toBe(original)
+      expect(recorderSha256(`${root}//`)).not.toBe(original)
     } finally {
       rmSync(root, { recursive: true })
     }
+  })
+
+  // A suite that only reads goldens cannot put an observation in one, so it is not provenance; the
+  // drivers are, because a golden's bytes come from them.
+  it('digests the recording drivers and no other suite', () => {
+    const root = mkdtempSync(join(tmpdir(), 'rpc-drivers-'))
+    try {
+      const directory = join(root, RECORDER_DIRECTORY)
+      mkdirSync(directory, { recursive: true })
+      writeFileSync(join(directory, 'runner.ts'), 'export const runner = 1')
+      const original = recorderSha256(root)
+      writeFileSync(join(directory, 'reads-goldens.test.ts'), 'export const suite = 1')
+      expect(recorderSha256(`${root}/`)).toBe(original)
+      writeFileSync(join(directory, RECORDING_DRIVERS[0]), 'export const suite = 1')
+      expect(recorderSha256(`${root}//`)).not.toBe(original)
+    } finally {
+      rmSync(root, { recursive: true })
+    }
+  })
+
+  it('keeps every named driver real and unimported by the engine', () => {
+    const directory = resolve(import.meta.dirname)
+    const missing = RECORDING_DRIVERS.filter((driver) => !existsSync(join(directory, driver)))
+    const imported = readdirSync(directory)
+      .filter((file) => file.endsWith('.ts'))
+      .filter((file) =>
+        /(?:from|import\()\s*'\.[^']*\.test'/.test(readFileSync(join(directory, file), 'utf8'))
+      )
+    expect({ missing, imported }).toEqual({ missing: [], imported: [] })
+  })
+
+  it('stamps a write ordinal that moves when a subscribe is reordered against a send', async () => {
+    const subscribeFirst = await payloadsFrom((client) => {
+      client.subscribe(CLIENT_EVENTS, null, () => {})
+      void client.sendRequest('worktree.show', {}).catch(() => {})
+    })
+    const sendFirst = await payloadsFrom((client) => {
+      void client.sendRequest('worktree.show', {}).catch(() => {})
+      client.subscribe(CLIENT_EVENTS, null, () => {})
+    })
+    // The published order is identical either way, because a subscribe publishes synchronously
+    // while a request first waits for connected. Without the ordinal the swap moves no recorded
+    // byte; the send takes its ordinal at the logical call, before the payload it publishes later.
+    expect(sendFirst.map((payload) => payload.name)).toEqual(
+      subscribeFirst.map((payload) => payload.name)
+    )
+    expect(subscribeFirst.map((payload) => payload.ordinal)).toEqual([1, 3])
+    expect(sendFirst.map((payload) => payload.ordinal)).toEqual([2, 3])
+  })
+
+  it('orders a subscribe against an effect in an operation that sends no requests', async () => {
+    // The gap the request count left: with no request to count, every stamp was `0`, so the two
+    // independent lists had nothing ordering them against each other.
+    const drive = async (subscribeFirst: boolean): Promise<RecordedValue> => {
+      const recording = await runRecording(
+        {
+          id: 'request-free',
+          operation: 'op',
+          version: 1,
+          family: 'op',
+          sites: [],
+          schedules: [],
+          steps: [{ action: 'mount', id: 'mount' }, { checkpoint: 'settled' }]
+        },
+        ({ client, effect }) => ({
+          action: () => {
+            if (subscribeFirst) {
+              client.subscribe(CLIENT_EVENTS, null, () => {})
+            }
+            effect('device.write', { key: 'seen' })
+            if (!subscribeFirst) {
+              client.subscribe(CLIENT_EVENTS, null, () => {})
+            }
+          },
+          state: () => ({}),
+          dispose: () => {}
+        }),
+        vitestRecordingScheduler()
+      )
+      const observed = recording.checkpoints[0]!.observation
+      return { payloads: observed.payloads, effects: observed.effects }
+    }
+    expect(await drive(true)).not.toEqual(await drive(false))
   })
 
   it('refuses a mutation anchor that matches more than once', () => {
     const root = mkdtempSync(join(tmpdir(), 'rpc-mutant-'))
     try {
       const anchor =
-        "const overrides = settings == null ? undefined : Reflect.get(Object(settings), 'prBotAuthorOverrides')"
+        "const overrides = settings == null ? undefined : settingsField(settings, 'prBotAuthorOverrides')"
       mkdirSync(join(root, 'mod'), { recursive: true })
       writeFileSync(
         join(root, 'mod/settings-read-operations.ts'),
         `const raw = {} as { settings?: unknown }\nconst settings = raw.settings\nexport function first() {\n  ${anchor}\n  return overrides\n}\nexport function second() {\n  ${anchor}\n  return overrides\n}\n`
       )
-      const loader = operationModuleLoader(root, 'bot-overrides-envelope')
+      // Its own spec, not one borrowed from the mutant table: the guard is the loader's, and the
+      // table is not an input to anything the loader does while recording.
+      const loader = operationModuleLoader(root, {
+        name: 'repeated-anchor',
+        file: 'settings-read-operations.ts',
+        before: anchor,
+        after: 'const overrides = undefined'
+      })
       expect(() => loader.load('mod/settings-read-operations.ts')).toThrow(
         'matched 2 sites, expected 1'
       )
@@ -420,6 +521,26 @@ describe('recording boundaries', () => {
     }
   })
 })
+
+const CLIENT_EVENTS = 'runtime.clientEvents.subscribe'
+
+/** The payloads one scripted client publishes, with the transport torn down either way. */
+async function payloadsFrom(
+  drive: (client: ScriptedRpcTransport['client']) => void
+): Promise<ScriptedRpcTransport['payloads']> {
+  const clock = vitestRecordingScheduler()
+  await clock.start()
+  const transport = new ScriptedRpcTransport(clock.elapsed)
+  try {
+    drive(transport.client)
+    await clock.flush()
+    return [...transport.payloads]
+  } finally {
+    transport.dispose()
+    await clock.flush()
+    clock.stop()
+  }
+}
 
 function entryHash(name: string): string {
   return valueHash({ name })
@@ -464,6 +585,7 @@ function sampleGolden(id: string): GoldenRecording {
     baseline: 'a'.repeat(40),
     lockfileSha256: 'b'.repeat(64),
     recorderSha256: 'c'.repeat(64),
+    adapterSha256: 'f'.repeat(64),
     scenarioSha256: 'd'.repeat(64),
     platform: process.platform,
     scenarioVersion: 1,

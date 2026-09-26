@@ -3,6 +3,7 @@ import {
   getUtf8ByteLength,
   isUtf8ByteLengthWithinLimit
 } from './utf8-byte-limits'
+import { ownRetainedString } from './own-retained-string'
 
 export const PR_CHECK_LOG_TAIL_LINES = 200
 export const PR_CHECK_LOG_TAIL_RECENT_LINES = 100
@@ -57,7 +58,7 @@ function collectEarlierErrorLineIndexes(lines: string[], recentStart: number): n
   return [...indexes].sort((left, right) => left - right)
 }
 
-export function sliceCheckLogTail(logText: string): string {
+function buildCheckLogTail(logText: string): string {
   const lines = logText.split(/\r?\n/)
   const recentStart = Math.max(0, lines.length - PR_CHECK_LOG_TAIL_RECENT_LINES)
   const recentLines = lines.slice(recentStart)
@@ -79,4 +80,9 @@ export function sliceCheckLogTail(logText: string): string {
     [...earlierLines, PR_CHECK_LOG_TAIL_EARLIER_SEPARATOR],
     recentLines
   )
+}
+
+export function sliceCheckLogTail(logText: string): string {
+  // Cached excerpts must not pin the downloaded log behind a small V8 slice.
+  return ownRetainedString(buildCheckLogTail(logText))
 }

@@ -17,13 +17,18 @@ export function prepareClaudeStructuredSessionAcquisitionOptions(args: {
   settings: unknown
   initialization: unknown
   inputOptions: Readonly<Record<string, string>> | undefined
-  resumed: boolean
+  /** A fresh CLI session has not carried a per-session Fast opt-in over from anywhere. */
+  resumesTranscript: boolean
 }) {
   const fastMode = readClaudeSettingsFastMode(args.settings)
   const fastModePerSessionOptIn = readClaudeSettingsFastModePerSessionOptIn(args.settings)
   const fastModeFacts = readClaudeFastModeFacts(args.initialization)
   const options = restoredClaudeStructuredSessionOptions(args.inputOptions)
-  if (!args.resumed && fastModePerSessionOptIn === true && options.get('fastMode') === 'true') {
+  if (
+    !args.resumesTranscript &&
+    fastModePerSessionOptIn === true &&
+    options.get('fastMode') === 'true'
+  ) {
     options.delete('fastMode')
   }
   return { fastMode, fastModePerSessionOptIn, fastModeFacts, options }

@@ -4,7 +4,8 @@
 // agent. Hook status is the same truth the sidebar, dashboard, and mobile rows
 // read, so stats now agree with what the user sees.
 
-import type { AgentStatusState } from '../../shared/agent-status-types'
+import { isAgentTimeAccruing } from '../../shared/agent-lead-status-fold'
+import type { AgentStatusPayload } from '../../shared/agent-status-types'
 
 /** Structural subset of the agent-hook enriched payload this module needs. */
 export type AgentSessionStatusEvent = {
@@ -17,9 +18,15 @@ export type AgentSessionStatusEvent = {
   isReplay?: boolean
   /** Nonterminal state backed only by child state restored from disk. */
   restoredUnconfirmed?: true
-  /** When the current state first appeared; preserved across same-state replays. */
+  /** When the current combined state first appeared; preserved across same-state replays. */
   stateStartedAt: number
-  payload: { state: AgentStatusState }
+  /** When this event arrived; a replay restamps it. */
+  receivedAt: number
+  /** When this evidence was first observed; survives a replay. Absent means `receivedAt`. */
+  evidenceObservedAt?: number
+  /** The combined row state and its watch-loop mode: a settled main agent's background shell holds
+   *  the row `working`, and the stats must not count it. */
+  payload: Pick<AgentStatusPayload, 'state' | 'workingMode'>
 }
 
 /** Ordinary pane teardown, or a stamped batch clear for one dropped connection. */
@@ -42,7 +49,8 @@ export type AgentSessionTransition = 'start' | 'stop' | 'none'
 export const AGENT_SESSION_MIRROR_LIMIT = 1000
 
 type MirroredSession = {
-  state: AgentStatusState
+  /** Whether the row last said an agent was executing (the main agent or live agent child work). */
+  executing: boolean
   connectionId: string | null
   /** True while this recorder has an unmatched onAgentStart out to the sink. */
   open: boolean
@@ -52,33 +60,46 @@ type MirroredSession = {
  * Pure transition classifier — the whole idempotency contract lives here.
  *
  * Rules:
- * - Same state as the mirror is a SNAPSHOT, not a transition. Reconnect replay,
+ * - Same answer as the mirror is a SNAPSHOT, not a transition. Reconnect replay,
  *   disk hydration, and mid-turn tool-progress events all re-emit the current
  *   state; counting those is what makes every reconnect inflate the totals.
  * - Only a LIVE event may open a session. A replayed or disk-restored `working`
  *   describes work that began in some earlier runtime, so crediting it would
  *   mint a phantom spawn (see #14610: replays carrying an unchanged state used
  *   to re-arm live timing, and cached replays re-fire completion side effects).
+ *   A restored row's `mainAgent` is as historical as its `state`; neither opens.
  * - Any event may CLOSE a session this recorder opened. A replayed `done` is how
  *   a client learns about a completion it missed while disconnected; refusing it
  *   would strand the session open until the quit flush.
  */
 export function classifyAgentSessionTransition(
-  previous: Pick<MirroredSession, 'state' | 'open'> | undefined,
+  previous: Pick<MirroredSession, 'executing' | 'open'> | undefined,
   event: AgentSessionStatusEvent
 ): AgentSessionTransition {
   if (event.providerSessionOnly) {
     return 'none'
   }
-  const next = event.payload.state
-  if (previous && previous.state === next) {
+  const executing = isAgentTimeAccruing(event.payload)
+  if (previous && previous.executing === executing) {
     return 'none'
   }
-  if (next === 'working') {
+  if (executing) {
     const live = event.isReplay !== true && event.restoredUnconfirmed !== true
     return live ? 'start' : 'none'
   }
   return previous?.open ? 'stop' : 'none'
+}
+
+/**
+ * When an execution edge happened, on this host's clocks. An edge that leaves `working` is a state
+ * change, which the row's own clock dates. An edge inside `working` (a watch loop starting or giving
+ * way to agent work, or the first live row after a restored one) leaves that clock on an older state
+ * start, so the evidence clock dates it; on a live row that just turned `working` the two agree.
+ */
+export function agentExecutionEdgeAt(event: AgentSessionStatusEvent): number {
+  return event.payload.state === 'working'
+    ? (event.evidenceObservedAt ?? event.receivedAt)
+    : event.stateStartedAt
 }
 
 /**
@@ -99,7 +120,8 @@ export class AgentSessionTransitionRecorder {
     }
     const previous = this.sessions.get(event.paneKey)
     const transition = classifyAgentSessionTransition(previous, event)
-    if (transition === 'none' && previous?.state === event.payload.state) {
+    const executing = isAgentTimeAccruing(event.payload)
+    if (transition === 'none' && previous?.executing === executing) {
       // Refresh recency without touching session state so a long-running pane
       // isn't evicted ahead of an idle one.
       this.touch(event.paneKey, previous)
@@ -108,15 +130,20 @@ export class AgentSessionTransitionRecorder {
 
     let open = previous?.open ?? false
     if (transition === 'start') {
-      this.sink.onAgentStart(event.paneKey, event.stateStartedAt, undefined, event.worktreeId)
+      this.sink.onAgentStart(
+        event.paneKey,
+        agentExecutionEdgeAt(event),
+        undefined,
+        event.worktreeId
+      )
       open = true
     } else if (transition === 'stop') {
-      this.sink.onAgentStop(event.paneKey, event.stateStartedAt)
+      this.sink.onAgentStop(event.paneKey, agentExecutionEdgeAt(event))
       open = false
     }
 
     this.touch(event.paneKey, {
-      state: event.payload.state,
+      executing,
       connectionId: event.connectionId,
       open
     })

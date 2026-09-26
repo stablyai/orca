@@ -187,7 +187,7 @@ describe('OrcaRuntimeService automation methods', () => {
     const runtime = new OrcaRuntimeService(store as never)
 
     const updated = await runtime.updateAutomation('auto-1', { enabled: false })
-    const removed = runtime.deleteAutomation('auto-1')
+    const removed = await runtime.deleteAutomation('auto-1')
 
     expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { enabled: false }, undefined)
     expect(updated).toMatchObject({

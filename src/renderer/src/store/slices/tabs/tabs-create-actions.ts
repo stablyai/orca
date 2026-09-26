@@ -57,6 +57,7 @@ export function createTabsCreateActions(
           worktreeId,
           ...(executionHostId ? { executionHostId } : {}),
           contentType,
+          ...(init?.agentSessionAgent ? { agentSessionAgent: init.agentSessionAgent } : {}),
           label:
             init?.label ??
             (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
@@ -138,6 +139,7 @@ export function createTabsCreateActions(
           worktreeId,
           ...(executionHostId ? { executionHostId } : {}),
           contentType,
+          ...(init?.agentSessionAgent ? { agentSessionAgent: init.agentSessionAgent } : {}),
           label:
             init?.label ??
             (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),

@@ -7,10 +7,8 @@ import type {
   AgentSessionMutationResult,
   AgentSessionWireRefusalCode
 } from '../../../src/shared/agent-session-wire'
-import {
-  createStructuredAgentSessionOperationId,
-  structuredAgentSessionPayloadFingerprint
-} from '../../../src/shared/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
+import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
@@ -22,7 +20,11 @@ export type StructuredAgentSessionMutationCallResult<TValue> =
   | { status: 'accepted'; value: TValue }
   | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
   | { status: 'failed'; message: string }
-  | { status: 'unknown' }
+  /** `hostReportedOperationUnknown` separates a host answer about the id from doubt
+   *  about the effect. Whether that id can still be retried is the method's own
+   *  question: a plan that recovers an unknown ledger row replays or reruns it, one
+   *  that does not refuses the same id until the row expires. */
+  | { status: 'unknown'; hostReportedOperationUnknown?: true }
 
 export type StructuredAgentSessionMutationResult<TValue> =
   | { status: 'accepted'; value: TValue; sameFence: boolean }
@@ -67,18 +69,6 @@ export async function callAgentSession<TResult>(
     throw new AgentSessionRpcResponseError(response.error.code, response.error.message)
   }
   return response.result as TResult
-}
-
-/** React Native has no guaranteed `crypto.randomUUID`; the fallback keeps the same
- *  32-hex entropy shape the durable id and fingerprint helpers validate. */
-export function structuredSessionRandomUuid(): string {
-  return typeof globalThis.crypto?.randomUUID === 'function'
-    ? globalThis.crypto.randomUUID()
-    : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
-}
-
-export function structuredSessionOperationId(now: number = Date.now()): string {
-  return createStructuredAgentSessionOperationId(structuredSessionRandomUuid, now)
 }
 
 function isReplayableStructuredSessionOperationId(operationId: string, now: number): boolean {
@@ -169,7 +159,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       (method === 'agentSession.cancel' || method === 'agentSession.conversationCommand') &&
       result.refusal.code === 'agent_session_operation_unknown'
     ) {
-      return { status: 'unknown' }
+      return { status: 'unknown', hostReportedOperationUnknown: true }
     }
     return result.ok
       ? { status: 'accepted', value: result.value }

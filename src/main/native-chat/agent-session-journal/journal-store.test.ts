@@ -18,6 +18,7 @@ import {
   boundPayload,
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from './journal-payload-bounds'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
 import { journalDatabaseFile, journalDirectoryFor, journalPathSegment } from './journal-paths'
 import { AgentSessionJournalError, type AgentSessionJournal } from './journal-store'
 import type { openAgentSessionJournal } from './journal-store-factory'
@@ -110,6 +111,45 @@ describe('sequences', () => {
       { itemId: agentJournalItemKey(item(0)), sequence: 2 },
       { itemId: latest.itemId, sequence: latest.cursor.sequence }
     ])
+  })
+
+  it('reads the live turn off reduced items, agreeing with the rendered snapshot', async () => {
+    const journal = await open()
+    const turnItem = (turnId: string): AgentJournalItemIdentity => ({
+      provider: 'legacy',
+      agent: 'codex',
+      sessionId: 'session-1',
+      recordId: `turn-lifecycle:${turnId}`
+    })
+    const rendered = (): string | null =>
+      activeStructuredAgentSessionTurnId(journal.snapshot().items)
+    const bothAgreeOn = async (turnId: string | null): Promise<void> => {
+      expect(journal.activeTurnId()).toBe(turnId)
+      expect(rendered()).toBe(turnId)
+    }
+
+    await journal.appendItem(
+      turnItem('turn-1'),
+      { kind: 'turn', turnId: 'turn-1', state: 'running' },
+      { fence: 1 }
+    )
+    await journal.appendItem(item(0), body('work'), { fence: 1 })
+    await bothAgreeOn('turn-1')
+
+    // The completion is a revision, so it keeps the row's creation sequence rather than moving it.
+    await journal.appendItem(
+      turnItem('turn-1'),
+      { kind: 'turn', turnId: 'turn-1', state: 'completed' },
+      { fence: 1 }
+    )
+    await bothAgreeOn(null)
+
+    await journal.appendItem(
+      turnItem('turn-2'),
+      { kind: 'turn', turnId: 'turn-2', state: 'running' },
+      { fence: 1 }
+    )
+    await bothAgreeOn('turn-2')
   })
 
   it('preserves an oversized identity and its raw digest-form mimic across reopen', async () => {

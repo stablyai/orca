@@ -75,7 +75,9 @@ describe('useMobileNativeChatStop', () => {
     expect(sendRequest).toHaveBeenCalledTimes(1)
 
     await render(enabled as boolean, streamIdentity as string)
-    await act(async () => vi.runAllTimersAsync())
+    await act(async () => {
+      await vi.runAllTimersAsync()
+    })
 
     expect(sendRequest).toHaveBeenCalledTimes(1)
   })
@@ -102,7 +104,9 @@ describe('useMobileNativeChatStop', () => {
     await render(true, 'stream-1')
 
     act(() => stop?.())
-    await act(async () => vi.runAllTimersAsync())
+    await act(async () => {
+      await vi.runAllTimersAsync()
+    })
 
     expect(onSendError).toHaveBeenCalledOnce()
     expect(onSendError).toHaveBeenCalledWith('Stop not sent')
@@ -183,7 +187,9 @@ describe('useMobileNativeChatStop', () => {
 
     act(() => stop?.())
     act(() => stop?.())
-    await act(async () => vi.runAllTimersAsync())
+    await act(async () => {
+      await vi.runAllTimersAsync()
+    })
     await act(async () => {
       rejectFirst(new Error('late failure'))
       await Promise.resolve()
@@ -196,7 +202,9 @@ describe('useMobileNativeChatStop', () => {
     await render(true, 'stream-1')
 
     act(() => stop?.())
-    await act(async () => vi.runAllTimersAsync())
+    await act(async () => {
+      await vi.runAllTimersAsync()
+    })
 
     expect(reportWorkerTerminalUserInput).toHaveBeenCalledWith(
       expect.objectContaining({ sendRequest }),
@@ -209,7 +217,9 @@ describe('useMobileNativeChatStop', () => {
     await render(true, 'stream-1')
 
     act(() => stop?.())
-    await act(async () => vi.runAllTimersAsync())
+    await act(async () => {
+      await vi.runAllTimersAsync()
+    })
 
     expect(reportWorkerTerminalUserInput).not.toHaveBeenCalled()
   })

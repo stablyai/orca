@@ -37,6 +37,14 @@ jobs:
         with:
           ref: refs/tags/${{ inputs.tag }}
 
+      - name: Restore draft-publish scripts from the workflow ref
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- config/scripts/assert-github-release-is-draft.mjs
+
       - name: Setup pnpm
         uses: pnpm/setup@v2
         with:
@@ -47,6 +55,9 @@ jobs:
         with:
           node-version-file: package.json
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       # Cache the Electron binary + electron-builder tool downloads (notarytool,
       # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
@@ -73,6 +84,10 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
 
       - name: Verify macOS signing environment
         run: node config/scripts/verify-macos-release-env.mjs
@@ -135,13 +150,28 @@ jobs:
           # Kill only its child and require both PTY and watch recovery before packaging.
           node config/scripts/relay-watcher-fault-harness.mjs
 
+      - name: Abort if the parent release-cut run was cancelled
+        # Why: this workflow is dispatched separately, so cancelling release-cut
+        # does not stop mac `--publish always`. A cancelled parent left v1.4.206
+        # public with only a partial mac upload.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PARENT_RUN: ${{ inputs.release_run_id }}
+        run: |
+          set -euo pipefail
+          conclusion="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PARENT_RUN" --jq '.conclusion // empty')"
+          if [[ "$conclusion" == "cancelled" || "$conclusion" == "failure" || "$conclusion" == "timed_out" ]]; then
+            echo "::error::Parent release-cut run $PARENT_RUN is $conclusion; refusing to publish mac artifacts."
+            exit 1
+          fi
+
       - name: Publish release artifacts (macOS)
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 45
           max_attempts: 3
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always -c.publish.releaseType=draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
@@ -151,28 +181,14 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Verify release remains draft after artifact upload
-        # Why: the macOS build must never be the actor that exposes a partial
-        # release. If an uploader or GitHub transition flips draft early, fail
-        # this job so release-cut never publishes the release.
+        # Why: re-draft immediately if electron-builder flipped the GitHub
+        # release public, then fail. Checking without restoring leaves
+        # /releases/latest serving a missing Windows exe.
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
-        run: |
-          set -euo pipefail
-          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
-          # Why: release upload must validate the draft before it is publicly visible.
-          draft="$(jq -e -r --arg tag "$TAG" '
-            map(select(.tag_name == $tag))
-            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
-          ' <<<"$releases_json")" || {
-            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
-            exit 1
-          }
-          if [[ "$draft" != "true" ]]; then
-            echo "::error::Release $TAG was published during the mac artifact upload."
-            exit 1
-          fi
+        run: node config/scripts/assert-github-release-is-draft.mjs "${{ inputs.tag }}"
 
       # Why post-publish for macOS: electron-builder packs and uploads in a
       # single `--publish always` invocation, so there is no cheap insertion

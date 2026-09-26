@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { NodeReadableTextTooLargeError } from '../../shared/node-readable-text'
 import { transcriptFallbackId } from './transcript-fallback-id'
 
 type TranscriptDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
@@ -10,10 +11,12 @@ export async function decodeTranscriptStream(
   filePath: string,
   start: number,
   decode: TranscriptDecoder,
-  includeTrailingLine: boolean
+  includeTrailingLine: boolean,
+  maxSourceBytes = Infinity
 ): Promise<{ messages: NativeChatMessage[]; consumedBytes: number }> {
   const messages: NativeChatMessage[] = []
   let consumedBytes = 0
+  let sourceBytes = 0
   const framer = createTranscriptLineFramer((line, byteLength, terminated) => {
     if (terminated || includeTrailingLine) {
       decodeLine(line, consumedBytes)
@@ -21,6 +24,12 @@ export async function decodeTranscriptStream(
     }
   })
   for await (const chunk of stream) {
+    if (maxSourceBytes !== Infinity) {
+      sourceBytes += Buffer.isBuffer(chunk) ? chunk.byteLength : Buffer.byteLength(chunk, 'utf8')
+      if (sourceBytes > maxSourceBytes) {
+        throw new NodeReadableTextTooLargeError(sourceBytes, maxSourceBytes)
+      }
+    }
     framer.write(chunk)
   }
   framer.end()

@@ -9,6 +9,7 @@ import {
   type AgentStatusRunAliasIndex
 } from './agent-status-run-alias-index'
 import type { AgentStatusExecutionScope } from './agent-status-subject'
+import { AGENT_STATUS_STORE_LIMITS } from './agent-status-store-contract'
 
 function scope(overrides: Partial<AgentStatusExecutionScope> = {}): AgentStatusExecutionScope {
   return {
@@ -71,6 +72,19 @@ describe('agent status provider alias index', () => {
 
     expect(decoded?.get(aliasKey)).toBeInstanceOf(Set)
     expect(decoded?.get(aliasKey)).toEqual(new Set(['run-a', 'run-b']))
+  })
+
+  it('round-trips every run allowed by the canonical parent-store limit for one alias', () => {
+    const aliasKey = serializeAgentStatusProviderAliasKey(alias())
+    const runIds = new Set(
+      Array.from({ length: AGENT_STATUS_STORE_LIMITS.parents }, (_, index) => `run-${index}`)
+    )
+
+    const decoded = deserializeAgentStatusRunAliasIndex(
+      serializeAgentStatusRunAliasIndex(new Map([[aliasKey, runIds]]))
+    )
+
+    expect(decoded?.get(aliasKey)).toEqual(runIds)
   })
 
   it('serializes deterministically regardless of insertion order', () => {

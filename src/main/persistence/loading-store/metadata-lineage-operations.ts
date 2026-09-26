@@ -27,7 +27,8 @@ import {
   getWorktreeMetaForHost as getWorktreeMetaForHostOperation,
   migrateWorktreeMetadataLocator,
   removeWorktreeMetadataForHost,
-  setWorktreeMetaForHost as setWorktreeMetaForHostOperation
+  setWorktreeMetaForHost as setWorktreeMetaForHostOperation,
+  WORKTREE_METADATA_DOMAINS
 } from './worktree-identity-metadata'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 import {
@@ -122,7 +123,7 @@ export class MetadataLineageOperations {
     }
     const updated = mergeWorktreeMetaForWrite(stored, meta)
     state.worktreeMeta[worktreeId] = updated
-    scheduleSave(this[metadataLineageOperationsContext].scheduling)
+    scheduleSave(this[metadataLineageOperationsContext].scheduling, ['worktreeMeta'])
     return updated
   }
 
@@ -269,7 +270,11 @@ export class MetadataLineageOperations {
       mover
     )
     if (legacyChanged || canonicalChanged) {
-      scheduleSave(this[metadataLineageOperationsContext].scheduling)
+      // Legacy identity moves also re-key sessions, lineage, mobile selections, and UI state.
+      scheduleSave(
+        this[metadataLineageOperationsContext].scheduling,
+        legacyChanged ? undefined : WORKTREE_METADATA_DOMAINS
+      )
     }
   }
 
@@ -316,7 +321,7 @@ export function removeWorkspaceLineageForFolderParent(
 }
 
 export function installMetadataLineageOperationsContext(
-  target: object,
+  target: MetadataLineageOperations,
   source: MetadataLineageOperations
 ): void {
   Object.defineProperty(target, metadataLineageOperationsContext, {

@@ -1,0 +1,596 @@
+{
+  "operation": "worktree.retired-names",
+  "family": "worktree.retired-names",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "4e942ddfbaa0ba6bfc2993969276987f6528ac53765d125e99a830e261f93a8e",
+  "scenarioSha256": "d321d6c17e67ae90f6ceefb775495ff765a86a35423ed33a212e71ec5e9e94aa",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "3a6762b141aa": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.listRetiredNames\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "459a995b6e11": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "6352d16d59e7": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "69d1beb82fab": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "6eed9d6c2ef7": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "74ef9b0770d6": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "840eaac5b440": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8458df9e5ec7": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "85d826c606ff": {
+      "registry": {
+        "exhaustedTiers": 2,
+        "names": ["marlin", "orca"]
+      }
+    },
+    "90d43035c093": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "97b3650e7890": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "retiredNameTiersByRepo": {
+              "repo-1": 2
+            },
+            "retiredNamesByRepo": {
+              "repo-1": ["marlin", "orca"]
+            }
+          }
+        }
+      }
+    },
+    "bb4fad6b1862": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "cb76d0017b96": {
+      "registry": {
+        "exhaustedTiers": 0,
+        "names": []
+      }
+    },
+    "d420905a085c": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "dab70f4454e7": {
+      "name": "worktree.listRetiredNames#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.listRetiredNames"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-worktree.retired-names-worktree.listretirednames-1",
+    "checkpoints": [
+      {
+        "id": "worktree-retired-names.prelude:names-pending",
+        "observation": {
+          "sender": ["840eaac5b440"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.normal:settled",
+        "observation": {
+          "sender": ["97b3650e7890"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "85d826c606ff",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.result-absent:settled",
+        "observation": {
+          "sender": ["8458df9e5ec7"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.result-null:settled",
+        "observation": {
+          "sender": ["d420905a085c"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["6eed9d6c2ef7"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["74ef9b0770d6"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["6352d16d59e7"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.outer-refused:settled",
+        "observation": {
+          "sender": ["459a995b6e11"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["90d43035c093"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.method-not-found:settled",
+        "observation": {
+          "sender": ["69d1beb82fab"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.transport-rejection:settled",
+        "observation": {
+          "sender": ["dab70f4454e7"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      },
+      {
+        "id": "worktree-retired-names.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["bb4fad6b1862"],
+          "payloads": ["3a6762b141aa"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "cb76d0017b96",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

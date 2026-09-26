@@ -3,7 +3,8 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { writeMobileWebBundleFixtureTree } from './mobile-web-bundle-fixture-tree.mjs'
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
 const SRC_MAIN_DIR = join(REPO_ROOT, 'src', 'main')
@@ -442,8 +443,23 @@ describe('arch-aware packaging guard', () => {
   const OTHER_ARCH_NAME = process.arch === 'arm64' ? 'x64' : 'arm64'
   const SHERPA_PLATFORM = process.platform === 'win32' ? 'win' : process.platform
   const otherSherpa = `sherpa-onnx-${SHERPA_PLATFORM}-${OTHER_ARCH_NAME}`
+
+  // beforePack also hash-verifies the mobile web bundle, which the unit-test job never builds.
+  // Point it at a real bundle built into a temp dir: these tests are about the native-variant
+  // guard, and the bundle guard has its own suite.
+  let scratch
+  let bundleDir
+  beforeAll(async () => {
+    scratch = await mkdtemp(join(tmpdir(), 'orca-electron-builder-guard-'))
+    bundleDir = join(scratch, 'mobile-web')
+    await writeMobileWebBundleFixtureTree({ outDir: bundleDir })
+  })
+  afterAll(async () => {
+    await rm(scratch, { recursive: true, force: true })
+  })
+
   const packHost = (arch) =>
-    electronBuilderConfig.beforePack({ electronPlatformName: process.platform, arch })
+    electronBuilderConfig.beforePack({ electronPlatformName: process.platform, arch }, bundleDir)
 
   it('allows packaging the host platform and architecture', () => {
     expect(() => packHost(HOST_ARCH)).not.toThrow()
@@ -471,7 +487,7 @@ describe('arch-aware packaging guard', () => {
       (resource) => resource.to === join('node_modules', '@vscode', 'windows-process-tree')
     )
     const packWindows = () =>
-      electronBuilderConfig.beforePack({ electronPlatformName: 'win32', arch: 1 })
+      electronBuilderConfig.beforePack({ electronPlatformName: 'win32', arch: 1 }, bundleDir)
     if (process.platform === 'win32' || windowsAddon) {
       expect(packWindows).not.toThrow()
     } else {

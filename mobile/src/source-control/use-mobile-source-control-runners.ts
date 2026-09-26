@@ -1,5 +1,5 @@
 import { useCallback, type MutableRefObject } from 'react'
-import { useRouter } from 'expo-router'
+import type { RouteHandoff } from '../navigation/route-handoff'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
@@ -28,7 +28,7 @@ type Params = {
   generatingMessage: boolean
   stageablePaths: string[]
   unstageablePaths: string[]
-  router: ReturnType<typeof useRouter>
+  router: RouteHandoff
   sendGitRequest: SendGitRequest
   sendCommitRequest: (message: string) => Promise<unknown>
   runGitSyncSteps: () => Promise<void>

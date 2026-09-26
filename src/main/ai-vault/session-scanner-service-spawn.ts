@@ -1,4 +1,5 @@
 import { localAiVaultScanRoots } from './cached-session-list'
+import type { SessionSearchHostScope } from '../ai-vault-search/session-search-service'
 import { fork, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import type {
@@ -96,9 +97,15 @@ export function readAiVaultFirstUserPromptInService(
 }
 
 export function searchSessionsInService(
-  request: AiVaultSearchRequest
+  request: AiVaultSearchRequest,
+  hostScope?: SessionSearchHostScope
 ): Promise<AiVaultSearchResponse> {
-  return getSharedClient().request({ type: 'request', operation: 'searchSessions', request })
+  return getSharedClient().request({
+    type: 'request',
+    operation: 'searchSessions',
+    request,
+    ...(hostScope ? { hostScope } : {})
+  })
 }
 
 export function sessionSearchStatusInService(): Promise<AiVaultSearchStatus> {
@@ -107,6 +114,10 @@ export function sessionSearchStatusInService(): Promise<AiVaultSearchStatus> {
 
 export function reconcileSessionSearchInService(): Promise<void> {
   return getSharedClient().request({ type: 'request', operation: 'searchReconcile' })
+}
+
+export function clearSessionSearchInService(): Promise<void> {
+  return getSharedClient().request({ type: 'request', operation: 'searchClear' })
 }
 
 /** Boot and every settings change: push the policy and keep a child while the index runs. */

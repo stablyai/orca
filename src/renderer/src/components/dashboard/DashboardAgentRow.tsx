@@ -59,8 +59,8 @@ type Props = {
   childAgentCount?: number
   childAgentsExpanded?: boolean
   onToggleChildAgents?: () => void
-  // Why: leaf siblings reserve the chevron gutter so state dots align.
-  reserveDisclosureGutter?: boolean
+  // Why: a top-level chevron hangs in the card gutter so the state dot keeps the column of chevron-less rows.
+  disclosureInGutter?: boolean
   // Why: chevron indentation replaces fixed-offset lineage connector art.
   hideLineageConnectors?: boolean
   // Why: send-popover target mode makes row clicks send/no-op instead of navigating.
@@ -82,7 +82,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   childAgentCount,
   childAgentsExpanded = false,
   onToggleChildAgents,
-  reserveDisclosureGutter = false,
+  disclosureInGutter = false,
   hideLineageConnectors = false,
   sendTargetStatus,
   sendTargetDisabledReason,
@@ -183,7 +183,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       onClick={handleActivate}
       className={cn(
         // Why: named group scopes the X-reveal to this row, not every row in the card.
-        'group/agent-row relative flex flex-col -ml-2 py-1',
+        'group/agent-row relative flex flex-col py-1',
+        hasChildDisclosure && disclosureInGutter ? '-ml-7' : '-ml-2',
         isLineageChild ? 'pl-5 pr-2' : 'px-2',
         // Why: hover wash stays softer than the enclosing card's highlight.
         'cursor-pointer rounded-sm worktree-agent-row-hover',
@@ -230,7 +231,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           childAgentCount={childAgentCount}
           childAgentsExpanded={childAgentsExpanded}
           onToggleChildAgents={onToggleChildAgents}
-          reserveDisclosureGutter={reserveDisclosureGutter}
         />
         {/* Why: state dot sits in the leading gutter so the eye can scan one column for row state. */}
         <Tooltip>

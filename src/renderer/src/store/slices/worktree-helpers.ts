@@ -1,4 +1,5 @@
 import type { CreateWorktreeCallOptions } from './worktrees/create/worktree-create-payload'
+import type { WorktreeCatalogVersion } from '../../../../shared/worktree/catalog-version'
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
@@ -96,6 +97,8 @@ export type ActiveWorktreeStateTransition = (state: AppState) => {
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
+  /** Newest catalog version applied per repo and host; an older publication is never applied. */
+  worktreeCatalogVersionByRepoHost: Record<string, WorktreeCatalogVersion>
   worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
   workspaceLineageByChildKey: Readonly<Record<WorkspaceKey, WorkspaceLineage>>
   activeWorktreeId: string | null
@@ -226,7 +229,6 @@ export type WorktreeSlice = {
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
       provisioningLog?: string
-      structuredLaunchRecoveryWorktreeId?: string
     }
   ) => void
   /** Drop a pending entry, clearing the active surface if it pointed at this

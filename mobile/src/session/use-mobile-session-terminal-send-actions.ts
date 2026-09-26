@@ -9,12 +9,13 @@ import {
   isTerminalLiveInputWithinByteLimit
 } from '../terminal/terminal-live-input'
 import { dismissTerminalKeyboard } from '../terminal/terminal-keyboard-dismiss'
-import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { terminalInputSend } from '../terminal/mobile-terminal-operations'
 import {
   buildTerminalSendParams,
   TERMINAL_INPUT_SEND_OPTIONS
 } from '../terminal/terminal-send-request'
 import { normalizeTerminalTextInput } from '../terminal/terminal-text-input-normalization'
+import { useTerminalTextFieldSubmitBinding } from '../terminal/use-terminal-text-field-submit-binding'
 import { useAgentSendKeyboardDismissal } from './use-agent-send-keyboard-dismissal'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { useMobileSessionTabActionSheetOpener } from './use-mobile-session-tab-action-targets'
@@ -45,7 +46,9 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     sendingRef,
     bufferedTerminalDraftState,
     getSendCompletionGeneration,
+    getLiveInteractionGeneration,
     handleLiveInputAccessoryBytes,
+    handleLiveInputSubmit,
     canSend,
     scheduleDelayedAction,
     showToast
@@ -64,6 +67,28 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     dismissSoftwareKeyboard,
     getSendCompletionGeneration
   )
+
+  const submitLiveInput = useCallback(() => {
+    const submit = handleLiveInputSubmit()
+    const sendOrigin = {
+      tab: activeSessionTab,
+      generation: getSendCompletionGeneration(),
+      interaction: getLiveInteractionGeneration()
+    }
+    void submit.then((accepted) =>
+      dismissKeyboardAfterAgentSend(
+        sendOrigin,
+        accepted && sendOrigin.interaction === getLiveInteractionGeneration()
+      )
+    )
+  }, [activeSessionTab, dismissKeyboardAfterAgentSend, handleLiveInputSubmit])
+  const bindLiveInputField = useTerminalTextFieldSubmitBinding(liveInputRef, submitLiveInput)
+  // Per-render, like handleSend itself: the binding refreshes its handler every commit, so there is
+  // no identity here worth pretending is stable.
+  const submitBufferedDraft = (): void => {
+    void handleSend()
+  }
+  const bindCommandField = useTerminalTextFieldSubmitBinding(commandInputRef, submitBufferedDraft)
 
   async function handleSend() {
     // Why: the return key still submits while offline; hold the composed text instead of firing a doomed RPC (#6713).
@@ -88,8 +113,8 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
 
     try {
       // Why: fail now and restore the text — a send parked across a reconnect would execute long after the tap.
-      const response = await client.sendRequest(
-        'terminal.send',
+      const response = await terminalInputSend.request(
+        client,
         buildTerminalSendParams({
           terminal: activeHandle,
           text,
@@ -98,7 +123,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         }),
         TERMINAL_INPUT_SEND_OPTIONS
       )
-      const accepted = isTerminalSendRpcAccepted(response)
+      const accepted = terminalInputSend.interpret(response) === true
       if (accepted) {
         reportWorkerTerminalUserInput(client, activeHandle)
       }
@@ -159,9 +184,9 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       // Why: live-mirror deltas queued behind a dying send drain into the connect
       // wait and replay stale bytes after reconnect (#6713's `YZZYecho …` corruption).
-      return rpc
-        .sendRequest(
-          'terminal.send',
+      return terminalInputSend
+        .request(
+          rpc,
           buildTerminalSendParams({
             terminal: handle,
             text,
@@ -172,7 +197,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         )
         .then(
           (response) => {
-            const accepted = isTerminalSendRpcAccepted(response)
+            const accepted = terminalInputSend.interpret(response) === true
             if (accepted) {
               reportWorkerTerminalUserInput(rpc, handle)
             }
@@ -248,7 +273,10 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     openSessionTabActionSheet,
     openSessionTabActionSheetAfterKeyboardDismiss,
     dismissSoftwareKeyboard,
-    dismissKeyboardAfterAgentSend
+    dismissKeyboardAfterAgentSend,
+    bindLiveInputField,
+    bindCommandField,
+    submitLiveInput
   }
 }
 

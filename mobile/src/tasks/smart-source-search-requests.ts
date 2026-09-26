@@ -36,11 +36,11 @@ export async function searchGitHubItems(
     limit: PER_REPO_FETCH_LIMIT,
     query: scopeGitHubQuery(query)
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const envelope = githubWorkItemSearchRead.interpret(reply) as { items: GitHubWorkItem[] }
+  const envelope = githubWorkItemSearchRead.interpret(reply)
   // Stamp repoId so the shared row builder + create flow can attribute each item
   // to the searched repo (the runtime omits it, like the desktop fetcher).
-  return (envelope.items ?? []).map((item) => ({ ...item, repoId }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `workItemRow` types every member at `GitHubWorkItem`'s own type and requires the ones a consumer reads unguarded, so the assertion only fills in members the row omits; each of those is read through a guard or interpolated as text (task-source-search-reply-schema.ts:10-12).
+  return envelope.items.map((item) => ({ ...item, repoId })) as GitHubWorkItem[]
 }
 
 export async function searchGitLabItems(
@@ -56,15 +56,12 @@ export async function searchGitLabItems(
     perPage: GITLAB_PER_PAGE,
     query: query.trim() || undefined
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const envelope = gitlabWorkItemSearchRead.interpret(reply) as {
-    items: GitLabWorkItem[]
-    error?: { type?: string; message: string }
-  }
+  const envelope = gitlabWorkItemSearchRead.interpret(reply)
   if (envelope.error?.type && envelope.error.type !== 'not_found') {
-    throw new Error(envelope.error.message)
+    throw new Error(envelope.error.message ?? '')
   }
-  return (envelope.items ?? []).map((item) => ({ ...item, repoId }))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same row rule as the GitHub search above, against `GitLabWorkItem`.
+  return envelope.items.map((item) => ({ ...item, repoId })) as GitLabWorkItem[]
 }
 
 export async function searchLinearIssues(
@@ -92,7 +89,7 @@ export async function searchLinearIssues(
           workspaceId: linearWorkspaceId ?? undefined
         })
       )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: linearIssueRowSchema requires all nine members this row is read for (`id`, `identifier`, `title`, `url`, `updatedAt`, `priority`, `labels`, `state`, `team`), so the only gap left is `labelIds`: the schema salvages it to `string[] | undefined` while the shared LinearIssue declares it `string[]`. No mobile code reads it.
   return issues as LinearIssue[]
 }
 
@@ -106,11 +103,7 @@ export async function searchBranches(
     { repo: `id:${repoId}`, query: query.trim(), limit: BRANCH_LIMIT },
     { timeoutMs: 30_000 }
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-  const result = repoBaseRefSearchRead.interpret(reply) as {
-    refDetails?: BaseRefSearchResult[]
-    refs?: string[]
-  }
+  const result = repoBaseRefSearchRead.interpret(reply)
   return (
     result.refDetails ??
     (result.refs ?? []).map((refName) => ({ refName, localBranchName: refName }))

@@ -444,7 +444,7 @@ describe('agent pane authority IPC', () => {
 
     onHandlers.get('agentStatus:retirePaneAuthority')!({}, PANE_KEY)
 
-    expect(retirePaneAuthority).toHaveBeenCalledWith(PANE_KEY)
+    expect(retirePaneAuthority).toHaveBeenCalledWith(PANE_KEY, undefined)
     expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
   })
 

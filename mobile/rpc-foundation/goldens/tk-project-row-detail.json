@@ -1,0 +1,242 @@
+{
+  "operation": "tasks.project-row-detail",
+  "family": "tasks.project-row-detail",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "f8f6e5d500f959b9b15c5498885a05422747880b6aef4ad795bc3064ebbacea6",
+  "scenarioSha256": "f572b37cfd15f41f283e5f96b772a1055670f80e68064ac81477d9b768fc971a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0216abb9c43b": {
+      "name": "projectTitleDraft",
+      "ordinal": 1,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "0679b27a119b": {
+      "name": "projectFieldDrafts",
+      "ordinal": 11,
+      "value": {}
+    },
+    "0ad63b01155a": {
+      "name": "prFileContents",
+      "ordinal": 8,
+      "value": {}
+    },
+    "118d9662d37f": {
+      "name": "github.project.workItemDetailsBySlug#1",
+      "ordinal": 16,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.workItemDetailsBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"type\":\"issue\"}}"
+    },
+    "1e161db29c89": {
+      "name": "projectRowDetail",
+      "ordinal": 17,
+      "value": {
+        "assignees": [],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": "head-sha",
+        "labels": [],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "undefined"
+        },
+        "reviewRequests": []
+      }
+    },
+    "2e6edf535ef3": {
+      "name": "prFileLoadingPath",
+      "ordinal": 9,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "2ee1c7329449": {
+      "name": "projectRowDetail",
+      "ordinal": 12,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "4ad8bb2f6308": {
+      "name": "projectReviewersDraft",
+      "ordinal": 6,
+      "value": ""
+    },
+    "561861a537bb": {
+      "name": "projectRowDetailLoading",
+      "ordinal": 18,
+      "value": false
+    },
+    "6545686833e4": {
+      "name": "expandedPrFilePath",
+      "ordinal": 7,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "742985d99709": {
+      "name": "projectEditingCommentDraft",
+      "ordinal": 5,
+      "value": ""
+    },
+    "9f0108368fff": {
+      "name": "projectEditingCommentId",
+      "ordinal": 4,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "b2a01ad6d4fe": {
+      "detail": {
+        "assignees": [],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [],
+        "files": [],
+        "headSha": "head-sha",
+        "labels": [],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "undefined"
+        },
+        "reviewRequests": []
+      },
+      "error": "",
+      "loading": false
+    },
+    "b4e65ea8b72c": {
+      "name": "github.project.workItemDetailsBySlug#1",
+      "ordinal": 15,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.project.workItemDetailsBySlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "host": "github.enterprise.test",
+            "number": 1,
+            "owner": "owner",
+            "repo": "repo",
+            "type": "issue"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "details": {
+              "assignees": [],
+              "baseSha": "base-sha",
+              "body": "body",
+              "checks": [],
+              "comments": [],
+              "files": [],
+              "headSha": "head-sha",
+              "item": {
+                "labels": []
+              },
+              "pullRequestId": "PR_kwDO"
+            },
+            "ok": true
+          }
+        }
+      }
+    },
+    "b63d5911050c": {
+      "name": "projectRowDetailError",
+      "ordinal": 13,
+      "value": ""
+    },
+    "da1a7926872e": {
+      "name": "projectBodyDraft",
+      "ordinal": 2,
+      "value": ""
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "eec8081f6290": {
+      "name": "projectCommentDraft",
+      "ordinal": 3,
+      "value": ""
+    },
+    "f6a5085dd8e9": {
+      "name": "projectRowDetailLoading",
+      "ordinal": 14,
+      "value": true
+    },
+    "fdcd0ea3f000": {
+      "name": "prFileCommentDrafts",
+      "ordinal": 10,
+      "value": {}
+    }
+  },
+  "recording": {
+    "scenario": "tk-project-row-detail",
+    "checkpoints": [
+      {
+        "id": "mounted",
+        "observation": {
+          "sender": ["b4e65ea8b72c"],
+          "payloads": ["118d9662d37f"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "b2a01ad6d4fe",
+          "effects": [
+            "0216abb9c43b",
+            "da1a7926872e",
+            "eec8081f6290",
+            "9f0108368fff",
+            "742985d99709",
+            "4ad8bb2f6308",
+            "6545686833e4",
+            "0ad63b01155a",
+            "2e6edf535ef3",
+            "fdcd0ea3f000",
+            "0679b27a119b",
+            "2ee1c7329449",
+            "b63d5911050c",
+            "f6a5085dd8e9",
+            "1e161db29c89",
+            "561861a537bb"
+          ]
+        }
+      }
+    ]
+  }
+}

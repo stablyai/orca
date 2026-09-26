@@ -2,7 +2,11 @@ import { ipcRenderer } from 'electron'
 import type { GitHubCommentResult } from '../../shared/github/comment-types'
 import type { GitHubAssignableUser, GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GetRateLimitResult } from '../../shared/github/rate-limit-types'
-import type { GhAuthDiagnostic } from '../../shared/github/auth-types'
+import type {
+  GhAccountBindingInventory,
+  GhAccountBindingValidationResult,
+  GhAuthDiagnostic
+} from '../../shared/github/auth-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type {
   GetProjectViewTableResult,
@@ -155,6 +159,18 @@ export const ghMutationsAndProjectsApi = {
     ipcRenderer.invoke('gh:rateLimit', args),
   diagnoseAuth: (args?: { host?: string }): Promise<GhAuthDiagnostic> =>
     ipcRenderer.invoke('gh:diagnoseAuth', args),
+  listBindableAccounts: (args: {
+    repoPath: string
+    repoId?: string
+    refreshCapability?: boolean
+  }): Promise<GhAccountBindingInventory> => ipcRenderer.invoke('gh:listBindableAccounts', args),
+  validateAccountBinding: (args: {
+    repoPath: string
+    repoId?: string
+    host: string
+    user: string
+  }): Promise<GhAccountBindingValidationResult> =>
+    ipcRenderer.invoke('gh:validateAccountBinding', args),
   listAccessibleProjects: (
     args?: ListAccessibleProjectsArgs
   ): Promise<ListAccessibleProjectsResult> => ipcRenderer.invoke('gh:listAccessibleProjects', args),

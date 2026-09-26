@@ -1,5 +1,7 @@
 import type { RelayDatabase, SqlRow } from './database.js'
 import { REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS } from './database.js'
+import { rehomeSourceRegionAllowed } from './idle-regional-rehome-selection.js'
+import { REGIONAL_REHOME_ABORT_REPORT_WINDOW_MS } from './regional-rehome-abort-reason.js'
 import {
   REGIONAL_REHOME_CONCURRENT_LIMIT,
   REGION_DECISION_TTL_MS
@@ -13,6 +15,11 @@ export type RegionCorrectionPreview = {
   availableMigrationSlots: number
   globalSafetyFailure: string | null
   counts: Record<string, number>
+  // Rehomes rolled back to their source in the last day, by the reason the
+  // sweep recorded. A rising `host_not_arrived` is what a leak looks like
+  // before it fills the concurrency budget; `unattributed` covers the abort
+  // paths that settle an attempt without naming one.
+  abortedLast24Hours: Record<string, number>
 }
 
 export async function previewRegionalRehomeEligibility(input: {
@@ -21,11 +28,12 @@ export async function previewRegionalRehomeEligibility(input: {
   heartbeatTtlMs: number
   cohortPercent: number
   globalSafetyFailure: string | null
+  directorRegion?: string
   connectionHeadroom: ReadonlyMap<string, boolean>
   cellIsClean: (safety: SqlRow | undefined, runtime: SqlRow, now: number) => boolean
 }): Promise<RegionCorrectionPreview> {
   const { database, now } = input
-  const [hosts, cells, runtimeRows, capabilityRows, safetyRows, controls, migrations] =
+  const [hosts, cells, runtimeRows, capabilityRows, safetyRows, controls, migrations, aborts] =
     await Promise.all([
       database.query(
         `SELECT assignment.cell_id, assignment.assignment_epoch,
@@ -63,6 +71,12 @@ export async function previewRegionalRehomeEligibility(input: {
       database.query(`SELECT * FROM relay_region_rehome_control WHERE control_id = 'global'`),
       database.query(
         `SELECT COUNT(*) AS count FROM relay_assignment_migrations WHERE completed_at IS NULL AND aborted_at IS NULL`
+      ),
+      database.query(
+        `SELECT COALESCE(abort_reason, 'unattributed') AS reason, COUNT(*) AS count
+         FROM relay_region_rehome_attempts WHERE aborted_at >= ?
+         GROUP BY COALESCE(abort_reason, 'unattributed')`,
+        [now - REGIONAL_REHOME_ABORT_REPORT_WINDOW_MS]
       )
     ])
   const byCell = (rows: SqlRow[]) => new Map(rows.map((row) => [String(row.cell_id), row]))
@@ -121,6 +135,8 @@ export async function previewRegionalRehomeEligibility(input: {
       !input.cellIsClean(safety.get(String(host.cell_id)), runtimes.get(String(host.cell_id))!, now)
     )
       reason = 'source-unclean'
+    else if (!rehomeSourceRegionAllowed(String(source.region), input.directorRegion))
+      reason = 'source-outside-director-region'
     if (reason) {
       count(reason)
       continue
@@ -152,6 +168,9 @@ export async function previewRegionalRehomeEligibility(input: {
     openMigrations,
     availableMigrationSlots: Math.max(0, REGIONAL_REHOME_CONCURRENT_LIMIT - openMigrations),
     globalSafetyFailure: input.globalSafetyFailure,
-    counts
+    counts,
+    abortedLast24Hours: Object.fromEntries(
+      aborts.map((row) => [String(row.reason), Number(row.count)])
+    )
   }
 }

@@ -10,10 +10,10 @@ Real transcripts now exist. They were recorded from a live `agy` on macOS with
 `src/main/runtime/__fixtures__/`. `src/main/runtime/antigravity-readiness-transcripts.test.ts`
 replays them through the runtime.
 
-**Headline: on real output the current detector is inverted.** It refuses a genuinely ready screen
-and accepts a live model picker. The five attempts argued about which extra condition to add; none
-of them had noticed that the condition they all shared — a line beginning with the model name —
-never matches a real Antigravity ready screen at all.
+**Headline: the captured ready screen needs a bare-caret rule, and an active model picker must veto
+that stale caret.** The earlier detector refused the genuine ready screen and accepted a live model
+picker. The shipped attempt-six rule accepts the bare composer caret, while the active-picker guard
+keeps a retained caret from satisfying `tui-idle` until `/model` exits.
 
 ## Versions
 
@@ -68,19 +68,20 @@ painted **on the same physical lines as the logo**. What Orca derives is:
 ▄▀▀    ▀▀▄     ~
 ```
 
-The detector requires `normalized.startsWith('gemini', trimmedStart)` on a trimmed line. The
-trimmed line starts with `▀`. It never matches. Measured three ways on the real screen:
+The earlier detector required `normalized.startsWith('gemini', trimmedStart)` on a trimmed line. The
+trimmed line starts with `▀`, so that rule never matched. The shipped detector uses the bare
+composer caret instead. Measured three ways on the real screen:
 
 | Input                                                  | `isKnownReadyPromptPreview` |
 | ------------------------------------------------------ | --------------------------- |
-| Real ready screen                                      | `false`                     |
+| Real ready screen                                      | `true`                      |
 | The same screen with the logo glyphs stripped          | `true`                      |
-| Real ready screen followed by the live `/model` picker | `true`                      |
+| Real ready screen followed by the live `/model` picker | `false`                     |
 
-So the logo — decoration, and suppressible with `AGY_CLI_HIDE_LOGO` — is what decides readiness
-today, and the live dialog is what supplies the model line the ready screen could not.
+So the logo — decoration, and suppressible with `AGY_CLI_HIDE_LOGO` — no longer decides readiness,
+and the live dialog cannot reuse the stale composer caret as a ready signal.
 
-### 2. The dialog is what satisfies the model rule
+### 2. The dialog used to satisfy the model rule
 
 `/model` prints its options one per line:
 
@@ -91,9 +92,9 @@ Gemini 3.1 Pro
 ```
 
 Those lines _do_ begin with `Gemini`, and a bare `>` composer line sits earlier in the same tail
-from before the picker opened. Both halves of the rule are satisfied **while a dialog owns the
-screen**, and the pane reads ready. This is the false-ready hazard the last three attempts were
-each trying to close, reproduced from a real capture.
+from before the picker opened. Both halves of the old rule were satisfied **while a dialog owned the
+screen**, and the pane read ready. The shipped detector now recognizes the active `Switch Model`
+surface and rejects that stale caret until it sees `Exited /model command`.
 
 ### 3. `>` is the dialog selection marker, not only the composer caret
 
@@ -233,29 +234,32 @@ expressed against the model/caret positions, which is what 1.2 and 1.3b just inv
 | X4  | Banner-to-caret distance                                   | ~8 derived lines on a 120x40 PTY; the banner falls outside the 6-line preview window, so only the full retained tail can see it |
 | X5  | Pane title on the trust screen versus ready                | Identical: none                                                                                                                 |
 
-## Can attempt six be written?
+## Attempt six is shipped
 
 Yes — but not as a variation on any of the five. Every one of them refined a predicate over
 `\n`-delimited lines, and that is the layer where the evidence says the information is not.
 
-What the captures support:
+What the captures support and the shipped detector now does:
 
 - **The one stable, dialog-free ready marker is a line whose entire trimmed content is `>`.** It is
   present in every ready capture and absent from every dialog capture, because a dialog's `>` always
   carries its selected row's label. This is a much narrower rule than any attempt used, and it is
   the only one that survived contact with the transcripts.
-- **Drop the model-row requirement.** It matches dialogs and not ready screens. Keeping it inverted
-  the detector.
+- **Drop the model-row requirement.** The model rows match dialogs and not the ready screen, so
+  keeping that requirement inverted the detector.
 - **Do not require an account row.** It is optional by environment variable and carries no email for
   API-key users.
+- **Veto an active model picker.** `Switch Model` followed by a labeled selection row means the
+  bare caret belongs to the composer behind the picker; readiness resumes after `Exited /model
+  command`.
 - **Do not anchor on `headerIndex`.** The banner is printed once and never reprinted.
 - **The blocked-signal path already works** for the trust dialog: `antigravity-dialog-trust-workspace.txt`
   is correctly refused today, by wording, not by structure.
 
-What is still unknown and should be captured before shipping: the sign-in, theme, privacy and
-update dialogs, and any ready screen where the composer is not idle (accept-edits and plan mode,
-which PRs #15840 and #15852 describe from a screenshot). A bare-`>` rule is only as good as the
-claim that those modes still end on a bare `>`; that claim is untested.
+What is still unknown and should be captured: the sign-in, theme, privacy and update dialogs, and
+any ready screen where the composer is not idle (accept-edits and plan mode, which PRs #15840 and
+#15852 describe from a screenshot). A bare-`>` rule is only as good as the claim that those modes
+still end on a bare `>`; that claim is untested.
 
 The honest summary is that this is a screen-shaped problem being solved with line-shaped tools. A
 rule over the derived tail can be made much better than what ships today, but the durable fix is to

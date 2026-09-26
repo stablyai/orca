@@ -1,0 +1,93 @@
+{
+  "operation": "transport.host-status-gates",
+  "family": "transport.host-status-gates",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "34b382b13fe75e8ef4002325287c95b3c4db62eeaaf3762af7fbaf6f836c2fa1",
+  "scenarioSha256": "a7871b5f1d37b0156970858d5a7fcab3105de7a8a6bfe827299a36f2b2ba5548",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "905661513589": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "status_unavailable",
+            "message": "no status"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "df2c10616b5e": {
+      "appVersion": {
+        "$rpc": "null"
+      },
+      "capabilities": [],
+      "floatingWorkspace": false,
+      "pending": false,
+      "verdict": {
+        "kind": "ok"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "transport-host-status-gates-refused-degrades",
+    "checkpoints": [
+      {
+        "id": "gates-degraded",
+        "observation": {
+          "sender": ["905661513589"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "df2c10616b5e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

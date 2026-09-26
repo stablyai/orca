@@ -9,21 +9,55 @@ on:
       - ready_for_review
     paths:
       - 'mobile/**'
+      # Mobile launch contracts exercise the real host dispatcher and durable receipt store.
+      - 'src/main/agent-launch/**'
+      - 'src/main/runtime/rpc/**'
+      - 'src/main/runtime/runtime-rpc/**'
+      - 'src/main/runtime/runtime-rpc.ts'
+      - 'src/main/runtime/device-registry.ts'
+      - 'src/main/runtime/orca-runtime.ts'
+      - 'src/main/runtime/agent-session-*.ts'
+      - 'src/main/native-chat/agent-session-wire/**'
+      - 'src/shared/agent-launch-*.ts'
+      - 'src/shared/agent-session-*.ts'
+      - 'src/shared/new-workspace/worktree-create-collision.ts'
       # Why: the mobile terminal link parsers are conformance-tested against
       # these shared fixtures; desktop-side fixture edits must re-run this suite.
       - 'src/shared/terminal-file-link-conformance.ts'
+      # Why: mobile imports the negotiated capability names directly and records
+      # the whole capability read verbatim in its goldens, so a capability added
+      # desktop-side rewrites a mobile fixture and must re-run this suite.
+      - 'src/shared/protocol-version.ts'
+      # Why: mobile's rpc-params-contract.ts is a type-only re-export of the
+      # generated params catalog, and mobile/tsconfig.json includes **/*.ts. A
+      # schema edit anywhere under here changes mobile's types, so a desktop-only
+      # change can break mobile's typecheck with no other mobile signal.
+      - 'src/shared/rpc-contract/**'
       # Why: this job holds the only checks that load the Fastfile, so edits to
       # it or to the release workflow it guards must re-run them.
       - '.github/workflows/mobile.yml'
       - '.github/actions/install-node-dependencies/**'
       - '.github/workflows/mobile-ios-release.yml'
+  # Why main too: a behaviour-change branch legitimately pins its own last fenced commit, and that
+  # commit only stops being reachable when the branch squash-merges. The pull_request run cannot
+  # see that; this one is where the pin guard finds it.
+  push:
+    branches:
+      - main
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile.yml'
 
 concurrency:
-  group: mobile-${{ github.event.pull_request.number || github.ref }}
+  # Per commit on main, not per branch. GitHub cancels any PENDING run in a group when a new one
+  # queues, whatever `cancel-in-progress` says, so one shared main group drops the middle merge of
+  # three -- and a pin that breaks there is exactly what this workflow now checks for.
+  group: mobile-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
   verify:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     env:
@@ -62,6 +96,19 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
+      # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
+      # drifted. This fails when a test file that checks today stops checking, when a test leaves
+      # the program, and on @ts-nocheck; the baseline may only shrink.
+      - name: Typecheck tests (ratchet)
+        run: pnpm run check:tests-typecheck
+
+      # This includes the bridged replay of the whole recording corpus, which used to be a second
+      # step of its own behind RPC_FOUNDATION_BRIDGE=1. A gate nobody can forget to set is the point:
+      # it fails when a divergence class grows, when a divergence lands in no class at all, or when
+      # one of the 103 goldens inside the C1 page closure changes the verdict it is pinned to. It is
+      # ~3 min of test time on its own, and Vitest runs it on a worker beside the rest of the suite,
+      # so folding it in costs a fraction of that in wall time and one step less to skip.
       - name: Test
         run: pnpm test
 
@@ -87,3 +134,56 @@ jobs:
 
       - name: Check formatting
         run: pnpm format:check
+
+  recording-pin:
+    name: RPC recording pin
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # The ancestry verdict is read straight off history. On a shallow checkout
+          # `git merge-base --is-ancestor` answers from grafted parents, so the guard refuses to
+          # answer at all rather than reporting a pass it has no evidence for -- and the pinned tree
+          # below has to be checkable out.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Seconds. No `--ref`, so the pin is judged against the same tree it was read out of. On a
+      # pull request that is the merge preview, which already carries main's repins; judging the
+      # branch head instead fails every branch cut before the day's repin, and its instruction would
+      # tell the author to pin their own head -- creating the break this guard exists to catch. A
+      # branch that pins its own commit passes here and fails on the push after the squash, which is
+      # where the pin actually leaves the history.
+      - name: Check the recording pin is reachable
+        shell: bash
+        run: pnpm exec tsx scripts/rpc-recording-pin-guard.mts ancestry
+
+      # ~2 min locally for the record itself, so it is gated rather than run twice over. A pull
+      # request that moves none of the corpus, the manifest or the recorder cannot move this
+      # verdict away from the one the base commit already published, and `verify` replays the
+      # corpus against the branch tree in the meantime. A push to main has no `verify` job and is
+      # where a squash lands a spliced corpus, so there it always runs.
+      - name: Reproduce the corpus from the pinned tree
+        shell: bash
+        env:
+          PIN_GUARD_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$PIN_GUARD_BASE" ]; then
+            pnpm exec tsx scripts/rpc-recording-pin-guard.mts reproduce --if-changed-since "$PIN_GUARD_BASE"
+          else
+            pnpm exec tsx scripts/rpc-recording-pin-guard.mts reproduce
+          fi

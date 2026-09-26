@@ -3,17 +3,19 @@
   "family": "settings.bot-overrides",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
   "scenarioSha256": "eb80283956c93849778f23cbabf1dbf83b72744197af4f6f50335b2fc1590d87",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "090c88478661": {
-      "name": "settings.get#1",
+    "02740e15d2b5": {
+      "name": "settings.get#2",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -38,33 +40,9 @@
       }
     },
     "4f53cda18c2b": [],
-    "7ad8a0996352": {
-      "name": "settings.get#2",
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "7ca23c4c946b": {
+    "b0e514c7c334": {
       "name": "settings.get#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -102,15 +80,43 @@
         }
       }
     },
-    "7ddcb1852b39": {
+    "c8c77ac17e0a": {
       "name": "settings.get#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "8f6fe9452bda": {
+    "ca63426ad6cf": {
       "name": "settings.get#2",
+      "ordinal": 4,
       "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "d52c8e96e222": ["bot-user"],
+    "e3973bb12da1": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -126,8 +132,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.prelude:settings-pending",
         "observation": {
-          "sender": ["090c88478661"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["e3973bb12da1"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -138,8 +144,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.reset-before-1:lifecycle-boundary",
         "observation": {
-          "sender": ["090c88478661", "7ad8a0996352"],
-          "payloads": ["7ddcb1852b39", "8f6fe9452bda"],
+          "sender": ["e3973bb12da1", "02740e15d2b5"],
+          "payloads": ["c8c77ac17e0a", "ca63426ad6cf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-reset": "eb79a9b3682a"
@@ -151,8 +157,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.reset-before-1:settled",
         "observation": {
-          "sender": ["7ca23c4c946b", "7ad8a0996352"],
-          "payloads": ["7ddcb1852b39", "8f6fe9452bda"],
+          "sender": ["b0e514c7c334", "02740e15d2b5"],
+          "payloads": ["c8c77ac17e0a", "ca63426ad6cf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-reset": "eb79a9b3682a"
@@ -164,8 +170,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.reset-after-1:lifecycle-boundary",
         "observation": {
-          "sender": ["7ca23c4c946b", "7ad8a0996352"],
-          "payloads": ["7ddcb1852b39", "8f6fe9452bda"],
+          "sender": ["b0e514c7c334", "02740e15d2b5"],
+          "payloads": ["c8c77ac17e0a", "ca63426ad6cf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-reset": "eb79a9b3682a"
@@ -177,8 +183,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.reset-after-1:settled",
         "observation": {
-          "sender": ["7ca23c4c946b", "7ad8a0996352"],
-          "payloads": ["7ddcb1852b39", "8f6fe9452bda"],
+          "sender": ["b0e514c7c334", "02740e15d2b5"],
+          "payloads": ["c8c77ac17e0a", "ca63426ad6cf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-reset": "eb79a9b3682a"
@@ -190,8 +196,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.unmount-before-1:lifecycle-boundary",
         "observation": {
-          "sender": ["090c88478661"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["e3973bb12da1"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-unmount": "eb79a9b3682a"
@@ -203,8 +209,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.unmount-before-1:settled",
         "observation": {
-          "sender": ["7ca23c4c946b"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["b0e514c7c334"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-unmount": "eb79a9b3682a"
@@ -216,8 +222,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.unmount-before-1:remounted",
         "observation": {
-          "sender": ["7ca23c4c946b", "7ad8a0996352"],
-          "payloads": ["7ddcb1852b39", "8f6fe9452bda"],
+          "sender": ["b0e514c7c334", "02740e15d2b5"],
+          "payloads": ["c8c77ac17e0a", "ca63426ad6cf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-unmount": "eb79a9b3682a",
@@ -230,8 +236,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.unmount-after-1:lifecycle-boundary",
         "observation": {
-          "sender": ["7ca23c4c946b"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["b0e514c7c334"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-unmount": "eb79a9b3682a"
@@ -243,8 +249,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.unmount-after-1:settled",
         "observation": {
-          "sender": ["7ca23c4c946b"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["b0e514c7c334"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-unmount": "eb79a9b3682a"
@@ -256,8 +262,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.unmount-after-1:remounted",
         "observation": {
-          "sender": ["7ca23c4c946b", "7ad8a0996352"],
-          "payloads": ["7ddcb1852b39", "8f6fe9452bda"],
+          "sender": ["b0e514c7c334", "02740e15d2b5"],
+          "payloads": ["c8c77ac17e0a", "ca63426ad6cf"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-unmount": "eb79a9b3682a",
@@ -270,8 +276,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.blur-before-1:lifecycle-boundary",
         "observation": {
-          "sender": ["090c88478661"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["e3973bb12da1"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-blur": "eb79a9b3682a"
@@ -283,8 +289,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.blur-before-1:settled",
         "observation": {
-          "sender": ["7ca23c4c946b"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["b0e514c7c334"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-blur": "eb79a9b3682a"
@@ -296,8 +302,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.blur-after-1:lifecycle-boundary",
         "observation": {
-          "sender": ["7ca23c4c946b"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["b0e514c7c334"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-blur": "eb79a9b3682a"
@@ -309,8 +315,8 @@
       {
         "id": "settings-bot-overrides-fulfilled.blur-after-1:settled",
         "observation": {
-          "sender": ["7ca23c4c946b"],
-          "payloads": ["7ddcb1852b39"],
+          "sender": ["b0e514c7c334"],
+          "payloads": ["c8c77ac17e0a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "lifecycle-blur": "eb79a9b3682a"

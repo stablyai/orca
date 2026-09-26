@@ -131,12 +131,22 @@ async function flushSessionBeforeQuit(
       () =>
         page.evaluate(
           async ({ targetId, worktreeId, tabIds }) => {
-            const persisted = await window.api.session.get()
+            // Why both partitions: an SSH worktree's rows live in `ssh:<targetId>` and only globals
+            // like `activeConnectionIdsAtShutdown` stay in `local`. Reading `session.get()` alone
+            // asserts the partition layout rather than the invariant, which is that the state is
+            // persisted where the boot read will find it.
+            const [local, host] = await Promise.all([
+              window.api.session.get(),
+              window.api.session.get(`ssh:${targetId}`)
+            ])
             const persistedIds = new Set(
-              (persisted.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+              [
+                ...(local.tabsByWorktree[worktreeId] ?? []),
+                ...(host.tabsByWorktree[worktreeId] ?? [])
+              ].map((tab) => tab.id)
             )
             return (
-              persisted.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
+              local.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
               tabIds.every((tabId) => persistedIds.has(tabId))
             )
           },

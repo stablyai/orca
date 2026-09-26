@@ -48,6 +48,7 @@ export type CreateNativeChatPtySessionOptionsArgs = {
   fallbackScopeKey?: string
   initialModels?: readonly CatalogModel[]
   mode: NativeChatSessionOptionMode
+  canSwitchOmpModel?: boolean
   reportedValues?: Record<string, SessionOptionValue> | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
@@ -58,10 +59,14 @@ export type CreateNativeChatPtySessionOptionsArgs = {
 export function createNativeChatPtySessionOptions(
   args: CreateNativeChatPtySessionOptionsArgs
 ): NativeChatPtySessionOptionsSurface | null {
-  const catalog = getAgentSessionOptionCatalog(args.agent)
-  if (!catalog) {
+  const baseCatalog = getAgentSessionOptionCatalog(args.agent)
+  if (!baseCatalog) {
     return null
   }
+  const catalog =
+    args.agent === 'omp' && args.mode === 'live' && !args.canSwitchOmpModel
+      ? { ...baseCatalog, modelApply: { ...baseCatalog.modelApply, midSession: undefined } }
+      : baseCatalog
   let models = [...(args.initialModels ?? catalog.models)]
   // The enrichment cache only ever holds probe output, so being handed a list at all
   // means `isDefault` below names the account's real default rather than the seed guess.

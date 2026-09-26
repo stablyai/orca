@@ -1,0 +1,161 @@
+{
+  "operation": "notifications.push-dismissal",
+  "family": "notifications.push-dismissal",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "595a3eb2994d0596b9fcd0707b175b4e978625053dfbc5c541b0350c0cbfb524",
+  "scenarioSha256": "318fab8c1efb1786bbdaea7f13b769952c1ce463bc5504dca6a9f545e905b7c9",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "4d602d4523e5": {
+      "name": "notifications.getMissedSince#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"notifications.getMissedSince\",\"params\":{\"lastSeenSeq\":9007199254740991,\"deliveredPushes\":[{\"notificationId\":\"note-1\",\"notificationEpoch\":\"epoch-1\",\"notificationSeq\":7}]}}"
+    },
+    "6cfa895b17c4": {
+      "name": "notification-tray.dismiss",
+      "ordinal": 4,
+      "value": {
+        "identifier": "tray-1"
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "aaf972690a35": {
+      "name": "notifications.getMissedSince#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "c44044f16dbc": {
+      "name": "notifications.getMissedSince#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "notifications.getMissedSince"
+        },
+        {
+          "name": "params",
+          "value": {
+            "deliveredPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ],
+            "lastSeenSeq": 9007199254740991
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "dismissedPushes": [
+              {
+                "notificationEpoch": "epoch-1",
+                "notificationId": "note-1",
+                "notificationSeq": 7
+              }
+            ]
+          }
+        }
+      }
+    },
+    "cf9c28129225": {
+      "disposed": false
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fa03fdca3d1d": {
+      "name": "device-store.setItem",
+      "ordinal": 3,
+      "value": {
+        "key": "orca:pushDismissalWatermarks:v1",
+        "value": "[{\"key\":\"[\\\"Yw3NKWbEM2aRElRI\\\",\\\"epoch-1\\\",\\\"note-1\\\"]\",\"seq\":7,\"expiresAt\":1767312000000}]"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "push-dismissal-tray-reconciled",
+    "checkpoints": [
+      {
+        "id": "requested",
+        "observation": {
+          "sender": ["aaf972690a35"],
+          "payloads": ["4d602d4523e5"],
+          "settlements": {
+            "catchup": "9270aeb7d9c6"
+          },
+          "state": "cf9c28129225",
+          "effects": []
+        }
+      },
+      {
+        "id": "reconciled",
+        "observation": {
+          "sender": ["c44044f16dbc"],
+          "payloads": ["4d602d4523e5"],
+          "settlements": {
+            "catchup": "eb79a9b3682a"
+          },
+          "state": "cf9c28129225",
+          "effects": ["fa03fdca3d1d", "6cfa895b17c4"]
+        }
+      }
+    ]
+  }
+}

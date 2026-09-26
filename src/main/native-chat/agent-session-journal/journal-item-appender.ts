@@ -5,10 +5,8 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalReducerState } from './journal-reducer'
-import type { JournalAppendResult } from './journal-store-contracts'
+import type { JournalAppendResult, JournalItemAppendOptions } from './journal-store-contracts'
 import type { JournalRow } from './journal-row-schema'
-
-type ItemAppendOptions = { fence: number; observedAt?: number; recovered?: true }
 
 export class JournalItemAppender {
   constructor(
@@ -21,7 +19,7 @@ export class JournalItemAppender {
   append(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    options: ItemAppendOptions
+    options: JournalItemAppendOptions
   ): Promise<JournalAppendResult> {
     const itemId = agentJournalItemKey(identity)
     return this.deps

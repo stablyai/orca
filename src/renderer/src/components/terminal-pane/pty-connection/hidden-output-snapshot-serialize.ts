@@ -3,6 +3,7 @@ import { onTerminalScrollIntentFollowOutput } from '@/lib/pane-manager/terminal-
 
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
 import { readE2eHiddenSnapshotOverride } from './e2e-terminal-pty-harness'
+import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { PtyBufferSnapshot } from '../pty-transport'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -13,6 +14,18 @@ export type HiddenOutputSnapshotResult =
   | { kind: 'permanently-unavailable' }
   | { kind: 'unknown-legacy-host' }
   | { kind: 'unavailable' }
+
+/** Why 'host': on a modern remote transport the only reject is the request timeout — the frame went out and the host stayed silent. Elsewhere local main answered nothing. */
+export function classifyHiddenOutputSnapshotReject(
+  session: ConnectPanePtySession,
+  ptyId: string
+): HiddenOutputSnapshotResult {
+  return !isRemoteRuntimePtyId(ptyId) ||
+    session.hiddenOutputRestoreLegacyPtyId === ptyId ||
+    typeof session.transport.serializeBufferOutcome !== 'function'
+    ? { kind: 'unavailable' }
+    : { kind: 'retry-worthy', source: 'host' }
+}
 
 export function bindSerializeHiddenOutputSnapshot(session: ConnectPanePtySession): void {
   session.serializeHiddenOutputSnapshot = async function (

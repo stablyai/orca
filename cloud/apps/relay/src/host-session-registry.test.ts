@@ -12,6 +12,12 @@ import type WebSocket from 'ws'
 import type { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credential-store.js'
+import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from './control-renewal-batch.js'
+import {
+  CONTROL_RENEWAL_STATEMENT_OUTCOMES,
+  type ControlRenewalOutcome,
+  type ControlRenewalRequest
+} from './control-renewal-statement.js'
 import { HostSessionRegistry, type HostSession } from './host-session-registry.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { RelayRuntimeObserver } from './relay-observability.js'
@@ -22,6 +28,12 @@ import {
 } from './regional-rehome-trust-probe.js'
 import type { RelayTokenClaims } from './relay-token-verifier.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
+
+// A due renewal leaves the heartbeat as a batch enqueue, so the store only sees
+// the tick once the batch window closes.
+async function closeRenewalWindow(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(CONTROL_RENEWAL_BATCH_INTERVAL_MS)
+}
 
 class FakeSocket extends EventEmitter {
   readonly OPEN = 1
@@ -109,6 +121,7 @@ function createRegistry(
   activate: ActivateSession
   acquireActivity: ReturnType<typeof vi.fn>
   renewControlActivity: ReturnType<typeof vi.fn>
+  renewControlActivities: ReturnType<typeof vi.fn>
   releaseActivity: ReturnType<typeof vi.fn>
   observer: {
     recordAuth: ReturnType<typeof vi.fn>
@@ -119,12 +132,38 @@ function createRegistry(
   const acquireActivity = vi.fn().mockResolvedValue(undefined)
   const renewControlActivity = vi.fn().mockResolvedValue(undefined)
   const releaseActivity = vi.fn().mockResolvedValue(true)
+  // Mirrors the store's own batch semantics over the single-renewal mock: a known
+  // outcome becomes that row's verdict, and any other failure reaches the caller
+  // as the driver's error. Keeps every per-call expectation below aimed at the
+  // renewal a session actually asked for.
+  const renewControlActivities = vi.fn(
+    async (rows: readonly ControlRenewalRequest[]): Promise<ControlRenewalOutcome[]> =>
+      await Promise.all(
+        rows.map(async (row): Promise<ControlRenewalOutcome> => {
+          try {
+            await renewControlActivity(row.identity, {
+              activityId: row.activityId,
+              cellId: row.cellId,
+              expiresAt: row.expiresAt
+            })
+            return 'renewed'
+          } catch (error) {
+            const message = String((error as { message?: unknown }).message)
+            if (!CONTROL_RENEWAL_STATEMENT_OUTCOMES.has(message as ControlRenewalOutcome)) {
+              throw error
+            }
+            return message as ControlRenewalOutcome
+          }
+        })
+      )
+  )
   const assignments = {
     activateControl,
     markMigrationTargetRegistered: vi.fn().mockResolvedValue(undefined),
     resolve: vi.fn().mockResolvedValue({ cellId: config.cellId }),
     acquireActivity,
     renewControlActivity,
+    renewControlActivities,
     releaseActivity
   } as unknown as RelayAssignmentStore
   const observer = {
@@ -176,6 +215,7 @@ function createRegistry(
     activate,
     acquireActivity,
     renewControlActivity,
+    renewControlActivities,
     releaseActivity,
     observer
   }
@@ -336,15 +376,15 @@ describe('host session cleanup races', () => {
     session.activeSplices.set('conn-a', () => session.activeSplices.delete('conn-a'))
 
     // POST /v1/admin/drain has no idempotency guard, and SIGTERM then SIGINT both
-    // reach drain(), so a second teardown can be scheduled for the same session.
+    // reach drain(), so a retry re-sends to every session. It must re-arm the pending
+    // teardown rather than stack a second one: across a paced cell that is 800 orphaned
+    // timers per retry, each one holding the loop open for the rest of the window.
     registry.drain(0)
     const scheduled = vi.getTimerCount()
     registry.drain(0)
-    // Pin the premise: if drain ever gains an idempotency guard, the retry schedules no
-    // second teardown and the assertion below stops defending the write-once snapshot
-    // while still passing. Compare against the count before the retry rather than an
-    // absolute, since the session's heartbeat interval is also pending.
-    expect(vi.getTimerCount()).toBe(scheduled + 1)
+    // Compare against the count before the retry rather than an absolute, since the
+    // session's heartbeat interval is also pending.
+    expect(vi.getTimerCount()).toBe(scheduled)
     vi.advanceTimersByTime(1)
 
     // Asserting registry state, not the log line: FakeSocket closes synchronously, so
@@ -689,7 +729,8 @@ describe('host session cleanup races', () => {
     expect(original).not.toBeNull()
 
     await activate(new FakeSocket() as unknown as WebSocket, identity, original, 2, false, 1)
-    vi.advanceTimersByTime(15_000)
+    await vi.advanceTimersByTimeAsync(15_000)
+    await closeRenewalWindow()
 
     expect(renewControlActivity).toHaveBeenCalledOnce()
     expect(renewControlActivity).toHaveBeenCalledWith(
@@ -715,6 +756,7 @@ describe('host session cleanup races', () => {
       })
     )
     await vi.advanceTimersByTimeAsync(15_000)
+    await closeRenewalWindow()
     const replacement = new FakeSocket()
     await h.activate(replacement as unknown as WebSocket, identity, session, 1, true, 1)
     reject(new Error('activity_cell_not_authoritative'))
@@ -737,6 +779,7 @@ describe('host session cleanup races', () => {
       })
     )
     await vi.advanceTimersByTimeAsync(15_000)
+    await closeRenewalWindow()
     h.registry.drainHost({
       attemptId: 'attempt',
       userId: identity.sub,
@@ -762,6 +805,7 @@ describe('host session cleanup races', () => {
     for (let interval = 0; interval < 4; interval++) {
       await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
       socket.emit('message', Buffer.from(JSON.stringify({ type: 'pong' })), false)
+      await closeRenewalWindow()
     }
 
     const pings = socket.send.mock.calls.filter((call) => String(call[0]).includes('"ping"'))
@@ -791,8 +835,10 @@ describe('host session cleanup races', () => {
     try {
       await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
       await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+      await closeRenewalWindow()
       expect(renewControlActivity).toHaveBeenCalledOnce()
       await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+      await closeRenewalWindow()
       expect(renewControlActivity).toHaveBeenCalledTimes(2)
     } finally {
       warn.mockRestore()
@@ -812,6 +858,7 @@ describe('host session cleanup races', () => {
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2)
+    await closeRenewalWindow()
 
     expect(renewControlActivity).toHaveBeenCalledTimes(2)
     stalled.resolve(undefined)
@@ -831,13 +878,16 @@ describe('host session cleanup races', () => {
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2)
+    await closeRenewalWindow()
     expect(renewControlActivity).toHaveBeenCalledTimes(2)
     stalled.resolve(undefined)
     await vi.advanceTimersByTimeAsync(0)
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+    await closeRenewalWindow()
 
     expect(renewControlActivity).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+    await closeRenewalWindow()
 
     expect(renewControlActivity).toHaveBeenCalledTimes(3)
     registry.drain(0)
@@ -855,6 +905,7 @@ describe('host session cleanup races', () => {
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+    await closeRenewalWindow()
 
     expect(acquireActivity).toHaveBeenCalledWith(
       { userId: identity.sub, relayHostId: identity.relayHostId },
@@ -880,6 +931,7 @@ describe('host session cleanup races', () => {
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+    await closeRenewalWindow()
 
     expect(acquireActivity).not.toHaveBeenCalled()
     expect(socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'control activity moved')
@@ -899,6 +951,7 @@ describe('host session cleanup races', () => {
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+    await closeRenewalWindow()
 
     expect(socket.close).toHaveBeenCalledWith(
       RELAY_CLOSE_CODE.DRAINING,
@@ -918,6 +971,7 @@ describe('host session cleanup races', () => {
     await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
 
     await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+    await closeRenewalWindow()
 
     expect(socket.close).toHaveBeenCalledWith(
       RELAY_CLOSE_CODE.DRAINING,
@@ -939,6 +993,7 @@ describe('host session cleanup races', () => {
     for (let interval = 0; interval < 3; interval++) {
       await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
       socket.emit('message', Buffer.from(JSON.stringify({ type: 'pong' })), false)
+      await closeRenewalWindow()
     }
 
     expect(renewControlActivity).toHaveBeenCalledTimes(2)
@@ -966,6 +1021,7 @@ describe('control renewal cadence across a rebind', () => {
     const beat = async (target: FakeSocket): Promise<void> => {
       await vi.advanceTimersByTimeAsync(ping)
       target.emit('message', Buffer.from(JSON.stringify({ type: 'pong' })), false)
+      await closeRenewalWindow()
     }
 
     // Age the session so its attempt counter is well above zero.
@@ -988,6 +1044,57 @@ describe('control renewal cadence across a rebind', () => {
     for (let tick = 0; tick < 4; tick++) await beat(rebindSocket)
     expect(renewControlActivity.mock.calls.length - before).toBe(2)
 
+    registry.drain(0)
+    vi.advanceTimersByTime(0)
+  })
+})
+
+describe('control renewals shared by one batch', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  it('renews two due hosts in one call and leaves a stale one alone', async () => {
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValueOnce('control:production-gce-c3:1')
+      .mockResolvedValueOnce('control:production-gce-c3:1')
+    const { registry, activate, renewControlActivities } = createRegistry(activateControl)
+    const other = { ...identity, sub: 'user-2', relayHostId: 'ponmlkjihgfedcba' }
+    const staleSocket = new FakeSocket()
+    const liveSocket = new FakeSocket()
+    await activate(staleSocket as unknown as WebSocket, identity, null, 1, false, 1)
+    await activate(liveSocket as unknown as WebSocket, other, null, 1, false, 1)
+    const stale = registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+    const live = registry.get({ userId: other.sub, relayHostId: other.relayHostId })!
+
+    // Both come due inside the same window, and one socket goes away while the
+    // statement is still in PostgreSQL.
+    let release!: () => void
+    renewControlActivities.mockImplementationOnce(
+      async (rows: readonly ControlRenewalRequest[]) => {
+        staleSocket.close()
+        await new Promise<void>((resolve) => (release = resolve))
+        return rows.map((): ControlRenewalOutcome => 'renewed')
+      }
+    )
+    await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+    const staleDueAt = stale.activityRenewalDueAt
+    await closeRenewalWindow()
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(renewControlActivities).toHaveBeenCalledOnce()
+    expect(
+      renewControlActivities.mock.calls[0]![0].map(
+        (row: ControlRenewalRequest) => row.identity.relayHostId
+      )
+    ).toEqual([identity.relayHostId, other.relayHostId])
+    expect(live.activityRenewalCompletedAttempt).toBe(1)
+    expect(stale.activityRenewalCompletedAttempt).toBe(0)
+    expect(stale.activityRenewalDueAt).toBe(staleDueAt)
     registry.drain(0)
     vi.advanceTimersByTime(0)
   })
@@ -1019,6 +1126,7 @@ describe('control lease recovery after the session is gone', () => {
         new Promise<void>((_resolve, reject) => (failRenewal = reject))
       )
       await vi.advanceTimersByTimeAsync(RELAY_PROTOCOL_LIMITS.controlPingIntervalMs)
+      await closeRenewalWindow()
       expect(renewControlActivity).toHaveBeenCalledOnce()
 
       const newer = new FakeSocket()
@@ -1694,5 +1802,126 @@ describe('host data attach owner lookup', () => {
     expect(h.owner.pendingConns.has(CONN_ID)).toBe(false)
     expect(duplicate.pendingConns.has(CONN_ID)).toBe(true)
     expect(h.owner.activeConnIds.size).toBe(0)
+  })
+})
+
+describe('paced drain', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  async function connectHosts(count: number): Promise<{
+    registry: HostSessionRegistry
+    sockets: FakeSocket[]
+  }> {
+    const activateControl = vi
+      .fn<RelayAssignmentStore['activateControl']>()
+      .mockResolvedValue('control:production-gce-c3:1')
+    const { registry, activate } = createRegistry(activateControl)
+    const sockets: FakeSocket[] = []
+    for (let index = 0; index < count; index += 1) {
+      const socket = new FakeSocket()
+      sockets.push(socket)
+      await activate(
+        socket as unknown as WebSocket,
+        { ...identity, sub: `user-${index}` },
+        null,
+        1,
+        false,
+        1
+      )
+      socket.send.mockClear()
+    }
+    return { registry, sockets }
+  }
+
+  function drainsSent(sockets: FakeSocket[]): number {
+    return sockets.filter((socket) =>
+      socket.send.mock.calls.some(([payload]) => String(payload).includes('"type":"drain"'))
+    ).length
+  }
+
+  it('sends every drain at once when no window is given', async () => {
+    const { registry, sockets } = await connectHosts(4)
+    registry.drain(0)
+    expect(drainsSent(sockets)).toBe(4)
+  })
+
+  // Windows here stay under the 75s control-silence watchdog, which would otherwise close
+  // a test socket that never heartbeats before its paced send is due.
+  it('spreads the sends evenly across the window', async () => {
+    const { registry, sockets } = await connectHosts(5)
+    registry.drain(0, { paceWindowMs: 40_000 })
+    // The first host is sent synchronously; the last lands on the window's closing edge.
+    expect(drainsSent(sockets)).toBe(1)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(drainsSent(sockets)).toBe(2)
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(drainsSent(sockets)).toBe(4)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(drainsSent(sockets)).toBe(5)
+  })
+
+  it('fences admission for every session before the first paced send lands', async () => {
+    const { registry, sockets } = await connectHosts(3)
+    registry.drain(0, { paceWindowMs: 40_000 })
+    expect(registry.isDraining()).toBe(true)
+    // A host whose drain has not been sent yet must already be non-authoritative.
+    const socket = new FakeSocket()
+    registry.acceptControl(socket as unknown as WebSocket, { ...identity, sub: 'user-late' })
+    expect(socket.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.DRAINING, 'relay draining')
+    expect(drainsSent(sockets)).toBe(1)
+  })
+
+  it('gives each host its own grace after its own send, not after the call', async () => {
+    const { registry, sockets } = await connectHosts(2)
+    registry.drain(10_000, { paceWindowMs: 40_000 })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(sockets[0]!.readyState).toBe(sockets[0]!.CLOSED)
+    expect(sockets[1]!.readyState).toBe(sockets[1]!.OPEN)
+    // Its own send at 40s plus its own 10s grace, not 10s from the drain call.
+    await vi.advanceTimersByTimeAsync(39_999)
+    expect(sockets[1]!.readyState).toBe(sockets[1]!.OPEN)
+    await vi.advanceTimersByTimeAsync(10_001)
+    expect(sockets[1]!.readyState).toBe(sockets[1]!.CLOSED)
+  })
+
+  it('leaves no timer behind once an emergency drain cuts a window short', async () => {
+    const { registry } = await connectHosts(4)
+    registry.drain(0, { paceWindowMs: 40_000 })
+    registry.drain(0)
+    await vi.advanceTimersByTimeAsync(0)
+    // Every session is closed, so anything still pending is an orphan of the cut window.
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps the first teardown snapshot when a regional drain fires before the fleet one', async () => {
+    const { registry, sockets } = await connectHosts(1)
+    const session = registry.get({ userId: 'user-0', relayHostId: identity.relayHostId })!
+    session.activeSplices.set('conn-a', () => session.activeSplices.delete('conn-a'))
+    registry.drainHost({
+      attemptId: 'attempt',
+      userId: 'user-0',
+      relayHostId: identity.relayHostId,
+      sourceAssignmentEpoch: 1,
+      graceMs: 0
+    })
+    registry.drain(10)
+    await vi.advanceTimersByTimeAsync(11)
+    expect(session.closingCounts).toEqual({ splices: 1, pending: 0 })
+    expect(sockets[0]!.readyState).toBe(sockets[0]!.CLOSED)
+  })
+
+  it('lets an emergency drain supersede the sends still queued by a paced one', async () => {
+    const { registry, sockets } = await connectHosts(4)
+    registry.drain(0, { paceWindowMs: 40_000 })
+    expect(drainsSent(sockets)).toBe(1)
+    registry.drain(0)
+    expect(drainsSent(sockets)).toBe(4)
+    const sendsAfterEmergency = sockets.map((socket) => socket.send.mock.calls.length)
+    await vi.advanceTimersByTimeAsync(40_000)
+    expect(sockets.map((socket) => socket.send.mock.calls.length)).toEqual(sendsAfterEmergency)
   })
 })

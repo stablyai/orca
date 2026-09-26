@@ -52,7 +52,6 @@ src/main/browser/agent-browser-bridge-state.ts
 src/main/browser/agent-browser-bridge-types.ts
 src/main/browser/browser-route-egress-electron-launch.ts
 src/main/browser/browser-route-persisted-worker-electron-process.ts
-src/main/claude-accounts/keychain.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
@@ -91,14 +90,12 @@ src/main/github/gh-utils.ts
 src/main/hooks.ts
 src/main/ipc/app.ts
 src/main/ipc/developer-permissions.ts
-src/main/ipc/filesystem-list-files-git-fallback.ts
 src/main/ipc/filesystem-list-files.ts
 src/main/ipc/filesystem-watcher-wsl.ts
 src/main/ipc/filesystem/filesystem-handler-context.ts
 src/main/ipc/filesystem/filesystem-search-handlers.ts
 src/main/ipc/local-network-connection-test.ts
 src/main/ipc/macos-keyboard-layout-snapshot.ts
-src/main/ipc/notebook.ts
 src/main/ipc/notification-authorization-status.ts
 src/main/ipc/parcel-watcher-cancellation-restart.ts
 src/main/ipc/parcel-watcher-cancellation-tracker.ts
@@ -116,8 +113,8 @@ src/main/ipc/preflight-command-exec.ts
 src/main/ipc/repos/repo-clone-lifecycle.ts
 src/main/ipc/worktree-apfs-clone.ts
 src/main/ipc/wsl-watcher-process-exit.ts
-src/main/linux-lid-sleep-assertion.ts
 src/main/local-builds/local-build-candidate.ts
+src/main/macos-keychain/generic-password.ts
 src/main/macos-system-sleep-assertion.ts
 src/main/macos-tcc-prompt-watch.ts
 src/main/memory/collector.ts
@@ -133,7 +130,6 @@ src/main/providers/process-cwd.ts
 src/main/providers/windows-console-attached-processes.ts
 src/main/pty-descendant-termination.ts
 src/main/pty/posix-pty-foreground-group.ts
-src/main/pty/posix-pty-process-groups.ts
 src/main/pty/windows-environment-path.ts
 src/main/rate-limits/codex-fetcher.ts
 src/main/rate-limits/gemini-cli-oauth-extractor.ts

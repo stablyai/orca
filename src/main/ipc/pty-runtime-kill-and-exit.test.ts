@@ -294,10 +294,11 @@ describe('registerPtyHandlers', () => {
       [['pty:exit', { id: 'local-pty', code: 0 }]]
     )
   })
-  it('ignores a late provider exit after synthesizing kill exit', async () => {
+  it('reconciles a late provider exit without repeating the synthetic renderer exit', async () => {
     const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
     const runtime = {
       setPtyController: vi.fn(),
+      markPtyStopRequested: vi.fn(),
       onPtyExit: vi.fn()
     }
     setLocalPtyProvider({
@@ -333,8 +334,12 @@ describe('registerPtyHandlers', () => {
       listener({ id: 'local-pty', code: 0 })
     }
 
-    expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', -1, undefined)
+    expect(runtime.onPtyExit).toHaveBeenCalledTimes(2)
+    expect(runtime.onPtyExit).toHaveBeenNthCalledWith(1, 'local-pty', -1, undefined)
+    expect(runtime.onPtyExit).toHaveBeenNthCalledWith(2, 'local-pty', 0, undefined, {
+      providerExitObserved: true
+    })
+    expect(runtime.markPtyStopRequested).toHaveBeenCalledTimes(2)
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
       [['pty:exit', { id: 'local-pty', code: -1 }]]
     )

@@ -5,6 +5,7 @@ import { getRepoIdFromWorktreeId } from './worktree/id'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from './terminal-scrollback-limits'
 import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from './utf8-byte-limits'
 import { parseExecutionHostId } from './execution-host'
+import { ownRetainedString } from './own-retained-string'
 
 export type RepoConnection = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 
@@ -34,6 +35,10 @@ function shouldPreserveTerminalScrollbackBuffersForRepoMap(
     // Why: when the repo catalog is not hydrated, treating the worktree as
     // remote avoids losing the only scrollback source a relay/runtime terminal
     // may have.
+    // Why this direction is local to this decision: worktree-runtime-owner.ts resolves the same
+    // unhydrated catalog to 'local'. Safe there (nothing is destroyed), data loss here. "Fail
+    // open" names a direction per decision, never a house style — do not pattern-match it across
+    // the two.
     return true
   }
   return false
@@ -53,7 +58,9 @@ export function capTerminalScrollbackSessionBuffer(buffer: string): string {
   if (isUtf8ByteLengthWithinLimit(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)) {
     return buffer
   }
-  return clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text
+  return ownRetainedString(
+    clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text
+  )
 }
 
 function capTerminalScrollbackLeafBuffers(buffers: Record<string, string> | undefined): {
@@ -73,6 +80,12 @@ function capTerminalScrollbackLeafBuffers(buffers: Record<string, string> | unde
   return { buffers: Object.keys(capped).length > 0 ? capped : undefined, changed }
 }
 
+/** Both homes a tab's scrollback can persist in; every one must pass through the cap below. */
+export const TERMINAL_SCROLLBACK_SESSION_HOMES = [
+  'terminalLayoutsByTabId',
+  'localOnlyScrollbackByTabId'
+] as const satisfies readonly (keyof WorkspaceSessionState)[]
+
 export function pruneLocalTerminalScrollbackBuffers(
   session: WorkspaceSessionState,
   repos: readonly RepoConnection[]
@@ -80,12 +93,7 @@ export function pruneLocalTerminalScrollbackBuffers(
   let repoById: Map<string, RepoConnection> | null = null
   let worktreeIdByTabId: Map<string, string> | null = null
   const tabsByWorktree = session.tabsByWorktree ?? {}
-  const terminalLayoutsByTabIdForRead = session.terminalLayoutsByTabId ?? {}
-  let terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
-  for (const [tabId, layout] of Object.entries(terminalLayoutsByTabIdForRead)) {
-    if (!layout.buffersByLeafId && !layout.scrollbackRefsByLeafId) {
-      continue
-    }
+  const preservesScrollback = (tabId: string): boolean => {
     repoById ??= new Map(repos.map((repo) => [repo.id, repo] as const))
     if (!worktreeIdByTabId) {
       worktreeIdByTabId = new Map()
@@ -95,8 +103,16 @@ export function pruneLocalTerminalScrollbackBuffers(
         }
       }
     }
-    const worktreeId = worktreeIdByTabId.get(tabId)
-    if (shouldPreserveTerminalScrollbackBuffersForRepoMap(worktreeId, repoById)) {
+    return shouldPreserveTerminalScrollbackBuffersForRepoMap(worktreeIdByTabId.get(tabId), repoById)
+  }
+
+  const terminalLayoutsByTabIdForRead = session.terminalLayoutsByTabId ?? {}
+  let terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
+  for (const [tabId, layout] of Object.entries(terminalLayoutsByTabIdForRead)) {
+    if (!layout.buffersByLeafId && !layout.scrollbackRefsByLeafId) {
+      continue
+    }
+    if (preservesScrollback(tabId)) {
       const capped = capTerminalScrollbackLeafBuffers(layout.buffersByLeafId)
       if (capped.changed) {
         terminalLayoutsByTabId ??= { ...terminalLayoutsByTabIdForRead }
@@ -112,7 +128,26 @@ export function pruneLocalTerminalScrollbackBuffers(
     terminalLayoutsByTabId[tabId] = layoutWithoutBuffers
   }
 
-  if (!terminalLayoutsByTabId) {
+  // The local-only home gets the same classification and cap; it is never externalized to refs,
+  // so an uncapped entry here would sit inline in every persisted write.
+  const localOnlyForRead = session.localOnlyScrollbackByTabId
+  let localOnlyScrollbackByTabId: Record<string, Record<string, string>> | null = null
+  for (const [tabId, buffers] of Object.entries(localOnlyForRead ?? {})) {
+    const capped = preservesScrollback(tabId)
+      ? capTerminalScrollbackLeafBuffers(buffers)
+      : { buffers: undefined, changed: true }
+    if (!capped.changed) {
+      continue
+    }
+    localOnlyScrollbackByTabId ??= { ...localOnlyForRead }
+    if (capped.buffers) {
+      localOnlyScrollbackByTabId[tabId] = capped.buffers
+    } else {
+      delete localOnlyScrollbackByTabId[tabId]
+    }
+  }
+
+  if (!terminalLayoutsByTabId && !localOnlyScrollbackByTabId) {
     return session
   }
 
@@ -122,6 +157,7 @@ export function pruneLocalTerminalScrollbackBuffers(
     // scrollback. Keeping renderer-captured buffers for local tabs makes every
     // persisted state write scale with old terminal output; remote/runtime tabs
     // keep them because teardown may leave no local history to cold-restore.
-    terminalLayoutsByTabId
+    ...(terminalLayoutsByTabId ? { terminalLayoutsByTabId } : {}),
+    ...(localOnlyScrollbackByTabId ? { localOnlyScrollbackByTabId } : {})
   }
 }

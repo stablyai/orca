@@ -15,8 +15,12 @@ import {
   clearPaneTitleOverlayRects
 } from './pane-title-overlay-rects'
 import type { PaneTitleOverlayRect } from './TerminalPaneHeaderOverlay'
-import { shutdownBufferCaptures } from './shutdown-buffer-captures'
+import {
+  shutdownBufferCaptures,
+  type ShutdownBufferCaptureOptions
+} from './shutdown-buffer-captures'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
+import { resolveLeafScrollbackBuffers } from './leaf-scrollback-resolution'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
@@ -25,10 +29,12 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     clearTerminalPaneUnread,
     clearTerminalTabUnread,
     clearWorktreeUnread,
+    chatLeafId,
     clearedScrollbackLeafIdsRef,
     containerRef,
     expandedPaneId,
     expandedPaneIdRef,
+    isChatViewMode,
     isolatedPaneKey,
     isVisible,
     managerRef,
@@ -44,6 +50,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     setPaneTitleOverlayRects,
     setSessionRestoredBannerPaneIds,
     setTabLayout,
+    setTabLocalOnlyScrollback,
     shouldMeasureHiddenStartup,
     tabId,
     worktreeId
@@ -187,7 +194,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
   }, [paneCount])
 
   useEffect(() => {
-    const captureBuffers = (options?: { includeLocalBuffers?: boolean }): void => {
+    const captureBuffers = (options?: ShutdownBufferCaptureOptions): void => {
       const manager = managerRef.current
       const container = containerRef.current
       if (!manager || !container) {
@@ -210,10 +217,28 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         paneTransports: paneTransportsRef.current,
         paneTitlesByPaneId: paneTitlesRef.current,
         existingLayout: existing,
+        chatLeafId: isChatViewMode ? chatLeafId : null,
+        // Why resolved: a pane that serializes empty mid-replay must fall back to whichever home
+        // holds its last good copy, not only the shared one.
+        priorBuffersByLeafId: resolveLeafScrollbackBuffers({
+          shared: existing,
+          localOnly: state.localOnlyScrollbackByTabId[tabId]
+        }),
         captureBuffers: shouldCaptureScrollbackBuffers,
         clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
       })
-      setTabLayout(tabId, layout)
+      if (options?.localOnly && layout.buffersByLeafId) {
+        // Why split: the ordinary cold park fires on every workspace hide, and buffersByLeafId
+        // rides the remote projection. Keep the structure (root, ptyIds, titles) in the shared
+        // layout and put the bytes in the local-only field, which the export never enumerates.
+        const { buffersByLeafId, ...structureOnly } = layout
+        setTabLayout(tabId, structureOnly)
+        setTabLocalOnlyScrollback(tabId, buffersByLeafId)
+      } else {
+        setTabLayout(tabId, layout)
+        // A shared capture supersedes whatever the last park left behind, so the local copy goes.
+        setTabLocalOnlyScrollback(tabId, null)
+      }
       for (const pane of panes) {
         clearedScrollbackLeafIdsRef.current.delete(pane.leafId)
       }
@@ -225,7 +250,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       }
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId, worktreeId, setTabLayout])
+  }, [chatLeafId, isChatViewMode, tabId, worktreeId, setTabLayout, setTabLocalOnlyScrollback])
 
   useEffect(() => {
     if (renamingPaneId === null) {

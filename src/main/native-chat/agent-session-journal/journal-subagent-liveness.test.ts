@@ -7,8 +7,12 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import { isSubagentGroupBlock } from '../../../shared/native-chat-types'
-import type { NativeChatSubagentEntry } from '../../../shared/native-chat-types'
+import { backgroundTaskFallbackText } from '../../../shared/native-chat-background-task-row'
+import { isBackgroundTaskBlock, isSubagentGroupBlock } from '../../../shared/native-chat-types'
+import type {
+  NativeChatBackgroundTaskBlock,
+  NativeChatSubagentEntry
+} from '../../../shared/native-chat-types'
 import {
   codexSubagentGroupBody,
   codexSubagentGroupIdentity
@@ -55,6 +59,34 @@ function rosterRow(agents: NativeChatSubagentEntry[]) {
   }
 }
 
+function backgroundTaskBlock(
+  overrides: Partial<NativeChatBackgroundTaskBlock> = {}
+): NativeChatBackgroundTaskBlock {
+  return {
+    type: 'background-task',
+    taskId: 'task-1',
+    kind: 'command',
+    label: 'sleep 20',
+    state: 'working',
+    startedAt: 10,
+    ...overrides
+  }
+}
+
+function backgroundTaskRow(block = backgroundTaskBlock()) {
+  return {
+    identity: {
+      provider: 'orca' as const,
+      clientMessageId: `claude-background-task:${block.taskId}`
+    },
+    body: {
+      kind: 'message' as const,
+      role: 'system' as const,
+      blocks: [{ type: 'text' as const, text: backgroundTaskFallbackText(block) }, block]
+    }
+  }
+}
+
 function renderItem(agents: NativeChatSubagentEntry[]): AgentJournalRenderItem {
   const row = rosterRow(agents)
   return {
@@ -68,6 +100,10 @@ function renderItem(agents: NativeChatSubagentEntry[]): AgentJournalRenderItem {
 
 function rosterOf(body: AgentJournalRenderItem['body']): NativeChatSubagentEntry[] {
   return body.kind === 'message' ? (body.blocks.find(isSubagentGroupBlock)?.agents ?? []) : []
+}
+
+function taskOf(body: AgentJournalRenderItem['body']): NativeChatBackgroundTaskBlock | undefined {
+  return body.kind === 'message' ? body.blocks.find(isBackgroundTaskBlock) : undefined
 }
 
 function twinOf(body: AgentJournalRenderItem['body']): string | undefined {
@@ -104,6 +140,23 @@ describe('staleSubagentRosterRevisions', () => {
     expect(twinOf(revisions[0]!.body)).toBe('Ran 2 subagents (1 unverifiable)')
   })
 
+  it('settles a background task the previous host left live, and moves the twin with it', () => {
+    const row = backgroundTaskRow()
+    const revisions = staleSubagentRosterRevisions([
+      {
+        itemId: agentJournalItemKey(row.identity),
+        revision: 1,
+        body: row.body,
+        sequence: 2,
+        observedAt: 1
+      }
+    ])
+
+    expect(revisions).toHaveLength(1)
+    expect(taskOf(revisions[0]!.body)).toMatchObject({ taskId: 'task-1', state: 'unverifiable' })
+    expect(twinOf(revisions[0]!.body)).toBe('Background command "sleep 20" stopped reporting')
+  })
+
   // The child stopped being observable at an unknown moment. A stamp taken now
   // would report the time the app was down as how long the child ran.
   it('records no terminal timestamp for a child whose run length is unknown', () => {
@@ -112,6 +165,21 @@ describe('staleSubagentRosterRevisions', () => {
     ])
 
     expect(rosterOf(revisions[0]!.body)[0]).not.toHaveProperty('settledAt')
+  })
+
+  it('records no terminal timestamp for a background task whose run length is unknown', () => {
+    const row = backgroundTaskRow(backgroundTaskBlock({ settledAt: 20 }))
+    const revisions = staleSubagentRosterRevisions([
+      {
+        itemId: agentJournalItemKey(row.identity),
+        revision: 1,
+        body: row.body,
+        sequence: 2,
+        observedAt: 1
+      }
+    ])
+
+    expect(taskOf(revisions[0]!.body)).not.toHaveProperty('settledAt')
   })
 
   it('owes nothing for a roster whose children all settled', () => {
@@ -184,6 +252,22 @@ describe('journal reopen after the writing host is gone', () => {
     const reopened = await open()
     expect(reopened.snapshot().items).toHaveLength(before)
     expect(reopened.snapshot().items.at(-1)?.revision).toBe(2)
+  })
+
+  it('settles a persisted working background task to unverifiable', async () => {
+    const live = await open()
+    const row = backgroundTaskRow()
+    await live.appendItem(row.identity, row.body, { fence: 0 })
+    const beforeRestart = live.snapshot().items.at(-1)!
+    expect(taskOf(beforeRestart.body)).toMatchObject({ state: 'working' })
+    expect(twinOf(beforeRestart.body)).toBe('Started background command "sleep 20"')
+    await live.close()
+
+    const reopened = await open()
+    const afterRestart = reopened.snapshot().items.at(-1)!
+    expect(afterRestart.itemId).toBe(beforeRestart.itemId)
+    expect(taskOf(afterRestart.body)).toMatchObject({ state: 'unverifiable' })
+    expect(twinOf(afterRestart.body)).toBe('Background command "sleep 20" stopped reporting')
   })
 
   it('writes nothing on a second reopen once every child is settled', async () => {

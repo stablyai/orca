@@ -245,6 +245,9 @@ export class Coordinator {
       this.opts.coordinatorHandle,
       this.opts.worktree
     )
+    if (terminals === null) {
+      return
+    }
     if (terminals.length === 0 && slotsAvailable > 0) {
       // Why: create at most one terminal per tick to avoid spawning many at once.
       try {

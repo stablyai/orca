@@ -446,24 +446,7 @@ describe('send', () => {
     expect(journal.submissions()).toHaveLength(1)
   })
 
-  it('refuses a stale fence and hands back the current one', async () => {
-    const record = await attach()
-    const body = hostTestMessage('add a retry')
-    const result = await host.send(CALLER, {
-      envelope: envelope(
-        'agentSession.send',
-        { body },
-        { expectedRuntimeFence: (record?.lease.runtimeFence ?? 1) + 5 }
-      ),
-      body
-    })
-    expect(result).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale', currentFence: record?.lease.runtimeFence }
-    })
-  })
-
-  it('reuses a pending send admission after the client refreshes its fence', async () => {
+  it('admits a send fenced to another generation, and replays it by id once the fence catches up', async () => {
     const record = await attach()
     const body = hostTestMessage('add a retry')
     const params = {
@@ -475,26 +458,14 @@ describe('send', () => {
       body
     }
     expect(await host.send(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale' }
-    })
-    expect(
-      store
-        .listOperationRows()
-        .filter((row) => row.operationId === params.envelope.clientOperationId)
-    ).toEqual([])
-    const retry = {
-      ...params,
-      envelope: {
-        ...params.envelope,
-        expectedRuntimeFence: record?.lease.runtimeFence ?? 1
-      }
-    }
-    expect(await host.send(CALLER, retry)).toMatchObject({
       ok: true,
       replayed: false,
       value: { submission: { dispatchState: 'accepted' } }
     })
+    const retry = {
+      ...params,
+      envelope: { ...params.envelope, expectedRuntimeFence: record?.lease.runtimeFence ?? 1 }
+    }
     expect(await host.send(CALLER, retry)).toMatchObject({ ok: true, replayed: true })
     expect(dispatch).toHaveBeenCalledTimes(1)
   })

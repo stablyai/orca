@@ -164,7 +164,7 @@ function primeGitExecForDefaultBranch({
   })
 }
 
-type RestPRShape = {
+type RestPROverrides = {
   number?: number
   state?: string
   merged_at?: string | null
@@ -178,7 +178,7 @@ function restPR({
   merged_at = null,
   head_ref = 'master',
   head_sha = 'stale-master-oid'
-}: RestPRShape = {}): Record<string, unknown> {
+}: RestPROverrides = {}): Record<string, unknown> {
   return {
     number,
     title: 'Historical PR',

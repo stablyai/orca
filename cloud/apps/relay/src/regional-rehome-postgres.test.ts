@@ -402,31 +402,19 @@ describePostgres('PostgreSQL regional rehoming', () => {
     ).toEqual([{ count: '0' }])
   })
 
-  it('rechecks fleet safety under locks before mutating a candidate', async () => {
+  // The commit reads fleet safety as a snapshot; it no longer locks the safety
+  // table, so the recheck covers a change committed after selection.
+  it('rechecks fleet safety inside the commit before mutating a candidate', async () => {
     const context = await fixture()
     const [request] = await context.store.selectIdleRegionalRehomeCandidates(safety(context.now()))
     expect(request).toBeDefined()
-    let unlock!: () => void
-    let locked!: () => void
-    const lockedPromise = new Promise<void>((resolve) => (locked = resolve))
-    const unlockPromise = new Promise<void>((resolve) => (unlock = resolve))
-    const held = secondary.transaction(async (transaction) => {
-      await transaction.queryLocked(`SELECT * FROM relay_cell_rehome_safety WHERE cell_id = ?`, [
-        context.target.id
-      ])
-      await transaction.query(
-        `UPDATE relay_cell_rehome_safety SET sql_failures = ${REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1} WHERE cell_id = ?`,
-        [context.target.id]
-      )
-      locked()
-      await unlockPromise
-    })
-    await lockedPromise
+    await secondary.query(
+      `UPDATE relay_cell_rehome_safety SET sql_failures = ${REGIONAL_REHOME_SQL_FAILURES_LIMIT + 1} WHERE cell_id = ?`,
+      [context.target.id]
+    )
     const claim = context.store.commitIdleRegionalRehome(request!, safety(context.now()))
-    unlock()
-    await held
 
-    await expect(claim).resolves.toEqual({ outcome: 'deferred' })
+    await expect(claim).resolves.toEqual({ outcome: 'deferred', reason: 'fleet-safety' })
     expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
       generation: 2,
       enabled: false
@@ -450,7 +438,7 @@ describePostgres('PostgreSQL regional rehoming', () => {
 
     await expect(
       context.store.commitIdleRegionalRehome(request!, safety(context.now()))
-    ).resolves.toEqual({ outcome: 'deferred' })
+    ).resolves.toEqual({ outcome: 'deferred', reason: 'fleet-safety' })
     await expect(context.store.inspectRegionalRehomeControl()).resolves.toMatchObject({
       generation: 2,
       enabled: false

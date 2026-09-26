@@ -14,6 +14,7 @@ export type DraftPasteReadySignal =
   | 'codex-composer-prompt'
   | 'render-cursor-after-bracketed-paste'
   | 'grok-composer-prompt'
+  | 'zcode-composer-prompt'
 
 export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 
@@ -36,14 +37,18 @@ export type TuiAgentConfig = {
   draftPromptFlag?: string
   /** Startup env var that seeds the input without submitting, for agents with no `--prefill`-style flag (e.g. pi); avoids the paste-after-ready race. */
   draftPromptEnvVar?: string
+  /** Claude Code follows pasted text only where the user's typed words ask, so dispatch briefs need a typed lead line. */
+  pasteNeedsTypedRequest?: boolean
   /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
-  preflightTrust?: 'cursor' | 'copilot' | 'codex'
+  preflightTrust?: 'cursor' | 'copilot' | 'codex' | 'antigravity'
   /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Hard deadline for the agent's composer readiness signal. */
   draftPasteReadyTimeoutMs?: number
   /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
   submitRetryDelayMs?: number
+  /** Extra ms per logical prompt line before Enter, for TUIs that expand multiline paste slowly (antigravity). */
+  submitLineSettleMsPerLine?: number
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'
   /** Paste newlines for TUIs that read Windows console input records instead of VT paste frames. */
@@ -70,6 +75,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   claude: {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
+    pasteNeedsTypedRequest: true,
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill'
   },
@@ -87,7 +93,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
       win32: `${getOrcaCliCommandNameForPlatform('win32')} claude-teams`
     },
     expectedProcess: 'claude',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    pasteNeedsTypedRequest: true
   },
   openclaude: {
     detectCmd: 'openclaude',
@@ -126,7 +133,24 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'opencode',
     promptInjectionMode: 'flag-prompt',
     // Why: opencode enables bracketed paste before its composer mounts; wait for the post-\x1b[?2004h show-cursor so paste lands.
-    draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
+    // Why 20s: measured on two Windows hosts (ConPTY dll backend, as pinned by
+    // local-pty-utils), opencode does not enable bracketed paste until ~4.8s and its
+    // composer is not ready until ~10s — so the 8s default expired first and the draft
+    // was pasted blind, mid-startup (#22479). The signal itself fired every time in
+    // those runs, so the budget was the problem, not a dropped escape.
+    draftPasteReadyTimeoutMs: 20_000
+  },
+  // Why: opencode2 installs as a separate binary and uses the same prompt flags.
+  // Its @opentui composer keeps the same cursor-gated paste signal.
+  opencode2: {
+    detectCmd: 'opencode2',
+    // The private server inherits this pane's hook endpoint and identity.
+    launchCmd: 'opencode2 --standalone',
+    expectedProcess: 'opencode2',
+    promptInjectionMode: 'flag-prompt',
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
+    draftPasteReadyTimeoutMs: 20_000
   },
   'mimo-code': {
     detectCmd: 'mimo',
@@ -165,7 +189,15 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   antigravity: {
     detectCmd: 'agy',
-    promptInjectionMode: 'flag-prompt-interactive'
+    promptInjectionMode: 'flag-prompt-interactive',
+    // Why: agy's first-launch trust menu consumes the bracketed paste, and its trust is
+    // exact-path rather than inherited, so every freshly created child worktree raises it
+    // again — a supervised worker would otherwise always fail at agent_readiness
+    // (agent-trust-presets.ts).
+    preflightTrust: 'antigravity',
+    // Why: agy 1.2.x collapses long paste as "↑ N more lines" and expands it over seconds; byte
+    // ingest alone (~500 ms on macOS) finishes before the composer is submit-ready.
+    submitLineSettleMsPerLine: 45
   },
   aider: {
     detectCmd: 'aider',
@@ -283,6 +315,25 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // timeout; its composer glyph lands ~0.6s in.
     draftPasteReadySignal: 'grok-composer-prompt',
     ctrlEnterEncoding: 'csi-u'
+  },
+  muse: {
+    detectCmd: 'muse',
+    launchCmd: 'muse --trust-workspace',
+    // Muse 1.3 treats subcommand-shaped prompts as commands even after `--`.
+    promptInjectionMode: 'stdin-after-start'
+  },
+  zcode: {
+    detectCmd: 'zcode',
+    // Why: ZCode's entrypoint sets `process.title = 'zcode-cli'` (its `process-name.ts`
+    // exports CLI_COMMAND_NAME 'zcode' / CLI_PROCESS_NAME 'zcode-cli'), so the foreground
+    // name never equals the launch command and dispatch would refuse with no_agent_detected.
+    expectedProcess: 'zcode-cli',
+    // Why: ZCode reads `positionals[0]` as a subcommand name (apps/zcode-cli/packages/cli/src/run.ts),
+    // so an argv prompt exits with "Unknown command"; `-p` is headless-only and quits after the turn.
+    promptInjectionMode: 'stdin-after-start',
+    // Why: ZCode repaints an animated ASCII banner indefinitely, so the default quiet-render
+    // window never settles; its composer box corner is the real "input is live" signal.
+    draftPasteReadySignal: 'zcode-composer-prompt'
   },
   devin: {
     detectCmd: 'devin',

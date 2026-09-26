@@ -21,6 +21,7 @@ import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mod
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getConnectionId } from '@/lib/connection-context'
 import { toast } from 'sonner'
+import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 
 export function ensureWebRuntimeWorktreeTerminalAfterWake(
   worktreeId: string,
@@ -32,6 +33,10 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
   }
 ): void {
   const state = useAppStore.getState()
+  const worktree = state.getKnownWorktreeById(worktreeId)
+  if (!worktree) {
+    return
+  }
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
@@ -70,7 +75,16 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     }
 
     const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
-    if (tabs.length > 0 && renderableTabCount === 0) {
+    if (tabs.length === 0) {
+      if (
+        !shouldAutoCreateInitialTerminal(
+          renderableTabCount,
+          Object.hasOwn(state.tabsByWorktree, worktreeId)
+        )
+      ) {
+        return
+      }
+    } else if (renderableTabCount === 0) {
       return
     }
   }

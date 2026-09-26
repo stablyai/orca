@@ -425,7 +425,7 @@ describe('connectPanePty', () => {
       titleHandler('Codex working', 'Codex working')
       await vi.advanceTimersByTimeAsync(2_500)
       getForegroundProcess.mockResolvedValue(null)
-      await vi.advanceTimersByTimeAsync(1_800)
+      await vi.advanceTimersByTimeAsync(3_000)
       if (hookUpdateBeforeDispatch !== 'none') {
         mockStoreState.agentStatusByPaneKey[paneKey] = {
           state: 'working',
@@ -540,11 +540,11 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-replaced-codex')
     transportFactoryQueue.push(transport)
     vi.useFakeTimers()
-    // Why: pin the ±10% poll jitter to nominal so the 2nd null sample can't confirm exit before the replacement owner is set.
+    // Why: pin poll jitter so follow-up null samples cannot overtake replacement ownership.
     const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.5)
     try {
       const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
-      // Why: one timer advance can start multiple reads; gate the 2nd+ null sample until the replacement hook owner is installed.
+      // Why: one timer advance can start multiple reads; gate follow-up null samples until the replacement hook owner is installed.
       let idleMode = false
       let nullSamplesStarted = 0
       let releaseConfirmingNullSample: (() => void) | undefined
@@ -587,7 +587,7 @@ describe('connectPanePty', () => {
         }
         await vi.advanceTimersToNextTimerAsync()
       }
-      // Why: let the first null sample apply pendingProcessExitAgent before the replacement owner is installed.
+      // Why: let the first null sample record a pending process exit before the replacement owner is installed.
       await flushAsyncTicks()
 
       mockStoreState.agentStatusByPaneKey[paneKey] = {

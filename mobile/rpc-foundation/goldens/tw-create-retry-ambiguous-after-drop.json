@@ -3,17 +3,31 @@
   "family": "worktree.create-retry",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
   "scenarioSha256": "a99bb80a5826af1df8d74114fcc5654aa42c9208747b512cea9bd5ca65b64ccb",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "3b42c7d5a39b": {
+    "06b14e4985de": {
       "name": "worktree.create#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
+    },
+    "3f946ad0279c": {
+      "outcome": "uncreated"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "aa5c4cf32f96": {
+      "name": "worktree.create#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -45,17 +59,6 @@
         }
       }
     },
-    "3f946ad0279c": {
-      "outcome": "uncreated"
-    },
-    "43a221c63628": {
-      "name": "worktree.create#1",
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"kestrel\",\"clientMutationId\":\"mutation-1\"}}"
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -81,8 +84,8 @@
       {
         "id": "waiting-for-reconnect",
         "observation": {
-          "sender": ["3b42c7d5a39b"],
-          "payloads": ["43a221c63628"],
+          "sender": ["aa5c4cf32f96"],
+          "payloads": ["06b14e4985de"],
           "settlements": {
             "create": "9270aeb7d9c6",
             "drop": "eb79a9b3682a"
@@ -94,8 +97,8 @@
       {
         "id": "replay-window-abandoned",
         "observation": {
-          "sender": ["3b42c7d5a39b"],
-          "payloads": ["43a221c63628"],
+          "sender": ["aa5c4cf32f96"],
+          "payloads": ["06b14e4985de"],
           "settlements": {
             "create": "f0d75436c3f2",
             "drop": "eb79a9b3682a"

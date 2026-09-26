@@ -1,3 +1,4 @@
+import { ownRetainedString } from './own-retained-string'
 import { parseTerminalKittyKeyboardFlags } from './terminal-kitty-keyboard-flags'
 
 // Why: PTY/SSH chunks can split an escape sequence before its final byte.
@@ -155,7 +156,12 @@ export class TerminalKittyKeyboardModeTracker {
   }
 
   private scanInternal(data: string, replay: boolean): void {
-    const input = this.scanTail + data
+    // Why: unchecked main-process callers can pass a snapshot field that is absent.
+    const chunk = typeof data === 'string' ? data : ''
+    if (this.scanTail.length === 0 && !chunk.includes('\x1b') && !chunk.includes('\x9b')) {
+      return
+    }
+    const input = this.scanTail + chunk
     this.scanTail = this.extractScanTail(input)
     // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
     const kittyModeRe = /\x1bc|(?:\x1b\[|\x9b)(?:!p|\?([0-9;]+)([hl])|([<>=])([0-9;]*)u)/g
@@ -308,7 +314,7 @@ export class TerminalKittyKeyboardModeTracker {
     if (body === null) {
       return ''
     }
-    return this.isIncompleteSequenceBody(body) ? tail : ''
+    return this.isIncompleteSequenceBody(body) ? ownRetainedString(tail) : ''
   }
 
   private isIncompleteSequenceBody(body: string): boolean {

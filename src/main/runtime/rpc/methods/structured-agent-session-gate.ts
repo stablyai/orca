@@ -48,7 +48,7 @@ export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHo
  * sounds:
  *
  *   - Starts, extends, retains or reads work -> `requireStructuredHost`. Revoked admission means
- *     no new turns, no new holds, no new reads. create, send, ensure, setOption, requestHandoff,
+ *     no new turns, no new holds, no new reads. create, send, ensure, setOption,
  *     subscribe, hold, reveal, history, options and the status stream all live here.
  *   - Stops or retires work the caller already owns -> `requireStructuredCleanupHost`. close,
  *     cancel, unsubscribe and release live here.

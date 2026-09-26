@@ -26,3 +26,9 @@ export const LIST_TABLE_STICKY_HEADER_CELL_CLASS = `${LIST_TABLE_STICKY_CELL_BAS
 
 // Why: hover/selection ride variants, not props, so the frozen cell tracks the row's own wash.
 export const LIST_TABLE_STICKY_ROW_CELL_CLASS = `${LIST_TABLE_STICKY_CELL_BASE_CLASS} z-20 bg-[color-mix(in_srgb,var(--muted)_20%,var(--background))] transition-colors group-hover/list-table-row:bg-accent group-data-[current=true]/list-table-row:bg-accent`
+
+// Why: virtualized rows are absolutely positioned, so a parent `divide-y` would only ever see the
+// single virtual container; each row draws its own separator instead. Bottom edge, like `divide-y`:
+// the semi-transparent rule composites over the row it belongs to, so a selected row keeps its
+// accent wash under its own hairline rather than tinting the one above it.
+export const LIST_TABLE_ROW_DIVIDER_CLASS = 'border-b border-border/50'

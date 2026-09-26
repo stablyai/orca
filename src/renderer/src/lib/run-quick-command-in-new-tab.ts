@@ -50,7 +50,8 @@ function resolveQuickCommandLaunchGroupId(
  * Terminal-command quick commands always append Enter — the split-button is
  * a "run" affordance, distinct from the right-click "Insert" mode where
  * `appendEnter: false` is honored. Agent-prompt quick commands use the
- * agent's normal prompt launch command instead of post-launch TUI paste.
+ * agent's prompt launch path; OpenCode2 submits through the ready-state TUI
+ * delivery path because its `--prompt` startup can leave text unsent.
  */
 export function runQuickCommandInNewTab({
   command,
@@ -68,20 +69,23 @@ export function runQuickCommandInNewTab({
       prompt: command.prompt,
       worktreeId,
       groupId: targetGroupId,
+      ...(command.agent === 'opencode' || command.agent === 'opencode2'
+        ? { promptDelivery: 'submit-after-ready' as const }
+        : {}),
       launchSource: 'quick_command',
       quickCommandLabel: command.label
     })
-    if (result?.tabId) {
-      const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.tabId, groupId)
+    if (
+      result?.surface.kind === 'local-terminal' ||
+      result?.surface.kind === 'local-agent-session'
+    ) {
+      const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.surface.tabId, groupId)
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
       }
-      return { tabId: result.tabId }
+      return { tabId: result.surface.tabId }
     }
-    // Structured launches publish their tab asynchronously and therefore do not
-    // return a local tab id; preserve quick-command recency immediately using
-    // the caller's group (or its active group fallback).
-    if (result?.focusAfterMenuClose === 'structured-session') {
+    if (result?.surface.kind === 'host-published') {
       const launchedGroupId = resolveQuickCommandLaunchGroupId(worktreeId, groupId)
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
@@ -110,7 +114,7 @@ export function runQuickCommandInNewTab({
   // Why: match `+` button's createNewTerminalTab — without this, a worktree
   // currently showing an editor file keeps rendering the editor and the new
   // terminal tab stays invisible.
-  store.setActiveTabType('terminal')
+  store.setActiveTabType('terminal', worktreeId)
 
   // Why: persist tab-bar order with the new terminal appended. Without this,
   // reconcileTabOrder falls back to terminals-first when the stored order is

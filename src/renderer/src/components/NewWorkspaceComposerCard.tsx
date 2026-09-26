@@ -59,6 +59,7 @@ export default function NewWorkspaceComposerCard(
   const {
     contextualTourSource,
     containerClassName,
+    contentClassName,
     composerRef,
     onComposerNodeChange,
     nameInputRef,
@@ -290,12 +291,12 @@ export default function NewWorkspaceComposerCard(
       onDragEnter={dragHandlers.onDragEnter}
       onDragLeave={dragHandlers.onDragLeave}
       className={cn(
-        'grid min-w-0 gap-1 rounded-md transition',
+        'flex min-h-0 min-w-0 flex-1 flex-col gap-1 rounded-md transition',
         isFileDragOver && 'ring-2 ring-ring/30',
         containerClassName
       )}
     >
-      <div className="min-w-0 space-y-4 pt-3">
+      <div className={cn('min-h-0 min-w-0 space-y-4 pt-3', contentClassName)}>
         <NewWorkspaceComposerProjectSection
           {...props}
           projectOptions={projectOptions}
@@ -337,10 +338,12 @@ export default function NewWorkspaceComposerCard(
           activeFolderWorkspaceId={activeFolderWorkspaceId}
         />
       </div>
-      <NewWorkspaceComposerFooter
-        {...props}
-        submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
-      />
+      <div className="shrink-0 space-y-1">
+        <NewWorkspaceComposerFooter
+          {...props}
+          submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
+        />
+      </div>
       <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />
       {setLocationDialogMounted ? (
         <React.Suspense fallback={null}>

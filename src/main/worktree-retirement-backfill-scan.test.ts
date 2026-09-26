@@ -32,7 +32,7 @@ function stallingScan(): {
 }
 
 /** Drive one namespace to the state where its listing is abandoned but still stuck in the kernel. */
-async function stallPastDeadline(store: object, scanKey: string) {
+async function stallPastDeadline(store: WeakKey, scanKey: string) {
   const scan = stallingScan()
   const pending = runRetirementBackfillScan(store, scanKey, scan.run)
   const settled = expect(pending).rejects.toThrow(/exceeded/)

@@ -5,16 +5,13 @@ import {
   resolveStructuredNativeChatSupport
 } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceLaunchKind } from '../../../shared/workspace-launch-kind'
 import {
   decideInitialAgentTabViewMode,
   type NativeChatLaunchPromptDelivery
 } from '@/lib/native-chat-initial-view-mode'
 
-export {
-  hasExplicitTuiAgentArgs,
-  hasExplicitTuiLaunchCustomization,
-  hasSemanticallyNonEmptyAgentArgs
-} from '../../../shared/tui-agent-launch-customization'
+export { hasExplicitTuiLaunchCommand } from '../../../shared/tui-agent-launch-command-override'
 
 export type AgentLaunchRoute = 'structured-native-chat' | 'legacy-native-chat' | 'terminal-tui'
 
@@ -32,12 +29,12 @@ export type AgentLaunchRoutingInput = {
   executionHostId: string
   /** Capabilities of the target host; `null` = not yet established. */
   hostCapabilities: readonly string[] | null
-  workspaceKind?: 'git-worktree' | 'folder' | 'floating'
+  workspaceKind?: WorkspaceLaunchKind
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   promptDelivery?: NativeChatLaunchPromptDelivery
   launchText?: string
   nativeChatTranscriptIsLocalReadable?: boolean
-  requiresTuiLaunchCustomization?: boolean
+  requiresTuiLaunchCommand?: boolean
   initialSessionOptions?: Readonly<Record<string, unknown>>
 }
 
@@ -77,7 +74,7 @@ export function structuredAgentLaunchSupported(
       hostCapabilities: input.hostCapabilities,
       workspaceKind: input.workspaceKind,
       projectRuntime: input.projectRuntime,
-      requiresTuiLaunchCustomization: input.requiresTuiLaunchCustomization
+      requiresTuiLaunchCommand: input.requiresTuiLaunchCommand
     }).supported
   )
 }

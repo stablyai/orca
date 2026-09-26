@@ -6,33 +6,37 @@ import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../shared/agent-status-identity'
-import { INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS } from './server-constants'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
 import {
-  attachClaudeChildOnlyBoundary,
   attachClaudePermissionToolUseId,
-  invalidateClaudeChildOnlyBoundary,
-  shouldKeepClaudePermissionVisible
+  pairedClaudeNonAgentWork,
+  shouldKeepClaudePermissionVisible,
+  withHeldChildWaitMainAgent
 } from './server-claude-status-rules'
 import { isStaleGrokTurnEnd } from './server-grok-status-rules'
-import { isToolProgressWorkingAfterInterrupt } from './server-status-identity'
+import { resolveCancelVerdictLatch } from './server-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected applyNormalizedStatus(
-    payload: AgentHookEventPayload,
+    incoming: AgentHookEventPayload & { authorityRestartId?: string },
     onAccepted?: () => void,
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
-  ): EnrichedAgentHookEventPayload {
+  ): EnrichedAgentHookEventPayload | undefined {
+    const { authorityRestartId, ...payload } = incoming
+    if (!this.canWriteLegacyStatusRow(payload)) {
+      return undefined
+    }
     if (payload.hookEventName === 'UserPromptSubmit') {
       // Why: the prompt boundary is authoritative even when text is unchanged; its next OSC working row must not inherit the prior cron/background turn stamp.
       this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
     }
-    let previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+    const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
     const rowBefore = mutationBefore ?? previous
@@ -70,7 +74,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       }
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
-      this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+      if (!this.writeLegacyStatusRow(enriched)) {
+        return undefined
+      }
       this.commitStatusRowMutation(rowBefore, enriched)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
@@ -116,17 +122,6 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
               : stateReconciledPayload.payload
           }
         : stateReconciledPayload
-    const boundaryReconciledPrevious = invalidateClaudeChildOnlyBoundary(
-      previous,
-      rootContextPreservingPayload
-    )
-    if (boundaryReconciledPrevious !== previous) {
-      previous = boundaryReconciledPrevious
-      if (previous) {
-        this.state.lastStatusByPaneKey.set(previous.paneKey, previous)
-        this.scheduleStatusPersist()
-      }
-    }
     const identity = resolveAgentStatusIdentity({
       existing: previous
         ? {
@@ -156,40 +151,40 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             ...rootContextPreservingPayload,
             payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
           }
-    const effectivePayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
-    const boundaryAwarePayload = attachClaudeChildOnlyBoundary(previous, effectivePayload)
-    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
-      this.commitStatusRowMutation(rowBefore, previous)
-      return previous
-    }
-    // Why: some TUIs emit a delayed tool/working hook after Ctrl+C stopped the turn; don't let it resurrect the row.
-    if (
-      previous?.payload.state === 'done' &&
-      previous.payload.interrupted === true &&
-      effectivePayload.payload.state === 'done' &&
-      previous.payload.agentType === effectivePayload.payload.agentType &&
-      previous.payload.prompt === effectivePayload.payload.prompt &&
-      Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS
-    ) {
-      this.commitStatusRowMutation(rowBefore, previous)
-      return previous
-    }
-    if (
-      previous?.payload.state === 'done' &&
-      previous.payload.interrupted === true &&
-      effectivePayload.payload.state === 'working' &&
-      previous.payload.agentType === effectivePayload.payload.agentType &&
-      previous.payload.prompt === effectivePayload.payload.prompt &&
-      (effectivePayload.isReplay === true ||
-        isToolProgressWorkingAfterInterrupt(effectivePayload) ||
-        (effectivePayload.hasExplicitPrompt !== true &&
-          Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS))
-    ) {
-      if (effectivePayload.payload.agentType === 'codex') {
-        markCodexLeadTurnInterrupted(this.state, effectivePayload.paneKey)
+    const attachedPayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
+    // Why before the permission hold: that hold adopts the event's `mainAgent`, and a relay's
+    // restatement of a main agent the desktop cancelled must not replace the cancel.
+    const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
+    if (latch.hold) {
+      if (
+        attachedPayload.payload.agentType === 'codex' &&
+        attachedPayload.payload.state === 'working'
+      ) {
+        markCodexLeadTurnInterrupted(this.state, attachedPayload.paneKey)
       }
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
+    }
+    const effectivePayload = latch.event
+    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
+      const held = withHeldChildWaitMainAgent(previous, effectivePayload)
+      // Why: a child's prompt leaves the main agent running, so the held row takes its `mainAgent` and
+      // must take the same event's background evidence; a main agent's own prompt blocks it, so not there.
+      if (previous.toolAgentId) {
+        onAccepted?.()
+      }
+      if (held !== previous) {
+        if (!this.writeLegacyStatusRow(held)) {
+          return undefined
+        }
+        this.scheduleStatusPersist()
+      }
+      this.commitStatusRowMutation(rowBefore, held)
+      // Why: pushed readers must see the new `mainAgent` a snapshot reader already does.
+      if (held.payload !== previous.payload) {
+        this.emitEnrichedStatus(held)
+      }
+      return held
     }
     if (
       effectivePayload.payload.state !== 'done' ||
@@ -203,9 +198,15 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     }
     // Why carried forward only within one host: main's OSC parse resolves the handle, so a later
     // hook must not erase its terminal join; a connection change must not inherit another host's.
+    const { claudeRunningNonAgentTask: _unpaired, ...unpairedPayload } = effectivePayload
+    const runningNonAgentTask = pairedClaudeNonAgentWork(previous, effectivePayload)
+    const pairedPayload =
+      runningNonAgentTask === undefined
+        ? unpairedPayload
+        : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
     const enriched = {
-      ...this.attachStatusTiming(boundaryAwarePayload, now, observedAt),
-      observation: this.stampObservation(boundaryAwarePayload, origin, observedAt ?? now)
+      ...this.attachStatusTiming(pairedPayload, now, observedAt),
+      observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
     }
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&
@@ -222,7 +223,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     } else {
       this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     }
-    this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+    if (!this.writeLegacyStatusRow(enriched)) {
+      return undefined
+    }
     this.commitStatusRowMutation(rowBefore, enriched)
     // Why skipped for structured rows: the serializer drops them, so the whole walk and stringify
     // can only ever reproduce the last file — once per debounce window for a streaming chat.
@@ -230,75 +233,11 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.scheduleStatusPersist()
     }
     this.notifyStatusChangeListeners()
-    this.emitEnrichedStatus(enriched)
+    this.emitEnrichedStatus(
+      authorityRestartId && payload.isReplay !== true
+        ? { ...enriched, authorityRestartId }
+        : enriched
+    )
     return enriched
-  }
-
-  protected refreshTerminalStatusEvidence(
-    previous: EnrichedAgentHookEventPayload,
-    mutationBefore?: EnrichedAgentHookEventPayload,
-    emitEnrichedStatus = false
-  ): void {
-    const connectionClearWatermark = previous.connectionId
-      ? this.connectionTimestampWatermarkById.get(previous.connectionId)
-      : undefined
-    const now = Math.max(Date.now(), (connectionClearWatermark ?? -1) + 1)
-    if (previous.connectionId) {
-      this.connectionTimestampWatermarkById.set(previous.connectionId, now)
-    }
-    const {
-      receivedAt: _receivedAt,
-      evidenceObservedAt: _evidenceObservedAt,
-      stateStartedAt,
-      observation: _observation,
-      restoredUnconfirmed: _restoredUnconfirmed,
-      isReplay: _isReplay,
-      ...payload
-    } = previous
-    const refreshed: EnrichedAgentHookEventPayload = {
-      ...payload,
-      receivedAt: now,
-      evidenceObservedAt: now,
-      stateStartedAt,
-      observation: this.stampObservation(payload, 'osc', now)
-    }
-    const firstRuntimeObservation = !this.runtimeObservedStatusPaneKeys.has(refreshed.paneKey)
-    this.runtimeObservedStatusPaneKeys.add(refreshed.paneKey)
-    this.state.lastStatusByPaneKey.set(refreshed.paneKey, refreshed)
-    this.commitStatusRowMutation(mutationBefore ?? previous, refreshed)
-    this.scheduleStatusPersist()
-    // A dismissed row may retain only provider resume identity. Its preserved payload can still
-    // read `working`, but it is deliberately hidden from live readers and must not renew awake or
-    // mobile freshness leases.
-    if (refreshed.providerSessionOnly === true) {
-      return
-    }
-    if (firstRuntimeObservation) {
-      this.notifyStatusChangeListeners()
-    }
-    this.emitStatusFreshnessObservation({
-      paneKey: refreshed.paneKey,
-      state: refreshed.payload.state,
-      receivedAt: refreshed.receivedAt,
-      observedInCurrentRuntime: true,
-      ...(refreshed.worktreeId ? { worktreeId: refreshed.worktreeId } : {}),
-      ...(refreshed.terminalHandle ? { terminalHandle: refreshed.terminalHandle } : {})
-    })
-    if (emitEnrichedStatus) {
-      this.emitEnrichedStatus(refreshed)
-    }
-  }
-
-  // Why: every status emit must reach plugins too, so a new early-return path
-  // upstream cannot silently leave the plugin tap behind the main-window fanout.
-  protected emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
-    this.onAgentStatus?.(enriched)
-    for (const listener of this.enrichedStatusListeners) {
-      try {
-        listener(enriched)
-      } catch (err) {
-        console.error('[agent-hooks] enriched status listener threw', err)
-      }
-    }
   }
 }

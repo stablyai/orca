@@ -7,9 +7,7 @@ import {
 } from '../dictation/mobile-dictation-setup'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
 
-export function nativeVoiceSettingsOperations(
-  client: Pick<RpcClient, 'sendRequest'>
-): VoiceSettingsOperations {
+export function nativeVoiceSettingsOperations(client: RpcClient): VoiceSettingsOperations {
   return {
     load: () => fetchDictationSetup(client),
     configure: (params) => setDictationConfig(client, params),

@@ -54,6 +54,14 @@ export const worktreePsProbe = defineRpcOperation({
   barrier: 'on-settle'
 })
 
+/** A method the catalog declares with no params at all, so `RpcSendParams` reads `void`. */
+export const pushTestWithoutParams = defineRpcOperation({
+  name: 'test.pushTestWithoutParams',
+  method: 'notifications.testPush',
+  acceptance: 'method-not-found-refusal',
+  barrier: 'on-settle'
+})
+
 export const terminalStreamOpener = defineRpcOperation({
   name: 'test.terminalStreamOpener',
   method: 'terminal.subscribe',

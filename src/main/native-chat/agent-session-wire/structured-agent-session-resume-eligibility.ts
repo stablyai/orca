@@ -7,17 +7,14 @@
 // it answers "may this be resumed", not "should it be" — so it lives here now and the caller that
 // knows a surface is asking is the only one that acts on it.
 
+import { agentSessionLeaseIsReleased } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { attachParamsForRecord } from './structured-agent-session-read-restore'
 
 export function isResumableStructuredAgentSessionRecord(record: AgentSessionRecord): boolean {
-  return (
-    !record.lease.unreconciled &&
-    record.lease.claimStatus === 'released' &&
-    record.lease.handoffStage === null
-  )
+  return agentSessionLeaseIsReleased(record.lease)
 }
 
 /** Attach params for a resume, or null when this record's lease is somebody else's problem. */
@@ -30,8 +27,7 @@ export function structuredAgentSessionResumeParams(
   }
   return attachParamsForRecord(record, {
     clientOperationId,
-    expectedRuntimeFence: record.lease.runtimeFence,
-    runtimeKind: 'native'
+    expectedRuntimeFence: record.lease.runtimeFence
   })
 }
 

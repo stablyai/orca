@@ -10,17 +10,20 @@ import {
   type InternedRecording,
   type ValuePool
 } from './golden-value-pool'
+import { adapterSha256 } from './adapter-digest'
+import { MOUNTED_OPERATION_MODULES } from './adapters/mounted-operation-modules'
 import { recorderSha256 } from './recorder-digest'
 import { scenarioSha256 } from './scenario-digest'
+import type { MountedOperationModule } from './mounted-operation-module'
 import type { Recording, RecordingScenario } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 
 export const RUNNER_VERSION = 1
 // 2 stamps every settlement with startedAt/settledAt on the pinned virtual clock.
 export const PROJECTION_VERSION = 2
-// 4 pins scenarioSha256 per golden. The byte compare would fail a version-3 golden anyway; the bump
-// buys the diagnosis, reporting the stale format instead of an opaque `(encoding)` difference.
-export const GOLDEN_FORMAT_VERSION = 4
+// 5 splits the mount adapters out of recorderSha256 into adapterSha256. As with 4, the byte compare
+// would fail a stale golden anyway; the bump buys the diagnosis instead of an opaque `(encoding)`.
+export const GOLDEN_FORMAT_VERSION = 5
 export type GoldenRecording = {
   operation: string
   family: string
@@ -29,6 +32,7 @@ export type GoldenRecording = {
   baseline: string
   lockfileSha256: string
   recorderSha256: string
+  adapterSha256: string
   scenarioSha256: string
   platform: string
   scenarioVersion: number
@@ -44,7 +48,8 @@ export function goldenRecording(
   root: string,
   baseline: string,
   scenarios: readonly RecordingScenario[],
-  recording: Recording
+  recording: Recording,
+  registered: readonly MountedOperationModule[] = MOUNTED_OPERATION_MODULES
 ): GoldenRecording {
   const [scenario] = scenarios
   if (!scenario) {
@@ -60,6 +65,7 @@ export function goldenRecording(
       .update(readFileSync(join(root, 'mobile/pnpm-lock.yaml')))
       .digest('hex'),
     recorderSha256: recorderSha256(root),
+    adapterSha256: adapterSha256(root, scenarios, registered),
     scenarioSha256: scenarioSha256(scenarios),
     platform: process.platform,
     scenarioVersion: scenario.version,
@@ -152,7 +158,7 @@ export function compareGolden(expected: GoldenRecording, actual: GoldenRecording
     throw new Error(`Recording differs: ${scenario} (encoding)`)
   }
 }
-function firstDifference(
+export function firstDifference(
   expected: RecordedValue,
   actual: RecordedValue,
   path = ''

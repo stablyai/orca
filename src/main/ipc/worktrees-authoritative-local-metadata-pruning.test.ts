@@ -107,7 +107,7 @@ vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).pty
 
 const REPO_ID = 'repo-1'
 const REPO_PATH = '/workspace/repo'
-const LOCAL_HOST_ID = 'local'
+const LOCAL_HOST_ID = 'local' as const
 
 function worktree(path: string, overrides: Partial<GitWorktreeInfo> = {}): GitWorktreeInfo {
   return {
@@ -244,9 +244,13 @@ describe('authoritative local worktree metadata pruning integration', () => {
     await Promise.resolve()
     notifyWorktreesChanged(mainWindow as never, REPO_ID)
     resolveScan([worktree(REPO_PATH), worktree('/workspace/live')])
+    // Why: the overtaken scan is re-run, and the mutation it missed brought the stale checkout back,
+    // so a prune can only come from the overtaken scan's own expectation -- which must not run.
+    await vi.waitFor(() => expect(listWorktreesMock).toHaveBeenCalledTimes(2))
+    resolveScan([worktree(REPO_PATH), worktree('/workspace/live'), worktree('/workspace/stale')])
     await pending
 
-    expect(store.captureNativeLocalWorktreeMetadataScanExpectation).toHaveBeenCalledTimes(1)
+    expect(store.captureNativeLocalWorktreeMetadataScanExpectation).toHaveBeenCalledTimes(2)
     expect(store.pruneSessionlessMissingLocalWorktreeMetadataForRepo).not.toHaveBeenCalled()
     expect(pruneCleanupScanSnapshotsMock).not.toHaveBeenCalled()
     expect(pruneSpaceAnalysisSnapshotsMock).not.toHaveBeenCalled()
@@ -270,6 +274,10 @@ describe('authoritative local worktree metadata pruning integration', () => {
     await Promise.resolve()
     resolveScan([worktree(REPO_PATH)])
     queueMicrotask(() => notifyWorktreesChanged(mainWindow as never, REPO_ID))
+    // Why: the overtaken scan is re-run; its rows bring the stale checkout back, so only the
+    // overtaken scan's own expectation could prune it.
+    await vi.waitFor(() => expect(listWorktreesMock).toHaveBeenCalledTimes(2))
+    resolveScan([worktree(REPO_PATH), worktree('/workspace/stale')])
     await pending
 
     expect(store.pruneSessionlessMissingLocalWorktreeMetadataForRepo).not.toHaveBeenCalled()
@@ -277,7 +285,7 @@ describe('authoritative local worktree metadata pruning integration', () => {
 
   it.each(localListingCalls)(
     'skips stale WSL root and lineage side effects after %s caller resumption',
-    async (_channel, listWorktrees) => {
+    async (channel, listWorktrees) => {
       const orphanId = `${REPO_ID}::/workspace/orphan`
       let resolveScan: (rows: GitWorktreeInfo[]) => void = () => {}
       mockSelectedWslProjectRuntime()
@@ -292,12 +300,16 @@ describe('authoritative local worktree metadata pruning integration', () => {
           createdAt: 0
         }
       })
-      listWorktreesMock.mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            resolveScan = resolve as (rows: GitWorktreeInfo[]) => void
-          })
-      )
+      // Why: the detected listing re-runs an overtaken scan, and that re-run finds the orphan alive,
+      // so a lineage removal can only come from the overtaken scan's side effects.
+      listWorktreesMock
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveScan = resolve as (rows: GitWorktreeInfo[]) => void
+            })
+        )
+        .mockImplementation(async () => [worktree(REPO_PATH), worktree('/workspace/orphan')])
 
       const pending = listWorktrees()
       await Promise.resolve()
@@ -306,7 +318,8 @@ describe('authoritative local worktree metadata pruning integration', () => {
       await pending
 
       expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
-      expect(isRegisteredWorktreePath(REPO_PATH)).toBe(false)
+      // Only the detected listing re-derives; its fresh re-scan is what registers the roots.
+      expect(isRegisteredWorktreePath(REPO_PATH)).toBe(channel === 'worktrees:listDetected')
     }
   )
 

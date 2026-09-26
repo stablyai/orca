@@ -1,15 +1,5 @@
 import { createCodexProviderActivityReader } from '../native-chat/agent-session-wire/provider-frame-activity'
-import {
-  CODEX_TOKEN_USAGE_METHOD,
-  readCodexNotificationThreadItem
-} from './codex-subagent-activity'
-import { CodexSubagentRoster } from './codex-subagent-roster'
-import { readCodexThreadItem } from './codex-structured-item-translation'
-import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
-import { CodexJournalCompactions } from './codex-structured-journal-compactions'
-import { CodexJournalGoals } from './codex-structured-journal-goals'
-import { CodexJournalItems } from './codex-structured-journal-items'
-import { CodexJournalPrompts } from './codex-structured-journal-prompts'
+import { CODEX_TOKEN_USAGE_METHOD } from './codex-subagent-activity'
 import {
   CODEX_JOURNAL_ADMITTED,
   type CodexJournalTranslationAdmission,
@@ -17,11 +7,12 @@ import {
   type CodexJournalTranslatorDeps
 } from './codex-structured-journal-contracts'
 import { settleCodexJournalSession } from './codex-structured-journal-settlement'
-import { createCodexOversizedNotificationSettler } from './codex-structured-journal-translation-frames'
 import { restoreCodexJournalThread } from './codex-structured-journal-translation-restore'
 import { CodexJournalTurnBoundaries } from './codex-structured-journal-translation-turn-boundaries'
-import { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
+import { createCodexJournalTranslatorWriters } from './codex-structured-journal-translation-writers'
 import { publishCodexTurnLifecycle } from './codex-structured-journal-translation-turns'
+import { readCodexProviderVerdict } from './codex-structured-journal-provider-verdicts'
+import { createCodexThreadItemRouter } from './codex-structured-journal-thread-item-routing'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
@@ -45,31 +36,17 @@ export {
 export function createCodexJournalTranslator(
   deps: CodexJournalTranslatorDeps
 ): CodexJournalTranslator {
-  const activeTurns = new CodexJournalActiveTurns()
-  const compactions = new CodexJournalCompactions(deps.sink, (threadId) =>
-    activeTurns.current(threadId)
-  )
-  const genericFrames = new CodexJournalGenericFrames(deps, (threadId) =>
-    activeTurns.current(threadId)
-  )
-  const goals = new CodexJournalGoals(deps.sink)
-  const items = new CodexJournalItems(
-    deps,
-    (threadId) => activeTurns.current(threadId),
-    (threadId, turnId) => genericFrames.suppress(threadId, turnId)
-  )
-  const settleOversizedNotification = createCodexOversizedNotificationSettler(deps, items)
-  const prompts = new CodexJournalPrompts(
-    deps,
-    (threadId, itemId) => items.detailFor(threadId, itemId),
-    (threadId) => activeTurns.current(threadId)
-  )
-  const subagents = new CodexSubagentRoster({
-    sink: deps.sink,
-    primaryThreadId: () => deps.primaryThreadId?.() ?? null,
-    activeTurn: (threadId) => activeTurns.current(threadId),
-    ...(deps.subagentExecutions ? { executions: deps.subagentExecutions } : {})
-  })
+  const {
+    activeTurns,
+    subagents,
+    linkageFor,
+    genericFrames,
+    items,
+    compactions,
+    goals,
+    prompts,
+    settleOversizedNotification
+  } = createCodexJournalTranslatorWriters(deps)
   const flushStreams = (): CodexJournalTranslationAdmission =>
     items.streams.flush() ? CODEX_JOURNAL_ADMITTED : { accepted: false, reason: 'backpressure' }
   let readActivity = createCodexProviderActivityReader()
@@ -88,7 +65,25 @@ export function createCodexJournalTranslator(
     ...(deps.clearPromptTurn ? { clearPromptTurn: deps.clearPromptTurn } : {}),
     flushSuppression: () => genericFrames.flush(),
     resetActivity,
+    linkageFor,
     ...(deps.now ? { now: deps.now } : {})
+  })
+  let primaryThreadStoppedRunning = false
+  const reportPrimaryThreadStoppedRunning = (): void => {
+    const primaryThreadId = deps.primaryThreadId?.() ?? null
+    if (!primaryThreadStoppedRunning || !primaryThreadId || activeTurns.current(primaryThreadId)) {
+      return
+    }
+    primaryThreadStoppedRunning = false
+    deps.onPrimaryThreadStoppedRunning?.()
+  }
+  const routeThreadItem = createCodexThreadItemRouter({
+    deps,
+    subagents,
+    items,
+    activeTurns,
+    turnBoundaries,
+    genericFrames
   })
   const publishActivity = (
     event: Extract<CodexStructuredSessionEvent, { type: 'notification' }>,
@@ -162,13 +157,14 @@ export function createCodexJournalTranslator(
           currentTurnIds: activeTurns.byThread,
           primaryThreadId: deps.primaryThreadId?.() ?? null,
           ordinals: items.ordinals,
+          // The host saw the child go, not what Codex made of the turn, so the row
+          // carries no outcome: the end is observed, the verdict is unknown.
           settledTurnLifecycle: (threadId, turnId) =>
-            turnBoundaries.settled(
-              threadId,
-              turnId,
-              'interrupted',
-              event.observedAt ?? deps.now?.() ?? Date.now()
-            )
+            turnBoundaries.settled(threadId, turnId, {
+              state: 'interrupted',
+              completedAt: event.observedAt ?? deps.now?.() ?? Date.now()
+            }),
+          linkageFor
         })
         if (!admission.accepted) {
           return admission
@@ -182,7 +178,7 @@ export function createCodexJournalTranslator(
         deps.sink.setActivity?.(null)
         items.activeItems.clear()
         prompts.pending.clear()
-        activeTurns.clear()
+        turnBoundaries.clear()
         compactions.clear()
         goals.clear()
         return CODEX_JOURNAL_ADMITTED
@@ -220,9 +216,14 @@ export function createCodexJournalTranslator(
         if (!childAdmission.accepted) {
           return childAdmission
         }
-        return event.method === 'turn/started'
-          ? turnBoundaries.start(event)
-          : turnBoundaries.complete(event)
+        const admission =
+          event.method === 'turn/started'
+            ? turnBoundaries.start(event)
+            : turnBoundaries.complete(event)
+        if (admission.accepted) {
+          reportPrimaryThreadStoppedRunning()
+        }
+        return admission
       }
       const compaction = compactions.handle(event)
       if (compaction) {
@@ -241,37 +242,36 @@ export function createCodexJournalTranslator(
         }
       }
       if (event.method === 'item/started' || event.method === 'item/completed') {
-        const subagentItem = readCodexNotificationThreadItem(event.params, readCodexThreadItem)
-        // Null means the roster did not claim it; fall through to normal item
-        // handling. Returning here unconditionally swallows every other item.
-        const subagentAdmission = subagentItem
-          ? subagents.handleItem({
-              threadId: event.threadId,
-              turnId: readCodexTurnId(event.params) ?? activeTurns.current(event.threadId),
-              item: subagentItem
-            })
-          : null
-        if (subagentAdmission) {
-          // Not a bare return: the roster claiming the item must not skip the
-          // turn-tail arm, which is the only publisher of its activity copy.
-          return publishActivity(event, subagentAdmission)
+        const routed = routeThreadItem(event)
+        // Not a bare return: a claimed item must not skip the turn-tail arm,
+        // which is the only publisher of its activity copy.
+        if (routed) {
+          return publishActivity(event, routed)
         }
-        const translated = items.handle(event)
-        return publishActivity(
-          event,
-          translated.handled
-            ? translated.admission
-            : genericFrames.appendUnhandled(
-                `notification:${event.method}`,
-                event.params,
-                event.threadId
-              )
-        )
       }
-      return publishActivity(
-        event,
-        genericFrames.appendUnhandled(`notification:${event.method}`, event.params, event.threadId)
+      const verdict = readCodexProviderVerdict(event.method, event.params)
+      if (
+        verdict === 'thread-stopped-running' &&
+        event.threadId === (deps.primaryThreadId?.() ?? null)
+      ) {
+        primaryThreadStoppedRunning = true
+        reportPrimaryThreadStoppedRunning()
+      }
+      // The row carries the provider's sentence and is written first, so it lands
+      // inside the turn this same frame is about to end.
+      const unhandled = genericFrames.appendUnhandled(
+        `notification:${event.method}`,
+        event.params,
+        event.threadId
       )
+      if (unhandled.accepted && verdict === 'turn-failed') {
+        const failed = turnBoundaries.fail(event)
+        if (!failed.accepted) {
+          return failed
+        }
+        reportPrimaryThreadStoppedRunning()
+      }
+      return publishActivity(event, unhandled)
     },
     cancelPrompt: (journalItemId) => prompts.cancel(journalItemId),
     resolvePrompt: (journalItemId) => prompts.resolve(journalItemId),
@@ -284,7 +284,7 @@ export function createCodexJournalTranslator(
       prompts.dispose()
       genericFrames.dispose()
       subagents.dispose()
-      activeTurns.clear()
+      turnBoundaries.clear()
       compactions.clear()
       goals.dispose()
     }

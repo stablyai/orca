@@ -19,16 +19,8 @@
  *   node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
  */
 import { execFileSync } from 'node:child_process'
-import {
-  closeSync,
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readSync,
-  writeFileSync
-} from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-artifacts.ts'
 import {
@@ -39,11 +31,12 @@ import {
   WINDOWS_PROCESS_TREE_PACKAGE_DIR as PACKAGE_DIR
 } from './windows-process-tree-gyp-rebuild.mjs'
 
+const { PE_MACHINE, describePeMachine, readPeMachine } = createRequire(import.meta.url)(
+  './windows-pe-machine.cjs'
+)
+
 const ROOT = resolve(import.meta.dirname, '..', '..')
 const SUPPORTED_ARCHES = ['x64', 'arm64']
-
-/** PE `IMAGE_FILE_HEADER.Machine` values, so a cross-build cannot silently emit host arch. */
-const PE_MACHINE = { x64: 0x8664, arm64: 0xaa64 }
 
 function parseArgs(argv) {
   const arch = argv.find((a) => a.startsWith('--arch='))?.slice('--arch='.length) ?? process.arch
@@ -363,21 +356,6 @@ function applyWindowsProcessTreeBuildFixes() {
   }
 }
 
-/** Read the PE machine field, so an arm64 request cannot ship an x64 binary. */
-function readPeMachine(binaryPath) {
-  const fd = openSync(binaryPath, 'r')
-  try {
-    const header = Buffer.alloc(4)
-    readSync(fd, header, 0, 4, 0x3c)
-    const peOffset = header.readUInt32LE(0)
-    const machine = Buffer.alloc(2)
-    readSync(fd, machine, 0, 2, peOffset + 4)
-    return machine.readUInt16LE(0)
-  } finally {
-    closeSync(fd)
-  }
-}
-
 function main() {
   const { arch, outDir } = parseArgs(process.argv.slice(2))
   if (process.platform !== 'win32') {
@@ -410,9 +388,12 @@ function main() {
   }
   const machine = readPeMachine(built)
   if (machine !== PE_MACHINE[arch]) {
+    const cause =
+      machine === null
+        ? 'A truncated or quarantined build output looks like this; a relay would get a binary no host can load.'
+        : 'node-gyp ignored --arch; a relay would get a binary its host cannot load.'
     throw new Error(
-      `Built binary is machine 0x${machine.toString(16)}, expected 0x${PE_MACHINE[arch].toString(16)} for ${arch}. ` +
-        'node-gyp ignored --arch; a relay would get a binary its host cannot load.'
+      `Built binary is ${describePeMachine(machine)}, expected 0x${PE_MACHINE[arch].toString(16)} for ${arch}. ${cause}`
     )
   }
 

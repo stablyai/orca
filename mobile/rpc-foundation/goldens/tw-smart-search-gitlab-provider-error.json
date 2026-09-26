@@ -3,30 +3,19 @@
   "family": "tasks.smart-source-search",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "50e752fc66a84638b0a8c1f4bdbbd5fdc708c3e9",
-  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "5ec2faffa944097d2916e2e9e2259b9d0c68e364c5f865bafd8a9600faedbdc7",
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
   "scenarioSha256": "4537bf83f7a030521eec549adf4490da5be183471d5a9f9e58b71815b29481ff",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
-  "goldenFormatVersion": 4,
+  "goldenFormatVersion": 5,
   "values": {
-    "44136fa355b3": {},
-    "46027e62015d": {
+    "2978f9aceb1e": {
       "name": "repo.searchRefs#1",
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}"
-    },
-    "51e012c25ebf": {
-      "branches": [
-        {
-          "localBranchName": "main",
-          "refName": "origin/main"
-        }
-      ]
-    },
-    "522d9e5c292e": {
-      "name": "repo.searchRefs#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -65,6 +54,15 @@
         }
       }
     },
+    "44136fa355b3": {},
+    "51e012c25ebf": {
+      "branches": [
+        {
+          "localBranchName": "main",
+          "refName": "origin/main"
+        }
+      ]
+    },
     "791f6fc629fc": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -76,12 +74,29 @@
         }
       ]
     },
-    "86057be07bd0": {
+    "ab2b1da8d0e9": {
+      "name": "repo.searchRefs#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"main\",\"limit\":20}}"
+    },
+    "bf7ab976b200": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "rate limited",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "cc32ff7ae122": {
       "name": "gitlab.listWorkItems#1",
+      "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"state\":\"opened\",\"page\":1,\"perPage\":50,\"query\":\"bug\"}}"
     },
-    "97c2301d5d8c": {
+    "f87417f689e2": {
       "name": "gitlab.listWorkItems#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
@@ -120,16 +135,6 @@
           }
         }
       }
-    },
-    "bf7ab976b200": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "rate limited",
-        "isRpcDeliveryUnknown": false
-      }
     }
   },
   "recording": {
@@ -138,8 +143,8 @@
       {
         "id": "in-band-provider-error",
         "observation": {
-          "sender": ["97c2301d5d8c"],
-          "payloads": ["86057be07bd0"],
+          "sender": ["f87417f689e2"],
+          "payloads": ["cc32ff7ae122"],
           "settlements": {
             "gitlab": "bf7ab976b200"
           },
@@ -150,8 +155,8 @@
       {
         "id": "branch-ref-details",
         "observation": {
-          "sender": ["97c2301d5d8c", "522d9e5c292e"],
-          "payloads": ["86057be07bd0", "46027e62015d"],
+          "sender": ["f87417f689e2", "2978f9aceb1e"],
+          "payloads": ["cc32ff7ae122", "ab2b1da8d0e9"],
           "settlements": {
             "gitlab": "bf7ab976b200",
             "branches": "791f6fc629fc"

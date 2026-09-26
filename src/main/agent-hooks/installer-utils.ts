@@ -12,6 +12,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
@@ -108,10 +109,6 @@ export function getSharedManagedScriptPath(scriptFileName: string): string {
 
 export { wrapPosixHookCommand } from './posix-hook-command'
 
-export function quotePowerShellString(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
 export {
   wrapWindowsPowerShellEncodedCommand,
   WINDOWS_POWERSHELL_HOOK_SWITCHES
@@ -120,29 +117,38 @@ export {
 export function wrapWindowsHookCommand(
   scriptPath: string,
   env: Record<string, string> = {},
+  options: { fallbackStdout?: string } = {}
+): string {
+  return wrapWindowsPowerShellEncodedCommand(
+    buildWindowsHookPowerShellCommand(scriptPath, env, options)
+  )
+}
+
+export function buildWindowsHookPowerShellCommand(
+  scriptPath: string,
+  env: Record<string, string> = {},
   // Why: POSIX wrap already answers missing-script with stdout; Windows must match so gate events cannot drift (#15462).
   options: { fallbackStdout?: string } = {}
 ): string {
   // Why: the encoded launcher protects paths across Windows shells and drains stdin when the config points at a missing script.
-  const quoted = quotePowerShellString(scriptPath)
+  const quoted = quotePowerShellLiteral(scriptPath)
   const envPrefix = Object.entries(env)
-    .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
+    .map(([key, value]) => `$env:${key} = ${quotePowerShellLiteral(value)}; `)
     .join('')
   const fallback =
     options.fallbackStdout === undefined
       ? ''
-      : `Write-Output ${quotePowerShellString(options.fallbackStdout)}; `
+      : `Write-Output ${quotePowerShellLiteral(options.fallbackStdout)}; `
   // Why the order: answer first (a gate event reads silence as deny), then the shared
   // env guard, and only then own stdin — outside an Orca pane the caller may abandon the
   // pipe, and ReadToEnd would strand the launcher there forever (#11549).
-  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${fallback}${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
-  return wrapWindowsPowerShellEncodedCommand(command)
+  return `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${fallback}${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 
 export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
 
 export function wrapWindowsCmdHookCommand(scriptPath: string): string {
-  // Why: Codex/Antigravity/Devin spawn the hook as argv[0], not via cmd.exe, so it must be one spawnable token; a cmd `if exist` launcher isn't (#8430).
+  // Direct-spawn consumers need one executable token; a cmd `if exist` fragment is not one (#8430).
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 
@@ -309,7 +315,9 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
 
 export function writeHooksJson(
   configPath: string,
-  config: HooksConfig,
+  // Why: only used for the fallback serialization, so any JSON-shaped config qualifies —
+  // ZCode nests its hook block under `hooks.events`, not Claude's `hooks.<Event>`.
+  config: Record<string, unknown>,
   // Why: `serialized` lets a JSONC config (Devin) supply text edited in place, so the
   // atomic write + rolling backup below stay shared instead of being reimplemented.
   options?: { preserveMode?: boolean; serialized?: string }
