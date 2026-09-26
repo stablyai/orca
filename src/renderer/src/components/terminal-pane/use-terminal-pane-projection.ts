@@ -1,3 +1,4 @@
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { useCallback, useEffect } from 'react'
 import type { CSSProperties } from 'react'
 import {
@@ -154,7 +155,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const activePaneIsChatLeaf = Boolean(
     isChatViewMode && activePane?.leafId && activePane.leafId === chatLeafId
   )
-  const resolveAgentForLeaf = (leafId: string | null): string | null => {
+  const resolveAgentForLeaf = (leafId: string | null): AgentType | null => {
     const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
     if (detectedAgent) {
       return detectedAgent

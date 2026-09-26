@@ -102,6 +102,7 @@ function createHarness(options: { staleActivePane?: boolean } = {}): {
     toggleExpandPane: vi.fn(),
     setSearchOpen: vi.fn(),
     focusSearchInput: vi.fn(),
+    onToggleRichInput: vi.fn(),
     onSearchSelectedText: vi.fn(),
     onRequestClosePane: vi.fn(),
     onClearPaneScrollback: vi.fn(),

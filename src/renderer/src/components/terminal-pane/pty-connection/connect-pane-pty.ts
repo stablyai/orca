@@ -32,6 +32,7 @@ import { installAgentTaskCompleteNotify } from './agent-task-complete-notify'
 import { installDirectSshRetryStatus } from './direct-ssh-retry-status'
 import { installPtyInputRecovery } from './pty-input-recovery'
 import { installPtyInputForward } from './pty-input-forward'
+import { installTuiRepaintResizeReassert } from './tui-repaint-resize-reassert'
 import { installPtyResizeGeometry } from './pty-resize-geometry'
 import { installSessionReconcileDispose } from './session-reconcile-dispose'
 import { findTerminalTabForPane } from './terminal-tab-id'
@@ -211,6 +212,7 @@ export function connectPanePty(
     session.deps.clearExitedPanePtyLayoutBinding(session.pane.id, exitedPtyId)
   }
   installPtyInputForward(session)
+  installTuiRepaintResizeReassert(session)
   installPtyResizeGeometry(session)
   installRunDeferredConnect(session)
   return installSessionReconcileDispose(session)

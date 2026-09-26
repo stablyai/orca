@@ -1,3 +1,4 @@
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import type { KeybindingPlatform } from '../../../../shared/keybindings'
 import type { KeyboardHandlersDeps } from './terminal-keyboard-dependencies'
 import type { createTerminalKeyboardRuntime } from './terminal-keyboard-runtime'
@@ -69,6 +70,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     onClearPaneScrollback,
     onSetTitle,
     onClearPaneTitle,
+    onToggleRichInput,
     searchOpenRef,
     searchStateRef,
     paneKittyKeyboardModesRef,
@@ -175,6 +177,21 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       }
       runTerminalSearchNavigation(pane, direction, searchStateRef.current)
       pane.terminal.focus()
+      return
+    }
+
+    // The same binding closes the composer while its textarea is focused, so
+    // this check must run before editable targets return to native text input.
+    if (
+      !e.repeat &&
+      keybindingMatchesAction('terminal.richInput.toggle', e, shortcutPlatform, keybindings, {
+        context: 'terminal',
+        terminalShortcutPolicy
+      })
+    ) {
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      onToggleRichInput()
       return
     }
 

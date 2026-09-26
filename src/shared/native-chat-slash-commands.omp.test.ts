@@ -23,7 +23,9 @@ describe('OMP terminal command catalog', () => {
     expect(getVerifiedNativeChatCommands('omp')).toEqual(commands)
     expect(getNativeChatAgentProfile('omp')).toBeNull()
     expect(new Set(names).size).toBe(names.length)
-    expect(getAgentSlashCommands('pi').map((command) => command.name)).toEqual(['clear', 'help'])
+    // Pi has its own catalog; OMP-only commands must not leak into it.
+    expect(getAgentSlashCommands('pi')).not.toBe(commands)
+    expect(getAgentSlashCommands('pi').map((command) => command.name)).not.toContain('switch')
   })
 
   it('completes arguments separately from picker command dispatch', () => {

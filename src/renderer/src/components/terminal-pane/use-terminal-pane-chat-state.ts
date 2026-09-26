@@ -1,3 +1,4 @@
+import { useTerminalPaneRichInput } from './use-terminal-pane-rich-input'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
@@ -49,6 +50,8 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
+  const richInput = useTerminalPaneRichInput(controller, effectiveChatViewMode)
+  const { setRichInputLeafId } = richInput
   const runtimePaneTitlesByPaneId = useAppStore(
     useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
   )
@@ -218,10 +221,18 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       }
       setChatLeafId(leafId)
       if (!effectiveChatViewMode) {
+        setRichInputLeafId(null)
         toggleTabViewMode(unifiedTabId)
       }
     },
-    [chatLeafId, effectiveChatViewMode, setChatLeafId, toggleTabViewMode, unifiedTabId]
+    [
+      chatLeafId,
+      effectiveChatViewMode,
+      setChatLeafId,
+      setRichInputLeafId,
+      toggleTabViewMode,
+      unifiedTabId
+    ]
   )
   const handleToggleNativeChat = useCallback(() => {
     const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
@@ -254,8 +265,8 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     consumePendingCodexPaneRestart,
     clearCodexRestartNotice,
     unifiedTabId,
+    ...richInput,
     isChatViewMode,
-    nativeChatEnabled,
     effectiveChatViewMode,
     unifiedTabLabel,
     isTabPinned,

@@ -125,6 +125,17 @@ describe('keybindings', () => {
     expect(getEffectiveKeybindingsForAction('terminal.selectAll', 'linux')).toEqual([
       'Ctrl+Shift+A'
     ])
+    expect(getEffectiveKeybindingsForAction('terminal.richInput.toggle', 'darwin')).toEqual([
+      'Mod+I'
+    ])
+    expect(getEffectiveKeybindingsForAction('terminal.richInput.toggle', 'linux')).toEqual([
+      'Ctrl+Shift+M'
+    ])
+    expect(
+      getEffectiveKeybindingsForAction('terminal.richInput.toggle', 'darwin', {
+        'terminal.richInput.toggle': ['Alt+R']
+      })
+    ).toEqual(['Alt+R'])
     expect(getEffectiveKeybindingsForAction('terminal.paste', 'darwin')).toEqual(['Mod+V'])
     expect(getEffectiveKeybindingsForAction('terminal.paste', 'linux')).toEqual([
       'Ctrl+V',
