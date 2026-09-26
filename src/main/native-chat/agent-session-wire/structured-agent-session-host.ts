@@ -44,6 +44,7 @@ import type {
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
+import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import {
   createStructuredAgentSessionRestartResume,
   type StructuredAgentSessionRestartResume
@@ -56,7 +57,10 @@ export class StructuredAgentSessionHost {
     () => this.mutationContext(),
     this
   )
-  private readonly sessions = new Map<string, StructuredAgentSessionHostSession>()
+  private readonly sessions = new StructuredAgentSessionConversations({
+    deliver: (sessionId, journal) => this.subscribers.publish(sessionId, journal),
+    onDeliveryError: (sessionId, error) => this.deps.onEventSinkError?.({ sessionId, error })
+  })
   private readonly clientDelivery = new StructuredAgentSessionClientDelivery(
     this.sessions,
     () => this.now(),
@@ -125,10 +129,11 @@ export class StructuredAgentSessionHost {
       ensureProviderChild: (id, options) => this.holds.ensureProviderChild(id, options),
       onBarrierError: (sessionId, error) => deps.onEventSinkError?.({ sessionId, error })
     })
-    this.restartResume = createStructuredAgentSessionRestartResume(deps, this.sessions, {
-      ...structuredAgentSessionRestartResumeSurfaces(this, this.now),
-      publish: this.subscribers.publish.bind(this.subscribers)
-    })
+    this.restartResume = createStructuredAgentSessionRestartResume(
+      deps,
+      this.sessions,
+      structuredAgentSessionRestartResumeSurfaces(this, this.now)
+    )
     this.runtimeState.startLeaseRenewal()
   }
 
@@ -268,17 +273,9 @@ export class StructuredAgentSessionHost {
     commands: this.deps.adapter.readCommands?.(sessionId)
   })
 
-  async handoffStatus(sessionId: string): Promise<SessionWire.AgentSessionHandoffStatus> {
-    this.requireSession(sessionId)
-    // Queued behind an in-flight attach, so a starting chat answers with its settled owner.
-    return this.serialize(sessionId, async () => {
-      const record = this.deps.store.getRecord(sessionId)
-      if (!record) {
-        throw new Error('agent_session_identity_required')
-      }
-      return structuredAgentSessionOwnerStatus(record)
-    })
-  }
+  /** From the record store, never the session map: an idle-released chat has no map entry. */
+  handoffStatus = (sessionId: string): SessionWire.AgentSessionHandoffStatus =>
+    structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
   history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request) =>
     this.backgroundTasks.history(request)
