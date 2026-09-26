@@ -1,6 +1,7 @@
 import { isClaudeAgent } from '@/lib/agent-status'
 import { recordTerminalInputActivity } from '@/lib/terminal-input-activity-coalescing'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
+import { anchorPromptCacheTimerToTranscript } from '@/lib/prompt-cache-transcript-anchor'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createTerminalEphemeralActions(
@@ -174,6 +175,7 @@ export function createTerminalEphemeralActions(
       })
     },
     setCacheTimerStartedAt: (key, ts) => {
+      const startedNewCountdown = get().cacheTimerByKey[key] !== ts
       set((s) => {
         // Why: a real pane write clears any ':seed' sentinel from seedCacheTimersForIdleTabs, avoiding phantom timers when the seed key doesn't match the real pane.
         const colonIdx = key.indexOf(':')
@@ -191,6 +193,19 @@ export function createTerminalEphemeralActions(
         }
         return { cacheTimerByKey: next }
       })
+      if (ts !== null && startedNewCountdown) {
+        void anchorPromptCacheTimerToTranscript({
+          paneKey: key,
+          startedAt: ts,
+          getState: get,
+          applyAnchor: (anchoredAt) =>
+            set((s) =>
+              s.cacheTimerByKey[key] === ts
+                ? { cacheTimerByKey: { ...s.cacheTimerByKey, [key]: anchoredAt } }
+                : s
+            )
+        })
+      }
     },
     seedCacheTimersForIdleTabs: () => {
       // Why: tabs already idle when the feature is enabled mid-session missed their working→idle transition, so seed timers for them.
