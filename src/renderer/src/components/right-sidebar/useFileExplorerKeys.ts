@@ -221,7 +221,13 @@ export function useFileExplorerKeys(opts: {
           (focused !== null ? rowProjectionRef.current.getRowAtIndex(focused) : null) ??
           selectedNodeRef.current
         if (node) {
-          if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+          const wantsRename = keybindingMatchesAction(
+            'fileExplorer.rename',
+            e,
+            platform,
+            keybindings
+          )
+          if (wantsRename) {
             e.preventDefault()
             startRenameRef.current(node)
             return

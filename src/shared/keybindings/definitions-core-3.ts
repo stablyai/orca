@@ -177,6 +177,21 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Alt+Shift+C'])
   },
   {
+    id: 'fileExplorer.rename',
+    title: 'Rename file',
+    group: 'File Explorer',
+    scope: 'fileExplorer',
+    searchKeywords: ['shortcut', 'file explorer', 'rename', 'f2'],
+    // Why: F2 mirrors VS Code/JetBrains on Windows/Linux; Enter stays bound everywhere
+    // to keep the long-standing Enter-to-rename behavior.
+    defaultBindings: {
+      darwin: ['Enter', 'F2'],
+      linux: ['F2', 'Enter'],
+      win32: ['F2', 'Enter']
+    },
+    allowBareKeybindings: true
+  },
+  {
     id: 'fileExplorer.delete',
     title: 'Delete file',
     group: 'File Explorer',
