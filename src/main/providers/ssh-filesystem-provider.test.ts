@@ -5,9 +5,11 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { SshFilesystemProvider } from './ssh-filesystem-provider'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
+import type { SshMultiplexerRequestOptions } from '../ssh/ssh-channel-multiplexer'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
+  _response: ReturnType<typeof vi.fn>
   notify: ReturnType<typeof vi.fn>
   onNotification: ReturnType<typeof vi.fn>
   onNotificationByMethod: ReturnType<typeof vi.fn>
@@ -20,8 +22,23 @@ type MockMultiplexer = {
 
 function createMockMux(): MockMultiplexer {
   const methodHandlers = new Map<string, Set<(params: Record<string, unknown>) => void>>()
+  const response = vi.fn().mockResolvedValue(undefined)
   return {
-    request: vi.fn().mockResolvedValue(undefined),
+    _response: response,
+    // Why: tests stub _response, and this wrapper runs beforeResolve during
+    // response dispatch just like the real mux — streamable readers reject
+    // when the hook never runs.
+    request: vi.fn(
+      async (
+        method: string,
+        params?: Record<string, unknown>,
+        options?: SshMultiplexerRequestOptions
+      ) => {
+        const result: unknown = await response(method, params, options)
+        options?.beforeResolve?.(result)
+        return result
+      }
+    ),
     notify: vi.fn(),
     onNotification: vi.fn(),
     onNotificationByMethod: vi.fn(
@@ -69,7 +86,7 @@ describe('SshFilesystemProvider', () => {
         { name: 'src', isDirectory: true, isSymlink: false },
         { name: 'README.md', isDirectory: false, isSymlink: false }
       ]
-      mux.request.mockResolvedValue(entries)
+      mux._response.mockResolvedValue(entries)
 
       const result = await provider.readDir('/home/user/project')
       expect(mux.request).toHaveBeenCalledWith('fs.readDir', { dirPath: '/home/user/project' })
@@ -79,7 +96,7 @@ describe('SshFilesystemProvider', () => {
 
   describe('readTerminalArtifact', () => {
     it('sends fs.readTerminalArtifact request with verification metadata', async () => {
-      mux.request.mockResolvedValue({ content: '{}', isBinary: false })
+      mux._response.mockResolvedValue({ content: '{}', isBinary: false })
 
       await expect(
         provider.readTerminalArtifact('/tmp/result.json', {
@@ -97,7 +114,7 @@ describe('SshFilesystemProvider', () => {
     })
 
     it('asks the user to reconnect when the relay is too old for artifact reads', async () => {
-      mux.request.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
+      mux._response.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
 
       await expect(
         provider.readTerminalArtifact('/tmp/result.json', {
@@ -121,7 +138,7 @@ describe('SshFilesystemProvider', () => {
 
   describe('writeTerminalArtifact', () => {
     it('returns the verified artifact write stat', async () => {
-      mux.request.mockResolvedValue({ stat: { type: 'file', size: 2, mtime: 3 } })
+      mux._response.mockResolvedValue({ stat: { type: 'file', size: 2, mtime: 3 } })
 
       await expect(
         provider.writeTerminalArtifact('/tmp/result.json', '{}', {
@@ -140,7 +157,7 @@ describe('SshFilesystemProvider', () => {
     })
 
     it('asks the user to reconnect when the relay is too old for artifact writes', async () => {
-      mux.request.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
+      mux._response.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
 
       await expect(
         provider.writeTerminalArtifact('/tmp/result.json', '{}', {
@@ -154,7 +171,7 @@ describe('SshFilesystemProvider', () => {
 
   describe('getTempDir', () => {
     it('reads and caches the remote temp directory from the relay', async () => {
-      mux.request.mockResolvedValue('/var/folders/remote')
+      mux._response.mockResolvedValue('/var/folders/remote')
 
       await expect(provider.getTempDir()).resolves.toBe('/var/folders/remote')
       await expect(provider.getTempDir()).resolves.toBe('/var/folders/remote')
@@ -164,7 +181,7 @@ describe('SshFilesystemProvider', () => {
     })
 
     it('falls back to /tmp when connected to an older relay', async () => {
-      mux.request.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
+      mux._response.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
 
       await expect(provider.getTempDir()).resolves.toBe('/tmp')
     })
@@ -340,7 +357,7 @@ describe('SshFilesystemProvider', () => {
   describe('stat', () => {
     it('sends fs.stat request', async () => {
       const statResult = { size: 1024, type: 'file', mtime: 1234567890 }
-      mux.request.mockResolvedValue(statResult)
+      mux._response.mockResolvedValue(statResult)
 
       const result = await provider.stat('/home/user/file.txt')
       expect(mux.request).toHaveBeenCalledWith('fs.stat', { filePath: '/home/user/file.txt' })
@@ -351,7 +368,7 @@ describe('SshFilesystemProvider', () => {
   describe('lstat', () => {
     it('sends fs.lstat request', async () => {
       const statResult = { size: 12, type: 'symlink', mtime: 1234567890 }
-      mux.request.mockResolvedValue(statResult)
+      mux._response.mockResolvedValue(statResult)
 
       const result = await provider.lstat('/home/user/link.txt')
       expect(mux.request).toHaveBeenCalledWith('fs.lstat', { filePath: '/home/user/link.txt' })
@@ -359,7 +376,7 @@ describe('SshFilesystemProvider', () => {
     })
 
     it('falls back to SFTP lstat when connected to an older relay', async () => {
-      mux.request.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
+      mux._response.mockRejectedValue(Object.assign(new Error('Method not found'), { code: -32601 }))
       const sftp = {
         lstat: vi.fn((_path: string, callback: (err: Error | undefined, stats: unknown) => void) =>
           callback(undefined, {
@@ -392,7 +409,7 @@ describe('SshFilesystemProvider', () => {
       omittedTopLevelSizeBytes: 0
     }
     const controller = new AbortController()
-    mux.request.mockResolvedValue(result)
+    mux._response.mockResolvedValue(result)
 
     await expect(
       provider.scanWorkspaceSpace('/home/user/project', { signal: controller.signal })
@@ -436,7 +453,7 @@ describe('SshFilesystemProvider', () => {
   })
 
   it('renameNoClobber fails closed when the relay lacks safe rename support', async () => {
-    mux.request.mockRejectedValueOnce(
+    mux._response.mockRejectedValueOnce(
       Object.assign(new Error('Method not found'), { code: JsonRpcErrorCode.MethodNotFound })
     )
 
@@ -459,14 +476,14 @@ describe('SshFilesystemProvider', () => {
   })
 
   it('realpath sends fs.realpath request', async () => {
-    mux.request.mockResolvedValue('/home/user/real/path')
+    mux._response.mockResolvedValue('/home/user/real/path')
     const result = await provider.realpath('/home/user/link')
     expect(result).toBe('/home/user/real/path')
   })
 
   it('search sends fs.search request with all options', async () => {
     const searchResult = { files: [], totalMatches: 0, truncated: false }
-    mux.request.mockResolvedValue(searchResult)
+    mux._response.mockResolvedValue(searchResult)
 
     const opts = {
       query: 'TODO',
@@ -482,12 +499,16 @@ describe('SshFilesystemProvider', () => {
   // response streaming. An old relay ignores `__streamResponse` and answers plainly, which is the
   // plain-array case each of these asserts.
   it('listFiles sends a streamable fs.listFiles request', async () => {
-    mux.request.mockResolvedValue(['src/index.ts', 'package.json'])
+    mux._response.mockResolvedValue(['src/index.ts', 'package.json'])
     const result = await provider.listFiles('/home/user/project')
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
-      rootPath: '/home/user/project',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      {
+        rootPath: '/home/user/project',
+        __streamResponse: true
+      },
+      { beforeResolve: expect.any(Function) }
+    )
     expect(result).toEqual(['src/index.ts', 'package.json'])
   })
 
@@ -497,32 +518,40 @@ describe('SshFilesystemProvider', () => {
       maxResults: 20_000,
       searchQuery: 'target'
     })
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
-      rootPath: '/home/user/project',
-      excludePaths: ['/home/user/project/worktrees/b'],
-      maxResults: 20_000,
-      searchQuery: 'target',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      {
+        rootPath: '/home/user/project',
+        excludePaths: ['/home/user/project/worktrees/b'],
+        maxResults: 20_000,
+        searchQuery: 'target',
+        __streamResponse: true
+      },
+      { beforeResolve: expect.any(Function) }
+    )
   })
 
   it('listFiles omits excludePaths when empty', async () => {
-    mux.request.mockResolvedValue([])
+    mux._response.mockResolvedValue([])
     await provider.listFiles('/home/user/project', { excludePaths: [] })
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
-      rootPath: '/home/user/project',
-      __streamResponse: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      {
+        rootPath: '/home/user/project',
+        __streamResponse: true
+      },
+      { beforeResolve: expect.any(Function) }
+    )
   })
 
   it('listFiles forwards the cancellation signal to the mux request (#7721)', async () => {
-    mux.request.mockResolvedValue([])
+    mux._response.mockResolvedValue([])
     const controller = new AbortController()
     await provider.listFiles('/home/user/project', { signal: controller.signal })
     expect(mux.request).toHaveBeenCalledWith(
       'fs.listFiles',
       { rootPath: '/home/user/project', __streamResponse: true },
-      { signal: controller.signal, timeoutMs: undefined }
+      { signal: controller.signal, beforeResolve: expect.any(Function) }
     )
   })
 
@@ -540,7 +569,7 @@ describe('SshFilesystemProvider', () => {
     })
 
     it('uses a registration-owned cancellation signal for the mux fs.watch request', async () => {
-      mux.request.mockResolvedValue(undefined)
+      mux._response.mockResolvedValue(undefined)
       const controller = new AbortController()
       const callback = vi.fn()
 
@@ -558,7 +587,7 @@ describe('SshFilesystemProvider', () => {
 
     it('rejects promptly when the watch signal aborts during setup', async () => {
       let resolveWatch: () => void = () => {}
-      mux.request.mockImplementationOnce(
+      mux._response.mockImplementationOnce(
         (_method, _params, options?: { signal?: AbortSignal }) =>
           new Promise<void>((resolve, reject) => {
             resolveWatch = resolve
@@ -590,7 +619,7 @@ describe('SshFilesystemProvider', () => {
     it('keeps shared setup alive when only its first caller aborts', async () => {
       let resolveWatch: () => void = () => {}
       let physicalSignal: AbortSignal | undefined
-      mux.request.mockImplementationOnce(
+      mux._response.mockImplementationOnce(
         (_method, _params, options?: { signal?: AbortSignal }) =>
           new Promise<void>((resolve) => {
             resolveWatch = resolve
@@ -743,7 +772,7 @@ describe('SshFilesystemProvider', () => {
 
     it('shares an in-flight same-root watch setup across concurrent subscribers', async () => {
       let resolveWatch: () => void = () => {}
-      mux.request.mockImplementationOnce(
+      mux._response.mockImplementationOnce(
         () =>
           new Promise<void>((resolve) => {
             resolveWatch = resolve
@@ -772,7 +801,7 @@ describe('SshFilesystemProvider', () => {
     })
 
     it('does not retain a watch listener when fs.watch setup fails', async () => {
-      mux.request.mockRejectedValueOnce(new Error('watch unavailable'))
+      mux._response.mockRejectedValueOnce(new Error('watch unavailable'))
       const first = vi.fn()
       await expect(provider.watch('/home/user/project', first)).rejects.toThrow('watch unavailable')
 
@@ -851,7 +880,7 @@ describe('SshFilesystemProvider', () => {
     it('fails destructive teardown closed on an older relay', async () => {
       const callback = vi.fn()
       await provider.watch('/home/user/project', callback)
-      mux.request.mockRejectedValueOnce(
+      mux._response.mockRejectedValueOnce(
         Object.assign(new Error('Method not found'), { code: JsonRpcErrorCode.MethodNotFound })
       )
 
@@ -883,7 +912,7 @@ describe('SshFilesystemProvider', () => {
 
     it('unwatches when disposed while fs.watch setup is still resolving', async () => {
       let resolveWatch: () => void = () => {}
-      mux.request.mockImplementationOnce(
+      mux._response.mockImplementationOnce(
         () =>
           new Promise<void>((resolve) => {
             resolveWatch = resolve
