@@ -72,6 +72,72 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey, 'agent-completion')
   })
 
+  it.each(['stored status', 'hook snapshot'] as const)(
+    'does not announce a Codex background recap from %s',
+    (statusSource) => {
+      const recap = {
+        state: 'done' as const,
+        agentType: 'codex',
+        prompt:
+          'Write a brief catch-up for a user returning to this Codex task. Summarize progress.',
+        lastAssistantMessage: '{"recap":"The task is still in progress."}'
+      }
+      if (statusSource === 'stored status') {
+        mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, recap)
+      } else {
+        mockState.agentStatusByPaneKey = {}
+      }
+
+      dispatchTerminalNotification('wt-primary', {
+        source: 'agent-task-complete',
+        terminalTitle: 'codex',
+        paneKey,
+        ...(statusSource === 'hook snapshot' ? { agentStatusSnapshot: recap } : {})
+      })
+
+      expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+      expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
+      expect(mockState.markAgentCompletionPaneUnread).not.toHaveBeenCalled()
+    }
+  )
+
+  it('still announces a user-requested JSON recap', () => {
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      prompt: 'Please return a JSON recap of the finished task.',
+      lastAssistantMessage: '{"recap":"The task is complete."}'
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledOnce()
+  })
+
+  it.each(['waiting', 'blocked'] as const)(
+    'still announces Codex %s attention after a background recap',
+    (state) => {
+      mockState.agentStatusByPaneKey = {}
+
+      dispatchTerminalNotification('wt-primary', {
+        source: 'agent-task-complete',
+        terminalTitle: 'codex',
+        paneKey,
+        agentStatusSnapshot: {
+          state,
+          agentType: 'codex',
+          prompt: 'Write a brief catch-up for a user returning to this Codex task.',
+          lastAssistantMessage: '{"recap":"The task is still in progress."}'
+        }
+      })
+
+      expect(window.api.notifications.dispatch).toHaveBeenCalledOnce()
+      expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    }
+  )
+
   it('builds the notification id from a completion snapshot, not the pinned working row', () => {
     const pinnedWorkingStartedAt = Date.now() - 60_000
     // Why: the stored row must name the event's agent, or it is dropped for identity mismatch
