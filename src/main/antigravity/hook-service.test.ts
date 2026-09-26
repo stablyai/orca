@@ -87,9 +87,9 @@ describe('AntigravityHookService', () => {
       expect(config['orca-status'].PreInvocation[0].command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
     } else {
       expect(config['orca-status'].PreInvocation[0].command).toContain(
-        "ORCA_ANTIGRAVITY_EVENT='PreInvocation'"
+        'ORCA_ANTIGRAVITY_EVENT="PreInvocation"'
       )
-      expect(config['orca-status'].Stop[0].command).toContain("ORCA_ANTIGRAVITY_EVENT='Stop'")
+      expect(config['orca-status'].Stop[0].command).toContain('ORCA_ANTIGRAVITY_EVENT="Stop"')
     }
 
     const script = readFileSync(

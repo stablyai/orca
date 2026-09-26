@@ -38,6 +38,12 @@ import {
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { findBareHookCommandVariables } from './managed-hook-command-env.test-fixture'
 
+// Why: a missing sh returns null stdout, and .trim() at import time fails the whole file on Windows.
+const nuPath =
+  process.platform === 'win32'
+    ? ''
+    : (spawnSync('sh', ['-c', 'command -v nu'], { encoding: 'utf8' }).stdout || '').trim()
+
 let tmpDir: string
 let configPath: string
 
@@ -491,7 +497,7 @@ describe('wrapPosixHookCommand', () => {
   it('produces a guarded command that no-ops when the script is missing', () => {
     const cmd = wrapPosixHookCommand('/does/not/exist.sh')
     expect(cmd).toBe(
-      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+      `/bin/sh -c 'if [ -f "/does/not/exist.sh" ] && [ -r "/does/not/exist.sh" ] && [ -x "/does/not/exist.sh" ]; then /bin/sh "/does/not/exist.sh"; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi'`
     )
   })
 
@@ -500,16 +506,15 @@ describe('wrapPosixHookCommand', () => {
     // a space. The guard must keep the path quoted so each file test and
     // `/bin/sh` see one argument.
     const cmd = wrapPosixHookCommand('/Users/a/Library/Application Support/Orca/agent-hooks/x.sh')
-    expect(cmd).toContain("'/Users/a/Library/Application Support/Orca/agent-hooks/x.sh'")
+    expect(cmd).toContain('"/Users/a/Library/Application Support/Orca/agent-hooks/x.sh"')
   })
 
   it('escapes embedded single quotes so the wrapped command stays well-formed', () => {
-    // Why: POSIX single-quote escape renders ' as '\''. Verify a path with an
-    // embedded quote does not break out of the quoting and instead reaches
-    // /bin/sh as a single argument.
+    // Why: `"'"` is the apostrophe both nushell and POSIX shells accept.
+    // `'\''` is a nushell parse error, so the path would never reach /bin/sh.
     const cmd = wrapPosixHookCommand("/path/with'quote/x.sh")
     expect(cmd).toBe(
-      `if [ -f '/path/with'\\''quote/x.sh' ] && [ -r '/path/with'\\''quote/x.sh' ] && [ -x '/path/with'\\''quote/x.sh' ]; then /bin/sh '/path/with'\\''quote/x.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+      `/bin/sh -c 'if [ -f "/path/with'"'"'quote/x.sh" ] && [ -r "/path/with'"'"'quote/x.sh" ] && [ -x "/path/with'"'"'quote/x.sh" ]; then /bin/sh "/path/with'"'"'quote/x.sh"; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi'`
     )
   })
 
@@ -518,7 +523,7 @@ describe('wrapPosixHookCommand', () => {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
     })
     expect(cmd).toBe(
-      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+      `/bin/sh -c 'if [ -f "/does/not/exist.sh" ] && [ -r "/does/not/exist.sh" ] && [ -x "/does/not/exist.sh" ]; then ORCA_COPILOT_HOOK_EVENT="UserPromptSubmit" /bin/sh "/does/not/exist.sh"; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi'`
     )
   })
 
@@ -534,7 +539,7 @@ describe('wrapPosixHookCommand', () => {
   it('emits a fallback response before draining when the caller supplies one', () => {
     const cmd = wrapPosixHookCommand('/does/not/exist.sh', {}, { fallbackStdout: '{"a":"b"}' })
     expect(cmd).toBe(
-      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else printf '%s\\n' '{"a":"b"}'; ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+      `/bin/sh -c 'if [ -f "/does/not/exist.sh" ] && [ -r "/does/not/exist.sh" ] && [ -x "/does/not/exist.sh" ]; then /bin/sh "/does/not/exist.sh"; else printf "%s\\n" "{\\"a\\":\\"b\\"}"; ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi'`
     )
   })
 
@@ -548,6 +553,40 @@ describe('wrapPosixHookCommand', () => {
       })
       expect(result.status).toBe(0)
       expect(result.stdout).toBe('{"a":"b"}\n')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32' || nuPath.length === 0)(
+    'nushell runs the sh -c guard instead of parsing && itself',
+    /** Nushell must run the guard, not fail on `&&` before `/bin/sh` starts. */
+    () => {
+      const missing = wrapPosixHookCommand(
+        '/does/not/exist.sh',
+        {},
+        { fallbackStdout: '{"a":"b"}' }
+      )
+      const missingResult = spawnSync(nuPath, ['-c', missing], {
+        input: 'payload',
+        encoding: 'utf8'
+      })
+      expect(missingResult.status).toBe(0)
+      expect(missingResult.stdout).toBe('{"a":"b"}\n')
+
+      const scriptPath = join(tmpDir, 'nu-present-hook.sh')
+      writeFileSync(scriptPath, "#!/bin/sh\nprintf 'from-script\\n'\n", { mode: 0o755 })
+      const present = wrapPosixHookCommand(scriptPath, {}, { fallbackStdout: '{"a":"b"}' })
+      const presentResult = spawnSync(nuPath, ['-c', present], { encoding: 'utf8' })
+      expect(presentResult.status).toBe(0)
+      expect(presentResult.stdout).toBe('from-script\n')
+
+      const quotedDir = join(tmpDir, "o'brien")
+      mkdirSync(quotedDir)
+      const quotedScript = join(quotedDir, 'hook.sh')
+      writeFileSync(quotedScript, "#!/bin/sh\nprintf 'quoted\\n'\n", { mode: 0o755 })
+      const quoted = wrapPosixHookCommand(quotedScript)
+      const quotedResult = spawnSync(nuPath, ['-c', quoted], { encoding: 'utf8' })
+      expect(quotedResult.status, quotedResult.stderr).toBe(0)
+      expect(quotedResult.stdout).toBe('quoted\n')
     }
   )
 

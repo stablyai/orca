@@ -240,7 +240,7 @@ describe('remote hook service installers', () => {
     ]) {
       const command = hooks.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/codex-hook.sh')
-      expect(command).toMatch(/^if \[ -f /)
+      expect(command).toMatch(/^\/bin\/sh -c 'if \[ -f /)
     }
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toBe(0o755)
@@ -332,7 +332,7 @@ describe('remote hook service installers', () => {
     for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool']) {
       const command = geminiConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/gemini-hook.sh')
-      expect(command).toMatch(/^if \[ -f /)
+      expect(command).toMatch(/^\/bin\/sh -c 'if \[ -f /)
     }
     expect(geminiConfig.hooks.PreToolUse).toBeUndefined()
 
@@ -347,18 +347,18 @@ describe('remote hook service installers', () => {
     for (const eventName of ['PreInvocation', 'PostInvocation', 'Stop']) {
       const command = antigravityConfig['orca-status'][eventName]?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
-      expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
+      expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT="${eventName}"`)
     }
     for (const eventName of ['PreToolUse', 'PostToolUse']) {
       const definition = antigravityConfig['orca-status'][eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(definition?.matcher).toBe('*')
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
-      expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
+      expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT="${eventName}"`)
     }
     // Why: #2426 was an SSH report — a remote host missing the script must still answer the gate, not deny every tool.
     expect(antigravityConfig['orca-status'].PreToolUse[0].hooks?.[0]?.command).toContain(
-      `printf '%s\\n' '{"decision":"ask"}'`
+      'printf "%s\\n" "{\\"decision\\":\\"ask\\"}"'
     )
     expect(antigravityConfig['orca-status'].PostToolUse[0].hooks?.[0]?.command).not.toContain(
       '{"decision"'
@@ -380,8 +380,8 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/cursor-hook.sh')
       expect(definition?.hooks).toBeUndefined()
       const response = EXPECTED_CURSOR_HOOK_RESPONSES[eventName]
-      expect(command).toContain(`ORCA_CURSOR_HOOK_RESPONSE='${response}'`)
-      expect(command).toContain(`printf '%s\\n' '${response}'`)
+      expect(command).toContain(`ORCA_CURSOR_HOOK_RESPONSE="${response.replaceAll('"', '\\"')}"`)
+      expect(command).toContain(`printf "%s\\n" "${response.replaceAll('"', '\\"')}"`)
     }
 
     const commandCodeConfig = JSON.parse(
@@ -393,7 +393,7 @@ describe('remote hook service installers', () => {
       const definition = commandCodeConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/command-code-hook.sh')
-      expect(command).toMatch(/^if \[ -f /)
+      expect(command).toMatch(/^\/bin\/sh -c 'if \[ -f /)
     }
     expect(commandCodeConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
     expect(commandCodeConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
@@ -417,7 +417,7 @@ describe('remote hook service installers', () => {
       const definition = grokConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
-      expect(command).toMatch(/^if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
+      expect(command).toMatch(/^\/bin\/sh -c 'if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
     }
     // Why: Grok tool matchers are real regexes; bare `*` is invalid match-all.
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
@@ -443,14 +443,14 @@ describe('remote hook service installers', () => {
       const definition = devinConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
-      expect(command).toMatch(/^if \[ -f /)
+      expect(command).toMatch(/^\/bin\/sh -c 'if \[ -f /)
     }
     for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
       const definition = devinConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(definition?.matcher).toBeUndefined()
       expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
-      expect(command).toMatch(/^if \[ -f /)
+      expect(command).toMatch(/^\/bin\/sh -c 'if \[ -f /)
     }
     expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
   })
@@ -508,7 +508,7 @@ describe('remote hook service installers', () => {
     }
     // The command points at the POSIX managed script via the regular-file guard.
     expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
-    expect(config).toMatch(/command = "if \[ -f /)
+    expect(config).toMatch(/command = "\/bin\/sh -c 'if \[ -f /)
     expect(fs.files.get('/home/dev/.orca/agent-hooks/kimi-hook.sh')).toContain('/hook/kimi')
   })
 
@@ -677,7 +677,7 @@ describe('remote hook service installers', () => {
     ]) {
       const definition = config.hooks[eventName]?.[0]
       expect(definition?.bash).toContain('/home/dev/.orca/agent-hooks/copilot-hook.sh')
-      expect(definition?.bash).toContain(`ORCA_COPILOT_HOOK_EVENT='${eventName}'`)
+      expect(definition?.bash).toContain(`ORCA_COPILOT_HOOK_EVENT="${eventName}"`)
       expect(definition?.timeoutSec).toBe(5)
     }
     expect(config.disableAllHooks).toBeUndefined()
@@ -777,7 +777,7 @@ describe('remote hook service installers', () => {
       const definition = config.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/droid-hook.sh')
-      expect(command).toMatch(/^if \[ -f /)
+      expect(command).toMatch(/^\/bin\/sh -c 'if \[ -f /)
     }
     // Tool/permission events carry a `*` matcher; lifecycle events do not.
     expect(config.hooks.PreToolUse?.[0]?.matcher).toBe('*')

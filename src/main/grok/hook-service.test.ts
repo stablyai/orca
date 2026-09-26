@@ -284,7 +284,7 @@ describe('GrokHookService', () => {
       expect(command).toContain(join(homeDir, '.orca'))
       // Why: with no Orca pane in the environment the guard short-circuits, so a standalone Grok
       // session never spawns a shell for the managed script at all.
-      expect(command).toMatch(/^if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
+      expect(command).toMatch(/^\/bin\/sh -c 'if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
     }
 
     const script = readFileSync(
