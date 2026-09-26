@@ -27,10 +27,15 @@ jobs:
       ORCA_INVESTIGATION_VARIANT: ${{ matrix.variant }}
       ORCA_INVESTIGATION_SOURCE_REF: ${{ matrix.source_ref }}
       ORCA_INVESTIGATION_SOURCE_SHA256: ${{ matrix.conpty_source_sha256 }}
-      ORCA_INVESTIGATION_RESULTS: ${{ runner.temp }}/orca-pty-evidence-${{ matrix.variant }}
       ORCA_INVESTIGATION_TOOL_REF: ${{ github.sha }}
 
     steps:
+      - name: Select the runner evidence directory
+        shell: pwsh
+        run: |
+          $resultDirectory = Join-Path $env:RUNNER_TEMP "orca-pty-evidence-$env:ORCA_INVESTIGATION_VARIANT"
+          "ORCA_INVESTIGATION_RESULTS=$resultDirectory" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Checkout immutable product source
         uses: actions/checkout@v6
         with:
