@@ -151,6 +151,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         this.registerPreAllocatedHandleForPty(ptyId, replacementHandle)
       }
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
+      this.rederiveFencedRendererSurface(worktreeId, ptyId, binding.tabId, binding.leafId)
     }
   }
 
