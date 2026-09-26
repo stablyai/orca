@@ -1,16 +1,20 @@
 import { mergeCommandEnvironment } from '../shared/command-environment'
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
 import { terminateRelaySubprocessTree } from './subprocess-tree-termination'
+import { spawnProcess } from '../shared/child-process/run-process'
+import { agentExecLoginShell } from './agent-exec-login-shell'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
+const LOGIN_SHELL_GUARD_ENV_KEY =
+  /^(?:GIT_TERMINAL_PROMPT|GCM_INTERACTIVE|GIT_ASKPASS|SSH_ASKPASS|GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+))$/
 
 function getCmdExePath(): string {
   return process.env.ComSpec || `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\cmd.exe`
@@ -76,6 +80,7 @@ type ExecParams = {
   timeoutMs: unknown
   env: unknown
   operation: unknown
+  loginShell?: unknown
 }
 
 type CancelParams = {
@@ -169,13 +174,24 @@ export class AgentExecHandler {
 
     return new Promise<ExecResult>((resolve) => {
       let child
+      const loginShellEnv = Object.fromEntries(
+        Object.entries(spawnEnv).filter(
+          ([key, value]) =>
+            Object.hasOwn(extraEnv ?? {}, key) ||
+            value !== process.env[key] ||
+            // Startup must not overwrite inherited guards or part of their indexed config.
+            LOGIN_SHELL_GUARD_ENV_KEY.test(key)
+        )
+      )
+      const loginShell = agentExecLoginShell(binary, args, cwd, params.loginShell, loginShellEnv)
       try {
-        const { spawnCmd, spawnArgs } = getWindowsSafeSpawn(binary, args, spawnEnv)
-        child = spawn(spawnCmd, spawnArgs, {
+        const { spawnCmd, spawnArgs } = loginShell ?? getWindowsSafeSpawn(binary, args, spawnEnv)
+        child = spawnProcess({
+          program: spawnCmd,
+          args: spawnArgs,
           cwd,
           env: spawnEnv,
-          stdio: ['pipe', 'pipe', 'pipe'],
-          windowsHide: true
+          stdio: ['pipe', 'pipe', 'pipe']
         })
       } catch (error) {
         resolve({
@@ -214,7 +230,13 @@ export class AgentExecHandler {
         if (laneKey && entry && this.inFlightByLane.get(laneKey) === entry) {
           this.inFlightByLane.delete(laneKey)
         }
-        resolve(result)
+        const output = loginShell ? (loginShell.readStdout(result.stdout) ?? '') : result.stdout
+        const missingBinary = loginShell?.isMissingBinary(output, result.exitCode)
+        resolve({
+          ...result,
+          stdout: missingBinary ? '' : output,
+          ...(missingBinary ? { stderr: '', spawnError: `spawn ${binary} ENOENT` } : {})
+        })
       }
       const cancelCurrent = (): void => {
         canceled = true
@@ -292,6 +314,10 @@ export class AgentExecHandler {
         }
       }
 
+      // A failed exec can break any pipe; late stream errors must not crash the relay.
+      child.stdin?.on?.('error', () => {})
+      child.stdout?.on('error', () => {})
+      child.stderr?.on('error', () => {})
       if (stdinPayload !== null) {
         child.stdin?.end(stdinPayload)
       } else {

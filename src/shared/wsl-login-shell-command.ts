@@ -72,20 +72,27 @@ export function buildWslCapturedLoginShellCommand(
   command: string,
   nonce: string = nextWslCaptureNonce()
 ): WslCapturedLoginShellCommand {
+  const captured = buildCapturedShellCommand(command, nonce)
+  return { ...captured, command: buildWslLoginShellCommand(captured.command) }
+}
+
+/** Fence command output separately from shell startup banners. */
+export function buildCapturedShellCommand(
+  command: string,
+  nonce: string = nextWslCaptureNonce()
+): WslCapturedLoginShellCommand {
   const begin = `__ORCA_WSL_CAPTURE_BEGIN_${nonce}__`
   const end = `__ORCA_WSL_CAPTURE_END_${nonce}__`
   return {
     beginMarker: begin,
     endMarker: end,
-    command: buildWslLoginShellCommand(
-      [
-        `printf %s ${quotePosixShell(begin)}`,
-        command,
-        '_orca_capture_status=$?',
-        `printf %s ${quotePosixShell(end)}`,
-        'exit $_orca_capture_status'
-      ].join('\n')
-    ),
+    command: [
+      `printf %s ${quotePosixShell(begin)}`,
+      command,
+      '_orca_capture_status=$?',
+      `printf %s ${quotePosixShell(end)}`,
+      'exit $_orca_capture_status'
+    ].join('\n'),
     readStdout: (stdout) => {
       // Why lastIndexOf: a login shell can echo the command text before running
       // it (`set -x` in an rc file), which repeats the opening fence verbatim.

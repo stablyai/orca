@@ -60,9 +60,12 @@ describe('AgentExecHandler', () => {
       requestContext()
     )
 
+    expect(() => child.stdout.emit('error', new Error('read pipe closed'))).not.toThrow()
+    expect(() => child.stderr.emit('error', new Error('read pipe closed'))).not.toThrow()
     child.stdout.emit('data', Buffer.from('message'))
     child.stderr.emit('data', Buffer.from('warning'))
     child.emit('close', 0)
+    expect(() => child.stdout.emit('error', new Error('late pipe error'))).not.toThrow()
 
     await expect(pending).resolves.toEqual({
       stdout: 'message',
@@ -79,7 +82,10 @@ describe('AgentExecHandler', () => {
         GCM_INTERACTIVE: 'never'
       }),
       stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
+      windowsHide: true,
+      detached: undefined,
+      windowsVerbatimArguments: undefined,
+      shell: false
     })
     expect(child.stdin.end).toHaveBeenCalledWith('PROMPT')
   })
@@ -119,7 +125,10 @@ describe('AgentExecHandler', () => {
         PATH: '/managed/bin'
       }),
       stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
+      windowsHide: true,
+      detached: undefined,
+      windowsVerbatimArguments: undefined,
+      shell: false
     })
   })
 
