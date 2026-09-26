@@ -167,9 +167,10 @@ it('does not open a stream when earlier middleware resumes after response close'
   const closed = once(response, 'close')
   response.destroy()
   await closed
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The middleware reads only method/url and uses the implemented writable response and header fields.
   middleware(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The middleware reads only these method/url fields.
     { method: 'GET', url: '/wasm/fixture.wasm' } as IncomingMessage,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture implements the writable response and header fields used by this middleware.
     response as unknown as ServerResponse,
     vi.fn()
   )
