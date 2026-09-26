@@ -17,6 +17,7 @@ export type HeadlessAutomationDispatchContext = {
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
   dispatcher: HeadlessAutomationDispatcher
+  beginHeadlessCompletionAbort: (runId: string) => AbortController
   runs: AutomationRunWriter
   runPrecheck: () => Promise<AutomationPrecheckResult | null>
   markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
@@ -25,6 +26,16 @@ export type HeadlessAutomationDispatchContext = {
 
 function describeDispatchError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function shouldIgnoreHeadlessCompletion(
+  error: unknown,
+  abortSignal: AbortSignal | undefined
+): boolean {
+  if (abortSignal?.aborted) {
+    return true
+  }
+  return error instanceof Error && error.message === 'request_aborted'
 }
 
 export async function runHeadlessAutomationDispatch(
@@ -43,7 +54,13 @@ export async function runHeadlessAutomationDispatch(
     })
   }
   try {
-    const launch = await ctx.dispatcher({ automation, run, target })
+    const completionAbort = ctx.beginHeadlessCompletionAbort(run.id)
+    const launch = await ctx.dispatcher({
+      automation,
+      run,
+      target,
+      completionSignal: completionAbort.signal
+    })
     const launchRunTarget = {
       workspaceId: launch.workspaceId,
       workspaceDisplayName: launch.workspaceDisplayName ?? null,
@@ -63,9 +80,13 @@ export async function runHeadlessAutomationDispatch(
       ctx.watchRun(updated)
       return updated
     }
+    const completionAbortSignal = launch.completionAbortSignal
     void launch.completion
-      .then((completion) =>
-        ctx.markDispatchResult({
+      .then((completion) => {
+        if (completionAbortSignal?.aborted) {
+          return
+        }
+        return ctx.markDispatchResult({
           runId: run.id,
           status: completion.status,
           ...launchRunTarget,
@@ -73,15 +94,18 @@ export async function runHeadlessAutomationDispatch(
           outputSnapshot: completion.outputSnapshot ?? null,
           error: completion.error ?? null
         })
-      )
-      .catch((error) =>
-        ctx.markDispatchResult({
+      })
+      .catch((error) => {
+        if (shouldIgnoreHeadlessCompletion(error, completionAbortSignal)) {
+          return
+        }
+        return ctx.markDispatchResult({
           runId: run.id,
           status: 'dispatch_failed',
           ...launchRunTarget,
           error: describeDispatchError(error)
         })
-      )
+      })
     return updated
   } catch (error) {
     return runs.updateRun({

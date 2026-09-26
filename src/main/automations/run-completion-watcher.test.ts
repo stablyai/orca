@@ -6,6 +6,7 @@ import type { Repo } from '../../shared/repo-types'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { AutomationsChangedPayload } from '../../shared/runtime-client-events'
 import { AutomationService } from './service'
+import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
@@ -72,6 +73,8 @@ const LAUNCH_TARGET = {
   terminalPtyId: 'pty-1'
 }
 
+const headlessLaunchOnly: HeadlessAutomationDispatcher = async () => ({ ...LAUNCH_TARGET })
+
 function readRun(store: TestStore, automationId: string, runId: string): AutomationRun {
   const run = store.listAutomationRuns(automationId).find((entry) => entry.id === runId)
   if (!run) {
@@ -107,7 +110,7 @@ describe('authority-owned automation run completion', () => {
     const service = new AutomationService(store, {
       // Why: a dispatcher without a completion promise is exactly the case that
       // used to strand a run at 'dispatched' for the process lifetime.
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      headlessDispatcher: headlessLaunchOnly,
       terminalObserver: createObserver(async () => ({ status: 'completed', error: null }))
     })
 
@@ -123,7 +126,7 @@ describe('authority-owned automation run completion', () => {
     const store = await createStore()
     const automation = createAutomation(store)
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      headlessDispatcher: headlessLaunchOnly,
       terminalObserver: createObserver(
         async () => ({ status: 'completed' }),
         () => null
@@ -145,7 +148,7 @@ describe('authority-owned automation run completion', () => {
     const automation = createAutomation(store)
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      headlessDispatcher: headlessLaunchOnly,
       terminalObserver: createObserver(async () => {
         throw new Error('terminal_handle_stale')
       })
@@ -239,7 +242,7 @@ describe('authority-owned automation run completion', () => {
     const automation = createAutomation(store)
     let resolveObservation: ((value: AutomationRunCompletionObservation) => void) | null = null
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      headlessDispatcher: headlessLaunchOnly,
       terminalObserver: createObserver(
         () =>
           new Promise<AutomationRunCompletionObservation>((resolve) => {
@@ -273,12 +276,40 @@ describe('authority-owned automation run completion', () => {
     service.stop()
   })
 
+  it('aborts in-flight headless completion on stop without persisting a terminal status', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store)
+    let completionSignal: AbortSignal | null = null
+    let resolveCompletion!: (value: AutomationRunCompletionObservation) => void
+    const service = new AutomationService(store, {
+      headlessDispatcher: async ({ completionSignal: signal }) => {
+        completionSignal = signal
+        return {
+          ...LAUNCH_TARGET,
+          completion: new Promise((resolve) => {
+            resolveCompletion = resolve
+          })
+        }
+      }
+    })
+
+    const run = await service.runNow(automation.id)
+    expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
+    service.stop()
+    expect(completionSignal).not.toBeNull()
+    expect(completionSignal!.aborted).toBe(true)
+    resolveCompletion({ status: 'completed', error: null })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
+  })
+
   it('disposes watchers on stop', async () => {
     const store = await createStore()
     const automation = createAutomation(store)
     const aborted: boolean[] = []
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      headlessDispatcher: headlessLaunchOnly,
       terminalObserver: createObserver(
         (signal) =>
           new Promise<AutomationRunCompletionObservation>((_resolve, reject) => {
@@ -304,7 +335,7 @@ describe('authority-owned automation run completion', () => {
     const automation = createAutomation(store)
     const publish = vi.fn()
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      headlessDispatcher: headlessLaunchOnly,
       onAutomationsChanged: publish
     })
 
@@ -331,7 +362,7 @@ describe('automationsChanged publication', () => {
     const automation = createAutomation(store)
     const seen: { payload: AutomationsChangedPayload; status: string | undefined }[] = []
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      headlessDispatcher: headlessLaunchOnly,
       onAutomationsChanged: (payload) => {
         seen.push({
           payload,
@@ -367,7 +398,7 @@ describe('automationsChanged publication', () => {
     // An old client's event switch has no automationsChanged branch at all.
     const oldClientState = { repoRefreshes: 0 }
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      headlessDispatcher: headlessLaunchOnly,
       onAutomationsChanged: (payload) => {
         if ((payload as { type?: string }).type === 'reposChanged') {
           oldClientState.repoRefreshes += 1

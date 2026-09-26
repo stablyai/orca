@@ -4,6 +4,7 @@ import type {
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import type { AutomationRunOutputSnapshot } from '../../shared/automations-types'
+import type { RuntimeTerminalWait } from '../../shared/runtime-types'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
 
@@ -30,7 +31,7 @@ export type AutomationRunTerminalHost = {
   waitForTerminal(
     handle: string,
     options?: { condition?: 'tui-idle'; timeoutMs?: number; signal?: AbortSignal }
-  ): Promise<{ satisfied: boolean; blockedReason?: string }>
+  ): Promise<RuntimeTerminalWait>
   readTerminal(handle: string, opts?: { limit?: number }): Promise<{ tail: string[] }>
 }
 
@@ -73,7 +74,9 @@ async function isTuiIdleSatisfiedNow(
       signal
     })
     // A blocked pane is not "already finished"; let the real wait report it.
-    return wait.satisfied
+    // An exited terminal can satisfy tui-idle while status is 'exited'; treat that
+    // as completion evidence, not a stale idle that needs a busy edge.
+    return wait.satisfied && wait.status !== 'exited'
   } catch (error) {
     if (isTerminalWaitTimeout(error)) {
       return false
@@ -117,10 +120,10 @@ async function readTerminalSnapshot(
 async function buildObservation(
   runtime: AutomationRunTerminalHost,
   handle: string,
-  wait: { satisfied: boolean; blockedReason?: string }
+  wait: RuntimeTerminalWait
 ): Promise<AutomationRunCompletionObservation> {
   const outputSnapshot = await readTerminalSnapshot(runtime, handle)
-  if (wait.satisfied) {
+  if (wait.satisfied && (wait.status !== 'exited' || wait.exitCode === 0)) {
     return { status: 'completed', outputSnapshot, error: null }
   }
   return {

@@ -18,6 +18,7 @@ import { runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
+import { HeadlessCompletionAbortRegistry } from './headless-completion-abort'
 import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
 import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
 import {
@@ -53,6 +54,7 @@ export class AutomationService {
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
   private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
+  private readonly headlessCompletionAbort = new HeadlessCompletionAbortRegistry()
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
@@ -78,7 +80,9 @@ export class AutomationService {
     this.claudeUsage = opts.claudeUsage ?? null
     this.codexUsage = opts.codexUsage ?? null
     this.allowRemoteHostScheduling = opts.allowRemoteHostScheduling ?? false
-    this.headlessDispatcher = opts.headlessDispatcher ?? null
+    this.headlessDispatcher = opts.headlessDispatcher
+      ? this.headlessCompletionAbort.wrapDispatcher(opts.headlessDispatcher)
+      : null
     this.publish = opts.onAutomationsChanged ?? null
     this.runs = createAutomationRunWriter(store, this.publish)
     this.completionWatcher = opts.terminalObserver
@@ -131,6 +135,7 @@ export class AutomationService {
 
   stop(): void {
     this.completionWatcher?.dispose()
+    this.headlessCompletionAbort.abortAll()
     if (!this.timer) {
       return
     }
@@ -309,6 +314,7 @@ export class AutomationService {
           run,
           target,
           dispatcher: this.headlessDispatcher,
+          beginHeadlessCompletionAbort: (runId) => this.headlessCompletionAbort.beginRun(runId),
           runs: this.runs,
           runPrecheck: () => this.runPrecheck(automation.id, run.id),
           markDispatchResult: (result) => this.markDispatchResult(result),

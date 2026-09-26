@@ -13,10 +13,20 @@ type FakePane = {
   lastAgentStatus: 'idle' | 'working' | 'permission' | null
   paneTitle: string | null
   preview: string
+  status: 'running' | 'exited' | 'unknown'
+  exitCode: number | null
+}
+
+type FakeWaitResult = {
+  handle: string
+  condition: 'tui-idle'
+  satisfied: boolean
+  status: FakePane['status']
+  exitCode: number | null
 }
 
 type FakeWaiter = {
-  resolve: (value: { satisfied: boolean; blockedReason?: string }) => void
+  resolve: (value: FakeWaitResult) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
 }
@@ -26,6 +36,8 @@ function createFakeRuntime(initial: Partial<FakePane>) {
     lastAgentStatus: null,
     paneTitle: null,
     preview: '',
+    status: 'running',
+    exitCode: null,
     ...initial
   }
   const waiters = new Set<FakeWaiter>()
@@ -36,7 +48,16 @@ function createFakeRuntime(initial: Partial<FakePane>) {
   const satisfiedNow = (): boolean =>
     pane.lastAgentStatus === 'idle' ||
     (pane.paneTitle?.toLowerCase().includes('idle') ?? false) ||
-    pane.preview.trimEnd().endsWith('$')
+    pane.preview.trimEnd().endsWith('$') ||
+    pane.status === 'exited'
+
+  const waitResult = (satisfied: boolean): FakeWaitResult => ({
+    handle: HANDLE,
+    condition: 'tui-idle',
+    satisfied,
+    status: pane.status,
+    exitCode: pane.exitCode
+  })
 
   const runtime: AutomationRunTerminalHost & {
     setPane: (next: Partial<FakePane>) => void
@@ -50,7 +71,7 @@ function createFakeRuntime(initial: Partial<FakePane>) {
         return Promise.reject(new Error('request_aborted'))
       }
       if (satisfiedNow()) {
-        return Promise.resolve({ satisfied: true })
+        return Promise.resolve(waitResult(true))
       }
       return new Promise((resolve, reject) => {
         const waiter: FakeWaiter = {
@@ -72,7 +93,7 @@ function createFakeRuntime(initial: Partial<FakePane>) {
       for (const waiter of waiters) {
         waiters.delete(waiter)
         clearTimeout(waiter.timer)
-        waiter.resolve({ satisfied: true })
+        waiter.resolve(waitResult(true))
       }
     },
     waitCalls: () => waitCalls
@@ -190,6 +211,32 @@ describe('createRuntimeAutomationRunTerminalObserver', () => {
     expect(run.settled[0]?.error).toContain('without a completion signal')
     // 6h of 5-minute waits, not an unbounded re-arm.
     expect(runtime.waitCalls()).toBeLessThanOrEqual(80)
+    await run.promise
+  })
+
+  it('completes a fast-finished new-per-run terminal that is already exited', async () => {
+    const runtime = createFakeRuntime({
+      lastAgentStatus: 'idle',
+      status: 'exited',
+      exitCode: 0
+    })
+    const run = observe(runtime)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(run.settled[0]?.status).toBe('completed')
+    await run.promise
+  })
+
+  it('fails an exited terminal with a non-zero exit code', async () => {
+    const runtime = createFakeRuntime({
+      lastAgentStatus: 'idle',
+      status: 'exited',
+      exitCode: 1
+    })
+    const run = observe(runtime)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(run.settled[0]?.status).toBe('dispatch_failed')
     await run.promise
   })
 })

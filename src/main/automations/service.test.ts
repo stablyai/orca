@@ -413,8 +413,11 @@ describe('AutomationService', () => {
       vi.setSystemTime(afterRunAt)
       service.start()
       await vi.waitFor(() => expect(headlessDispatcher).toHaveBeenCalledTimes(1))
+      await vi.waitFor(() => {
+        const pendingRun = store.listAutomationRuns(automation.id)[0]
+        expect(pendingRun?.status).toBe('dispatched')
+      })
       const run = store.listAutomationRuns(automation.id)[0]
-      expect(run?.status).toBe('dispatched')
       expect(run?.scheduledFor).toBe(scheduledRunAt)
       expect(headlessDispatcher).toHaveBeenCalledWith(
         expect.objectContaining({ automation: expect.objectContaining({ id: automation.id }) })

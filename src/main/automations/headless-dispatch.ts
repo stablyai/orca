@@ -18,12 +18,15 @@ export type HeadlessAutomationDispatchLaunch = {
     outputSnapshot?: AutomationRunOutputSnapshot | null
     error?: string | null
   }>
+  /** Set by AutomationService so headless completion can be dropped after stop(). */
+  completionAbortSignal?: AbortSignal
 }
 
 export type HeadlessAutomationDispatcher = (request: {
   automation: Automation
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
+  completionSignal: AbortSignal
 }) => Promise<HeadlessAutomationDispatchLaunch>
 
 export function createHeadlessAutomationOutputSnapshotBuffer(): {

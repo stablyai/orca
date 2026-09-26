@@ -232,6 +232,7 @@ describe('AutomationService prechecks', () => {
       run,
       target: { ok: true, cwd: '/repo', repo: store.getRepo('r1')! },
       dispatcher: headlessDispatcher,
+      beginHeadlessCompletionAbort: () => new AbortController(),
       runs: createAutomationRunWriter(store, null),
       runPrecheck: () => service.runPrecheck(automation.id, run.id),
       markDispatchResult: (result) => service.markDispatchResult(result),

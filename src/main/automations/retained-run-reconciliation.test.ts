@@ -9,6 +9,7 @@ import {
   type AutomationRun
 } from '../../shared/automations-types'
 import { AutomationService } from './service'
+import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
@@ -51,6 +52,8 @@ const LAUNCH_TARGET = {
   terminalPaneKey: 'tab-1:11111111-2222-4333-8444-555555555555',
   terminalPtyId: 'pty-1'
 }
+
+const headlessLaunchOnly: HeadlessAutomationDispatcher = async () => ({ ...LAUNCH_TARGET })
 
 /** Well past the reconciler's post-ready settle window. */
 const AFTER_SETTLE_MS = 10 * 60 * 1000
@@ -217,7 +220,7 @@ describe('reconciling retained runs against a graph that has not published yet',
     const retained = retainDispatchedRun(store, automation)
     const surface = createPaneSurface()
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      headlessDispatcher: headlessLaunchOnly,
       terminalObserver: surface.observer
     })
 
