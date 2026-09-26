@@ -11,12 +11,19 @@ import { HeadlessEmulator } from './headless-emulator'
 //     src/main/daemon/headless-emulator-snapshot-cost.bench.test.ts \
 //     --config config/vitest.config.ts
 //
-// Why these measurements: during an active agent session every PTY chunk marks
-// the session dirty, so daemon-pty-adapter checkpoints every 5s. getSnapshot()
-// serializes the full headless buffer synchronously on the daemon event loop
-// (stalling the PTY pump), and history-manager JSON.stringifies the result on
-// the Electron main process (stalling input IPC). Both stalls scale with
-// buffer content, which matches the report that clearing history fixes the lag.
+// Why these measurements (all describe the PRE-#5292 design this harness was
+// written to justify retiring — see the caveat below): every PTY chunk marked
+// the session dirty, so daemon-pty-adapter took a full checkpoint every 5s.
+// getSnapshot() serializes the full headless buffer synchronously on the daemon
+// event loop (stalling the PTY pump), and history-manager JSON.stringifies the
+// result on the Electron main process (stalling input IPC). Both stalls scale
+// with buffer content, which matched the report that clearing history fixed the lag.
+//
+// Current behaviour: the 5s tick appends increments (takePendingOutput) and does
+// NOT serialize the buffer. A full snapshot happens only on a clean disconnect,
+// a pending-buffer overflow, or the 5MB log cap, and is further bounded by
+// FULL_CHECKPOINT_COOLDOWN_MS. Do not cite the numbers below as the cost of a
+// periodic checkpoint; they are the cost of one full snapshot.
 const benchEnabled = process.env.ORCA_TERMINAL_PERF_BENCH === '1'
 
 const COLS = 200
@@ -76,7 +83,7 @@ function measureCheckpointStringify(emulator: HeadlessEmulator): number {
   const snapshot = emulator.getSnapshot()
   const start = performance.now()
   // Mirrors history-manager.ts checkpoint(): the payload main stringifies and
-  // writes to disk every 5s per dirty session.
+  // writes to disk on each full checkpoint (not on the periodic tick).
   JSON.stringify({
     snapshotAnsi: snapshot.snapshotAnsi,
     scrollbackAnsi: snapshot.scrollbackAnsi,
@@ -142,7 +149,7 @@ function writeBenchReport(fileName: string, report: unknown): void {
 // Why: models the daemon event loop. PTY chunks and the checkpoint work share
 // one thread in the daemon process; the worst inter-chunk gap during a
 // checkpoint is the output latency a user sees when a tick lands.
-// 'snapshot' models the pre-#5096 design (full serialize per tick);
+// 'snapshot' models the pre-#5292 design (full serialize per tick);
 // 'incremental-take' models the replacement (drain pending records — the
 // daemon-side cost of the takePendingOutput RPC).
 async function measureStreamInterference(
@@ -201,7 +208,8 @@ describe.skipIf(!benchEnabled)('headless emulator snapshot cost (issue #5096 har
 
     writeBenchReport('orca-headless-snapshot-bench.json', {
       interpretation:
-        'snapshotMedianMs stalls the daemon PTY pump per 5s checkpoint; ' +
+        'snapshotMedianMs stalls the daemon PTY pump per full checkpoint ' +
+        '(log cap / overflow / clean disconnect — not the 5s incremental tick); ' +
         'checkpointStringifyMs stalls Electron main (input IPC); ' +
         'reflowMs models the renderer-side resize/reflow stall at the same fill.',
       cols: COLS,
