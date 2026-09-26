@@ -257,13 +257,16 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
             { threadId: session.threadId },
             { timeoutMs: this.deps.requestTimeoutMs }
           )
-          .catch((error) => {
-            if (isCodexAppServerRequestError(error)) {
-              const detail = error.providerDiagnostic
-              return { error: error.message, ...(detail ? { detail } : {}) }
+          .then(
+            () => undefined,
+            (error) => {
+              if (isCodexAppServerRequestError(error)) {
+                const detail = error.providerDiagnostic
+                return { outcome: 'failed' as const, ...(detail ? { detail } : {}) }
+              }
+              throw error
             }
-            throw error
-          })
+          )
       },
       input.onLateResult,
       input.turnId

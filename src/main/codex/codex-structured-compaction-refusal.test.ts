@@ -21,7 +21,7 @@ describe('Codex compaction refused at the request', () => {
     await expect(
       adapter.compact({ turnId: 'compact-1', sessionId: 'session-1', fence: 7 })
     ).resolves.toEqual({
-      error: 'codex app-server thread/compact/start failed: thread has nothing to compact',
+      outcome: 'failed',
       detail: { text: 'thread has nothing to compact', audience: 'person' }
     })
   })

@@ -21,7 +21,7 @@ export function compactClaudeSession(
         body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: '/compact' }] }
       })
       if (result.state === 'rejected') {
-        return { error: result.reason }
+        return { outcome: 'failed' as const }
       }
       return undefined
     },

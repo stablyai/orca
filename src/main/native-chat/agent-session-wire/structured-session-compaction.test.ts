@@ -6,7 +6,7 @@ describe('structured compaction lifecycle', () => {
     const tracker = new StructuredSessionCompaction()
     const finished = vi.fn()
     const result = tracker
-      .run('session', 'thread', async () => ({}))
+      .run('session', 'thread', async () => undefined)
       .then((value) => {
         finished()
         return value
@@ -28,7 +28,7 @@ describe('structured compaction lifecycle', () => {
       threadId: 'thread',
       turn: { id: 'compact-turn', status: 'completed' }
     })
-    await expect(result).resolves.toEqual({})
+    await expect(result).resolves.toEqual({ outcome: 'compacted' })
   })
 
   it('observes notifications arriving before the request acknowledgment', async () => {
@@ -42,7 +42,7 @@ describe('structured compaction lifecycle', () => {
         })
       })
     ).resolves.toEqual({
-      error: 'Unavailable',
+      outcome: 'failed',
       detail: { text: 'Unavailable', audience: 'person' }
     })
   })
@@ -67,9 +67,9 @@ describe('structured compaction lifecycle', () => {
       })
       await expect(result).resolves.toEqual(
         state === 'success'
-          ? {}
+          ? { outcome: 'compacted' }
           : {
-              error: 'Not enough messages to compact.',
+              outcome: 'failed',
               detail: { text: 'Not enough messages to compact.', audience: 'person' }
             }
       )
@@ -80,29 +80,26 @@ describe('structured compaction lifecycle', () => {
     const tracker = new StructuredSessionCompaction()
     const pending = tracker.run('s', 'p', async () => {})
     tracker.ended('s')
-    await expect(pending).resolves.toEqual({
-      error: 'The provider exited during compaction.',
-      unconfirmed: true
-    })
+    await expect(pending).resolves.toEqual({ outcome: 'unconfirmed' })
     const next = tracker.run('s', 'p', async () => {
       tracker.claude('s', { type: 'system', subtype: 'compact_boundary', session_id: 'p' })
       tracker.claude('s', { type: 'result', subtype: 'success', session_id: 'p' })
     })
-    await expect(next).resolves.toEqual({})
+    await expect(next).resolves.toEqual({ outcome: 'compacted' })
   })
   it('reconciles a terminal frame after timeout without repeating the provider request', async () => {
     vi.useFakeTimers()
     try {
       const tracker = new StructuredSessionCompaction(10)
       const late = vi.fn(async () => {})
-      const invoke = vi.fn(async () => ({}))
+      const invoke = vi.fn(async () => undefined)
       const result = tracker.run('s', 'p', invoke, late)
       const rejected = expect(result).rejects.toThrow('unconfirmed')
       await vi.advanceTimersByTimeAsync(11)
       await rejected
       tracker.claude('s', { type: 'system', subtype: 'compact_boundary', session_id: 'p' })
       tracker.claude('s', { type: 'result', subtype: 'success', session_id: 'p' })
-      expect(late).toHaveBeenCalledWith({})
+      expect(late).toHaveBeenCalledWith({ outcome: 'compacted' })
       expect(invoke).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
@@ -111,40 +108,34 @@ describe('structured compaction lifecycle', () => {
 
   it('does not mistake an unrelated completed turn for compaction', async () => {
     const tracker = new StructuredSessionCompaction()
-    const result = tracker.run('s', 't', async () => ({}))
+    const result = tracker.run('s', 't', async () => undefined)
     tracker.codex('s', 'turn/started', { threadId: 't', turn: { id: 'c' } })
     tracker.codex('s', 'turn/completed', { threadId: 't', turn: { id: 'c', status: 'completed' } })
-    await expect(result).resolves.toEqual({
-      error: 'Compaction was not confirmed by the provider.',
-      unconfirmed: true
-    })
+    await expect(result).resolves.toEqual({ outcome: 'unconfirmed' })
   })
 
   it('fails, not merely unconfirmed, a Codex compaction turn that did not complete', async () => {
     const tracker = new StructuredSessionCompaction()
-    const result = tracker.run('s', 't', async () => ({}))
+    const result = tracker.run('s', 't', async () => undefined)
     tracker.codex('s', 'turn/started', { threadId: 't', turn: { id: 'c' } })
     tracker.codex('s', 'turn/completed', {
       threadId: 't',
       turn: { id: 'c', status: 'interrupted' }
     })
-    await expect(result).resolves.toEqual({ error: 'Compaction did not complete.' })
+    await expect(result).resolves.toEqual({ outcome: 'failed' })
   })
 
   it('leaves a Claude turn that ended without confirming compaction unconfirmed', async () => {
     const tracker = new StructuredSessionCompaction()
     const result = tracker.run('s', 'p', async () => {})
     tracker.claude('s', { type: 'result', subtype: 'success', session_id: 'p' })
-    await expect(result).resolves.toEqual({
-      error: 'Compaction was not confirmed by the provider.',
-      unconfirmed: true
-    })
+    await expect(result).resolves.toEqual({ outcome: 'unconfirmed' })
   })
 
   it('fails a Claude compaction whose turn ended in error', async () => {
     const tracker = new StructuredSessionCompaction()
     const result = tracker.run('s', 'p', async () => {})
     tracker.claude('s', { type: 'result', subtype: 'error_during_execution', session_id: 'p' })
-    await expect(result).resolves.toEqual({ error: 'Compaction did not complete.' })
+    await expect(result).resolves.toEqual({ outcome: 'failed' })
   })
 })

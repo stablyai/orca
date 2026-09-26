@@ -31,12 +31,14 @@ import type { StructuredSessionCompactionResult } from './structured-session-com
 function compactionFailure(
   result: StructuredSessionCompactionResult
 ): AgentSessionFailureFact | undefined {
-  if (result.error === undefined) {
-    return undefined
+  switch (result.outcome) {
+    case 'compacted':
+      return undefined
+    case 'unconfirmed':
+      return agentSessionFailureFact('compactionUnconfirmed')
+    case 'failed':
+      return agentSessionFailureFact('compactionFailed', { detail: result.detail })
   }
-  return result.unconfirmed
-    ? agentSessionFailureFact('compactionUnconfirmed')
-    : agentSessionFailureFact('compactionFailed', { detail: result.detail })
 }
 
 function compactionStatusBody(failure: AgentSessionFailureFact | undefined) {
