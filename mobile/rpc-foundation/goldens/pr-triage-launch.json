@@ -3,129 +3,28 @@
   "family": "session.pr-triage",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "baseline": "5d697b25575bcc1597611aa5e6b50625fdb48e23",
   "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
   "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
-  "adapterSha256": "f560ff1582487c118756c527faa1fb1f65e37ce22ca9573491fd4b2dbcedf38d",
-  "scenarioSha256": "8bb2ff4e899ee873289fed7c1ef12e7f9dba91949125b1f0e4336d378ceb071e",
+  "adapterSha256": "5f65c5b318f4764b0f58a5e7b593333759a9cfa799db45b11190ac26f4083335",
+  "scenarioSha256": "b7c9498eea67df2f670911e3b868a44ba77833813c17e7800dba52ebff530350",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "280ce0d6f832": {
-      "name": "terminal.send#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"term-1\",\"text\":\"Fix the failing checks\",\"enter\":true}}"
-    },
-    "5093e98ba369": {
-      "name": "session.tabs.createTerminal#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "session.tabs.createTerminal"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": false,
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "tab": {
-              "id": "tab-1",
-              "terminal": "term-1",
-              "title": "Agent",
-              "type": "terminal"
-            }
-          }
-        }
-      }
-    },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "94d38f1838f6": {
-      "name": "session.tabs.createTerminal#1",
+    "02188f091419": {
+      "name": "settings.get#1",
       "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:repo-9::/w\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
-    },
-    "a4273b38df83": {
-      "launched": "unlaunched"
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f9b284ac2424": {
-      "name": "session.tabs.createTerminal#1",
-      "ordinal": 1,
       "args": [
         {
           "name": "method",
-          "value": "session.tabs.createTerminal"
+          "value": "settings.get"
         },
         {
           "name": "params",
-          "value": {
-            "activate": false,
-            "navigation": "caller",
-            "select": true,
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
           "value": {
             "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "fe1fe746e77a": {
-      "launched": "sent"
-    },
-    "fe53d3bce307": {
-      "name": "terminal.send#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.send"
-        },
-        {
-          "name": "params",
-          "value": {
-            "enter": true,
-            "terminal": "term-1",
-            "text": "Fix the failing checks"
           }
         },
         {
@@ -143,12 +42,233 @@
           "id": "frame-2",
           "ok": true,
           "result": {
-            "send": {
-              "accepted": true
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": []
             }
           }
         }
       }
+    },
+    "1c2564f1daca": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "28339abecf78": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"agent.launchReplay\",\"params\":{\"agent\":\"codex\",\"operationId\":\"1767225600000-00000000000040008000000000000001\",\"target\":{\"kind\":\"existing\",\"worktree\":\"id:repo-9::/w\"},\"prompt\":{\"text\":\"Fix the failing checks\",\"delivery\":\"submit\"},\"launchSource\":\"task_page\"}}"
+    },
+    "35f85fe3b71c": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "3e6a0417d2ee": {
+      "name": "repo.list#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "repos": [
+              {
+                "id": "repo-9"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "51d4cb56be85": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9c16efc31903": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": ["codex"]
+        }
+      }
+    },
+    "a4273b38df83": {
+      "launched": "unlaunched"
+    },
+    "ba3fac1eb199": {
+      "name": "agent.launchReplay#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "agent.launchReplay"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "launchSource": "task_page",
+            "operationId": "1767225600000-00000000000040008000000000000001",
+            "prompt": {
+              "delivery": "submit",
+              "text": "Fix the failing checks"
+            },
+            "target": {
+              "kind": "existing",
+              "worktree": "id:repo-9::/w"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 90000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "outcome": {
+              "handle": "term-1",
+              "kind": "terminal"
+            },
+            "prompt": {
+              "delivery": "submit",
+              "outcome": "handed-to-terminal"
+            },
+            "receipt": {
+              "detail": "Started a terminal agent, the default for new agent tabs in your settings.",
+              "mode": "terminal",
+              "preferred": "terminal",
+              "reason": "user_default"
+            },
+            "worktreeId": "repo-9::/w"
+          }
+        }
+      }
+    },
+    "e0eef7c9fafe": {
+      "name": "repo.list#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "eb8d47f90956": {
+      "launched": {
+        "kind": "sent"
+      }
+    },
+    "f49d184679d1": {
+      "name": "preflight.detectAgents#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectAgents\"}"
     }
   },
   "recording": {
@@ -157,8 +277,8 @@
       {
         "id": "pending",
         "observation": {
-          "sender": ["f9b284ac2424"],
-          "payloads": ["94d38f1838f6"],
+          "sender": ["35f85fe3b71c", "51d4cb56be85"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca"],
           "settlements": {
             "launch": "9270aeb7d9c6"
           },
@@ -169,12 +289,12 @@
       {
         "id": "launched",
         "observation": {
-          "sender": ["5093e98ba369", "fe53d3bce307"],
-          "payloads": ["94d38f1838f6", "280ce0d6f832"],
+          "sender": ["3e6a0417d2ee", "02188f091419", "9c16efc31903", "ba3fac1eb199"],
+          "payloads": ["e0eef7c9fafe", "1c2564f1daca", "f49d184679d1", "28339abecf78"],
           "settlements": {
             "launch": "eb79a9b3682a"
           },
-          "state": "fe1fe746e77a",
+          "state": "eb8d47f90956",
           "effects": []
         }
       }
