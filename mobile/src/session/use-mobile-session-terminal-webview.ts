@@ -14,11 +14,11 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     initializedHandlesRef,
     terminalDiagnosticsRef,
     webReadyHandlesRef,
+    subscribedDocumentsRef,
     activeHandleRef,
     pendingActiveTerminalHandleRef,
     activeSessionTab,
     unsubscribeTerminal,
-    measureViewportOnce,
     subscribeToTerminal,
     nativeChatStream,
     readMarkdownTab,
@@ -31,6 +31,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       terminalRefs.current.set(handle, ref)
     } else {
       terminalRefs.current.delete(handle)
+      subscribedDocumentsRef.current.delete(handle)
       terminalGestureInputBucketsRef.current.delete(handle)
       const queued = terminalGestureInputQueuesRef.current.get(handle)
       if (queued?.timer) {
@@ -55,25 +56,21 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         // Why: WebView reloaded (hot reload / Android churn); old xterm buffer is gone, so resubscribe for a fresh scrollback.
         unsubscribeTerminal(handle)
         initializedHandlesRef.current.delete(handle)
+        subscribedDocumentsRef.current.delete(handle)
         if (handle === activeHandleRef.current) {
           subscribeToTerminal(handle)
         }
         return
       }
-      // Why: first subscribe may skip (no WebView ref); await measure so it carries the viewport, else it races measureViewportOnce and skips.
       // Why: a just-created tab can lose activeHandleRef to a lagging snapshot; honor the pending marker so its web-ready subscribe still fires.
-      const isIntendedActive = () =>
+      const isIntendedActive =
         handle === activeHandleRef.current || handle === pendingActiveTerminalHandleRef.current
-      if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
-        void (async () => {
-          await measureViewportOnce(handle)
-          if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
-            subscribeToTerminal(handle)
-          }
-        })()
+      // Why: subscribeToTerminal measures the viewport first for a fresh document, so the dims ride this subscribe.
+      if (isIntendedActive && !terminalUnsubsRef.current.has(handle)) {
+        subscribeToTerminal(handle)
       }
     },
-    [measureViewportOnce, nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+    [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
   )
 
   useEffect(() => {

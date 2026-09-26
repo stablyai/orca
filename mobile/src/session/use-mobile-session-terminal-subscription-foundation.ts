@@ -19,6 +19,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     terminalDiagnosticsRef,
     viewportResubscribeBudgetRef,
     webReadyHandlesRef,
+    subscribedDocumentsRef,
     activeHandleRef,
     subscribeSeqRef,
     layoutSeqRef,
@@ -76,6 +77,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     terminalDiagnosticsRef.current.clearTerminalCache()
     viewportResubscribeBudgetRef.current.clear()
     webReadyHandlesRef.current.clear()
+    subscribedDocumentsRef.current.clear()
     subscribeSeqRef.current.clear()
     layoutSeqRef.current.clear()
     terminalCwdRef.current.clear()
@@ -90,6 +92,7 @@ export function useMobileSessionTerminalSubscriptionFoundation(
       measureTerminalViewportOnce({
         handle,
         ref: getTerminalRef(handle),
+        documentHasTerminal: initializedHandlesRef.current.has(handle),
         viewportRef,
         viewportMeasuredRef,
         terminalFrameHeightRef,
