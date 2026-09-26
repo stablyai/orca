@@ -6,6 +6,7 @@ import {
   shouldUseTerminalWebgl
 } from './pane-webgl-renderer'
 import { safeFit } from './pane-tree-ops'
+import { applyDomBlockFills } from './terminal-dom-block-fill'
 import { resetPaneWebglContextLosses } from './pane-webgl-context-loss-policy'
 
 export function applyTerminalGpuAcceleration(
@@ -32,6 +33,13 @@ export function applyTerminalGpuAcceleration(
     }
     if (!shouldUseTerminalWebgl(pane)) {
       disposeWebgl(pane, { refreshDimensions: true })
+      const root = pane.terminal.element
+      if (root) {
+        applyDomBlockFills(root)
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => applyDomBlockFills(root))
+        }
+      }
       continue
     }
     if (
