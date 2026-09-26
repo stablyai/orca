@@ -29,6 +29,8 @@ const { listAddressableStructuredWorkers } =
   await import('./orchestration/structured-worker-group-addressing')
 const { closeStructuredAgentSessionChild } = await import('./structured-agent-session-close')
 const { resolveGroupAddress } = await import('./orchestration/groups')
+const { createRestTestRig, foundRestTestChat, IDLE_MS, REST_TEST_SESSION, sweepTicks } =
+  await import('../native-chat/agent-session-wire/structured-agent-session-rest-test-rig')
 
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const LOCAL = JSON.stringify({ kind: 'local', hostId: 'local' })
@@ -256,5 +258,73 @@ describe('a close whose stop could not be proven (P2-30)', () => {
   it('still refuses a close that left the lease live', () => {
     installHost(record({ claimStatus: 'live' }), [SESSION])
     expect(structuredSessionCloseSettled(SESSION)).toBe(false)
+  })
+})
+
+describe('a task dispatched into a worker whose own dispatch settled', () => {
+  it('keeps the worker running while that task is open, and lets it rest once the task settles', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const rig = await createRestTestRig({
+      hasOpenDispatch: (current) => structuredWorkerHasOpenDispatch(db, current)
+    })
+    try {
+      hostRef.current = rig.host
+      await foundRestTestChat(rig)
+      const incarnation = structuredWorkerProcessIncarnation(REST_TEST_SESSION)
+      const handle = mintStructuredWorkerHandle()
+      const workerPane = mintStructuredWorkerPaneKey(REST_TEST_SESSION)
+      const first = db.createTask({ runId: 'run_legacy_local', spec: 'first task' })
+      const { dispatch: started } = db.createStartingWorkerDispatch({
+        taskId: first.id,
+        startOptions: {},
+        creator: { kind: 'system' },
+        maxDepth: 9
+      })
+      db.prepareStartingWorkerAuthority({
+        dispatchId: started.id,
+        handle,
+        paneKey: workerPane,
+        processIncarnation: incarnation,
+        worktreeId: 'wt_1',
+        effects: [],
+        setupState: 'not_configured',
+        hostScope: LOCAL,
+        terminalOwnership: 'created'
+      })
+      db.markWorkerDispatchReady(started.id)
+      expect(
+        db.settleWorkerReport({
+          taskId: first.id,
+          dispatchId: started.id,
+          outcome: 'succeeded',
+          result: 'done'
+        })
+      ).toMatchObject({ action: 'settled' })
+      // The coordinator hands the same worker its next task: a dispatch with no worker row.
+      const second = db.createTask({ runId: 'run_legacy_local', spec: 'second task' })
+      const handedOn = db.createDispatchContext({
+        taskId: second.id,
+        assigneeHandle: handle,
+        assigneePaneKey: workerPane,
+        processIncarnation: incarnation,
+        creator: { kind: 'system' },
+        maxDepth: 9
+      })
+      rig.clock.now += 2 * IDLE_MS
+
+      await sweepTicks(12)
+      expect(rig.adapter.closeSession).not.toHaveBeenCalled()
+      expect(observeStructuredWorker({ sessionId: REST_TEST_SESSION }).status).toBe('live')
+
+      db.completeDispatch(handedOn.id)
+      await vi.waitFor(() =>
+        expect(observeStructuredWorker({ sessionId: REST_TEST_SESSION }).status).toBe('exited')
+      )
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(REST_TEST_SESSION)
+    } finally {
+      hostRef.current = null
+      await rig.dispose()
+      db.close()
+    }
   })
 })

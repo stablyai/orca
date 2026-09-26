@@ -160,8 +160,8 @@ export function structuredWorkerRecordIsCurrent(
   )
 }
 
-/** Whether a dispatch that has not settled still owns this session's worker, keyed the way the
- *  worker's terminal resource row is: its process incarnation and host scope. */
+/** Whether a dispatch that has not settled still addresses this session's worker, keyed the way
+ *  the worker's terminal resource row is: its process incarnation and host scope. */
 export function structuredWorkerHasOpenDispatch(
   db: OrchestrationDb | null,
   record: AgentSessionRecord
