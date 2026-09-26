@@ -164,6 +164,17 @@ export const ORCHESTRATION_SEND_METHODS = [
         if (addressedDispatchId && !federatedTarget) {
           assertDispatchMailboxDeliverable(db, addressedDispatchId)
         }
+        // Why: send delivers mail but never answers; a success receipt otherwise looks like the ask is resolved.
+        if (addressedDispatchId) {
+          const pendingQuestionId = db.getPendingQuestionIdForDispatch(addressedDispatchId)
+          if (pendingQuestionId) {
+            sendWarnings.push({
+              code: 'pending_ask',
+              recipient: `dispatch:${addressedDispatchId}`,
+              message: `Dispatch ${addressedDispatchId} is blocked on question ${pendingQuestionId}; this message does not answer it. Use orchestration reply --id ${pendingQuestionId}.`
+            })
+          }
+        }
         const federatedControl = sendFederatedControlMail({
           params,
           runtime,
