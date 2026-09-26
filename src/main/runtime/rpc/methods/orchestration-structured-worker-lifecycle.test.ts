@@ -64,10 +64,7 @@ function installHost(options: {
   let closed = false
   hostRef.current = {
     deps: { store: { getRecord: () => record } },
-    getPersistedVisibleSessionTabIndex: () => ({
-      present: true,
-      sessionIds: options.tabListed ? [IDENTITY.sessionId] : []
-    }),
+    listVisibleSessionIds: () => (options.tabListed ? [IDENTITY.sessionId] : []),
     hasSession: () => (closed ? false : (options.hasSession ?? true)),
     setSessionTabVisibility: options.setSessionTabVisibility ?? (async () => {}),
     close:

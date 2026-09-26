@@ -3,6 +3,7 @@ import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-sessio
 import { createStructuredAgentSessionEventCoalescer } from '../../../../shared/structured-agent-session-coalescer'
 import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
+  isFinalAgentSessionReadRefusal,
   isUnattachedAgentSessionReadRefusal
 } from '../../../../shared/structured-agent-session-read-refusal'
 import { agentSessionErrorText } from '../../../../shared/agent-session-error-text'
@@ -45,6 +46,8 @@ export function startStructuredAgentSessionReadTransport(args: {
   dispose: () => void
 } {
   let stopped = false
+  // An unusable journal file answers the same on every ask, so nothing re-asks it.
+  let finalRefusal = false
   let connected = false
   let unattachedSince: number | null = null
   let opening = false
@@ -58,7 +61,7 @@ export function startStructuredAgentSessionReadTransport(args: {
     }
   })
   const reconnectScheduler = createReconnectScheduler({
-    shouldStop: () => stopped || connected,
+    shouldStop: () => stopped || connected || finalRefusal,
     reconnect: () => void open()
   })
   const isCurrentOpenGeneration = (candidate: number): boolean =>
@@ -78,6 +81,7 @@ export function startStructuredAgentSessionReadTransport(args: {
    * transitional, so the pane is owed the failure rather than a spinner that never resolves.
    */
   const reportReadFailure = (error: unknown): void => {
+    finalRefusal = isFinalAgentSessionReadRefusal(error)
     if (!isUnattachedAgentSessionReadRefusal(error)) {
       clearUnattachedReadGrace()
       args.applyError(agentSessionErrorText(error))

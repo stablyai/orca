@@ -74,7 +74,7 @@ function structuredWorkerTabListed(
   sessionId: string
 ): boolean {
   try {
-    return host.getPersistedVisibleSessionTabIndex?.().sessionIds.includes(sessionId) ?? false
+    return host.listVisibleSessionIds?.().includes(sessionId) ?? false
   } catch {
     return false
   }

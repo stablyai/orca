@@ -17,6 +17,8 @@ import type { StructuredAgentSessionHostSession } from './structured-agent-sessi
 import { StructuredAgentSessionIdleSweep } from './structured-agent-session-idle-sweep'
 import { AGENT_SESSION_NOT_ATTACHED } from './structured-agent-session-mutation-admission'
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { isUnusableSqliteDatabaseError } from '../../sqlite/sqlite-read-failure'
+import type { StructuredAgentSessionStartupStep } from './structured-agent-session-restart-restore'
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<
   typeof createStructuredAgentSessionConversationLifetime
@@ -34,6 +36,8 @@ export function createStructuredAgentSessionConversationLifetime(host: {
   closeStatus: (sessionId: string, options: { listed: boolean }) => void
 }) {
   let disposed = false
+  // Sessions inside a startup step, and whether any `conversation()` caller reached one meanwhile.
+  const reachedDuringStartupStep = new Map<string, boolean>()
   const { sessions, serialize } = host
   const deps = () => host.context().deps
   // The sweep's stop puts an idle agent to rest: nothing is queued, so no loop reads its cause.
@@ -44,11 +48,8 @@ export function createStructuredAgentSessionConversationLifetime(host: {
     closeStructuredAgentSessionConversationUnderSerialize(
       {
         sessions,
-        closeStatus: (id) => {
-          const tabs = deps().store.getVisibleSessionTabIndex()
-          // A legacy store cannot say, so the row stays; restart is the boundary that forgets.
-          host.closeStatus(id, { listed: !tabs.present || tabs.sessionIds.includes(id) })
-        }
+        closeStatus: (id) =>
+          host.closeStatus(id, { listed: deps().store.listVisibleSessionIds().includes(id) })
       },
       sessionId
     )
@@ -92,6 +93,9 @@ export function createStructuredAgentSessionConversationLifetime(host: {
      * drop it after.
      */
     conversation: async (sessionId: string): Promise<StructuredAgentSessionHostSession> => {
+      if (reachedDuringStartupStep.has(sessionId)) {
+        reachedDuringStartupStep.set(sessionId, true)
+      }
       const open = sessions.get(sessionId)
       if (open) {
         return open
@@ -108,13 +112,41 @@ export function createStructuredAgentSessionConversationLifetime(host: {
         if (disposed) {
           throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
         }
-        const session = await host.open(sessionId)
+        const session = await host.open(sessionId).catch((error: unknown) => {
+          // Final: the same file answers the same on every retry. Anything else stays retryable.
+          throw isUnusableSqliteDatabaseError(error)
+            ? new Error('agent_session_journal_unreadable')
+            : error
+        })
         if (!session) {
           throw new Error('agent_session_identity_required')
         }
         return session
       })
     },
+    /** The startup pass's per-chat step, under the session's lock and never after quit began. A
+     *  conversation the step opens only to derive status is closed again unless a reader reached
+     *  it meanwhile or it has a child. */
+    startupStep: ((sessionId, step) =>
+      serialize(sessionId, async () => {
+        if (disposed) {
+          return undefined
+        }
+        reachedDuringStartupStep.set(sessionId, false)
+        try {
+          return await step({
+            session: sessions.get(sessionId),
+            closeIfUnreached: async () => {
+              const session = sessions.get(sessionId)
+              if (session && !session.child && !reachedDuringStartupStep.get(sessionId)) {
+                await closeConversation(sessionId)
+              }
+            }
+          })
+        } finally {
+          reachedDuringStartupStep.delete(sessionId)
+        }
+      })) satisfies StructuredAgentSessionStartupStep,
     /** Ends a chat's resources, not the chat: its record and journal stay on disk, and what is
      *  still queued will not be sent. */
     close: (sessionId: string): Promise<void> =>

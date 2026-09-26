@@ -62,6 +62,8 @@ function openHost(): void {
 /** Writes the lease an older build left behind, then starts a fresh app generation over it. */
 async function persistFromOlderBuild(lease: Partial<PersistedAgentSessionLease>): Promise<void> {
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
+  // Listed, as a chat with a tab is: the startup pass settles what a listed chat owes.
+  await store.setSessionTabVisibility(SESSION, true)
   const attached = store.getRecord(SESSION)?.lease
   await host.flushAllStreamedEvents()
   // Over the attached owner: the older build's stage or terminal owner kept it from releasing.
@@ -154,7 +156,7 @@ describe('a record an older build left mid terminal handoff', () => {
       claimStatus: 'released'
     })
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       handoffStage: null,
@@ -188,7 +190,7 @@ describe('a record an older build left mid terminal handoff', () => {
     })
     expect(store.getRecord(SESSION)?.lease.handoffStage).toBe('recovering')
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       handoffStage: null,
@@ -208,7 +210,7 @@ describe('a record an older build left mid terminal handoff', () => {
       claimStatus: 'live'
     })
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       handoffStage: null,
@@ -231,7 +233,7 @@ describe('a record an older build left mid terminal handoff', () => {
     })
     probe.mockResolvedValue({ outcome: 'identity-matched', matchedOn: ['spawn-token'] })
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'conflicted',

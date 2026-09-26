@@ -99,17 +99,22 @@ describe('structured session rollback compatibility', () => {
     await mkdir(journalDir, { recursive: true })
     await writeFile(join(journalDir, 'journal.log'), 'durable-journal-fixture\n')
 
-    const target = await AgentSessionRecordStore.open({ directory: storeDir, hostId: 'local' })
-    expect(target.getVisibleSessionTabIndex()).toEqual({ present: false, sessionIds: [] })
-    await target.setSessionTabVisibility(SESSION, true)
-    expect(target.getVisibleSessionTabIndex()).toEqual({ present: true, sessionIds: [SESSION] })
-
     const targetProfile = profileWithStructuredTab()
     const targetParsed = safeParseWorkspaceSession(targetProfile)
     expect(targetParsed?.success).toBe(true)
-    expect(
-      collectSavedStructuredAgentSessionIds(targetParsed?.success ? targetParsed.data : null)
-    ).toEqual([SESSION])
+    const targetTabs = collectSavedStructuredAgentSessionIds(
+      targetParsed?.success ? targetParsed.data : null
+    )
+    expect(targetTabs).toEqual([SESSION])
+
+    // The store predates any tab index: it is seeded from the saved session at open (L4b).
+    const target = await AgentSessionRecordStore.open({
+      directory: storeDir,
+      hostId: 'local',
+      savedTabSessionIds: () => targetTabs
+    })
+    expect(target.listVisibleSessionIds()).toEqual([SESSION])
+    await target.setConversationName(SESSION, 'first write persists the seed')
 
     const baseProfile = pinnedBaseRoundTrip(targetProfile)
     const baseParsed = safeParseWorkspaceSession(baseProfile)
@@ -126,7 +131,11 @@ describe('structured session rollback compatibility', () => {
         targetReloadedProfile?.success ? targetReloadedProfile.data : null
       )
     ).toEqual([])
-    const reloaded = await AgentSessionRecordStore.open({ directory: storeDir, hostId: 'local' })
+    const reloaded = await AgentSessionRecordStore.open({
+      directory: storeDir,
+      hostId: 'local',
+      savedTabSessionIds: () => []
+    })
     expect(reloaded.listVisibleSessionIds()).toEqual([SESSION])
     expect(reloaded.getRecord(SESSION)?.providerHandleChain).toHaveLength(1)
     await expect(readFile(join(journalDir, 'journal.log'), 'utf8')).resolves.toBe(
@@ -138,7 +147,6 @@ describe('structured session rollback compatibility', () => {
 
     await reloaded.setSessionTabVisibility(SESSION, false)
     const afterClose = await AgentSessionRecordStore.open({ directory: storeDir, hostId: 'local' })
-    expect(afterClose.getVisibleSessionTabIndex()).toEqual({ present: true, sessionIds: [] })
     expect(afterClose.listVisibleSessionIds()).toEqual([])
     expect(afterClose.getRecord(SESSION)?.providerHandleChain).toHaveLength(1)
   })

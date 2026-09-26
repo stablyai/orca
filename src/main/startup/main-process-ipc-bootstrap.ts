@@ -23,7 +23,11 @@ export function registerMainProcessIpcHandlers(): void {
       state.firstWindowStartupServicesReady,
       state.managedWslCliStartupBarrierReady
     ])
-    await state.runtime?.prepareStructuredAgentSessionStartupRestoration()
+    // Not awaited: chat bookkeeping must not hold the window's first paint. Every hold, attach,
+    // send and worker release awaits the same reconcile itself; reads need none.
+    void state.runtime?.prepareStructuredAgentSessionStartupRestoration().catch((error) => {
+      console.error('[structured-agent-session] startup restoration failed', error)
+    })
   })
   ipcMain.handle('app:recoverLegacyWorkerTerminalsForRendererStartup', () =>
     recoverLegacyWorkerTerminalsForRendererStartup({

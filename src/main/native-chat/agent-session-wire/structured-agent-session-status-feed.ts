@@ -7,24 +7,30 @@
 //
 // The last projection is kept after the session's provider child is evicted: an idle session is
 // still idle without a process, and a renderer that reloads must not lose every settled row until
-// each chat is reopened. Restart is the one boundary that forgets, and restoring readable sessions
-// republishes them.
+// each chat is reopened. A settled projection is also saved with the journal position it was
+// computed at, so a restart republishes a listed chat from that saved copy when its journal still
+// stands there, and from the journal otherwise.
 
-import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
-import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
-import {
-  agentSessionBackgroundTasksEqual,
-  type AgentSessionBackgroundTaskState,
-  type AgentSessionStatusEvent,
-  type AgentSessionStatusSummary
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionStatusEvent,
+  AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
-import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
+import {
+  projectStructuredAgentSessionStatusSummary,
+  type StructuredAgentSessionStatusProjection
+} from '../../../shared/structured-agent-session-projection'
+import {
+  isSavableStructuredAgentSessionProjection,
+  STRUCTURED_AGENT_SESSION_STATUS_PROJECTION_VERSION,
+  type StructuredAgentSessionSavedStatus
+} from '../../../shared/structured-agent-session-saved-status'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { structuredAgentSessionSummariesEqual as summariesEqual } from './structured-agent-session-status-equality'
 import type { StructuredAgentSessionProviderChildPhase } from './structured-agent-session-adapter'
 import { structuredAgentSessionProviderSessionMetadata } from './structured-agent-session-history-result'
 import {
@@ -60,45 +66,8 @@ export type StructuredAgentSessionStatusFeedDeps = {
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null | undefined
   /** The session's agent proved a start: its row's phase became `ready`. */
   onAgentStarted?: (sessionId: string) => void
-}
-
-function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSummary): boolean {
-  return (
-    a.workspaceId === b.workspaceId &&
-    a.agent === b.agent &&
-    a.status === b.status &&
-    a.hostExecutionOwned === b.hostExecutionOwned &&
-    a.hostExecutionPhase === b.hostExecutionPhase &&
-    a.rewindBlockedReason === b.rewindBlockedReason &&
-    // A moved state clock changes ranking; row activity alone, including a subagent's, does not.
-    // An idle state the journal cannot date still republishes, since readers date it by `updatedAt`,
-    // and so does one live child work holds open: readers take each publish as its evidence.
-    a.statusStartedAt === b.statusStartedAt &&
-    (a.status !== 'idle' ||
-      a.updatedAt === b.updatedAt ||
-      (a.statusStartedAt !== undefined && !isIdleHeldOpenByChildWork(b))) &&
-    a.latestPrompt === b.latestPrompt &&
-    a.model === b.model &&
-    a.toolName === b.toolName &&
-    a.toolInput === b.toolInput &&
-    a.lastAssistantMessage === b.lastAssistantMessage &&
-    a.turnOutcome === b.turnOutcome &&
-    agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
-    agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)
-  )
-}
-
-function isIdleHeldOpenByChildWork(summary: AgentSessionStatusSummary): boolean {
-  return (
-    summary.status === 'idle' &&
-    isAgentStatusHeldOpenByChildWork(
-      structuredAgentSessionAgentStatus({
-        status: summary.status,
-        backgroundTasks: summary.backgroundTasks,
-        turnOutcome: summary.turnOutcome
-      })
-    )
-  )
+  /** A settled projection and the journal position it was computed at, for the next restart. */
+  saveProjection?: (sessionId: string, saved: StructuredAgentSessionSavedStatus) => void
 }
 
 /** Wire the host's own deps into a feed; keeps the host at one call site.
@@ -116,6 +85,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     }
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
     statusSink?: StructuredAgentSessionStatusSink
+    savedStatus?: { record: NonNullable<StructuredAgentSessionStatusFeedDeps['saveProjection']> }
   }
   onAgentStarted?: (sessionId: string) => void
 }): StructuredAgentSessionStatusFeed {
@@ -128,6 +98,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     // Resolved per call for the same reason the other deps are: the host builds this feed in a
     // field initializer, before its constructor parameters are assigned.
     statusSink: () => args.deps().statusSink,
+    saveProjection: (sessionId, saved) => args.deps().savedStatus?.record(sessionId, saved),
     ...(args.onAgentStarted ? { onAgentStarted: args.onAgentStarted } : {})
   })
 }
@@ -228,8 +199,28 @@ export class StructuredAgentSessionStatusFeed {
     if (summary.hostExecutionPhase === 'ready' && previous?.hostExecutionPhase !== 'ready') {
       this.deps.onAgentStarted?.(sessionId)
     }
+    this.notify(summary, options?.replay === true)
+  }
+
+  /** A restarted host's row for a chat it has not opened, from a saved copy the caller proved
+   *  current. A replay: it is state the host already had, so no rename or restart edge fires. */
+  seedRestored(sessionId: string, saved: StructuredAgentSessionSavedStatus): boolean {
+    const record = this.deps.getRecord(sessionId)
+    if (!record || this.deps.sessions.has(sessionId) || this.published.has(sessionId)) {
+      return false
+    }
+    const target = { params: { location: record.location, provider: record.provider } }
+    const summary = this.compose(sessionId, target, saved.projection, saved.lastActivityAt)
+    this.published.set(sessionId, summary)
+    this.sink(summary, record.location)
+    this.broadcast({ type: 'status', session: summary })
+    this.notify(summary, true)
+    return true
+  }
+
+  private notify(summary: AgentSessionStatusSummary, replay: boolean): void {
     try {
-      this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
+      this.deps.onStatusChanged?.(summary, { replay })
     } catch (error) {
       // An observer must never cost the subscribers their status event.
       console.warn('[structured-session-status] status observer failed', error)
@@ -269,7 +260,36 @@ export class StructuredAgentSessionStatusFeed {
         )
       }
       this.journalProjections.set(journal, projection)
+      if (!readOnly && isSavableStructuredAgentSessionProjection(projection.summary)) {
+        this.save(sessionId, {
+          v: STRUCTURED_AGENT_SESSION_STATUS_PROJECTION_VERSION,
+          cursor,
+          projection: projection.summary,
+          lastActivityAt: journal.lastActivityAt()
+        })
+      }
     }
+    return this.compose(sessionId, session, projection.summary, journal.lastActivityAt(), record)
+  }
+
+  /** Best-effort: a failing save costs the next restart one journal open, never this publish. */
+  private save(sessionId: string, saved: StructuredAgentSessionSavedStatus): void {
+    try {
+      this.deps.saveProjection?.(sessionId, saved)
+    } catch (error) {
+      console.warn('[structured-session-status] saving the settled status failed', error)
+    }
+  }
+
+  /** The one composer for a journal projection and a saved one: record-side fields are read here,
+   *  never saved, so a model switched while idle cannot leave two copies that disagree. */
+  private compose(
+    sessionId: string,
+    session: Pick<StatusFeedSession, 'params' | 'child'>,
+    projection: StructuredAgentSessionStatusProjection,
+    lastActivityAt: number,
+    record = this.deps.getRecord(sessionId)
+  ): AgentSessionStatusSummary {
     const providerSession = structuredAgentSessionProviderSessionMetadata(record)
     // The journal has no model: the record's acknowledged options are where a mid-session
     // switch lands, so the row follows whichever is in force.
@@ -287,14 +307,14 @@ export class StructuredAgentSessionStatusFeed {
       ...(session.child
         ? { hostExecutionOwned: true as const, hostExecutionPhase: session.child.phase }
         : {}),
-      ...projection.summary,
+      ...projection,
       ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
         ? { rewindBlockedReason: 'outcome-unknown' as const }
         : {}),
       ...(model ? { model } : {}),
       ...(backgroundTasks && backgroundTasks.length > 0 ? { backgroundTasks } : {}),
       ...(providerSession ? { providerSession } : {}),
-      updatedAt: journal.lastActivityAt() || this.deps.now()
+      updatedAt: lastActivityAt || this.deps.now()
     }
   }
 

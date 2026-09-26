@@ -382,6 +382,8 @@ describe('a session with a turn in flight', () => {
 describe('startup', () => {
   it('settles an idle absent owner without chat pollution and resumes the same provider identity', async () => {
     await attach()
+    // Listed: the startup pass settles what a listed chat owes.
+    await store.setSessionTabVisibility(SESSION, true)
     const beforeRestart = store.getRecord(SESSION)
     host['runtimeState'].stopLeaseRenewal()
     host['lifetime'].dispose()
@@ -390,7 +392,7 @@ describe('startup', () => {
 
     store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
     openHost(async () => ({ outcome: 'pid-absent' }))
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     const restored = await host.history({ sessionId: SESSION, direction: 'tail' })
     expect(restored.ok && restored.page.items.some((item) => item.body.kind === 'status')).toBe(
@@ -413,11 +415,11 @@ describe('startup', () => {
     await attach()
     await reboot()
 
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     // The record is readable — the tab comes back, history answers — and nothing is running.
     expect(acquire).not.toHaveBeenCalled()
-    expect(host.listSessionTabs()).toEqual([
+    expect(host.listPersistedSessionTabs([SESSION])).toEqual([
       { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'codex' }
     ])
     expect((await host.history({ sessionId: SESSION, direction: 'tail' })).ok).toBe(true)
@@ -427,7 +429,7 @@ describe('startup', () => {
   it('gives the child back for work, never for a read', async () => {
     await attach()
     await reboot()
-    await host.restoreReadableSessions()
+    await host.restoreStartupSessions()
 
     const unsubscribe = await host.subscribe({
       id: 'viewer-1',

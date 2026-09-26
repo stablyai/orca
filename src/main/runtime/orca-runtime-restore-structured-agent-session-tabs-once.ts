@@ -1,17 +1,17 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './orca-runtime-get-structured-agent-session-create-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
-import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
-  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRepoSearchRefs
 } from '../../shared/runtime-types'
-import { getHeadlessMobileSessionGroupId } from './mobile-session-layout-projection'
+import {
+  appendStructuredAgentSessionTabs,
+  structuredAgentSessionSnapshotTabId,
+  type StructuredAgentSessionTabToAppend
+} from './structured-agent-session-tab-append'
 import { DEFAULT_REPO_SEARCH_REFS_LIMIT } from './orca-runtime-postlude'
 import type { Repo } from '../../shared/repo-types'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
@@ -47,19 +47,16 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     }
   }
 
+  // Tab existence needs only the opened store: reconcile, recovery and every journal open run
+  // behind the answer, in the startup pass prepare kicks.
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
-    await this.prepareStructuredAgentSessionStartupRestoration()
+    if (this.hasPersistedStructuredAgentSessionStore()) {
+      await this.ensureStructuredAgentSessionHost()
+      void this.prepareStructuredAgentSessionStartupRestoration().catch((error) => {
+        console.error('[structured-agent-session] startup restoration failed', error)
+      })
+    }
     const host = getStructuredAgentSessionHost()
-    const persistedVisibleIndex =
-      typeof host?.getPersistedVisibleSessionTabIndex === 'function'
-        ? host.getPersistedVisibleSessionTabIndex()
-        : { present: false, sessionIds: [] }
-    const profileIds = collectSavedStructuredAgentSessionIds(
-      this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
-    )
-    await host?.restoreReadableSessions(
-      persistedVisibleIndex.present ? persistedVisibleIndex.sessionIds : profileIds
-    )
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
@@ -70,21 +67,41 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     for (const replacement of host?.conversationReplacements?.() ?? []) {
       await this.replaceStructuredAgentSessionTab(replacement)
     }
-    for (const session of host?.listSessionTabs() ?? []) {
-      if (session.agent !== 'codex' && session.agent !== 'claude') {
+    this.publishListedStructuredAgentSessionTabs(host)
+  }
+
+  /** Every listed chat in one store write per workspace, from the index and the records alone.
+   *  Synchronous from the index read to the last store, so a close lands wholly before or after. */
+  private publishListedStructuredAgentSessionTabs(host): void {
+    if (
+      typeof host?.listVisibleSessionIds !== 'function' ||
+      typeof host.listPersistedSessionTabs !== 'function'
+    ) {
+      return
+    }
+    const byWorkspace = new Map<string, StructuredAgentSessionTabToAppend[]>()
+    for (const tab of host.listPersistedSessionTabs(host.listVisibleSessionIds())) {
+      if (tab.agent !== 'codex' && tab.agent !== 'claude') {
         continue
       }
-      let sessionId = session.sessionId
+      let sessionId = tab.sessionId
       while (sessionId.startsWith('agent-session:')) {
         sessionId = sessionId.slice('agent-session:'.length)
       }
-      await this.publishStructuredAgentSessionTab({
-        ...session,
-        agent: session.agent,
-        sessionId,
-        activate: false,
-        notify: false
-      })
+      const tabs = byWorkspace.get(tab.workspaceId) ?? []
+      tabs.push({ sessionId, agent: tab.agent })
+      byWorkspace.set(tab.workspaceId, tabs)
+    }
+    for (const [workspaceId, tabs] of byWorkspace) {
+      const next = appendStructuredAgentSessionTabs(
+        this.mobileSessionTabsByWorktree.get(workspaceId),
+        workspaceId,
+        tabs,
+        { activate: false }
+      )
+      if (next) {
+        this.storeMobileSessionSnapshot(workspaceId, next)
+      }
     }
   }
 
@@ -107,7 +124,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       )
     }
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
-    const id = `agent-session:${input.sessionId}`
+    const id = structuredAgentSessionSnapshotTabId(input.sessionId)
     if (existing?.tabs.some((tab) => tab.id === id)) {
       // A background re-publish is a no-op — no store write, no emit — so it cannot re-surface a
       // client whose mirror lost the tab; healing one needs `activate` or an explicit republish.
@@ -137,49 +154,20 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       }
       return
     }
-    const tab: RuntimeMobileSessionAgentTab = {
-      type: 'agent-session',
-      id,
-      title: defaultAgentChatLabel(input.agent),
-      sessionId: input.sessionId,
-      ...(input.replacesSessionId ? { replacesSessionId: input.replacesSessionId } : {}),
-      agent: input.agent,
-      isActive: input.activate
-    }
-    const tabs = [...(existing?.tabs ?? [])].map((candidate) => ({
-      ...candidate,
-      isActive: input.activate ? false : candidate.isActive
-    }))
-    tabs.push(tab)
-    const priorGroups = existing?.tabGroups ?? [
-      {
-        id: getHeadlessMobileSessionGroupId(input.workspaceId),
-        activeTabId: existing?.activeTabId ?? null,
-        tabOrder: []
-      }
-    ]
-    const groupId = priorGroups.some((group) => group.id === existing?.activeGroupId)
-      ? existing!.activeGroupId!
-      : priorGroups[0]!.id
-    const tabGroups = priorGroups.map((group) =>
-      group.id === groupId
-        ? {
-            ...group,
-            activeTabId: input.activate ? id : group.activeTabId,
-            tabOrder: [...group.tabOrder, id]
-          }
-        : group
+    const snapshot = appendStructuredAgentSessionTabs(
+      existing,
+      input.workspaceId,
+      [
+        {
+          sessionId: input.sessionId,
+          agent: input.agent,
+          ...(input.replacesSessionId ? { replacesSessionId: input.replacesSessionId } : {})
+        }
+      ],
+      { activate: input.activate }
     )
-    const snapshot: RuntimeMobileSessionTabsSnapshot = {
-      worktree: input.workspaceId,
-      publicationEpoch: existing?.publicationEpoch ?? `structured:${Date.now().toString(36)}`,
-      snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-      activeGroupId: input.activate ? groupId : (existing?.activeGroupId ?? groupId),
-      activeTabId: input.activate ? id : (existing?.activeTabId ?? null),
-      activeTabType: input.activate ? 'agent-session' : (existing?.activeTabType ?? null),
-      tabGroups,
-      ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
-      tabs
+    if (!snapshot) {
+      return
     }
     const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
     if (input.notify !== false) {

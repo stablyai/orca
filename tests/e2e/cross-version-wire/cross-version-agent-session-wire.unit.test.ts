@@ -755,9 +755,12 @@ describe('cross-version structured agent sessions', () => {
       const held = first.cursor
 
       const restarted = await bootHost('b')
-      await restarted.restoreReadableSessions()
-      // Restart restores the session for READING. The chat the client still has open takes its
-      // hold, and that is what gives the session a provider child again.
+      // What every boot runs before its startup pass; it opens no journal. The hold and the
+      // reads open it on first use, and the hold gives the session a child again.
+      await restarted.reconcileRestartLeases()
+      // The first read after the restart opens the journal on its own.
+      const reread = await answer('agentSession.history', { sessionId: SESSION, direction: 'tail' })
+      expect(JSON.stringify(reread)).toContain('before restart')
       await answer('agentSession.hold', { sessionId: SESSION, holderId: 'surface-1' })
       const resumedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
       expect(resumedFence).toBeGreaterThan(created.fence)

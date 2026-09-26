@@ -4,6 +4,46 @@ import { OrcaRuntimeService } from './orca-runtime'
 
 afterEach(() => setStructuredAgentSessionHost(null))
 
+type RestoreInternals = {
+  store: { getWorkspaceSession: () => unknown }
+  hasPersistedStructuredAgentSessionStore(): boolean
+  getKnownWorkspaceSessionWorktreeIds(): Set<string>
+  hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
+    worktreeId?: string,
+    options?: { allowAttachedWindow?: boolean; onlyRuntimeOwnedTerminals?: boolean }
+  ): Set<string>
+  refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
+  ensureStructuredAgentSessionHost(): Promise<void>
+  storeMobileSessionSnapshot(worktreeId: string, snapshot: unknown): unknown
+}
+
+function savedSessionWithChat(sessionId: string) {
+  return {
+    activeRepoId: null,
+    activeWorktreeId: 'workspace-1',
+    activeTabId: `agent-session:${sessionId}`,
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    activeTabIdByWorktree: { 'workspace-1': `agent-session:${sessionId}` },
+    unifiedTabs: {
+      'workspace-1': [
+        {
+          id: `agent-session:${sessionId}`,
+          entityId: sessionId,
+          groupId: 'group-1',
+          worktreeId: 'workspace-1',
+          contentType: 'agent-session',
+          label: 'Codex Chat',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    }
+  }
+}
+
 describe('structured session cold restoration', () => {
   it('skips every heavy recovery step when no durable session store exists', async () => {
     const runtime = new OrcaRuntimeService()
@@ -18,6 +58,7 @@ describe('structured session cold restoration', () => {
     internal.hasPersistedStructuredAgentSessionStore = () => false
     internal.refreshMobileSessionPtyRecords = refresh
     internal.ensureStructuredAgentSessionHost = ensureHost
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test reads only the host members stubbed here.
     setStructuredAgentSessionHost({ reconcileRestartLeases } as never)
 
     await runtime.prepareStructuredAgentSessionStartupRestoration()
@@ -27,179 +68,102 @@ describe('structured session cold restoration', () => {
     expect(reconcileRestartLeases).not.toHaveBeenCalled()
   })
 
-  it('keeps historical journal parsing outside the terminal-safety fence', async () => {
+  it('kicks the startup pass without waiting on it, then reconciles once', async () => {
     const runtime = new OrcaRuntimeService()
     const refresh = vi.fn(async () => new Set<string>())
     const ensureHost = vi.fn(async () => undefined)
     const reconcileRestartLeases = vi.fn(async () => undefined)
-    const restoreReadableSessions = vi.fn(async () => undefined)
-    const internal = runtime as unknown as {
-      hasPersistedStructuredAgentSessionStore(): boolean
-      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
-      ensureStructuredAgentSessionHost(): Promise<void>
-    }
+    const restoreStartupSessions = vi.fn(() => new Promise<void>(() => undefined))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these members exist on the runtime; they are protected, not absent.
+    const internal = runtime as unknown as RestoreInternals
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.refreshMobileSessionPtyRecords = refresh
     internal.ensureStructuredAgentSessionHost = ensureHost
-    setStructuredAgentSessionHost({ reconcileRestartLeases, restoreReadableSessions } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test reads only the host members stubbed here.
+    setStructuredAgentSessionHost({ reconcileRestartLeases, restoreStartupSessions } as never)
 
+    await runtime.prepareStructuredAgentSessionStartupRestoration()
     await runtime.prepareStructuredAgentSessionStartupRestoration()
 
     expect(ensureHost).toHaveBeenCalledOnce()
     expect(refresh).toHaveBeenCalledOnce()
     expect(reconcileRestartLeases).toHaveBeenCalledOnce()
-    expect(restoreReadableSessions).not.toHaveBeenCalled()
+    expect(restoreStartupSessions).toHaveBeenCalledOnce()
+    expect(ensureHost.mock.invocationCallOrder[0]).toBeLessThan(
+      restoreStartupSessions.mock.invocationCallOrder[0] ?? Infinity
+    )
   })
 
-  it('loads records, inventories PTYs, restores ownership, then projects tabs exactly once', async () => {
+  it('answers the tab restore from the index while reconcile and the startup pass hang', async () => {
     const runtime = new OrcaRuntimeService()
     const hydrate = vi.fn()
-    const refresh = vi.fn(async () => new Set<string>())
-    const ensureHost = vi.fn(async () => undefined)
-    const reconcileRestartLeases = vi.fn(async () => undefined)
-    const restoreReadableSessions = vi.fn(async () => undefined)
-    const internal = runtime as unknown as {
-      hasPersistedStructuredAgentSessionStore(): boolean
-      getKnownWorkspaceSessionWorktreeIds(): Set<string>
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
-        worktreeId?: string,
-        options?: { allowAttachedWindow?: boolean; onlyRuntimeOwnedTerminals?: boolean }
-      ): Set<string>
-      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
-      ensureStructuredAgentSessionHost(): Promise<void>
-    }
+    const reconcileRestartLeases = vi.fn(() => new Promise<void>(() => undefined))
+    const restoreStartupSessions = vi.fn(() => new Promise<void>(() => undefined))
+    const setSessionTabVisibility = vi.fn(async () => undefined)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these members exist on the runtime; they are protected, not absent.
+    const internal = runtime as unknown as RestoreInternals
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.getKnownWorkspaceSessionWorktreeIds = () => new Set(['workspace-1'])
     internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = hydrate
-    internal.refreshMobileSessionPtyRecords = refresh
-    internal.ensureStructuredAgentSessionHost = ensureHost
+    internal.refreshMobileSessionPtyRecords = async () => new Set()
+    internal.ensureStructuredAgentSessionHost = async () => undefined
+    const store = vi.spyOn(internal, 'storeMobileSessionSnapshot')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test reads only the host members stubbed here.
     setStructuredAgentSessionHost({
       reconcileRestartLeases,
-      restoreReadableSessions,
-      listSessionTabs: () => []
+      restoreStartupSessions,
+      setSessionTabVisibility,
+      listVisibleSessionIds: () => ['a', 'b', 'c'],
+      listPersistedSessionTabs: (ids: readonly string[]) =>
+        ids.map((sessionId) => ({
+          sessionId,
+          workspaceId: sessionId === 'c' ? 'workspace-2' : 'workspace-1',
+          agent: 'codex'
+        }))
     } as never)
 
     const first = runtime.restoreStructuredAgentSessionTabs()
     const second = runtime.restoreStructuredAgentSessionTabs()
     expect(second).toBe(first)
-    await Promise.all([first, second])
+    await first
 
     expect(hydrate).toHaveBeenCalledWith('workspace-1', {
       allowAttachedWindow: true,
       onlyRuntimeOwnedTerminals: true
     })
-    expect(hydrate).toHaveBeenCalledWith()
-    expect(refresh).toHaveBeenCalledOnce()
-    expect(reconcileRestartLeases).toHaveBeenCalledOnce()
-    expect(restoreReadableSessions).toHaveBeenCalledOnce()
-    expect(ensureHost).toHaveBeenCalledOnce()
-    expect(ensureHost.mock.invocationCallOrder[0]).toBeLessThan(
-      refresh.mock.invocationCallOrder[0] ?? Infinity
-    )
-    expect(refresh.mock.invocationCallOrder[0]).toBeLessThan(
-      reconcileRestartLeases.mock.invocationCallOrder[0] ?? Infinity
-    )
-    expect(reconcileRestartLeases.mock.invocationCallOrder[0]).toBeLessThan(
-      restoreReadableSessions.mock.invocationCallOrder[0] ?? Infinity
-    )
-    expect(restoreReadableSessions.mock.invocationCallOrder[0]).toBeLessThan(
-      hydrate.mock.invocationCallOrder[0] ?? Infinity
-    )
+    expect(restoreStartupSessions).toHaveBeenCalledOnce()
+    // One store write per workspace, and no visibility write: the ids came from the index.
+    expect(store.mock.calls.map(([workspaceId]) => workspaceId)).toEqual([
+      'workspace-1',
+      'workspace-2'
+    ])
+    expect(setSessionTabVisibility).not.toHaveBeenCalled()
+    const listed = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(listed.tabs.map((tab) => tab.id)).toEqual(['agent-session:a', 'agent-session:b'])
   })
 
-  it('prefers the durable visible-session index after a legacy profile drops agent tabs', async () => {
+  it('lists exactly what the durable index holds, including nothing', async () => {
     const runtime = new OrcaRuntimeService()
-    const restoreReadableSessions = vi.fn(async () => undefined)
-    const internal = runtime as unknown as {
-      store: { getWorkspaceSession: () => unknown }
-      hasPersistedStructuredAgentSessionStore(): boolean
-      getKnownWorkspaceSessionWorktreeIds(): Set<string>
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
-      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
-      ensureStructuredAgentSessionHost(): Promise<void>
-    }
-    internal.store = {
-      getWorkspaceSession: () => ({
-        activeRepoId: null,
-        activeWorktreeId: 'workspace-1',
-        activeTabId: null,
-        tabsByWorktree: {},
-        terminalLayoutsByTabId: {},
-        unifiedTabs: { 'workspace-1': [] }
-      })
-    }
+    const listPersistedSessionTabs = vi.fn(() => [])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these members exist on the runtime; they are protected, not absent.
+    const internal = runtime as unknown as RestoreInternals
+    internal.store = { getWorkspaceSession: () => savedSessionWithChat('closed-session') }
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
     internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
     internal.refreshMobileSessionPtyRecords = async () => new Set()
     internal.ensureStructuredAgentSessionHost = async () => undefined
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test reads only the host members stubbed here.
     setStructuredAgentSessionHost({
       reconcileRestartLeases: async () => undefined,
-      getPersistedVisibleSessionTabIndex: () => ({
-        present: true,
-        sessionIds: ['session-survives-rollback']
-      }),
-      restoreReadableSessions,
-      listSessionTabs: () => []
+      restoreStartupSessions: async () => undefined,
+      listVisibleSessionIds: () => [],
+      listPersistedSessionTabs
     } as never)
 
     await runtime.restoreStructuredAgentSessionTabs()
 
-    expect(restoreReadableSessions).toHaveBeenCalledWith(['session-survives-rollback'])
-  })
-
-  it('treats an empty durable visible-session index as authoritative', async () => {
-    const runtime = new OrcaRuntimeService()
-    const restoreReadableSessions = vi.fn(async () => undefined)
-    const internal = runtime as unknown as {
-      store: { getWorkspaceSession: () => unknown }
-      hasPersistedStructuredAgentSessionStore(): boolean
-      getKnownWorkspaceSessionWorktreeIds(): Set<string>
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
-      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
-      ensureStructuredAgentSessionHost(): Promise<void>
-    }
-    internal.store = {
-      getWorkspaceSession: () => ({
-        activeRepoId: null,
-        activeWorktreeId: 'workspace-1',
-        activeTabId: 'agent-session:closed-session',
-        tabsByWorktree: {},
-        terminalLayoutsByTabId: {},
-        activeTabIdByWorktree: { 'workspace-1': 'agent-session:closed-session' },
-        unifiedTabs: {
-          'workspace-1': [
-            {
-              id: 'agent-session:closed-session',
-              entityId: 'closed-session',
-              groupId: 'group-1',
-              worktreeId: 'workspace-1',
-              contentType: 'agent-session',
-              label: 'Codex Chat',
-              customLabel: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        }
-      })
-    }
-    internal.hasPersistedStructuredAgentSessionStore = () => true
-    internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
-    internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
-    internal.refreshMobileSessionPtyRecords = async () => new Set()
-    internal.ensureStructuredAgentSessionHost = async () => undefined
-    setStructuredAgentSessionHost({
-      reconcileRestartLeases: async () => undefined,
-      getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [] }),
-      restoreReadableSessions,
-      listSessionTabs: () => []
-    } as never)
-
-    await runtime.restoreStructuredAgentSessionTabs()
-
-    expect(restoreReadableSessions).toHaveBeenCalledWith([])
+    expect(listPersistedSessionTabs).toHaveBeenCalledExactlyOnceWith([])
   })
 
   it('normalizes a restored tab id and removes it when closed', async () => {
@@ -223,12 +187,14 @@ describe('structured session cold restoration', () => {
     internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
     internal.refreshMobileSessionPtyRecords = async () => new Set()
     internal.ensureStructuredAgentSessionHost = async () => undefined
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test reads only the host members stubbed here.
     setStructuredAgentSessionHost({
       reconcileRestartLeases: async () => undefined,
-      restoreReadableSessions: async () => undefined,
+      restoreStartupSessions: async () => undefined,
       close: closeStructuredSession,
       setSessionTabVisibility,
-      listSessionTabs: () => [
+      listVisibleSessionIds: () => ['restored'],
+      listPersistedSessionTabs: () => [
         {
           sessionId: 'agent-session:agent-session:restored-session',
           workspaceId: 'workspace-1',
@@ -327,23 +293,19 @@ describe('structured session cold restoration', () => {
 
   it('publishes restored Claude tabs with the Claude title', async () => {
     const runtime = new OrcaRuntimeService()
-    const publish = vi.spyOn(runtime, 'publishStructuredAgentSessionTab')
-    const internal = runtime as unknown as {
-      hasPersistedStructuredAgentSessionStore(): boolean
-      getKnownWorkspaceSessionWorktreeIds(): Set<string>
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
-      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
-      ensureStructuredAgentSessionHost(): Promise<void>
-    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these members exist on the runtime; they are protected, not absent.
+    const internal = runtime as unknown as RestoreInternals
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
     internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
     internal.refreshMobileSessionPtyRecords = async () => new Set()
     internal.ensureStructuredAgentSessionHost = async () => undefined
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test reads only the host members stubbed here.
     setStructuredAgentSessionHost({
       reconcileRestartLeases: async () => undefined,
-      restoreReadableSessions: async () => undefined,
-      listSessionTabs: () => [
+      restoreStartupSessions: async () => undefined,
+      listVisibleSessionIds: () => ['restored'],
+      listPersistedSessionTabs: () => [
         {
           sessionId: 'agent-session:agent-session:restored-claude',
           workspaceId: 'workspace-1',
@@ -354,25 +316,17 @@ describe('structured session cold restoration', () => {
 
     await runtime.restoreStructuredAgentSessionTabs()
 
-    expect(publish).toHaveBeenCalledWith({
-      workspaceId: 'workspace-1',
-      sessionId: 'restored-claude',
-      agent: 'claude',
-      activate: false,
-      notify: false
-    })
-
     const restored = await runtime.listMobileSessionTabs('id:workspace-1')
-    expect(restored.tabs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: 'agent-session',
-          id: 'agent-session:restored-claude',
-          title: 'Claude Chat',
-          agent: 'claude'
-        })
-      ])
-    )
+    expect(restored.tabs).toEqual([
+      expect.objectContaining({
+        type: 'agent-session',
+        id: 'agent-session:restored-claude',
+        sessionId: 'restored-claude',
+        title: 'Claude Chat',
+        agent: 'claude',
+        isActive: false
+      })
+    ])
   })
 
   it('commits the host close when the renderer already removed the structured tab', async () => {

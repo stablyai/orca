@@ -73,7 +73,8 @@ describe('chat tab table', () => {
     await store.reserveOwner(reserveRequest({ surfaceTabId: 'tab-alpha' }))
     // A create that dies before its tab is shown leaves nothing to restore or release.
     expect(store.getSessionTabId('session-alpha')).toBeNull()
-    expect((await readFileJson()).sessionTabs).toBeUndefined()
+    // The table exists from the store's first open, and lists nothing.
+    expect((await readFileJson()).sessionTabs).toEqual([])
 
     await store.setSessionTabVisibility('session-alpha', true, 'tab-alpha')
     expect(store.getSessionTabId('session-alpha')).toBe('tab-alpha')
@@ -168,6 +169,50 @@ describe('chat tab table', () => {
     // Older builds restore from this list; the record field rides along untouched and unread.
     expect(persisted.visibleSessionIds).toEqual(['session-alpha', 'session-beta', 'session-gamma'])
     expect(persisted.records['session-alpha'].surfaceTabId).toBe('tab-alpha')
+  })
+
+  it('seeds a store with no index from the saved session, so one later write cannot drop the rest (L4)', async () => {
+    const first = await open()
+    for (const [index, sessionId] of ['session-alpha', 'session-beta', 'session-gamma'].entries()) {
+      await first.reserveOwner(
+        reserveRequest({
+          sessionId,
+          operation: {
+            callerKey: 'client-1',
+            operationId: operationId(),
+            fingerprint: `fp-${index}`
+          }
+        })
+      )
+    }
+    // What a build before any tab index wrote: chats listed only in the saved workspace session.
+    const raw = await readFileJson()
+    delete raw.sessionTabs
+    delete raw.visibleSessionIds
+    const legacy = JSON.stringify(raw)
+    await writeFile(filePath(), legacy)
+    const saved = ['session-alpha', 'session-beta', 'session-gamma', 'session-without-record']
+
+    const seeded = await AgentSessionRecordStore.open({
+      directory,
+      hostId: 'local',
+      savedTabSessionIds: () => saved
+    })
+    expect(seeded.listVisibleSessionIds()).toEqual([
+      'session-alpha',
+      'session-beta',
+      'session-gamma'
+    ])
+    expect(await readFile(filePath(), 'utf-8')).toBe(legacy)
+
+    await seeded.setSessionTabVisibility('session-beta', false)
+    expect((await readFileJson()).visibleSessionIds).toEqual(['session-alpha', 'session-gamma'])
+    const restarted = await AgentSessionRecordStore.open({
+      directory,
+      hostId: 'local',
+      savedTabSessionIds: () => saved
+    })
+    expect(restarted.listVisibleSessionIds()).toEqual(['session-alpha', 'session-gamma'])
   })
 
   it('seeds a chat cleared before the upgrade under the id its tab opened with', async () => {
