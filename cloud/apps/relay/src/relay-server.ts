@@ -276,7 +276,7 @@ export function createRelayServer(
       finished = true
       authenticated(source)
       observability.recordAuth(false)
-      socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
+      closeRelayWebSocket(socket, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame timeout')
     }, RELAY_PROTOCOL_LIMITS.firstFrameDeadlineMs)
     socket.once('message', (raw, binary) => {
       if (finished) return
@@ -285,7 +285,11 @@ export function createRelayServer(
       authenticated(source)
       if (binary) {
         observability.recordAuth(false)
-        socket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'first frame must be text')
+        closeRelayWebSocket(
+          socket,
+          RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+          'first frame must be text'
+        )
         return
       }
       void callback(raw).catch((error: unknown) => {
@@ -356,7 +360,11 @@ export function createRelayServer(
               webSocket.send(
                 JSON.stringify({ type: 'relay-hello', ok: false, code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL })
               )
-              webSocket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid relay auth')
+              closeRelayWebSocket(
+                webSocket,
+                RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+                'invalid relay auth'
+              )
               return
             }
             if (config.role === 'director') {
@@ -442,7 +450,11 @@ export function createRelayServer(
             const auth = HostDataAuthSchema.safeParse(firstPayload(raw, 'host-data-auth'))
             if (!auth.success) {
               observability.recordAuth(false)
-              webSocket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid host data auth')
+              closeRelayWebSocket(
+                webSocket,
+                RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+                'invalid host data auth'
+              )
               return
             }
             const accepted = await sessions.acceptHostData(
