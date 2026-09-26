@@ -17,6 +17,16 @@ export function record(value: unknown): JsonRecord | undefined {
   return typeof value === 'object' && value !== null ? (value as JsonRecord) : undefined
 }
 
+/** A cursor that reads only lines appended after now; undefined when the file is unreadable. */
+export function createJsonlCursorAtEnd(filePath: string): JsonlCursor | undefined {
+  try {
+    const stats = statSync(filePath)
+    return stats.isFile() ? { filePath, offset: stats.size, carry: '' } : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** Returns undefined when the file is unreadable, distinguishing a vanished rollout from one with no new lines.
  *  `lineFilter` skips JSON.parse for raw lines the caller can reject by substring. */
 export function readJsonlCursor(

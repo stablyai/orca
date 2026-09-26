@@ -269,9 +269,23 @@ that publishes `mainAgent`, the inference is admitted only when
 prompt of a row held open by child work as a turn cancel (Codex also keeps the
 child-evidence guard, and a row without `mainAgent` keeps only that guard).
 The keypress itself is not inert, though: measured live, Claude 2.1.280 stops
-its background subagents on a single idle-prompt Ctrl+C (shells survive) and
-Codex 0.156.1 quits outright, so refusing the inference can leave the row
-showing a subagent its CLI already stopped. The synthesized row is the fold
+its background subagents on a single idle-prompt Ctrl+C (shells and scheduled
+checks survive; no hook fires) and Codex 0.156.1 quits outright. Orca does not
+infer the Claude kill from the keypress, which the CLI may swallow (an open
+`/tasks` panel kills nothing). The CLI's own record of it is an id-less
+`system`/`agents_killed` line in the session transcript, written only when it
+really killed every running background agent. The listener on the host that
+runs the session (the desktop for a local pane, the SSH or WSL relay for a
+remote one) watches for that line only while the pane has a working agent child
+and a transcript path it can read locally: armed at the file's end, so a
+resumed or forked session's older lines never count, read incrementally on the
+existing transcript-poll timer, and dropped when the children end or the pane
+closes. A new line retires the children that started by its timestamp with
+SubagentStop semantics and publishes a `SubagentStop` row attributed to one of
+them, with no verdict stamped; the row keeps monitoring a surviving shell and
+settles to done only when nothing is left (`claude-idle-ctrl-c-*` fixtures pin
+this). A relay too old to watch leaves the child on the row until the next
+Stop's inventory, as before. The synthesized row is the fold
 of the cancelled main agent with the child work the pane's owner can see: the
 local listener's roster for a local pane, the row's own subagents and shell fact
 for a relayed one, whose provider records live on the relay.
@@ -428,7 +442,8 @@ call it.
   runtime execution, native mobile clients, and mixed-version paired clients
   remain validation gaps.
 - **Performance budget:** publication stays event-driven with no new polling or
-  subprocesses. One mobile projection clones the status snapshot once, builds
+  subprocesses (the Claude `agents_killed` watch above reuses the existing
+  transcript-poll timer and runs only while a pane has working agent children). One mobile projection clones the status snapshot once, builds
   pane/handle indexes once, and has a deterministic call-count test; lifecycle
   cleanup is bounded by the existing status and handle inventories, and orcad
   tests prove listeners clean up once on failed startup and repeated stop.

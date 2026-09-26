@@ -1,0 +1,16 @@
+{
+  "source_scenario": "idle-shell-only",
+  "claude_version": "2.1.280 (Claude Code)",
+  "argv": [
+    "claude",
+    "--settings",
+    "/Users/uuuuuuuuuuuuu/orca-qa/idle-ctrlc-capture/settings.json",
+    "--dangerously-skip-permissions"
+  ],
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-09-24",
+  "clock": "t is seconds since the first record; hook records keep the ps snapshot taken inside the hook",
+  "note": "Same rig, background shell only (sleep 600). ONE Ctrl+C at the idle prompt does nothing to it: no 'All background agents stopped' (only the quit hint), no hook, no agents_killed transcript record, the shell process survives, and the next Stop still lists it running. Scrubbed: username replaced by a same-length placeholder."
+}
