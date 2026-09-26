@@ -1,7 +1,7 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { SetupScriptLaunchMode } from '../../../../shared/worktree/launch-types'
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group'
-import { SettingsRow, SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsRow, SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { translate } from '@/i18n/i18n'
 
@@ -112,6 +112,33 @@ export function TerminalSetupScriptSection({
                   )}
                 </ToggleGroupItem>
               </ToggleGroup>
+            }
+          />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={translate(
+            'components.settings.TerminalSetupScript.closeOnSuccess',
+            'Close Setup Tab When It Succeeds'
+          )}
+          description={translate(
+            'components.settings.TerminalSetupScript.closeOnSuccessDescription',
+            'Close the setup tab or split once the script exits successfully. A failed setup stays open so you can read the error.'
+          )}
+          keywords={['setup', 'script', 'close', 'auto', 'success', 'exit', 'tab', 'split']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'components.settings.TerminalSetupScript.closeOnSuccess',
+              'Close Setup Tab When It Succeeds'
+            )}
+            description={translate(
+              'components.settings.TerminalSetupScript.closeOnSuccessDescription',
+              'Close the setup tab or split once the script exits successfully. A failed setup stays open so you can read the error.'
+            )}
+            checked={settings.closeSetupTabOnSuccess}
+            onChange={() =>
+              updateSettings({ closeSetupTabOnSuccess: !settings.closeSetupTabOnSuccess })
             }
           />
         </SearchableSetting>

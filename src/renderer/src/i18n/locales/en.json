@@ -18111,6 +18111,10 @@
         "copyTrimsGutter": "Trim Gutter on Copy",
         "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed."
       },
+      "TerminalSetupScript": {
+        "closeOnSuccess": "Close Setup Tab When It Succeeds",
+        "closeOnSuccessDescription": "Close the setup tab or split once the script exits successfully. A failed setup stays open so you can read the error."
+      },
       "terminal": {
         "clipboard": {
           "search": {

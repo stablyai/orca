@@ -9,6 +9,7 @@ import {
 import { replayIntoTerminal } from '../replay-guard'
 import { POST_REPLAY_MODE_RESET } from '../../../../../shared/terminal-mode-reset-profiles'
 import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
+import { exitsShellOnSetupSuccess } from '../../../../../shared/setup-runner-command'
 import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence
@@ -322,7 +323,14 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       // for this ptyId — reattach/coldRestore skip it) that the user never typed
       // into, so a reattached-dead session or an explicit `exit` still tears
       // down as before.
-      if (session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt)) {
+      // A setup that exited its shell on success asked to close, so the guard does not apply.
+      const setupExitedOnSuccess =
+        exitCode === 0 && exitsShellOnSetupSuccess(processExitState.startup?.command)
+      if (
+        session.spawnedFreshPtyId === ptyId &&
+        !Number.isFinite(session.lastTerminalInputAt) &&
+        !setupExitedOnSuccess
+      ) {
         return
       }
       session.deps.onPtyExitRef.current(ptyId, exitCode)

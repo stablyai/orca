@@ -1,5 +1,5 @@
 import type { WorktreeSetupLaunch } from '../../../shared/worktree/launch-types'
-import { buildSetupRunnerCommand } from './setup-runner'
+import { applySetupAutoClose, buildSetupRunnerCommand } from './setup-runner'
 import { useAppStore } from '@/store'
 import type {
   InitialTerminalOptions,
@@ -23,12 +23,16 @@ export function queueSetupAndIssueCommands(
 ): void {
   // Why: setup launch location is user-configurable — 'new-tab' keeps setup output off the primary pane; splits keep it adjacent.
   if (setup) {
-    const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab'
+    const settings = useAppStore.getState().settings
+    const mode = settings?.setupScriptLaunchMode ?? 'new-tab'
     const setupCommand = {
-      command:
+      command: applySetupAutoClose(
         wrappedSetupCommandStr ??
-        setup.command ??
-        buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
+          setup.command ??
+          buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
+        setup,
+        settings
+      ),
       env: setup.envVars
     }
     if (mode === 'new-tab') {

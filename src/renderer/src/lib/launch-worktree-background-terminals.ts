@@ -1,7 +1,3 @@
-import {
-  registerEagerPtyBuffer,
-  type EagerPtyHandle
-} from '@/components/terminal-pane/pty-dispatcher'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -14,12 +10,18 @@ import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
 } from '../../../shared/setup-runner-command'
+import { applySetupAutoClose } from '@/lib/setup-runner'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import {
+  collapseSetupSplit,
+  registerBackgroundPaneBuffer,
+  type SpawnedPane
+} from '@/lib/background-terminal-pane-exit'
 
 type BackgroundPane = {
   leafId: string
@@ -33,6 +35,7 @@ type BackgroundTab = {
 
 type BackgroundTerminalLaunch = {
   command?: string
+  closeOnSuccess?: boolean
   env?: Record<string, string>
   title?: string
   color?: string
@@ -87,54 +90,22 @@ function buildSplitLayout(
   }
 }
 
-function persistExitedPaneOutput(tabId: string, leafId: string, output: string): void {
-  const store = useAppStore.getState()
-  const layout = store.terminalLayoutsByTabId[tabId]
-  if (!layout) {
-    return
-  }
-  const { ptyIdsByLeafId: existingPtyIds, buffersByLeafId: existingBuffers, ...rest } = layout
-  const nextPtyIds = { ...existingPtyIds }
-  delete nextPtyIds[leafId]
-  const trimmedOutput = output.trim() ? output : ''
-  store.setTabLayout(tabId, {
-    ...rest,
-    ...(Object.keys(nextPtyIds).length > 0 ? { ptyIdsByLeafId: nextPtyIds } : {}),
-    ...(trimmedOutput
-      ? {
-          buffersByLeafId: {
-            ...existingBuffers,
-            [leafId]: output
-          }
-        }
-      : existingBuffers
-        ? { buffersByLeafId: existingBuffers }
-        : {})
-  })
-}
-
-// Why the incarnation: a relay-recycled id can hold the previous owner's exit, and draining that
-// into this handler tears the pane down seconds after it launched.
-function registerBackgroundPaneBuffer(tabId: string, leafId: string, pane: SpawnedPane): void {
-  let eagerBuffer: EagerPtyHandle | null = null
-  const onExit = (exitPtyId: string): void => {
-    persistExitedPaneOutput(tabId, leafId, eagerBuffer?.flush() ?? '')
-    useAppStore.getState().clearTabPtyId(tabId, exitPtyId)
-  }
-  eagerBuffer = registerEagerPtyBuffer(pane.ptyId, onExit, pane.incarnationId)
-}
-
 function buildSetupCommand(setup: WorktreeSetupLaunch): string {
   // Why: background setup tabs can launch later, so they must reuse the same shell chosen when the runner was written.
-  return buildSetupRunnerCommand(
-    setup.runnerScriptPath,
-    getSetupRunnerCommandPlatformForPath(setup.runnerScriptPath, 'posix'),
-    setup.shell
+  return applySetupAutoClose(
+    buildSetupRunnerCommand(
+      setup.runnerScriptPath,
+      getSetupRunnerCommandPlatformForPath(setup.runnerScriptPath, 'posix'),
+      setup.shell
+    ),
+    setup,
+    useAppStore.getState().settings
   )
 }
 
-/** The id a background pane got, plus which lifetime of it this spawn owns. */
-type SpawnedPane = { ptyId: string; incarnationId?: string }
+function shouldCloseSetupOnSuccess(): boolean {
+  return useAppStore.getState().settings?.closeSetupTabOnSuccess === true
+}
 
 async function spawnPane(args: {
   worktree: Worktree
@@ -205,7 +176,15 @@ async function createBackgroundTab(args: {
   }
   store.updateTabPtyId(tab.id, pane.ptyId)
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, pane.ptyId))
-  registerBackgroundPaneBuffer(tab.id, leafId, pane)
+  registerBackgroundPaneBuffer(
+    tab.id,
+    leafId,
+    pane,
+    args.launch.closeOnSuccess
+      ? () =>
+          useAppStore.getState().closeTab(tab.id, { recordInteraction: false, reason: 'pty-exit' })
+      : undefined
+  )
   return { tabId: tab.id, primary: { leafId, ptyId: pane.ptyId } }
 }
 
@@ -245,7 +224,14 @@ async function addSetupSplit(args: {
       getSetupTabTitle()
     )
   )
-  registerBackgroundPaneBuffer(args.tab.tabId, setupLeafId, setupPane)
+  registerBackgroundPaneBuffer(
+    args.tab.tabId,
+    setupLeafId,
+    setupPane,
+    shouldCloseSetupOnSuccess()
+      ? () => collapseSetupSplit(args.tab.tabId, args.tab.primary.leafId, setupPane.ptyId)
+      : undefined
+  )
 }
 
 function getDefaultTabLaunches(
@@ -319,7 +305,8 @@ export async function launchWorktreeBackgroundTerminals(
       launch: {
         title: getSetupTabTitle(),
         command: buildSetupCommand(args.setup),
-        env: args.setup.envVars
+        env: args.setup.envVars,
+        closeOnSuccess: shouldCloseSetupOnSuccess()
       }
     })
   }
