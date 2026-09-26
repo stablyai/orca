@@ -1,3 +1,5 @@
+import { getUtf8ByteLength } from './utf8-byte-limits'
+
 export class JsonStringifyByteLimitError extends Error {
   constructor(
     readonly observedBytes: number,
@@ -79,7 +81,11 @@ function rawJsonBytes(value: unknown): number | null {
     return null
   }
   const rawJSON = (value as { rawJSON?: unknown }).rawJSON
-  return typeof rawJSON === 'string' ? Buffer.byteLength(rawJSON, 'utf8') : null
+  return typeof rawJSON === 'string' ? jsonUtf8ByteLength(rawJSON) : null
+}
+
+function jsonUtf8ByteLength(value: string): number {
+  return typeof Buffer === 'undefined' ? getUtf8ByteLength(value) : Buffer.byteLength(value, 'utf8')
 }
 
 function normalizedJsonIndent(space: number | string | undefined): string {
@@ -104,7 +110,7 @@ export function stringifyJsonWithinByteLimit(
   const emittedProperties = new WeakMap<object, number>()
   const containerDepths = new WeakMap<object, number>()
   const indent = normalizedJsonIndent(space)
-  const indentBytes = Buffer.byteLength(indent, 'utf8')
+  const indentBytes = jsonUtf8ByteLength(indent)
   const addBytes = (count: number): void => {
     bytes += count
     if (bytes > maxBytes) {
@@ -157,7 +163,7 @@ export function stringifyJsonWithinByteLimit(
   if (serialized === undefined) {
     throw new TypeError('JSON value is not serializable')
   }
-  const actualBytes = Buffer.byteLength(serialized, 'utf8')
+  const actualBytes = jsonUtf8ByteLength(serialized)
   if (actualBytes > maxBytes) {
     throw new JsonStringifyByteLimitError(actualBytes, maxBytes)
   }
