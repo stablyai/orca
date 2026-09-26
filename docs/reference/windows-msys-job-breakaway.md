@@ -83,7 +83,16 @@ every gate: `isPtyJobOwnershipAvailable()` returned true and
 `windows-msys-job.win32.test.ts` failed with a two-pid job list that read as a
 source defect rather than a build-freshness one.
 
-When that test fails, check the binary before the code:
+Read the failing line first, because only one of the two shapes is about this
+page. A **two-pid job list** at `expect(listPtyJobProcessIds(proc))` is the
+breakaway defect or its stale-addon lookalike, below. A test that never gets
+`MSYS_OWNED_CHILD` at all is not: it is the ConPTY startup race described in
+`windows-msys-job.win32.test.ts`, where input typed before the pty's client has
+attached is dropped instead of queued. The same shape reaches the cmd.exe
+siblings (`windows-pty-job.win32.test.ts`, `windows-host-job.win32.test.ts`),
+which do not touch MSYS at all.
+
+When the job list is short, check the binary before the code:
 
 ```js
 // UTF-16LE, because usesCygwinRuntime holds the literals
