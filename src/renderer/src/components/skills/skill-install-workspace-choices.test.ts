@@ -42,6 +42,33 @@ describe('skillInstallWorkspaceChoices', () => {
     expect(skillInstallWorkspaceChoices({ ...input, environmentId: 'environment_1' })).toHaveLength(
       1
     )
-    expect(skillInstallWorkspaceChoices({ ...input, environmentId: 'ssh:ssh_1' })).toHaveLength(1)
+    expect(skillInstallWorkspaceChoices({ ...input, environmentId: 'ssh:ssh_1' })).toHaveLength(0)
+  })
+
+  it('keeps SSH worktrees while omitting SSH folder workspaces', () => {
+    const repo = {
+      id: 'repo_1',
+      connectionId: 'ssh_1',
+      executionHostId: 'ssh:ssh_1'
+    } as unknown as Repo
+    const worktree = {
+      id: 'repo_1::/remote/worktree',
+      repoId: repo.id,
+      displayName: 'Remote worktree'
+    } as Worktree
+    const folder = {
+      id: 'ssh',
+      name: 'SSH folder',
+      folderPath: '/ssh',
+      executionHostId: 'ssh:ssh_1'
+    } as FolderWorkspace
+    expect(
+      skillInstallWorkspaceChoices({
+        environmentId: 'ssh:ssh_1',
+        repos: [repo],
+        worktreesByRepo: { [repo.id]: [worktree] },
+        folderWorkspaces: [folder]
+      })
+    ).toEqual([{ id: worktree.id, label: worktree.displayName, kind: 'worktree' }])
   })
 })
