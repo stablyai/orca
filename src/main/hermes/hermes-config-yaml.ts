@@ -1,6 +1,7 @@
 import { parse, stringify } from 'yaml'
 
 import { HERMES_PLUGIN_NAME } from './hermes-managed-plugin-source'
+import { editHermesPluginLists } from './hermes-config-source-edit'
 
 export type HermesConfig = Record<string, unknown>
 
@@ -50,7 +51,9 @@ export function enablePlugin(config: HermesConfig): HermesConfig {
   const plugins = isRecord(next.plugins) ? { ...next.plugins } : {}
   const enabled = asStringArray(plugins.enabled) ?? []
   const disabled = asStringArray(plugins.disabled)
-  plugins.enabled = Array.from(new Set([...enabled, HERMES_PLUGIN_NAME])).sort()
+  plugins.enabled = enabled.includes(HERMES_PLUGIN_NAME)
+    ? enabled
+    : [...enabled, HERMES_PLUGIN_NAME]
   if (disabled === null) {
     // Why: Hermes treats a malformed disabled list as empty. Normalize it here
     // so Orca's install status matches what the real Hermes loader will do.
@@ -70,7 +73,7 @@ export function disablePlugin(config: HermesConfig): HermesConfig {
   }
   const plugins = { ...next.plugins }
   const enabled = asStringArray(plugins.enabled)
-  if (enabled !== null) {
+  if (enabled?.includes(HERMES_PLUGIN_NAME)) {
     plugins.enabled = enabled.filter((name) => name !== HERMES_PLUGIN_NAME)
   }
   next.plugins = plugins
@@ -85,7 +88,11 @@ export function updateConfigContent(
   if (!parsed.ok) {
     return { content: null, detail: parsed.detail }
   }
-  return { content: serializeHermesConfig(updater(parsed.config)) }
+  try {
+    return { content: editHermesPluginLists(content ?? '', parsed.config, updater(parsed.config)) }
+  } catch (error) {
+    return { content: null, detail: error instanceof Error ? error.message : String(error) }
+  }
 }
 
 export function getConfigEnablement(config: HermesConfig): {
