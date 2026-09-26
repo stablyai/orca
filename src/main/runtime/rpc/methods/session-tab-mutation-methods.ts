@@ -6,7 +6,6 @@ import {
   translateProjectedSessionTabMove
 } from './session-tab-browser-placement-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
-import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 import { ActivateTab, MoveTab, SetTabProps, UpdatePaneLayout } from './session-tabs-schemas'
 
 export const SESSION_TAB_MUTATION_METHODS = [
@@ -18,8 +17,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
         const visible = projectSessionTabsForClient(
           await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
           clientKind,
-          clientCapabilities,
-          isStructuredNativeChatEnabled(runtime)
+          clientCapabilities
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
       }
@@ -38,12 +36,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
           })
         }
       )
-      return projectSessionTabsForMutationClient(
-        result,
-        clientKind,
-        clientCapabilities,
-        isStructuredNativeChatEnabled(runtime)
-      )
+      return projectSessionTabsForMutationClient(result, clientKind, clientCapabilities)
     }
   }),
   defineMethod({
@@ -53,12 +46,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
       let translated: Parameters<typeof translateProjectedSessionTabMove>[2] = params
       if (clientKind) {
         const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
-        const projected = projectSessionTabsForClient(
-          raw,
-          clientKind,
-          clientCapabilities,
-          isStructuredNativeChatEnabled(runtime)
-        )
+        const projected = projectSessionTabsForClient(raw, clientKind, clientCapabilities)
         translated = translateProjectedSessionTabMove(raw, projected, params)
       }
       const base = { tabId: translated.tabId, targetGroupId: translated.targetGroupId }
@@ -142,8 +130,7 @@ async function assertVisibleMutationTab(
   const visible = projectSessionTabsForClient(
     await runtime.listMobileSessionTabs(worktree, pairedDeviceId),
     clientKind,
-    clientCapabilities,
-    isStructuredNativeChatEnabled(runtime)
+    clientCapabilities
   )
   assertProjectedSessionTabVisible(visible, tabId)
 }

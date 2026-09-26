@@ -9,7 +9,8 @@ import {
 } from './structured-agent-session-rpc.test-fixture'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 
-/** Stops or retires work the caller already owns, so admission may already have been revoked. */
+/** Stops or retires a session that already exists. Asks only the capability, and never installs a
+ *  host to answer: with none installed there is nothing to stop. */
 export const CLEANUP_METHODS = [
   {
     method: 'agentSession.close',
@@ -33,8 +34,8 @@ export const CLEANUP_METHODS = [
   }
 ] as const
 
-/** Starts, extends, retains or reads work, so every one stays refused once the setting is off. */
-export const ADMISSION_METHODS = [
+/** Brings a NEW session into being, so the host's Chat UI setting is asked on top of the capability. */
+export const CREATE_METHODS = [
   { method: 'agentSession.createSupport', params: { worktree: 'id:workspace-1', agent: 'codex' } },
   {
     method: 'agentSession.create',
@@ -51,7 +52,11 @@ export const ADMISSION_METHODS = [
       agent: 'codex'
     }
   },
-  { method: 'agentSession.ensure', params: attachParams() },
+  { method: 'agentSession.ensure', params: attachParams() }
+] as const
+
+/** Reads, drives or retains a session that already exists, so Chat UI being off never refuses it. */
+export const EXISTING_SESSION_METHODS = [
   { method: 'agentSession.send', params: sendParams() },
   {
     method: 'agentSession.rewind',

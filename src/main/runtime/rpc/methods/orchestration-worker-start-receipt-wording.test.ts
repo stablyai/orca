@@ -22,7 +22,6 @@ import {
 
 const STRUCTURED_PREFERENCE = {
   experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
   openAgentTabsInChatByDefault: true
 } as const
 

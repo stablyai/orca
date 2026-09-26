@@ -169,7 +169,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
 
   it.each([true, false])('answers from feasibility alone (supported=%s)', (supported) => {
     mocks.structuredAgentLaunchSupported.mockReturnValue(supported)
-    const settings = { experimentalStructuredNativeChat: true } as never
+    const settings = { experimentalNativeChat: true }
 
     expect(
       structuredAgentSessionLaunchFeasible(store, {
@@ -183,7 +183,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
   })
 
   it('builds the input from the named settings, not the store copy', () => {
-    const settings = { experimentalStructuredNativeChat: true } as never
+    const settings = { experimentalNativeChat: true }
     structuredAgentSessionLaunchFeasible(store, {
       agent: 'codex',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },

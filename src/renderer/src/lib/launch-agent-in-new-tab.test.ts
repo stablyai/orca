@@ -33,7 +33,6 @@ const store = {
     activeRuntimeEnvironmentId: string | null
     terminalWindowsShell?: string
     experimentalNativeChat?: boolean
-    experimentalStructuredNativeChat?: boolean
     openAgentTabsInChatByDefault?: boolean
     nativeChatSessionOptions?: Record<
       string,
@@ -227,7 +226,6 @@ describe('launchAgentInNewTab', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
@@ -265,7 +263,6 @@ describe('launchAgentInNewTab', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
@@ -297,7 +294,6 @@ describe('launchAgentInNewTab', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     store.repos = [{ id: 'repo-1', connectionId: 'ssh-target-1', path: '/repo' }]
@@ -318,7 +314,6 @@ describe('launchAgentInNewTab', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
@@ -349,7 +344,6 @@ describe('launchAgentInNewTab', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
@@ -390,7 +384,6 @@ describe('launchAgentInNewTab', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: false,
       nativeChatSessionOptions: {
         codex: {
@@ -423,7 +416,6 @@ describe('launchAgentInNewTab', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: true,
       nativeChatSessionOptions: {
         codex: {
@@ -463,7 +455,6 @@ describe('launchAgentInNewTab', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: 'web-runtime',
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: true,
       nativeChatSessionOptions: {
         claude: {
@@ -507,7 +498,6 @@ describe('launchAgentInNewTab', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: 'web-runtime',
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
@@ -533,7 +523,6 @@ describe('launchAgentInNewTab', () => {
       agentDefaultEnv: {},
       activeRuntimeEnvironmentId: 'web-runtime',
       experimentalNativeChat: true,
-      experimentalStructuredNativeChat: true,
       openAgentTabsInChatByDefault: false
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')

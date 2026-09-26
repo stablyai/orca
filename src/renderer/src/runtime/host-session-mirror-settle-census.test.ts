@@ -150,9 +150,8 @@ describe('host-session-mirror settle census', () => {
       'runtime/web-session-tabs-sync/visibility-resume-repair.ts': 1,
       // The eager post-create session.tabs.list refresh.
       'runtime/web-runtime-session-snapshot.ts': 1,
-      // The local structured-session mirror owns two: the inventory/subscription
-      // frame, and the toggle-off teardown that retracts the tabs it published.
-      'runtime/local-structured-session-tabs-sync/snapshot-apply.ts': 2
+      // The local structured-session mirror's inventory/subscription frame.
+      'runtime/local-structured-session-tabs-sync/snapshot-apply.ts': 1
     })
   })
 
@@ -198,8 +197,7 @@ describe('host-session-mirror settle census', () => {
       // the global singular frame owns two hydration completions and the global
       // inventory frame one, initial loading owns one, active subscription owns
       // two mirror settles, and visibility resume repair owns one. The local
-      // structured-session apply module owns one settle per direction: the
-      // snapshot it mirrors in, and the teardown that retracts it.
+      // structured-session apply module owns the snapshot it mirrors in.
       'runtime/web-session-tabs-sync/active-session-subscription.ts': { settle: 2 },
       'runtime/web-session-tabs-sync/global-session-events.ts': { settleHydration: 2 },
       'runtime/web-session-tabs-sync/global-session-inventory-event.ts': { settleHydration: 1 },
@@ -207,7 +205,6 @@ describe('host-session-mirror settle census', () => {
       'runtime/web-session-tabs-sync/visibility-resume-repair.ts': { settle: 1 },
       'runtime/web-runtime-session-snapshot.ts': { settleMirror: 1 },
       'runtime/local-structured-session-tabs-sync/snapshot-apply.ts': {
-        settleStructuredSessionClear: 1,
         settleStructuredSessionMirror: 1
       }
     })

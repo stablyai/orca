@@ -47,6 +47,8 @@ export const appApi = {
     ipcRenderer.invoke('app:awaitGitEnvironmentStartupBarrier'),
   prepareTerminalStartupRestoration: (): Promise<void> =>
     ipcRenderer.invoke('app:prepareTerminalStartupRestoration'),
+  hasLocalStructuredAgentSessions: (): Promise<boolean> =>
+    ipcRenderer.invoke('app:hasLocalStructuredAgentSessions'),
   recoverLegacyWorkerTerminalsForRendererStartup: (): Promise<void> =>
     ipcRenderer.invoke('app:recoverLegacyWorkerTerminalsForRendererStartup'),
   startupDiagnostic: (event: string, details?: Record<string, unknown>): Promise<void> =>

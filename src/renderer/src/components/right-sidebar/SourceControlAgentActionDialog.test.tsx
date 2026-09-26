@@ -240,7 +240,6 @@ describe('SourceControlAgentActionDialog', () => {
       {
         ...settingsWithGlobalRecipe(null),
         experimentalNativeChat: true,
-        experimentalStructuredNativeChat: true,
         openAgentTabsInChatByDefault: true
       },
       [repoWithSavedRecipe('--model saved', 'build-box', 'ssh:build-box')]
@@ -270,7 +269,6 @@ describe('SourceControlAgentActionDialog', () => {
       {
         ...settingsWithGlobalRecipe(recipe),
         experimentalNativeChat: true,
-        experimentalStructuredNativeChat: true,
         openAgentTabsInChatByDefault: true
       },
       []
