@@ -1,8 +1,6 @@
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
-import type {
-  PersistedOpenFile,
-  WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { buildPersistedEditorFileRecords } from './workspace-session-editor-records'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-doc-history'
@@ -128,42 +126,21 @@ export function buildEditorSessionData(
   | 'activeTabTypeByWorktree'
   | 'markdownFrontmatterVisible'
 > {
-  const editFiles = openFiles.filter((f) => f.mode === 'edit')
-  const byWorktree: Record<string, PersistedOpenFile[]> = {}
-  const editFileIdsByWorktree: Record<string, Set<string>> = {}
-  for (const f of editFiles) {
-    const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
-    // Why: never persist a dirty draft for a read-only tab — restoring one would reintroduce writable/hot-exit state for an agent transcript.
-    const dirtyDraftContent = f.isDirty && f.readOnly !== true ? editorDrafts[f.id] : undefined
-    arr.push({
-      filePath: f.filePath,
-      relativePath: f.relativePath,
-      worktreeId: f.worktreeId,
-      language: f.language,
-      isPreview: f.isPreview || undefined,
-      runtimeEnvironmentId: f.runtimeEnvironmentId,
-      externalSshTargetId: f.externalSshTargetId,
-      // Why: persist readOnly only when true; absence is the writable default on restore.
-      ...(f.readOnly === true ? { readOnly: true } : {}),
-      ...(f.readOnly === true && f.liveTail === true ? { liveTail: true } : {}),
-      ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {}),
-      // Why: baseline travels with the draft so restore can detect a changed-on-disk conflict before autosave clobbers an offline agent write.
-      ...(dirtyDraftContent !== undefined && f.lastKnownDiskSignature
-        ? { lastKnownDiskSignature: f.lastKnownDiskSignature }
-        : {})
-    })
-    const ids =
-      editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
-    ids.add(f.id)
-  }
+  const {
+    openFilesByWorktree: byWorktree,
+    editFileIdsByWorktree,
+    survivingFileIdByMergedId
+  } = buildPersistedEditorFileRecords(openFiles, editorDrafts, activeFileIdByWorktree)
 
   const activeFileEntries: [string, string][] = []
   for (const [worktreeId, fileId] of Object.entries(activeFileIdByWorktree)) {
     if (!fileId) {
       continue
     }
-    if (editFileIdsByWorktree[worktreeId]?.has(fileId)) {
-      activeFileEntries.push([worktreeId, fileId])
+    // Why: the active tab can be the one whose record merged away — follow it to the survivor.
+    const survivingFileId = survivingFileIdByMergedId.get(fileId) ?? fileId
+    if (editFileIdsByWorktree[worktreeId]?.has(survivingFileId)) {
+      activeFileEntries.push([worktreeId, survivingFileId])
     }
   }
   const persistedActiveFileIdByWorktree = Object.fromEntries(activeFileEntries) as Record<
@@ -188,11 +165,21 @@ export function buildEditorSessionData(
   >
   const allEditFileIds = new Set(Object.values(editFileIdsByWorktree).flatMap((ids) => [...ids]))
   // Why: preserve the value so per-file hide overrides survive restart (map only carries `false`; visible is the default).
-  const persistedMarkdownFrontmatterVisible = Object.fromEntries(
-    Object.entries(markdownFrontmatterVisible ?? {}).filter(([fileId]) =>
-      allEditFileIds.has(fileId)
-    )
+  // A merged-away id carries its override onto the surviving record unless that record set its own.
+  const frontmatterEntries = Object.entries(markdownFrontmatterVisible ?? {}).flatMap(
+    ([fileId, visible]): [string, boolean][] => {
+      if (allEditFileIds.has(fileId)) {
+        return [[fileId, visible]]
+      }
+      const survivingFileId = survivingFileIdByMergedId.get(fileId)
+      return survivingFileId &&
+        allEditFileIds.has(survivingFileId) &&
+        markdownFrontmatterVisible?.[survivingFileId] === undefined
+        ? [[survivingFileId, visible]]
+        : []
+    }
   )
+  const persistedMarkdownFrontmatterVisible = Object.fromEntries(frontmatterEntries)
 
   return {
     openFilesByWorktree: byWorktree,

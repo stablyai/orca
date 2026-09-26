@@ -43,6 +43,7 @@ import {
   makeUnifiedTab
 } from './store-test-helpers'
 import {
+  appendRecentlyClosedTabKind,
   pushRecentlyClosedTabKind,
   remapClosedTerminalTabSnapshotCwds,
   restoreRecentlyClosedTabPosition
@@ -129,6 +130,19 @@ describe('recently-closed history bounds', () => {
 
     expect(result[WT]).toHaveLength(30)
     expect(result[WT]?.every((kind) => kind === 'editor')).toBe(true)
+  })
+
+  it('appends a kind behind the existing ones and drops it rather than a newer close at the cap', () => {
+    expect(appendRecentlyClosedTabKind({ [WT]: ['terminal'] }, WT, 'editor')[WT]).toEqual([
+      'terminal',
+      'editor'
+    ])
+
+    const full = pushRecentlyClosedTabKind({}, WT, 'terminal', 30)
+    const appended = appendRecentlyClosedTabKind(full, WT, 'editor')
+
+    expect(appended[WT]).toHaveLength(30)
+    expect(appended[WT]?.every((kind) => kind === 'terminal')).toBe(true)
   })
 })
 

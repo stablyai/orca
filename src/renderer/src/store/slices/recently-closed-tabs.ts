@@ -75,6 +75,19 @@ export function pushRecentlyClosedTabKind(
   }
 }
 
+/** Why the tail: a kind whose snapshot cannot be restored yet must queue behind the user's recent
+ *  closes instead of blocking every other tab type's reopen at the head. */
+export function appendRecentlyClosedTabKind(
+  map: Record<string, RecentlyClosedTabKind[]> | undefined,
+  worktreeId: string,
+  kind: RecentlyClosedTabKind
+): Record<string, RecentlyClosedTabKind[]> {
+  return {
+    ...map,
+    [worktreeId]: [...(map?.[worktreeId] ?? []), kind].slice(0, MAX_RECENT_CLOSED_TAB_KINDS)
+  }
+}
+
 export function remapClosedTerminalTabSnapshotCwds(
   snapshots: ClosedTerminalTabSnapshot[],
   oldWorktreePath: string,
