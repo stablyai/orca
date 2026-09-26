@@ -4,9 +4,7 @@ import type {
   AutomationCreateInput,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { buildAutomationRrule } from '../../../../shared/automation-schedule-occurrences'
-import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { listAutomationsForTarget } from './automation-host-client'
@@ -15,8 +13,11 @@ import {
   type AutomationDispatchResult
 } from './automation-row-action-dispatch'
 import { buildDraftPrecheck } from './automation-draft-model'
-import { buildAutomationRunContextForRepo } from './automation-run-context'
-import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
+import {
+  createAutomationCopiesForExtraProjects,
+  normalizeAutomationCreateTargets,
+  planAutomationProjectRun
+} from './automation-project-run-plan'
 import {
   createAutomationOnDestination,
   moveAutomationToDestination,
@@ -30,11 +31,10 @@ export async function saveOrcaAutomation(
   context: AutomationSaveContext,
   time: { hour: number; minute: number; now: number }
 ): Promise<void> {
-  const { store, local, setup, destination, destinationForm, pageRefresh } = context
-  const { repos, projectHostSetups } = store
+  const { store, local, destination, destinationForm, pageRefresh } = context
+  const { repos } = store
   const {
     draft,
-    createTarget,
     editingAutomationId,
     editingRowKey,
     editingDestination,
@@ -81,51 +81,25 @@ export async function saveOrcaAutomation(
   const missedRunGraceMinutes = Number.isFinite(rawGrace) ? Math.max(0, rawGrace) : 720
   const precheck = buildDraftPrecheck(draft)
   const reposForDraft = editingAutomationId !== null ? dialogRepos : repos
+  const { extraProjectIds, workspaceMode } =
+    editingAutomationId === null
+      ? normalizeAutomationCreateTargets(draft)
+      : { extraProjectIds: [], workspaceMode: draft.workspaceMode }
+  const reuseSession = workspaceMode === 'existing' && draft.reuseSession
   const setupResolution =
     editingAutomationId !== null
       ? editHostResolution
       : createCheck
         ? { status: 'ready' as const, ...createCheck.destination }
         : null
-  const setupHostId: ExecutionHostId | undefined =
-    setupResolution?.status === 'ready' && setupResolution.authority.kind === 'runtime'
-      ? (`runtime:${setupResolution.authority.environmentId}` as ExecutionHostId)
-      : undefined
-  const setupProjectHostSetups = setupHostId
-    ? projectHostSetups.filter(
-        (candidate) => candidate.repoId !== draft.projectId || candidate.hostId === setupHostId
-      )
-    : projectHostSetups
-  let setupDecision = resolveAutomationSetupDecisionForSave({
-    createTarget,
-    workspaceMode: draft.workspaceMode,
-    repoId: draft.projectId,
+  const plan = await planAutomationProjectRun(context, {
+    projectId: draft.projectId,
     repos: reposForDraft,
-    projectHostSetups: setupProjectHostSetups,
-    yamlHooks:
-      draft.workspaceMode === 'new_per_run'
-        ? await setup.loadAutomationYamlHooksForRepo(draft.projectId, setupHostId)
-        : null,
+    authority: setupResolution?.status === 'ready' ? setupResolution.authority : null,
+    workspaceMode,
     draftSetupDecision: draft.setupDecision
   })
-  if (setupDecision === 'run') {
-    const trustDecision = await ensureHooksConfirmed(
-      useAppStore.getState(),
-      draft.projectId,
-      'setup',
-      setupHostId
-    )
-    if (trustDecision === 'skip') {
-      setupDecision = 'skip'
-    }
-  }
-
-  const runContext = buildAutomationRunContextForRepo({
-    repoId: draft.projectId,
-    repos: reposForDraft,
-    projectHostSetups: setupProjectHostSetups
-  })
-  if (!runContext) {
+  if (!plan) {
     toast.error(
       translate(
         'auto.components.automations.AutomationsPage.32534e7c9c',
@@ -134,6 +108,7 @@ export async function saveOrcaAutomation(
     )
     return
   }
+  const { setupDecision, runContext } = plan
 
   let currentAutomation = editingAutomationId
     ? (automations.find((automation) => automation.id === editingAutomationId) ?? null)
@@ -161,11 +136,11 @@ export async function saveOrcaAutomation(
     agentId: draft.agentId,
     runContext,
     projectId: draft.projectId,
-    workspaceMode: draft.workspaceMode,
+    workspaceMode,
     workspaceId: draft.workspaceId,
     baseBranch: draft.baseBranch.trim() || null,
     setupDecision,
-    reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
+    reuseSession,
     timezone,
     missedRunGraceMinutes
   }
@@ -180,11 +155,11 @@ export async function saveOrcaAutomation(
     agentId: draft.agentId,
     runContext,
     projectId: draft.projectId,
-    workspaceMode: draft.workspaceMode,
+    workspaceMode,
     workspaceId: draft.workspaceId,
     baseBranch: draft.baseBranch.trim() || null,
     setupDecision,
-    reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
+    reuseSession,
     timezone,
     rrule,
     dtstart: updates.dtstart ?? time.now,
@@ -253,16 +228,22 @@ export async function saveOrcaAutomation(
     return
   }
   const automation = saved.value
+  const copies =
+    extraProjectIds.length > 0
+      ? await createAutomationCopiesForExtraProjects(context, extraProjectIds, createInput)
+      : null
   if (editingAutomationId !== null) {
     invalidateRowHost(editingRowKey, 'definition')
   } else {
     await pageRefresh.hydratePersistedUIState()
   }
   setAutomations((current) => {
-    const next = current.filter((entry) => entry.id !== automation.id)
-    return [...next, automation].sort((left, right) => left.name.localeCompare(right.name))
+    const written = [automation, ...(copies?.created ?? [])]
+    const writtenIds = new Set(written.map((entry) => entry.id))
+    const next = current.filter((entry) => !writtenIds.has(entry.id))
+    return [...next, ...written].sort((left, right) => left.name.localeCompare(right.name))
   })
-  setDraft((current) => ({ ...current, name: '', prompt: '' }))
+  setDraft((current) => ({ ...current, name: '', prompt: '', extraProjectIds: [] }))
   await pageRefresh.refresh()
   if (editingAutomationId !== null && editingRowKey && !moveTarget) {
     setSelectedAutomationRunPageId(null)
@@ -274,6 +255,25 @@ export async function saveOrcaAutomation(
     useAppStore.getState().recordFeatureInteraction('automation-created')
   }
   if (moveTarget && !originalRemoved) {
+    return
+  }
+  if (copies?.failed.length) {
+    toast.error(
+      translate(
+        'auto.components.automations.AutomationsPage.copiesFailed',
+        'Saved, but no copy was created in: {{projects}}',
+        { projects: copies.failed.join(', ') }
+      )
+    )
+  }
+  if (copies && copies.created.length > 0) {
+    toast.success(
+      translate(
+        'auto.components.automations.AutomationsPage.savedInProjects',
+        'Automation saved in {{count}} projects.',
+        { count: copies.created.length + 1 }
+      )
+    )
     return
   }
   toast.success(

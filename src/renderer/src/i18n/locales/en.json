@@ -16322,7 +16322,9 @@
           "tableLastRun": "Last run",
           "noListMatches": "No automations match.",
           "destinationProjectUnavailable": "Choose a project owned by the selected automation destination.",
-          "ownerChanged": "This automation changed hosts. Refresh and try again."
+          "ownerChanged": "This automation changed hosts. Refresh and try again.",
+          "copiesFailed": "Saved, but no copy was created in: {{projects}}",
+          "savedInProjects": "Automation saved in {{count}} projects."
         },
         "AutomationsPageSkeleton": {
           "55527b7bcf": "Loading automations"
@@ -16617,6 +16619,12 @@
         "AutomationsPageBreadcrumb": {
           "ariaLabel": "Automations breadcrumb",
           "runDetails": "Run details"
+        },
+        "AutomationExtraProjectsField": {
+          "label": "Also create in",
+          "remove": "Remove {{project}}",
+          "add": "Add another project",
+          "hint": "Saves one automation per project, each running in a new workspace."
         }
       },
       "agent": {

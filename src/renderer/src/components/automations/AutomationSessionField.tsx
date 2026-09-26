@@ -50,6 +50,8 @@ export function AutomationSessionField({
       <ToggleGroup
         type="single"
         spacing={1}
+        // Why: Reuse needs an existing workspace, which copies for extra projects cannot share.
+        disabled={draft.extraProjectIds.length > 0}
         value={draft.workspaceMode === 'existing' && draft.reuseSession ? 'reuse' : 'fresh'}
         onValueChange={(value) => {
           if (!value) {

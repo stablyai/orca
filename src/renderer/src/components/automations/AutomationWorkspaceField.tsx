@@ -72,6 +72,8 @@ export function AutomationWorkspaceField({
           <ToggleGroup
             type="single"
             spacing={1}
+            // Why: copies for extra projects need a fresh workspace each, so the mode is fixed.
+            disabled={draft.extraProjectIds.length > 0}
             value={draft.workspaceMode}
             onValueChange={(workspaceMode) =>
               workspaceMode &&
