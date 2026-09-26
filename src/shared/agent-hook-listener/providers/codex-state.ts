@@ -47,6 +47,19 @@ export function hasCodexTranscriptSubagents(state: HookListenerState, paneKey: s
   return hasTrackedCodexTranscriptSubagents(state.codexSubagentTranscriptByPaneKey.get(paneKey))
 }
 
+/** Whether the root turn is still open, with the id and rollout needed to find its end. */
+export function codexLeadTurnAwaitsTranscriptEnd(
+  state: HookListenerState,
+  paneKey: string
+): boolean {
+  const lead = state.codexLeadStateByPaneKey.get(paneKey)
+  return (
+    lead?.turnId !== undefined &&
+    lead.state !== 'done' &&
+    state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath !== undefined
+  )
+}
+
 /** The only writer of the root record; the root's clock keeps continuity across same-state writes. */
 export function setCodexMainAgentTurnState(
   state: HookListenerState,
@@ -60,7 +73,8 @@ export function setCodexMainAgentTurnState(
     state: next.state,
     ...(continued.outcome ? { outcome: continued.outcome } : {}),
     stateStartedAt: continued.stateStartedAt,
-    model: next.model
+    model: next.model,
+    ...(next.turnId ? { turnId: next.turnId } : {})
   }
   state.codexLeadStateByPaneKey.set(paneKey, record)
   return record
@@ -200,6 +214,15 @@ export function reconcileRemoteCodexState(
     if (eventName === 'SubagentStop') {
       finishCodexSubagent(roster, agentId)
     }
+    // Why: the relay alone reads the rollout, and a child hook can carry the root turn's end.
+    const lead = state.codexLeadStateByPaneKey.get(paneKey)
+    if (payload.mainAgent?.state === 'done' && lead && lead.state !== 'done') {
+      setCodexMainAgentTurnState(state, paneKey, {
+        state: 'done',
+        ...(payload.mainAgent.outcome ? { outcome: payload.mainAgent.outcome } : {}),
+        model: lead.model
+      })
+    }
   } else {
     const leadState = codexLeadStateForHookEvent(eventName, payload.state)
     if (eventName === 'SessionStart' || (eventName === 'Stop' && !payload.subagents)) {
@@ -207,9 +230,13 @@ export function reconcileRemoteCodexState(
     }
     if (leadState) {
       const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
+      // Why: the relay alone reads the rollout, so a turn it saw fail arrives as a Stop carrying the verdict.
+      const outcome =
+        codexOutcomeRestatedByStop(previousLead, leadState).outcome ??
+        (leadState === 'done' ? payload.mainAgent?.outcome : undefined)
       setCodexMainAgentTurnState(state, paneKey, {
         state: leadState,
-        ...codexOutcomeRestatedByStop(previousLead, leadState),
+        ...(outcome ? { outcome } : {}),
         model: payload.model ?? previousLead?.model
       })
     }

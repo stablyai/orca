@@ -20,6 +20,8 @@ import {
 
 // Why: retire a child whose rollout stays unreadable this long, else a deleted/never-written file pins a phantom row forever.
 const CHILD_UNREADABLE_GRACE_MS = 60_000
+// Why: only the open turn is ever looked up; a small window covers a batch read after a restart.
+const MAX_TRACKED_TURN_ENDS = 16
 const SAFE_THREAD_ID = /^[A-Za-z0-9-]{1,64}$/
 
 type TrackedTranscriptSubagent = JsonlCursor & {
@@ -32,8 +34,13 @@ type TrackedTranscriptSubagent = JsonlCursor & {
   unresolvedSince?: number
 }
 
+/** How the root agent's turn ended, as its rollout recorded it. */
+export type CodexTranscriptTurnEnd = 'completed' | 'failed'
+
 export type CodexSubagentTranscriptState = {
   parent: JsonlCursor
+  /** Root turn ends read from the parent rollout, keyed by Codex `turn_id`. */
+  turnEnds: Map<string, CodexTranscriptTurnEnd>
   subagents: Map<string, TrackedTranscriptSubagent>
   /** Incremental reviewer cursors for child rollouts, which must not replace the parent cursor. */
   reviewerCursorsByPath: Map<string, JsonlCursor>
@@ -149,6 +156,20 @@ function readChildModel(records: JsonRecord[]): string | undefined {
   return model
 }
 
+function readTurnEnd(
+  recordValue: JsonRecord
+): { turnId: string; end: CodexTranscriptTurnEnd } | undefined {
+  if (recordValue.type !== 'event_msg') {
+    return undefined
+  }
+  const payload = record(recordValue.payload)
+  const turnId = typeof payload?.turn_id === 'string' ? payload.turn_id.trim() : ''
+  if (payload?.type !== 'task_complete' || !turnId) {
+    return undefined
+  }
+  return { turnId, end: record(payload.error) ? 'failed' : 'completed' }
+}
+
 function normalizedTranscriptPath(transcriptPath: string | undefined): string | undefined {
   const normalizedPath = transcriptPath?.trim()
   return normalizedPath && isAbsolute(normalizedPath) && extname(normalizedPath) === '.jsonl'
@@ -175,6 +196,7 @@ function childIsComplete(records: JsonRecord[]): boolean {
 export function createCodexSubagentTranscriptState(): CodexSubagentTranscriptState {
   return {
     parent: { offset: 0, carry: '' },
+    turnEnds: new Map(),
     subagents: new Map(),
     reviewerCursorsByPath: new Map(),
     reviewersByPath: new Map()
@@ -185,6 +207,13 @@ export function hasTrackedCodexTranscriptSubagents(
   state: CodexSubagentTranscriptState | undefined
 ): boolean {
   return Boolean(state && state.subagents.size > 0)
+}
+
+export function codexTranscriptTurnEnd(
+  state: CodexSubagentTranscriptState | undefined,
+  turnId: string
+): CodexTranscriptTurnEnd | undefined {
+  return state?.turnEnds.get(turnId)
 }
 
 export function reconcileCodexSubagentTranscript(
@@ -202,6 +231,7 @@ export function reconcileCodexSubagentTranscript(
     }
     state.parent = { filePath: normalizedPath, offset: 0, carry: '' }
     state.subagents.clear()
+    state.turnEnds.clear()
     state.reviewerCursorsByPath.clear()
     state.reviewersByPath.clear()
     // Why: a different rollout is a different session, so its predecessor's reviewer is void.
@@ -214,6 +244,16 @@ export function reconcileCodexSubagentTranscript(
       ? undefined
       : (readApprovalsReviewer(parentRecords) ?? state.approvalsReviewer)
   for (const recordValue of parentRecords ?? []) {
+    const turnEnd = readTurnEnd(recordValue)
+    if (turnEnd) {
+      state.turnEnds.delete(turnEnd.turnId)
+      state.turnEnds.set(turnEnd.turnId, turnEnd.end)
+      const oldest = state.turnEnds.keys().next()
+      if (state.turnEnds.size > MAX_TRACKED_TURN_ENDS && !oldest.done) {
+        state.turnEnds.delete(oldest.value)
+      }
+      continue
+    }
     const activity = readActivity(recordValue)
     if (!activity) {
       continue

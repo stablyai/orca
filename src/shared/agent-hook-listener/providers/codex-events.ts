@@ -14,7 +14,10 @@ import {
   finishCodexSubagent,
   upsertCodexSubagent
 } from '../../codex-subagent-roster'
-import { reconcileCodexSubagentTranscript } from '../../codex-subagent-transcript'
+import {
+  codexTranscriptTurnEnd,
+  reconcileCodexSubagentTranscript
+} from '../../codex-subagent-transcript'
 import {
   codexTurnApprovalsAreAutoReviewed,
   reconcileCodexSubagentReviewer
@@ -82,6 +85,31 @@ export function buildCodexChildDrivenStatusPayload(
   })
 }
 
+/** Settles the open root turn once its rollout records the end; a child hook can be the pane's
+ *  last event when the root turn fails, and Codex runs no root hook for that failure. */
+function settleCodexRootTurnFromTranscript(state: HookListenerState, paneKey: string): void {
+  const lead = state.codexLeadStateByPaneKey.get(paneKey)
+  const transcriptState = state.codexSubagentTranscriptByPaneKey.get(paneKey)
+  const parentPath = transcriptState?.parent.filePath
+  if (!lead?.turnId || lead.state === 'done' || !transcriptState || !parentPath) {
+    return
+  }
+  reconcileCodexSubagentTranscript(
+    transcriptState,
+    getOrCreateCodexSubagentRoster(state, paneKey),
+    parentPath
+  )
+  const turnEnd = codexTranscriptTurnEnd(transcriptState, lead.turnId)
+  if (turnEnd) {
+    setCodexMainAgentTurnState(state, paneKey, {
+      state: 'done',
+      ...(turnEnd === 'failed' ? { outcome: 'failure' as const } : {}),
+      model: lead.model,
+      turnId: lead.turnId
+    })
+  }
+}
+
 export function normalizeCodexSubagentLifecycleEvent(
   state: HookListenerState,
   eventName: 'SubagentStart' | 'SubagentStop',
@@ -107,6 +135,7 @@ export function normalizeCodexSubagentLifecycleEvent(
   } else {
     finishCodexSubagent(roster, agentId)
   }
+  settleCodexRootTurnFromTranscript(state, paneKey)
   return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
 }
 
@@ -170,6 +199,11 @@ export function normalizeCodexEvent(
   }
 
   const agentId = readString(hookPayload, 'agent_id')
+  if (eventName === 'SessionStart' && hookPayload['source'] === 'compact') {
+    // Why: Codex fires it mid-turn after compacting, with no `turn_id` and no new process, so the
+    // turn's last real hook must stay the one the rollout poll re-reads.
+    return null
+  }
   const transcriptPath = readFirstString(hookPayload, ['transcript_path', 'transcriptPath'])
   if (eventName === 'SessionStart' && !agentId) {
     // Why: a pane can host a new Codex process after the old one exited without child Stop hooks.
@@ -214,31 +248,38 @@ export function normalizeCodexEvent(
       },
       Date.now()
     )
+    settleCodexRootTurnFromTranscript(state, paneKey)
     return buildCodexChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
-  if (eventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey)) {
+  const turnId = readString(hookPayload, 'turn_id')
+  // Why: Codex runs no hook when a turn fails, so its rollout's record of this turn's end stands in for Stop.
+  const transcriptTurnEnd =
+    stateName !== 'done' && turnId
+      ? codexTranscriptTurnEnd(state.codexSubagentTranscriptByPaneKey.get(paneKey), turnId)
+      : undefined
+  const leadEventName = transcriptTurnEnd ? 'Stop' : eventName
+  if (leadEventName === 'Stop' && !hasCodexTranscriptSubagents(state, paneKey)) {
     // Why: Codex CLI 0.144 can omit child Stop hooks; later child activity safely recreates any agent still running.
     state.codexSubagentRosterByPaneKey.delete(paneKey)
   }
   // Why: resolved after the transcript reconcile above, so this turn's reviewer is read from the
   // rollout during the very PermissionRequest being classified, not from a prior event.
-  const ownedState = resolveCodexApprovalOwnedState(
-    state,
-    eventName,
-    paneKey,
-    transcriptPath,
-    stateName
-  )
+  const ownedState = transcriptTurnEnd
+    ? 'done'
+    : resolveCodexApprovalOwnedState(state, eventName, paneKey, transcriptPath, stateName)
   const previousLead = state.codexLeadStateByPaneKey.get(paneKey)
   const record = setCodexMainAgentTurnState(state, paneKey, {
     state: ownedState,
-    ...codexOutcomeRestatedByStop(previousLead, ownedState),
+    ...(transcriptTurnEnd === 'failed'
+      ? { outcome: 'failure' as const }
+      : codexOutcomeRestatedByStop(previousLead, ownedState)),
     model:
       normalizeOptionalField(hookPayload['model'], AGENT_MODEL_MAX_LENGTH) ??
-      (eventName === 'SessionStart' ? undefined : previousLead?.model)
+      (eventName === 'SessionStart' ? undefined : previousLead?.model),
+    turnId
   })
-  return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
+  return buildCodexStatusPayload(state, leadEventName, promptText, paneKey, hookPayload, {
     ...resolveCodexPaneStatus(state, paneKey, record),
     updateLead: true
   })

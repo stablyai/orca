@@ -32,4 +32,6 @@ export type CodexLeadTurnState = {
   /** When `state` first appeared; the root's own clock, published as `mainAgent.stateStartedAt`. */
   stateStartedAt: number
   model?: string
+  /** Codex `turn_id` of the root turn this record describes; only the execution host sets it. */
+  turnId?: string
 }
