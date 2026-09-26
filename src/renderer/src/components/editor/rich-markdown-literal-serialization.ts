@@ -3,9 +3,21 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
+const MAX_LITERAL_BLOCK_CODE_UNITS = 50_000
+const LITERAL_BLOCK_TYPES = new Set([
+  'paragraph',
+  'heading',
+  'blockquote',
+  'bulletList',
+  'orderedList',
+  'taskList'
+])
+
 function withoutOptionalEscapes(markdown: string): string {
-  return markdown.replace(/\\([\\_[\]])/g, (escaped, character) =>
-    character === '\\' ? escaped : character
+  // Consume escaped backslashes first; underscore runs must be wholly inside a word.
+  return markdown.replace(
+    /\\\\|(?<=[\p{L}\p{N}\p{M}])(?:\\_)+(?=[\p{L}\p{N}\p{M}])|\\[[\]]/gu,
+    (escaped) => (escaped === '\\\\' ? escaped : escaped.replace(/\\/g, ''))
   )
 }
 
@@ -23,7 +35,13 @@ export function preserveLiteralMarkdownSource(
   manager.renderNodeToMarkdown = (node, ...args) => {
     const markdown = render(node, ...args)
     const block = blocks?.get(node)
-    if (!block || !/\\[[\]]/.test(markdown)) {
+    if (!block || !/\\[_[\]]/.test(markdown)) {
+      return markdown
+    }
+    // Retain existing large paragraph/heading fidelity; cap only the expanded validation.
+    const preservesBrackets =
+      (node.type === 'paragraph' || node.type === 'heading') && /\\[[\]]/.test(markdown)
+    if (markdown.length > MAX_LITERAL_BLOCK_CODE_UNITS && !preservesBrackets) {
       return markdown
     }
     const cached = cache.get(block)
@@ -31,6 +49,9 @@ export function preserveLiteralMarkdownSource(
       return cached.result
     }
     const candidate = withoutOptionalEscapes(markdown)
+    if (candidate === markdown) {
+      return markdown
+    }
     let result = markdown
     try {
       const parsed = manager.parse(
@@ -49,17 +70,17 @@ export function preserveLiteralMarkdownSource(
 
   editor.getMarkdown = () => {
     const markdown = serialize()
-    if (!/\\[[\]]/.test(markdown)) {
+    if (!/\\[_[\]]/.test(markdown)) {
       return markdown
     }
     // Reference definitions can change inline meaning across block boundaries.
-    if (/^ {0,3}\[[^\n]*\]:/m.test(withoutOptionalEscapes(markdown))) {
+    if (/\][ \t]*:/.test(withoutOptionalEscapes(markdown))) {
       return markdown
     }
     const json = editor.getJSON()
     blocks = new Map()
     json.content?.forEach((node, index) => {
-      if (node.type === 'paragraph' || node.type === 'heading') {
+      if (node.type && LITERAL_BLOCK_TYPES.has(node.type)) {
         blocks!.set(node, editor.state.doc.child(index))
       }
     })
