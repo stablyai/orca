@@ -537,6 +537,69 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
     expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
   })
 
+  it('keeps an escaped heading-like paragraph when a sibling is edited', () => {
+    const originalSource = '\\# not a heading\n\n_emphasis_\n'
+    const baseCanonical = serialize(originalSource)!
+    const edited = baseCanonical.replace('emphasis', 'emphasis!')
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (md) => serialize(md)
+    })
+
+    expect(reconciled).toContain('\\# not a heading')
+    expect(reconciled).toContain('_emphasis!_')
+    expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
+  })
+
+  it('returns original bytes for an unedited escaped-dollar doc', () => {
+    const originalSource = 'cost \\$5 and _em_\n'
+    const baseCanonical = serialize(originalSource)!
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited: baseCanonical,
+      roundTrip: (md) => serialize(md)
+    })
+
+    expect(reconciled).toBe(originalSource)
+  })
+
+  it('keeps an escaped table pipe when another cell is edited', () => {
+    const originalSource = '| a \\| b | c |\n| --- | --- |\n| d | e |\n'
+    const baseCanonical = serialize(originalSource)!
+    const edited = baseCanonical.replace('d', 'D')
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (md) => serialize(md)
+    })
+
+    expect(reconciled).toContain('\\|')
+    expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
+  })
+
+  it('still repairs table pipes when reconciling a doc that has a reference definition', () => {
+    const originalSource = '[ref]: ./x.md\n\n[literal][ref]\n\n| a \\| b | c |\n| --- | --- |\n'
+    const baseCanonical = serialize(originalSource)!
+    const edited = baseCanonical.replace('literal', 'literal!')
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (md) => serialize(md)
+    })
+
+    expect(reconciled).toContain('\\|')
+    expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
+  })
+
   it('falls back cleanly when an empty-list doc cannot be source-preserved', () => {
     // Combines an empty list item with non-canonical emphasis; whatever the fuzzy
     // patch does, the output must render to `edited` (no corruption).

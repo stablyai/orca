@@ -77,6 +77,47 @@ describe('literal Markdown serialization', () => {
     }
   })
 
+  it.each([
+    ['# not a heading', '\\# not a heading'],
+    ['  # not a heading', '  \\# not a heading'],
+    ['1. x', '1\\. x'],
+    ['- x', '\\- x'],
+    ['#', '\\#']
+  ])('escapes line-leading %j as %j', (text, expected) => {
+    const editor = createEditor({ type: 'doc', content: [paragraph(text)] })
+    try {
+      expect(editor.getMarkdown()).toBe(expected)
+      expectReopens(editor)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('does not escape a real heading', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Title' }] }
+      ]
+    })
+    try {
+      expect(editor.getMarkdown()).toBe('# Title')
+      expectReopens(editor)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('keeps underscore escapes that 3.31.3 already emits', () => {
+    const editor = createEditor({ type: 'doc', content: [paragraph('file_name')] })
+    try {
+      expect(editor.getMarkdown()).toContain('\\_')
+      expectReopens(editor)
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('preserves headings, marked text, and nested blocks', () => {
     const editor = createEditor({
       type: 'doc',
