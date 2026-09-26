@@ -14852,6 +14852,7 @@
           "f1aa04b5cf": "このファイル",
           "8b87612461": "すべての未送信のメモ"
         },
+        "diffCommentSaveFailed": "コメントの保存に失敗しました",
         "DiffSectionBody": {
           "35d6afb5be": "バイナリファイルが変更されました",
           "cef4cf0ff5": "再試行",

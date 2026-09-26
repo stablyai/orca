@@ -14955,6 +14955,7 @@
           "f1aa04b5cf": "Ce fichier",
           "8b87612461": "Toutes les notes non envoyées"
         },
+        "diffCommentSaveFailed": "Échec de l'enregistrement du commentaire",
         "DiffSectionBody": {
           "35d6afb5be": "Fichier binaire modifié",
           "cef4cf0ff5": "Réessayer",

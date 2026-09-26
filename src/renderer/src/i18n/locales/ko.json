@@ -14852,6 +14852,7 @@
           "f1aa04b5cf": "이 파일",
           "8b87612461": "보내지 않은 모든 메모"
         },
+        "diffCommentSaveFailed": "댓글을 저장하지 못했습니다.",
         "DiffSectionBody": {
           "35d6afb5be": "바이너리 파일이 변경됨",
           "cef4cf0ff5": "다시 시도",

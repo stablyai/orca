@@ -13029,6 +13029,7 @@
           "f1aa04b5cf": "Este archivo",
           "8b87612461": "Todas las notas no enviadas"
         },
+        "diffCommentSaveFailed": "No se pudo guardar el comentario",
         "DiffSectionBody": {
           "35d6afb5be": "Archivo binario cambiado",
           "cef4cf0ff5": "Reintentar",

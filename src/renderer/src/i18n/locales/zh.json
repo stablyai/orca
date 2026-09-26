@@ -14852,6 +14852,7 @@
           "f1aa04b5cf": "这个文件",
           "8b87612461": "所有未发送的笔记"
         },
+        "diffCommentSaveFailed": "保存评论失败",
         "DiffSectionBody": {
           "35d6afb5be": "二进制文件已更改",
           "cef4cf0ff5": "重试",
