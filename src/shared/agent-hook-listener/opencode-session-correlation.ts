@@ -36,6 +36,12 @@ export type CorrelatedPane = {
    * had a client alive.
    */
   lastInputAtMs?: number | null
+  /**
+   * The stamp `lastInputAtMs` replaced. The row appears once the prompt is
+   * submitted and the creator commonly keeps typing, so the submission is often
+   * only visible in this older slot.
+   */
+  previousInputAtMs?: number | null
 }
 
 /** One live client process as the binder sees it. */
@@ -241,13 +247,17 @@ function tieBreakByFreshLaunch(
 }
 
 /**
- * Break a same-directory tie by who was actually submitting the prompt.
- * Creating a session writes to that pane's PTY immediately beforehand —
- * whether a human keystroke or a prompt Orca delivered host-side — so the
- * candidate with the most recent pre-creation activity is the creator. A
- * candidate with no recorded activity, or one whose last write fell outside
- * the window, contributes nothing; candidates recorded at the identical
- * instant tie and are both rejected rather than guessed between.
+ * Break a same-directory tie by which pane submitted the prompt. Creating a
+ * session writes to that pane's PTY immediately beforehand — a human keystroke
+ * or a prompt Orca delivered — so the candidate with the newest pre-creation
+ * activity is the creator. Both of a pane's stamps are consulted, because the
+ * creator will usually have typed again after submitting.
+ *
+ * A pane whose stamps all postdate the row has had its earlier history evicted,
+ * so it cannot be ruled out as the creator; crediting anyone else would be the
+ * wrong-pane result this exists to prevent, and the round abstains instead. A
+ * pane with no stamps at all is a launch candidate rather than an input one and
+ * is simply not considered here.
  */
 function tieBreakByRecentInput(
   evidencing: readonly CorrelatedPane[],
@@ -257,26 +267,33 @@ function tieBreakByRecentInput(
   let bestAt = Number.NEGATIVE_INFINITY
   let tied = false
   for (const pane of evidencing) {
-    const at = pane.lastInputAtMs
-    if (typeof at !== 'number' || Number.isNaN(at)) {
+    const stamps = [pane.lastInputAtMs, pane.previousInputAtMs].filter(
+      (value): value is number => typeof value === 'number' && !Number.isNaN(value)
+    )
+    if (stamps.length === 0) {
       continue
     }
-    // Why abstain rather than skip: lastInputAtMs holds only the newest write,
-    // so a pane that typed the prompt and was then typed into again has had its
-    // pre-creation evidence overwritten. Skipping it would let a bystander
-    // become the unique in-window leader — the exact wrong-pane result this
-    // tie-break exists to prevent.
-    if (at > createdAtMs) {
-      return null
-    }
-    if (createdAtMs - at > OPENCODE_INPUT_TIEBREAK_WINDOW_MS) {
+    const preCreation = stamps.filter((value) => value <= createdAtMs)
+    if (preCreation.length === 0) {
+      if (stamps.length >= 2) {
+        // Every stamp we hold postdates the row, and two slots means at least
+        // two writes since. An earlier submission may have been evicted —
+        // unknowable, and not another pane's to claim.
+        return null
+      }
+      // A single post-creation write cannot have created the row: submitting is
+      // itself a write, and it would be the stamp we hold.
       continue
     }
-    if (at > bestAt) {
+    const activity = Math.max(...preCreation)
+    if (createdAtMs - activity > OPENCODE_INPUT_TIEBREAK_WINDOW_MS) {
+      continue
+    }
+    if (activity > bestAt) {
       best = pane
-      bestAt = at
+      bestAt = activity
       tied = false
-    } else if (at === bestAt) {
+    } else if (activity === bestAt) {
       tied = true
     }
   }
@@ -289,13 +306,13 @@ function tieBreakByRecentInput(
  * immediately; otherwise exactly one pane must have both the directory and a
  * client that brackets the creation. When several panes qualify — the normal
  * case for split panes or sibling folder workspaces, which share a directory —
- * two signals decide, in order: the pane whose client had just booted (which
- * covers Orca-launched agents, whose prompt rides on the spawn command and
- * leaves their pane no keystroke), then the pane whose PTY received input just
- * before the session appeared. Each must yield an unambiguous in-window
- * leader. Anything still undecided stays unbound rather than guessed: a wrong
- * owner shows the wrong pane spinning, which is the bug this resolves, not a
- * milder version of it.
+ * two signals are computed: the pane whose client had just booted (which covers
+ * Orca-launched agents, whose prompt rides on the spawn command and leaves their
+ * pane no keystroke) and the pane whose PTY received input just before the
+ * session appeared. Each must yield an unambiguous in-window leader, and they
+ * must agree, before anything is bound. Anything still undecided stays unbound
+ * rather than guessed: a wrong owner shows the wrong pane spinning, which is the
+ * bug this resolves, not a milder version of it.
  */
 export function correlateOpenCodeSessionOwners(args: {
   sessions: readonly CorrelatedSession[]
@@ -390,10 +407,16 @@ export function correlateOpenCodeSessionOwners(args: {
       // Launch recency is consulted first: an Orca-launched agent carries its
       // first prompt on the spawn command, so the creating pane never writes a
       // keystroke and input alone would hand the session to a bystander.
-      const owner =
-        tieBreakByFreshLaunch(evidencing, clients, session.createdAtMs) ??
-        tieBreakByRecentInput(evidencing, session.createdAtMs)
-      if (owner) {
+      const launchOwner = tieBreakByFreshLaunch(evidencing, clients, session.createdAtMs)
+      const inputOwner = tieBreakByRecentInput(evidencing, session.createdAtMs)
+      // Why disagreement abstains: a pane that just booted and a pane that was
+      // just written to explain this row equally well, and no evidence tells a
+      // launched creator apart from an innocent pane someone happened to open
+      // nearby. Picking a side would risk the wrong-pane result this file
+      // exists to prevent, so only agreement is acted on.
+      const agreed = launchOwner === null || inputOwner === null || launchOwner === inputOwner
+      const owner = launchOwner ?? inputOwner
+      if (owner && agreed) {
         claim(session.id, owner, 'creation-correlation')
       }
       continue

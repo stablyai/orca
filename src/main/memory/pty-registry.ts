@@ -1,13 +1,11 @@
 /**
- * Lightweight side-table that lets the memory collector attribute PTY
- * processes back to the worktree that spawned them.
+ * Lightweight side-table of live local PTYs, keyed by id.
  *
- * Why a separate module rather than folding it into pty.ts: the PTY
- * subsystem has no other reason to know about worktree memory. Keeping
- * the registry here means the collector can evolve (e.g. start tracking
- * extra per-session metadata) without touching the critical-path spawn
- * handler. The write-side is just two calls — `register` on spawn,
- * `unregister` on teardown.
+ * Two consumers share it: the memory collector, which attributes PTY processes
+ * back to the worktree that spawned them, and (via the session binder) the
+ * OpenCode session→pane correlation, which reads the prompt-activity stamps the
+ * PTY write paths leave here. The write side is `register` on spawn,
+ * `unregister` on teardown, and `notePtyInput` on each prompt-activity write.
  *
  * Scope: local PTYs only. SSH-backed PTYs execute on a remote host, so
  * their memory does not contribute to Orca's process footprint and
@@ -34,6 +32,14 @@ export type PtyRegistration = {
    * submitted the prompt that created a session (#22838).
    */
   lastInputAtMs?: number
+  /**
+   * The stamp `lastInputAtMs` replaced. A session row appears *after* the
+   * prompt that created it, so the creating pane's useful evidence is its
+   * pre-creation stamp — and if it typed again after submitting, that evidence
+   * is only visible here. Two slots recover the ordinary "submitted, then kept
+   * typing" case; a third post-creation write evicts it.
+   */
+  previousInputAtMs?: number
 }
 
 const registry = new Map<string, PtyRegistration>()
@@ -47,13 +53,15 @@ export function unregisterPty(ptyId: string): void {
 }
 
 /**
- * Record prompt activity against a PTY. Ids the registry never learned
- * (remote PTYs, already-torn-down ones) are ignored so the row cannot be
- * created by input alone.
+ * Record prompt activity against a PTY, keeping the stamp it replaces so a
+ * pane that submitted a prompt and then kept typing can still show the
+ * submission. Ids the registry never learned (remote PTYs, already-torn-down
+ * ones) are ignored so the row cannot be created by input alone.
  */
 export function notePtyInput(ptyId: string, nowMs: number): void {
   const entry = registry.get(ptyId)
   if (entry) {
+    entry.previousInputAtMs = entry.lastInputAtMs
     entry.lastInputAtMs = nowMs
   }
 }

@@ -28,14 +28,16 @@ function proc(
 function pane(
   paneKey: string,
   shellPid: number | null,
-  lastInputAtMs: number | null = null
+  lastInputAtMs: number | null = null,
+  previousInputAtMs: number | null = null
 ): BinderPaneSnapshot {
   return {
     paneKey,
     directory: DIR,
     worktreeId: 'repo::/Users/jin/work/mocitec',
     shellPid,
-    lastInputAtMs
+    lastInputAtMs,
+    previousInputAtMs
   }
 }
 
@@ -204,6 +206,33 @@ describe('runOpenCodeBinderRound', () => {
     ])
   })
 
+  it('carries the replaced stamp across a remint so a submission survives', () => {
+    // The stale row holds pane A's submission at NOW-61s, already displaced into
+    // the older slot by a later write; the live row has no history. pane B was
+    // written to at NOW-65s, so only the carried older slot lets A win.
+    const { ownerships } = runOpenCodeBinderRound({
+      nowMs: NOW,
+      sessions: [{ id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null }],
+      panes: [
+        pane(PANE_A, 100, NOW - 55_000, NOW - 61_000),
+        pane(PANE_A, 101, null, null),
+        pane(PANE_B, 200, NOW - 65_000)
+      ],
+      processes: [
+        proc(100, 1, ['zsh']),
+        proc(101, 1, ['zsh']),
+        proc(200, 1, ['zsh']),
+        proc(102, 100, ['opencode'], NOW - 86_400_000),
+        proc(201, 200, ['opencode'], NOW - 86_400_000)
+      ],
+      knownOwners: new Map(),
+      parentBySessionId: new Map()
+    })
+    expect(ownerships).toEqual([
+      { sessionId: 'ses_1', paneKey: PANE_A, basis: 'creation-correlation' }
+    ])
+  })
+
   it('advances the cursor past handled rows only', () => {
     const fresh = [
       { id: 'ses_1', directory: DIR, createdAtMs: NOW - 60_000, parentId: null },
@@ -273,7 +302,8 @@ describe('applyBinderOwnerships', () => {
           directory: '/elsewhere',
           worktreeId: 'repo::/elsewhere',
           shellPid: 100,
-          lastInputAtMs: null
+          lastInputAtMs: null,
+          previousInputAtMs: null
         },
         { ...pane(PANE_A, 101) }
       ],

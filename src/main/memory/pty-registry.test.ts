@@ -24,6 +24,19 @@ describe('notePtyInput', () => {
     expect(listRegisteredPtys().some((pty) => pty.ptyId === 'pty-never-registered')).toBe(false)
   })
 
+  it('keeps the stamp it replaces so a submission survives later typing', () => {
+    const ptyId = 'pty-note-input-history'
+    registerPty(registration(ptyId))
+    try {
+      notePtyInput(ptyId, 1_000)
+      notePtyInput(ptyId, 2_000)
+      expect(find(ptyId)?.lastInputAtMs).toBe(2_000)
+      expect(find(ptyId)?.previousInputAtMs).toBe(1_000)
+    } finally {
+      unregisterPty(ptyId)
+    }
+  })
+
   it('drops the stamp with the registration', () => {
     const ptyId = 'pty-note-input-teardown'
     registerPty(registration(ptyId))

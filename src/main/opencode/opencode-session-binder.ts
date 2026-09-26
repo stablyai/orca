@@ -42,6 +42,8 @@ export type BinderPaneSnapshot = {
    * registered. Breaks same-directory ties.
    */
   lastInputAtMs: number | null
+  /** The stamp `lastInputAtMs` replaced; see `PtyRegistration`. */
+  previousInputAtMs: number | null
 }
 
 /** One session store row feeding a binder round. */
@@ -164,18 +166,20 @@ function toCorrelatedClients(
   return clients
 }
 
-/** Most recent of two observations; null when neither side has one. */
-function mostRecentInput(
-  left: number | null | undefined,
-  right: number | null | undefined
-): number | null {
-  if (typeof left !== 'number') {
-    return typeof right === 'number' ? right : null
-  }
-  if (typeof right !== 'number') {
-    return left
-  }
-  return Math.max(left, right)
+/**
+ * The two newest stamps among the rows describing one pane, newest first. A
+ * remint can leave two rows for the same pane and the live one starts with no
+ * history, so the replaced row's stamps are the only record of what the human
+ * typed there.
+ */
+function newestTwoStamps(...values: readonly (number | null | undefined)[]): {
+  last: number | null
+  previous: number | null
+} {
+  const sorted = values
+    .filter((value): value is number => typeof value === 'number')
+    .sort((left, right) => right - left)
+  return { last: sorted[0] ?? null, previous: sorted[1] ?? null }
 }
 
 /** Pure round core: correlate unbound sessions against panes and clients. */
@@ -194,15 +198,18 @@ export function runOpenCodeBinderRound(deps: BinderRoundDeps): BinderRoundResult
     // keystrokes that never happened there.
     const carriedInput =
       previous && openCodeDirectoryMatches(previous.directory, pane.directory)
-        ? mostRecentInput(previous.lastInputAtMs, pane.lastInputAtMs)
-        : pane.lastInputAtMs
+        ? newestTwoStamps(
+            previous.lastInputAtMs,
+            previous.previousInputAtMs,
+            pane.lastInputAtMs,
+            pane.previousInputAtMs
+          )
+        : { last: pane.lastInputAtMs, previous: pane.previousInputAtMs }
     paneByKey.set(pane.paneKey, {
       paneKey: pane.paneKey,
       directory: pane.directory,
-      // Why most-recent instead of the current row's own value: a reminted
-      // PTY re-registers with no input history, so the replaced row's
-      // observation is the only record of what the human typed there.
-      lastInputAtMs: carriedInput
+      lastInputAtMs: carriedInput.last,
+      previousInputAtMs: carriedInput.previous
     })
   }
   const panes = [...paneByKey.values()]
@@ -341,7 +348,8 @@ export function listBinderPaneSnapshots(): BinderPaneSnapshot[] {
       directory: parsed?.worktreePath ?? null,
       worktreeId: pty.worktreeId,
       shellPid: pty.pid,
-      lastInputAtMs: pty.lastInputAtMs ?? null
+      lastInputAtMs: pty.lastInputAtMs ?? null,
+      previousInputAtMs: pty.previousInputAtMs ?? null
     })
   }
   return snapshots

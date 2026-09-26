@@ -239,10 +239,9 @@ describe('correlateOpenCodeSessionOwners', () => {
     expect(results).toEqual([])
   })
 
-  it('abstains when a pane was typed into after the session was created', () => {
-    // lastInputAtMs holds only the newest write, so pane-b's pre-creation
-    // evidence has been overwritten by later typing. Skipping it would let
-    // pane-a win as the unique in-window leader and reproduce #22838.
+  it('ignores a pane whose only write postdates the session', () => {
+    // Submitting a prompt is itself a write, so a pane holding a single stamp
+    // that postdates the row cannot have created it — pane-a keeps the session.
     const results = correlateOpenCodeSessionOwners({
       sessions: [session('ses_1', NOW - 60_000)],
       panes: [
@@ -252,13 +251,60 @@ describe('correlateOpenCodeSessionOwners', () => {
       clients: [client('pane-a', NOW - 86_400_000), client('pane-b', NOW - 86_400_000)],
       knownOwners: new Map()
     })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'creation-correlation' }
+    ])
+  })
+
+  it('recovers the submitting stamp from a pane that kept typing', () => {
+    // pane-b submitted at T-1s and typed again at T+5s. The newest stamp alone
+    // would look post-creation and let pane-a inherit the session; the older
+    // slot holds the submission.
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR, lastInputAtMs: NOW - 90_000 },
+        {
+          paneKey: 'pane-b',
+          directory: DIR,
+          lastInputAtMs: NOW - 55_000,
+          previousInputAtMs: NOW - 61_000
+        }
+      ],
+      clients: [client('pane-a', NOW - 86_400_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([
+      { sessionId: 'ses_1', paneKey: 'pane-b', basis: 'creation-correlation' }
+    ])
+  })
+
+  it('abstains when a pane typed twice after the session and lost its earlier stamps', () => {
+    // Both slots postdate the row, so an earlier submission may have been
+    // evicted. That pane cannot be ruled out as the creator, and pane-a must not
+    // inherit the session on evidence that is merely incomplete.
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR, lastInputAtMs: NOW - 65_000 },
+        {
+          paneKey: 'pane-b',
+          directory: DIR,
+          lastInputAtMs: NOW - 10_000,
+          previousInputAtMs: NOW - 20_000
+        }
+      ],
+      clients: [client('pane-a', NOW - 86_400_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
     expect(results).toEqual([])
   })
 
-  it('binds an Orca-launched session to the pane whose client just booted', () => {
-    // Orca passes the first prompt with --prompt, so the creating pane writes
-    // nothing and input alone would hand the session to the bystander in
-    // pane-b, which was typed into a second before creation.
+  it('stays unbound when a fresh launch and a recent write disagree', () => {
+    // pane-a's client booted seconds ago (an Orca launch, which writes no
+    // keystroke) while pane-b was written to a second before the row. Both
+    // explanations fit, and nothing separates a launched creator from an
+    // innocent pane opened nearby — so neither is credited.
     const results = correlateOpenCodeSessionOwners({
       sessions: [session('ses_1', NOW - 60_000)],
       panes: [
@@ -268,9 +314,44 @@ describe('correlateOpenCodeSessionOwners', () => {
       clients: [client('pane-a', NOW - 65_000), client('pane-b', NOW - 86_400_000)],
       knownOwners: new Map()
     })
+    expect(results).toEqual([])
+  })
+
+  it('binds a fresh launch when no write disagrees', () => {
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR },
+        { paneKey: 'pane-b', directory: DIR }
+      ],
+      clients: [client('pane-a', NOW - 65_000), client('pane-b', NOW - 86_400_000)],
+      knownOwners: new Map()
+    })
     expect(results).toEqual([
       { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'creation-correlation' }
     ])
+  })
+
+  it('keeps a pane whose later client postdates the session', () => {
+    // clientCouldCreate admits starts up to CREATE_SKEW after the row, so a
+    // client spawned inside the pane (e.g. `opencode run`) must not mask the
+    // earlier client that launched this session. Masking would leave no launch
+    // leader at all and let pane-b's write hand it the session; unmasked, the
+    // two signals disagree and the round abstains instead.
+    const results = correlateOpenCodeSessionOwners({
+      sessions: [session('ses_1', NOW - 60_000)],
+      panes: [
+        { paneKey: 'pane-a', directory: DIR },
+        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 61_000 }
+      ],
+      clients: [
+        client('pane-a', NOW - 65_000),
+        client('pane-a', NOW - 40_000),
+        client('pane-b', NOW - 86_400_000)
+      ],
+      knownOwners: new Map()
+    })
+    expect(results).toEqual([])
   })
 
   it('stays unbound when two panes booted together', () => {
@@ -298,29 +379,6 @@ describe('correlateOpenCodeSessionOwners', () => {
     })
     expect(results).toEqual([
       { sessionId: 'ses_1', paneKey: 'pane-b', basis: 'creation-correlation' }
-    ])
-  })
-
-  it('keeps a pane whose later client postdates the session', () => {
-    // clientCouldCreate admits starts up to CREATE_SKEW after the row, so a
-    // client spawned inside the pane (e.g. `opencode run`) must not mask the
-    // earlier client that actually launched this session — and must not let
-    // the bystander in pane-b inherit it on input alone.
-    const results = correlateOpenCodeSessionOwners({
-      sessions: [session('ses_1', NOW - 60_000)],
-      panes: [
-        { paneKey: 'pane-a', directory: DIR },
-        { paneKey: 'pane-b', directory: DIR, lastInputAtMs: NOW - 61_000 }
-      ],
-      clients: [
-        client('pane-a', NOW - 65_000),
-        client('pane-a', NOW - 40_000),
-        client('pane-b', NOW - 86_400_000)
-      ],
-      knownOwners: new Map()
-    })
-    expect(results).toEqual([
-      { sessionId: 'ses_1', paneKey: 'pane-a', basis: 'creation-correlation' }
     ])
   })
 

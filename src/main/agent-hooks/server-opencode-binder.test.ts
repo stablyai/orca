@@ -72,7 +72,8 @@ describe('opencode binder loop', () => {
           directory: DIR,
           worktreeId: `repo::${DIR}`,
           shellPid: 111,
-          lastInputAtMs: null
+          lastInputAtMs: null,
+          previousInputAtMs: null
         }
       ],
       sweep: async () => [
