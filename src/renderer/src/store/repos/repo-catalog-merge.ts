@@ -149,12 +149,17 @@ export function dropWorktreeRowsForRemovedRepos(
   const worktreesByRepo = { ...state.worktreesByRepo }
   const detectedWorktreesByRepo = { ...state.detectedWorktreesByRepo }
   const droppedWorktreeIds = new Set<string>()
+  // Why: tabs and the active selection are keyed by raw id, which a surviving host's twin row may share.
+  const keptWorktreeIds = new Set<string>()
+  let rowsDropped = false
   for (const id of new Set(previousRepos.map((repo) => repo.id))) {
     if (validRepoIds.has(id)) {
       continue
     }
     const listed = splitRowsByHost(worktreesByRepo[id] ?? [], hostId)
+    listed.kept.forEach((row) => keptWorktreeIds.add(row.id))
     if (listed.droppedIds.length > 0) {
+      rowsDropped = true
       listed.droppedIds.forEach((worktreeId) => droppedWorktreeIds.add(worktreeId))
       if (listed.kept.length > 0) {
         worktreesByRepo[id] = listed.kept
@@ -164,7 +169,9 @@ export function dropWorktreeRowsForRemovedRepos(
     }
     const detected = detectedWorktreesByRepo[id]
     const detectedRows = splitRowsByHost(detected?.worktrees ?? [], hostId)
+    detectedRows.kept.forEach((row) => keptWorktreeIds.add(row.id))
     if (detected && detectedRows.droppedIds.length > 0) {
+      rowsDropped = true
       detectedRows.droppedIds.forEach((worktreeId) => droppedWorktreeIds.add(worktreeId))
       if (detectedRows.kept.length > 0) {
         detectedWorktreesByRepo[id] = { ...detected, worktrees: detectedRows.kept }
@@ -173,12 +180,12 @@ export function dropWorktreeRowsForRemovedRepos(
       }
     }
   }
-  if (droppedWorktreeIds.size === 0) {
+  if (!rowsDropped) {
     return { state, droppedWorktreeIds: [] }
   }
   return {
     state: { worktreesByRepo, detectedWorktreesByRepo, sortEpoch: state.sortEpoch + 1 },
-    droppedWorktreeIds: [...droppedWorktreeIds]
+    droppedWorktreeIds: [...droppedWorktreeIds].filter((id) => !keptWorktreeIds.has(id))
   }
 }
 

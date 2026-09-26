@@ -198,3 +198,38 @@ describe('runtime fetchRepos dropping a repo that runtime removed', () => {
     expect(s.tabsByWorktree[LOCAL_GUARD]).toBe(guardTabs)
   })
 })
+
+describe('local fetchRepos dropping a row whose id a surviving host row shares', () => {
+  it('keeps the shared id terminal state and active selection for the runtime row', async () => {
+    const store = createTestStore()
+    const sharedId = `${sharedIdRepo.id}::/same/path`
+    const localRow = makeWorktree({ id: sharedId, repoId: sharedIdRepo.id, path: '/same/path' })
+    const runtimeRow = { ...localRow, hostId: 'runtime:env-1' as const }
+    store.setState({
+      repos: [keptRepo, sharedIdRepo],
+      worktreesByRepo: { [sharedIdRepo.id]: [localRow, runtimeRow] },
+      detectedWorktreesByRepo: {
+        [sharedIdRepo.id]: makeDetectedResult(sharedIdRepo.id, [localRow, runtimeRow])
+      },
+      tabsByWorktree: { [sharedId]: [makeTab({ id: 'tab-shared', worktreeId: sharedId })] },
+      ptyIdsByTabId: { 'tab-shared': ['pty-shared'] },
+      activeWorktreeId: sharedId,
+      activeTabId: 'tab-shared'
+    })
+    const sharedTabs = store.getState().tabsByWorktree[sharedId]
+
+    await store.getState().fetchRepos()
+
+    const s = store.getState()
+    expect(reposList).toHaveBeenCalledTimes(1)
+    expect(s.repos.map((repo) => repo.id)).toEqual([keptRepo.id])
+    expect(s.worktreesByRepo[sharedIdRepo.id]?.map((worktree) => worktree.hostId)).toEqual([
+      'runtime:env-1'
+    ])
+    expect(s.tabsByWorktree[sharedId]).toBe(sharedTabs)
+    expect(s.ptyIdsByTabId['tab-shared']).toEqual(['pty-shared'])
+    expect(s.activeWorktreeId).toBe(sharedId)
+    expect(s.activeTabId).toBe('tab-shared')
+    expect(ptyKill).not.toHaveBeenCalled()
+  })
+})
