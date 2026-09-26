@@ -223,6 +223,91 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary).toMatchObject({ hasInterrupted: true, hasLiveDone: false })
   })
 
+  describe('a failed main-agent turn', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    let epoch = 100
+    const failedMainAgent = {
+      state: 'done' as const,
+      outcome: 'failure' as const,
+      stateStartedAt: 900
+    }
+
+    function summarize(
+      entry: AgentStatusEntry | null,
+      retained: AgentActivityInput['retainedAgentsByPaneKey'] = {}
+    ) {
+      return selectWorktreeAgentActivitySummary(
+        {
+          tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+          agentStatusEpoch: ++epoch,
+          agentStatusByPaneKey: entry ? { [paneKey]: entry } : {},
+          migrationUnsupportedByPtyId: {},
+          runtimeAgentOrchestrationByPaneKey: {},
+          retainedAgentsByPaneKey: retained
+        },
+        'repo::/wt-1'
+      )
+    }
+
+    function statusFor(summary: ReturnType<typeof summarize>) {
+      return resolveWorktreeStatus({
+        tabs: [makeTab('tab-1', 'repo::/wt-1')],
+        browserTabs: [],
+        ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+        ...summary
+      })
+    }
+
+    it.each([
+      ['held open by a subagent', { state: 'working' as const }],
+      [
+        'restored after a restart',
+        { state: 'working' as const, restoredUnconfirmed: true as const }
+      ],
+      ['stale', { state: 'working' as const, updatedAt: -AGENT_STATUS_STALE_AFTER_MS }],
+      ['settled', { state: 'done' as const }]
+    ])('rolls a failure %s up as failed', (_label, overrides) => {
+      vi.spyOn(Date, 'now').mockReturnValue(2_000)
+      const summary = summarize({
+        ...makeAgentStatusEntry({ paneKey, state: overrides.state }),
+        ...overrides,
+        mainAgent: failedMainAgent
+      })
+      expect(summary.hasFailed).toBe(true)
+      expect(statusFor(summary)).toBe('failed')
+    })
+
+    it("lets a child's permission prompt outrank the failure", () => {
+      vi.spyOn(Date, 'now').mockReturnValue(2_000)
+      const summary = summarize({
+        ...makeAgentStatusEntry({ paneKey, state: 'waiting' }),
+        mainAgent: failedMainAgent
+      })
+      expect(statusFor(summary)).toBe('permission')
+    })
+
+    it('rolls a retained failed pane up as failed and a retained clean one as done', () => {
+      vi.spyOn(Date, 'now').mockReturnValue(2_000)
+      const retained = (mainAgent?: AgentStatusEntry['mainAgent']) => ({
+        [paneKey]: {
+          entry: { ...makeAgentStatusEntry({ paneKey, state: 'done' }), mainAgent },
+          worktreeId: 'repo::/wt-1',
+          tab: makeTab('tab-1', 'repo::/wt-1'),
+          agentType: 'claude',
+          startedAt: 1_000
+        }
+      })
+      expect(summarize(null, retained(failedMainAgent))).toMatchObject({
+        hasFailed: true,
+        hasRetainedDone: false
+      })
+      expect(summarize(null, retained({ state: 'done', stateStartedAt: 900 }))).toMatchObject({
+        hasFailed: false,
+        hasRetainedDone: true
+      })
+    })
+  })
+
   it('lets an unconfirmed restored row suppress only its pane title', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)

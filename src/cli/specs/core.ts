@@ -187,7 +187,10 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Show a compact orchestration summary across worktrees',
     usage: 'orca worktree ps [--limit <n>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'limit'],
-    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
+    notes: [
+      ...WORKTREE_LISTING_SCOPE_NOTES,
+      "`status` is the host's lifecycle rollup, kept stable for older clients. `displayStatus` / `displayState` are what Orca shows, where a failed turn outranks working and only a permission prompt outranks it. Do not treat them as synonyms."
+    ]
   },
   {
     path: ['terminal', 'list'],

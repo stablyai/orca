@@ -225,7 +225,7 @@ describe('connectPanePty', () => {
         agentToolName: 'Edit',
         agentToolInput: 'src/main/ipc/notifications.ts',
         agentLastAssistantMessage: 'Implemented the formatter.',
-        agentInterrupted: false
+        agentTurnEnding: undefined
       })
     )
   })

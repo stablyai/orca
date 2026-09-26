@@ -115,6 +115,14 @@ describe('worktree ps reports structured sessions', () => {
     expect(attach([summary({ status: null })]).agents).toHaveLength(0)
   })
 
+  it('carries a failed turn verdict to the worktree ps row', () => {
+    const row = attach([summary({ status: 'idle', turnOutcome: 'failure' })])
+    expect(row.agents[0]).toMatchObject({
+      state: 'done',
+      mainAgent: { state: 'done', outcome: 'failure' }
+    })
+  })
+
   it('keeps the journal clock on the row, so a restart republish is not new activity', () => {
     const row = attach([summary()])
     expect(row.agents[0]?.updatedAt).toBe(1_757_030_400_000)

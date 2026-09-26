@@ -16,11 +16,13 @@ import {
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { resolveAgentPaneDisplayState } from '../../../../shared/agent-status-display-state'
 
 /**
  * Ordinal class for the "Smart" sort. Lower number = more attention-demanding.
  *   1 — Needs you (`blocked` / `waiting`)
- *   2 — Done (`done`, not interrupted, completed within AGENT_STATUS_STALE_AFTER_MS)
+ *   2 — Done (`done`, not interrupted, completed within AGENT_STATUS_STALE_AFTER_MS), or a failed
+ *       main-agent turn not in a fresh human wait (never ages out; dated by the main agent's end)
  *   3 — Working (`working`)
  *   4 — Unverifiable (stale non-`done` entry on a pane Orca still holds a live PTY for:
  *       the reporting stream stopped, not necessarily the work)
@@ -57,31 +59,6 @@ export type WorktreeAttention = {
 }
 
 export const IDLE: WorktreeAttention = { cls: 5, attentionTimestamp: 0 }
-
-export function hasFreshAttributedAgentStatus(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
-  now: number,
-  tabsByWorktree: Record<string, TerminalTab[]>
-): boolean {
-  const freshUnstampedTabIds = new Set<string>()
-  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
-    const parsed = parsePaneKey(entry.paneKey)
-    if (parsed === null || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-      continue
-    }
-    if (entry.worktreeId) {
-      return true
-    }
-    // Why: hook rows can omit the worktree stamp but still map via paneKey to a mirrored tab — enough to end cold-start.
-    freshUnstampedTabIds.add(parsed.tabId)
-  }
-  if (freshUnstampedTabIds.size === 0) {
-    return false
-  }
-  return Object.values(tabsByWorktree).some((tabs) =>
-    tabs.some((tab) => freshUnstampedTabIds.has(tab.id))
-  )
-}
 
 /**
  * Return the timestamp of the most recent `done`/`blocked`/`waiting` history row, ignoring
@@ -136,7 +113,21 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
 
     if (pane.kind === 'hook') {
       const entry = pane.entry
-      if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      const isFresh = isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+      const failedAt =
+        resolveAgentPaneDisplayState(entry, isFresh ? undefined : 'idle') === 'failed'
+          ? entry.mainAgent?.stateStartedAt
+          : undefined
+      // Why: a failed turn needs the user until they act on it, so staleness never ages it out.
+      if (failedAt !== undefined && Number.isFinite(failedAt)) {
+        if (2 < bestCls || (bestCls === 2 && failedAt > bestTs)) {
+          bestCls = 2
+          bestTs = failedAt
+          bestCause = undefined
+        }
+        continue
+      }
+      if (!isFresh) {
         // Why: a pane Orca still holds a PTY for outranks a genuinely empty one — the user may
         // know why it went quiet (a long build), which Orca never can. It never outranks a
         // reporting pane, and it never claims the agent finished.

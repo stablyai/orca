@@ -12,6 +12,10 @@ import type { WorktreeStatus } from './worktree-status'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import {
+  agentMainTurnEnding,
+  resolveAgentPaneDisplayState
+} from '../../../shared/agent-status-display-state'
 
 /** Row model for Cmd+J's empty-query recent tabs section. */
 export type RecentWorkspaceTabRow = {
@@ -74,6 +78,19 @@ export function resolveRecentWorkspaceTabStatus(
   const panes = collectTabPaneInputs(row.terminalTab, row.worktreeLastActivityAt, paneSources, now)
   const attention = resolveAttention(panes, now)
   const explicit = STATUS_BY_ATTENTION_CLASS[attention.cls]
+  if (explicit === 'permission') {
+    return explicit
+  }
+  const hasFailed = panes.some((pane) => {
+    if (pane.kind !== 'hook') {
+      return false
+    }
+    const isFresh = isExplicitAgentStatusFresh(pane.entry, now, AGENT_STATUS_STALE_AFTER_MS)
+    return resolveAgentPaneDisplayState(pane.entry, isFresh ? undefined : 'idle') === 'failed'
+  })
+  if (hasFailed) {
+    return 'failed'
+  }
   if (explicit === 'working') {
     const hasForegroundWork = panes.some(
       (pane) =>
@@ -82,13 +99,11 @@ export function resolveRecentWorkspaceTabStatus(
     )
     return hasForegroundWork ? 'working' : 'monitoring'
   }
-  if (explicit === 'permission') {
-    return explicit
-  }
   const hasInterrupted = panes.some(
     (pane) =>
       pane.kind === 'hook' &&
-      pane.entry.interrupted === true &&
+      pane.entry.state === 'done' &&
+      agentMainTurnEnding(pane.entry) === 'cancellation' &&
       isExplicitAgentStatusFresh(pane.entry, now, AGENT_STATUS_STALE_AFTER_MS)
   )
   if (hasInterrupted) {

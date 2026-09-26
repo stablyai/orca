@@ -699,7 +699,7 @@ describe('connectPanePty', () => {
     expect('agentToolName' in dispatchArgs).toBe(false)
     expect('agentToolInput' in dispatchArgs).toBe(false)
     expect('agentLastAssistantMessage' in dispatchArgs).toBe(false)
-    expect('agentInterrupted' in dispatchArgs).toBe(false)
+    expect('agentTurnEnding' in dispatchArgs).toBe(false)
   })
 
   // Why: agent-row removal belongs to process/PTY lifecycle, not title reversion, so interrupts can't disappear the activity row.

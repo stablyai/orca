@@ -25,6 +25,7 @@ const AGENT_STATUS_TOOLTIP_STATUSES = new Set<Status>([
   'working',
   'monitoring',
   'permission',
+  'failed',
   'interrupted',
   'done'
 ])
@@ -65,6 +66,15 @@ const StatusIndicator = React.memo(function StatusIndicator({
         {...rest}
       >
         <span className="block size-1.5 rounded-full bg-red-500" />
+      </span>
+    )
+  } else if (status === 'failed') {
+    indicator = (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        {...rest}
+      >
+        <span className="block size-2 rounded-full bg-destructive" />
       </span>
     )
   } else if (status === 'permission') {

@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/dashboard-snapshot'
 import { dashboardBucketForDotState } from '../dashboard/dashboard-card-bucket'
 import { dashboardCardDotState } from '../dashboard/dashboard-row-bucket'
+import { agentMainTurnEnding } from '../../../../shared/agent-status-display-state'
 
 export type DashboardAgentStatusPatchResult = {
   matched: boolean
@@ -52,11 +53,13 @@ export function patchDashboardSnapshotFromAgentStatus(
   const dotState = event.state
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
+  const turnEnding = agentMainTurnEnding(event)
   const bucket = dashboardBucketForDotState(
-    dashboardCardDisplayState({ dotState, workingMode, unseen })
+    dashboardCardDisplayState({ dotState, workingMode, unseen, turnEnding })
   )
+  const { turnEnding: _previousTurnEnding, ...cardWithoutEnding } = card
   const nextCard: DashboardCard = {
-    ...card,
+    ...cardWithoutEnding,
     ...(event.agentType ? { agentType: event.agentType } : {}),
     ...(event.prompt ? { task: event.prompt, lastUserMessage: event.prompt } : {}),
     ...(event.lastAssistantMessage !== undefined
@@ -68,6 +71,7 @@ export function patchDashboardSnapshotFromAgentStatus(
     bucket,
     dotState,
     workingMode,
+    ...(turnEnding ? { turnEnding } : {}),
     unseen,
     stateChangedAt: stateChanged ? event.stateStartedAt : card.stateChangedAt,
     statusUpdatedAt: event.receivedAt,

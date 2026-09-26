@@ -1,5 +1,11 @@
-import type { FleetAgentStatusEvidence } from '../../../shared/orchestration-fleet-agent-status-evidence'
-import { projectOrchestrationFleetAttention } from '../../../shared/orchestration-fleet-attention'
+import {
+  fleetEvidenceMainAgent,
+  type FleetAgentStatusEvidence
+} from '../../../shared/orchestration-fleet-agent-status-evidence'
+import {
+  isFleetMainTurnFailed,
+  projectOrchestrationFleetAttention
+} from '../../../shared/orchestration-fleet-attention'
 import { resolveFleetWorkerOutcome } from '../../../shared/orchestration-fleet-outcome-resolution'
 import { projectLiveness } from '../../../shared/orchestration-fleet-worker-projection'
 import type { OrchestrationDb } from './db'
@@ -42,6 +48,9 @@ export function projectWorkerAttentionContext(args: {
     interrupted:
       args.facts.terminationReason === 'operator_close' ||
       args.facts.terminationReason === 'signaled',
+    mainTurnFailed: isFleetMainTurnFailed(
+      args.evidence ? fleetEvidenceMainAgent(args.evidence.activity) : undefined
+    ),
     liveness: projectLiveness(
       {
         workerState: args.facts.workerState,

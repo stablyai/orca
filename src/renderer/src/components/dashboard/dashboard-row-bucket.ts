@@ -6,6 +6,10 @@ import {
 } from '../../../../shared/dashboard-snapshot'
 import { dashboardBucketForDotState } from './dashboard-card-bucket'
 import type { AgentRowState } from '@/lib/agent-row-decay-state'
+import {
+  agentMainTurnEnding,
+  type AgentStatusTurnEnding
+} from '../../../../shared/agent-status-display-state'
 
 /**
  * Project a row state onto the published card vocabulary.
@@ -23,6 +27,7 @@ export type DashboardRowBucketProjection = {
   isTitleDerived: boolean
   dotState: DashboardCardDotState
   workingMode: DashboardAgentRow['entry']['workingMode']
+  turnEnding: AgentStatusTurnEnding | undefined
   unseen: boolean
   bucket: DashboardBucket
 }
@@ -38,11 +43,12 @@ export function dashboardRowBucketProjection(
     row.state === 'working' && row.entry.workingMode === 'monitoring'
       ? row.entry.workingMode
       : undefined
+  const turnEnding = agentMainTurnEnding(row.entry)
   const unseen =
     !isTitleDerived && (acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt
   const bucket = dashboardBucketForDotState(
-    dashboardCardDisplayState({ dotState, workingMode, unseen })
+    dashboardCardDisplayState({ dotState, workingMode, unseen, turnEnding })
   )
 
-  return { isTitleDerived, dotState, workingMode, unseen, bucket }
+  return { isTitleDerived, dotState, workingMode, turnEnding, unseen, bucket }
 }

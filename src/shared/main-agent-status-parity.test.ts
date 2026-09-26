@@ -271,6 +271,52 @@ const STORIES: Story[] = [
     }
   },
   {
+    // Lifecycle only: the failure is the main agent's verdict, and the subagent it left running
+    // keeps the combined row working in every lane until it ends.
+    name: 'failed with a live subagent',
+    claude: {
+      events: [
+        { hook_event_name: 'UserPromptSubmit', prompt: 'go' },
+        { hook_event_name: 'SubagentStart', agent_id: 'agent-1' },
+        {
+          hook_event_name: 'StopFailure',
+          error: 'rate_limit',
+          background_tasks: [RUNNING_AGENT]
+        }
+      ],
+      expect: { state: 'working', mainAgent: { state: 'done', outcome: 'failure' } }
+    },
+    structured: {
+      status: 'idle',
+      turnOutcome: 'failure',
+      backgroundTasks: [AGENT_TASK],
+      expect: { state: 'working', mainAgent: { state: 'done', outcome: 'failure' } }
+    },
+    grok: {
+      events: [
+        { hookEventName: 'user_prompt_submit', prompt: 'go' },
+        { hookEventName: 'stop_failure', backgroundTasks: [RUNNING_AGENT] }
+      ],
+      expect: { state: 'working', mainAgent: { state: 'done', outcome: 'failure' } }
+    }
+  },
+  {
+    name: 'failed, then its subagent drains',
+    claude: {
+      events: [
+        { hook_event_name: 'UserPromptSubmit', prompt: 'go' },
+        { hook_event_name: 'SubagentStart', agent_id: 'agent-1' },
+        {
+          hook_event_name: 'StopFailure',
+          error: 'rate_limit',
+          background_tasks: [RUNNING_AGENT]
+        },
+        { hook_event_name: 'SubagentStop', agent_id: 'agent-1' }
+      ],
+      expect: { state: 'done', mainAgent: { state: 'done', outcome: 'failure' } }
+    }
+  },
+  {
     // A cancel never hides live work: the shell the cancelled turn left running reads monitoring
     // in every lane, and the cancellation survives only as the main agent's verdict. The Claude
     // row is the primary path: Orca's inferred cancel, carried by the main agent record into the

@@ -1,3 +1,5 @@
+import type { AgentMainAgentStatus } from '../../../shared/agent-status-types'
+import { wireAgentDisplayState } from '../../agent-display-state'
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import {
@@ -117,7 +119,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
           provider: { id: string; model: string | null } | null
           host: { id: string }
           workspace: { id: string } | null
-          stage: { activity: string }
+          stage: { activity: string; mainAgent?: AgentMainAgentStatus }
           liveness: { verdict: string }
           nextAction: { argv: string[] }
           attention?: { categories: string[] }
@@ -158,7 +160,12 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
                   ? `${projection.provider.id}${projection.provider.model ? `/${projection.provider.model}` : ''}`
                   : 'unknown'
                 const workspace = projection?.workspace?.id ?? 'unknown'
-                const stage = projection?.stage.activity ?? worker.dispatchStatus
+                const stage = projection
+                  ? (wireAgentDisplayState({
+                      state: projection.stage.activity,
+                      mainAgent: projection.stage.mainAgent
+                    }) ?? projection.stage.activity)
+                  : worker.dispatchStatus
                 const liveness = projection?.liveness.verdict
                 const attention = projection?.attention?.categories.join(',') || 'none'
                 const details = projection

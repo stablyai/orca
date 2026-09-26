@@ -7,6 +7,7 @@ import type {
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
 import type { MemorySnapshot, WorktreeMemory } from '../shared/process-stats-types'
+import type { WithWorktreePsDisplayStatus } from './agent-display-state'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 
 export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
@@ -131,7 +132,9 @@ export function formatEnvironment(environment: PublicKnownRuntimeEnvironment): s
   ].join('\n')
 }
 
-export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreePsResult>): string {
+export function formatWorktreePs(
+  result: WithWorktreePsDisplayStatus<WithAnnotatedHostScope<RuntimeWorktreePsResult>>
+): string {
   const scope = formatListingHostScope(result.hostScope)
   if (result.worktrees.length === 0) {
     return `No worktrees found.\n${scope}`
@@ -139,7 +142,7 @@ export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreeP
   const body = result.worktrees
     .map(
       (worktree) =>
-        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  live:${worktree.liveTerminalCount}  pty:${worktree.hasAttachedPty ? 'yes' : 'no'}  unread:${worktree.unread ? 'yes' : 'no'}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
+        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  status:${worktree.displayStatus}  live:${worktree.liveTerminalCount}  pty:${worktree.hasAttachedPty ? 'yes' : 'no'}  unread:${worktree.unread ? 'yes' : 'no'}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
     )
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`

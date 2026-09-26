@@ -6,6 +6,7 @@ import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { lastInputBlocksHibernation } from './agent-hibernation-input-guard'
 import { isLiveResumeAnchorForCompletedAgent } from './live-resume-anchor-record'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
+import { isCleanAgentTurnCompletion } from '../../../shared/agent-status-display-state'
 
 export type EligiblePane = {
   paneKey: string
@@ -88,8 +89,8 @@ export function getEligiblePane(args: {
     tab.worktreeId
   )
   if (
-    entry.state !== 'done' ||
-    entry.interrupted === true ||
+    // Why: a failed or cancelled turn stays open so the user sees how it ended.
+    !isCleanAgentTurnCompletion(entry) ||
     Boolean(entry.subagents?.length) ||
     hasUnsettledOrUnknownDispatch(entry) ||
     (sleepingRecord && !hasOnlyLiveResumeAnchor)

@@ -14,10 +14,10 @@ import {
 } from '../../smart-sort'
 import {
   buildAttentionByWorktree,
-  hasFreshAttributedAgentStatus,
   type SmartClass,
   type WorktreeAttention
 } from '../../smart-attention'
+import { hasFreshAttributedAgentStatus } from '../../fresh-attributed-agent-status'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 
 // Debounce re-sort after a sortEpoch bump so background score changes don't jar row positions.

@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { CompactAgentRow, getCompactAgentSecondary } from './worktree-card-compact-agent-row'
 import { getAgentDotState, summarizeAgents } from './worktree-card-agent-summary'
+import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 
 function monitoringAgent(): DashboardAgentRowData {
   return {
@@ -101,5 +102,39 @@ describe('worktree card agent summary', () => {
     }
 
     expect(summarizeAgents([done, interrupted], 'Agents')).toBe('Agents: 1 interrupted, 1 done')
+  })
+
+  it('shows a failed main-agent turn as failed, with the error text, ahead of working agents', () => {
+    const failed = monitoringAgent()
+    failed.entry.lastAssistantMessage = 'API Error: 400 invalid_request_error'
+    failed.entry.mainAgent = { state: 'done', outcome: 'failure', stateStartedAt: 1 }
+    const working = monitoringAgent()
+    working.paneKey = 'tab-1:leaf-2'
+    working.entry = { ...working.entry, paneKey: 'tab-1:leaf-2', workingMode: undefined }
+
+    // The row is held open by a subagent, so its combined state still says working.
+    expect(failed.entry.state).toBe('working')
+    expect(getAgentDotState(failed)).toBe('failed')
+    expect(getCompactAgentSecondary(failed, Date.now())).toBe(
+      'API Error: 400 invalid_request_error'
+    )
+    expect(summarizeAgents([working, failed], 'Agents')).toBe('Agents: 1 failed, 1 working')
+  })
+
+  it('keeps a subagent child row on its own state under a failed parent', () => {
+    const parent = monitoringAgent()
+    parent.entry = {
+      ...parent.entry,
+      workingMode: undefined,
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1 },
+      subagents: [{ id: 'child-1', state: 'working', startedAt: 1, agentType: 'reviewer' }]
+    }
+    const [child] = buildSubagentChildRows({
+      parentEntry: parent.entry,
+      tab: parent.tab,
+      parentIsFresh: true
+    })
+    expect(getAgentDotState(parent)).toBe('failed')
+    expect(child && getAgentDotState(child)).toBe('working')
   })
 })

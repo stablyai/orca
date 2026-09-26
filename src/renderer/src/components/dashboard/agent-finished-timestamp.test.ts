@@ -60,3 +60,13 @@ describe('lastEnteredDoneAt subagent rows', () => {
     expect(lastEnteredDoneAt({ rowSource: 'subagent', state: 'unverifiable', entry })).toBeNull()
   })
 })
+
+describe('lastEnteredDoneAt for a failed turn', () => {
+  it('times a failure from when the main agent settled, even while child work holds the row', () => {
+    const mainAgent = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: 1_500 }
+    expect(lastEnteredDoneAt(row(doneEntry({ mainAgent, stateStartedAt: 2_000 })))).toBe(1_500)
+    expect(
+      lastEnteredDoneAt(row(doneEntry({ state: 'working', mainAgent, stateStartedAt: 1_000 })))
+    ).toBe(1_500)
+  })
+})

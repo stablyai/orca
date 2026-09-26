@@ -179,7 +179,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               item={item}
               isReadOnly={isReadOnly}
               now={now}
-              status={getWorktreeStatus(item)}
+              status={getWorktreeStatus(item, now)}
               repoColor={uniqueRepoColors.get(item.repo) ?? repoColor(item.repo)}
               repoIcon={state.repoIconsByName.get(item.repo) ?? null}
               hideRepo={state.groupMode === 'repo'}

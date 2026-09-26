@@ -1,6 +1,7 @@
 import type { AppState } from '../types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  mainAgentStatusEqual,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import type {
@@ -71,9 +72,12 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     existing?.state === 'done' &&
     entry.state === 'done' &&
     agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
+  // Why: a main agent's own verdict can change under an unchanged combined state (held-open failure).
+  const mainAgentChanged = !!existing && !mainAgentStatusEqual(existing.mainAgent, entry.mainAgent)
   const sortRelevantChange =
     !existing ||
     existing.state !== entry.state ||
+    mainAgentChanged ||
     !wasFresh ||
     attributionChanged ||
     commandCodeNewTurn ||

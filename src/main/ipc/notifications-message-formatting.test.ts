@@ -217,7 +217,7 @@ describe('registerNotificationHandlers', () => {
           worktreeLabel: 'feat/notis',
           agentType: 'claude',
           agentState: 'done',
-          agentInterrupted: true,
+          agentTurnEnding: 'cancellation',
           agentLastAssistantMessage: 'Stopped by user.'
         }
       )
@@ -336,7 +336,7 @@ describe('registerNotificationHandlers', () => {
         worktreeLabel: 'feat/notis',
         agentType: 'claude',
         agentState: 'done',
-        agentInterrupted: true
+        agentTurnEnding: 'cancellation'
       }
     )
 
@@ -344,6 +344,38 @@ describe('registerNotificationHandlers', () => {
       expectedNativeNotificationOptions({
         title: 'feat/notis - Claude stopped',
         body: 'Claude stopped.'
+      })
+    )
+  })
+
+  it('words a turn that ended in the provider error as failed, never finished', async () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: false,
+          suppressWhenFocused: true
+        }
+      })
+    } as never)
+
+    const handler = getDispatchHandler()
+    await handler(
+      {},
+      {
+        source: 'agent-task-complete',
+        worktreeLabel: 'feat/notis',
+        agentType: 'claude',
+        agentState: 'done',
+        agentTurnEnding: 'failure'
+      }
+    )
+
+    expect(notificationCtorMock).toHaveBeenCalledWith(
+      expectedNativeNotificationOptions({
+        title: 'feat/notis - Claude failed',
+        body: 'Claude failed.'
       })
     )
   })

@@ -14,6 +14,7 @@ export function dashboardBucketForDotState(state: DashboardCardDisplayState): Da
       return 'idle'
     case 'blocked':
     case 'waiting':
+    case 'failed':
       return 'attention'
   }
 }

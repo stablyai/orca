@@ -1,3 +1,6 @@
+import { agentMainTurnEnding } from './agent-status-display-state'
+import type { AgentMainAgentStatus } from './main-agent-status'
+
 export const ORCHESTRATION_FLEET_ATTENTION_CATEGORIES = [
   'guidance',
   'input',
@@ -24,6 +27,8 @@ export type OrchestrationFleetAttentionFacts = {
   pendingGuidance?: boolean
   pendingApproval?: boolean
   interrupted?: boolean
+  /** The worker's current main-agent turn failed, derived from its own record on every read. */
+  mainTurnFailed?: boolean
   liveness: {
     verdict: 'live' | 'unverifiable' | 'exited'
     reason?: string
@@ -52,7 +57,7 @@ export function projectOrchestrationFleetAttention(
   if (facts.pendingApproval) {
     categories.push('approval')
   }
-  if (facts.outcome === 'failed') {
+  if (facts.outcome === 'failed' || facts.mainTurnFailed) {
     categories.push('failure')
   }
   if (facts.interrupted) {
@@ -83,6 +88,15 @@ export function projectOrchestrationFleetAttention(
     categories,
     requiresAction: categories.some((category) => ACTION_CATEGORIES.has(category))
   }
+}
+
+/** The `mainTurnFailed` fact. Without `mainAgent` a row can carry no failure, so the combined
+ *  row state never changes the answer. */
+export function isFleetMainTurnFailed(mainAgent: AgentMainAgentStatus | undefined): boolean {
+  return (
+    mainAgent !== undefined &&
+    agentMainTurnEnding({ state: mainAgent.state, mainAgent }) === 'failure'
+  )
 }
 
 export function orchestrationFleetAttentionEqual(

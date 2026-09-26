@@ -45,7 +45,7 @@ describe('TerminalTabLeadingIcon', () => {
     expect(markup).toContain('data-agent-activity-status="permission"')
     expect(markup).toContain('lucide-message-circle-question-mark')
     expect(markup).toContain('text-agent-question')
-    expect(markup).not.toContain('bg-red-500')
+    expect(markup).not.toContain('bg-destructive')
   })
 
   it('shows no activity glyph for an active shell — just the identity icon', () => {

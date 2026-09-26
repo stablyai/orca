@@ -1,4 +1,5 @@
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
+import { agentMainTurnEnding } from '../../../../shared/agent-status-display-state'
 import type { DashboardAgentRow } from './useDashboardData'
 
 /**
@@ -15,6 +16,10 @@ export function lastEnteredDoneAt(
     return null
   }
   const entry = agent.entry
+  // Why: a failed turn ended when the main agent settled, even while child work holds the row open.
+  if (entry.mainAgent && agentMainTurnEnding(entry) === 'failure') {
+    return entry.mainAgent.stateStartedAt
+  }
   // Why: same primitive Smart Sort ranks on, so the displayed age and Done eligibility share a clock.
   // (Session-boundary `done` means the session connected idle — STA-3386 — so it resolves to the real
   // completion it displaced, if any.)

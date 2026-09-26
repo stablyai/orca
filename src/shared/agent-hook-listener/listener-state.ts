@@ -57,6 +57,8 @@ export type HookListenerState = {
   grokActiveTurnByPaneKey: Map<string, GrokActiveTurn>
   /** The Grok main agent's own state as last published, so its clock keeps continuity across events. */
   grokMainAgentStatusByPaneKey: Map<string, AgentMainAgentStatus>
+  /** The OpenCode root session's own state as last published, so its clock keeps continuity across events. */
+  openCodeMainAgentStatusByPaneKey: Map<string, AgentMainAgentStatus>
   /** Muse child-session filter and session-log cursor per pane. */
   musePaneStateByPaneKey: Map<string, MusePaneState>
   /**
@@ -117,6 +119,7 @@ export function createHookListenerState(
     codexLeadStateByPaneKey: new Map(),
     grokActiveTurnByPaneKey: new Map(),
     grokMainAgentStatusByPaneKey: new Map(),
+    openCodeMainAgentStatusByPaneKey: new Map(),
     musePaneStateByPaneKey: new Map(),
     opencodeSessionPaneBySessionId: new Map(),
     lastLaunchTokenByPaneKey: new Map()
@@ -207,6 +210,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.codexLeadStateByPaneKey.delete(paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
+  state.openCodeMainAgentStatusByPaneKey.delete(paneKey)
   state.musePaneStateByPaneKey.delete(paneKey)
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
@@ -285,6 +289,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokActiveTurnByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokMainAgentStatusByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.openCodeMainAgentStatusByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.musePaneStateByPaneKey, fromPaneKey, toPaneKey)
   moveOpenCodeSessionBindings(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
@@ -297,6 +302,7 @@ export function clearPaneTurnCacheState(state: HookListenerState, paneKey: strin
   state.ampCompletedCacheKeys.delete(paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
   state.grokMainAgentStatusByPaneKey.delete(paneKey)
+  state.openCodeMainAgentStatusByPaneKey.delete(paneKey)
 }
 
 export function deletePaneScopedCacheEntry(map: Map<string, unknown>, paneKey: string): void {
@@ -339,6 +345,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.codexLeadStateByPaneKey.clear()
   state.grokActiveTurnByPaneKey.clear()
   state.grokMainAgentStatusByPaneKey.clear()
+  state.openCodeMainAgentStatusByPaneKey.clear()
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
 }

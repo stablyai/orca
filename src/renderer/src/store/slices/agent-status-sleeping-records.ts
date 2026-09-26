@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
+import { isCleanAgentTurnCompletion } from '../../../../shared/agent-status-display-state'
 
 export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
   return {
@@ -79,7 +80,7 @@ export function normalizeSleepingAgentSessionCollectOptions(
 }
 
 export function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean {
-  return entry.state === 'done' && entry.interrupted !== true
+  return isCleanAgentTurnCompletion(entry)
 }
 
 // Why: a finished pane is passive wake evidence, and a mobile wake background-mounts every passive

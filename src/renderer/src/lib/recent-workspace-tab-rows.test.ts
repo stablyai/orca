@@ -166,6 +166,24 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     )
   })
 
+  it('shows a failed turn after a permission prompt and before a working sibling', () => {
+    const mainAgent = { state: 'done' as const, outcome: 'failure' as const, stateStartedAt: NOW }
+    const failed = entry('mixed', 'working', NOW - 1_000, { mainAgent })
+    const working = entry('mixed', 'working', NOW - 2_000, {
+      paneKey: 'mixed:22222222-2222-4222-8222-222222222222'
+    })
+    expect(resolveRecentWorkspaceTabStatus(row('mixed'), sources([failed, working]), NOW)).toBe(
+      'failed'
+    )
+
+    const blocked = entry('mixed', 'blocked', NOW - 2_000, {
+      paneKey: 'mixed:22222222-2222-4222-8222-222222222222'
+    })
+    expect(resolveRecentWorkspaceTabStatus(row('mixed'), sources([failed, blocked]), NOW)).toBe(
+      'permission'
+    )
+  })
+
   it('does not let a cleanly finished sibling mask an interruption', () => {
     const interrupted = entry('mixed', 'done', NOW - 1_000, {
       paneKey: `mixed:${LEAF_ID}`,

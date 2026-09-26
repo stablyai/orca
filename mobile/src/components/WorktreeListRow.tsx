@@ -13,6 +13,7 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/
 import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
+import type { WorktreeDisplayStatus } from '../worktree/workspace-list-types'
 import { triggerMediumImpact } from '../platform/haptics'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { AgentSpinner } from './AgentSpinner'
@@ -57,8 +58,6 @@ export type WorktreeListRowItem = {
   workingMode?: AgentWorkingMode
 }
 
-type WorktreeRollupStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
-
 type Props<T extends WorktreeListRowItem> = {
   item: T
   isReadOnly: boolean
@@ -68,7 +67,7 @@ type Props<T extends WorktreeListRowItem> = {
   // When the list is already grouped under this repo's section header, the row
   // omits its own repo icon+name to avoid the redundant "📁 orca" on every row.
   hideRepo?: boolean
-  status: WorktreeRollupStatus
+  status: WorktreeDisplayStatus
   onPress: (item: T) => void
   onLongPress?: (item: T) => void
   onToggleLineage?: (item: T) => void

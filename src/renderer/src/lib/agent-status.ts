@@ -1,9 +1,8 @@
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { AgentStatusState, AgentType } from '../../../shared/agent-status-types'
+import type { AgentType } from '../../../shared/agent-status-types'
 import { tabHasLivePty } from './tab-has-live-pty'
-import type { WorktreeStatus } from './worktree-status'
 import { tuiAgentToAgentKind } from '../../../shared/agent-kind'
 import type { AgentKind } from '../../../shared/telemetry-events'
 
@@ -154,29 +153,6 @@ export function agentKindForAgentType(agentType: AgentType | null | undefined): 
 
 // Re-export: freshness gate moved into pane-agent-evidence; keeps existing importers unchanged.
 export { isExplicitAgentStatusFresh } from './pane-agent-evidence'
-
-/**
- * Map an explicit AgentStatusState to the visual Status used by
- * StatusIndicator and WorktreeCard.
- *
- * | Explicit State | Visual Status | Meaning                        |
- * |----------------|---------------|--------------------------------|
- * | working        | working       | agent actively executing       |
- * | blocked        | permission    | agent needs user attention     |
- * | waiting        | permission    | agent needs user attention     |
- * | done           | done          | task complete but pane live    |
- */
-export function mapAgentStatusStateToVisualStatus(state: AgentStatusState): WorktreeStatus {
-  switch (state) {
-    case 'working':
-      return 'working'
-    case 'blocked':
-    case 'waiting':
-      return 'permission'
-    case 'done':
-      return 'done'
-  }
-}
 
 export function countWorkingAgents({
   tabsByWorktree,

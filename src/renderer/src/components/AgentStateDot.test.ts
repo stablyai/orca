@@ -107,7 +107,7 @@ describe('AgentStateDot', () => {
     (state) => {
       const classNames = renderDotClassNames(state)
 
-      expect(classNames).toContain('bg-red-500')
+      expect(classNames).toContain('bg-destructive')
       expect(classNames).not.toContain('bg-amber-500')
     }
   )

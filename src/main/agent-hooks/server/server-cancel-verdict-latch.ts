@@ -57,6 +57,18 @@ function refoldUnderLatchedMainAgent(
   }
 }
 
+function keepLatchedCancellation(incoming: AgentHookEventPayload): AgentHookEventPayload {
+  const { interrupted: _interrupted, turnCompletedAt: _turnCompletedAt, ...rest } = incoming.payload
+  return {
+    ...incoming,
+    payload: {
+      ...rest,
+      ...(rest.state === 'done' ? { interrupted: true } : {}),
+      ...(rest.mainAgent ? { mainAgent: { ...rest.mainAgent, outcome: 'cancellation' } } : {})
+    }
+  }
+}
+
 /** A main agent's own prompt submission always opens a turn, including a harness-injected one that
  *  keeps the cached prompt (the task notification Claude starts when background work ends). */
 function opensNewTurn(event: AgentHookEventPayload): boolean {
@@ -85,7 +97,8 @@ function restatesAnotherPrompt(
 /**
  * The store's hold on a cancel verdict against restatements that predate it: a relay never learns
  * of the cancel the desktop infers, and TUIs emit late same-turn hooks after Ctrl+C. The latch dies
- * on the provider's own verdict (any settled `mainAgent`) or a new turn (another prompt, an
+ * on the provider's own verdict (any settled `mainAgent`, except a failure, which ends the same
+ * turn the user already stopped) or a new turn (another prompt, an
  * explicit prompt, a prompt submission, a session start). Child-attributed and replayed events keep the latched main
  * agent and are re-folded with their own child evidence; late main agent work is held.
  */
@@ -100,10 +113,15 @@ export function resolveCancelVerdictLatch(
     !isCancelVerdictLatched(previous) ||
     previous.payload.agentType !== incoming.payload.agentType ||
     restatesAnotherPrompt(previous, incoming) ||
-    incoming.payload.mainAgent?.state === 'done' ||
     opensNewTurn(incoming)
   ) {
     return apply
+  }
+  if (incoming.payload.mainAgent?.state === 'done') {
+    // Why: the user's stop is the turn's verdict; a provider error landing after it ends the same turn.
+    return incoming.payload.mainAgent.outcome === 'failure'
+      ? { hold: false, event: keepLatchedCancellation(incoming) }
+      : apply
   }
   const latched = previous.payload.mainAgent
   // Why: Codex's combine is not this fold; its child events already come reconciled against main's marked record.

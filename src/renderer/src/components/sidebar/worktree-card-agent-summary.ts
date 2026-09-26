@@ -2,29 +2,15 @@ import type { AgentDotState } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { agentRowDotState } from '@/lib/agent-row-dot-state'
+import { AGENT_STATUS_DISPLAY_PRIORITY } from '../../../../shared/agent-status-display-state'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
   agents: DashboardAgentRowData[]
 }
 
-const SUMMARY_STATE_ORDER: AgentDotState[] = [
-  'waiting',
-  'blocked',
-  'working',
-  'monitoring',
-  'interrupted',
-  'done',
-  // Why: below every reporting state, above true idle — the pane is still held.
-  'unverifiable',
-  'idle'
-]
-
 export function getAgentDotState(agent: DashboardAgentRowData): AgentDotState {
-  if (agent.entry.interrupted === true) {
-    return 'interrupted'
-  }
-  return agentRowDotState(agent.state, agent.entry.workingMode)
+  return agentRowDotState(agent)
 }
 
 export function formatSummaryStateLabel(state: AgentDotState): string {
@@ -63,7 +49,7 @@ export function buildSummaryAgentGroups(agents: DashboardAgentRowData[]): Summar
       groups.set(dotState, [agent])
     }
   }
-  return SUMMARY_STATE_ORDER.flatMap((state) => {
+  return AGENT_STATUS_DISPLAY_PRIORITY.flatMap((state) => {
     const groupAgents = groups.get(state)
     return groupAgents ? [{ state, agents: groupAgents }] : []
   })
@@ -75,7 +61,7 @@ export function summarizeAgents(agents: DashboardAgentRowData[], subjectLabel: s
     const dotState = getAgentDotState(agent)
     counts.set(dotState, (counts.get(dotState) ?? 0) + 1)
   }
-  const parts = SUMMARY_STATE_ORDER.flatMap((state) => {
+  const parts = AGENT_STATUS_DISPLAY_PRIORITY.flatMap((state) => {
     const count = counts.get(state) ?? 0
     if (count === 0) {
       return []

@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import {
   DropdownMenuItem,
@@ -246,7 +246,7 @@ function AgentTargetMenuItem({
   onSend: (target: NotesSendAgentTarget) => void
 }): React.JSX.Element {
   const tabTitle = target.tabTitle.trim()
-  const state = agentRowDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
+  const state: AgentDotState = agent ? agentRowDotState(agent) : 'idle'
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
   const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
   const secondaryParts = [

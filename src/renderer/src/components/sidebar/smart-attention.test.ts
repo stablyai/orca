@@ -170,6 +170,45 @@ describe('resolveAttention', () => {
     })
   })
 
+  it('ranks a failed main-agent turn in Class 2 by when it failed, and never ages it out', () => {
+    const failedAt = NOW - AGENT_STATUS_STALE_AFTER_MS * 3
+    const mainAgent = {
+      state: 'done' as const,
+      outcome: 'failure' as const,
+      stateStartedAt: failedAt
+    }
+    for (const failed of [
+      makeEntry({
+        paneKey: 't:1',
+        state: 'done',
+        stateStartedAt: failedAt,
+        updatedAt: failedAt,
+        mainAgent
+      }),
+      // Held open by a subagent: the combined row still says working.
+      makeEntry({ paneKey: 't:1', state: 'working', updatedAt: NOW - 1_000, mainAgent })
+    ]) {
+      expect(resolveAttention([hookPane(failed)], NOW)).toEqual({
+        cls: 2,
+        attentionTimestamp: failedAt
+      })
+    }
+  })
+
+  it('keeps a fresh child permission wait in Class 1 above a failed main-agent turn', () => {
+    const waiting = makeEntry({
+      paneKey: 't:1',
+      state: 'waiting',
+      stateStartedAt: NOW - 5_000,
+      updatedAt: NOW - 1_000,
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: NOW - 10_000 }
+    })
+    expect(resolveAttention([hookPane(waiting)], NOW)).toMatchObject({
+      cls: 1,
+      attentionTimestamp: NOW - 5_000
+    })
+  })
+
   it('treats interrupted done as idle', () => {
     const entry = makeEntry({
       paneKey: 't:1',

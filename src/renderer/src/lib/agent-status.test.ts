@@ -9,7 +9,6 @@ import {
   isClaudeManagementTitle,
   normalizeTerminalTitle,
   isExplicitAgentStatusFresh,
-  mapAgentStatusStateToVisualStatus,
   formatAgentTypeLabel,
   agentTypeToIconAgent
 } from './agent-status'
@@ -784,32 +783,6 @@ describe('isExplicitAgentStatusFresh', () => {
     const now = 1_000_000
     const entry = { updatedAt: now }
     expect(isExplicitAgentStatusFresh(entry, now, staleAfterMs)).toBe(true)
-  })
-})
-
-describe('mapAgentStatusStateToVisualStatus', () => {
-  it("maps 'working' to 'working'", () => {
-    expect(mapAgentStatusStateToVisualStatus('working')).toBe('working')
-  })
-
-  it("maps 'blocked' to 'permission'", () => {
-    expect(mapAgentStatusStateToVisualStatus('blocked')).toBe('permission')
-  })
-
-  it("maps 'waiting' to 'permission'", () => {
-    expect(mapAgentStatusStateToVisualStatus('waiting')).toBe('permission')
-  })
-
-  it("maps 'done' to 'done'", () => {
-    expect(mapAgentStatusStateToVisualStatus('done')).toBe('done')
-  })
-
-  it('returns a non-empty string for every valid state', () => {
-    for (const state of ['working', 'blocked', 'waiting', 'done'] as const) {
-      const visual = mapAgentStatusStateToVisualStatus(state)
-      expect(typeof visual).toBe('string')
-      expect(visual.length).toBeGreaterThan(0)
-    }
   })
 })
 

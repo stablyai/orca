@@ -28,8 +28,16 @@ export function getCompactAgentSecondary(
   now: number,
   lastAssistantMessageOverride?: string
 ): string {
-  if (agent.entry.interrupted === true) {
+  const dotState = getAgentDotState(agent)
+  if (dotState === 'interrupted') {
     return 'Interrupted by user'
+  }
+  // Why: a failed turn's last message is the provider's error text, which says why it failed.
+  if (dotState === 'failed') {
+    return (
+      (lastAssistantMessageOverride ?? agent.entry.lastAssistantMessage?.trim()) ||
+      agentStateLabel('failed')
+    )
   }
   // Why: the only honest thing to say about a pane Orca still holds but no longer hears
   // from is how long the silence has run; the user supplies the meaning.

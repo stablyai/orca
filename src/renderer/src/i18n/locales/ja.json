@@ -15458,7 +15458,9 @@
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "中断された",
-          "1ec01cef03": "ユーザーによる中断"
+          "1ec01cef03": "ユーザーによる中断",
+          "failedAriaLabel": "ターンがエラーで終了しました",
+          "failed": "失敗"
         }
       },
       "crash": {
@@ -18164,7 +18166,8 @@
       "needsInput": "入力待ち",
       "working": "処理中",
       "stopped": "停止",
-      "finished": "完了"
+      "finished": "完了",
+      "failed": "失敗"
     }
   },
   "sidebar": {

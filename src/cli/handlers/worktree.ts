@@ -8,6 +8,7 @@ import type {
 import type { CommandHandler } from '../dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
+import { withWorktreePsDisplayStatus } from '../agent-display-state'
 import {
   annotateOmittedHostScope,
   type WithAnnotatedHostScope
@@ -157,7 +158,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       { limit: getOptionalPositiveIntegerFlag(flags, 'limit') }
     )
     await annotateOmittedHostScope(client, result.result)
-    printResult(result, json, formatWorktreePs)
+    printResult(
+      { ...result, result: withWorktreePsDisplayStatus(result.result) },
+      json,
+      formatWorktreePs
+    )
   },
   'worktree list': async ({ flags, client, json }) => {
     const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreeListResult>>(

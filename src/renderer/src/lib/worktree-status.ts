@@ -10,6 +10,7 @@ import type {
   TerminalTab
 } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import { resolveAgentWorktreeDisplayStatus } from '../../../shared/agent-status-display-state'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 
 export type WorktreeStatus =
@@ -17,6 +18,7 @@ export type WorktreeStatus =
   | 'working'
   | 'monitoring'
   | 'permission'
+  | 'failed'
   | 'interrupted'
   | 'done'
   | 'inactive'
@@ -35,6 +37,7 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
   working: 'Working',
   monitoring: 'Monitoring background tasks',
   permission: 'Needs permission',
+  failed: 'Failed',
   interrupted: 'Interrupted',
   done: 'Done',
   inactive: 'Inactive'
@@ -167,7 +170,8 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  *
  * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
  * `hasLiveDone` are fresh hook entries ({blocked,waiting} / {working} / {done});
- * `hasRetainedDone` is a retained-agent snapshot scoped to this worktreeId.
+ * `hasRetainedDone` is a retained-agent snapshot scoped to this worktreeId. `hasFailed` is any row
+ * displaying a failed turn; only a permission prompt outranks it.
  */
 export function resolveWorktreeStatus(args: {
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
@@ -182,9 +186,20 @@ export function resolveWorktreeStatus(args: {
   hasLiveWorking: boolean
   hasLiveMonitoring?: boolean
   hasInterrupted?: boolean
+  hasFailed?: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
 }): WorktreeStatus {
+  return resolveAgentWorktreeDisplayStatus({
+    base: resolveWorktreeLifecycleStatus(args),
+    hasHumanWait: args.hasPermission,
+    hasFailed: args.hasFailed === true
+  })
+}
+
+function resolveWorktreeLifecycleStatus(
+  args: Omit<Parameters<typeof resolveWorktreeStatus>[0], 'hasFailed'>
+): WorktreeStatus {
   const heuristic = getWorktreeStatus(
     args.tabs,
     args.browserTabs,

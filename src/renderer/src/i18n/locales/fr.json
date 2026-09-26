@@ -15561,7 +15561,9 @@
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "interrompu",
-          "1ec01cef03": "Interrompu par l'utilisateur"
+          "1ec01cef03": "Interrompu par l'utilisateur",
+          "failedAriaLabel": "Le tour s'est terminé par une erreur",
+          "failed": "échoué"
         }
       },
       "crash": {
@@ -18166,7 +18168,8 @@
       "needsInput": "attend une réponse",
       "working": "en cours",
       "stopped": "arrêté",
-      "finished": "terminé"
+      "finished": "terminé",
+      "failed": "échoué"
     }
   },
   "sidebar": {

@@ -7,6 +7,7 @@ import {
   isFreshNonDoneAgentStatus,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
+import { agentMainTurnEnding } from '../../../../shared/agent-status-display-state'
 import { isSupersededAgentCompletionSnapshot } from './agent-completion-snapshot-staleness'
 import type {
   AgentCompletionDispatchMeta,
@@ -146,7 +147,7 @@ export function dispatchTerminalNotification(
         agentToolName: agentStatus.toolName,
         agentToolInput: agentStatus.toolInput,
         agentLastAssistantMessage: agentStatus.lastAssistantMessage,
-        agentInterrupted: agentStatus.interrupted
+        agentTurnEnding: agentMainTurnEnding(agentStatus)
       }
     : {}
   const notificationId =

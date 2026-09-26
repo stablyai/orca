@@ -234,15 +234,15 @@ describe('StructuredAgentSessionAttentionBridge', () => {
       surface: 'agent-session',
       worktreeId: WORKSPACE,
       paneKey: CHAT_SUBJECT,
-      agentState: 'done',
-      agentInterrupted: false
+      agentState: 'done'
     })
+    expect(onlyDispatch()).not.toHaveProperty('agentTurnEnding')
   })
 
   // A settled turn is news whichever way it settled, exactly as the CLI lane treats one. The
-  // difference is wording, and it rides the notification flag that already says "stopped".
+  // difference is wording: the turn ending says "failed" or "stopped".
   it.each(['failure', 'cancellation'] as const)(
-    'lights the indicators and says stopped for a %s the host reports',
+    'lights the indicators and carries the %s ending the host reports',
     async (outcome) => {
       render(<StructuredAgentSessionAttentionBridge />)
       await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
@@ -254,7 +254,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
         paneDot: 'agent-completion',
         tabDot: 'agent-completion'
       })
-      expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentInterrupted: true })
+      expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnEnding: outcome })
     }
   )
 

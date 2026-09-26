@@ -15,6 +15,7 @@ export type RuntimeWorktreeAgentSource = {
   toolName: string | null
   toolInput: string | null
   interrupted: boolean
+  mainAgent?: ParsedAgentStatusPayload['mainAgent']
   stateStartedAt: number
   updatedAt: number
   /** Projected by the structured session host; `owned` rows stay fresh past the staleness window. */

@@ -1,3 +1,4 @@
+import { mainAgentStatusEqual } from '../../../src/shared/main-agent-status'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { Worktree } from './workspace-list-sections'
 
@@ -110,6 +111,7 @@ function areAgentRowsEqual(
       a.toolName !== b.toolName ||
       a.toolInput !== b.toolInput ||
       a.interrupted !== b.interrupted ||
+      !mainAgentStatusEqual(a.mainAgent, b.mainAgent) ||
       a.stateStartedAt !== b.stateStartedAt ||
       a.updatedAt !== b.updatedAt
     ) {

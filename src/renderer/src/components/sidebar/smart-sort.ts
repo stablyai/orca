@@ -7,12 +7,8 @@ import type {
 } from '../../../../shared/agent-status-types'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { basename } from '@/lib/path'
-import {
-  IDLE,
-  buildAttentionByWorktree,
-  hasFreshAttributedAgentStatus,
-  type WorktreeAttention
-} from './smart-attention'
+import { IDLE, buildAttentionByWorktree, type WorktreeAttention } from './smart-attention'
+import { hasFreshAttributedAgentStatus } from './fresh-attributed-agent-status'
 
 export type SortBy = 'name' | 'smart' | 'recent' | 'repo' | 'manual'
 

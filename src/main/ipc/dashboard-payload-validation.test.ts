@@ -312,6 +312,18 @@ describe('dashboard payload validation', () => {
     ).toBe(false)
   })
 
+  it('accepts a known turn ending and rejects an unknown one', () => {
+    expect(
+      isDashboardSnapshot({ ...SNAPSHOT, cards: [{ ...SNAPSHOT.cards[0], turnEnding: 'failure' }] })
+    ).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], turnEnding: 'exploded' }]
+      })
+    ).toBe(false)
+  })
+
   it('validates the preview terminal input profile', () => {
     const terminalInput = {
       hostPlatform: 'win32',

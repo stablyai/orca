@@ -321,4 +321,23 @@ describe('The main agent fact across a restart', () => {
       server.stop()
     }
   })
+
+  it('hydrates a failed turn as a confirmed row that keeps its verdict', async () => {
+    const receivedAt = recentTs()
+    const mainAgent = { state: 'done', outcome: 'failure', stateStartedAt: receivedAt - 1_000 }
+    writeEntry({
+      receivedAt,
+      stateStartedAt: receivedAt - 1_000,
+      payload: { state: 'done', prompt: 'failed turn', agentType: 'claude', mainAgent }
+    })
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const row = server.getStatusSnapshot()[0]
+      expect(row).toMatchObject({ state: 'done', mainAgent })
+      expect(row?.restoredUnconfirmed).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
 })

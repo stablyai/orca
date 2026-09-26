@@ -38,7 +38,10 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         interactivePrompt: entry.interactivePrompt ?? null,
         lastAssistantMessage: entry.lastAssistantMessage ?? null,
         lastAssistantMessageIsToolOutput: entry.lastAssistantMessageIsToolOutput ?? null,
-        interrupted: entry.interrupted ?? null
+        interrupted: entry.interrupted ?? null,
+        mainAgent: entry.mainAgent
+          ? [entry.mainAgent.state, entry.mainAgent.outcome ?? null, entry.mainAgent.stateStartedAt]
+          : null
       }))
   )
 }
@@ -71,6 +74,11 @@ describe('mobile agent-status projection equivalence', () => {
     statusMaps.push({})
     statusMaps.push({ 'tab-0:leaf-0': makeEntry(0) })
     statusMaps.push({ 'tab-0:leaf-0': makeEntry(0, { workingMode: 'monitoring' }) })
+    statusMaps.push({
+      'tab-0:leaf-0': makeEntry(0, {
+        mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1740000000500 }
+      })
+    })
     const many: AppState['agentStatusByPaneKey'] = {}
     for (let index = 0; index < 12; index += 1) {
       many[`tab-${index}:leaf-0`] = makeEntry(index)
@@ -122,6 +130,21 @@ describe('mobile agent-status projection equivalence', () => {
         projection: buildRuntimeMobileAgentStatusProjectionForTests(current)
       }).toEqual({ round, projection: referenceProjection(current) })
     }
+  })
+
+  it('republishes when only the main agent fact changes', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const working = {
+      'tab-0:leaf-0': makeEntry(0, { mainAgent: { state: 'working', stateStartedAt: 1 } })
+    }
+    const failed = {
+      'tab-0:leaf-0': makeEntry(0, {
+        mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 2 }
+      })
+    }
+    expect(buildRuntimeMobileAgentStatusProjectionForTests(failed)).not.toBe(
+      buildRuntimeMobileAgentStatusProjectionForTests(working)
+    )
   })
 
   it('serializes the same entries the localeCompare order did', () => {

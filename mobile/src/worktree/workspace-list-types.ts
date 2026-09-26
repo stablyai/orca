@@ -49,10 +49,14 @@ export type Worktree = {
   linkedGitLabMR?: number | null
   linkedGitLabIssue?: number | null
   comment?: string
+  /** The host's lifecycle rollup; the row dot reads `getWorktreeStatus` instead. */
   status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
   workingMode?: AgentWorkingMode
   agents?: RuntimeWorktreeAgentRow[]
 }
+
+/** The list-row dot: the host's rollup plus `failed`, derived from the agent rows. */
+export type WorktreeDisplayStatus = NonNullable<Worktree['status']> | 'failed'
 
 export type FilterState = {
   filterRepoIds: Set<string>

@@ -25,8 +25,8 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
 import {
-  isTerminalTabActivityLive,
   resolveTerminalTabActivityStatus,
+  resolveTerminalTabAttentionBadge,
   terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
 
@@ -143,9 +143,12 @@ export default function SortableTab({
     customTitle: tab.customTitle,
     onSetCustomTitle
   })
-  // Why: a live working/needs-input state is newer than a prior-turn unread, so it owns the icon until the turn ends.
+  // Why: a live working/needs-input state is newer than a prior-turn unread, and a failed turn still
+  // needs the user once read, so both own the icon over the bell (the ladder shared with Cmd+J).
   const showUnreadActivity =
-    hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
+    hasUnreadActivity &&
+    !isEditing &&
+    resolveTerminalTabAttentionBadge({ status: activityStatus, hasUnread: true }) === 'unread'
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
