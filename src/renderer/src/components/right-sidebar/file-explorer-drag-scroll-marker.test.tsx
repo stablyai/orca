@@ -267,7 +267,7 @@ function HandlersProbe({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElemen
     toggleDir: vi.fn(),
     loadDir: vi.fn(),
     statPath: vi.fn(),
-    authorizeExternalPath: vi.fn(),
+    grantExternalPath: vi.fn(),
     markPathAsDirectory: vi.fn(),
     setSelectedPath: vi.fn(),
     scrollRef

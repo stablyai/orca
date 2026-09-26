@@ -43,6 +43,14 @@ export function authorizeExternalPath(targetPath: string): void {
   } catch {}
 }
 
+export function recordAuthorizedExternalGrant(
+  resolvedTarget: string,
+  canonicalTarget: string
+): void {
+  rememberAuthorizedExternalPath(resolvedTarget)
+  rememberAuthorizedExternalPath(canonicalTarget)
+}
+
 /**
  * One allowed-root list shared by every check in a single authorization.
  *

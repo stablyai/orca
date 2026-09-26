@@ -15,7 +15,7 @@ const doubles = createTerminalLinkTestDoubles()
 const {
   storeState,
   deps,
-  authorizeExternalPathMock,
+  grantExternalFileMock,
   statMock,
   openFileMock,
   openFilePathMock,
@@ -67,7 +67,7 @@ describe('handleOscLink', () => {
     openDetectedFilePath('/tmp/src/main.ts', null, null, deps)
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
     await vi.waitFor(() => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
@@ -130,7 +130,7 @@ describe('handleOscLink', () => {
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(statMock).toHaveBeenCalledWith({
       filePath: '/home/me/repo/src/main.ts',
       connectionId: 'ssh-1'
@@ -172,7 +172,7 @@ describe('handleOscLink', () => {
     })
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
+    expect(grantExternalFileMock).not.toHaveBeenCalled()
     expect(statMock).toHaveBeenCalledWith({
       filePath: '/tmp/ssh-preview.png',
       connectionId: 'ssh-1'

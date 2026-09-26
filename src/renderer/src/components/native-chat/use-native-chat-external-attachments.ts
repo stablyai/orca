@@ -104,7 +104,11 @@ export function useNativeChatExternalAttachments({
               return
             }
             try {
-              await window.api.fs.authorizeExternalPath({ targetPath })
+              try {
+                await window.api.fs.grantExternalFile({ targetPath })
+              } catch {
+                await window.api.fs.grantExternalDirectory({ targetPath })
+              }
               authorizedPaths.push(targetPath)
             } catch {
               // Skip unreadable paths, matching workspace composer drops.

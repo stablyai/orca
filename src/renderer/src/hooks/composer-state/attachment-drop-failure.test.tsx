@@ -31,7 +31,10 @@ function installFsApi(): void {
   Object.assign(window, {
     api: {
       fs: {
-        authorizeExternalPath: vi.fn(async () => {}),
+        grantExternalFile: vi.fn(async () => {}),
+        grantExternalDirectory: vi.fn(async () => {
+          throw new Error('not a directory')
+        }),
         stat: vi.fn(async ({ filePath }: { filePath: string }) => {
           if (FAILING_PATHS.has(filePath)) {
             throw new Error(
