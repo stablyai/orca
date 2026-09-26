@@ -150,25 +150,26 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         )
       }
     }
-    const retried =
-      !submitWithPaste &&
-      (await writeAgentPromptSubmitRetry({
-        agent: foregroundAgent ?? launchAgent,
-        signal: options.signal,
-        assertWritable: async () => {
-          assertAgentPromptRequestActive(options.signal)
-          this.assertAgentPromptGeneration(ptyId, generation)
-          await options.beforeWrite?.(ptyId)
-          assertAgentPromptRequestActive(options.signal)
-          this.assertAgentPromptGeneration(ptyId, generation)
-          this.assertAgentPromptPermissionSafe(
-            permissionBaseline,
-            this.getAgentPromptActivity(handle, ptyId)
-          )
-        },
-        write: (data) => this.ptyController?.write(ptyId, data) === true
-      }))
-    const submits = retried ? 2 : 1
+    const retry = submitWithPaste
+      ? 'none'
+      : await writeAgentPromptSubmitRetry({
+          target: options.promptTarget,
+          agent: foregroundAgent ?? launchAgent,
+          signal: options.signal,
+          assertWritable: async () => {
+            assertAgentPromptRequestActive(options.signal)
+            this.assertAgentPromptGeneration(ptyId, generation)
+            await options.beforeWrite?.(ptyId)
+            assertAgentPromptRequestActive(options.signal)
+            this.assertAgentPromptGeneration(ptyId, generation)
+            this.assertAgentPromptPermissionSafe(
+              permissionBaseline,
+              this.getAgentPromptActivity(handle, ptyId)
+            )
+          },
+          write: (data) => this.ptyController?.write(ptyId, data) === true
+        })
+    const submits = retry === 'written' ? 2 : 1
     if (!inputAccepted) {
       await verifyAgentPromptSubmission({
         baseline,
@@ -214,7 +215,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         return { submits, prompt: inputAccepted }
       }
       // The input was accepted; a reset during the retry wait is the observation stage's to judge.
-      if (error instanceof Error && error.message === 'terminal_handle_stale') {
+      if (retry !== 'none' && error instanceof Error && error.message === 'terminal_handle_stale') {
         this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
         return { submits, prompt: inputAccepted }
       }

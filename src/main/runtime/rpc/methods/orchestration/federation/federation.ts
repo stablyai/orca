@@ -264,7 +264,11 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
             cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
           }),
-          dispatchPreambleSendOptions(orchestrationMutation.requestId)
+          {
+            ...dispatchPreambleSendOptions(orchestrationMutation.requestId),
+            // A `--terminal` worker's agent was already running; only a created one was just launched.
+            promptTarget: params.terminal ? undefined : 'just-launched-agent'
+          }
         )
         effects.push({
           kind: 'dispatch_input',

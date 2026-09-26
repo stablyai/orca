@@ -24,6 +24,7 @@
 import { randomUUID } from 'node:crypto'
 import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { AgentPromptTarget } from '../../runtime-terminal-contracts'
 
 /** The same budget orchestration gives a worker to reach its composer before dispatching to it. */
 const AGENT_READY_TIMEOUT_MS = 60_000
@@ -48,6 +49,8 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
   runtime: TerminalPromptRuntime
   handle: string
   text: string
+  /** Absent for a reused terminal, whose agent was already running. */
+  promptTarget?: AgentPromptTarget
 }): Promise<boolean> {
   if (args.text.trim().length === 0) {
     return false
@@ -73,7 +76,8 @@ export async function deliverTerminalAgentLaunchPrompt(args: {
       requestId: randomUUID(),
       // The launch reply should not wait out a turn that has already been handed over; what the
       // agent does with the text is the pane's to show, and no receipt arm claims it.
-      observationTimeoutMs: 0
+      observationTimeoutMs: 0,
+      ...(args.promptTarget ? { promptTarget: args.promptTarget } : {})
     })
     return sent.accepted
   } catch (error) {

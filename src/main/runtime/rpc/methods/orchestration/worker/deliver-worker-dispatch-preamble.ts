@@ -1,5 +1,6 @@
 import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-contracts'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { AgentPromptTarget } from '../../../../runtime-terminal-contracts'
 import {
   buildDispatchPreamble,
   dispatchPreambleSendOptions
@@ -28,6 +29,8 @@ export async function deliverWorkerDispatchPreamble(args: {
   dispatchCapability: string
   devMode: boolean | undefined
   requestId: string
+  /** Set when worker-start launched this agent in a terminal it created. */
+  promptTarget?: AgentPromptTarget
 }): Promise<RuntimeTerminalSend['prompt']> {
   const { runtime, structuredSession, terminalHandle } = args
   const preamble = buildDispatchPreamble({
@@ -54,10 +57,9 @@ export async function deliverWorkerDispatchPreamble(args: {
     return undefined
   }
   return (
-    await runtime.sendTerminalAgentPrompt(
-      terminalHandle,
-      preamble,
-      dispatchPreambleSendOptions(args.requestId)
-    )
+    await runtime.sendTerminalAgentPrompt(terminalHandle, preamble, {
+      ...dispatchPreambleSendOptions(args.requestId),
+      promptTarget: args.promptTarget
+    })
   ).prompt
 }

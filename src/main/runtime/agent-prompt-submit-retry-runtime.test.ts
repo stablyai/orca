@@ -5,6 +5,7 @@ import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { createAgentPromptSubmissionRuntime } from './agent-prompt-submission-runtime-test-fixture'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { dispatchPreambleSendOptions } from './orchestration/preamble'
+import type { RuntimeAgentPromptWriteOptions } from './runtime-terminal-contracts'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -28,6 +29,11 @@ vi.mock('../git/worktree', () => ({
 }))
 
 const RETRY_DELAY_MS = TUI_AGENT_CONFIG.codex.submitRetryDelayMs!
+
+// Worker-start's send into a Codex it just launched in a terminal it created.
+function launchSendOptions(requestId: string): RuntimeAgentPromptWriteOptions {
+  return { ...dispatchPreambleSendOptions(requestId), promptTarget: 'just-launched-agent' }
+}
 
 type Enter = { at: number }
 
@@ -65,7 +71,7 @@ function trackSettled<T>(promise: Promise<T>): { settled: () => boolean } {
   return { settled: () => settled }
 }
 
-describe('host Codex retry Enter', () => {
+describe('host Codex retry Enter for a just-launched agent', () => {
   afterEach(() => vi.useRealTimers())
 
   it('writes one retry Enter on the dispatch path before the send returns', async () => {
@@ -75,7 +81,7 @@ describe('host Codex retry Enter', () => {
     const send = runtime.sendTerminalAgentPrompt(
       handle,
       'dispatch brief',
-      dispatchPreambleSendOptions('dispatch-retry')
+      launchSendOptions('dispatch-retry')
     )
     const tracked = trackSettled(send)
     await vi.advanceTimersByTimeAsync(0)
@@ -108,7 +114,7 @@ describe('host Codex retry Enter', () => {
     const send = runtime.sendTerminalAgentPrompt(
       handle,
       'dispatch brief',
-      dispatchPreambleSendOptions('dispatch-retry-started')
+      launchSendOptions('dispatch-retry-started')
     )
     await vi.runAllTimersAsync()
 
@@ -125,12 +131,35 @@ describe('host Codex retry Enter', () => {
     const send = runtime.sendTerminalAgentPrompt(
       handle,
       'dispatch brief',
-      dispatchPreambleSendOptions('dispatch-claude')
+      launchSendOptions('dispatch-claude')
     )
     await vi.runAllTimersAsync()
     await send
 
     expect(enters).toHaveLength(1)
+  })
+
+  it('sends a Codex that was not just launched exactly one Enter', async () => {
+    vi.useFakeTimers()
+    const { runtime, handle, enters } = await createRetryRuntime('codex')
+
+    // Re-dispatch or coordinator dispatch to a running worker, then `terminal send --enter`.
+    const dispatch = runtime.sendTerminalAgentPrompt(
+      handle,
+      'dispatch brief',
+      dispatchPreambleSendOptions('dispatch-running')
+    )
+    await vi.runAllTimersAsync()
+    await dispatch
+    expect(enters).toHaveLength(1)
+
+    const send = runtime.sendTerminalAgentPrompt(handle, 'follow-up', {
+      acceptQueued: true,
+      requestId: 'terminal-send-running'
+    })
+    await vi.runAllTimersAsync()
+    await send
+    expect(enters).toHaveLength(2)
   })
 
   it('skips the retry when the request is aborted and keeps the accepted receipt', async () => {
@@ -144,7 +173,7 @@ describe('host Codex retry Enter', () => {
     const accepted = vi.fn()
 
     const send = runtime.sendTerminalAgentPrompt(handle, 'dispatch brief', {
-      ...dispatchPreambleSendOptions('dispatch-aborted'),
+      ...launchSendOptions('dispatch-aborted'),
       signal: controller.signal,
       onInputAccepted: accepted
     })
@@ -173,7 +202,7 @@ describe('host Codex retry Enter', () => {
     const send = runtime.sendTerminalAgentPrompt(
       handle,
       'dispatch brief',
-      dispatchPreambleSendOptions('dispatch-reset')
+      launchSendOptions('dispatch-reset')
     )
     await vi.runAllTimersAsync()
 
@@ -189,7 +218,7 @@ describe('host Codex retry Enter', () => {
     let guardCalls = 0
 
     const send = runtime.sendTerminalAgentPrompt(handle, 'dispatch brief', {
-      ...dispatchPreambleSendOptions('dispatch-guard'),
+      ...launchSendOptions('dispatch-guard'),
       beforeWrite: async () => {
         guardCalls += 1
         if (guardCalls > 2) {
@@ -217,7 +246,7 @@ describe('host Codex retry Enter', () => {
     const send = runtime.sendTerminalAgentPrompt(
       handle,
       'dispatch brief',
-      dispatchPreambleSendOptions('dispatch-permission')
+      launchSendOptions('dispatch-permission')
     )
     await vi.runAllTimersAsync()
 

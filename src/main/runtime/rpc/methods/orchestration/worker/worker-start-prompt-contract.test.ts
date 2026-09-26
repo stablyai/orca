@@ -58,7 +58,9 @@ type PromptContractHarness = {
 
 // 'first-swallowed': Codex's cold-boot gate eats the first Enter and the retry Enter submits.
 async function createPromptContractHarness(
-  outcome: 'accepted' | 'first-swallowed' | 'swallowed'
+  outcome: 'accepted' | 'first-swallowed' | 'swallowed',
+  // 'reused-terminal': `--terminal` names a pane whose agent was already running.
+  placement: 'created-terminal' | 'reused-terminal' = 'created-terminal'
 ): Promise<PromptContractHarness> {
   let composerReady = false
   let draftPending = false
@@ -119,11 +121,17 @@ async function createPromptContractHarness(
     candidate === handle ? `runtime_test:${handle}:1` : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
-  vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
-    handle: 'term_coord',
-    worktreeId: 'repo::parent',
-    status: 'running'
-  } as never)
+  const reused = placement === 'reused-terminal'
+  vi.spyOn(runtime, 'showTerminal').mockImplementation(
+    async (candidate) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worker-start reads only handle, worktreeId and status from a shown terminal here.
+      ({
+        handle: candidate,
+        worktreeId: reused ? AGENT_PROMPT_TEST_WORKTREE_ID : 'repo::parent',
+        status: 'running'
+      }) as never
+  )
+  vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
   vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
     id: 'repo::parent',
     repoId: 'repo-1'
@@ -156,9 +164,9 @@ async function createPromptContractHarness(
       params: {
         task: task.id,
         from: 'term_coord',
-        worktree: 'new-child',
-        name: `prompt-contract-${outcome}`,
-        agent: 'codex'
+        ...(reused
+          ? { worktree: 'current', terminal: handle }
+          : { worktree: 'new-child', name: `prompt-contract-${outcome}`, agent: 'codex' })
       }
     },
     requestId: `${REQUEST_ID}_${outcome}`,
@@ -412,6 +420,27 @@ describe('orchestration worker-start prompt contract', () => {
     expect(harness.enters()).toBe(2)
     expect(harness.startedTurns()).toBe(1)
     expect(harness.prematureSubmits()).toBe(0)
+  })
+
+  it('sends one Enter to a `--terminal` worker, whose agent was already running', async () => {
+    vi.useFakeTimers()
+    const harness = await createPromptContractHarness('accepted', 'reused-terminal')
+    const pending = harness.dispatcher.dispatch(harness.request)
+
+    await vi.runAllTimersAsync()
+    const response = await pending
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        state: 'ready',
+        effects: expect.arrayContaining([
+          expect.objectContaining({ kind: 'terminal', action: 'reused', id: harness.handle })
+        ])
+      }
+    })
+    expect(harness.pastes()).toBe(1)
+    expect(harness.enters()).toBe(1)
+    expect(harness.startedTurns()).toBe(1)
   })
 
   it('does not attribute output from the old busy turn to a queued prompt', async () => {

@@ -6,6 +6,7 @@
 
 import type { AgentLaunchPrompt } from '../../shared/agent-launch-intent'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { AgentPromptTarget } from '../runtime/runtime-terminal-contracts'
 
 /** How a surface is built once the executor has decided which one. Injected because an
  *  orchestration worker's session carries a dispatch hold and a mailbox a plain launch must not
@@ -61,7 +62,12 @@ export type AgentLaunchSurfaceFactory = {
    * running before this launch existed. `false` for every failure, on the same rule the structured
    * twin follows — a launch whose agent is running must not fail because its text did not land.
    */
-  deliverTerminalPrompt?(args: { handle: string; prompt: AgentLaunchPrompt }): Promise<boolean>
+  deliverTerminalPrompt?(args: {
+    handle: string
+    prompt: AgentLaunchPrompt
+    /** Absent for a reused terminal, whose agent was already running. */
+    promptTarget?: AgentPromptTarget
+  }): Promise<boolean>
 }
 
 /** `fence` is the lease the create was admitted at, carried so the launch prompt's send can fill its

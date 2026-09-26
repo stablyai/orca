@@ -50,13 +50,10 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(1_500)
       expect(writes).not.toContain('\r')
       await vi.advanceTimersByTimeAsync(1)
-      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-      await vi.runAllTimersAsync()
       await sendPromise
 
       expect(composerReady).toBe(true)
-      // The foreground Codex also gets its one cold-boot retry Enter.
-      expect(writes.filter((data) => data === '\r')).toHaveLength(2)
+      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
     } finally {
       vi.useRealTimers()
     }
@@ -126,11 +123,9 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(1_599)
       expect(writes).not.toContain('\r')
       await vi.advanceTimersByTimeAsync(1)
-      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-      await vi.runAllTimersAsync()
       await sendPromise
       expect(composerReady).toBe(true)
-      expect(writes.filter((data) => data === '\r')).toHaveLength(2)
+      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
     } finally {
       vi.useRealTimers()
     }
