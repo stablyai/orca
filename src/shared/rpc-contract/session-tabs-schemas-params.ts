@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CUSTOM_TAB_TITLE_MAX_LENGTH } from '../custom-tab-title'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../tab-activation-intent'
 import { OptionalBoolean } from './rpc-param-primitives'
@@ -127,6 +128,8 @@ export const SetTabProps = WorktreeTabSelector.extend({
     .pipe(z.string().min(1, 'Missing tab id')),
   // undefined = leave unchanged; null = clear color / unset.
   color: z.string().max(64).nullable().optional(),
+  // undefined = leave unchanged; null = clear the user-authored title.
+  customTitle: z.string().max(CUSTOM_TAB_TITLE_MAX_LENGTH).nullable().optional(),
   isPinned: z.boolean().optional(),
   // undefined = leave unchanged; no "clear" semantic (absence means default 'terminal').
   viewMode: z.enum(['terminal', 'chat']).optional()

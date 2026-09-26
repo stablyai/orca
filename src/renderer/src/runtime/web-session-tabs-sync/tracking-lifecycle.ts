@@ -27,6 +27,7 @@ import {
 } from '../web-runtime-initial-terminal-bootstrap'
 import { clearWebSessionReorderIntentsForWorktree } from '../web-session-reorder-intent'
 import { clearWebSessionCloseIntentsForWorktree } from '../web-session-close-intent'
+import { clearWebSessionCustomTitleIntentsForWorktree } from '../web-session-custom-title-intent'
 import {
   clearWebAgentSessionHandoffsForWorktree,
   clearWebAgentSessionHandoffsForEnvironment
@@ -169,6 +170,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
   clearWebSessionReorderIntentsForWorktree({ environmentId }, worktreeId)
   clearWebSessionCloseIntentsForWorktree({ environmentId }, worktreeId)
+  clearWebSessionCustomTitleIntentsForWorktree(environmentId, worktreeId)
   clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)
   clearHostSessionTabIdMappings(environmentId, worktreeId)
   clearWebSessionBrowserPlacementsForWorktree(environmentId, worktreeId)
