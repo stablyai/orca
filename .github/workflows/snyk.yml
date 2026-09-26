@@ -1,0 +1,112 @@
+name: Snyk Security
+
+# Snyk CI/CD integration.
+# - Snyk Open Source (SCA): scans dependency manifests (root + mobile/ pnpm lockfiles).
+# - Snyk Code (SAST): static analysis of our own TS/Electron source.
+# Findings are uploaded to the GitHub Security tab (Code Scanning) as SARIF, and
+# a High/Critical finding blocks the PR. On pushes to main we additionally take a
+# `snyk monitor` snapshot so Snyk alerts us about newly disclosed vulns later.
+#
+# Requires repo/org secret SNYK_TOKEN (app.snyk.io -> Account settings -> Auth Token,
+# or a service-account token). Snyk Code must be enabled once in the org settings.
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  push:
+    branches:
+      - main
+
+# Cancel superseded runs on the same ref to save Snyk test quota.
+concurrency:
+  group: snyk-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Needed to upload SARIF results to the GitHub Security tab (free on public repos).
+  security-events: write
+  actions: read
+
+jobs:
+  snyk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Install Snyk CLI
+        uses: snyk/actions/setup@master
+
+      # SCA: --all-projects auto-detects every manifest, so both the root and
+      # mobile/ pnpm-lock.yaml are scanned in one pass. Snyk reads the lockfiles
+      # directly, so no heavy `pnpm install` (native node-pty builds) is needed.
+      # continue-on-error lets the SARIF upload run even when vulns are found;
+      # the final gate step re-fails the job so High/Critical still blocks the PR.
+      # SNYK_TOKEN is withheld from fork PRs, so scanning them would only error.
+      # Skip the scans on fork PRs (the job still reports a green check, so this
+      # can be a required status without blocking external contributors); fork
+      # changes get covered by the `snyk monitor` snapshot once merged to main.
+      - name: Snyk Open Source (SCA)
+        id: sca
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk test --all-projects --severity-threshold=high --sarif-file-output=snyk-sca.sarif
+
+      - name: Snyk Code (SAST)
+        id: code
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk code test --severity-threshold=high --sarif-file-output=snyk-code.sarif
+
+      # Separate categories so SCA and Code results don't overwrite each other in
+      # the Security tab. `if: always()` + `continue-on-error` so a missing SARIF
+      # (e.g. a scan that errored out) never masks the real gate below.
+      - name: Upload SCA results
+        if: always() && hashFiles('snyk-sca.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk-sca.sarif
+          category: snyk-open-source
+
+      - name: Upload Code results
+        if: always() && hashFiles('snyk-code.sarif') != ''
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk-code.sarif
+          category: snyk-code
+
+      # Snapshot the project so Snyk keeps watching it and alerts on vulns
+      # disclosed after this run. Only on main to avoid one snapshot per PR.
+      - name: Snyk monitor (baseline)
+        if: github.event_name == 'push'
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: snyk monitor --all-projects
+
+      # Gate: fail the PR when either scan reported a High/Critical finding.
+      # snyk exits 1 when issues at/above the threshold are found.
+      - name: Enforce High/Critical gate
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ "${{ steps.sca.outcome }}" = "failure" ] || [ "${{ steps.code.outcome }}" = "failure" ]; then
+            echo "::error::Snyk found High/Critical issues. See the Security tab for details."
+            exit 1
+          fi
+          echo "No High/Critical Snyk issues."
