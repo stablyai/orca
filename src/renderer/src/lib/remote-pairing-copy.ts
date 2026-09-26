@@ -1,7 +1,5 @@
-import type {
-  HostAccessLinkErrorKind,
-  RemotePairingEndpointKind
-} from '../../../shared/remote-pairing-address'
+import type { HostAccessLinkErrorKind } from '../../../shared/remote-pairing-access-link'
+import type { RemotePairingEndpointKind } from '../../../shared/remote-pairing-endpoint'
 import type { RemotePairingFailureKind } from '../../../shared/remote-pairing-verification'
 import { translate } from '@/i18n/i18n'
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from './pairing'
-import { classifyRemotePairingHostname, parseHostAccessLink } from './remote-pairing-address'
+import { parseHostAccessLink } from './remote-pairing-access-link'
 
 function accessLink(endpoint: string): string {
   return encodePairingOffer({
@@ -12,30 +12,7 @@ function accessLink(endpoint: string): string {
   })
 }
 
-describe('remote pairing address', () => {
-  it.each([
-    ['127.0.0.1', 'loopback'],
-    ['localhost', 'loopback'],
-    ['localhost.', 'loopback'],
-    ['api.localhost', 'loopback'],
-    ['api.localhost.', 'loopback'],
-    ['localhost.localdomain', 'loopback'],
-    ['localhost6', 'loopback'],
-    ['ip6-localhost', 'loopback'],
-    ['::1', 'loopback'],
-    ['::ffff:7f00:1', 'loopback'],
-    ['100.76.32.125', 'tailscale'],
-    ['::ffff:644c:207d', 'tailscale'],
-    ['192.168.1.20', 'lan'],
-    ['10.0.0.8', 'lan'],
-    ['fd7a:115c:a1e0::1', 'lan'],
-    ['fe80::1', 'lan'],
-    ['orca.example.com', 'public'],
-    ['devbox', 'custom']
-  ] as const)('classifies %s as %s', (hostname, expected) => {
-    expect(classifyRemotePairingHostname(hostname)).toBe(expected)
-  })
-
+describe('host access link parsing', () => {
   it('extracts a sanitized display endpoint without credentials', () => {
     expect(parseHostAccessLink(accessLink('wss://orca.example.com/runtime'))).toEqual({
       ok: true,

@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { EMPTY_FORM, type EditingTarget } from '../settings/ssh-target-draft'
 import type { SshConfigHostSummary } from '../../../../shared/ssh-types'
-import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
+import { parseHostAccessLink } from '../../../../shared/remote-pairing-access-link'
 import {
   translateHostAccessLinkError,
   translateRemotePairingFailureDescription

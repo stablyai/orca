@@ -1,6 +1,6 @@
 import { ChevronDown, Loader2, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
+import { parseHostAccessLink } from '../../../../shared/remote-pairing-access-link'
 import type { RemotePairingFailureKind } from '../../../../shared/remote-pairing-verification'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'

@@ -2,7 +2,7 @@ import {
   addEnvironmentFromPairingCode,
   RuntimeEnvironmentStoreError
 } from '../../shared/runtime-environment-store'
-import { parseHostAccessLink } from '../../shared/remote-pairing-address'
+import { parseHostAccessLink } from '../../shared/remote-pairing-access-link'
 import {
   verifyRemotePairingRuntimeStatus,
   type VerifyAndAddRuntimeEnvironmentResult
