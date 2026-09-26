@@ -1929,7 +1929,11 @@
         "4b8ae7303f": "Failed to load diff.",
         "closePullRequestFailed": "Failed to close pull request",
         "reopenPullRequestFailed": "Failed to reopen pull request",
-        "diffLoadTimedOut": "Timed out loading this diff."
+        "diffLoadTimedOut": "Timed out loading this diff.",
+        "576272291a": "Copied",
+        "b398ff2f60": "Couldn't copy",
+        "1d737fe9e4": "Copy all",
+        "9758579efc": "Nothing to copy"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
