@@ -315,7 +315,24 @@ describe('runTerminalViewportFitPass', () => {
     expect(h.budget.attempts(HANDLE)).toBe(1)
   })
 
-  it('converges on the viewport the subscribe carried, even after a refit cleared the measured flag', async () => {
+  it('re-measures a stale sent viewport after the flag was cleared, and resubscribes at the phone size', async () => {
+    const stale = { cols: 80, rows: 30 }
+    const h = makeHarness({
+      hostCols: stale.cols,
+      hostRows: stale.rows,
+      viewportMeasured: false,
+      viewport: stale,
+      sentViewport: stale,
+      measured: PHONE
+    })
+    runTerminalViewportFitPass(h.args)
+    await settle()
+    expect(h.unsubscribeTerminal).toHaveBeenCalledTimes(1)
+    expect(h.subscribeToTerminal).toHaveBeenCalledTimes(1)
+    expect(h.args.viewportRef.current).toEqual(PHONE)
+  })
+
+  it('re-measures locally and skips the round trip when the host matches the viewport the subscribe carried', async () => {
     const h = makeHarness({
       hostCols: PHONE.cols,
       hostRows: PHONE.rows,
