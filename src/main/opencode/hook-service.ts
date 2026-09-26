@@ -131,10 +131,18 @@ export class OpenCodeHookService {
     if (!existingConfigDir || existingConfigDir === managedConfigDir) {
       try {
         this.writePluginToConfigDir(resolveOpenCodeConfigDirectory())
-        return {}
       } catch {
-        return {}
+        // The managed directory may still be writable.
       }
+      try {
+        // Why: older installs and inherited env still load plugins from
+        // userData/opencode-hooks/shared via OPENCODE_CONFIG_DIR; refresh that
+        // copy too so a plain `opencode` does not keep a pre-setup() template (#22764).
+        this.writePluginToConfigDir(managedConfigDir)
+      } catch {
+        // Both writes are best effort.
+      }
+      return {}
     }
     if (!existsSync(existingConfigDir)) {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
