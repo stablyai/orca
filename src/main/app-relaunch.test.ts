@@ -1,20 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { appRelaunchMock, recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
+const { appRelaunchMock, appExitMock, recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
   appRelaunchMock: vi.fn(),
+  appExitMock: vi.fn(),
   recordDurableCrashBreadcrumbMock: vi.fn()
 }))
 
-vi.mock('electron', () => ({ app: { relaunch: appRelaunchMock } }))
+vi.mock('electron', () => ({ app: { relaunch: appRelaunchMock, exit: appExitMock } }))
 vi.mock('./crash-reporting/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))
 
-import { relaunchApp } from './app-relaunch'
+import { relaunchAndExitImmediately, relaunchApp } from './app-relaunch'
+import { COMMITTED_QUIT_BREADCRUMB_NAME } from './crash-reporting/committed-quit-breadcrumb'
 import { _resetHydrateShellPathCache, _setLaunchPathForTests } from './startup/hydrate-shell-path'
 
 beforeEach(() => {
   appRelaunchMock.mockReset()
+  appExitMock.mockReset()
   recordDurableCrashBreadcrumbMock.mockReset()
 })
 
@@ -57,5 +60,32 @@ describe('relaunchApp', () => {
 
     expect(inheritedPath).toBe('/usr/bin')
     expect(process.env.PATH).toBe('/seeded/newest-nvm/bin:/usr/bin')
+  })
+})
+
+describe('relaunchAndExitImmediately', () => {
+  // app.exit() fires neither before-quit nor will-quit, so this is the only place the
+  // committed-quit crumb can be written for a deliberate restart. Without it the next
+  // launch publishes previousMainProcessDiedAbruptly: true and backfills
+  // mainProcessDiedAbruptly onto the very reports the GPU crash just created.
+  it('closes the launch with a committed-quit crumb before exiting', () => {
+    relaunchAndExitImmediately('gpu-fallback', { mode: 'hardware-retry' })
+
+    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith(COMMITTED_QUIT_BREADCRUMB_NAME, {
+      quitReason: 'relaunch-exit'
+    })
+    expect(appExitMock).toHaveBeenCalledWith(0)
+    expect(recordDurableCrashBreadcrumbMock.mock.invocationCallOrder[0]).toBeLessThan(
+      appExitMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('still records the relaunch reason the crash trail already carried', () => {
+    relaunchAndExitImmediately('renderer-request')
+
+    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith('app_relaunch_requested', {
+      reason: 'renderer-request'
+    })
+    expect(appRelaunchMock).toHaveBeenCalledOnce()
   })
 })

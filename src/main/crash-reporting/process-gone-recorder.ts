@@ -3,8 +3,7 @@ import { app } from 'electron'
 import {
   isCrashReportReason,
   sanitizeCrashReportDetails,
-  sanitizeCrashReportString,
-  type CrashReportBreadcrumbData
+  sanitizeCrashReportString
 } from '../../shared/crash-reporting'
 import { decodePosixWaitStatus, describePosixWaitStatus } from '../../shared/posix-wait-status'
 import { rendererCrashBreadcrumbOrigin } from '../../shared/crash-breadcrumb-origin'
@@ -24,7 +23,12 @@ import {
   type ProcessGoneSource
 } from './process-gone-classification'
 import { buildProcessGoneCrashDetails } from './process-gone-diagnostics'
-import { buildSuppressedProcessGoneBreadcrumbData } from './suppressed-process-gone-breadcrumb'
+import { previousLaunchExitDetails } from './previous-launch-exit-verdict'
+import {
+  buildSuppressedProcessGoneBreadcrumbData,
+  SUPPRESSED_PROCESS_GONE_COALESCE_MS,
+  suppressedProcessGoneCoalesceKey
+} from './suppressed-process-gone-breadcrumb'
 import {
   getProcessGoneDedupeKey,
   processGoneDedupe,
@@ -77,29 +81,10 @@ function expectedCrashpadProcessType(event: ProcessGoneCrashEvent): string | nul
 const captureProcessMinidump: MinidumpCapture = (crashedAtMs, expectedProcessType) =>
   captureMinidumpSignature(crashedAtMs, { expectedProcessType })
 
-// Why: the coalesce map prunes every key against the calling window, so a shorter
-// one here would weaken the other 30s coalescers. Stay uniform with them.
-const SUPPRESSED_PROCESS_GONE_COALESCE_MS = 30_000
-
 function processGoneRendererOrigin(event: ProcessGoneCrashEvent): string | undefined {
   return event.webContentsId === undefined
     ? undefined
     : rendererCrashBreadcrumbOrigin(event.webContentsId)
-}
-
-// Why: key off the emitted breadcrumb, not the crash-report dedupe key, so two
-// different recoverable services can never suppress each other's evidence.
-function suppressedProcessGoneCoalesceKey(data: CrashReportBreadcrumbData): string {
-  return JSON.stringify([
-    data.source,
-    data.processType,
-    data.reason,
-    data.exitCode,
-    data.expectedTeardown,
-    data.serviceName ?? null,
-    data.name ?? null,
-    data.type ?? null
-  ])
 }
 
 // Why: POSIX exit codes arrive as raw wait statuses (61696 = exit 241); name the
@@ -251,9 +236,13 @@ export function recordProcessGoneCrash(
       ...siblingDetails,
       // Why: an Orca-issued kill and an external one are identical in every other
       // recorded field, so this is what answers "did we do this to ourselves?"
-      ...selfInitiatedTreeKillDetails(goneAt)
+      ...selfInitiatedTreeKillDetails(goneAt),
+      // Why on this report: a whole-app death leaves no report of its own, so the run
+      // that follows is the only place its abruptness can surface.
+      ...previousLaunchExitDetails()
     },
-    event.processType
+    event.processType,
+    goneAt
   )
   const breadcrumbs = getCrashBreadcrumbSnapshot(processGoneRendererOrigin(event))
   const reportBreadcrumbs = breadcrumbs?.map(({ origin: _origin, ...breadcrumb }) => breadcrumb)

@@ -1,5 +1,5 @@
 import { app, type BrowserWindow } from 'electron'
-import { relaunchApp } from '../app-relaunch'
+import { relaunchAndExitImmediately } from '../app-relaunch'
 import { destroySystemTray } from '../tray/system-tray'
 import { applyGpuFallbackCommandLineSwitches } from './gpu-fallback-switches'
 import {
@@ -122,12 +122,11 @@ export async function presentGpuFallbackRecoveredLaunchPrompt(
       }),
     restartWithHardware: () => {
       state.isQuitting = true
-      relaunchApp('gpu-fallback', {
+      destroySystemTray()
+      relaunchAndExitImmediately('gpu-fallback', {
         mode: 'hardware-retry',
         crashesInWindow: marker.crashesInWindow
       })
-      destroySystemTray()
-      app.exit(0)
     }
   })
 }
@@ -253,9 +252,8 @@ export async function handleGpuChildCrash(
         recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData),
       restartIntoSafeGraphics: () => {
         state.isQuitting = true
-        relaunchApp('gpu-fallback', fallbackData)
         destroySystemTray()
-        app.exit(0)
+        relaunchAndExitImmediately('gpu-fallback', fallbackData)
       }
     }
   )
