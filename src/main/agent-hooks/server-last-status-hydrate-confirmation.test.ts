@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
-import { buildBody, postHookEvent, recentTs, PANE, GOOD_PANE } from './server.test-fixtures'
+import { buildBody, postHookEvent, recentTs, PANE } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -301,36 +301,12 @@ describe('Last-status persistence', () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
     try {
-      const clearListener = vi.fn()
-      server.setPaneStatusClearListener(clearListener)
       server.ingestRemote(
         { paneKey: PANE, payload: { state: 'working', agentType: 'codex' } },
         'ssh-a'
       )
 
       expect(server.getStatusSnapshot()[0]?.receivedAt).toBe(receivedAt + 1)
-      server.clearStatusEntriesForConnection('ssh-a')
-      const clearedAt = receivedAt + 2
-      expect(clearListener).toHaveBeenCalledWith({
-        transient: true,
-        connectionId: 'ssh-a',
-        clearedAt
-      })
-      server.ingestRemote(
-        {
-          paneKey: GOOD_PANE,
-          isReplay: true,
-          payload: { state: 'working', agentType: 'claude' }
-        },
-        'ssh-a'
-      )
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: GOOD_PANE,
-          connectionId: 'ssh-a',
-          receivedAt: clearedAt + 1
-        })
-      ])
     } finally {
       server.stop()
     }

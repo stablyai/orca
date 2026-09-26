@@ -155,10 +155,12 @@ describe('AgentHookServer authority evidence', () => {
       })
     ).toBeNull()
 
-    server.clearStatusEntriesForConnection('ssh-target')
+    server.clearPaneState(SECOND_PANE_KEY)
 
     expect(server.getHydratedAuthorityCommitments()).toBe(commitments)
-    expect(server.getCurrentAuthorityObservations()).toEqual([])
+    expect(server.getCurrentAuthorityObservations()).toEqual([
+      expect.objectContaining({ paneKey: PANE_KEY })
+    ])
     expect(
       server.attestCompatibilityAuthority({
         paneKey: PANE_KEY,
@@ -166,7 +168,7 @@ describe('AgentHookServer authority evidence', () => {
         connectionId: 'ssh-target',
         terminalProvenance: 'restored'
       })
-    ).toEqual({ paneKey: PANE_KEY, source: 'hydrated_commitment' })
+    ).toEqual({ paneKey: PANE_KEY, source: 'current_hook' })
 
     server.clearPaneState(PANE_KEY)
 

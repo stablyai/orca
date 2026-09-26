@@ -164,59 +164,6 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     return paneHasStateClaims(this.state, paneKey)
   }
 
-  /** Clear statuses proven to belong to one lost SSH transport. */
-  clearStatusEntriesForConnection(connectionId: string): void {
-    const normalizedConnectionId = connectionId.trim()
-    if (normalizedConnectionId.length === 0) {
-      return
-    }
-    const clearedAt = Math.max(
-      Date.now(),
-      (this.connectionTimestampWatermarkById.get(normalizedConnectionId) ?? -1) + 1
-    )
-    this.connectionTimestampWatermarkById.set(normalizedConnectionId, clearedAt)
-    let statusChanged = false
-    for (const [paneKey, rawEntry] of this.state.lastStatusByPaneKey) {
-      const entry = rawEntry as EnrichedAgentHookEventPayload
-      // Why: unstamped rows can't be attributed to one host; leave them for normal pane teardown.
-      if (entry.connectionId !== normalizedConnectionId) {
-        continue
-      }
-      const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
-      if (deleted) {
-        statusChanged = true
-        this.commitStatusRowMutation(deleted, undefined)
-        if (deleted.payload.agentType === 'codex') {
-          // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
-          this.state.codexSubagentRosterByPaneKey.delete(paneKey)
-          this.state.codexLeadStateByPaneKey.delete(paneKey)
-        } else if (deleted.payload.agentType === 'claude') {
-          this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
-          this.state.claudeLeadStateByPaneKey.delete(paneKey)
-          this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-          this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-          this.state.claudeSessionOwnerByPaneKey.delete(paneKey)
-        }
-      }
-    }
-    for (const [paneKey, evidence] of this.currentAuthorityObservations) {
-      if (evidence.connectionId === normalizedConnectionId) {
-        this.currentAuthorityObservations.delete(paneKey)
-      }
-    }
-    if (statusChanged) {
-      // Why: persist/notify once — one disconnect can own many panes.
-      this.scheduleStatusPersist()
-      this.notifyStatusChangeListeners()
-    }
-    // Why: always send the cutoff even with no matched entry — another host may have overwritten this pane's row.
-    this.emitPaneStatusCleared({
-      transient: true,
-      connectionId: normalizedConnectionId,
-      clearedAt
-    })
-  }
-
   protected deleteStatusEntry(
     paneKey: string,
     options?: { preserveAuthority?: boolean }

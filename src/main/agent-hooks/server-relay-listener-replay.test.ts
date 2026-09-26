@@ -84,47 +84,6 @@ describe('AgentHookServer listener replay', () => {
     })
   })
 
-  it('does not carry a remote Codex roster across connection cleanup', () => {
-    const server = new AgentHookServer()
-    const child = (id: string) => ({
-      id,
-      state: 'working' as const,
-      startedAt: 1
-    })
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        hookEventName: 'SubagentStart',
-        toolAgentId: 'old-child',
-        payload: {
-          state: 'working',
-          prompt: '',
-          agentType: 'codex',
-          subagents: [child('old-child')]
-        }
-      },
-      'conn-1'
-    )
-
-    server.clearStatusEntriesForConnection('conn-1')
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        hookEventName: 'SubagentStart',
-        toolAgentId: 'new-child',
-        payload: {
-          state: 'working',
-          prompt: '',
-          agentType: 'codex',
-          subagents: [child('new-child')]
-        }
-      },
-      'conn-2'
-    )
-
-    expect(server.getStatusSnapshot()[0]?.subagents).toEqual([child('new-child')])
-  })
-
   it('restores a subagent roster the relay shed to fit the frame', () => {
     const server = new AgentHookServer()
     const roster = [
@@ -168,46 +127,6 @@ describe('AgentHookServer listener replay', () => {
       'conn-1'
     )
     expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
-  })
-
-  it('does not carry Claude background work across connection cleanup', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    try {
-      const server = new AgentHookServer()
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          claudeRunningNonAgentTask: true,
-          payload: { state: 'working', prompt: 'old host', agentType: 'claude' }
-        },
-        'conn-1'
-      )
-
-      server.clearStatusEntriesForConnection('conn-1')
-      server.ingestRemote(
-        {
-          paneKey: PANE,
-          payload: { state: 'working', prompt: 'new host', agentType: 'claude' }
-        },
-        'conn-2'
-      )
-      const baseline = server.getStatusSnapshot()[0]
-      vi.setSystemTime(1_500)
-
-      expect(
-        server.inferInterrupt({
-          paneKey: PANE,
-          baselineUpdatedAt: baseline.receivedAt,
-          baselineStateStartedAt: baseline.stateStartedAt,
-          baselinePrompt: 'new host',
-          baselineAgentType: 'claude',
-          intent: 'ctrl-c'
-        })
-      ).toBe(true)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('retains root Codex identity when relay child events omit it', () => {
