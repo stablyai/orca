@@ -18,10 +18,7 @@ import {
   persistWorkspaceSessionByHost
 } from '@/lib/workspace-session-host-persistence'
 import type { AppState } from '../types'
-import {
-  captureRecoveryApplySnapshot,
-  rollbackFailedRecoveryApply
-} from './cross-machine-recovery-apply-rollback'
+import { rollbackFailedRecoveryApply } from './cross-machine-recovery-apply-rollback'
 import type { OpenFile } from './editor'
 import { resolveEditorFileIdForOwner } from './editor/file-ids/editor-file-ids'
 import {
@@ -182,32 +179,89 @@ async function ensureLocalDestinationKnown(
   }
 }
 
+function recoveryApplyDestinations(op: CrossMachineRecoveryApplyOp): string[] {
+  switch (op.kind) {
+    case 'import':
+      return [op.fragment.worktreeId]
+    case 'merge-records':
+      return [...new Set(op.records.map((record) => record.worktreeId))]
+    case 'claim-record':
+      return [op.worktreeId]
+    case 'restore-record':
+      return [op.record.worktreeId]
+  }
+}
+
+const applyTailsByStore = new WeakMap<RecoveryStore, Map<string, Promise<void>>>()
+
+// Why: the host's timeout leaves an earlier apply running, so a retry must judge the destination
+// only after that apply persisted or rolled back, or its rollback erases the acknowledged retry.
+async function serializedByDestination<T>(
+  store: RecoveryStore,
+  destinations: readonly string[],
+  run: () => Promise<T>
+): Promise<T> {
+  const tails = applyTailsByStore.get(store) ?? new Map<string, Promise<void>>()
+  applyTailsByStore.set(store, tails)
+  const predecessors = destinations.flatMap((destination) => tails.get(destination) ?? [])
+  const current = Promise.all(predecessors).then(run)
+  const settled = current.then(
+    () => undefined,
+    () => undefined
+  )
+  for (const destination of destinations) {
+    tails.set(destination, settled)
+  }
+  try {
+    return await current
+  } finally {
+    for (const destination of destinations) {
+      if (tails.get(destination) === settled) {
+        tails.delete(destination)
+      }
+    }
+  }
+}
+
+async function applyAndPersist(
+  store: RecoveryStore,
+  api: RecoveryPreloadApi,
+  op: CrossMachineRecoveryApplyOp
+): Promise<CrossMachineRecoveryApplyOutcome> {
+  if (op.kind === 'import') {
+    await ensureLocalDestinationKnown(store, op.fragment.worktreeId)
+  }
+  const before = store.getState()
+  const outcome = applyCrossMachineRecoveryOpToStore(store, op)
+  if (!outcome.ok) {
+    return outcome
+  }
+  const staged = store.getState()
+  try {
+    // Why: the host treats this reply as the durability boundary before resuming or reporting.
+    await persistWorkspaceSessionByHost(api.session, buildWorkspaceSessionPayload(staged), staged)
+  } catch (error) {
+    // Why: main never receives a record claimed here, so only this rollback can restore it;
+    // a replay applied nothing, so rolling back would erase tabs opened since the import.
+    if (!outcome.alreadyApplied) {
+      rollbackFailedRecoveryApply(store, op, before, staged)
+    }
+    throw error
+  }
+  return outcome
+}
+
 export async function handleCrossMachineRecoveryApplyRequest(
   store: RecoveryStore,
   api: RecoveryPreloadApi,
   request: CrossMachineRecoveryApplyRequest
 ): Promise<CrossMachineRecoveryApplyReply> {
   try {
-    if (request.op.kind === 'import') {
-      await ensureLocalDestinationKnown(store, request.op.fragment.worktreeId)
-    }
-    const snapshot = captureRecoveryApplySnapshot(store, request.op)
-    const outcome = applyCrossMachineRecoveryOpToStore(store, request.op)
-    if (outcome.ok) {
-      const state = store.getState()
-      const stagedRecords = state.sleepingAgentSessionsByPaneKey
-      try {
-        // Why: the host treats this reply as the durability boundary before resuming or reporting.
-        await persistWorkspaceSessionByHost(api.session, buildWorkspaceSessionPayload(state), state)
-      } catch (error) {
-        // Why: main never receives a record claimed here, so only this rollback can restore it;
-        // a replay applied nothing, so rolling back would erase tabs opened since the import.
-        if (!outcome.alreadyApplied) {
-          rollbackFailedRecoveryApply(store, request.op, snapshot, stagedRecords)
-        }
-        throw error
-      }
-    }
+    const outcome = await serializedByDestination(
+      store,
+      recoveryApplyDestinations(request.op),
+      () => applyAndPersist(store, api, request.op)
+    )
     return { requestId: request.requestId, outcome }
   } catch (error) {
     return {

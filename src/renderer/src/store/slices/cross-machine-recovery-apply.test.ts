@@ -275,6 +275,155 @@ describe('cross-machine recovery renderer apply', () => {
     expect(state.recoveryImportKeyByWorktreeId[WT]).toBe('key')
   })
 
+  it('keeps tabs and unsaved files the user opened while a first import fails to persist', async () => {
+    const { store, session, apply } = setup()
+    let userTabId = ''
+    let userFileId = ''
+    session.flush.mockImplementationOnce(async () => {
+      const state = store.getState()
+      userTabId = state.createTab(WT).id
+      userFileId = state.openFile({
+        filePath: '/repo1/wt/user.ts',
+        relativePath: 'user.ts',
+        worktreeId: WT,
+        language: 'typescript',
+        mode: 'edit'
+      })
+      store.getState().setEditorDraft(userFileId, 'unsaved user data')
+      store.getState().markFileDirty(userFileId, true)
+      throw new Error('disk full')
+    })
+
+    const reply = await apply(importOp())
+
+    expect(reply).toEqual({ requestId: 'r1', error: 'disk full' })
+    const state = store.getState()
+    expect(state.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([userTabId])
+    expect(state.openFiles.map((file) => [file.id, file.isDirty])).toEqual([[userFileId, true]])
+    expect(state.editorDrafts[userFileId]).toBe('unsaved user data')
+    const unifiedIds = state.unifiedTabsByWorktree[WT]?.map((tab) => tab.entityId)
+    expect(unifiedIds?.toSorted()).toEqual([userTabId, userFileId].toSorted())
+    const groups = state.groupsByWorktree[WT] ?? []
+    expect(groups.flatMap((group) => group.tabOrder).toSorted()).toEqual(
+      state.unifiedTabsByWorktree[WT]?.map((tab) => tab.id).toSorted()
+    )
+    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
+    expect(state.recoveryImportKeyByWorktreeId[WT]).toBeUndefined()
+    store.getState().reconcileWorktreeTabModel(WT)
+    expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([userTabId])
+    expect(store.getState().openFiles.map((file) => file.id)).toEqual([userFileId])
+  })
+
+  it('keeps an imported tab the user renamed while the import failed to persist', async () => {
+    const { store, session, apply } = setup()
+    session.flush.mockImplementationOnce(async () => {
+      store.getState().setTabCustomTitle('tab-new', 'mine')
+      throw new Error('disk full')
+    })
+
+    expect(await apply(importOp())).toEqual({ requestId: 'r1', error: 'disk full' })
+
+    store.getState().reconcileWorktreeTabModel(WT)
+    const state = store.getState()
+    expect(state.tabsByWorktree[WT]?.map((tab) => [tab.id, tab.customTitle])).toEqual([
+      ['tab-new', 'mine']
+    ])
+    expect(state.unifiedTabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-new'])
+    expect(state.groupsByWorktree[WT]?.map((group) => [group.id, group.tabOrder])).toEqual([
+      ['group-new', ['tab-new']]
+    ])
+    expect(state.activeGroupIdByWorktree[WT]).toBe('group-new')
+    expect(state.openFiles).toEqual([])
+    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
+    expect(state.recoveryImportKeyByWorktreeId[WT]).toBeUndefined()
+  })
+
+  it('keeps an imported file the user edited, with its tab, when the import fails to persist', async () => {
+    const { store, session, apply } = setup()
+    const filePath = '/repo1/wt/src/a.ts'
+    const base = fragment()
+    const op: CrossMachineRecoveryApplyOp = {
+      kind: 'import',
+      importKey: 'key',
+      records: [record],
+      fragment: {
+        ...base,
+        unifiedTabs: [
+          ...base.unifiedTabs,
+          makeUnifiedTab({
+            id: filePath,
+            entityId: filePath,
+            worktreeId: WT,
+            groupId: 'group-new',
+            contentType: 'editor',
+            label: 'a.ts'
+          })
+        ],
+        tabGroups: [
+          makeTabGroup({
+            id: 'group-new',
+            worktreeId: WT,
+            activeTabId: 'tab-new',
+            tabOrder: ['tab-new', filePath],
+            recentTabIds: [filePath, 'tab-new']
+          })
+        ]
+      }
+    }
+    session.flush.mockImplementationOnce(async () => {
+      store.getState().setEditorDraft(filePath, 'unsaved import edit')
+      store.getState().markFileDirty(filePath, true)
+      throw new Error('disk full')
+    })
+
+    expect(await apply(op)).toEqual({ requestId: 'r1', error: 'disk full' })
+
+    store.getState().reconcileWorktreeTabModel(WT)
+    const state = store.getState()
+    expect(state.openFiles.map((file) => [file.id, file.isDirty])).toEqual([[filePath, true]])
+    expect(state.editorDrafts[filePath]).toBe('unsaved import edit')
+    expect(state.unifiedTabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([filePath])
+    expect(state.groupsByWorktree[WT]).toEqual([
+      expect.objectContaining({
+        id: 'group-new',
+        activeTabId: filePath,
+        tabOrder: [filePath],
+        recentTabIds: [filePath]
+      })
+    ])
+    expect(state.tabsByWorktree[WT]).toBeUndefined()
+    expect(state.terminalLayoutsByTabId['tab-new']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
+    expect(state.recoveryImportKeyByWorktreeId[WT]).toBeUndefined()
+  })
+
+  it('evaluates a retry only after the earlier import to that worktree rolls back', async () => {
+    const { store, session, apply } = setup()
+    let failFirstFlush!: (error: Error) => void
+    session.flush.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          failFirstFlush = reject
+        })
+    )
+    const first = apply(importOp())
+    await vi.waitFor(() => expect(session.flush).toHaveBeenCalledTimes(1))
+    const retry = apply(importOp())
+    await Promise.resolve()
+    expect(session.set).toHaveBeenCalledTimes(1)
+
+    failFirstFlush(new Error('disk full'))
+
+    expect(await first).toEqual({ requestId: 'r1', error: 'disk full' })
+    expect(await retry).toEqual({ requestId: 'r1', outcome: { ok: true, claimed: null } })
+    expect(session.set).toHaveBeenCalledTimes(2)
+    const state = store.getState()
+    expect(state.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-new'])
+    expect(state.recoveryImportKeyByWorktreeId[WT]).toBe('key')
+    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
+    expect(session.set.mock.calls[1][0].recoveryImportKeyByWorktreeId).toEqual({ [WT]: 'key' })
+  })
+
   it('binds an imported editor tab to its own file when another owner holds the path id', async () => {
     const { store, session, apply } = setup()
     const filePath = '/repo1/wt/src/a.ts'
