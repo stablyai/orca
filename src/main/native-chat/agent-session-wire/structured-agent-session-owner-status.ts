@@ -18,19 +18,6 @@ export function structuredAgentSessionOwnerStatus(
     throw new Error('structured_agent_session_unsupported')
   }
   const { handoffStage: stage, handoffOperationId: operationId } = record.lease
-  if (stage === 'manual-recovery') {
-    return {
-      owner: 'none',
-      direction: 'to-native',
-      phase: 'failed',
-      stage,
-      operationId,
-      error: {
-        message: "Couldn't verify which runtime owns this session — manual recovery is required",
-        recoverableOwner: 'none'
-      }
-    }
-  }
   return {
     owner: 'native',
     direction: stage ? 'to-native' : null,

@@ -1,0 +1,106 @@
+name: Bun profile persistence
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/persistence/**'
+      - 'src/main/sqlite/**'
+      - 'src/main/worker-thread-entry-path.ts'
+      - 'src/main/orcad/**'
+      - 'src/main/daemon/pty-subprocess/**'
+      - 'src/main/providers/**'
+      - 'src/shared/**'
+      - 'config/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/workflows/bun-profile-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bun-profile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  persistence:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-14, macos-15-intel, windows-2022, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Build the native Windows process reader
+        if: runner.os == 'Windows'
+        run: node config/scripts/build-windows-process-tree-relay-addon.mjs
+      - run: pnpm build:orcad
+      - run: pnpm test:bun:profile --artifact
+      - uses: actions/setup-node@v6
+        if: runner.arch == 'X64'
+        with:
+          node-version: '18'
+      - name: Verify Node 18 loads and hands off to bundled Bun
+        if: runner.arch == 'X64'
+        run: |
+          node out/orcad/orcad.js --orcad-smoke-load-check
+          node out/orcad/orcad.js --orcad-profile-state-preflight 00000000-0000-4000-8000-000000000018
+
+  linux_glibc_floor:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    container: ubuntu:20.04
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - name: Install Ubuntu 20.04 prerequisites
+        run: apt-get update && apt-get install -y build-essential ca-certificates git python3 unzip
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Trust the checked-out workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: ./.github/actions/install-node-dependencies
+      - run: pnpm build:orcad
+      - run: pnpm test:bun:profile --artifact
+
+  linux_musl:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Verify native Alpine artifact and persistence
+        run: |
+          docker run --rm --init -i \
+            -e ORCA_BACKGROUND_LAUNCH=1 \
+            -v "$GITHUB_WORKSPACE:/work" -w /work \
+            node:24-alpine3.23 sh -s <<'BUN_QUALIFICATION'
+          set -eu
+          apk add --no-cache bash git libstdc++ python3 make g++
+          git config --global --add safe.directory /work
+          npm install -g "$(node -p "require('./package.json').packageManager.split('+')[0]")"
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm build:orcad
+          pnpm test:bun:profile --artifact
+          BUN_QUALIFICATION

@@ -412,6 +412,11 @@
   z-index: 40 !important;
 }
 
+/* Keep errors above standard modal backdrops at the existing popover tier. */
+body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner-toaster] {
+  z-index: 60 !important;
+}
+
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
   align-items: flex-start;
   flex-wrap: wrap;

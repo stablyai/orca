@@ -1,3 +1,4 @@
+import type { StoreRuntimeState } from '../loading-store/store-runtime-state'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
@@ -12,7 +13,7 @@ export type SshPtyLeaseOperations = {
   clearBindingsForTarget: (targetId: string) => void
   clearBindingsForLeases: (targetId: string, leases: SshRemotePtyLease[]) => boolean
   flush: () => void
-  flushDurableStateOrThrowAsync: () => Promise<void>
+  runDurableMutation: StoreRuntimeState['runDurableMutation']
 }
 
 /**
@@ -93,7 +94,8 @@ function updateSshRemotePtyLeaseStates(
   operations: SshPtyLeaseOperations,
   targetId: string,
   state: SshRemotePtyLease['state'],
-  ptyIds?: ReadonlySet<string>
+  ptyIds?: ReadonlySet<string>,
+  admittedLeases?: ReadonlySet<SshRemotePtyLease>
 ): boolean {
   const now = Date.now()
   let changed = false
@@ -101,7 +103,11 @@ function updateSshRemotePtyLeaseStates(
   const leasesToClear: SshRemotePtyLease[] = []
   operations.state.sshRemotePtyLeases ??= []
   for (const lease of operations.state.sshRemotePtyLeases) {
-    if (lease.targetId !== targetId || (ptyIds && !ptyIds.has(lease.ptyId))) {
+    if (
+      lease.targetId !== targetId ||
+      (ptyIds && !ptyIds.has(lease.ptyId)) ||
+      (admittedLeases && !admittedLeases.has(lease))
+    ) {
       continue
     }
     if (state === 'attached' && lease.state === 'terminated') {
@@ -179,9 +185,12 @@ export async function markSshRemotePtyLeasesAsync(
   targetId: string,
   state: SshRemotePtyLease['state']
 ): Promise<void> {
-  if (updateSshRemotePtyLeaseStates(operations, targetId, state)) {
-    await operations.flushDurableStateOrThrowAsync()
-  }
+  // A newer connection can replace a lease while this operation waits for the writer.
+  const admittedLeases = new Set(getSshRemotePtyLeases(operations.state, targetId))
+  await operations.runDurableMutation(() => {
+    updateSshRemotePtyLeaseStates(operations, targetId, state, undefined, admittedLeases)
+    return { value: undefined }
+  })
 }
 
 export async function markSshRemotePtyLeasesAttachedAsync(
@@ -190,9 +199,12 @@ export async function markSshRemotePtyLeasesAttachedAsync(
   ptyIds: readonly string[]
 ): Promise<void> {
   const relayPtyIds = new Set(ptyIds.map((ptyId) => operations.toStoredPtyId(targetId, ptyId)))
-  if (updateSshRemotePtyLeaseStates(operations, targetId, 'attached', relayPtyIds)) {
-    await operations.flushDurableStateOrThrowAsync()
-  }
+  // A newer connection can replace a lease while this operation waits for the writer.
+  const admittedLeases = new Set(getSshRemotePtyLeases(operations.state, targetId))
+  await operations.runDurableMutation(() => {
+    updateSshRemotePtyLeaseStates(operations, targetId, 'attached', relayPtyIds, admittedLeases)
+    return { value: undefined }
+  })
 }
 
 /** `relayIdRecycled` is the pending-stop replay's evidence that the host now lists this id under a
