@@ -3,8 +3,7 @@ import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './orca-runtime-cl
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
+  RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { buildHeadlessMobileSessionTabGroups } from './mobile-session-layout-projection'
@@ -17,7 +16,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
   protected closeHeadlessMobileTerminalTab(
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
-    tab: RuntimeMobileSessionTerminalTab,
+    closedParentTabId: string,
     options: {
       allowMissingPersistedTab?: boolean
       killPtys?: boolean
@@ -26,7 +25,6 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       reason?: RuntimeSessionTabCloseReason
     } = {}
   ): void {
-    const closedParentTabId = tab.parentTabId
     const retirementProofs = snapshot.tabs.flatMap((candidate) => {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         return []
@@ -38,11 +36,15 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       )
       return proof ? [proof] : []
     })
-    const projectedPtyIds = this.closeTerminalSurface(worktreeId, closedParentTabId, {
-      allowMissing: options.allowMissingPersistedTab,
-      force: options.force,
-      reason: options.reason
-    })
+    const projectedPtyIds = this.closeTerminalSurface(
+      worktreeId,
+      { kind: 'tab', tabId: closedParentTabId },
+      {
+        allowMissing: options.allowMissingPersistedTab,
+        force: options.force,
+        reason: options.reason
+      }
+    )
     this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
     if (options.authorizedPty) {
       options.authorizedPty.runtimeSessionOwned = false

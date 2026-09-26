@@ -71,7 +71,11 @@ describe('closeTab close-record mirror', () => {
       worktreeId,
       reason: 'user'
     })
-    expect(closeTerminalSurface).toHaveBeenCalledWith({ worktreeId, tabId, reason: 'user' })
+    expect(closeTerminalSurface).toHaveBeenCalledWith({
+      worktreeId,
+      target: { kind: 'tab', tabId },
+      reason: 'user'
+    })
   })
 
   it('mirrors a cleanup close with its reason', () => {

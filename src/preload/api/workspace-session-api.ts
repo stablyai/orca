@@ -4,6 +4,7 @@ import type {
   WorkspaceSessionState
 } from '../../shared/workspace-session-state-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
 import type {
   RemoteWorkspaceChangedEvent,
   RemoteWorkspaceConnectedClient,
@@ -19,11 +20,10 @@ export type WorkspaceSessionApi = {
     listHostIds: () => Promise<ExecutionHostId[]>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
-    /** Commits a terminal tab (or split pane, with leafId) close into main's membership. */
+    /** Commits a terminal tab or split-pane close into main's membership. */
     closeTerminalSurface: (args: {
       worktreeId: string
-      tabId: string
-      leafId?: string
+      target: TerminalSurfaceCloseTarget
       reason?: 'user' | 'cleanup'
     }) => Promise<void>
     flush: () => Promise<void>

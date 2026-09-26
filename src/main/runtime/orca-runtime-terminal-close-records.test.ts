@@ -79,7 +79,7 @@ describe('close records', () => {
     async (reason) => {
       const { store, runtime, reload } = createPersistedRuntime()
 
-      runtime.closeTerminalSurfaceFromRenderer({ worktreeId: WORKTREE_ID, tabId: TAB_ID, reason })
+      runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: TAB_ID }, reason)
       store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
 
       const reloaded = (await reload()).getWorkspaceSession()
@@ -96,8 +96,8 @@ describe('close records', () => {
   it("keeps main's own record writes across later store writes", () => {
     const { store, runtime } = createPersistedRuntime()
 
-    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: WORKTREE_ID, tabId: TAB_ID })
-    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: WORKTREE_ID, tabId: LATE_TAB_ID })
+    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: TAB_ID })
+    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: LATE_TAB_ID })
     store.setWorkspaceSession(rendererSave(store.getWorkspaceSession()))
 
     expect(
@@ -108,8 +108,8 @@ describe('close records', () => {
   it('records nothing for a split pane close, which leaves its tab open', () => {
     const { store, runtime } = createPersistedRuntime()
 
-    runtime.closeTerminalSurfaceFromRenderer({
-      worktreeId: WORKTREE_ID,
+    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
+      kind: 'pane',
       tabId: 'unknown-tab',
       leafId: LEAF_ID
     })
@@ -117,12 +117,28 @@ describe('close records', () => {
     expect(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId).toBeUndefined()
   })
 
+  // Why: only a resolved tab close records; a pane target never widens here, even on the last pane.
+  it("records nothing for a pane close aimed at its tab's only pane", () => {
+    const { store, runtime } = createPersistedRuntime()
+
+    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
+      kind: 'pane',
+      tabId: TAB_ID,
+      leafId: LEAF_ID
+    })
+
+    expect(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId).toBeUndefined()
+    expect(store.getWorkspaceSession().tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([
+      TAB_ID
+    ])
+  })
+
   // The durable half of refusing a late graft: the close lands while the tab's spawn is in
   // flight, so main has never listed the tab, and the spawn commits only after a relaunch.
   it('refuses a closed tab whose spawn commits after a crash and reload', async () => {
     const { runtime, reload } = createPersistedRuntime()
 
-    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: WORKTREE_ID, tabId: LATE_TAB_ID })
+    runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, { kind: 'tab', tabId: LATE_TAB_ID })
     const relaunched = await reload()
 
     expect(
@@ -146,7 +162,7 @@ describe('close records', () => {
       SSH_HOST_ID
     )
 
-    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: SSH_WORKTREE_ID, tabId: LATE_TAB_ID })
+    runtime.closeTerminalSurfaceFromRenderer(SSH_WORKTREE_ID, { kind: 'tab', tabId: LATE_TAB_ID })
 
     expect(
       store.getWorkspaceSession(SSH_HOST_ID).closedTerminalTabTombstonesByTabId?.[LATE_TAB_ID]
@@ -169,10 +185,13 @@ describe('close records', () => {
       { ...getDefaultWorkspaceSession(), tabsByWorktree: { [SSH_WORKTREE_ID]: [] } },
       SSH_HOST_ID
     )
-    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: SSH_WORKTREE_ID, tabId: 'ssh-tab' })
+    runtime.closeTerminalSurfaceFromRenderer(SSH_WORKTREE_ID, { kind: 'tab', tabId: 'ssh-tab' })
 
     for (let index = 0; index <= MAX_CLOSED_TERMINAL_TAB_TOMBSTONES; index += 1) {
-      runtime.closeTerminalSurfaceFromRenderer({ worktreeId: WORKTREE_ID, tabId: `local-${index}` })
+      runtime.closeTerminalSurfaceFromRenderer(WORKTREE_ID, {
+        kind: 'tab',
+        tabId: `local-${index}`
+      })
     }
 
     expect(
