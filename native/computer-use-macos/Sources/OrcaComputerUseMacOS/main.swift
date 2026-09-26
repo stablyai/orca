@@ -84,22 +84,7 @@ struct AppDescriptor {
     let app: NSRunningApplication
 
     var needsManualAccessibilityMode: Bool {
-        // Chromium/Electron apps often need this private AX mode, but applying it
-        // broadly can corrupt native Cocoa app trees into app-root-only nodes.
-        guard let bundleId = bundleId?.lowercased() else {
-            return false
-        }
-        return bundleId.hasPrefix("com.google.chrome") ||
-            bundleId.hasPrefix("com.microsoft.edgemac") ||
-            bundleId.hasPrefix("com.brave.browser") ||
-            bundleId.hasPrefix("com.operasoftware.opera") ||
-            bundleId.hasPrefix("com.vivaldi.vivaldi") ||
-            bundleId == "com.github.electron" ||
-            bundleId == "com.tinyspeck.slackmacgap" ||
-            bundleId == "com.spotify.client" ||
-            bundleId == "com.hnc.discord" ||
-            bundleId == "com.microsoft.teams2" ||
-            bundleId == "notion.id"
+        ChromiumAccessibilityPolicy.needsManualAccessibilityMode(bundleId: bundleId)
     }
 
     var isKnownBrowser: Bool {
@@ -4108,9 +4093,7 @@ private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
     }
     // Why: dev validation runs from per-worktree wrapper apps with stable
     // Orca-owned bundle ids; the sidecar peer check must still authorize them.
-    return bundleId == "com.stablyai.orca" ||
-        bundleId.hasPrefix("com.stablyai.orca.dev.") ||
-        bundleId == "com.github.Electron"
+    return OrcaApplicationIdentity.isTrustedAgentHost(bundleId: bundleId)
 }
 
 private func parentProcessId(_ pid: pid_t) -> pid_t? {
