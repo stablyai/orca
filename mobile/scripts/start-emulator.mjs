@@ -577,19 +577,28 @@ async function main() {
     logInfo(`Using worktree: ${worktree}`)
     await ensureMobileDependencies(worktree)
 
-    pairingRuntime = await startHeadlessPairingRuntime({
-      enabled: options.pair,
-      orcaCli: ORCA_CLI,
-      cwd: process.cwd(),
-      lanIpCandidates,
-      logStep,
-      logSuccess
-    })
-    await registerWorktreeForPairingRuntime(pairingRuntime, worktree, {
-      orca,
-      logStep,
-      logSuccess
-    })
+    // Why: the temporary pairing runtime is auxiliary to launching the app. If it
+    // fails to start, never emits a pairing URL, or its worktree registration
+    // fails, keep going with the app launch instead of aborting the whole flow.
+    try {
+      pairingRuntime = await startHeadlessPairingRuntime({
+        enabled: options.pair,
+        orcaCli: ORCA_CLI,
+        cwd: process.cwd(),
+        lanIpCandidates,
+        logStep,
+        logSuccess
+      })
+      await registerWorktreeForPairingRuntime(pairingRuntime, worktree, {
+        orca,
+        logStep,
+        logSuccess
+      })
+    } catch (error) {
+      pairingRuntime?.stop()
+      pairingRuntime = null
+      logError(`Skipping mobile pairing: ${error.message}`)
+    }
 
     // Find best device
     const device = await findBestDevice(options.device)
