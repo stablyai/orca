@@ -24,7 +24,7 @@ export async function publishLegacyBinaryInitialSnapshot(
   const {
     params,
     runtime,
-    signal,
+    registration,
     sendBinary,
     emit,
     ptyId,
@@ -34,8 +34,9 @@ export async function publishLegacyBinaryInitialSnapshot(
     rendererMountRequestedBeforePty,
     serializerGenerationBeforeMobileFit
   } = args
+  const { signal } = registration
   if (isMobile && clientId) {
-    await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
+    await registration.addMobilePresence(ptyId, clientId, params.viewport)
   } else if (clientId && params.viewport) {
     // Why: legacy subscribe records geometry without taking ownership; only an explicit activity/claim frame may suppress the host.
     state.registeredRemoteDesktopDriver = true
@@ -70,10 +71,10 @@ export async function publishLegacyBinaryInitialSnapshot(
     const mountWaitController = new AbortController()
     const abortMountWait = (): void => mountWaitController.abort()
     state.abortRendererMountWait = abortMountWait
-    if (signal?.aborted) {
+    if (signal.aborted) {
       abortMountWait()
     } else {
-      signal?.addEventListener('abort', abortMountWait, { once: true })
+      signal.addEventListener('abort', abortMountWait, { once: true })
     }
     const rendererReadyPromise = runtime
       .waitForRendererTerminalSerializer(
@@ -84,7 +85,7 @@ export async function publishLegacyBinaryInitialSnapshot(
       )
       .catch(() => false)
     const finishMountWait = (): void => {
-      signal?.removeEventListener('abort', abortMountWait)
+      signal.removeEventListener('abort', abortMountWait)
       if (state.abortRendererMountWait === abortMountWait) {
         state.abortRendererMountWait = () => {}
       }
@@ -101,7 +102,7 @@ export async function publishLegacyBinaryInitialSnapshot(
     if (deadlineTimer) {
       clearTimeout(deadlineTimer)
     }
-    if (state.closed || signal?.aborted) {
+    if (state.closed || signal.aborted) {
       return
     }
     if (rendererReady) {
