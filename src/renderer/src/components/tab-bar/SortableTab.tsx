@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { X, Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-title-decoration'
+import { isOrchestrationWorkerTerminalTitle } from '../../../../shared/orchestration-worker-terminal-title'
+import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { useTabAgent } from '@/lib/use-tab-agent'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
@@ -52,6 +54,7 @@ type SortableTabProps = {
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
+  generatedTitlesEnabled?: boolean
   /** True when this agent terminal can switch between the terminal and native chat views; surfaces the "Switch view" context-menu item. */
   canToggleViewMode?: boolean
   /** True when the tab is currently showing the native chat view. */
@@ -85,6 +88,7 @@ export default function SortableTab({
   dragData,
   dropIndicator,
   includeTopTabBorder = true,
+  generatedTitlesEnabled = false,
   canToggleViewMode = false,
   isChatView = false,
   onToggleViewMode,
@@ -116,9 +120,17 @@ export default function SortableTab({
   // Why: use hook status + title evidence so the icon reflects the harness running now, not just the launch command.
   const tabAgent = useTabAgent(tab)
 
-  // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
+  const userCustomTitle =
+    tab.customTitle !== null &&
+    tab.customTitle !== undefined &&
+    tab.customTitle.trim().length > 0 &&
+    !isOrchestrationWorkerTerminalTitle(tab.customTitle)
+      ? tab.customTitle
+      : null
+  const tabTitle = userCustomTitle ?? resolveTerminalTabTitle(tab, generatedTitlesEnabled)
+  // Why: keep an explicit user title verbatim; only strip the agent glyph from a resolved title.
   const displayTitle =
-    tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
+    tabAgent && userCustomTitle === null ? stripLeadingAgentTitleDecoration(tabTitle) : tabTitle
 
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
@@ -175,7 +187,6 @@ export default function SortableTab({
   })
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeLabel = translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
-  const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
       ref={setNodeRef}

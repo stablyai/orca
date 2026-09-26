@@ -12,6 +12,7 @@ import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
 
 let mockTabAgent: TuiAgent | null = null
+let settingsSelectorCalls = 0
 
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: ({ id }: { id: string }) => ({
@@ -93,8 +94,21 @@ vi.mock('@/lib/use-tab-agent', () => ({
 }))
 
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: { unreadTerminalTabs: Record<string, boolean> }) => unknown) =>
-    selector({ unreadTerminalTabs: {} })
+  useAppStore: (
+    selector: (state: {
+      unreadTerminalTabs: Record<string, boolean>
+      settings: { tabAutoGenerateTitle: boolean }
+    }) => unknown
+  ) => {
+    const state = {
+      unreadTerminalTabs: {},
+      get settings() {
+        settingsSelectorCalls += 1
+        return { tabAutoGenerateTitle: true }
+      }
+    }
+    return selector(state)
+  }
 }))
 
 vi.mock('@/store', () => ({
@@ -252,6 +266,7 @@ function makeEditorFile(overrides: Partial<OpenFile & { tabId?: string }> = {}):
 describe('tab title tooltips', () => {
   beforeEach(() => {
     mockTabAgent = null
+    settingsSelectorCalls = 0
   })
 
   it('uses the terminal custom title for the visible label and tooltip trigger content', () => {
@@ -286,6 +301,105 @@ describe('tab title tooltips', () => {
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
     expectTabContainerWidth(markup, root)
+  })
+
+  it('preserves a user custom title when the agent icon is visible', () => {
+    mockTabAgent = 'claude'
+    const markup = renderToStaticMarkup(
+      <SortableTab
+        tab={makeTerminalTab({ customTitle: '  ✦ My task  ', title: '✳ Claude Code' })}
+        unifiedTabId="terminal-1"
+        groupId="group-1"
+        tabCount={1}
+        hasTabsToRight={false}
+        hasTabsToLeft={false}
+        isActive={true}
+        isPinned={false}
+        isExpanded={false}
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onCloseOthers={vi.fn()}
+        onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
+        onSetCustomTitle={vi.fn()}
+        onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
+        onToggleExpand={vi.fn()}
+        dragData={makeDragData('terminal', 'terminal-1')}
+      />
+    )
+
+    expect(markup).toContain('data-agent-icon="claude"')
+    expectTooltipContent(markup, '  ✦ My task  ')
+    expect(markup).toContain('data-tab-title="  ✦ My task  "')
+    expect(markup).toContain('>  ✦ My task  </span>')
+  })
+
+  it('falls back when the custom title contains only whitespace', () => {
+    const markup = renderToStaticMarkup(
+      <SortableTab
+        tab={makeTerminalTab({ customTitle: '   ' })}
+        unifiedTabId="terminal-1"
+        groupId="group-1"
+        tabCount={1}
+        hasTabsToRight={false}
+        hasTabsToLeft={false}
+        isActive={true}
+        isPinned={false}
+        isExpanded={false}
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onCloseOthers={vi.fn()}
+        onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
+        onSetCustomTitle={vi.fn()}
+        onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
+        onToggleExpand={vi.fn()}
+        dragData={makeDragData('terminal', 'terminal-1')}
+      />
+    )
+
+    expectTooltipContent(markup, 'Runtime terminal title')
+    const root = openingTag(markup, 'data-testid', 'sortable-tab')
+    expect(root).toContain('data-tab-title="Runtime terminal title"')
+  })
+
+  it('uses the generated task title instead of an orchestration worker management title', () => {
+    const markup = renderToStaticMarkup(
+      <SortableTab
+        tab={makeTerminalTab({
+          customTitle: 'worker-task_0123abcdef45',
+          generatedTitle: 'Trace synthetic worker naming',
+          title: 'worker-task_0123abcdef45'
+        })}
+        unifiedTabId="terminal-1"
+        groupId="group-1"
+        tabCount={1}
+        hasTabsToRight={false}
+        hasTabsToLeft={false}
+        isActive={true}
+        isPinned={false}
+        isExpanded={false}
+        generatedTitlesEnabled={true}
+        onActivate={vi.fn()}
+        onClose={vi.fn()}
+        onCloseOthers={vi.fn()}
+        onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
+        onSetCustomTitle={vi.fn()}
+        onSetTabColor={vi.fn()}
+        onTogglePin={vi.fn()}
+        onToggleExpand={vi.fn()}
+        dragData={makeDragData('terminal', 'terminal-1')}
+      />
+    )
+
+    expectTooltipContent(markup, 'Trace synthetic worker naming')
+    const root = openingTag(markup, 'data-testid', 'sortable-tab')
+    expect(root).toContain('data-tab-title="Trace synthetic worker naming"')
+    expect(markup).not.toContain('worker-task_0123abcdef45')
+    expect(settingsSelectorCalls).toBe(0)
   })
 
   it("shows the provider icon while stripping the agent's leading status glyph from the label", () => {

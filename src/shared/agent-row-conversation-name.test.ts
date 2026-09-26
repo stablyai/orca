@@ -184,6 +184,19 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(makeTab({ title: 'Agent' }), 'claude', false)).toBeNull()
   })
 
+  it('rejects orchestration worker management titles from live and restored tabs', () => {
+    const workerTitle = 'worker-task_0123abcdef45'
+
+    expect(getAgentRowConversationName(makeTab({ title: workerTitle }), 'codex', false)).toBeNull()
+    expect(
+      getAgentRowConversationName(
+        makeTab({ customTitle: workerTitle, title: workerTitle }),
+        'codex',
+        true
+      )
+    ).toBeNull()
+  })
+
   it('rejects empty, glyph-only, and default terminal titles', () => {
     expect(getAgentRowConversationName(makeTab(), 'claude', false)).toBeNull()
     expect(getAgentRowConversationName(makeTab({ title: '✳' }), 'claude', false)).toBeNull()

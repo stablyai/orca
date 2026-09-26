@@ -11,6 +11,7 @@ import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { formatAgentTypeLabel } from './agent-type-label'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
+import { isOrchestrationWorkerTerminalTitle } from './orchestration-worker-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 import type { TerminalTab } from './terminal-tab-types'
 
@@ -96,6 +97,7 @@ function conversationNameFromLiveTitle(
     isAgentIdentityStatusTitle(lower, agentType, agentTypeLabelLower) ||
     STATUS_WITH_CONTEXT_RE.test(stripped) ||
     DEFAULT_TERMINAL_TITLE_RE.test(stripped) ||
+    isOrchestrationWorkerTerminalTitle(stripped) ||
     isClaudeManagementTitle(stripped) ||
     isCwdLikeTitle(stripped)
   ) {
@@ -124,7 +126,7 @@ export function getAgentRowConversationName(
   providerSessionId?: string
 ): string | null {
   const customTitle = tab.customTitle?.trim()
-  if (customTitle) {
+  if (customTitle && !isOrchestrationWorkerTerminalTitle(customTitle)) {
     return customTitle
   }
   const quickCommandLabel = tab.quickCommandLabel?.trim()
