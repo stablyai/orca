@@ -11,8 +11,6 @@ export function TaskPageLinearIssueList({
 }): React.JSX.Element | null {
   const {
     linearIssues,
-    linearViewMode,
-    linearGroupBy,
     selectedLinearProject,
     linearProjectTab,
     linearProjectIssuesResult,
@@ -25,41 +23,11 @@ export function TaskPageLinearIssueList({
     showLinearIssuePagination,
     handleLinearIssuePageChange,
     showLinearEmptyFilteredLoadMore,
-    handleLinearEmptyFilteredLoadMore,
-    effectiveLinearDisplayProperties,
-    linearIssueGridStyle
+    handleLinearEmptyFilteredLoadMore
   } = model
   return (
     <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
       <TaskPageLinearIssueToolbar model={model} />
-
-      {linearViewMode === 'list' && linearGroupBy === 'none' ? (
-        <div
-          className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-lg:!hidden lg:grid-cols-[var(--linear-grid-template)] [&>span]:min-w-0 [&>span]:truncate"
-          style={linearIssueGridStyle}
-        >
-          <span>{translate('auto.components.TaskPage.37e7ee311e', 'Key')}</span>
-          <span>{translate('auto.components.TaskPage.b1eaa18ace', 'Issue')}</span>
-          {effectiveLinearDisplayProperties.has('labels') ? (
-            <span>{translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}</span>
-          ) : null}
-          {effectiveLinearDisplayProperties.has('team') ? (
-            <span>{translate('auto.components.TaskPage.a98cbe7664', 'Team')}</span>
-          ) : null}
-          {effectiveLinearDisplayProperties.has('state') ? (
-            <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
-          ) : null}
-          {effectiveLinearDisplayProperties.has('assignee') ? (
-            <span className="text-center">
-              {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
-            </span>
-          ) : null}
-          {effectiveLinearDisplayProperties.has('updated') ? (
-            <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
-          ) : null}
-          <span>{translate('auto.components.TaskPage.linearWorktreesColumn', 'Workspaces')}</span>
-        </div>
-      ) : null}
 
       <TaskPageLinearIssueRows model={model} />
       {selectedLinearProject && linearProjectTab === 'issues' ? (
