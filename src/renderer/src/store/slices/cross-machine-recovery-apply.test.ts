@@ -192,4 +192,62 @@ describe('cross-machine recovery renderer apply', () => {
     expect(store.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
     expect(session.flush).toHaveBeenCalledTimes(3)
   })
+
+  it('restores a claimed record when persisting the claim fails', async () => {
+    const { store, session, apply } = setup()
+    store.setState({ sleepingAgentSessionsByPaneKey: { [PANE_KEY]: record } })
+    session.set.mockRejectedValueOnce(new Error('disk full'))
+
+    const reply = await apply({
+      kind: 'claim-record',
+      worktreeId: WT,
+      binding: { agent: record.agent, ...record.providerSession }
+    })
+
+    expect(reply).toEqual({ requestId: 'r1', error: 'disk full' })
+    expect(store.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
+  })
+
+  it('removes an import whose persistence fails', async () => {
+    const { store, session, apply } = setup()
+    session.flush.mockRejectedValueOnce(new Error('flush failed'))
+
+    const reply = await apply({ kind: 'import', fragment: fragment(), records: [record] })
+
+    expect(reply).toEqual({ requestId: 'r1', error: 'flush failed' })
+    const state = store.getState()
+    expect(state.tabsByWorktree[WT] ?? []).toEqual([])
+    expect(state.unifiedTabsByWorktree[WT] ?? []).toEqual([])
+    expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeUndefined()
+    expect(state.openFiles).toEqual([])
+    expect(state.activeFileIdByWorktree[WT]).toBeUndefined()
+    expect(state.defaultTerminalTabsAppliedByWorktreeId[WT]).toBeUndefined()
+  })
+
+  it('does not treat a same-id runtime worktree as the local destination', async () => {
+    const { store, session, apply } = setup()
+    store.setState({
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: WT,
+            repoId: 'repo1',
+            path: '/repo1/wt',
+            hostId: 'runtime:env-1',
+            runtimeOwnerEnvironmentId: 'env-1'
+          })
+        ]
+      }
+    })
+    const fetchWorktrees = vi.spyOn(store.getState(), 'fetchWorktrees').mockResolvedValue(true)
+
+    const reply = await apply({ kind: 'import', fragment: fragment(), records: [record] })
+
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo1', { forceLocalOwner: true })
+    expect(reply).toEqual({
+      requestId: 'r1',
+      error: `Recovery destination ${WT} is not a known local worktree`
+    })
+    expect(session.set).not.toHaveBeenCalled()
+  })
 })

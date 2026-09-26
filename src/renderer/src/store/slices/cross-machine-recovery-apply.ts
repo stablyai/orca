@@ -1,6 +1,7 @@
 import type { StoreApi } from 'zustand'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   applyCrossMachineRecoveryOp,
   type CrossMachineRecoveryApplyOp,
@@ -12,8 +13,15 @@ import {
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { detectLanguage } from '@/lib/language-detect'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import {
+  buildHostIdByWorktreeId,
+  persistWorkspaceSessionByHost
+} from '@/lib/workspace-session-host-persistence'
 import type { AppState } from '../types'
+import {
+  captureRecoveryApplySnapshot,
+  rollbackFailedRecoveryApply
+} from './cross-machine-recovery-apply-rollback'
 import type { OpenFile } from './editor'
 import { buildOwnedEditorFileId } from './editor/file-ids/editor-file-ids'
 
@@ -106,16 +114,22 @@ async function ensureLocalDestinationKnown(
   store: RecoveryStore,
   worktreeId: string
 ): Promise<void> {
-  if (store.getState().getKnownWorktreeById(worktreeId)) {
-    return
+  const isKnownLocally = (): boolean =>
+    Boolean(store.getState().getKnownWorktreeById(worktreeId, LOCAL_EXECUTION_HOST_ID))
+  if (!isKnownLocally()) {
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    if (!store.getState().repos.some((repo) => repo.id === repoId)) {
+      await store.getState().fetchRepos({ runtimeEnvironmentId: null })
+    }
+    await store.getState().fetchWorktrees(repoId, { forceLocalOwner: true })
+    if (!isKnownLocally()) {
+      throw new Error(`Recovery destination ${worktreeId} is not a known local worktree`)
+    }
   }
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  if (!store.getState().repos.some((repo) => repo.id === repoId)) {
-    await store.getState().fetchRepos({ runtimeEnvironmentId: null })
-  }
-  await store.getState().fetchWorktrees(repoId, { forceLocalOwner: true })
-  if (!store.getState().getKnownWorktreeById(worktreeId)) {
-    throw new Error(`Recovery destination ${worktreeId} is not a known local worktree`)
+  // Why: a same-id worktree on another host can own the partition this write would land in.
+  const partitionHostId = buildHostIdByWorktreeId(store.getState())(worktreeId)
+  if (partitionHostId !== LOCAL_EXECUTION_HOST_ID) {
+    throw new Error(`Recovery destination ${worktreeId} persists to ${partitionHostId}, not local`)
   }
 }
 
@@ -128,11 +142,19 @@ export async function handleCrossMachineRecoveryApplyRequest(
     if (request.op.kind === 'import') {
       await ensureLocalDestinationKnown(store, request.op.fragment.worktreeId)
     }
+    const snapshot = captureRecoveryApplySnapshot(store, request.op)
     const outcome = applyCrossMachineRecoveryOpToStore(store, request.op)
     if (outcome.ok) {
-      // Why: the host treats this reply as the durability boundary before resuming or reporting.
       const state = store.getState()
-      await persistWorkspaceSessionByHost(api.session, buildWorkspaceSessionPayload(state), state)
+      const stagedRecords = state.sleepingAgentSessionsByPaneKey
+      try {
+        // Why: the host treats this reply as the durability boundary before resuming or reporting.
+        await persistWorkspaceSessionByHost(api.session, buildWorkspaceSessionPayload(state), state)
+      } catch (error) {
+        // Why: main never receives a record claimed here, so only this rollback can restore it.
+        rollbackFailedRecoveryApply(store, request.op, snapshot, stagedRecords)
+        throw error
+      }
     }
     return { requestId: request.requestId, outcome }
   } catch (error) {
