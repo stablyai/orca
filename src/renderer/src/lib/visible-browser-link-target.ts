@@ -11,8 +11,7 @@ export type VisibleBrowserLinkState = {
   activeGroupIdByWorktree?: Record<string, string | undefined>
 }
 
-// Why placementFixed: stops forks that open beside a lone pane from splitting away from the browser; upstream ignores it.
-export type BrowserLinkPlacement = { targetGroupId: string; placementFixed: true }
+export type BrowserLinkPlacement = { targetGroupId: string }
 
 /** The on-screen group whose active tab is a browser: focused group first, else most recently focused. */
 export function findVisibleBrowserLinkTarget(
@@ -36,11 +35,11 @@ export function findVisibleBrowserLinkTarget(
       continue
     }
     if (groupId === focusedGroupId) {
-      return { targetGroupId: groupId, placementFixed: true }
+      return { targetGroupId: groupId }
     }
     if (!best || (tab.lastFocusedAt ?? 0) > (best.lastFocusedAt ?? 0)) {
       best = tab
     }
   }
-  return best ? { targetGroupId: best.groupId, placementFixed: true } : undefined
+  return best ? { targetGroupId: best.groupId } : undefined
 }
