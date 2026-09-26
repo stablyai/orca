@@ -1,13 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
-import {
-  View,
-  Pressable,
-  useWindowDimensions,
-  ScrollView,
-  Keyboard,
-  Modal,
-  Platform
-} from 'react-native'
+import { View, Pressable, useWindowDimensions, ScrollView, Keyboard, Modal } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
@@ -29,6 +21,7 @@ import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
+import { hostOs } from '../platform/host-os'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -131,8 +124,7 @@ export function MountedBottomDrawer({
   // Why: KeyboardAvoidingView and useAnimatedKeyboard are both unreliable
   // inside Modal (iOS ignores KAV; Android needs adjustNothing for
   // useAnimatedKeyboard). The keyboard seam's events work on both platforms
-  // and give the exact height; inside the shell's page none fire, because
-  // the shell shortens the WebView above the IME.
+  // and give the exact height; inside the shell's page they are the shell's.
   useEffect(() => {
     // Pinned-under sheets stay visible for size but must not ride the keyboard —
     // only the top interactive sheet owns inset/lift.
@@ -147,7 +139,7 @@ export function MountedBottomDrawer({
         keyboardHeight,
         bottomInset: insets.bottom,
         fillAvailable,
-        platform: Platform.OS
+        platform: hostOs()
       })
       setKeyboardInset(inset)
       if (duration > 0) {

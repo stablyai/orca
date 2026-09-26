@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback } from 'react'
-import { Platform, type Keyboard, type TextInput } from 'react-native'
+import type { Keyboard, TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { TerminalModes, TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import { useTerminalLiveInputFocus } from '../terminal/use-terminal-live-input-focus'
+import { reopensFocusedInputWhenKeyboardHidden } from '../terminal/terminal-live-input-keyboard-reopen'
 import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
 import { useTerminalLiveInputCommit } from '../terminal/use-terminal-live-input-commit'
 import { resolveMobileTerminalInputGate } from '../terminal/terminal-input-connection-gate'
@@ -144,7 +145,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
     liveInputEnabled,
-    reopenFocusedInputWhenKeyboardHidden: Platform.OS === 'android',
+    reopenFocusedInputWhenKeyboardHidden: reopensFocusedInputWhenKeyboardHidden(),
     timerRef: liveInputFocusTimerRef
   })
   useFocusEffect(

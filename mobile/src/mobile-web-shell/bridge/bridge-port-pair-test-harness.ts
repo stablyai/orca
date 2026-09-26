@@ -105,6 +105,7 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   /** Replaces the verb handler, for the arms where the shell refuses rather than answers. */
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
   safeAreaInsets?: BridgeSafeAreaInsets
+  keyboardInset?: number
 }
 
 type Lane = {
@@ -229,6 +230,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
     sessionId: options.sessionId ?? 'session-a',
     route: options.route ?? { pathname: '/h/host-a' },
     ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets }),
+    ...(options.keyboardInset === undefined ? {} : { keyboardInset: options.keyboardInset }),
     readClientIdentity: () =>
       options.clientIdentity === undefined ? PORT_PAIR_CLIENT_IDENTITY : options.clientIdentity,
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],

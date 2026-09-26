@@ -267,6 +267,9 @@ export type MobileWebShellSession = {
   /** Whether this document pads for the system bars itself, so the view may go edge-to-edge.
    *  Cleared with `pageReady`, and false for every page built before the declaration existed. */
   readonly pageOwnsSafeArea: boolean
+  /** Whether this document reads the keyboard height from `init`, so the keyboard may cover the
+   *  view. Cleared with `pageReady`, and false for every page built before the declaration. */
+  readonly pageReadsKeyboardInset: boolean
   /** The gates the current step was taken on; null until the first one arrives. */
   readonly gates: MobileWebShellGates | null
   readonly cached: CachedGeneration | null

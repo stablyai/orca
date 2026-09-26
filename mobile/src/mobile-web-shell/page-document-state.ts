@@ -1,5 +1,6 @@
 import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
 import { BRIDGE_SAFE_AREA_ACCEPT } from './bridge/bridge-safe-area-insets'
+import { BRIDGE_KEYBOARD_INSET_ACCEPT } from './bridge/bridge-keyboard-inset'
 import type {
   MobileWebShellSession,
   MobileWebShellSessionEvent
@@ -11,7 +12,8 @@ export const CLEAR_PAGE_DOCUMENT_STATE = {
   pageReportsPaint: false,
   pagePainted: false,
   pageBackClaimed: false,
-  pageOwnsSafeArea: false
+  pageOwnsSafeArea: false,
+  pageReadsKeyboardInset: false
 } as const
 
 /** The three things a document reports about itself, as the reducer receives them. */
@@ -42,7 +44,8 @@ export function pageDocumentStatePatch(
       pageReady: true,
       pageReportsPaint: event.reports.includes(BRIDGE_PAGE_PAINTED),
       pageBackClaimed: false,
-      pageOwnsSafeArea: event.accepts.includes(BRIDGE_SAFE_AREA_ACCEPT)
+      pageOwnsSafeArea: event.accepts.includes(BRIDGE_SAFE_AREA_ACCEPT),
+      pageReadsKeyboardInset: event.accepts.includes(BRIDGE_KEYBOARD_INSET_ACCEPT)
     }
   }
   // Kept off a page that never said it would report: acting on an unasked-for frame would make
@@ -56,4 +59,11 @@ export function shellPageOwnsSafeArea(
   session: Pick<MobileWebShellSession, 'state' | 'pageOwnsSafeArea'>
 ): boolean {
   return session.state.kind === 'ready' && session.pageOwnsSafeArea
+}
+
+/** Whether the shell may let the keyboard cover the view, gated on `ready` the same way. */
+export function shellPageReadsKeyboardInset(
+  session: Pick<MobileWebShellSession, 'state' | 'pageReadsKeyboardInset'>
+): boolean {
+  return session.state.kind === 'ready' && session.pageReadsKeyboardInset
 }

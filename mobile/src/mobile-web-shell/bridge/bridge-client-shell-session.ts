@@ -31,6 +31,8 @@ export type BridgeClientShellSession = {
   onRouteUpdate: (listener: (route: BridgeInitRoute | null) => void) => () => void
   /** Fires when an `init` moved the safe-area insets the page holds, including a replacement's. */
   onSafeAreaInsetsUpdate: (listener: (insets: BridgeSafeAreaInsets) => void) => () => void
+  /** Fires when an `init` moved the keyboard height the page holds, including a replacement's. */
+  onKeyboardInsetUpdate: (listener: (height: number) => void) => () => void
   /** Drops the session and every listener waiting on one, which `close` is the only caller of. */
   close: () => void
 }
@@ -45,6 +47,7 @@ export function createBridgeClientShellSession(args: {
   const readyListeners = new Set<() => void>()
   const routeUpdateListeners = new Set<(route: BridgeInitRoute | null) => void>()
   const insetsListeners = new Set<(insets: BridgeSafeAreaInsets) => void>()
+  const keyboardListeners = new Set<(height: number) => void>()
 
   return {
     current: () => session,
@@ -62,10 +65,12 @@ export function createBridgeClientShellSession(args: {
       // The held object when the values match, so a reader keyed on identity does not re-render
       // for a re-asked `ready`.
       const safeAreaInsets = held === null || movedInsets ? sent : held.safeAreaInsets
+      const keyboardInset = message.keyboardInset ?? 0
+      const movedKeyboard = held !== null && held.keyboardInset !== keyboardInset
       session =
         update === null
           ? { ...readShellSession(message), safeAreaInsets }
-          : { ...update, route: message.route ?? null, safeAreaInsets }
+          : { ...update, route: message.route ?? null, safeAreaInsets, keyboardInset }
       // Re-primed either way, because a second `init` is also how the page recovers a cache it has
       // refused a `state` frame into: the shell rebuilt under it publishes a generation the page's
       // own is newer than, and this frame is what puts the two back in step. A pane update carries
@@ -78,6 +83,11 @@ export function createBridgeClientShellSession(args: {
       if (movedInsets) {
         for (const listener of insetsListeners) {
           listener(safeAreaInsets)
+        }
+      }
+      if (movedKeyboard) {
+        for (const listener of keyboardListeners) {
+          listener(keyboardInset)
         }
       }
       // Only a route that moved is an update. The shell answers every `ready` with the route it
@@ -112,6 +122,12 @@ export function createBridgeClientShellSession(args: {
       insetsListeners.add(listener)
       return () => {
         insetsListeners.delete(listener)
+      }
+    },
+    onKeyboardInsetUpdate: (listener) => {
+      keyboardListeners.add(listener)
+      return () => {
+        keyboardListeners.delete(listener)
       }
     },
     close: () => {

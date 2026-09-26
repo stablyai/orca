@@ -181,7 +181,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         pageReady: dependencies.pageReady,
         pageFrame: dependencies.pageFrame,
         backClaimed: dependencies.backClaimed,
-        pageOwnsSafeArea: dependencies.pageOwnsSafeArea
+        pageOwnsSafeArea: dependencies.pageOwnsSafeArea,
+        pageReadsKeyboardInset: dependencies.pageReadsKeyboardInset
       })
     })
   }

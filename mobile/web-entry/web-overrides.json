@@ -30,6 +30,10 @@
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
     {
+      "file": "src/platform/host-os.web.ts",
+      "reason": "Platform.OS is web inside the shell's page, but the keyboard the page lifts over is the phone's, reported in that OS's own terms: iOS counts the home indicator. Keyboard and inset arithmetic branches on the host OS, so this answers the phone's OS from the WebView's user agent, and the page computes what the native screen computes."
+    },
+    {
       "file": "app/_layout.web.tsx",
       "reason": "The page's route tree starts at app/h, so without a root layout expo-router mounts DefaultNavigator, an all-edges SafeAreaView that would pad every screen a second time. The native root owns pairing and push and cannot reach the page. This one adds no padding and feeds the insets the shell sent in init to react-native-safe-area-context, whose web provider reads env(safe-area-inset-*) as 0 in both WebViews."
     },
@@ -68,6 +72,10 @@
     {
       "file": "src/platform/keyboard-occlusion.web.ts",
       "reason": "react-native-web's Keyboard is a stub: addListener returns a subscription that never fires and isVisible() is always false, so a screen waiting for keyboardDidShow inside the page waits forever and the software keyboard covers whatever sits at the bottom of the document \u2014 the source-control commit bar, and the review note composer whose KeyboardAvoidingView is driven by those same events. The browser publishes the geometry a different way: the layout viewport keeps its size and visualViewport shrinks, so the occluded strip is innerHeight minus the visual viewport's height and offsetTop, tracked on its resize and scroll. A document with no visualViewport answers 0 rather than guessing."
+    },
+    {
+      "file": "src/platform/keyboard-persisting-taps.web.ts",
+      "reason": "react-native-web ignores keyboardShouldPersistTaps, and its Pressable is a focusable element that takes focus on mousedown. On Pixel_API_37 a tap on a session tab or a dock key moved focus off the live input and the IME closed, while natively a Pressable never takes focus and those two ScrollViews persist taps. This sibling gives the tab bar ('handled') and the accessory bar ('always') the same rule by keeping a focused text field's focus through the mousedown; the native module returns no ref."
     },
     {
       "file": "src/platform/live-input-composing-range.web.ts",

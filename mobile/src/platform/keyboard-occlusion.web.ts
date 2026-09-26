@@ -1,7 +1,24 @@
 import { useEffect, useState } from 'react'
 
+/** The height the shell last said over the bridge, and a way to hear it move. */
+export type ShellKeyboardSource = {
+  read: () => number
+  subscribe: (listener: (height: number) => void) => () => void
+}
+
+let shellKeyboard: ShellKeyboardSource | null = null
+
 /**
- * Web sibling: the keyboard's height as the browser reports it, which is not as an event.
+ * Called once by the page entry. Inside the shell the keyboard covers the page as it covers a
+ * native screen, but the WebView's IME insets are zeroed, so `visualViewport` never moves: the
+ * shell is the only thing that knows the height, and every reader below answers from it.
+ */
+export function publishShellKeyboardSource(source: ShellKeyboardSource | null): void {
+  shellKeyboard = source
+}
+
+/**
+ * Outside the shell: the keyboard's height as the browser reports it, which is not as an event.
  *
  * react-native-web's `Keyboard` is a stub whose `addListener` returns a subscription that never
  * fires, so every screen waiting for `keyboardDidShow` inside the shell's page waits forever and
@@ -48,21 +65,15 @@ function visualViewport(): VisualViewport | undefined {
 }
 
 /**
- * The strip as events, with duration 0: the browser has already moved the viewport by the time it
- * says so. Inside the shell nothing fires, because the shell shortens the WebView above the IME and
- * the strip stays 0; in a plain mobile browser the keyboard overlays the page and this is the lift.
+ * The strip as events, with duration 0: the shell and the browser have both moved the keyboard by
+ * the time they say so.
  */
 export function subscribeSoftKeyboard(
   onShow: (height: number, duration: number) => void,
   onHide: (duration: number) => void
 ): () => void {
-  const viewport = visualViewport()
-  if (viewport === undefined) {
-    return () => {}
-  }
-  let open = occlusion(viewport) > 0
-  const read = (): void => {
-    const height = occlusion(viewport)
+  let open = currentSoftKeyboardHeight() > 0
+  const read = (height: number): void => {
     if (height > 0) {
       open = true
       onShow(height, 0)
@@ -71,17 +82,28 @@ export function subscribeSoftKeyboard(
       onHide(0)
     }
   }
-  viewport.addEventListener('resize', read)
-  viewport.addEventListener('scroll', read)
+  if (shellKeyboard !== null) {
+    return shellKeyboard.subscribe(read)
+  }
+  const viewport = visualViewport()
+  if (viewport === undefined) {
+    return () => {}
+  }
+  const measure = (): void => read(occlusion(viewport))
+  viewport.addEventListener('resize', measure)
+  viewport.addEventListener('scroll', measure)
 
   return () => {
-    viewport.removeEventListener('resize', read)
-    viewport.removeEventListener('scroll', read)
+    viewport.removeEventListener('resize', measure)
+    viewport.removeEventListener('scroll', measure)
   }
 }
 
 /** A keyboard already up when a composer opens gets no event at all. */
 export function currentSoftKeyboardHeight(): number {
+  if (shellKeyboard !== null) {
+    return shellKeyboard.read()
+  }
   const viewport = visualViewport()
   return viewport === undefined ? 0 : occlusion(viewport)
 }
@@ -100,50 +122,10 @@ export function useKeyboardOcclusion(): number {
   return keyboardLift
 }
 
-/**
- * On the web the padding is the whole of the avoidance: `KeyboardAvoidingView` is driven by the
- * `Keyboard` events this file exists because the page never receives.
- */
-export function useKeyboardAvoidingPadding(): number {
-  return useKeyboardOcclusion()
-}
-
-/** The sibling's shape; the two facts it answers together are measured separately here. */
+/** The sibling's shape. Open is a covered strip here: neither source reports a keyboard of 0. */
 export type SoftKeyboardState = { readonly height: number; readonly visible: boolean }
 
-/**
- * Whether a keyboard is open, which here is not what it covers: the shell shortens the WebView to
- * sit above the IME, so nothing covers the page and the occlusion above reads 0, correctly. The
- * resize is what is left of the keyboard — inside the shell's WebView the shell's own bottom
- * padding is the one thing that changes this window's height without changing its width too.
- */
-function useShortenedWindow(): boolean {
-  const [shortened, setShortened] = useState(false)
-
-  useEffect(() => {
-    // The tallest height seen at this width is the resting one; a width change is a rotation or a
-    // fold, which starts the comparison again. A page that mounts with the keyboard already up
-    // reads false until it closes once, which costs one terminal refit and no correctness.
-    let width = window.innerWidth
-    let tallest = window.innerHeight
-    const read = (): void => {
-      if (window.innerWidth !== width) {
-        width = window.innerWidth
-        tallest = window.innerHeight
-      } else if (window.innerHeight > tallest) {
-        tallest = window.innerHeight
-      }
-      setShortened(window.innerHeight < tallest)
-    }
-    read()
-    window.addEventListener('resize', read)
-
-    return () => window.removeEventListener('resize', read)
-  }, [])
-
-  return shortened
-}
-
 export function useSoftKeyboard(): SoftKeyboardState {
-  return { height: useKeyboardOcclusion(), visible: useShortenedWindow() }
+  const height = useKeyboardOcclusion()
+  return { height, visible: height > 0 }
 }

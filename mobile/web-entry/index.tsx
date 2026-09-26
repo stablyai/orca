@@ -20,6 +20,7 @@ import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-bou
 import { publishPageHostProfile } from '../src/mobile-web-shell/bridge/page-host-profile'
 import { publishExternalLinkOpener } from '../src/platform/external-link.web'
 import { publishHapticsNotifier } from '../src/platform/haptics.web'
+import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
 // Named with its extension: this entry is the web build's and the provider it needs is the web
 // sibling's, which takes the page's client. The screens below still import `./client-context`
 // and reach the same module, because the builder resolves both specifiers to the same file.
@@ -111,6 +112,12 @@ bootstrapShellPage({
     // The same shape again, and for the same reason: every haptic on this page is played from a
     // plain function inside a row's press handler, which no provider wraps.
     publishHapticsNotifier((kind) => client.notifyHaptics(kind))
+    // The shell's keyboard height, read by plain functions as well as hooks; 0 from a shell too old
+    // to send one, which shortens the view instead.
+    publishShellKeyboardSource({
+      read: () => client.getShellSession()?.keyboardInset ?? 0,
+      subscribe: client.onKeyboardInsetUpdate
+    })
     // Scoped to the host `init` named: with none, no key is writable, which is the right answer
     // for a shell too old to say whose list this is.
     publishPageStorage(
