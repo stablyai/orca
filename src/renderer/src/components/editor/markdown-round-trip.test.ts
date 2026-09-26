@@ -6,7 +6,7 @@ import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import type { SlashCommandId } from './rich-markdown-slash-commands'
 import { slashCommands } from './rich-markdown-slash-commands'
 
-function roundTripMarkdown(content: string): string {
+function withRichMarkdownEditor<T>(content: string, read: (editor: Editor) => T): T {
   const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
     element: null,
@@ -14,16 +14,43 @@ function roundTripMarkdown(content: string): string {
     content: encodeRawMarkdownHtmlForRichEditor(content, codec),
     contentType: 'markdown'
   })
-
   try {
-    // Why: markdown serialization walks the document without running
-    // NodeType.checkContent, so it emits byte-identical output from a
-    // schema-invalid document that would crash on the user's next keystroke.
     editor.state.doc.check()
-    return editor.getMarkdown().trimEnd()
+    return read(editor)
   } finally {
     editor.destroy()
   }
+}
+
+function countMathNodes(content: string, type: 'inlineMath' | 'blockMath'): number {
+  return withRichMarkdownEditor(content, (editor) => {
+    let count = 0
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === type) {
+        count += 1
+      }
+    })
+    return count
+  })
+}
+
+function countInlineMathNodes(content: string): number {
+  return countMathNodes(content, 'inlineMath')
+}
+
+function countBlockMathNodes(content: string): number {
+  return countMathNodes(content, 'blockMath')
+}
+
+function richMarkdownTextContent(content: string): string {
+  return withRichMarkdownEditor(content, (editor) => editor.state.doc.textContent)
+}
+
+function roundTripMarkdown(content: string): string {
+  // Why: markdown serialization walks the document without running
+  // NodeType.checkContent, so it emits byte-identical output from a
+  // schema-invalid document that would crash on the user's next keystroke.
+  return withRichMarkdownEditor(content, (editor) => editor.getMarkdown().trimEnd())
 }
 
 function markdownAfterTextReplace(content: string, search: string, replacement: string): string {
@@ -499,5 +526,72 @@ describe('rich markdown round trip', () => {
   it('preserves doc links inside fenced code blocks as plain text', () => {
     const input = '```\n[[not-a-link]]\n```\n'
     expect(roundTripMarkdown(input)).toBe('```\n[[not-a-link]]\n```')
+  })
+})
+
+describe('pandoc dollar math round trip', () => {
+  const money = 'from $10 to $20, then (deficit −$509,542 by end-2020) entered 2021 at $0'
+
+  it('keeps dollar-heavy money as text', () => {
+    expect(countInlineMathNodes(money)).toBe(0)
+    expect(roundTripMarkdown(`${money}\n`)).toBe(money)
+    expect(richMarkdownTextContent(money)).toContain('$509,542')
+    expect(richMarkdownTextContent(money)).toContain('$0')
+  })
+
+  it('keeps CRLF money paragraphs as text', () => {
+    const crlf = `${money}\r\n`
+    expect(countInlineMathNodes(crlf)).toBe(0)
+    expect(richMarkdownTextContent(crlf)).toContain('$0')
+  })
+
+  it('rejects Pandoc-invalid dollar pairs', () => {
+    expect(countInlineMathNodes('$x$2 apples')).toBe(0)
+    expect(countInlineMathNodes('costs $ x$ here')).toBe(0)
+    expect(countInlineMathNodes('costs $x $ here')).toBe(0)
+  })
+
+  it('parses real inline math', () => {
+    expect(countInlineMathNodes('Energy is $E = mc^2$ here, and $x_1$ too.')).toBe(2)
+    expect(countInlineMathNodes('$\\frac{1}{2}$')).toBe(1)
+    expect(countInlineMathNodes('$a *b* c$')).toBe(1)
+    expect(roundTripMarkdown('Energy is $E = mc^2$ here, and $x_1$ too.\n')).toBe(
+      'Energy is $E = mc^2$ here, and $x_1$ too.'
+    )
+  })
+
+  it('reparses $a $b$ and $a$$b$', () => {
+    expect(countInlineMathNodes('$a $b$')).toBe(1)
+    expect(countInlineMathNodes('$a$$b$')).toBe(2)
+  })
+
+  it('does not atomize escaped dollars on the first parse', () => {
+    expect(countInlineMathNodes('\\$x\\$')).toBe(0)
+    expect(richMarkdownTextContent('\\$x\\$')).toBe('$x$')
+    expect(roundTripMarkdown('\\$x\\$\n')).toBe('$x$')
+    expect(countInlineMathNodes('\\$x$')).toBe(0)
+    expect(richMarkdownTextContent('\\$x$')).toBe('$x$')
+  })
+
+  it('atomizes decoded $x$ on the second parse (PR 3)', () => {
+    expect(countInlineMathNodes(roundTripMarkdown('\\$x\\$'))).toBe(1)
+  })
+
+  it('treats mid-line $$ as text and line-start $$ as display math', () => {
+    expect(countBlockMathNodes('costs $$ big $$ here')).toBe(0)
+    expect(countInlineMathNodes('costs $$ big $$ here')).toBe(0)
+    expect(roundTripMarkdown('costs $$ big $$ here\n')).toBe('costs $$ big $$ here')
+    expect(countBlockMathNodes('$$\nx^2\n$$')).toBe(1)
+    expect(roundTripMarkdown('$$\nx^2\n$$\n')).toBe('$$\nx^2\n$$')
+    expect(countBlockMathNodes('text\n$$\nmore')).toBe(0)
+    expect(roundTripMarkdown('text\n$$\nmore\n')).toBe('text\n$$\nmore')
+  })
+
+  it('degrades KaTeX-invalid candidates to text', () => {
+    expect(countInlineMathNodes('$foo{bar$')).toBe(0)
+    expect(richMarkdownTextContent('$foo{bar$')).toBe('$foo{bar$')
+    expect(roundTripMarkdown('$foo{_bar$\n')).toBe('$foo{\\_bar$')
+    expect(countInlineMathNodes('$foo{bar$ and $x$')).toBe(1)
+    expect(richMarkdownTextContent('$foo{bar$ and $x$')).toBe('$foo{bar$ and ')
   })
 })

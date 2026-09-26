@@ -553,4 +553,25 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
 
     expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
   })
+
+  it('keeps dollar amounts when reconciling a 1-char edit', () => {
+    const originalSource =
+      '# Title\n\n(deficit −$509,542 by end-2020), so stock basis entered 2021 at $0.\n'
+    const baseCanonical = serialize(originalSource)!
+    expect(baseCanonical).toContain('$509,542')
+    expect(baseCanonical).toContain('$0')
+    expect(baseCanonical).not.toContain('at$0')
+
+    const edited = baseCanonical.replace('# Title', '# Title!')
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (md) => serialize(md)
+    })
+    expect(reconciled).toContain('$509,542')
+    expect(reconciled).toContain('at $0')
+    expect(reconciled).toContain('# Title!')
+    expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
+  })
 })
