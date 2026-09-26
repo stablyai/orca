@@ -31,7 +31,6 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       terminalRefs.current.set(handle, ref)
     } else {
       terminalRefs.current.delete(handle)
-      subscribedDocumentsRef.current.delete(handle)
       terminalGestureInputBucketsRef.current.delete(handle)
       const queued = terminalGestureInputQueuesRef.current.get(handle)
       if (queued?.timer) {
@@ -45,6 +44,8 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   const handleTerminalWebReady = useCallback(
     (handle: string) => {
       const wasAlreadyReady = webReadyHandlesRef.current.has(handle)
+      // Why: web-ready announces a new document; the handle also re-attaches on theme or text-size changes, which keep the document.
+      subscribedDocumentsRef.current.delete(handle)
       webReadyHandlesRef.current.add(handle)
       nativeChatStream.notifyWebReady(handle, wasAlreadyReady)
       terminalDiagnosticsRef.current.webViewReady(
@@ -56,7 +57,6 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         // Why: WebView reloaded (hot reload / Android churn); old xterm buffer is gone, so resubscribe for a fresh scrollback.
         unsubscribeTerminal(handle)
         initializedHandlesRef.current.delete(handle)
-        subscribedDocumentsRef.current.delete(handle)
         if (handle === activeHandleRef.current) {
           subscribeToTerminal(handle)
         }
