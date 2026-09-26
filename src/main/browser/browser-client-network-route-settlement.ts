@@ -19,18 +19,9 @@ export function waitForRoute<T>(work: Promise<T>, signal: AbortSignal): Promise<
   if (signal.aborted) {
     return Promise.reject(new Error('browser_client_network_route_aborted'))
   }
-  return new Promise((resolve, reject) => {
-    const abort = (): void => reject(new Error('browser_client_network_route_aborted'))
-    signal.addEventListener('abort', abort, { once: true })
-    void work.then(
-      (value) => {
-        signal.removeEventListener('abort', abort)
-        resolve(value)
-      },
-      (error) => {
-        signal.removeEventListener('abort', abort)
-        reject(error)
-      }
-    )
+  return new PromiseSettlementWaiters(work).wait({
+    signal,
+    createAbortError: () => new Error('browser_client_network_route_aborted')
   })
 }
+import { PromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
