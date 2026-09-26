@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type * as SessionDedup from './session-root-dedup'
+import type * as RemoteSessionParseCache from './remote-session-parse-cache'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 
 const fixture = vi.hoisted((): { sessions: AiVaultSession[]; visits: number } => ({
@@ -31,7 +32,8 @@ vi.mock('./remote-session-scanner-sources', () => ({ remoteSessionSources: () =>
 vi.mock('./remote-session-scanner-discovery', () => ({
   discoverRemoteSourceCandidates: async () => candidates()
 }))
-vi.mock('./remote-session-parse-cache', () => ({
+vi.mock('./remote-session-parse-cache', async (original) => ({
+  ...(await original<typeof RemoteSessionParseCache>()),
   remoteSessionParseHostKey: () => 'fixture',
   parseRemoteSessionFileCached: async ({ candidate }: { candidate: { session: AiVaultSession } }) =>
     candidate.session

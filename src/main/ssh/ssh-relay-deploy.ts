@@ -1,7 +1,7 @@
-import { join } from 'node:path'
 /* eslint-disable max-lines -- Why: one cohesive contract (version detect, install-locked deploy, native-deps probe, launch, GC); splitting risks install/GC drift. */
 import { existsSync } from 'node:fs'
 import { app } from 'electron'
+import { relayBundleCandidates } from './relay-bundle-paths'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR, type RelayPlatform } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
@@ -30,6 +30,11 @@ import {
   recordRemoteRipgrepReference
 } from './ssh-relay-ripgrep-install'
 import { gcRemoteRipgrepCache } from './ssh-relay-ripgrep-cache-gc'
+import { ensureRemoteOpenCodeRuntime } from './ssh-relay-opencode-runtime'
+import {
+  createRemoteOpenCodeRuntimeRetry,
+  type RemoteOpenCodeRuntimePreparation
+} from './ssh-relay-opencode-runtime-retry'
 import {
   readLocalFullVersion,
   computeRemoteRelayDir,
@@ -131,6 +136,7 @@ export type RelayDeployResult = {
   nodePath?: string
   sockPath?: string
   credentialFile?: string
+  prepareOpenCodeRuntime?: RemoteOpenCodeRuntimePreparation
 }
 
 class RelayDirectoryGcConflictError extends Error {
@@ -624,59 +630,89 @@ async function deployAndLaunchRelayAttempt(
       ? ensureRemoteBundledRipgrep(conn, hostPlatform, remoteHome, { signal: deploySignal })
       : Promise.resolve()
   ).catch(() => {})
-  const cleanupReady = conn.canRunConcurrentExecCommands() ? Promise.resolve() : ripgrepInstall
-
-  void cleanupReady
+  const runtimeInstall = (conn.canRunConcurrentExecCommands() ? Promise.resolve() : ripgrepInstall)
     .then(() =>
+      ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
+        nodePath: launched.nodePath,
+        relayDir: remoteRelayDir,
+        signal: deploySignal
+      })
+    )
+    .catch(() => 'teardown-unconfirmed' as const)
+  const cleanupReady = conn.canRunConcurrentExecCommands() ? Promise.resolve() : runtimeInstall
+
+  const backgroundCleanup = cleanupReady.then((runtimeOutcome) => {
+    if (runtimeOutcome === 'teardown-unconfirmed') {
+      return false
+    }
+    return (
       execHostCommand(
         conn,
         hostPlatform,
         recoverOneStaleRelayUploadStageCommand(hostPlatform, uploadStagePoolDir)
       )
-    )
-    .catch(() => {})
-    // Why before GC: a superseded relay pins its version dir via the live-socket probe, so the
-    // sweep has to settle first or GC keeps every orphan's tree forever.
-    .then(() =>
-      sweepSupersededRelayEndpoints(conn, hostPlatform, {
-        remoteHome,
-        currentRelayDir: remoteRelayDir,
-        sockName: relaySocketNameForInstanceId(relayInstanceId),
-        // Set only when this launch relocated past sun_path; the sweep must not reap
-        // the socket the transport it just handed back is talking to.
-        ...(launched.sockPath.startsWith(SHORT_RELAY_SOCKET_DIR_PREFIX)
-          ? {
-              currentShortSocketDir: launched.sockPath.slice(0, launched.sockPath.lastIndexOf('/'))
-            }
-          : {}),
-        nodePath: launched.nodePath
-      })
-    )
-    .catch((error) => {
-      if (error instanceof RelayProbeCleanupUnconfirmedError) {
-        throw error
-      }
-    })
-    .then(() =>
-      gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
-        windowsNodePath: launched.nodePath,
-        windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)],
-        // Why pin rather than rely on the symlink alone: a deploy that fell back to a
-        // per-directory install has no reference to show, and its key must still survive.
-        nativeDepsCacheKeys: [
-          resolveRelayNativeDepsCacheKey({
-            platform,
-            localRelayDir,
-            deps: RELAY_NATIVE_DEPS
+        .catch((error) => {
+          if (isUnconfirmedSshCommandTermination(error)) {
+            throw error
+          }
+        })
+        // Why before GC: a superseded relay pins its version dir via the live-socket probe, so the
+        // sweep has to settle first or GC keeps every orphan's tree forever.
+        .then(() =>
+          sweepSupersededRelayEndpoints(conn, hostPlatform, {
+            remoteHome,
+            currentRelayDir: remoteRelayDir,
+            sockName: relaySocketNameForInstanceId(relayInstanceId),
+            // Set only when this launch relocated past sun_path; the sweep must not reap
+            // the socket the transport it just handed back is talking to.
+            ...(launched.sockPath.startsWith(SHORT_RELAY_SOCKET_DIR_PREFIX)
+              ? {
+                  currentShortSocketDir: launched.sockPath.slice(
+                    0,
+                    launched.sockPath.lastIndexOf('/')
+                  )
+                }
+              : {}),
+            nodePath: launched.nodePath
           })
-        ].filter((key): key is string => key !== null)
-      })
+        )
+        .catch((error) => {
+          if (
+            error instanceof RelayProbeCleanupUnconfirmedError ||
+            isUnconfirmedSshCommandTermination(error)
+          ) {
+            throw error
+          }
+        })
+        .then(() =>
+          gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
+            windowsNodePath: launched.nodePath,
+            windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)],
+            // Why pin rather than rely on the symlink alone: a deploy that fell back to a
+            // per-directory install has no reference to show, and its key must still survive.
+            nativeDepsCacheKeys: [
+              resolveRelayNativeDepsCacheKey({
+                platform,
+                localRelayDir,
+                deps: RELAY_NATIVE_DEPS
+              })
+            ].filter((key): key is string => key !== null)
+          })
+        )
+        // Why after the version GC and not beside it: that pass is what removes the relay directories
+        // holding the references, so running second is what lets a superseded build become collectable
+        // in the same connect rather than the next one.
+        .then(() =>
+          gcRemoteRipgrepCache(conn, hostPlatform, remoteHome, { pinnedEntry: ripgrepEntry })
+        )
+        .then(() => true)
+        .catch(
+          (error) =>
+            !(error instanceof RelayProbeCleanupUnconfirmedError) &&
+            !isUnconfirmedSshCommandTermination(error)
+        )
     )
-    // Why after the version GC and not beside it: that pass is what removes the relay directories
-    // holding the references, so running second is what lets a superseded build become collectable
-    // in the same connect rather than the next one.
-    .then(() => gcRemoteRipgrepCache(conn, hostPlatform, remoteHome, { pinnedEntry: ripgrepEntry }))
-    .catch(() => {})
+  })
 
   return {
     transport: launched.transport,
@@ -687,7 +723,17 @@ async function deployAndLaunchRelayAttempt(
     remoteRelayDir,
     nodePath: launched.nodePath,
     sockPath: launched.sockPath,
-    credentialFile: launched.credentialFile
+    credentialFile: launched.credentialFile,
+    prepareOpenCodeRuntime: createRemoteOpenCodeRuntimeRetry(
+      runtimeInstall,
+      backgroundCleanup,
+      (signal) =>
+        ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
+          nodePath: launched.nodePath,
+          relayDir: remoteRelayDir,
+          signal
+        })
+    )
   }
 }
 
@@ -1685,24 +1731,7 @@ function getLocalRelayPath(platform: RelayPlatform): string | null {
 }
 
 export function getLocalRelayCandidates(platform: RelayPlatform): string[] {
-  const candidates: string[] = []
-  if (process.env.ORCA_RELAY_PATH) {
-    candidates.push(join(process.env.ORCA_RELAY_PATH, platform))
-  }
-
-  // Why: electron-builder copies extraResources next to the app bundle, but app.getAppPath() points at app.asar in packaged builds.
-  if (process.resourcesPath) {
-    candidates.push(join(process.resourcesPath, 'relay', platform))
-    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', platform))
-  }
-
-  const appPath = app.getAppPath()
-  candidates.push(
-    join(appPath, 'resources', 'relay', platform),
-    join(appPath, 'out', 'relay', platform)
-  )
-
-  return [...new Set(candidates)]
+  return relayBundleCandidates(platform, app.getAppPath())
 }
 
 async function launchRelay(

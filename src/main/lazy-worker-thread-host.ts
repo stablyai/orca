@@ -1,6 +1,12 @@
 import type { Worker } from 'node:worker_threads'
 
-export type WorkerThreadFactory = () => Worker
+export type WorkerRequestTransport = Pick<Worker, 'unref' | 'postMessage' | 'terminate'> & {
+  on(...args: Parameters<Worker['on']>): unknown
+  off(...args: Parameters<Worker['off']>): unknown
+  removeAllListeners(): unknown
+}
+
+export type WorkerThreadFactory = () => WorkerRequestTransport
 
 /**
  * Owns the lifetime of one lazily-spawned worker thread: spawn on demand,
@@ -10,7 +16,7 @@ export type WorkerThreadFactory = () => Worker
  * queued calls closed instead of moving the work back onto the main thread.
  */
 export class LazyWorkerThreadHost<TResponse> {
-  private worker: Worker | null = null
+  private worker: WorkerRequestTransport | null = null
   private idleTimer: NodeJS.Timeout | null = null
   private cleanupListeners: (() => void) | null = null
   private reportedUnavailable = false
@@ -29,12 +35,12 @@ export class LazyWorkerThreadHost<TResponse> {
     }
   ) {}
 
-  get current(): Worker | null {
+  get current(): WorkerRequestTransport | null {
     return this.worker
   }
 
   /** The live worker, spawning one if needed; null when no worker can be had. */
-  ensure(): Worker | null {
+  ensure(): WorkerRequestTransport | null {
     if (this.worker) {
       return this.worker
     }

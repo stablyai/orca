@@ -14852,6 +14852,7 @@
           "f1aa04b5cf": "이 파일",
           "8b87612461": "보내지 않은 모든 메모"
         },
+        "diffCommentSaveFailed": "댓글을 저장하지 못했습니다.",
         "DiffSectionBody": {
           "35d6afb5be": "바이너리 파일이 변경됨",
           "cef4cf0ff5": "다시 시도",
@@ -15495,7 +15496,10 @@
             "2b3ce6d394": "취소",
             "e05063cfc1": "라인 {{value0}}",
             "c845170b3b": "라인 {{value0}}-{{value1}}",
-            "commentTooLarge": "댓글이 너무 길어 안전하게 제출할 수 없습니다."
+            "commentTooLarge": "댓글이 너무 길어 안전하게 제출할 수 없습니다.",
+            "f6c449191e": "AI에 대한 메모 추가",
+            "5fa4bfebaa": "메모 추가",
+            "5e9b3d0c2e": "추가 중..."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "이 메모"
@@ -17477,9 +17481,9 @@
         "responding": "Agent이 응답 중입니다.",
         "working": "일하고 있는…",
         "thinking": "생각",
-        "workingFor": "{{value0}}에서 근무",
-        "workedFor": "{{value0}}에서 근무함",
-        "toggleDetails": "회전 세부정보 전환"
+        "workingFor": "{{value0}} 작업 중",
+        "workedFor": "{{value0}} 작업 완료",
+        "toggleDetails": "턴 세부정보 전환"
       },
       "jumpToLatest": "최신으로 이동",
       "toggle": {
@@ -17925,7 +17929,7 @@
           "justNow": "방금",
           "minutesAgo": "{{value0}}분 전",
           "hoursAgo": "{{value0}}시간 전",
-          "daysAgo": "{{value0}}d 전"
+          "daysAgo": "{{value0}}일 전"
         },
         "host": {
           "label": "호스트: {{value0}}",
@@ -17983,9 +17987,9 @@
     },
     "cmd-j": {
       "paletteSessionAge": {
-        "minutes": "{{value0}}m",
-        "hours": "{{value0}}h",
-        "days": "{{value0}}d",
+        "minutes": "{{value0}}분",
+        "hours": "{{value0}}시간",
+        "days": "{{value0}}일",
         "underOneMinute": "1분 미만"
       }
     },

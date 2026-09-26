@@ -899,14 +899,15 @@ jobs:
           persist-credentials: false
 
       - name: Cache electron-builder downloads
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
-          key: electron-builder-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          # Release builds seed this exact path set; PR-local copies cannot serve other PRs.
+          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            electron-builder-windows-
+            electron-builder-win-
 
       # Why persist-native-cache false: this job later rebuilds the same path for
       # Electron. A post-job save would store the Electron ABI under the Node key.
