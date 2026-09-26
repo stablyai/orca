@@ -34,6 +34,7 @@ import {
 type RepositoryHostSetupsSectionProps = {
   repo: Repo
   selectedProjectSetupId?: string
+  settingsEntryRepoIds?: ReadonlySet<string>
   forceVisible: boolean
   searchQuery: string
   searchEntries: SettingsSearchEntry[]
@@ -60,6 +61,7 @@ function setupsByOwnedExecutionHost(
 export function RepositoryHostSetupsSection({
   repo,
   selectedProjectSetupId,
+  settingsEntryRepoIds,
   forceVisible,
   searchQuery,
   searchEntries
@@ -116,21 +118,27 @@ export function RepositoryHostSetupsSection({
         setup.repoId === repo.id &&
         setup.projectId === repoProjectHostSetup?.projectId
     ) ?? repoProjectHostSetup
-  const projectHostSetups = selectedProjectHostSetup
-    ? setupsByOwnedExecutionHost(
-        projectHostSetupProjection.setups.filter(
-          (setup) => setup.projectId === selectedProjectHostSetup.projectId
-        ),
-        selectedProjectHostSetup.id
+  const allProjectHostSetups = selectedProjectHostSetup
+    ? projectHostSetupProjection.setups.filter(
+        (setup) => setup.projectId === selectedProjectHostSetup.projectId
       )
     : []
+  // Why: a sibling entry's setups can't be opened from this pane; not-set-up
+  // placeholders belong to the project, not a checkout, so every entry keeps them.
+  const projectHostSetups = setupsByOwnedExecutionHost(
+    allProjectHostSetups.filter(
+      (setup) =>
+        !settingsEntryRepoIds || !setup.repoId.trim() || settingsEntryRepoIds.has(setup.repoId)
+    ),
+    selectedProjectHostSetup?.id ?? ''
+  )
   const openableProjectHostSetups = projectHostSetups.filter((setup) => setup.repoId.trim())
   const switchableProjectHostSetups = setupsByOwnedExecutionHost(
     openableProjectHostSetups,
     selectedProjectHostSetup?.id ?? ''
   )
   const setupHostOptions = buildSetupHostOptions({
-    projectHostSetups,
+    projectHostSetups: allProjectHostSetups,
     hostOptions
   })
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))

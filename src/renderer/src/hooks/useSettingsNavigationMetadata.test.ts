@@ -401,6 +401,30 @@ describe('settings navigation metadata', () => {
     expect(repoSections[0].id).toBe('repo-local-1')
   })
 
+  it('renders a nav section per same-host clone, titled by the clone (#20861)', () => {
+    const gitRemote = {
+      canonicalKey: 'gitlab.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:acme/app.git'
+    }
+    const clone = { badgeColor: '#000', addedAt: 0, gitRemoteIdentity: gitRemote }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [
+        { ...clone, id: 'clone-a', path: '/work/app', displayName: 'app' },
+        { ...clone, id: 'clone-b', path: '/work/app-b', displayName: 'app-b' }
+      ]
+    })
+
+    const repoSections = sections.filter((section) => section.id.startsWith('repo-'))
+    expect(repoSections.map((section) => [section.id, section.title])).toEqual([
+      ['repo-clone-a', 'app'],
+      ['repo-clone-b', 'app-b']
+    ])
+  })
+
   it('keeps macOS permissions mac-only', () => {
     expect(ids({ isMac: false })).not.toContain('developer-permissions')
     expect(ids({ isMac: true })).toContain('developer-permissions')

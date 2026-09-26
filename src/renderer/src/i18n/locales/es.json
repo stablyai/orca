@@ -6822,6 +6822,8 @@
           "c7ef4415de": "Nombre para mostrar",
           "b0a0c14a1c": "Detalles de visualización específicos del proyecto para la barra lateral y las pestañas.",
           "removeProjectAllHosts": "Eliminar este proyecto de Orca en todos los hosts configurados.",
+          "removeProjectCheckout": "Eliminar este checkout de Orca. Los demás checkouts de este proyecto se conservan.",
+          "removeProjectKeepCheckouts": "Eliminar este proyecto de Orca. Los checkouts que tienen su propia configuración se conservan.",
           "0909e5d650": "Eliminar proyecto",
           "ee5a290616": "Abierto como carpeta. Las funciones de Git no están disponibles para este espacio de trabajo.",
           "323debba71": "Tipo:",

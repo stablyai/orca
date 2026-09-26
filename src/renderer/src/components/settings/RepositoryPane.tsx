@@ -5,18 +5,17 @@ import type { Project, ProjectUpdateArgs } from '../../../../shared/project-type
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
-import { Trash2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
 import { SearchableSetting } from './SearchableSetting'
+import { RepositoryRemoveProjectButton } from './RepositoryRemoveProjectButton'
+import type { SettingsProjectRemovalScope } from './settings-project-list'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { getRepositoryIconSectionId } from './repository-settings-targets'
@@ -60,6 +59,8 @@ type RepositoryPaneProps = {
   removeProject: (repoId: string) => void
   project?: Project | null
   selectedProjectSetupId?: string
+  settingsEntryRepoIds?: ReadonlySet<string>
+  removalScope?: SettingsProjectRemovalScope
   isLocalWindowsProject?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -80,6 +81,8 @@ export function RepositoryPane({
   removeProject,
   project = null,
   selectedProjectSetupId,
+  settingsEntryRepoIds,
+  removalScope = 'project',
   isLocalWindowsProject = false,
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
@@ -116,7 +119,6 @@ export function RepositoryPane({
   const runtimeSessionSummary = useAppStore(
     useShallow((state) => getProjectRuntimeSessionSummary(state, repo.id))
   )
-  const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
   const copiedTemplateResetTimerRef = useRef<number | null>(null)
   // Why: clipboard IPC can resolve after settings navigation; avoid starting
@@ -142,16 +144,6 @@ export function RepositoryPane({
     },
     [clearCopiedTemplateResetTimer]
   )
-
-  const handleRemoveProject = (repoId: string) => {
-    if (confirmingRemove === repoId) {
-      removeProject(repoId)
-      setConfirmingRemove(null)
-      return
-    }
-
-    setConfirmingRemove(repoId)
-  }
 
   const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
     updateSelectedRepo(repo.id, {
@@ -211,8 +203,6 @@ export function RepositoryPane({
   const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
   const hostSetupEntries = allEntries.filter((entry) => entry.title === 'Available Hosts')
   const projectRuntimeEntries = allEntries.filter((entry) => entry.title === 'Project Runtime')
-  const removeProjectLabel =
-    confirmingRemove === repo.id ? 'Confirm Remove Project' : 'Remove Project'
 
   const hooksSection =
     !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
@@ -260,37 +250,12 @@ export function RepositoryPane({
               </p>
             ) : null}
           </div>
-          <SearchableSetting
-            title={translate(
-              'auto.components.settings.RepositoryPane.0909e5d650',
-              'Remove Project'
-            )}
-            description={translate(
-              'auto.components.settings.RepositoryPane.removeProjectAllHosts',
-              'Remove this project from Orca on all configured hosts.'
-            )}
-            keywords={[repo.displayName, 'delete', 'project', 'repository']}
-            className="absolute top-0 right-0 z-10 w-auto max-w-none"
+          <RepositoryRemoveProjectButton
+            repo={repo}
+            removalScope={removalScope}
             forceVisible={forceFullPaneForRepoMatch}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={confirmingRemove === repo.id ? 'destructive' : 'outline'}
-                  size="icon-sm"
-                  onClick={() => handleRemoveProject(repo.id)}
-                  onBlur={() => setConfirmingRemove(null)}
-                  aria-label={removeProjectLabel}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {removeProjectLabel}
-              </TooltipContent>
-            </Tooltip>
-          </SearchableSetting>
+            removeProject={removeProject}
+          />
         </div>
 
         <SearchableSetting
@@ -343,6 +308,7 @@ export function RepositoryPane({
             <RepositoryHostSetupsSection
               repo={repo}
               selectedProjectSetupId={selectedProjectSetupId}
+              settingsEntryRepoIds={settingsEntryRepoIds}
               forceVisible={forceFullPaneForRepoMatch}
               searchQuery={searchQuery}
               searchEntries={hostSetupEntries}

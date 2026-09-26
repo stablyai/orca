@@ -6,12 +6,33 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import {
+  buildProjectGroupingIndex,
+  isCheckoutScopedProjectSetup,
+  type ProjectGroupingModel
+} from '@/components/sidebar/worktree-list/grouping/project-grouping'
 
 export type SettingsProject = {
   projectId: string
   project: Project
   setups: ProjectHostSetup[]
   representativeRepoId: string
+  /** Only set when same-host clones split the project. */
+  checkoutLabel?: string
+  /** Set on every entry of a split project; each holds only its own part. */
+  splitProject?: boolean
+}
+
+/** What a pane's "Remove Project" removes: the project, one clone, or a split project's remainder. */
+export type SettingsProjectRemovalScope = 'project' | 'checkout' | 'split-project'
+
+export function getSettingsProjectRemovalScope(
+  settingsProject: SettingsProject
+): SettingsProjectRemovalScope {
+  if (settingsProject.checkoutLabel !== undefined) {
+    return 'checkout'
+  }
+  return settingsProject.splitProject ? 'split-project' : 'project'
 }
 
 /**
@@ -40,32 +61,63 @@ export function getSettingsProjectRepresentativeRepoId(
 }
 
 /**
- * Collapses repo rows into one entry per project so Settings renders per
- * project, matching the rest of the app. Derived from repos alone (not the
- * persisted projects/setups) so the nav and pane lists agree exactly.
+ * Collapses repo rows into one entry per project, except that a same-host clone
+ * the sidebar gives its own header gets its own entry. Entries are derived from
+ * repos alone so the nav and pane lists agree exactly; pass the sidebar's
+ * `projectGrouping` so the split decision sees the same setups it does.
  */
-export function buildSettingsProjectList(repos: readonly Repo[]): SettingsProject[] {
+export function buildSettingsProjectList(
+  repos: readonly Repo[],
+  projectGrouping?: ProjectGroupingModel
+): SettingsProject[] {
   const projection = projectHostSetupProjectionFromRepos(repos)
-  const setupsByProjectId = new Map<string, ProjectHostSetup[]>()
+  const projectById = new Map(projection.projects.map((project) => [project.id, project]))
+  const groupingIndex = buildProjectGroupingIndex(
+    projectGrouping ?? { projects: projection.projects, projectHostSetups: projection.setups }
+  )
+  // Why: Settings metadata is rebuilt as repos refresh across hosts; index
+  // setups once so many projects do not turn each refresh into an O(n²) scan.
+  const entriesByKey = new Map<string, Omit<SettingsProject, 'representativeRepoId'>>()
+  // Why: a repo id owns one `repo-<id>` section, so its same-id twin on another
+  // host joins the clone's entry instead of colliding with it.
+  const checkoutRepoIds = new Set(
+    groupingIndex === null
+      ? []
+      : projection.setups
+          .filter((setup) => isCheckoutScopedProjectSetup(setup, groupingIndex))
+          .map((setup) => setup.repoId)
+  )
   for (const setup of projection.setups) {
-    const projectSetups = setupsByProjectId.get(setup.projectId)
-    if (projectSetups) {
-      projectSetups.push(setup)
+    const project = projectById.get(setup.projectId)
+    if (!project) {
+      continue
+    }
+    const checkoutScoped = checkoutRepoIds.has(setup.repoId)
+    const key = checkoutScoped ? `${project.id}::setup:${setup.repoId}` : project.id
+    const entry = entriesByKey.get(key)
+    if (entry) {
+      entry.setups.push(setup)
     } else {
-      setupsByProjectId.set(setup.projectId, [setup])
+      entriesByKey.set(key, {
+        projectId: project.id,
+        project,
+        setups: [setup],
+        ...(checkoutScoped ? { checkoutLabel: setup.displayName } : {})
+      })
     }
   }
-  return projection.projects.map((project) => {
-    // Why: Settings metadata is rebuilt as repos refresh across hosts; index
-    // setups once so many projects do not turn each refresh into an O(n²) scan.
-    const setups = setupsByProjectId.get(project.id) ?? []
-    return {
-      projectId: project.id,
-      project,
-      setups,
-      representativeRepoId: getSettingsProjectRepresentativeRepoId(setups)
-    }
-  })
+  const entryCountByProjectId = new Map<string, number>()
+  for (const entry of entriesByKey.values()) {
+    entryCountByProjectId.set(
+      entry.projectId,
+      (entryCountByProjectId.get(entry.projectId) ?? 0) + 1
+    )
+  }
+  return [...entriesByKey.values()].map((entry) => ({
+    ...entry,
+    representativeRepoId: getSettingsProjectRepresentativeRepoId(entry.setups),
+    ...((entryCountByProjectId.get(entry.projectId) ?? 0) > 1 ? { splitProject: true } : {})
+  }))
 }
 
 /**
@@ -168,9 +220,10 @@ export function resolveSettingsTargetRepoId(
 }
 
 /**
- * Removes a project's setup on every host it exists on. Sequential so each
- * host's teardown + projection recompute don't interleave; setups without a
- * repo row (planned/not-set-up hosts) have nothing to remove.
+ * Removes a Settings entry's setup on every host it exists on; an entry of a
+ * split project holds only its own part. Sequential so each host's teardown +
+ * projection recompute don't interleave; setups without a repo row
+ * (planned/not-set-up hosts) have nothing to remove.
  */
 export async function removeSettingsProjectFromAllHosts(
   setups: readonly ProjectHostSetup[],
