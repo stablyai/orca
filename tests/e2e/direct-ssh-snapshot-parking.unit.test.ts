@@ -160,6 +160,7 @@ async function applySnapshot(snapshot: RemoteWorkspaceObservedSnapshot): Promise
 }
 
 async function deliverReadAfterOwnReply(own: RemoteWorkspaceSnapshot, read = own): Promise<void> {
+  request.mockResolvedValue(read)
   let releaseRead: ((snapshot: RemoteWorkspaceSnapshot) => void) | undefined
   request.mockImplementationOnce(
     () =>

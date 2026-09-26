@@ -39,6 +39,7 @@ import {
   rememberRemoteWorkspaceSnapshot
 } from './remote-workspace-snapshot-cache'
 import { isRemoteWorkspaceResyncInFlight } from './remote-workspace-stale-resync'
+import { CLIENT_ID } from './remote-workspace-client-identity'
 
 function session(activeTabId: string): RemoteWorkspaceSession {
   return {
@@ -177,6 +178,7 @@ describe('workspace.stale resync', () => {
       rememberRemoteWorkspaceSnapshot('target-1', snapshot(1, 'tab-before-patch'))
       const ownSnapshot = snapshot(2, 'tab-from-own-patch')
       const readSnapshot = source === 'own' ? ownSnapshot : snapshot(3, 'tab-from-peer')
+      request.mockResolvedValue(readSnapshot)
       let releaseRead: ((value: RemoteWorkspaceSnapshot) => void) | undefined
       request.mockImplementationOnce(
         () =>
@@ -262,8 +264,9 @@ describe('workspace.stale resync', () => {
     expect(sent.map((event) => event.targetId)).toEqual(['target-2'])
   })
 
-  it('observes the read before a later own reply advances the cache', async () => {
+  it('does not deliver a captured read after a same-token own acknowledgement advances the cache', async () => {
     rememberRemoteWorkspaceSnapshot('target-1', snapshot(1, 'initial-tab'))
+    request.mockResolvedValue(snapshot(3, 'newer-own-tab'))
     let releaseRead: ((value: RemoteWorkspaceSnapshot) => void) | undefined
     request.mockImplementationOnce(
       () =>
@@ -282,12 +285,18 @@ describe('workspace.stale resync', () => {
     await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
 
     expect(getCachedRemoteWorkspaceSnapshot('target-1')?.revision).toBe(3)
-    expect(sent.map((event) => event.snapshot.revision)).toEqual([2])
+    expect(sent.map((event) => event.snapshot.revision)).toEqual([])
+    expect(request).toHaveBeenCalledTimes(2)
   })
 
-  it.each(['response-first', 'notification-first'] as const)(
-    'never publishes an older read after a newer notification in one decode turn (%s)',
-    async (order) => {
+  it.each([
+    { source: 'peer', order: 'response-first' },
+    { source: 'peer', order: 'notification-first' },
+    { source: 'own', order: 'response-first' },
+    { source: 'own', order: 'notification-first' }
+  ])(
+    'never publishes an older read after a newer $source notification ($order)',
+    async ({ source, order }) => {
       let receive: ((data: Buffer) => void) | undefined
       const mux = new SshChannelMultiplexer({
         write: () => {},
@@ -301,7 +310,8 @@ describe('workspace.stale resync', () => {
       mux.onNotification((method, params) =>
         handleRemoteWorkspaceNotification('target-1', method, params)
       )
-      rememberRemoteWorkspaceSnapshot('target-1', snapshot(1, 'initial-tab'))
+      const initial = rememberRemoteWorkspaceSnapshot('target-1', snapshot(2, 'initial-tab'))
+      const sourceClientId = source === 'own' ? CLIENT_ID : 'peer-client'
       try {
         handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_STALE_NOTIFICATION, {
           namespace: 'target-1'
@@ -310,22 +320,27 @@ describe('workspace.stale resync', () => {
         const changed = {
           jsonrpc: '2.0',
           method: REMOTE_WORKSPACE_CHANGED_NOTIFICATION,
-          params: { snapshot: snapshot(3, 'newer-peer'), sourceClientId: 'peer-client' }
+          params: { snapshot: snapshot(3, 'newer-source'), sourceClientId }
         } as const
         const messages = order === 'response-first' ? [reply, changed] : [changed, reply]
         receive?.(
           Buffer.concat(messages.map((message, index) => encodeJsonRpcFrame(message, index + 1, 0)))
         )
-        await Promise.resolve()
-        await Promise.resolve()
+        if (source === 'own') {
+          expect(getCachedRemoteWorkspaceSnapshot('target-1')?.hostObservationToken).toBe(
+            initial.hostObservationToken
+          )
+        }
+        await new Promise((resolve) => setImmediate(resolve))
         expect(getCachedRemoteWorkspaceSnapshot('target-1')?.revision).toBe(3)
         expect(sent.map((event) => event.snapshot.revision)).toEqual([3])
         await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2))
         receive?.(
-          encodeJsonRpcFrame({ jsonrpc: '2.0', id: 2, result: snapshot(3, 'newer-peer') }, 3, 0)
+          encodeJsonRpcFrame({ jsonrpc: '2.0', id: 2, result: snapshot(3, 'newer-source') }, 3, 0)
         )
         await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
         expect(sent.map((event) => event.snapshot.revision)).toEqual([3])
+        expect(sent[0].sourceClientId).toBe(sourceClientId)
       } finally {
         mux.dispose()
       }

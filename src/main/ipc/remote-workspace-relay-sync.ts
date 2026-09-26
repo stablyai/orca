@@ -19,7 +19,7 @@ import {
   remoteWorkspaceSessionMatchesSnapshot
 } from './remote-workspace-snapshot-normalization'
 
-// Observe at receipt so another reply cannot advance the cache between fetch and observation.
+// Keep comparison and cache mutation together in the response continuation.
 export async function readRemoteSnapshot<Result>(
   target: SshTarget,
   receive: (snapshot: RemoteWorkspaceSnapshot) => Result

@@ -47,7 +47,11 @@ export function resyncStaleRemoteWorkspace(
         const observation = await readRemoteSnapshot(target, (snapshot) => {
           // An own patch reply can update the cache while this read is pending.
           const previous = getCachedRemoteWorkspaceSnapshot(target.id)
-          if (previous?.hostObservationToken !== cachedBeforeRead?.hostObservationToken) {
+          if (
+            cachedBeforeRead
+              ? !remoteWorkspaceSnapshotsAreIdentical(previous, cachedBeforeRead)
+              : previous !== undefined
+          ) {
             // Reread a conflicting observation; revision comparisons would reject valid relay resets.
             pending.requeued ||= !remoteWorkspaceSnapshotsAreIdentical(previous, snapshot)
             return null
@@ -66,10 +70,7 @@ export function resyncStaleRemoteWorkspace(
           continue
         }
         const latest = getCachedRemoteWorkspaceSnapshot(target.id)
-        if (
-          latest?.hostObservationToken !== observation.snapshot.hostObservationToken &&
-          !remoteWorkspaceSnapshotsAreIdentical(latest, observation.snapshot)
-        ) {
+        if (!remoteWorkspaceSnapshotsAreIdentical(latest, observation.snapshot)) {
           pending.requeued = true
           continue
         }
