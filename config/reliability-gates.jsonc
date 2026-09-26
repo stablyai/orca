@@ -22,25 +22,10 @@
         "preview settings updates",
         "preview box fit and grid claim"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
-      "coveredProviders": [
-        "local",
-        "remote-runtime"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "remote-runtime"],
       "coverageNotes": "Mounted production component and real settings action with cloned IPC replies, inert xterm/input adapters, and simulated metrics. Local/remote-qualified renderer identities covered; no physical provider, native geometry, focus, IME or rendered app claim. Subsequent hidden/offscreen Electron component proof uses real xterm and synthetic snapshots, preserving the rendered terminal across unrelated updates and measuring equivalent fallback scale/fit requests after a font-size change.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/main/src/renderer/src/components/dashboard-popout/AgentTerminalPreview.tsx",
@@ -126,20 +111,9 @@
         "issue-command read and write",
         "hosted-review own-store host resolution"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
       "coveredProviders": [],
       "coverageNotes": "Actual hydration and authoritative desktop owner selection with mocked filesystem, Git, inspection and provider boundaries; synthetic local/SSH/runtime rows. No physical provider or native platform certification.",
       "motivatingLinks": [
@@ -150,9 +124,7 @@
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/hooks/worktree-hook-execution-host.test.ts"
       ],
-      "testFiles": [
-        "src/main/ipc/hooks/worktree-hook-execution-host.test.ts"
-      ],
+      "testFiles": ["src/main/ipc/hooks/worktree-hook-execution-host.test.ts"],
       "assertionRefs": [
         {
           "file": "src/main/ipc/hooks/worktree-hook-execution-host.test.ts",
@@ -272,6 +244,81 @@
       ],
       "promotionCriteria": ["Retain red/green heap and value assertions and complete CI soak."],
       "demotionRule": "Keep experimental until cross-platform and soak evidence; investigate failures without weakening content or memory assertions."
+    },
+    {
+      "id": "relay-performance.ai-vault-ready-ownership",
+      "title": "AI Vault readiness releases canceled request owners",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "relay-service-client-contract",
+      "surfaces": ["AI Vault sidecar startup", "SSH title lookup cancellation"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["ssh"],
+      "coverageNotes": "Production relay client with synthetic child events and real forced GC. Native remote process execution and live SSH remain untested. Local/daemon PTY, WSL shell selection and mobile terminal stream are unaffected.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/23024"],
+      "invariant": "Canceled unsent calls release request payloads before sidecar readiness, disposal releases all pending readiness owners, and live calls still start exactly once through cancellation and startup failures.",
+      "oracle": "Hold ready and cancel 1,000 title calls; require zero retained request arrays after GC and one child. Dispose before ready and require uncanceled payload collection and zero timers. Race ready with abort and spawn failure with a second lane; require only live calls delivered and successful results. Preserve existing restart and cancel-ack behavior.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/relay/ai-vault-service-ready-retention.test.ts src/relay/ai-vault-service-client.test.ts src/relay/ai-vault-service-restart-policy.test.ts src/relay/ai-vault-service-spawn.test.ts src/relay/ai-vault-handler.test.ts src/shared/promise-settlement-waiters.test.ts"
+      ],
+      "testFiles": [
+        "src/relay/ai-vault-service-ready-retention.test.ts",
+        "src/relay/ai-vault-service-client.test.ts",
+        "src/relay/ai-vault-service-restart-policy.test.ts",
+        "src/relay/ai-vault-service-spawn.test.ts",
+        "src/relay/ai-vault-handler.test.ts",
+        "src/shared/promise-settlement-waiters.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/relay/ai-vault-service-ready-retention.test.ts",
+          "assertions": [
+            "releases canceled request payloads while readiness remains pending",
+            "releases uncanceled readiness payloads when the client is disposed",
+            "does not send a call canceled in the turn that readiness arrives",
+            "retries an unsent lane after spawn fails while the other lane starts a child"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/relay/ai-vault-service-ready-retention.test.ts src/relay/ai-vault-service-client.test.ts src/relay/ai-vault-service-restart-policy.test.ts src/relay/ai-vault-service-spawn.test.ts src/relay/ai-vault-handler.test.ts src/shared/promise-settlement-waiters.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.616,
+          "summary": "38 tests across six suites passed, including real forced-GC retention and startup/cancel races."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused Node contract tests with forced GC"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local runs passed; CI/soak history not collected."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline retains all 1,000 canceled arrays and the disposed uncanceled payload; both permanent regressions fail there and pass after the fix. Independent spawn-failure race failed on the initial prototype, passed on baseline and passes after correction."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Synthetic cold-start churn retains 1,000 to zero canceled arrays; incremental heap 34,771,464 to 492,504 bytes. One shared startup reaction, no new polling, timers, process starts, timeout changes or wire fields."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Exercise real SSH sidecar cancellation and restart on Linux and Windows."
+      ],
+      "knownGaps": [
+        "Synthetic churn does not measure typical user frequency or UI latency.",
+        "Physical sidecar/native Windows/Linux and live SSH paths were not exercised."
+      ],
+      "demotionRule": "Keep experimental or demote if canceled payloads survive GC, disposal retains startup owners, or live lanes stall/duplicate after startup failure."
     },
     {
       "id": "runtime.connection-owned-host-status",
