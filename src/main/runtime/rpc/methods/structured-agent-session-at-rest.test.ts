@@ -332,7 +332,8 @@ describe('an agent exit', () => {
       .at(-1)?.[0]
       .events?.appendItem(
         { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'working', ordinal: 50 },
-        { kind: 'turn', turnId: 'working', state: 'running' }
+        { kind: 'turn', turnId: 'working', state: 'running' },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
     await rig.host.flushStreamedEvents(SESSION)
     vi.spyOn(open.journal, 'appendLifecycleBatch').mockRejectedValueOnce(new Error('disk full'))

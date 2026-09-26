@@ -166,7 +166,7 @@ describe('a request that failed reads as failed through the feed, the ingest and
     await journal.appendItem(
       TURN_IDENTITY,
       { kind: 'turn', turnId: 'turn-1', state: 'completed', outcome: 'failure', completedAt: 5 },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     const summary: AgentSessionStatusSummary = {
       ...publishedSummary(journal),
