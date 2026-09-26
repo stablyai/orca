@@ -49,7 +49,7 @@ describe('desktop activation after ready-phase failures', () => {
   })
 
   it.each(['foundation', 'runtimeServices'] as const)(
-    'replays queued and accepts later desktop activations after %s fails',
+    'disables desktop activation after %s fails',
     async (phase) => {
       const error = new Error(`${phase} failed`)
       phases[phase].mockRejectedValueOnce(error)
@@ -57,16 +57,16 @@ describe('desktop activation after ready-phase failures', () => {
 
       await expect(initializeMainProcessReady(launchOptions)).rejects.toBe(error)
 
-      expect(activateWindow).toHaveBeenCalledTimes(1)
-      expect(state.desktopActivationGate?.getState()).toBe('ready')
+      expect(activateWindow).not.toHaveBeenCalled()
+      expect(state.desktopActivationGate).toBeNull()
       expect(phases.launch).not.toHaveBeenCalled()
       state.desktopActivationGate?.requestActivation()
-      expect(activateWindow).toHaveBeenCalledTimes(2)
+      expect(activateWindow).not.toHaveBeenCalled()
     }
   )
 
   it.each(['foundation', 'runtimeServices'] as const)(
-    'keeps serve promotion held after %s fails',
+    'disables serve promotion after %s fails',
     async (phase) => {
       const error = new Error(`${phase} failed`)
       phases[phase].mockRejectedValueOnce(error)
@@ -75,7 +75,7 @@ describe('desktop activation after ready-phase failures', () => {
 
       await expect(initializeMainProcessReady(launchOptions)).rejects.toBe(error)
 
-      expect(state.desktopActivationGate?.getState()).toBe('initializing')
+      expect(state.desktopActivationGate).toBeNull()
       state.desktopActivationGate?.requestActivation()
       expect(activateWindow).not.toHaveBeenCalled()
       expect(phases.launch).not.toHaveBeenCalled()
@@ -99,7 +99,9 @@ describe('desktop activation after ready-phase failures', () => {
     )
     state.desktopActivationGate?.requestActivation()
 
-    await expect(initializeMainProcessReady(launchOptions)).rejects.toBe(error)
+    const ready = initializeMainProcessReady(launchOptions)
+    const rejected = expect(ready).rejects.toBe(error)
+    await vi.waitFor(() => expect(phases.launch).toHaveBeenCalledOnce())
 
     expect(state.desktopActivationGate?.getState()).toBe('initializing')
     expect(activateWindow).not.toHaveBeenCalled()
@@ -108,5 +110,24 @@ describe('desktop activation after ready-phase failures', () => {
     expect(launchOptions.openMainWindow).toHaveBeenCalledTimes(1)
     expect(state.desktopActivationGate?.getState()).toBe('ready')
     expect(activateWindow).toHaveBeenCalledTimes(1)
+    await rejected
+    expect(state.desktopActivationGate).toBeNull()
+  })
+
+  it('does not replay pending activations when window creation throws', async () => {
+    const error = new Error('window creation failed')
+    vi.mocked(launchOptions.openMainWindow).mockImplementationOnce(() => {
+      throw error
+    })
+    phases.launch.mockImplementationOnce(async (options) => {
+      options.openMainWindow()
+    })
+    state.desktopActivationGate?.requestActivation()
+
+    await expect(initializeMainProcessReady(launchOptions)).rejects.toBe(error)
+
+    expect(state.desktopActivationGate).toBeNull()
+    expect(activateWindow).not.toHaveBeenCalled()
+    expect(launchOptions.openMainWindow).toHaveBeenCalledTimes(1)
   })
 })

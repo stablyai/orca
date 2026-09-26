@@ -349,6 +349,7 @@ describe('a structured Claude session over agentSession.*', () => {
   })
 
   it('leaves unlisted shell exports out when inheritance is off', async () => {
+    vi.stubEnv('CODEX_LB_API_KEY', undefined)
     shellEnv = { ...shellEnv, CODEX_LB_API_KEY: 'shell-exported', LISTED_ONLY: 'yes' }
     shellEnvironmentPolicy = { inheritAll: false, names: ['LISTED_ONLY'] }
 
@@ -450,6 +451,25 @@ describe('a structured Claude session over agentSession.*', () => {
     })
     expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
     claude.setSelfExit(null)
+  })
+
+  it('releases a failed start that recorded no owner without claiming it exited', async () => {
+    claude.setSelfExit({
+      message: 'claude stream-json exited (code 1): claude: not signed in',
+      // The root was never seen to exit, so nothing proves this start's process gone.
+      exitVerdict: { root: 'live', tree: 'unverifiable' }
+    })
+
+    await call('agentSession.create', createIntentParams())
+    claude.setSelfExit(null)
+
+    // The adapter closed the stdio of what it spawned, and no owner was recorded to stop. The next
+    // start goes ahead; with no death evidence nothing reads the failed start as exited.
+    expect(leaseOf(SESSION)).toMatchObject({
+      claimStatus: 'released',
+      handoffStage: null,
+      deathEvidence: null
+    })
   })
 
   it.each(['unverifiable', 'live'] as const)(

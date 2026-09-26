@@ -36,11 +36,9 @@ export function releaseDesktopActivationAfter<TArgs extends unknown[], TResult>(
   open: (...args: TArgs) => TResult
 ): (...args: TArgs) => TResult {
   return (...args) => {
-    try {
-      return open(...args)
-    } finally {
-      gate?.markReady()
-    }
+    const result = open(...args)
+    gate?.markReady()
+    return result
   }
 }
 

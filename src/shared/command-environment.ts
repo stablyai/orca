@@ -23,10 +23,10 @@ export function extractLeadingEnvAssignments(tokens: string[]): {
 }
 
 export function mergeCommandEnvironment(
-  base: NodeJS.ProcessEnv | undefined,
+  base: Record<string, string | undefined> | undefined,
   overrides: Record<string, string> | undefined,
   platform: NodeJS.Platform
-): NodeJS.ProcessEnv | undefined {
+): Record<string, string | undefined> | undefined {
   if (!overrides) {
     return base
   }

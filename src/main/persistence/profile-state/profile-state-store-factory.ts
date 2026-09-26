@@ -1,0 +1,121 @@
+import type { AutomationStorageAuthority } from '../scheduling-automations/automation-owner-projection'
+import type { ProfileStateAuthorityInitialState } from '../loading-store/profile-state-authority'
+import type { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
+import { Store } from '../loading-store/store'
+import { bootstrapProfileStateAuthority } from './profile-state-authority-bootstrap'
+import {
+  classifyProfileStateStorage,
+  type ProfileStateStorageClassification
+} from './profile-state-storage-classification'
+import { assertNoRetainedProfileStateExports } from './profile-state-recovery-required'
+
+/** Legacy refuses SQLite; candidate migrates; established only reopens existing SQLite. */
+export type ProfileStateStoreAuthorityMode =
+  | 'legacy'
+  | 'sqlite-candidate'
+  /** Use SQLite only when a prior migration already established it. */
+  | 'sqlite-established'
+
+export type ProfileStateStoreFactoryOptions = {
+  dataFile: string
+  databaseFile: string
+  profileId: string
+  storageAuthority?: AutomationStorageAuthority
+  authorityMode?: ProfileStateStoreAuthorityMode
+}
+
+export class ProfileStateStoreFactoryError extends Error {
+  readonly code = 'profile-state-authority-required' as const
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'ProfileStateStoreFactoryError'
+  }
+}
+
+export type ProfileStateStoreFactoryResult = {
+  store: Store
+  backend: 'json' | 'sqlite'
+  classification: ProfileStateStorageClassification
+  migrated: boolean
+}
+
+/** Centralize authority selection for desktop, orcad and offline callers. */
+export function createProfileStateStore(
+  options: ProfileStateStoreFactoryOptions
+): ProfileStateStoreFactoryResult {
+  const { initialState, ...prepared } = prepareProfileStateStore(options)
+  try {
+    return {
+      ...prepared,
+      store: new Store({
+        dataFile: options.dataFile,
+        storageAuthority: options.storageAuthority,
+        profileStateAuthority: initialState?.authority,
+        initialAuthorityState: initialState
+      })
+    }
+  } catch (error) {
+    // Store construction owns the authority only after its load boundary succeeds.
+    initialState?.authority.close?.()
+    throw error
+  }
+}
+
+type PreparedProfileStateStore = Omit<ProfileStateStoreFactoryResult, 'store'> & {
+  initialState?: ProfileStateAuthorityInitialState<ProfileStateSqliteAuthority>
+}
+
+/** Admission is shared by live worker startup and synchronous offline operations. */
+export function prepareProfileStateStore(
+  options: ProfileStateStoreFactoryOptions
+): PreparedProfileStateStore {
+  const authorityMode = options.authorityMode ?? 'legacy'
+  const classification = classifyProfileStateStorage(options.dataFile, options.databaseFile)
+  if (classification === 'json-only' || classification === 'neither') {
+    assertNoRetainedProfileStateExports(options)
+  }
+  if (authorityMode === 'legacy') {
+    if (classification === 'sqlite-only' || classification === 'both') {
+      throw new ProfileStateStoreFactoryError(
+        'SQLite profile state is present; construct the Store with sqlite-candidate authority mode'
+      )
+    }
+    return {
+      backend: 'json',
+      classification,
+      migrated: false
+    }
+  }
+
+  if (
+    authorityMode === 'sqlite-established' &&
+    (classification === 'neither' || classification === 'json-only')
+  ) {
+    return {
+      backend: 'json',
+      classification,
+      migrated: false
+    }
+  }
+
+  const bootstrap = bootstrapProfileStateAuthority({
+    ...options,
+    allowEmptyProfileState: authorityMode === 'sqlite-candidate'
+  })
+  const authority = bootstrap.authority
+  if (authority === undefined) {
+    return {
+      backend: 'json',
+      classification: bootstrap.classification,
+      migrated: bootstrap.migrated
+    }
+  }
+
+  return {
+    initialState: bootstrap.initialState,
+    backend: 'sqlite',
+    classification: bootstrap.classification,
+    migrated: bootstrap.migrated
+  }
+}

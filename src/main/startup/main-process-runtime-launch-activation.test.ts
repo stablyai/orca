@@ -203,7 +203,7 @@ describe('desktop startup activation', () => {
     }
   )
 
-  it('still opens a window for an activation when launch fails before the startup window', async () => {
+  it('does not replay an activation when launch fails before the startup window', async () => {
     launchHooks.duringInstallDirRepair = () => state.desktopActivationGate?.requestActivation()
     launchHooks.failBeforeWindow = true
 
@@ -215,8 +215,8 @@ describe('desktop startup activation', () => {
       })
     ).rejects.toThrow('install-dir repair failed')
 
-    expect(windows).toHaveLength(1)
-    expect(state.desktopActivationGate?.getState()).toBe('ready')
+    expect(windows).toHaveLength(0)
+    expect(state.desktopActivationGate).toBeNull()
   })
 
   it('holds every launch mode behind the gate until startup settles it', () => {

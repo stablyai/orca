@@ -21,18 +21,18 @@
  *     the remote host's partition never received the capture (#21295). This is the test that fails
  *     with the fix reverted.
  *
- * The on-disk reader walks the local `workspaceSession` AND every `workspaceSessionsByHostId`
+ * The SQLite reader walks the local `workspaceSession` AND every `workspaceSessionsByHostId`
  * partition, and names the partition each reading came from — the issue's original "onDisk: 0" was a
  * reader that inspected only the local blob while the capture sat in the runtime partition, a
- * reading that could not contradict itself. An empty list means no session file at all (a deleted
- * profile), distinguished from an empty buffer.
+ * reading that could not contradict itself. A missing database fails the read; an empty list means
+ * no session partitions were persisted, distinguished from an empty buffer.
  *
  * Run:
  *   pnpm exec playwright test \
  *     tests/e2e/paired-remote-terminal-parked-scrollback-restart.spec.ts \
  *     --config tests/playwright.config.ts --project electron-headless --workers=1
  */
-import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
@@ -49,10 +49,12 @@ import {
   callEnvironment,
   createPairedHostTerminal,
   openPairedClientTab,
-  waitForPairedPaneMarker
+  waitForPairedPaneMarker,
+  type PairedHostTerminal
 } from './helpers/paired-host-terminal'
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
+import { readPersistedProfileState } from './helpers/persisted-profile-state'
 
 const PARK_DELAY_MS = 2_000
 const PAINT_BUDGET_MS = 30_000
@@ -137,31 +139,21 @@ function stringRecord(value: unknown): Record<string, string> | undefined {
   )
 }
 
-/** Walks the local `workspaceSession` and every `workspaceSessionsByHostId` partition. An empty
- *  list means no session file was found at all — a reader problem, not an empty buffer. */
+/** Read committed session partitions without consulting the retained compatibility export. */
 function readOnDiskPartitions(userDataDir: string, webTabId: string): OnDiskPartitionReading[] {
+  const state = readPersistedProfileState(userDataDir)
   const readings: OnDiskPartitionReading[] = []
-  for (const file of globSync(path.join(userDataDir, '**', 'orca-data.json'))) {
-    try {
-      const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'))
-      if (!isRecord(parsed)) {
-        continue
-      }
-      const local = readSessionPartition('local', parsed.workspaceSession, webTabId)
-      if (local) {
-        readings.push(local)
-      }
-      const partitions = isRecord(parsed.workspaceSessionsByHostId)
-        ? parsed.workspaceSessionsByHostId
-        : {}
-      for (const [hostId, session] of Object.entries(partitions)) {
-        const reading = readSessionPartition(hostId, session, webTabId)
-        if (reading) {
-          readings.push(reading)
-        }
-      }
-    } catch {
-      // A partially written profile is itself a datapoint; keep scanning the rest.
+  const local = readSessionPartition('local', state.workspaceSession, webTabId)
+  if (local) {
+    readings.push(local)
+  }
+  const partitions = isRecord(state.workspaceSessionsByHostId)
+    ? state.workspaceSessionsByHostId
+    : {}
+  for (const [hostId, session] of Object.entries(partitions)) {
+    const reading = readSessionPartition(hostId, session, webTabId)
+    if (reading) {
+      readings.push(reading)
     }
   }
   return readings
@@ -258,7 +250,7 @@ async function parkRemoteTerminalWithToken(
     fixtureCommand()
   )
   createdTerminals.push(target.terminal)
-  const decoys = []
+  const decoys: PairedHostTerminal[] = []
   for (let index = 0; index < 2; index += 1) {
     const decoy = await createPairedHostTerminal(
       client.page,
@@ -428,7 +420,7 @@ test.describe('host retains nothing', () => {
       expect({
         tokenBeforePark: parked.tokenBeforePark,
         capturedAtPark: parked.storeAtPark > 0,
-        // Distinguishes a deleted profile (no partitions) from an empty buffer.
+        // Distinguishes missing session partitions from an empty buffer.
         profileSurvived: onDiskAfterQuit.length > 0,
         runtimePartitionHoldsCapture: runtimePartitionBufferLength(onDiskAfterQuit) > 0,
         localPartitionDidNotKeepCapture: localPartitionBufferLength(onDiskAfterQuit) <= 0
