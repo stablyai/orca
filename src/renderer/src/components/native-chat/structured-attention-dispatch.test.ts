@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import {
   createTestStore,
@@ -250,6 +251,15 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ outcome, turnId }))
       expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: outcome })
     }
+  })
+
+  it('calls back a send refused before any turn, named by its journal item key, as failed', () => {
+    dispatchStructuredTurnCompletionAttention(
+      structuredTab(),
+      completion({ outcome: 'failure', turnId: agentJournalSubmissionKey('m1') })
+    )
+    expect(indicators().paneDot).toBe('agent-completion')
+    expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: 'failure' })
   })
 
   it('says done even while the status row still reads working, because the host settled the turn', () => {

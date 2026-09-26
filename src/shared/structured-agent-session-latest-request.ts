@@ -18,6 +18,10 @@ import { dispatchRejectionVerdict } from './structured-agent-session-dispatch-re
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
 export type StructuredAgentSessionLatestRequest = {
+  kind: 'turn' | 'refused-send'
+  /** The turn's id, or the refused send's journal item key. Unique only within its kind. */
+  id: string
+  running: boolean
   /** Null while the turn runs, and for a turn whose end carried no verdict. */
   outcome: AgentJournalTurnOutcome | null
   /** When it settled: the turn's end, or the refusal. Undefined while it runs. */
@@ -39,9 +43,13 @@ export function latestStructuredAgentSessionRequest(
     }
     const turn = readAgentJournalTurn(item.body)
     if (turn) {
+      const running = turn.state === 'running'
       return {
+        kind: 'turn',
+        id: turn.turnId,
+        running,
         outcome: readAgentJournalTurnOutcome(turn),
-        settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn)
+        settledAt: running ? undefined : turnEndedAt(item, turn)
       }
     }
     const submission = rejected.get(item.itemId)
@@ -50,7 +58,13 @@ export function latestStructuredAgentSessionRequest(
       dispatchRejectionVerdict(submission.reason) === 'failure' &&
       !deliveredIntoRunningTurn(items, index, submission)
     ) {
-      return { outcome: 'failure', settledAt: submission.resolvedAt ?? undefined }
+      return {
+        kind: 'refused-send',
+        id: item.itemId,
+        running: false,
+        outcome: 'failure',
+        settledAt: submission.resolvedAt ?? undefined
+      }
     }
   }
   return null

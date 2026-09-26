@@ -22,7 +22,8 @@ import {
 } from './structured-agent-session-live-turn'
 import {
   hasStructuredAgentSessionRequest,
-  latestStructuredAgentSessionRequest
+  latestStructuredAgentSessionRequest,
+  type StructuredAgentSessionLatestRequest
 } from './structured-agent-session-latest-request'
 import {
   isStructuredAgentSessionToolAction,
@@ -32,13 +33,15 @@ import {
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
-import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
+import { hasUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
-// Re-exported so the live-turn readers' existing consumers keep one import site.
+// Re-exported so the live-turn readers' and the unanswered-send rule's existing consumers keep one
+// import site.
 export {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn
 } from './structured-agent-session-live-turn'
+export { hasUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 
 function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
@@ -183,27 +186,6 @@ export function projectStructuredItemToNativeChat(
   return message
 }
 
-/**
- * A send the host has journaled that the provider has neither opened a turn for nor refused.
- *
- * Codex declares `turn/started` within ~150ms, but Claude's running row can only be written once
- * the SDK echoes the user message back — a 3.4s median and 18s at p90 on real journals. Waiting
- * on that echo to call a session working leaves the whole gap reading idle in the chat and in
- * every session list, so the send itself is the evidence.
- *
- * A live `unknown` still counts because an ambiguous adapter reply does not prove the provider
- * stopped. A recovered `unknown` does not — it outlived the host generation that sent it, so
- * there is nothing still running to report.
- */
-export function hasUnansweredStructuredAgentSessionDispatch(
-  submissions: readonly AgentJournalSubmission[],
-  currentFence?: number | null
-): boolean {
-  return submissions.some((submission) =>
-    isUnansweredStructuredAgentSessionDispatch(submission, currentFence)
-  )
-}
-
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
 export function structuredAgentSessionTabId(sessionId: string): string {
@@ -314,8 +296,21 @@ export function projectStructuredAgentSessionStatusSummary(
   submissions: readonly AgentJournalSubmission[] = [],
   currentFence?: number | null
 ): StructuredAgentSessionStatusProjection {
+  return projectStructuredAgentSessionStatusState(items, submissions, currentFence).summary
+}
+
+/** The summary plus the latest request it was read from, whatever the status, so the host's
+ *  completion feed follows the same request the row reports without scanning again. */
+export function projectStructuredAgentSessionStatusState(
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[] = [],
+  currentFence?: number | null
+): {
+  summary: StructuredAgentSessionStatusProjection
+  latestRequest: StructuredAgentSessionLatestRequest | null
+} {
   if (!hasStructuredAgentSessionRequest(items, submissions, currentFence)) {
-    return { status: null, latestPrompt: '' }
+    return { summary: { status: null, latestPrompt: '' }, latestRequest: null }
   }
   const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
   const statusToolCall = status === 'working' ? statusStructuredAgentSessionToolCall(items) : null
@@ -332,8 +327,9 @@ export function projectStructuredAgentSessionStatusSummary(
     latestStructuredAgentSessionAssistantMessage(items),
     AGENT_STATUS_MAX_FIELD_LENGTH
   )
+  const latestRequest = latestStructuredAgentSessionRequest(items, submissions)
   // A verdict is a fact about a finished request: only an idle session has one to report.
-  const request = status === 'idle' ? latestStructuredAgentSessionRequest(items, submissions) : null
+  const request = status === 'idle' ? latestRequest : null
   const turnOutcome = request?.outcome
   const statusStartedAt = structuredAgentSessionStatusStartedAt(
     status,
@@ -343,13 +339,16 @@ export function projectStructuredAgentSessionStatusSummary(
     request
   )
   return {
-    status,
-    latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items)),
-    ...(toolName ? { toolName } : {}),
-    ...(toolInput ? { toolInput } : {}),
-    ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
-    ...(turnOutcome ? { turnOutcome } : {}),
-    ...(statusStartedAt !== undefined ? { statusStartedAt } : {})
+    latestRequest,
+    summary: {
+      status,
+      latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items)),
+      ...(toolName ? { toolName } : {}),
+      ...(toolInput ? { toolInput } : {}),
+      ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
+      ...(turnOutcome ? { turnOutcome } : {}),
+      ...(statusStartedAt !== undefined ? { statusStartedAt } : {})
+    }
   }
 }
 
