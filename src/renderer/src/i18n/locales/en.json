@@ -18329,7 +18329,9 @@
     "genericDetail": "This is often a graphics-driver or installation problem. Reload to try again, or quit and relaunch Orca.",
     "title": "Orca keeps failing to load",
     "stalledMessage": "The app window stopped responding while reloading after a crash.",
-    "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
+    "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically.",
+    "blankDetail": "The window finished loading but Orca never started inside it, and reloading did not help.",
+    "blankMessage": "The app window opened but stayed blank."
   },
   "notifications": {
     "agentStatus": {

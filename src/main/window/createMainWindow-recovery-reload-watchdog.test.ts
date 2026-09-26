@@ -41,6 +41,7 @@ import {
   RENDERER_RECOVERY_DEV_LOAD_TIMEOUT_MS,
   RENDERER_RECOVERY_LOAD_TIMEOUT_MS
 } from './renderer-recovery-reload-watchdog'
+import { notifyRendererBootstrapped } from './renderer-bootstrap-signal'
 
 const DOCUMENT_URL = 'file:///opt/orca/renderer/index.html'
 // A real macOS install URL: the crash-report redactor's PATH_PATTERNS provably leave this one intact.
@@ -364,8 +365,9 @@ describe('renderer recovery reload watchdog', () => {
     expect(onRecoveryReloadOutcome).not.toHaveBeenCalled()
     expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
 
-    // The replacement load lands, and the window the user sees was never worth a Reload/Quit prompt. The crumb
-    // says so: elapsedMs measures the replacement, and the budget analysis has to be able to leave it out.
+    // The replacement load lands and its app boots, so the window the user sees was never worth a Reload/Quit
+    // prompt. The crumb says so: elapsedMs measures the replacement, and budget analysis has to leave it out.
+    notifyRendererBootstrapped(143)
     windowHandlers['did-finish-load']?.()
     expect(onRecoveryReloadOutcome).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'loaded', attempt: 1, superseded: true })

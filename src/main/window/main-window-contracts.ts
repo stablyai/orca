@@ -25,9 +25,13 @@ export type CreateMainWindowOptions = {
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
   ) => boolean
-  /** Called when auto-recovery gives up — the breaker opened, or the recovery reload never produced a document. */
+  /**
+   * Called when auto-recovery gives up — the breaker opened, the recovery reload never produced a
+   * document, or the document it produced never ran its JavaScript.
+   */
   onRendererRecoveryExhausted?: (info: {
-    details: Electron.RenderProcessGoneDetails
+    /** Absent when nothing died: a document that loaded but never booted has no process-gone record. */
+    details?: Electron.RenderProcessGoneDetails
     webContentsId: number
     recentRecoveryCount: number
     cause?: RecoveryExhaustionCause
@@ -47,9 +51,13 @@ export type CreateMainWindowOptions = {
    * breadcrumb counting only automatic recoveries.
    */
   onBeforeRecoveryReload?: (webContentsId: number, trigger: RecoveryReloadTrigger) => void
-  /** Pairs an outcome with the recovery-reload intent crumb: bundles could not tell a landed reload from a stalled one. */
+  /**
+   * Pairs an outcome with the recovery-reload intent crumb: bundles could not tell a landed reload
+   * from a stalled one. `blank` is the exception — it reports a document nobody reloaded.
+   */
   onRecoveryReloadOutcome?: (outcome: {
-    status: 'loaded' | 'timeout' | 'failed'
+    /** `blank`: the document loaded but its JavaScript never ran — a white window, not a failure Chromium reports. */
+    status: 'loaded' | 'timeout' | 'failed' | 'blank'
     attempt: number
     elapsedMs: number
     /** How far the load got: 'none' is the blank-window field failure, anything else a document that then hung. */
