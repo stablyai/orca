@@ -14,9 +14,17 @@ it.each(['end', 'abort', 'timeout'] as const)(
       const encoded = Buffer.from(JSON.stringify(content))
       const notify = vi.fn()
       const mux = {
-        request: vi.fn(async () => ({
-          __orcaGitResponseStream: { streamId: 7, totalBytes: encoded.length, chunkCount: 1000 }
-        })),
+        request: vi.fn(async (_method, _params, options) => {
+          const marker = {
+            __orcaGitResponseStream: {
+              streamId: 7,
+              totalBytes: encoded.length,
+              chunkCount: 1000
+            }
+          }
+          options?.beforeResolve?.(marker)
+          return marker
+        }),
         isDisposed: () => false,
         notify,
         onDispose: () => () => {},
