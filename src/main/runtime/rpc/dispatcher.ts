@@ -96,6 +96,10 @@ export class RpcDispatcher {
           runtime: this.runtime,
           signal: options?.signal,
           connectionId: options?.connectionId,
+          subscriptionRegistrationVersion:
+            request.method === 'terminal.unsubscribe'
+              ? this.runtime.getSubscriptionRegistrationVersion()
+              : undefined,
           requestId: request.id,
           clientId: options?.clientId,
           clientKind: options?.clientKind,

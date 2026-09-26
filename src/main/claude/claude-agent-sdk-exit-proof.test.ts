@@ -432,8 +432,8 @@ describe('claude child tree reaper', () => {
     const child = mockChild()
     // Reap #1 completed and saw a descendant alive at its deadline; the root then
     // left on its own and the re-verification on a loaded host could not read the
-    // table. "Could not look" must not erase "was seen alive": the lease release
-    // gate is exactly the pair this distinguishes.
+    // table. "Could not look" must not erase "was seen alive": the report never
+    // calls a survivor gone.
     const terminateDescendants = vi
       .fn()
       .mockResolvedValueOnce('live')

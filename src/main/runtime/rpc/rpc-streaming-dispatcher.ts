@@ -65,6 +65,11 @@ export class RpcStreamingDispatcher {
 
     if (!isStreamingMethod(method)) {
       try {
+        // Capture before middleware yields to a replacement subscribe on the same connection.
+        const subscriptionRegistrationVersion =
+          request.method === 'terminal.unsubscribe'
+            ? runtime.getSubscriptionRegistrationVersion()
+            : undefined
         const clientHostedBrowser = await routeDispatcherClientHostedBrowserRpc(
           runtime,
           request.method,
@@ -109,6 +114,7 @@ export class RpcStreamingDispatcher {
             signal: options?.signal,
             requestId: request.id,
             connectionId: options?.connectionId,
+            subscriptionRegistrationVersion,
             clientId: options?.clientId,
             pairedDeviceId: options?.pairedDeviceId,
             clientKind: options?.clientKind,
