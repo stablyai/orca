@@ -47,6 +47,16 @@ export function pauseReasonLabel(pause: CcSyncPause): string {
   }
 }
 
+/** Orca's reason codes get words; a reason this build does not know stays visible verbatim. */
+export function notRestorableReasonLabel(reason: string): string {
+  return reason === 'agent-not-supported-v1'
+    ? translate(
+        'components.cross-machine-recovery.copy.notRestorable.agentNotSupported',
+        'agent not supported yet'
+      )
+    : reason
+}
+
 export function providerErrorMessage(error: CrossMachineRecoveryProviderError): string {
   switch (error.code) {
     case 'not-installed':

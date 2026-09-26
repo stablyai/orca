@@ -1,12 +1,14 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handlers, runProcess, spawnProcess, signalProcessTree } = vi.hoisted(() => ({
-  handlers: new Map<string, (...args: unknown[]) => unknown>(),
-  runProcess: vi.fn(),
-  spawnProcess: vi.fn(),
-  signalProcessTree: vi.fn(async () => true)
-}))
+const { handlers, runProcess, spawnProcess, signalProcessTree, readOrMintClientInstanceId } =
+  vi.hoisted(() => ({
+    handlers: new Map<string, (...args: unknown[]) => unknown>(),
+    runProcess: vi.fn(),
+    spawnProcess: vi.fn(),
+    signalProcessTree: vi.fn(async () => true),
+    readOrMintClientInstanceId: vi.fn(async () => 'client-1')
+  }))
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -16,6 +18,12 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess, spawnProcess }))
 vi.mock('../../shared/child-process/process-tree-termination', () => ({ signalProcessTree }))
+vi.mock('../runtime/cross-machine-recovery/client-instance-id', () => ({
+  readOrMintCrossMachineRecoveryClientInstanceId: readOrMintClientInstanceId
+}))
+vi.mock('../orca-profiles/profile-storage-paths', () => ({
+  getProfileUserDataPath: () => '/profile'
+}))
 
 import {
   createCrossMachineRecoveryProvider,
@@ -61,6 +69,17 @@ function fakeChild() {
 
 const sender = { send: vi.fn(), isDestroyed: () => false }
 
+function provider() {
+  return createCrossMachineRecoveryProvider(
+    () => 'cc-sync',
+    async () => 'client-1'
+  )
+}
+
+async function spawned(): Promise<void> {
+  await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalled())
+}
+
 beforeEach(() => {
   handlers.clear()
   runProcess.mockReset()
@@ -81,10 +100,7 @@ describe('cross-machine recovery provider bridge', () => {
         crossMachineRecovery: { providerPath: '/opt/cc-sync' }
       })
     })
-    const result = await handlers.get('crossMachineRecovery:list')?.(
-      {},
-      { clientInstanceId: 'client-1', source: 'laptop' }
-    )
+    const result = await handlers.get('crossMachineRecovery:list')?.({}, { source: 'laptop' })
     expect(result).toEqual({ ok: true, value: LIST })
     const spec = runProcess.mock.calls[0][0]
     expect(spec.program).toBe('/opt/cc-sync')
@@ -92,6 +108,7 @@ describe('cross-machine recovery provider bridge', () => {
     expect(spec.timeoutMs).toBe(15_000)
     expect(spec.maxOutputBytes).toBe(4 * 1024 * 1024)
     expect(spec.env.CC_SYNC_ORCA_CLIENT_INSTANCE_ID).toBe('client-1')
+    expect(readOrMintClientInstanceId).toHaveBeenCalledWith('/profile')
     for (const key of ['ORCA_ENVIRONMENT', 'ORCA_PAIRING_CODE', 'ORCA_REMOTE_PAIRING']) {
       expect(spec.env).not.toHaveProperty(key)
     }
@@ -142,20 +159,18 @@ describe('cross-machine recovery provider bridge', () => {
     ]
   ])('maps %s to a typed error', async (_name, arrange, code) => {
     arrange()
-    const provider = createCrossMachineRecoveryProvider(() => 'cc-sync')
-    const result = await provider.status('client-1')
+    const result = await provider().status()
     expect(result).toMatchObject({ ok: false, error: { code } })
   })
 
   it('streams pickup progress by operation id and parses the final answer', async () => {
     const child = fakeChild()
-    const provider = createCrossMachineRecoveryProvider(() => 'cc-sync')
-    const pending = provider.pickup(sender, {
-      clientInstanceId: 'client-1',
+    const pending = provider().pickup(sender, {
       operationId: 'op-1',
       selector: 'laptop/ws',
       resume: ['s1', 's2']
     })
+    await spawned()
     const spec = spawnProcess.mock.calls[0][0]
     expect(spec.args).toEqual([
       'pickup',
@@ -184,13 +199,13 @@ describe('cross-machine recovery provider bridge', () => {
 
   it('drops an oversized unterminated stderr line and keeps parsing later progress', async () => {
     const child = fakeChild()
-    const provider = createCrossMachineRecoveryProvider(() => 'cc-sync')
-    const pending = provider.pickup(sender, {
-      clientInstanceId: 'c',
+    const bridge = provider()
+    const pending = bridge.pickup(sender, {
       operationId: 'op-4',
       selector: 'a/b',
       resume: []
     })
+    await spawned()
     child.stderr.emit('data', Buffer.from('x'.repeat(5000)))
     child.stderr.emit('data', Buffer.from('{"phase":"orca-import"}\n{"phase":"select"}\n'))
     child.stderr.emit('data', Buffer.from('y'.repeat(5000)))
@@ -205,14 +220,14 @@ describe('cross-machine recovery provider bridge', () => {
 
   it('cancels a pickup by signalling its process group', async () => {
     const child = fakeChild()
-    const provider = createCrossMachineRecoveryProvider(() => 'cc-sync')
-    const pending = provider.pickup(sender, {
-      clientInstanceId: 'c',
+    const bridge = provider()
+    const pending = bridge.pickup(sender, {
       operationId: 'op-2',
       selector: 'a/b',
       resume: []
     })
-    await provider.cancel('op-2')
+    await spawned()
+    await bridge.cancel('op-2')
     expect(signalProcessTree).toHaveBeenCalledWith(child, 'SIGTERM')
     child.emit('close', null)
     await expect(pending).resolves.toMatchObject({ ok: false, error: { code: 'cancelled' } })
@@ -220,14 +235,34 @@ describe('cross-machine recovery provider bridge', () => {
 
   it('reports a missing provider binary during pickup as not installed', async () => {
     const child = fakeChild()
-    const provider = createCrossMachineRecoveryProvider(() => 'cc-sync')
-    const pending = provider.pickup(sender, {
-      clientInstanceId: 'c',
+    const bridge = provider()
+    const pending = bridge.pickup(sender, {
       operationId: 'op-3',
       selector: 'a/b',
       resume: []
     })
+    await spawned()
     child.emit('error', Object.assign(new Error('spawn cc-sync ENOENT'), { code: 'ENOENT' }))
     await expect(pending).resolves.toMatchObject({ ok: false, error: { code: 'not-installed' } })
+  })
+
+  it('honours a cancel that arrives while the client id is still loading', async () => {
+    let releaseClientId: (id: string) => void = () => {}
+    const bridge = createCrossMachineRecoveryProvider(
+      () => 'cc-sync',
+      () =>
+        new Promise((resolve) => {
+          releaseClientId = resolve
+        })
+    )
+    const pending = bridge.pickup(sender, { operationId: 'op-5', selector: 'a/b', resume: [] })
+    await bridge.cancel('op-5')
+    releaseClientId('client-1')
+    await expect(pending).resolves.toEqual({
+      ok: false,
+      error: { code: 'cancelled', message: 'Recovery was cancelled.' }
+    })
+    expect(spawnProcess).not.toHaveBeenCalled()
+    expect(signalProcessTree).not.toHaveBeenCalled()
   })
 })

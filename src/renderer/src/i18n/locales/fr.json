@@ -18139,7 +18139,9 @@
         "resumeAge": "Reprendre · dernière utilisation {{age}}",
         "dormantAge": "Restaurer sans démarrer · dernière utilisation {{age}}",
         "collisionTooltip": "Cette session est active ici ; la reprendre à nouveau créerait une bifurcation de la conversation.",
-        "codeDeferred": "Capture du code différée · code de {{codeAge}}"
+        "codeDeferred": "Capture du code différée · code de {{codeAge}}",
+        "newerPartial": "Point de contrôle partiel plus récent non récupéré · sessions de {{sessionAge}} · code de {{codeAge}}",
+        "notRestorable": "Impossible de récupérer ici : {{sessions}}"
       },
       "status": {
         "countOne": "1 espace de travail récupérable",
@@ -18171,6 +18173,9 @@
           "orcaImport": "Restauration de la disposition de l'espace de travail…",
           "orcaResume": "Reprise des sessions…",
           "unknown": "Récupération…"
+        },
+        "notRestorable": {
+          "agentNotSupported": "agent pas encore pris en charge"
         }
       },
       "web": {

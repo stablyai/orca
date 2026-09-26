@@ -18159,7 +18159,9 @@
         "resumeAge": "Resume · last used {{age}}",
         "dormantAge": "Restore without starting · last used {{age}}",
         "collisionTooltip": "This session is live here; resuming it again would fork the conversation.",
-        "codeDeferred": "Code capture deferred · code from {{codeAge}}"
+        "codeDeferred": "Code capture deferred · code from {{codeAge}}",
+        "newerPartial": "Newer partial checkpoint not recovered · sessions from {{sessionAge}} · code from {{codeAge}}",
+        "notRestorable": "Can't recover here: {{sessions}}"
       },
       "status": {
         "countOne": "1 recoverable workspace",
@@ -18191,6 +18193,9 @@
           "orcaImport": "Restoring the workspace layout…",
           "orcaResume": "Resuming sessions…",
           "unknown": "Recovering…"
+        },
+        "notRestorable": {
+          "agentNotSupported": "agent not supported yet"
         }
       },
       "web": {

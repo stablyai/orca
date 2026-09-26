@@ -7,32 +7,15 @@ import {
   type CrossMachineRecoveryApplyRequest
 } from '../../shared/cross-machine-recovery-session-ops'
 import type { PreloadApi } from '../api-types'
-import type {
-  CrossMachineRecoveryInspectArgs,
-  CrossMachineRecoveryListArgs,
-  CrossMachineRecoveryPickupArgs,
-  CrossMachineRecoveryPickupProgressEvent
-} from '../../shared/cross-machine-recovery-provider-ipc'
-
-type ProviderCallArgs =
-  | CrossMachineRecoveryListArgs
-  | CrossMachineRecoveryInspectArgs
-  | CrossMachineRecoveryPickupArgs
-
-const getClientInstanceId = (): Promise<string> =>
-  ipcRenderer.invoke('crossMachineRecovery:getClientInstanceId')
-
-async function invokeAsClient<T>(channel: string, args: ProviderCallArgs): Promise<T> {
-  return ipcRenderer.invoke(channel, { ...args, clientInstanceId: await getClientInstanceId() })
-}
+import type { CrossMachineRecoveryPickupProgressEvent } from '../../shared/cross-machine-recovery-provider-ipc'
 
 export const crossMachineRecoveryApi = {
   isSupported: true,
-  getClientInstanceId,
-  status: () => invokeAsClient('crossMachineRecovery:status', {}),
-  list: (args = {}) => invokeAsClient('crossMachineRecovery:list', args),
-  inspect: (args) => invokeAsClient('crossMachineRecovery:inspect', args),
-  pickup: (args) => invokeAsClient('crossMachineRecovery:pickup', args),
+  status: () => ipcRenderer.invoke('crossMachineRecovery:status'),
+  list: (args = {}) => ipcRenderer.invoke('crossMachineRecovery:list', args),
+  inspect: (args) => ipcRenderer.invoke('crossMachineRecovery:inspect', args),
+  // Why: invoked synchronously so main registers the operation before any cancel can reach it.
+  pickup: (args) => ipcRenderer.invoke('crossMachineRecovery:pickup', args),
   cancel: (operationId) => ipcRenderer.invoke('crossMachineRecovery:cancel', { operationId }),
   onPickupProgress: (listener) => {
     const handler = (

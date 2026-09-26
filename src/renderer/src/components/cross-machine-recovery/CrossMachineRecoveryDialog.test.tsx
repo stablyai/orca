@@ -12,7 +12,12 @@ import {
   consumeCrossMachineRecoveryDialogRequest,
   requestCrossMachineRecoveryDialog
 } from './cross-machine-recovery-dialog-request'
-import { _resetCrossMachineRecoverySnapshot } from './cross-machine-recovery-provider-store'
+import { formatUiRelativeTime } from '@/i18n/relative-time-format'
+import type { CcSyncItem } from '../../../../shared/cross-machine-recovery-provider-types'
+import {
+  _resetCrossMachineRecoverySnapshot,
+  refreshCrossMachineRecovery
+} from './cross-machine-recovery-provider-store'
 import { recoveryTestItem } from './cross-machine-recovery-test-items'
 
 const activate = vi.hoisted(() => vi.fn(() => ({ primaryTabId: null })))
@@ -38,23 +43,44 @@ const items = [
     ready: false,
     missing: ['transcript'],
     sessions: []
+  }),
+  recoveryTestItem({
+    host: 'laptop',
+    workspace: 'other',
+    sessions: [{ id: 'elsewhere', human: '2026-09-24T00:00:00Z' }]
   })
 ]
 
-const bridge = {
-  isSupported: true,
-  getClientInstanceId: vi.fn(async () => 'client-1'),
-  status: vi.fn(async () => ({ ok: false, error: { code: 'timeout', message: 'slow' } })),
-  list: vi.fn(async () => ({
+function listResult(listed: CcSyncItem[]) {
+  return {
     ok: true,
     value: {
       version: 1,
       ok: true,
       generated_at: '2026-09-26T02:00:00Z',
       local: { host_id: 'me', host_name: 'studio-mac' },
-      items
+      items: listed
     }
-  })),
+  } as const
+}
+
+const divergentFailure = {
+  ok: false,
+  error: {
+    code: 'divergent-local-copy',
+    message: 'local copy is newer',
+    details: {
+      session_id: 'recent',
+      local_last_activity_at: '2026-09-26T03:00:00Z',
+      picked_captured_at: '2026-09-26T00:00:00Z'
+    }
+  }
+} as const
+
+const bridge = {
+  isSupported: true,
+  status: vi.fn(async () => ({ ok: false, error: { code: 'timeout', message: 'slow' } })),
+  list: vi.fn(async () => listResult(items)),
   inspect: vi.fn(),
   pickup: vi.fn<CrossMachineRecoveryProviderApi['pickup']>(async () => ({
     ok: true,
@@ -95,6 +121,7 @@ afterEach(() => {
   consumeCrossMachineRecoveryDialogRequest()
   _resetCrossMachineRecoverySnapshot()
   vi.clearAllMocks()
+  vi.useRealTimers()
 })
 
 async function openDialog(): Promise<void> {
@@ -117,6 +144,10 @@ function itemRow(name: string): HTMLElement {
     throw new Error(`no row ${name}`)
   }
   return row
+}
+
+function divergencePrompt(): Element | null {
+  return document.querySelector('[data-testid="cross-machine-recovery-divergence"]')
 }
 
 function buttonLabelled(label: string): HTMLButtonElement | undefined {
@@ -200,4 +231,80 @@ it('offers keep-local/replace/fork on a divergent local copy and re-runs pickup 
   )
   expect(document.querySelector('[data-testid="cross-machine-recovery-divergence"]')).toBeNull()
   expect(activate).toHaveBeenCalledWith('wt-recovered', { executionHostId: 'local' })
+})
+
+it('drops the divergence prompt when another workspace is selected', async () => {
+  bridge.pickup.mockResolvedValueOnce(divergentFailure)
+  await openDialog()
+  await act(async () => itemRow('ready-name').click())
+  await act(async () => buttonLabelled('Recover')?.click())
+  expect(divergencePrompt()?.textContent).toContain('newer local copy of session recent')
+  await act(async () => itemRow('other-name').click())
+  expect(divergencePrompt()).toBeNull()
+  expect(buttonLabelled('Replace local')).toBeUndefined()
+  expect(bridge.pickup).toHaveBeenCalledTimes(1)
+})
+
+it('re-runs exactly the request that diverged even after the list refreshes', async () => {
+  bridge.pickup.mockResolvedValueOnce(divergentFailure)
+  await openDialog()
+  await act(async () => itemRow('ready-name').click())
+  await act(async () => buttonLabelled('Recover')?.click())
+  bridge.list.mockResolvedValueOnce(
+    listResult([
+      recoveryTestItem({
+        host: 'laptop',
+        workspace: 'ready',
+        sessions: [
+          { id: 'recent', human: '2026-09-20T00:00:00Z' },
+          { id: 'older', human: '2026-09-26T05:00:00Z' }
+        ]
+      })
+    ])
+  )
+  await act(async () => refreshCrossMachineRecovery())
+  await act(async () => buttonLabelled('Replace local')?.click())
+  expect(bridge.pickup).toHaveBeenCalledTimes(2)
+  expect(bridge.pickup.mock.calls[1][0]).toEqual({
+    operationId: expect.any(String),
+    selector: 'laptop/ready',
+    resume: ['recent'],
+    onDivergence: 'replace'
+  })
+})
+
+it('shows a newer partial checkpoint and the sessions it cannot recover', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-09-26T20:00:00Z'))
+  bridge.list.mockResolvedValueOnce(
+    listResult([
+      recoveryTestItem({
+        host: 'laptop',
+        workspace: 'mixed',
+        sessions: [{ id: 'claude-1', human: '2026-09-26T18:29:00Z' }],
+        newerPartial: {
+          id: 'cp-new',
+          captured_at: '2026-09-26T19:50:00Z',
+          session_activity_at: '2026-09-26T19:49:00Z',
+          code_captured_at: '2026-09-26T19:10:00Z'
+        },
+        notRestorable: [
+          { agent: 'codex', key: 'session_id', id: 'codex-1', reason: 'agent-not-supported-v1' },
+          { agent: 'gemini', key: 'session_id', id: 'gem-1', reason: 'future-reason' }
+        ]
+      })
+    ])
+  )
+  await openDialog()
+  const row = itemRow('mixed-name')
+  expect(
+    row.querySelector('[data-testid="cross-machine-recovery-newer-partial"]')?.textContent
+  ).toBe(
+    `Newer partial checkpoint not recovered · sessions from ${formatUiRelativeTime(-11 * 60_000)} · code from ${formatUiRelativeTime(-50 * 60_000)}`
+  )
+  expect(
+    row.querySelector('[data-testid="cross-machine-recovery-not-restorable"]')?.textContent
+  ).toBe(
+    "Can't recover here: codex codex-1 (agent not supported yet), gemini gem-1 (future-reason)"
+  )
 })

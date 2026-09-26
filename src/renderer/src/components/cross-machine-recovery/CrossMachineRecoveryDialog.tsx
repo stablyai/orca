@@ -43,6 +43,8 @@ import {
   CrossMachineRecoverySessionRow
 } from './CrossMachineRecoveryItemRow'
 
+type RecoveryRequest = { selector: string; resume: string[] }
+
 export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
   const open = useSyncExternalStore(
     subscribeCrossMachineRecoveryDialog,
@@ -56,7 +58,10 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
   const [pickup, setPickup] = useState<RecoveryPickupHandle | null>(null)
   const [progress, setProgress] = useState<CcSyncProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [divergence, setDivergence] = useState<{ sessionId: string | null } | null>(null)
+  const [divergence, setDivergence] = useState<{
+    request: RecoveryRequest
+    sessionId: string | null
+  } | null>(null)
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -103,20 +108,30 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
     setDivergence(null)
   }, [])
 
+  // Why: a divergence prompt answers the request that failed, so any change to that request voids it.
+  const selectWorkspace = useCallback(
+    (next: string) => {
+      if (next !== selector) {
+        setSelector(next)
+        setError(null)
+        setDivergence(null)
+      }
+    },
+    [selector]
+  )
+
   const toggleResume = useCallback((sessionId: string, checked: boolean) => {
     setOverrides((current) => new Map(current).set(sessionId, checked))
+    setError(null)
+    setDivergence(null)
   }, [])
 
-  const recover = useCallback(
-    async (onDivergence?: CrossMachineRecoveryDivergence) => {
-      if (!selected) {
-        return
-      }
+  const run = useCallback(
+    async (request: RecoveryRequest, onDivergence?: CrossMachineRecoveryDivergence) => {
       setError(null)
       setDivergence(null)
       const handle = startRecoveryPickup({
-        selector: selected.selector,
-        resume,
+        ...request,
         ...(onDivergence ? { onDivergence } : {}),
         onProgress: setProgress
       })
@@ -127,7 +142,7 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
       if (!result.ok) {
         setError(providerErrorMessage(result.error))
         if (result.error.code === 'divergent-local-copy') {
-          setDivergence({ sessionId: result.error.details?.session_id ?? null })
+          setDivergence({ request, sessionId: result.error.details?.session_id ?? null })
         }
         return
       }
@@ -150,8 +165,14 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
       close()
       void refreshCrossMachineRecovery()
     },
-    [selected, resume, close]
+    [close]
   )
+
+  const recover = useCallback(() => {
+    if (selected) {
+      void run({ selector: selected.selector, resume })
+    }
+  }, [selected, resume, run])
 
   return (
     <Dialog
@@ -231,7 +252,7 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
                       row={row}
                       hostName={group.hostName}
                       now={now}
-                      onSelect={setSelector}
+                      onSelect={selectWorkspace}
                     />
                   ))}
                 </CommandGroup>
@@ -258,7 +279,7 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
           <CrossMachineRecoveryDivergencePrompt
             sessionId={divergence.sessionId}
             disabled={pickup !== null}
-            onChoose={(choice) => void recover(choice)}
+            onChoose={(choice) => void run(divergence.request, choice)}
           />
         ) : null}
         {error || progress ? (
@@ -274,7 +295,7 @@ export function CrossMachineRecoveryDialog(): React.JSX.Element | null {
           >
             {translate('components.cross-machine-recovery.dialog.cancel', 'Cancel')}
           </Button>
-          <Button size="sm" disabled={!selected || pickup !== null} onClick={() => void recover()}>
+          <Button size="sm" disabled={!selected || pickup !== null} onClick={recover}>
             {translate('components.cross-machine-recovery.dialog.recover', 'Recover')}
           </Button>
         </DialogFooter>

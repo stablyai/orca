@@ -18040,7 +18040,9 @@
         "resumeAge": "继续 · 上次使用 {{age}}",
         "dormantAge": "恢复但不启动 · 上次使用 {{age}}",
         "collisionTooltip": "此会话正在这里运行；再次继续会使对话分叉。",
-        "codeDeferred": "代码捕获已推迟 · 代码来自 {{codeAge}}"
+        "codeDeferred": "代码捕获已推迟 · 代码来自 {{codeAge}}",
+        "newerPartial": "较新的部分检查点未恢复 · 会话来自 {{sessionAge}} · 代码来自 {{codeAge}}",
+        "notRestorable": "无法在此恢复：{{sessions}}"
       },
       "status": {
         "countOne": "1 个可恢复的工作区",
@@ -18072,6 +18074,9 @@
           "orcaImport": "正在恢复工作区布局…",
           "orcaResume": "正在继续会话…",
           "unknown": "正在恢复…"
+        },
+        "notRestorable": {
+          "agentNotSupported": "尚不支持该代理"
         }
       },
       "web": {

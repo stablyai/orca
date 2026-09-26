@@ -5,7 +5,7 @@ import { CommandItem } from '@/components/ui/command'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
-import { pauseReasonLabel } from './cross-machine-recovery-copy'
+import { notRestorableReasonLabel, pauseReasonLabel } from './cross-machine-recovery-copy'
 import {
   workspaceDisabledReason,
   type RecoverySessionRow,
@@ -81,6 +81,40 @@ export function CrossMachineRecoveryItemRow({
                     : null,
                   now
                 )
+              }
+            )}
+          </span>
+        ) : null}
+        {row.newerPartial ? (
+          <span
+            className="block truncate text-xs text-muted-foreground"
+            data-testid="cross-machine-recovery-newer-partial"
+          >
+            {translate(
+              'components.cross-machine-recovery.row.newerPartial',
+              'Newer partial checkpoint not recovered · sessions from {{sessionAge}} · code from {{codeAge}}',
+              {
+                sessionAge: ageLabel(row.newerPartial.sessionActivityAt, now),
+                codeAge: ageLabel(row.newerPartial.codeCapturedAt, now)
+              }
+            )}
+          </span>
+        ) : null}
+        {row.notRestorable.length > 0 ? (
+          <span
+            className="block text-xs text-muted-foreground"
+            data-testid="cross-machine-recovery-not-restorable"
+          >
+            {translate(
+              'components.cross-machine-recovery.row.notRestorable',
+              "Can't recover here: {{sessions}}",
+              {
+                sessions: row.notRestorable
+                  .map(
+                    (session) =>
+                      `${session.agent} ${session.id} (${notRestorableReasonLabel(session.reason)})`
+                  )
+                  .join(', ')
               }
             )}
           </span>

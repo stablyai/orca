@@ -17,14 +17,15 @@ import {
   type CcSyncPickup
 } from '../../shared/cross-machine-recovery-provider-types'
 import type {
-  CrossMachineRecoveryBridgeErrorCode,
   CrossMachineRecoveryInspectArgs,
   CrossMachineRecoveryListArgs,
   CrossMachineRecoveryPickupArgs,
   CrossMachineRecoveryPickupProgressEvent,
-  CrossMachineRecoveryProviderResult,
-  WithClientInstanceId
+  CrossMachineRecoveryProviderError,
+  CrossMachineRecoveryProviderResult
 } from '../../shared/cross-machine-recovery-provider-ipc'
+import { readOrMintCrossMachineRecoveryClientInstanceId } from '../runtime/cross-machine-recovery/client-instance-id'
+import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 
 const DEFAULT_PROVIDER_PATH = 'cc-sync'
 const QUERY_TIMEOUT_MS = 15_000
@@ -48,7 +49,7 @@ export function buildProviderEnv(
 }
 
 function fail<T>(
-  code: CrossMachineRecoveryBridgeErrorCode,
+  code: CrossMachineRecoveryProviderError['code'],
   message: string
 ): CrossMachineRecoveryProviderResult<T> {
   return { ok: false, error: { code, message } }
@@ -111,6 +112,7 @@ function listArgv(args: CrossMachineRecoveryListArgs): string[] {
 const MAX_PROGRESS_LINE_CHARS = 4096
 
 type PickupChild = ReturnType<typeof spawnProcess>
+type PickupOperation = { child: PickupChild | null; cancelled: boolean }
 
 function pickupArgv(args: CrossMachineRecoveryPickupArgs): string[] {
   return [
@@ -124,19 +126,25 @@ function pickupArgv(args: CrossMachineRecoveryPickupArgs): string[] {
   ]
 }
 
-export function createCrossMachineRecoveryProvider(getProviderPath: () => string) {
-  const pickups = new Map<string, { child: PickupChild; cancelled: boolean }>()
+function cancelledResult<T>(): CrossMachineRecoveryProviderResult<T> {
+  return fail('cancelled', 'Recovery was cancelled.')
+}
+
+export function createCrossMachineRecoveryProvider(
+  getProviderPath: () => string,
+  getClientInstanceId: () => Promise<string>
+) {
+  const pickups = new Map<string, PickupOperation>()
 
   async function query<T>(
     argv: string[],
-    clientInstanceId: string,
     parse: Parser<T>
   ): Promise<CrossMachineRecoveryProviderResult<T>> {
     try {
       const result = await runProcess({
         program: getProviderPath(),
         args: [...argv, '--json'],
-        env: buildProviderEnv(process.env, clientInstanceId),
+        env: buildProviderEnv(process.env, await getClientInstanceId()),
         timeoutMs: QUERY_TIMEOUT_MS,
         maxOutputBytes: MAX_PROVIDER_OUTPUT_BYTES
       })
@@ -146,23 +154,31 @@ export function createCrossMachineRecoveryProvider(getProviderPath: () => string
     }
   }
 
-  function pickup(
+  // Why: registered before the first await so a cancel sent right after pickup always finds it.
+  async function pickup(
     sender: Pick<WebContents, 'send' | 'isDestroyed'>,
-    args: WithClientInstanceId<CrossMachineRecoveryPickupArgs>
+    args: CrossMachineRecoveryPickupArgs
   ): Promise<CrossMachineRecoveryProviderResult<CcSyncPickup>> {
+    const entry: PickupOperation = { child: null, cancelled: false }
+    pickups.set(args.operationId, entry)
     let child: PickupChild
     try {
+      const clientInstanceId = await getClientInstanceId()
+      if (entry.cancelled) {
+        pickups.delete(args.operationId)
+        return cancelledResult()
+      }
       child = spawnProcess({
         program: getProviderPath(),
         args: [...pickupArgv(args), '--json'],
-        env: buildProviderEnv(process.env, args.clientInstanceId),
+        env: buildProviderEnv(process.env, clientInstanceId),
         detached: true
       })
     } catch (error) {
-      return Promise.resolve(spawnFailure(error))
+      pickups.delete(args.operationId)
+      return spawnFailure(error)
     }
-    const entry = { child, cancelled: false }
-    pickups.set(args.operationId, entry)
+    entry.child = child
     const stdout = createOutputSink(MAX_PROVIDER_OUTPUT_BYTES)
     const stderr = createOutputSink(MAX_PROVIDER_OUTPUT_BYTES)
     let pendingLine = ''
@@ -217,7 +233,7 @@ export function createCrossMachineRecoveryProvider(getProviderPath: () => string
         )
         resolve(
           entry.cancelled && !result.ok && result.error.code !== 'cancelled'
-            ? { ok: false, error: { code: 'cancelled', message: 'Recovery was cancelled.' } }
+            ? cancelledResult()
             : result
         )
       })
@@ -230,17 +246,17 @@ export function createCrossMachineRecoveryProvider(getProviderPath: () => string
       return
     }
     entry.cancelled = true
-    await signalProcessTree(entry.child, 'SIGTERM')
+    if (entry.child) {
+      await signalProcessTree(entry.child, 'SIGTERM')
+    }
   }
 
   return {
-    status: (clientInstanceId: string) => query(['status'], clientInstanceId, parseCcSyncStatus),
-    list: (args: WithClientInstanceId<CrossMachineRecoveryListArgs>) =>
-      query(listArgv(args), args.clientInstanceId, parseCcSyncList),
-    inspect: (args: WithClientInstanceId<CrossMachineRecoveryInspectArgs>) =>
+    status: () => query(['status'], parseCcSyncStatus),
+    list: (args: CrossMachineRecoveryListArgs) => query(listArgv(args), parseCcSyncList),
+    inspect: (args: CrossMachineRecoveryInspectArgs) =>
       query(
         ['inspect', args.selector, ...(args.checkpoint ? ['--checkpoint', args.checkpoint] : [])],
-        args.clientInstanceId,
         parseCcSyncInspect
       ),
     pickup,
@@ -252,23 +268,18 @@ export function registerCrossMachineRecoveryProviderHandlers(
   store: Pick<Store, 'getSettings'>
 ): void {
   const provider = createCrossMachineRecoveryProvider(
-    () => store.getSettings().crossMachineRecovery?.providerPath?.trim() || DEFAULT_PROVIDER_PATH
+    () => store.getSettings().crossMachineRecovery?.providerPath?.trim() || DEFAULT_PROVIDER_PATH,
+    () => readOrMintCrossMachineRecoveryClientInstanceId(getProfileUserDataPath())
   )
-  ipcMain.handle('crossMachineRecovery:status', (_event, args: { clientInstanceId: string }) =>
-    provider.status(args.clientInstanceId)
+  ipcMain.handle('crossMachineRecovery:status', () => provider.status())
+  ipcMain.handle('crossMachineRecovery:list', (_event, args: CrossMachineRecoveryListArgs) =>
+    provider.list(args)
   )
-  ipcMain.handle(
-    'crossMachineRecovery:list',
-    (_event, args: WithClientInstanceId<CrossMachineRecoveryListArgs>) => provider.list(args)
+  ipcMain.handle('crossMachineRecovery:inspect', (_event, args: CrossMachineRecoveryInspectArgs) =>
+    provider.inspect(args)
   )
-  ipcMain.handle(
-    'crossMachineRecovery:inspect',
-    (_event, args: WithClientInstanceId<CrossMachineRecoveryInspectArgs>) => provider.inspect(args)
-  )
-  ipcMain.handle(
-    'crossMachineRecovery:pickup',
-    (event, args: WithClientInstanceId<CrossMachineRecoveryPickupArgs>) =>
-      provider.pickup(event.sender, args)
+  ipcMain.handle('crossMachineRecovery:pickup', (event, args: CrossMachineRecoveryPickupArgs) =>
+    provider.pickup(event.sender, args)
   )
   ipcMain.handle('crossMachineRecovery:cancel', (_event, args: { operationId: string }) =>
     provider.cancel(args.operationId)

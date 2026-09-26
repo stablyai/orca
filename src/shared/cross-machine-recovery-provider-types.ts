@@ -115,6 +115,9 @@ const ItemSchema = z.object({
       live_local_collision: z.boolean()
     })
   ),
+  not_restorable: z.array(
+    z.object({ agent: z.string(), key: z.string(), id: z.string(), reason: z.string() })
+  ),
   checkpoint: z.object({
     id: z.string(),
     tier: CheckpointTier,
@@ -130,6 +133,14 @@ const ItemSchema = z.object({
     layout: lenientEnum(['client-view', 'host-only', 'none']),
     code_captured_at: Timestamp.nullable().optional()
   }),
+  newer_partial: z
+    .object({
+      id: z.string(),
+      captured_at: Timestamp,
+      session_activity_at: Timestamp.nullable(),
+      code_captured_at: Timestamp.nullable()
+    })
+    .nullable(),
   pause: PauseSchema.nullable(),
   local_checkout: z.object({ path: z.string(), reusable: z.boolean() }).nullable()
 })
