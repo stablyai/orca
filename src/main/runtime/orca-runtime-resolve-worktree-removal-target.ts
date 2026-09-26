@@ -80,6 +80,7 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       this.mobileSessionTabsAgentStatusHeartbeat.removeWorktree(worktreeId)
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
       this.cancelScheduledMobileSessionTabsChanged(worktreeId)
+      this.terminalExitRecords.clearWorktree(worktreeId)
       this.notifyMobileSessionTabsRemoved(worktreeId)
       advertisedUrlWatcher.forgetWorktree(worktreeId)
       deleteWorktreeHistoryDir(worktreeId)

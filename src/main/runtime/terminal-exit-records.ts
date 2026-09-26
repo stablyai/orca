@@ -1,4 +1,5 @@
 import type { TerminalExitRecord } from '../../shared/terminal-surface-exit'
+import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 
 type TerminalExitRecordListeners = {
   /** The desktop renderer's mirror, sent whole on every change. */
@@ -10,7 +11,7 @@ type TerminalExitRecordListeners = {
 /**
  * Main's in-memory exit record per kept leaf. Deliberately not persisted: after a relaunch a kept
  * leaf spawns a fresh shell. A record dies when its leaf binds a new process, when the surface is
- * closed, or with main.
+ * closed, when its worktree is removed, or with main.
  */
 export class TerminalExitRecords {
   private readonly byLeafId = new Map<string, TerminalExitRecord>()
@@ -49,6 +50,20 @@ export class TerminalExitRecords {
     let changed = false
     for (const leafId of leafIds) {
       changed = this.byLeafId.delete(leafId) || changed
+    }
+    if (changed) {
+      this.listeners.onRecordsChanged()
+    }
+  }
+
+  /** Ends every record of a removed worktree; its removal is the only publication clients need. */
+  clearWorktree(worktreeId: string): void {
+    let changed = false
+    for (const [leafId, record] of this.byLeafId) {
+      if (runtimeWorktreeIdsEqual(record.worktreeId, worktreeId)) {
+        this.byLeafId.delete(leafId)
+        changed = true
+      }
     }
     if (changed) {
       this.listeners.onRecordsChanged()

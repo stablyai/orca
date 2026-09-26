@@ -329,6 +329,32 @@ describe('terminal exit records', () => {
     expect(notifier.terminalExitRecordsChanged).toHaveBeenLastCalledWith([])
   })
 
+  it("ends every record of a removed worktree, and only that worktree's", () => {
+    const { runtime, notifier } = makeRendererRuntime(
+      rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }])
+    )
+    const otherWorktreeRecord = exitRecord({
+      worktreeId: 'repo-1::/tmp/worktree-b',
+      leafId: SIBLING_LEAF_ID
+    })
+    runtime.terminalExitRecords.record(exitRecord())
+    runtime.terminalExitRecords.record(otherWorktreeRecord)
+    const removalStore = {
+      ...store,
+      getWorktreeMeta: () => undefined,
+      removeWorktreeMeta: () => {}
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every worktree removal path funnels through this protected runtime method.
+    const internals = runtime as unknown as {
+      removeWorktreeMetadataAndHistory: (store: unknown, worktreeId: string) => void
+    }
+
+    internals.removeWorktreeMetadataAndHistory(removalStore, TEST_WORKTREE_ID)
+
+    expect(runtime.terminalExitRecords.list()).toEqual([otherWorktreeRecord])
+    expect(notifier.terminalExitRecordsChanged).toHaveBeenLastCalledWith([otherWorktreeRecord])
+  })
+
   it("gives a client without the capability exactly today's projection of an exit", async () => {
     const graph = (ptyId: string | null) => ({
       tabs: [
