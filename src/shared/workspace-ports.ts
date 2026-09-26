@@ -15,12 +15,37 @@ export type WorkspacePortOwner = {
   confidence: WorkspacePortAttributionConfidence
 }
 
+const WILDCARD_BIND_HOSTS = new Set(['0.0.0.0', '::', '*'])
+
+/** A wildcard bind accepts connections on every interface, so another machine can reach
+ *  the listener. A loopback bind never leaves its own host at any address.
+ *
+ *  Distinct from the private `isWildcardBindHost` in `src/shared/browser-url.ts`: that one
+ *  asks whether a certificate may be issued for a URL hostname, so it must reject `*`,
+ *  which is never a hostname. This one reads a scanner-reported bind, where `lsof` does
+ *  report `*`. */
+export function isWildcardBindHost(bindHost: string): boolean {
+  return WILDCARD_BIND_HOSTS.has(
+    bindHost
+      .trim()
+      .toLowerCase()
+      .replace(/^\[|\]$/g, '')
+  )
+}
+
 type WorkspacePortBase = {
   id: string
-  /** Address reported by the OS listener. May be a wildcard bind. */
+  /** Address reported by the OS listener. May be a wildcard bind; see isWildcardBindHost. */
   bindHost: string
-  /** Address the renderer should copy/open. Wildcard binds are normalized to localhost. */
+  /** Address the renderer should copy/open. Wildcard binds are normalized to localhost.
+   *  Normalized for a consumer on the *execution host*; on a paired runtime `localhost`
+   *  names the client, so a client-side surface must not treat it as reachable. */
   connectHost: string
+  /** Scan key of the host that reported this listener. The renderer's merge projection
+   *  always stamps it, single-host or not, so a row can name its own host instead of
+   *  inheriting the active workspace's; only a raw per-host scan leaves it unset.
+   *  Never sent over the wire. */
+  hostScanKey?: string
   port: number
   pid?: number
   processName?: string

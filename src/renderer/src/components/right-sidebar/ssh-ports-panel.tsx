@@ -4,7 +4,10 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-port-actions'
+import {
+  resolvePortOpenInOrcaBrowser,
+  resolvePortOpenModifierDestination
+} from '@/lib/workspace-port-open-routing'
 import { browserUrlForPortForwardEntry } from '@/lib/workspace-port-urls'
 import type { EnrichedDetectedPort, PortForwardEntry } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
@@ -25,6 +28,8 @@ function normalizeHost(host: string | undefined): string {
 
 export function SshPortsPanel(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  // A forward listens on this machine's loopback, so it is never a remote-host row.
+  const modifierDestination = resolvePortOpenModifierDestination({ settings })
   const portForwardsByConnection = useAppStore((s) => s.portForwardsByConnection)
   const detectedPortsByConnection = useAppStore((s) => s.detectedPortsByConnection)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
@@ -180,6 +185,7 @@ export function SshPortsPanel(): React.JSX.Element {
               <SshForwardedPortRow
                 key={entry.id}
                 entry={entry}
+                modifierDestination={modifierDestination}
                 onEdit={() => handleEdit(entry)}
                 onOpenInBrowser={(event) => handleOpenForwardInBrowser(entry, event)}
               />

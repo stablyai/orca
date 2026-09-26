@@ -53,43 +53,6 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
-export function shouldOpenWorkspacePortInOrcaBrowser(
-  settings: { openLinksInApp?: boolean } | null | undefined
-): boolean {
-  return settings?.openLinksInApp === true
-}
-
-function isMacShortcutPlatform(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
-}
-
-export function getPortSystemBrowserHint(isMac: boolean = isMacShortcutPlatform()): string {
-  return isMac ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
-}
-
-export function getPortOpenBrowserTooltipLabel(openLabel: string, isMac?: boolean): string {
-  return `${openLabel}. ${getPortSystemBrowserHint(isMac)}`
-}
-
-type PortOpenClickEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>
-
-export function resolvePortOpenInOrcaBrowser({
-  settings,
-  event,
-  isMac
-}: {
-  settings: { openLinksInApp?: boolean } | null | undefined
-  event?: PortOpenClickEvent | null
-  isMac: boolean
-}): boolean {
-  // Why: Shift+Cmd/Ctrl is the external-browser escape hatch; no pointer
-  // event means context-menu and keyboard opens should keep the saved setting.
-  if (event?.shiftKey && (isMac ? event.metaKey : event.ctrlKey)) {
-    return false
-  }
-  return shouldOpenWorkspacePortInOrcaBrowser(settings)
-}
-
 export function workspacePortOwnerWorktreeId(port: WorkspacePort): string | null {
   return port.kind === 'workspace' ? port.owner.worktreeId : null
 }
@@ -107,6 +70,12 @@ export async function openWorkspacePortInBrowser(args: {
   setRemoteBrowserPageHandle: RemoteBrowserPageHandleSetter
   openInOrcaBrowser?: boolean
   localhostLabelRoute?: LocalhostWorktreeLabelRoute | null
+  /** Remote-workspace URL this machine can open directly, from
+   *  usePortClientReachability. Null when the port is loopback-bound or the connection
+   *  has no client-reachable address. */
+  clientReachableUrl?: string | null
+  /** From resolvePortOpenRouting: the user held the system-browser modifier. */
+  systemBrowserRequested?: boolean
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!args.runtimeTarget) {
     return { ok: false, reason: WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON }
@@ -120,9 +89,21 @@ export async function openWorkspacePortInBrowser(args: {
       url = rawUrl
     }
   }
-  if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
+  // Why a remote port needs the modifier and a local one does not: `clientReachableUrl`
+  // is an offer, not a guarantee — a firewall or port-scoped ACL can refuse the very port
+  // it names, and shell.openUrl reports success either way, leaving no fallback. The
+  // embedded browser tunnels and always works, so it stays the default for a remote port
+  // and only an explicit gesture trades it away. A local port's URL is this machine's
+  // own, so the stock `openLinksInApp: false` click keeps routing there unchanged.
+  const systemBrowserUrl =
+    args.runtimeTarget.kind === 'local'
+      ? url
+      : args.systemBrowserRequested === true
+        ? (args.clientReachableUrl ?? null)
+        : null
+  if (args.openInOrcaBrowser === false && systemBrowserUrl) {
     try {
-      await window.api.shell.openUrl(url)
+      await window.api.shell.openUrl(systemBrowserUrl)
       return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -243,8 +224,30 @@ export function workspacePortRuntimeTargetKey(target: RuntimeClientTarget): stri
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
+const WORKSPACE_PORT_SCAN_KEY_SUFFIX = ':all'
+const WORKSPACE_PORT_ENVIRONMENT_KEY_PREFIX = 'environment:'
+
 export function workspacePortScanKeyForTarget(target: RuntimeClientTarget): string {
-  return `${workspacePortRuntimeTargetKey(target)}:all`
+  return `${workspacePortRuntimeTargetKey(target)}${WORKSPACE_PORT_SCAN_KEY_SUFFIX}`
+}
+
+/** Inverse of workspacePortScanKeyForTarget. Null for the synthetic all-hosts key and
+ *  anything else that does not name one host. */
+export function runtimeTargetForWorkspacePortScanKey(
+  scanKey: string | null | undefined
+): RuntimeClientTarget | null {
+  if (!scanKey?.endsWith(WORKSPACE_PORT_SCAN_KEY_SUFFIX)) {
+    return null
+  }
+  const targetKey = scanKey.slice(0, -WORKSPACE_PORT_SCAN_KEY_SUFFIX.length)
+  if (targetKey === 'local') {
+    return { kind: 'local' }
+  }
+  if (!targetKey.startsWith(WORKSPACE_PORT_ENVIRONMENT_KEY_PREFIX)) {
+    return null
+  }
+  const environmentId = targetKey.slice(WORKSPACE_PORT_ENVIRONMENT_KEY_PREFIX.length)
+  return environmentId ? { kind: 'environment', environmentId } : null
 }
 
 export function mergeWorkspacePortScans(
@@ -256,15 +259,23 @@ export function mergeWorkspacePortScans(
   if (entries.length === 0) {
     return null
   }
+  // Why the stamp happens on both paths: a row resolves its own host from hostScanKey, and
+  // a single-host projection is still read by surfaces whose active workspace lives
+  // somewhere else. Only the id prefix is skipped here — one host's ids are already unique.
   if (entries.length === 1) {
-    return entries[0][1]
+    const [key, scan] = entries[0]!
+    return { ...scan, ports: scan.ports.map((port) => ({ ...port, hostScanKey: key })) }
   }
   const ports = entries.flatMap(([key, scan]) =>
     scan.ports.map((port) => ({
       ...port,
       // Why: local and runtime scanners can both report simple ids like
       // `tcp:3000`; aggregate All-hosts views need stable unique row keys.
-      id: `${key}:${port.id}`
+      id: `${key}:${port.id}`,
+      // Why: the merged view is the only place a row's host differs from the active
+      // workspace's. Carrying the key as a field (rather than leaving it encoded in the
+      // prefixed id) is what lets a row resolve its own host instead of inheriting one.
+      hostScanKey: key
     }))
   )
   const unavailable = entries

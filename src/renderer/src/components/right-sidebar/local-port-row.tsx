@@ -1,7 +1,11 @@
 import React, { useCallback } from 'react'
 import { Box, Copy, ExternalLink, Info, Server, Trash2 } from 'lucide-react'
-import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-port-actions'
-import { addressForPort } from '@/lib/workspace-port-urls'
+import {
+  getPortOpenBrowserTooltipLabel,
+  resolvePortOpenModifierDestination
+} from '@/lib/workspace-port-open-routing'
+import { usePortClientReachability } from '@/lib/workspace-port-client-reachability'
+import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -32,9 +36,20 @@ export function LocalPortRow({
   onShowDetails: (port: WorkspacePort) => void
   onOpenInBrowser: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
+  // Why: on a remote workspace the OS-derived address is `localhost:<port>`, which names
+  // *this* machine. Worse, a developer laptop often has its own server on that port, so
+  // the old row could send a copied address to the wrong process silently.
+  const { address, remoteHost, systemBrowserAvailable } = usePortClientReachability(port)
+  const settings = useAppStore((s) => s.settings)
+  const modifierDestination = resolvePortOpenModifierDestination({
+    settings,
+    remoteHost,
+    systemBrowserAvailable
+  })
+
   const handleCopy = useCallback(() => {
-    void window.api.ui.writeClipboardText(addressForPort(port))
-  }, [port])
+    void window.api.ui.writeClipboardText(address)
+  }, [address])
 
   const handleOpenBrowser = useCallback(
     (event?: React.MouseEvent<HTMLButtonElement>) => {
@@ -76,7 +91,7 @@ export function LocalPortRow({
   )
 
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
-  const address = addressForPort(port)
+
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
@@ -141,7 +156,7 @@ export function LocalPortRow({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {getPortOpenBrowserTooltipLabel(openBrowserLabel)}
+                {getPortOpenBrowserTooltipLabel(openBrowserLabel, { modifierDestination })}
               </TooltipContent>
             </Tooltip>
             <Tooltip>

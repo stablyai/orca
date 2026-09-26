@@ -106,10 +106,20 @@ export function isUserManagedRuntimeEnvironment(
   return !isEphemeralVmRuntimeEnvironment(environment)
 }
 
-export function getPreferredPairingOffer(environment: KnownRuntimeEnvironment): PairingOffer {
-  const endpoint =
+/** The endpoint a transport actually dials. Every caller must use this one pick, or a
+ *  surface can name a different endpoint than the connection it is describing. */
+export function preferredRuntimeEndpoint<TEndpoint extends { id: string }>(environment: {
+  endpoints: readonly TEndpoint[]
+  preferredEndpointId?: string | null
+}): TEndpoint | undefined {
+  return (
     environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
     environment.endpoints[0]
+  )
+}
+
+export function getPreferredPairingOffer(environment: KnownRuntimeEnvironment): PairingOffer {
+  const endpoint = preferredRuntimeEndpoint(environment)
   if (!endpoint) {
     throw new Error(`Environment ${environment.name} has no access endpoints`)
   }

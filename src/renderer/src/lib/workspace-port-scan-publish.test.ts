@@ -89,8 +89,19 @@ describe('publishWorkspacePortScanForHost', () => {
       scan: localScan
     })
 
-    expect(harness.projections).toEqual([{ key: 'local:all', result: localScan }])
+    // The projection is the stamped copy: every row names its own host so a surface whose
+    // active workspace lives elsewhere cannot re-attribute it. The raw scan stays raw.
+    expect(harness.projections).toEqual([
+      {
+        key: 'local:all',
+        result: {
+          ...localScan,
+          ports: localScan.ports.map((port) => ({ ...port, hostScanKey: 'local:all' }))
+        }
+      }
+    ])
     expect(Object.keys(harness.scansByKey)).toEqual(['local:all'])
+    expect(harness.scansByKey['local:all']).toBe(localScan)
   })
 
   it('keeps the other host in the projection when one host refreshes', () => {

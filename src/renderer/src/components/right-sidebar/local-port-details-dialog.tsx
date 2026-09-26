@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { addressForPort } from '@/lib/workspace-port-urls'
+import { usePortClientReachability } from '@/lib/workspace-port-client-reachability'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
 
@@ -17,6 +17,10 @@ export function LocalPortDetailsDialog({
   port: WorkspacePort | null
   onClose: () => void
 }): React.JSX.Element {
+  // Why: the row, the copy action and this dialog must name the same address, or the
+  // details pane quietly contradicts the row it was opened from. Bind stays raw below,
+  // which is what makes the two fields useful together on a remote workspace.
+  const { address } = usePortClientReachability(port)
   return (
     <Dialog open={Boolean(port)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
@@ -31,7 +35,7 @@ export function LocalPortDetailsDialog({
               : translate('auto.components.right.sidebar.PortsPanel.d41a8241ec', 'Port')}
           </DialogTitle>
           <DialogDescription>
-            {port ? `${port.processName ?? 'Unknown process'} · ${addressForPort(port)}` : ''}
+            {port ? `${port.processName ?? 'Unknown process'} · ${address}` : ''}
           </DialogDescription>
         </DialogHeader>
         {port && (
@@ -39,7 +43,7 @@ export function LocalPortDetailsDialog({
             <dt className="text-muted-foreground">
               {translate('auto.components.right.sidebar.PortsPanel.1c1c18cefc', 'Address')}
             </dt>
-            <dd className="min-w-0 break-all text-foreground">{addressForPort(port)}</dd>
+            <dd className="min-w-0 break-all text-foreground">{address}</dd>
             <dt className="text-muted-foreground">
               {translate('auto.components.right.sidebar.PortsPanel.0f1d8cd324', 'Bind')}
             </dt>

@@ -1,4 +1,7 @@
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import {
+  preferredRuntimeEndpoint,
+  type PublicKnownRuntimeEnvironment
+} from '../../../shared/runtime-environments'
 import type { WebPairingOffer } from './web-pairing'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
@@ -124,9 +127,7 @@ export function redactStoredWebRuntimeEnvironment(
 export function getPreferredWebPairingOffer(
   environment: StoredWebRuntimeEnvironment
 ): WebPairingOffer {
-  const endpoint =
-    environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
-    environment.endpoints[0]
+  const endpoint = preferredRuntimeEndpoint(environment)
   if (!endpoint) {
     throw new Error('No runtime endpoint is stored for this web client.')
   }
