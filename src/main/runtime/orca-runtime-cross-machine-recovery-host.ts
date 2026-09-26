@@ -7,6 +7,7 @@ import { createRecoveryResumeHolds } from './cross-machine-recovery/recovery-res
 import { createClaudeHelpFlagProbe } from './cross-machine-recovery/claude-help-flag-probe'
 import { CLAUDE_APPEND_SYSTEM_PROMPT_FLAG } from './cross-machine-recovery/recovery-resume'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
 
 export class OrcaRuntimeWithCrossMachineRecoveryHost extends OrcaRuntimeWithCrossMachineRecovery {
   private readonly crossMachineRecoveryResumeHolds = createRecoveryResumeHolds()
@@ -25,7 +26,9 @@ export class OrcaRuntimeWithCrossMachineRecoveryHost extends OrcaRuntimeWithCros
       listLocalRepos: () =>
         this.listRepos().filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID),
       addRepo,
-      invalidateWorktreeCatalog: (repoId) => this.invalidateWorktreeCatalog(repoId),
+      // Why: the renderer confirms the destination through worktrees:list, whose detected-scan
+      // cache only the shared invalidators clear; they include this runtime's own catalog.
+      invalidateWorktreeCatalog: runWorktreeChangeInvalidators,
       resolveWorktree: (selector) => this.resolveWorktreeSelector(selector),
       ensureAgentSession: (request) => this.ensureAgentSession(request),
       resumeHolds: this.crossMachineRecoveryResumeHolds,
