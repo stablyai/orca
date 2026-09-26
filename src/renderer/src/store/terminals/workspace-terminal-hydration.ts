@@ -109,19 +109,6 @@ export function createWorkspaceTerminalHydrationActions(
           runtimeSessionPlaceholders.repos.some((repo) => repo.id === session.activeRepoId)
             ? session.activeRepoId
             : null
-        const {
-          pendingReconnectPtyIdByTabId,
-          pendingReconnectTabByWorktree,
-          pendingReconnectWorktreeIds
-        } = buildWorkspaceTerminalReconnectPlan({
-          reconnectPtyIdByRetainedTabId,
-          releasedPtyIdsByTabId,
-          repos: runtimeSessionPlaceholders.repos,
-          session,
-          validTabIds,
-          validWorktreeIds,
-          worktreesByRepo: runtimeSessionPlaceholders.worktreesByRepo
-        })
         // Restore per-worktree active tab; validate ids when the map exists, else derive for legacy sessions.
         let activeTabIdByWorktree: Record<string, string | null> = {}
         if (session.activeTabIdByWorktree) {
@@ -163,6 +150,29 @@ export function createWorkspaceTerminalHydrationActions(
         // re-flattening tabsByWorktree per entry is O(tabs x layouts).
         const allTabs = Object.values(tabsByWorktree).flat()
         const tabById = buildByIdIndex(allTabs)
+        const terminalLayoutPlan = buildWorkspaceTerminalLayoutPlan({
+          ownershipTransfersByTabId,
+          ownershipTransferTabIds,
+          releasedPtyIdsByTabId,
+          session,
+          tabById,
+          validTabIds
+        })
+        // Why after the layout plan: it reports the PTYs a duplicate binding just cost a row,
+        // and reconnect must withhold those from the row's tab-level id too.
+        const {
+          pendingReconnectPtyIdByTabId,
+          pendingReconnectTabByWorktree,
+          pendingReconnectWorktreeIds
+        } = buildWorkspaceTerminalReconnectPlan({
+          reconnectPtyIdByRetainedTabId,
+          releasedPtyIdsByTabId: terminalLayoutPlan.releasedPtyIdsByTabId,
+          repos: runtimeSessionPlaceholders.repos,
+          session,
+          validTabIds,
+          validWorktreeIds,
+          worktreesByRepo: runtimeSessionPlaceholders.worktreesByRepo
+        })
         const hydrated: WorkspaceHydrationPatch = {
           activeRepoId,
           activeWorktreeId,
@@ -210,14 +220,7 @@ export function createWorkspaceTerminalHydrationActions(
           worktreeNavHistory: activeWorktreeId ? [activeWorktreeId] : [],
           worktreeNavHistoryIndex: activeWorktreeId ? 0 : -1,
           ptyIdsByTabId: Object.fromEntries(allTabs.map((tab) => [tab.id, []] as const)),
-          terminalLayoutsByTabId: buildWorkspaceTerminalLayoutPlan({
-            ownershipTransfersByTabId,
-            ownershipTransferTabIds,
-            releasedPtyIdsByTabId,
-            session,
-            tabById,
-            validTabIds
-          }),
+          terminalLayoutsByTabId: terminalLayoutPlan.layoutsByTabId,
           localOnlyScrollbackByTabId: Object.fromEntries(
             Object.entries(session.localOnlyScrollbackByTabId ?? {}).filter(([tabId]) =>
               validTabIds.has(tabId)

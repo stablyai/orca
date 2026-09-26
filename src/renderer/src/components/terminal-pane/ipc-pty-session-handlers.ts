@@ -15,6 +15,10 @@ import {
   hasPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
 import type { createPtyOutputProcessor } from './pty-output-processor'
+import {
+  claimPtyDataHandlerForPane,
+  createPtyDataHandlerPaneOwner
+} from './pty-data-handler-overwrite-breadcrumb'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 
 type PtyCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
@@ -53,6 +57,8 @@ export function createIpcPtySessionHandlers({
     }
   >()
   const ownedExitHandlers = new Map<string, (code: number) => void>()
+  // Why: the overwrite breadcrumb compares owning panes, not handler identity; this token is the pane.
+  const paneOwner = createPtyDataHandlerPaneOwner()
 
   function clearAccumulatedState(): void {
     outputProcessor.clearAccumulatedState()
@@ -124,6 +130,7 @@ export function createIpcPtySessionHandlers({
       }
     }
     ptyReplayHandlers.set(id, replay)
+    claimPtyDataHandlerForPane(id, data, paneOwner)
     ptyDataHandlers.set(id, data)
     ptyWriteUnavailableHandlers.set(id, writeUnavailable)
     ownedDataHandlers.set(id, { data, replay, writeUnavailable })
