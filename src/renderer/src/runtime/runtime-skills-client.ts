@@ -3,17 +3,9 @@ import type {
   SkillDeleteRequest,
   SkillDeleteResult
 } from '../../../shared/skill-delete-contract'
-import {
-  SKILL_DELETE_CAPABILITY,
-  SKILL_DELETE_UPDATE_REQUIRED_MESSAGE
-} from '../../../shared/skill-install-capability'
+import { SKILL_DELETE_UPDATE_REQUIRED_MESSAGE } from '../../../shared/skill-install-capability'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared/skills'
-import {
-  assertRuntimeEnvironmentCapability,
-  callRuntimeRpc,
-  runtimeEnvironmentSupportsCapability,
-  type RuntimeClientTarget
-} from './runtime-rpc-client'
+import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
 
 const SKILL_DISCOVERY_TIMEOUT_MS = 15_000
 
@@ -55,48 +47,31 @@ export async function discoverSkillsForRuntimeTarget(
   )
 }
 
-const SKILL_DELETE_PREVIEW_TIMEOUT_MS = 60_000
-const SKILL_DELETE_TIMEOUT_MS = 5 * 60_000
+const PAIRED_SKILL_DELETE_UNSUPPORTED_MESSAGE =
+  'Deleting skills through a paired client is not supported. Run the command from Orca on the machine that stores the skills.'
 
 /**
- * Whether the delete affordance may be offered at all. The gate lives here,
- * beside where `callRuntimeRpc` is actually invoked — the main-process
- * `callRuntimeEnvironment` path install and remove use is a different,
- * non-overlapping transport, so a check there would never run for this.
+ * Whether the delete affordance may be offered at all. Paired environment
+ * targets share the runtime-scoped WebSocket with web/phone clients, so delete
+ * stays host-local (unix-socket / preload) only.
  */
 export async function runtimeTargetSupportsSkillDelete(
   runtimeTarget: RuntimeClientTarget | null
 ): Promise<boolean> {
-  if (!runtimeTarget) {
+  if (!runtimeTarget || runtimeTarget.kind !== 'local') {
     return false
   }
-  if (runtimeTarget.kind === 'local') {
-    // Desktop answers true immediately; on web the "local" host is a remote
-    // server that updates independently, so the preload probes its capability.
-    return window.api.skills.deleteSupported()
-  }
-  return runtimeEnvironmentSupportsCapability(runtimeTarget.environmentId, SKILL_DELETE_CAPABILITY)
+  // Desktop answers true immediately; on web the "local" host is a remote
+  // server that updates independently, so the preload probes its capability.
+  return window.api.skills.deleteSupported()
 }
 
 async function assertSkillDeleteSupported(runtimeTarget: RuntimeClientTarget): Promise<void> {
-  if (runtimeTarget.kind === 'local') {
-    if (!(await window.api.skills.deleteSupported())) {
-      throw new Error(SKILL_DELETE_UPDATE_REQUIRED_MESSAGE)
-    }
-    return
+  if (runtimeTarget.kind !== 'local') {
+    throw new Error(PAIRED_SKILL_DELETE_UNSUPPORTED_MESSAGE)
   }
-  try {
-    await assertRuntimeEnvironmentCapability(
-      runtimeTarget.environmentId,
-      SKILL_DELETE_CAPABILITY,
-      SKILL_DELETE_UPDATE_REQUIRED_MESSAGE
-    )
-  } catch (error) {
-    // A capability change racing the gate has no main-process hook to reuse:
-    // `recordSkillCapabilityAbsence` imports the main tracer and its capability
-    // parameter is a closed union over main-side capabilities.
-    console.warn('[skills] delete capability absent at call time', error)
-    throw error
+  if (!(await window.api.skills.deleteSupported())) {
+    throw new Error(SKILL_DELETE_UPDATE_REQUIRED_MESSAGE)
   }
 }
 
@@ -105,12 +80,7 @@ export async function previewSkillDeletionOnRuntimeTarget(
   request: SkillDeleteRequest
 ): Promise<SkillDeletePlan> {
   await assertSkillDeleteSupported(runtimeTarget)
-  if (runtimeTarget.kind === 'local') {
-    return window.api.skills.previewDelete(request)
-  }
-  return callRuntimeRpc<SkillDeletePlan>(runtimeTarget, 'skills.previewDelete', request, {
-    timeoutMs: SKILL_DELETE_PREVIEW_TIMEOUT_MS
-  })
+  return window.api.skills.previewDelete(request)
 }
 
 export async function deleteSkillsOnRuntimeTarget(
@@ -118,10 +88,5 @@ export async function deleteSkillsOnRuntimeTarget(
   request: SkillDeleteRequest
 ): Promise<SkillDeleteResult> {
   await assertSkillDeleteSupported(runtimeTarget)
-  if (runtimeTarget.kind === 'local') {
-    return window.api.skills.delete(request)
-  }
-  return callRuntimeRpc<SkillDeleteResult>(runtimeTarget, 'skills.delete', request, {
-    timeoutMs: SKILL_DELETE_TIMEOUT_MS
-  })
+  return window.api.skills.delete(request)
 }

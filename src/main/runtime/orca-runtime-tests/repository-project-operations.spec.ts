@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { realpath } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   EventEmitter,
@@ -49,7 +51,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('browses runtime server directories before projects are added', async () => {
-    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-browse-'))
+    const tempRoot = await mkdtemp(join(homedir(), 'orca-runtime-browse-'))
     try {
       await mkdir(join(tempRoot, 'zeta'))
       await mkdir(join(tempRoot, 'alpha'))
@@ -58,7 +60,7 @@ describe('OrcaRuntimeService', () => {
 
       const result = await runtime.browseServerDir(tempRoot)
 
-      expect(result.resolvedPath).toBe(tempRoot)
+      expect(result.resolvedPath).toBe(await realpath(tempRoot))
       expect(result.pathFlavor).toBe(process.platform === 'win32' ? 'win32' : 'posix')
       expect(result.entries).toEqual([
         { name: 'alpha', isDirectory: true, isSymlink: false },
@@ -68,6 +70,15 @@ describe('OrcaRuntimeService', () => {
     } finally {
       await rm(tempRoot, { recursive: true, force: true })
     }
+  })
+
+  it('refuses to browse a path outside the home directory', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const outsideHome = process.platform === 'win32' ? 'C:\\Windows' : '/etc'
+
+    await expect(runtime.browseServerDir(outsideHome)).rejects.toThrow(
+      'Directory browsing is limited to the home directory.'
+    )
   })
 
   it.runIf(process.platform === 'win32')('lists drive roots for a server-root browse', async () => {
