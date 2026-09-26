@@ -32,29 +32,36 @@ export function notifyHostOfMirroredEditorClose(
     return false
   }
   // A mirrored unified tab carries the host's tab id as `id` and the local file id as `entityId`; the host close RPC resolves by id.
-  const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+  // Why every match, not the first: a split view mirrors one file under several tabs, and a tab left
+  // un-notified keeps the host's copy open, which re-mirrors the file on the next snapshot.
+  const unifiedTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
     (tab) => tab.contentType === 'editor' && tab.entityId === fileId
   )
-  if (!unifiedTab) {
+  if (unifiedTabs.length === 0) {
     return false
   }
-  // Record the close intent SYNCHRONOUSLY so a host snapshot landing before the dynamic import below resolves can't
-  // flash the old-path tab back. closeWebRuntimeSessionTab re-records it idempotently.
-  recordWebSessionCloseIntent(
-    { environmentId: runtimeEnvironmentId },
-    worktreeId,
-    toHostSessionTabId(unifiedTab.id),
-    Date.now()
-  )
+  const closedAt = Date.now()
+  for (const unifiedTab of unifiedTabs) {
+    // Record the close intent SYNCHRONOUSLY so a host snapshot landing before the dynamic import below resolves can't
+    // flash the old-path tab back. closeWebRuntimeSessionTab re-records it idempotently.
+    recordWebSessionCloseIntent(
+      { environmentId: runtimeEnvironmentId },
+      worktreeId,
+      toHostSessionTabId(unifiedTab.id),
+      closedAt
+    )
+  }
   // Dynamic import: this helper is imported by the editor slice during store creation, so importing
   // web-runtime-session eagerly imports the store back and trips cyclic init in full-suite import order.
-  void import('./web-runtime-session').then(({ closeWebRuntimeSessionTab }) =>
-    closeWebRuntimeSessionTab({
-      worktreeId,
-      tabId: unifiedTab.id,
-      environmentId: runtimeEnvironmentId,
-      reason: 'user'
-    })
-  )
+  void import('./web-runtime-session').then(({ closeWebRuntimeSessionTab }) => {
+    for (const unifiedTab of unifiedTabs) {
+      closeWebRuntimeSessionTab({
+        worktreeId,
+        tabId: unifiedTab.id,
+        environmentId: runtimeEnvironmentId,
+        reason: 'user'
+      })
+    }
+  })
   return true
 }

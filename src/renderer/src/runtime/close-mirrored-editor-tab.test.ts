@@ -21,6 +21,22 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import type { Tab } from '../../../shared/tab-types'
+
+function mirroredEditorTab(id: string): Tab {
+  return {
+    id,
+    entityId: 'file-1',
+    groupId: 'group-1',
+    worktreeId: 'wt-1',
+    contentType: 'editor',
+    label: id,
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+}
 
 function buildState(overrides: Partial<MirroredEditorCloseState> = {}): MirroredEditorCloseState {
   return {
@@ -69,6 +85,40 @@ describe('notifyHostOfMirroredEditorClose', () => {
       environmentId: 'env-1',
       reason: 'user'
     })
+  })
+
+  it('closes every mirrored tab that renders the file, not just the first', async () => {
+    const now = Date.now()
+    const state = buildState({
+      unifiedTabsByWorktree: {
+        'wt-1': [mirroredEditorTab('host-tab-1'), mirroredEditorTab('host-tab-2')]
+      }
+    })
+
+    const handled = notifyHostOfMirroredEditorClose(state, 'wt-1', 'file-1')
+
+    expect(handled).toBe(true)
+    for (const tabId of ['host-tab-1', 'host-tab-2']) {
+      expect(
+        isWebSessionCloseIntentPending(
+          { environmentId: 'env-1' },
+          'wt-1',
+          toHostSessionTabId(tabId),
+          now
+        )
+      ).toBe(true)
+    }
+    await vi.waitFor(() => {
+      expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledTimes(2)
+    })
+    for (const tabId of ['host-tab-1', 'host-tab-2']) {
+      expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+        worktreeId: 'wt-1',
+        tabId,
+        environmentId: 'env-1',
+        reason: 'user'
+      })
+    }
   })
 
   it('does not route locally-opened (non-mirrored) files to the host', () => {
