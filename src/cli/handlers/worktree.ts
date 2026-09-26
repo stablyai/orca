@@ -38,6 +38,7 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
+import { getOptionalGitLabLinkFlag } from './worktree-gitlab-link'
 
 function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean>): void {
   if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
@@ -216,6 +217,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const linkedGitLabIssue = getOptionalGitLabLinkFlag(flags, 'issue')
+    const linkedGitLabMR = getOptionalGitLabLinkFlag(flags, 'mr')
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const name = getRequiredStringFlag(flags, 'name')
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
@@ -226,6 +229,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
       ...linearIssueLink,
+      ...(linkedGitLabIssue === undefined ? {} : { linkedGitLabIssue }),
+      ...(linkedGitLabMR === undefined ? {} : { linkedGitLabMR }),
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
       activate,
@@ -258,11 +263,17 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
+    const linkedGitLabIssue = getOptionalGitLabLinkFlag(flags, 'issue', { allowNull: true })
+    const linkedGitLabMR = getOptionalGitLabLinkFlag(flags, 'mr', { allowNull: true })
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.set', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       displayName: getOptionalStringFlag(flags, 'display-name'),
       linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
       ...linearIssueLink,
+      // Why: an absent flag must not emit the key at all — the update spreads raw,
+      // so a present-but-undefined key would erase the stored link.
+      ...(linkedGitLabIssue === undefined ? {} : { linkedGitLabIssue }),
+      ...(linkedGitLabMR === undefined ? {} : { linkedGitLabMR }),
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),

@@ -391,4 +391,86 @@ describe('orca cli worktree awareness', () => {
       noParent: false
     })
   })
+
+  it('passes a GitLab merge request reference through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_gitlab_mr', {
+        worktree: { ...buildWorktree('/tmp/repo/child', 'feature/child'), linkedGitLabMR: 77 }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--gitlab-mr', '!77', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      linkedGitLabMR: 77,
+      comment: undefined,
+      workspaceStatus: undefined,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  it('clears a GitLab issue link with null', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_gitlab_issue_clear', {
+        worktree: { ...buildWorktree('/tmp/repo/child', 'feature/child'), linkedGitLabIssue: null }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--gitlab-issue',
+        'null',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      linkedGitLabIssue: null,
+      comment: undefined,
+      workspaceStatus: undefined,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  // Why: the update spreads raw, so emitting the key at all on an untouched flag
+  // would erase the stored link.
+  it('omits both GitLab keys entirely when neither flag is passed', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_no_gitlab', {
+        worktree: buildWorktree('/tmp/repo/child', 'feature/child')
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--comment', 'note', '--json'],
+      '/tmp/repo'
+    )
+
+    const payload = callMock.mock.calls.at(-1)?.[1]
+    expect(payload).toBeDefined()
+    expect(Object.keys(payload ?? {})).not.toContain('linkedGitLabIssue')
+    expect(Object.keys(payload ?? {})).not.toContain('linkedGitLabMR')
+  })
 })
