@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { CommandSpec } from './args'
 import { COMMAND_SPECS } from './specs'
 import {
+  BOOLEAN_FLAGS,
   REPEATED_FLAG_SEPARATOR,
   findCommandSpec,
   normalizeCommandPositionals,
@@ -45,6 +46,14 @@ describe('parseArgs', () => {
     expect(parsed.commandPath).toEqual(['tab', 'create'])
     expect(parsed.flags.get('json')).toBe(true)
     expect(parsed.flags.get('url')).toBe('https://example.com')
+  })
+
+  it('parses the open graphics fallback as a boolean flag', () => {
+    const parsed = parseArgs(['open', '--disable-gpu'])
+
+    expect(BOOLEAN_FLAGS.has('disable-gpu')).toBe(true)
+    expect(parsed.commandPath).toEqual(['open'])
+    expect(parsed.flags.get('disable-gpu')).toBe(true)
   })
 
   it('does not consume a command token after an unknown flag', () => {

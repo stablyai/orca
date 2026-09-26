@@ -92,8 +92,10 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       rawArgs ?? []
     )
   },
-  open: async ({ client, json }) => {
-    const result = await client.openOrca()
+  open: async ({ client, flags, json }) => {
+    const result = await client.openOrca(undefined, {
+      disableGpu: flags.get('disable-gpu') === true
+    })
     printResult(result, json, formatCliStatus)
   },
   serve: async ({ flags, json }) => {

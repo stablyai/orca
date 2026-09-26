@@ -9,9 +9,12 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['open'],
     summary: 'Launch Orca and wait for the runtime to be reachable',
-    usage: 'orca open [--json]',
-    allowedFlags: [...GLOBAL_FLAGS],
-    examples: ['orca open', 'orca open --json']
+    usage: 'orca open [--disable-gpu] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'disable-gpu'],
+    notes: [
+      'Use --disable-gpu when Linux graphics initialization prevents the desktop window from opening.'
+    ],
+    examples: ['orca open', 'orca open --json', 'orca open --disable-gpu']
   },
   ...SERVE_COMMAND_SPECS,
   {

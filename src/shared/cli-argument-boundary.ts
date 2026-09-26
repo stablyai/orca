@@ -10,6 +10,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'connect',
   'current',
   'debug',
+  'disable-gpu',
   'dry-run',
   'enter',
   'focus',
