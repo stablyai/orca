@@ -11,6 +11,8 @@ import {
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 
+const emptyLayout = { root: null, activeLeafId: null, expandedLeafId: null }
+
 /**
  * Every explicit close of one pane, from every entry point, under every condition that has ever
  * widened one into a whole-tab close: the live sibling survives and no tab-level close goes out.
@@ -27,6 +29,7 @@ type Condition =
   | 'no-saved-layout'
   | 'no-live-pty'
   | 'kill-fails'
+  | 'nothing-published'
 
 /** The desktop renderer's split tab as it publishes it, with the given PTY bindings. */
 function syncRendererSplit(
@@ -106,6 +109,32 @@ function arrange(entry: Entry, condition: Condition): CloseContinuityHarness {
   if (entry === 'cli-pty') {
     // Graph without the leaf: the handle resolves through the PTY, as for a runtime-owned pane.
     harness.syncFixtureTabWithoutLeaf()
+  }
+  if (condition === 'nothing-published') {
+    // The renderer lists the tab before its panes register and before it publishes any row.
+    harness.runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: TAB_ID,
+          worktreeId: WORKTREE_ID,
+          title: 'Fixture shell',
+          activeLeafId: null,
+          layout: null
+        }
+      ],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: WORKTREE_ID,
+          publicationEpoch: 'renderer:nothing-published',
+          snapshotVersion: 4,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ]
+    })
   }
   if (condition === 'kill-fails') {
     harness.kill.mockReturnValue(false)
@@ -187,6 +216,8 @@ const rows: [Entry, Condition][] = [
   ['cli-pty', 'stop-unconfirmed'],
   ['cli-pty', 'stop-throws'],
   ['cli-pty', 'unbound-sibling'],
+  // An owner copy with no panes once read as "one pane", so the close took the whole tab.
+  ['cli-pty', 'nothing-published'],
   ['phone-desktop', 'normal'],
   ['phone-desktop', 'pinned'],
   ['phone-desktop', 'unbound-sibling'],
@@ -248,6 +279,38 @@ describe("a close of a tab's last pane still closes the tab", () => {
     expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
     expect((await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs).toEqual([])
     expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+  })
+
+  it.each([
+    ['no saved layout', () => ({})],
+    ['a layout saved before its pane mounted', () => ({ [TAB_ID]: emptyLayout })]
+  ] as const)(
+    'on a host with no desktop window, closes an unsplit tab with %s',
+    async (_name, layouts) => {
+      const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
+      harness.runtime.setNotifier(null)
+      harness.syncEmptyGraph()
+      harness.editSession((session) => ({ ...session, terminalLayoutsByTabId: layouts() }))
+
+      await harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, `${TAB_ID}::${LEAF_ID}`, {
+        reason: 'user'
+      })
+
+      expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
+      expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
+    }
+  )
+
+  it('from the CLI by PTY, closes an unsplit tab whose renderer graph lists no panes yet', async () => {
+    const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
+    harness.syncFixtureTabWithoutLeaf()
+    harness.setVerifiedStopResult(true)
+    harness.setCloseTerminalTabAction(() => harness.retirePersistedTab())
+
+    await closePane('cli-pty', harness)
+
+    expect(harness.closeTerminalTab.mock.calls.map((call) => call[0])).toEqual([TAB_ID])
+    expect(harness.closeTerminalPane).not.toHaveBeenCalled()
   })
 
   it.each(['phone-desktop', 'cli-graph'] as const)(

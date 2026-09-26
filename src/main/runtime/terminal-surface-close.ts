@@ -27,20 +27,14 @@ export function collectTerminalLayoutLeafIds(
 }
 
 /**
- * Resolves a pane close against one copy of its tab's panes. `null` means the copy has no record
- * of the tab; an empty list means it knows the tab but records no split, so it is one pane.
+ * Resolves a pane close against the panes one copy records. Only a copy that positively shows this
+ * pane as its tab's one pane widens the close; a copy recording no panes knows nothing about it.
  */
 export function resolvePaneClose(
   leafIds: readonly string[] | null,
   leafId: string
 ): PaneCloseResolution {
-  if (!leafIds) {
-    return 'absent'
-  }
-  if (leafIds.length === 0) {
-    return 'last-pane'
-  }
-  if (!leafIds.includes(leafId)) {
+  if (!leafIds?.includes(leafId)) {
     return 'absent'
   }
   return leafIds.length === 1 ? 'last-pane' : 'pane'
@@ -55,28 +49,22 @@ export type TerminalCloseLayoutCopies = {
   /** The tab's panes in the renderer-published runtime graph. */
   graphLeafIds: readonly string[]
   sessionLayout: TerminalLayoutSnapshot | undefined
-  sessionListsTab: boolean
 }
 
-/** Reads the panes from whoever owns the tab's layout; `null` means no copy records the tab. */
-function readLayoutOwnerLeafIds(copies: TerminalCloseLayoutCopies): string[] | null {
-  const publishedLayout = copies.snapshotRows.find((row) => row.parentLayout)?.parentLayout
-  const published = publishedLayout ? collectTerminalLayoutLeafIds(publishedLayout.root) : null
-  if (copies.rendererListsTab) {
-    // Why: main's saved layout lacks a renderer split whose PTY binding has not committed yet;
-    // the published layout outranks the graph, which relay recovery can leave with stale panes.
-    return published ?? [...copies.graphLeafIds]
-  }
-  if (copies.sessionLayout) {
-    return collectTerminalLayoutLeafIds(copies.sessionLayout.root)
-  }
-  if (published) {
-    return published
-  }
-  if (copies.snapshotRows.length > 0) {
-    return copies.snapshotRows.map((row) => row.leafId)
-  }
-  return copies.sessionListsTab ? [] : null
+/** Reads the panes from whoever owns the tab's layout; `null` means no copy records any. */
+function readLayoutOwnerLeafIds(copies: TerminalCloseLayoutCopies): readonly string[] | null {
+  const published =
+    copies.snapshotRows
+      .map((row) => collectTerminalLayoutLeafIds(row.parentLayout?.root))
+      .find((leafIds) => leafIds.length > 0) ?? []
+  const rows = copies.snapshotRows.map((row) => row.leafId)
+  // Why: main's saved layout lacks a renderer split whose PTY binding has not committed yet;
+  // the published layout outranks the graph, which relay recovery can leave with stale panes.
+  const ownerCopies = copies.rendererListsTab
+    ? [published, copies.graphLeafIds, rows]
+    : [collectTerminalLayoutLeafIds(copies.sessionLayout?.root), published, rows]
+  // Why: a layout saved before its pane mounted (or a graph before its panes register) is empty.
+  return ownerCopies.find((leafIds) => leafIds.length > 0) ?? null
 }
 
 /**

@@ -131,7 +131,6 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
     worktreeId: string,
     target: TerminalSurfaceCloseTarget
   ): PaneCloseResolution | 'tab' {
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
     const graphLeafIds: string[] = []
     for (const leaf of this.leaves.values()) {
       if (leaf.tabId === target.tabId) {
@@ -144,10 +143,8 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
         (row) => row.type === 'terminal' && row.parentTabId === target.tabId
       ),
       graphLeafIds,
-      sessionLayout: session?.terminalLayoutsByTabId?.[target.tabId],
-      sessionListsTab: Object.values(session?.tabsByWorktree ?? {}).some((tabs) =>
-        tabs.some((tab) => tab.id === target.tabId)
-      )
+      sessionLayout:
+        this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[target.tabId]
     })
   }
 
