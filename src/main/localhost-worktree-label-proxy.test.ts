@@ -5,6 +5,12 @@ import { LocalhostWorktreeLabelProxy } from './localhost-worktree-label-proxy'
 
 const upstreamServers: http.Server[] = []
 
+type ProxyRequestOptions = {
+  method?: string
+  headers?: http.OutgoingHttpHeaders
+  body?: string
+}
+
 afterEach(async () => {
   await Promise.all(
     upstreamServers
@@ -23,7 +29,8 @@ async function startUpstream(
 }
 
 function fetchThroughProxy(
-  labeledUrl: string
+  labeledUrl: string,
+  options: ProxyRequestOptions = {}
 ): Promise<{ status: number; body: string; headers: http.IncomingHttpHeaders }> {
   const url = new URL(labeledUrl)
   return new Promise((resolve, reject) => {
@@ -34,7 +41,8 @@ function fetchThroughProxy(
         host: '127.0.0.1',
         port: Number(url.port),
         path: `${url.pathname}${url.search}`,
-        headers: { host: url.host }
+        method: options.method,
+        headers: { ...options.headers, host: url.host }
       },
       (response) => {
         const chunks: Buffer[] = []
@@ -49,7 +57,7 @@ function fetchThroughProxy(
       }
     )
     request.on('error', reject)
-    request.end()
+    request.end(options.body)
   })
 }
 
@@ -88,6 +96,53 @@ describe('localhost worktree label proxy', () => {
     // with no injected favicon/title and the CSP header intact.
     expect(result.body).toBe('<html><head></head><body>hello</body></html>')
     expect(result.headers['content-security-policy']).toBe("default-src 'self'")
+  })
+
+  it('forwards the browser-facing host authoritatively on POST requests', async () => {
+    let upstreamRequest: Record<string, unknown> | undefined
+    const port = await startUpstream((request, response) => {
+      const chunks: Buffer[] = []
+      request.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+      request.on('end', () => {
+        upstreamRequest = {
+          method: request.method,
+          host: request.headers.host,
+          forwardedHost: request.headers['x-forwarded-host'],
+          origin: request.headers.origin,
+          url: request.url,
+          body: Buffer.concat(chunks).toString('utf8')
+        }
+        response.writeHead(200, { 'content-type': 'text/plain' })
+        response.end('ok')
+      })
+    })
+    const proxy = new LocalhostWorktreeLabelProxy()
+    const { url } = await proxy.registerRoute({
+      targetUrl: `http://localhost:${port}/`,
+      projectName: 'Snap Studio',
+      worktreeName: 'analytics'
+    })
+    const labeledUrl = new URL('/action', url)
+
+    const result = await fetchThroughProxy(labeledUrl.toString(), {
+      method: 'POST',
+      headers: {
+        origin: labeledUrl.origin,
+        'x-forwarded-host': 'attacker.example'
+      },
+      body: 'action'
+    })
+
+    expect(upstreamRequest).toEqual({
+      method: 'POST',
+      host: `localhost:${port}`,
+      forwardedHost: labeledUrl.host,
+      origin: labeledUrl.origin,
+      url: '/action',
+      body: 'action'
+    })
+    expect(result.status).toBe(200)
+    expect(result.body).toBe('ok')
   })
 
   it('normalizes a 0.0.0.0 target to a connectable loopback host', async () => {
