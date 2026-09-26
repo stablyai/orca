@@ -21,7 +21,8 @@ function getPlatformManifestName(): string {
     return 'latest-mac.yml'
   }
   if (process.platform === 'linux') {
-    return 'latest-linux.yml'
+    // Match electron-updater getChannelFilePrefix(): non-x64 Linux appends -${arch}.
+    return process.arch === 'x64' ? 'latest-linux.yml' : `latest-linux-${process.arch}.yml`
   }
   return 'latest.yml'
 }
