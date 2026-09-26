@@ -21,6 +21,7 @@ import { shellEscape } from './ssh-connection-utils'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { SHORT_RELAY_SOCKET_DIR_PREFIX } from './relay-socket-path-limit'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import {
   describeRelayEndpointIncumbent,
   isReapableRelayHusk,
@@ -138,6 +139,9 @@ export async function sweepSupersededRelayEndpoints(
       signal: options.signal
     })
   } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     // Same reason the Windows arm logs: an abandoned pass and an empty host are the same return
     // value, and only the log tells them apart.
     console.warn(
@@ -201,7 +205,10 @@ async function applySupersededRelayDecision(
         signal: options.signal
       })
       return 'stale-endpoint-removed'
-    } catch {
+    } catch (error) {
+      if (isUnconfirmedSshCommandTermination(error)) {
+        throw error
+      }
       return 'unverifiable'
     }
   }

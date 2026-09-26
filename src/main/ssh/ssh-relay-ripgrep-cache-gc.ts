@@ -6,15 +6,19 @@ import {
   MAX_LISTING_ENTRIES,
   cacheDir,
   listEntriesCommand,
-  listReferencesCommand,
-  restoreEntryCommand
+  listReferencesCommand
 } from './ssh-relay-ripgrep-cache-gc-commands'
 // Relay installation references protect binaries until version GC removes their owners.
 // Unknown references block deletion; tombstones are rechecked before removal.
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { BUNDLED_RIPGREP_PLATFORMS } from '../../shared/bundled-ripgrep'
-import { moveRemoteTreeCommand, removeRemoteTreeCommand } from './ssh-remote-commands'
+import {
+  moveRemoteTreeCommand,
+  removeRemoteTreeCommand,
+  restoreRemoteTreeCommand
+} from './ssh-remote-commands'
 import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 
 function entryNamePattern(): RegExp {
@@ -32,7 +36,12 @@ function staleTombstoneEntry(name: string): string | null {
     return null
   }
   const match = /^(.*)\.(\d+)\.(\d+)$/.exec(name.slice(TOMBSTONE_PREFIX.length))
-  if (!match || !ENTRY_NAME.test(match[1]) || Date.now() - Number(match[3]) < 30 * 60_000) {
+  if (
+    !match ||
+    !ENTRY_NAME.test(match[1]) ||
+    !Number.isSafeInteger(Number(match[3])) ||
+    Date.now() - Number(match[3]) < 30 * 60_000
+  ) {
     return null
   }
   return match[1]
@@ -75,7 +84,10 @@ async function scanReferences(
   let output: string
   try {
     output = await exec(conn, host, listReferencesCommand(host, remoteHome))
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     return { readable: false }
   }
   const lines = output.split(/\r?\n/).map((line) => line.trim())
@@ -99,7 +111,7 @@ async function scanReferences(
   return { readable: true, referenced }
 }
 
-/** Collect ripgrep builds that no relay installation references. Never throws. */
+/** Collect unreferenced ripgrep builds; unconfirmed termination stops the caller's cleanup. */
 export async function gcRemoteRipgrepCache(
   conn: SshConnection,
   host: RemoteHostPlatform,
@@ -119,6 +131,15 @@ export async function gcRemoteRipgrepCache(
     for (const name of entries) {
       const entry = staleTombstoneEntry(name) ?? name
       if (scan.referenced.has(entry) || entry === options.pinnedEntry) {
+        if (name !== entry) {
+          const base = cacheDir(host, remoteHome)
+          await restoreCacheEntry(
+            conn,
+            host,
+            joinRemotePath(host, base, name),
+            joinRemotePath(host, base, entry)
+          )
+        }
         continue
       }
       if (
@@ -136,8 +157,11 @@ export async function gcRemoteRipgrepCache(
     if (removed.length > 0) {
       console.log(`[ssh-relay] ripgrep cache GC: removed ${removed.length}: ${removed.join(', ')}`)
     }
-  } catch {
-    /* Never fails a deploy; the next connect tries again. */
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+    // Confirmed cleanup failures are optional; the next connect tries again.
   }
 }
 
@@ -162,22 +186,45 @@ async function removeUnreferencedEntry(
     ) {
       return false
     }
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     return false
   }
   // Why recheck under the rename: a deploy that read this entry as present can still be writing
   // its marker. Its reference now names a path that no longer exists, so restoring the tree is
   // the only outcome that leaves that relay with a working ripgrep.
-  const recheck = await scanReferences(conn, host, remoteHome)
+  const recheck = await scanReferences(conn, host, remoteHome).catch(async (err: unknown) => {
+    // A read-only scan cannot conflict with restoring this pass's renamed tree.
+    await restoreCacheEntry(conn, host, tombstone, entryDir).catch(() => {})
+    throw err
+  })
   if (!recheck.readable || recheck.referenced.has(entry)) {
-    await exec(conn, host, restoreEntryCommand(host, tombstone, entryDir)).catch(() => {})
+    await restoreCacheEntry(conn, host, tombstone, entryDir)
     return false
   }
   try {
     await exec(conn, host, removeRemoteTreeCommand(host, tombstone))
     return true
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     // A later pass retries after verifying references again.
     return false
   }
+}
+
+async function restoreCacheEntry(
+  conn: SshConnection,
+  host: RemoteHostPlatform,
+  tombstone: string,
+  entryDir: string
+): Promise<void> {
+  await exec(conn, host, restoreRemoteTreeCommand(host, tombstone, entryDir)).catch((err) => {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+  })
 }

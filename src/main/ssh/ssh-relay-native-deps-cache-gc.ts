@@ -16,12 +16,14 @@
  */
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import {
   isRelayNativeDepsCacheEntryName,
   relayNativeDepsCacheBaseDir,
   relayNativeDepsCacheNodeModulesPath,
   supportsRelayNativeDepsCache,
-  RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX
+  RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX,
+  LEGACY_RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX
 } from './ssh-relay-native-deps-cache'
 import {
   listRelayNativeDepsCacheEntriesCommand,
@@ -30,13 +32,37 @@ import {
   RELAY_NATIVE_CACHE_LIST_OK,
   RELAY_NATIVE_CACHE_REFS_OK
 } from './ssh-relay-native-deps-cache-commands'
-import { moveRemoteTreeCommand, removeRemoteTreeCommand } from './ssh-remote-commands'
+import {
+  moveRemoteTreeCommand,
+  removeRemoteTreeCommand,
+  restoreRemoteTreeCommand
+} from './ssh-remote-commands'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 
 type ReferenceScan =
   | { readable: true; referencedKeys: Set<string> }
   /** Anything this client could not fully account for. No entry may be deleted on it. */
   | { readable: false }
+
+function staleTombstoneKey(name: string): string | null {
+  const prefix = [
+    RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX,
+    LEGACY_RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX
+  ].find((value) => name.startsWith(value))
+  if (!prefix) {
+    return null
+  }
+  const match = /^(.*)\.(\d+)\.(\d+)$/.exec(name.slice(prefix.length))
+  if (
+    !match ||
+    !isRelayNativeDepsCacheEntryName(match[1]) ||
+    !Number.isSafeInteger(Number(match[3])) ||
+    Date.now() - Number(match[3]) < 30 * 60_000
+  ) {
+    return null
+  }
+  return match[1]
+}
 
 function execHostCommand(
   conn: SshConnection,
@@ -69,7 +95,10 @@ export async function gcRelayNativeDepsCache(
     entries = parseCacheEntryListing(
       await execHostCommand(conn, host, listRelayNativeDepsCacheEntriesCommand(host, remoteHome))
     )
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     return
   }
   if (entries.length === 0) {
@@ -80,10 +109,30 @@ export async function gcRelayNativeDepsCache(
     return
   }
   const pinned = new Set(options?.pinnedKeys ?? [])
-  const candidates = entries.filter((key) => !scan.referencedKeys.has(key) && !pinned.has(key))
   const removed: string[] = []
-  for (const key of candidates) {
-    if (await removeUnreferencedCacheEntry(conn, host, remoteHome, base, key)) {
+  for (const name of entries) {
+    const key = staleTombstoneKey(name) ?? name
+    if (scan.referencedKeys.has(key) || pinned.has(key)) {
+      if (name !== key) {
+        await restoreCacheEntry(
+          conn,
+          host,
+          joinRemotePath(host, base, name),
+          joinRemotePath(host, base, key)
+        )
+      }
+      continue
+    }
+    if (
+      await removeUnreferencedCacheEntry(
+        conn,
+        host,
+        remoteHome,
+        base,
+        key,
+        name === key ? undefined : name
+      )
+    ) {
       removed.push(key)
     }
   }
@@ -99,48 +148,68 @@ async function removeUnreferencedCacheEntry(
   host: RemoteHostPlatform,
   remoteHome: string,
   base: string,
-  key: string
+  key: string,
+  abandonedTombstone?: string
 ): Promise<boolean> {
   const entryDir = joinRemotePath(host, base, key)
   const tombstone = joinRemotePath(
     host,
     base,
-    `${RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX}${key}.${process.pid}.${Date.now()}`
+    abandonedTombstone ??
+      `${RELAY_NATIVE_DEPS_CACHE_TOMBSTONE_PREFIX}${key}.${process.pid}.${Date.now()}`
   )
   try {
-    const moved = await execHostCommand(
-      conn,
-      host,
-      moveRemoteTreeCommand(host, entryDir, tombstone)
-    )
-    if (moved.trim() !== 'MOVED') {
+    if (
+      !abandonedTombstone &&
+      (
+        await execHostCommand(conn, host, moveRemoteTreeCommand(host, entryDir, tombstone))
+      ).trim() !== 'MOVED'
+    ) {
       return false
     }
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     return false
   }
   // Why recheck under the rename: a deploy that read `.deps-complete` before it moved can still
   // be creating its symlink. Its reference now names a path that no longer exists, so restoring
   // the tree is the only outcome that leaves that relay with working native deps.
-  let recheck: ReferenceScan
-  try {
-    recheck = await scanCacheReferences(conn, host, remoteHome)
-  } catch {
-    recheck = { readable: false }
-  }
+  const recheck = await scanCacheReferences(conn, host, remoteHome).catch(async (err: unknown) => {
+    // A read-only scan cannot conflict with restoring this pass's renamed tree.
+    await restoreCacheEntry(conn, host, tombstone, entryDir).catch(() => {})
+    throw err
+  })
   if (!recheck.readable || recheck.referencedKeys.has(key)) {
-    await execHostCommand(conn, host, moveRemoteTreeCommand(host, tombstone, entryDir)).catch(
-      () => {}
-    )
+    await restoreCacheEntry(conn, host, tombstone, entryDir)
     return false
   }
   try {
     await execHostCommand(conn, host, removeRemoteTreeCommand(host, tombstone))
     return true
-  } catch {
-    // The sweep in the entry listing drains a tombstone this pass could not remove.
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
+    // A later pass rechecks references before retrying this tombstone.
     return false
   }
+}
+
+async function restoreCacheEntry(
+  conn: SshConnection,
+  host: RemoteHostPlatform,
+  tombstone: string,
+  entryDir: string
+): Promise<void> {
+  await execHostCommand(conn, host, restoreRemoteTreeCommand(host, tombstone, entryDir)).catch(
+    (err) => {
+      if (isUnconfirmedSshCommandTermination(err)) {
+        throw err
+      }
+    }
+  )
 }
 
 async function scanCacheReferences(
@@ -155,7 +224,10 @@ async function scanCacheReferences(
       host,
       listRelayNativeDepsCacheReferencesCommand(host, remoteHome)
     )
-  } catch {
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      throw err
+    }
     return { readable: false }
   }
   const lines = output.split(/\r?\n/).map((line) => line.trim())
@@ -233,7 +305,7 @@ function parseCacheEntryListing(output: string): string[] {
     // Why re-validate a name the host produced: it is about to be interpolated into `mv` and
     // `rm -rf`. Only names this client could itself have minted are eligible.
     if (
-      isRelayNativeDepsCacheEntryName(name) &&
+      (isRelayNativeDepsCacheEntryName(name) || staleTombstoneKey(name)) &&
       entries.length < MAX_RELAY_NATIVE_CACHE_LISTING_ENTRIES
     ) {
       entries.push(name)

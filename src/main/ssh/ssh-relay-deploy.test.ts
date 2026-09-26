@@ -167,6 +167,7 @@ function detachedLaunchCommand(conn: SshConnection): string | undefined {
 describe('deployAndLaunchRelay', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(ensureRemoteOpenCodeRuntime).mockReset().mockResolvedValue('ready')
     vi.mocked(execCommand).mockReset().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
     vi.mocked(waitForSentinel).mockReset().mockResolvedValue({
       write: vi.fn(),
@@ -450,22 +451,33 @@ describe('deployAndLaunchRelay', () => {
     expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
   })
 
-  it('does not retry when a session-limit failure races with a real install-state failure', async () => {
-    const conn = makeMockConnection()
-    const mockExecCommand = vi.mocked(execCommand)
-    const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 4
-    })
-    const installError = new Error('permission denied while checking relay install')
-    vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(sessionLimitError)
-    vi.mocked(isRelayAlreadyInstalled).mockRejectedValueOnce(installError)
-    mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
-    mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
+  it.each([false, true])(
+    'does not retry after a sibling failure (unconfirmed abort: %s)',
+    async (unconfirmed) => {
+      const conn = makeMockConnection()
+      const mockExecCommand = vi.mocked(execCommand)
+      const sessionLimitError = Object.assign(
+        new Error('(SSH) Channel open failure: open failed'),
+        {
+          reason: 4
+        }
+      )
+      const installError = unconfirmed
+        ? Object.assign(new Error('probe still running'), {
+            name: 'AbortError',
+            sshChannelCloseConfirmed: false
+          })
+        : new Error('permission denied while checking relay install')
+      vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(sessionLimitError)
+      vi.mocked(isRelayAlreadyInstalled).mockRejectedValueOnce(installError)
+      mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
+      mockExecCommand.mockResolvedValueOnce('/home/user') // concurrent install-state $HOME
 
-    await expect(deployAndLaunchRelay(conn)).rejects.toBe(installError)
-    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(1)
-    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
-  })
+      await expect(deployAndLaunchRelay(conn)).rejects.toBe(installError)
+      expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(1)
+      expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
+    }
+  )
 
   it('does not retry until the surviving first-attempt probe settles', async () => {
     const conn = makeMockConnection()
@@ -530,11 +542,16 @@ describe('deployAndLaunchRelay', () => {
     expect(launchCommand).not.toContain('.pty-source-credit-policy')
   })
 
-  it.each([false, true])(
-    'waits for the ripgrep upload before cleanup (upload failure: %s)',
-    async (fails) => {
+  it.each([
+    [false, false],
+    [false, true],
+    [true, false],
+    [true, true]
+  ])(
+    'waits for ripgrep before cleanup (concurrent exec: %s, upload failure: %s)',
+    async (concurrent, fails) => {
       const conn = makeMockConnection()
-      vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(false)
+      vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(concurrent)
       queueFreshLinuxDeploy()
       let finishUpload = (): void => {}
       vi.mocked(ensureRemoteBundledRipgrep).mockImplementationOnce(
@@ -549,32 +566,35 @@ describe('deployAndLaunchRelay', () => {
       await new Promise<void>((resolve) => setImmediate(resolve))
       expect(execCommand).toHaveBeenCalledTimes(execCount)
       expect(gcOldRelayVersions).not.toHaveBeenCalled()
-      expect(ensureRemoteOpenCodeRuntime).not.toHaveBeenCalled()
+      expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledTimes(concurrent ? 1 : 0)
       finishUpload()
       await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
     }
   )
 
-  it('waits for SQLite runtime setup before cleanup on single-exec transports', async () => {
-    const conn = makeMockConnection()
-    vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(false)
-    queueFreshLinuxDeploy()
-    let finishSetup!: () => void
-    vi.mocked(ensureRemoteOpenCodeRuntime).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishSetup = () => resolve('failed')
-        })
-    )
-    await deployAndLaunchRelay(conn)
-    await vi.waitFor(() => expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledOnce())
-    const execCount = vi.mocked(execCommand).mock.calls.length
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    expect(execCommand).toHaveBeenCalledTimes(execCount)
-    expect(gcOldRelayVersions).not.toHaveBeenCalled()
-    finishSetup()
-    await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
-  })
+  it.each([false, true])(
+    'waits for SQLite setup before cleanup (concurrent exec: %s)',
+    async (concurrent) => {
+      const conn = makeMockConnection()
+      vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(concurrent)
+      queueFreshLinuxDeploy()
+      let finishSetup!: () => void
+      vi.mocked(ensureRemoteOpenCodeRuntime).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishSetup = () => resolve('failed')
+          })
+      )
+      await deployAndLaunchRelay(conn)
+      await vi.waitFor(() => expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledOnce())
+      const execCount = vi.mocked(execCommand).mock.calls.length
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(execCommand).toHaveBeenCalledTimes(execCount)
+      expect(gcOldRelayVersions).not.toHaveBeenCalled()
+      finishSetup()
+      await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
+    }
+  )
 
   it('does not launch or upload an unprotected binary when recording its reference fails', async () => {
     const conn = makeMockConnection()
@@ -585,19 +605,83 @@ describe('deployAndLaunchRelay', () => {
     expect(ensureRemoteBundledRipgrep).not.toHaveBeenCalled()
   })
 
-  it('skips cleanup when SQLite setup cannot confirm command teardown on a single-exec transport', async () => {
+  it.each([false, true])(
+    'skips cleanup after unconfirmed SQLite teardown (concurrent exec: %s)',
+    async (concurrent) => {
+      const conn = makeMockConnection()
+      vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(concurrent)
+      queueFreshLinuxDeploy()
+      vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValueOnce('teardown-unconfirmed')
+      await deployAndLaunchRelay(conn)
+      await vi.waitFor(() => expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledOnce())
+      const execCount = vi.mocked(execCommand).mock.calls.length
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(execCommand).toHaveBeenCalledTimes(execCount)
+      expect(gcOldRelayVersions).not.toHaveBeenCalled()
+      expect(gcRemoteRipgrepCache).not.toHaveBeenCalled()
+    }
+  )
+
+  it('does not launch after an unconfirmed ripgrep reference write', async () => {
     const conn = makeMockConnection()
-    vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(false)
     queueFreshLinuxDeploy()
-    vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValueOnce('teardown-unconfirmed')
-    await deployAndLaunchRelay(conn)
-    await vi.waitFor(() => expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledOnce())
-    const execCount = vi.mocked(execCommand).mock.calls.length
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    expect(execCommand).toHaveBeenCalledTimes(execCount)
-    expect(gcOldRelayVersions).not.toHaveBeenCalled()
-    expect(gcRemoteRipgrepCache).not.toHaveBeenCalled()
+    const error = Object.assign(new Error('reference write still running'), {
+      sshChannelCloseConfirmed: false
+    })
+    vi.mocked(recordRemoteRipgrepReference).mockRejectedValueOnce(error)
+
+    await expect(deployAndLaunchRelay(conn)).rejects.toBe(error)
+    expect(detachedLaunchCommand(conn)).toBeUndefined()
+    expect(ensureRemoteBundledRipgrep).not.toHaveBeenCalled()
   })
+
+  it.each([false, true])(
+    'blocks cleanup and runtime retry after uncertain ripgrep teardown (concurrent exec: %s)',
+    async (concurrent) => {
+      const conn = makeMockConnection()
+      vi.mocked(conn.canRunConcurrentExecCommands).mockReturnValue(concurrent)
+      queueFreshLinuxDeploy()
+      vi.mocked(ensureRemoteBundledRipgrep).mockRejectedValueOnce(
+        Object.assign(new Error('upload still running'), { sshChannelCloseConfirmed: false })
+      )
+      vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValue('failed')
+      const deployed = await deployAndLaunchRelay(conn)
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(gcOldRelayVersions).not.toHaveBeenCalled()
+      expect(gcRemoteRipgrepCache).not.toHaveBeenCalled()
+      const execCount = vi.mocked(execCommand).mock.calls.length
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_001)
+      try {
+        await deployed.prepareOpenCodeRuntime?.(new AbortController().signal)
+        expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledTimes(concurrent ? 1 : 0)
+        expect(execCommand).toHaveBeenCalledTimes(execCount)
+      } finally {
+        clock.mockRestore()
+      }
+    }
+  )
+
+  it.each([false, true])(
+    'gates later cache cleanup and runtime retry on GC termination (confirmed: %s)',
+    async (confirmed) => {
+      const conn = makeMockConnection()
+      queueFreshLinuxDeploy()
+      vi.mocked(ensureRemoteOpenCodeRuntime).mockResolvedValueOnce('failed')
+      vi.mocked(gcOldRelayVersions).mockRejectedValueOnce(
+        Object.assign(new Error('GC interrupted'), { sshChannelCloseConfirmed: confirmed })
+      )
+      const deployed = await deployAndLaunchRelay(conn)
+      await vi.waitFor(() => expect(gcOldRelayVersions).toHaveBeenCalledOnce())
+      expect(gcRemoteRipgrepCache).not.toHaveBeenCalled()
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_001)
+      try {
+        await deployed.prepareOpenCodeRuntime?.(new AbortController().signal)
+        expect(ensureRemoteOpenCodeRuntime).toHaveBeenCalledTimes(confirmed ? 2 : 1)
+      } finally {
+        clock.mockRestore()
+      }
+    }
+  )
 
   it('allows an unlimited SSH disconnect grace window', async () => {
     const conn = makeMockConnection()
