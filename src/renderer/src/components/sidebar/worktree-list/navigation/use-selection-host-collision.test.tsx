@@ -37,7 +37,9 @@ let selection: Selection
 function Probe(): null {
   selection = useSidebarWorktreeSelection({
     sectionRows: rows,
-    pinnedDisplayPolicy: 'single-location'
+    pinnedDisplayPolicy: 'single-location',
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null
   })
   return null
 }
