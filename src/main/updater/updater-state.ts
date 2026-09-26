@@ -13,6 +13,8 @@ export const NUDGE_POLL_INTERVAL_MS = 30 * 60 * 1000
 export const NUDGE_ACTIVATION_COOLDOWN_MS = 5 * 60 * 1000
 export const QUIT_AND_INSTALL_DELAY_MS = 100
 export const PRE_QUIT_CLEANUP_TIMEOUT_MS = 2_500
+// Required profile exports may each wait for a bounded writer request.
+export const REQUIRED_PRE_QUIT_CLEANUP_TIMEOUT_MS = 90_000
 export const UPDATE_CHECK_SILENT_SETTLE_DELAY_MS = 1_000
 export const UPDATE_CHECK_STALL_TIMEOUT_MS = 45_000
 
@@ -24,6 +26,7 @@ export type UpdateInstallMode =
   | 'interactive'
   | 'supervised-headless-serve'
   | 'unsupported-headless-serve'
+export type PreQuitCleanupFailureMode = 'continue' | 'abort'
 
 // Why: expected preflight outcomes need typed context so UI routing never depends on matching error text.
 export class ReleaseFeedPreflightError extends Error {
@@ -42,6 +45,7 @@ export abstract class UpdaterState {
   protected currentStatus: UpdateStatus = { state: 'idle' }
   protected userInitiatedCheck = false
   protected onBeforeQuitCleanup: (() => void | Promise<void>) | null = null
+  protected onBeforeQuitFailure: PreQuitCleanupFailureMode = 'continue'
   protected autoUpdaterInitialized = false
   // Why: modifier-clicking "Check for Updates" targets prerelease manifests; the feed still pins a concrete tag so cancelled prereleases without manifests are skipped.
   protected includePrereleaseActive = false

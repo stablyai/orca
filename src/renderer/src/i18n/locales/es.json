@@ -34,7 +34,8 @@
         "resourceUsageToggleDescription": "Muestra el Administrador de recursos. Haz clic para ver CPU, memoria, sesiones, controles del daemon y análisis de disco de los espacios de trabajo.",
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
         "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
-        "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
+        "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI.",
+        "cursorToggleDescription": "Muestra el uso del plan de Cursor cuando inicias sesión con cursor-agent o el IDE de Cursor."
       },
       "menuBarIcon": {
         "title": "Mostrar icono en la barra de menús",
@@ -727,7 +728,8 @@
             "tooMany": "You can attach up to {{maxCount}} images.",
             "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
             "invalidImage": "{{fileName}} is not a valid supported image.",
-            "additionalErrors": "{{count}} additional images could not be attached."
+            "additionalErrors": "{{count}} additional images could not be attached.",
+            "totalTooLarge": "{{fileName}} superaría el total de {{maxSize}} de archivos adjuntos."
           }
         }
       }
@@ -2802,7 +2804,7 @@
             "missing": {
               "tui": {
                 "title": "This ZCode build has no terminal UI",
-                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+                "description": "Orca's hooks installed correctly — the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
               }
             }
           },
@@ -3339,7 +3341,8 @@
             "grokUsageMenu": "Uso de Grok",
             "floatingTerminalNewActivity": "{{label}}, nueva actividad",
             "codexSignInSuccess": "Sesión iniciada en Codex",
-            "codexSignInError": "No se pudo iniciar sesión en Codex. Inténtalo de nuevo."
+            "codexSignInError": "No se pudo iniciar sesión en Codex. Inténtalo de nuevo.",
+            "cursorUsageMenu": "Uso de Cursor"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -3507,6 +3510,13 @@
               "noSubscription": {
                 "label": "Sin suscripción"
               }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Inicio de sesión caducado",
+                "message": "Ejecuta cursor-agent login en una terminal del equipo donde se ejecuta Orca y vuelve a intentar consultar el uso."
+              },
+              "plan": "Plan"
             }
           },
           "SshTargetStatusRow": {
@@ -4452,7 +4462,9 @@
           "69969ba364": "Envío…",
           "imageReadFailed": "Could not read the attached images. Try attaching them again.",
           "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
-          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed."
+          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed.",
+          "imagesNotIncluded": "Comentarios enviados. No se pudieron subir tus capturas de pantalla y no se incluyeron.",
+          "imagesRejected": "Comentarios enviados. Tus capturas de pantalla eran demasiado grandes para subirlas y no se incluyeron."
         },
         "SidebarFilter": {
           "e3b3898218": "Agregar proyecto",
@@ -5334,7 +5346,8 @@
         },
         "SidebarFeedbackImageAttachments": {
           "attachImages": "Attach",
-          "removeImage": "Remove {{fileName}}"
+          "removeImage": "Remove {{fileName}}",
+          "screenshotsHint": "Adjunta hasta {{count}} capturas de pantalla, {{maxSize}} en total"
         },
         "WorkspaceKanbanSearchField": {
           "bdb753c78d": "Ningún espacio de trabajo coincide",
@@ -6064,7 +6077,8 @@
             "shellEnvNamesAlwaysPassed": "PATH, la configuración regional y SSH_AUTH_SOCK se pasan siempre. Se aplica la próxima vez que un chat se inicie o se reanude.",
             "shellEnvTitle": "Usar el entorno de tu shell",
             "shellEnvCopy": "Los chats de Codex y Claude empiezan con todas las variables que exporta tu shell de inicio de sesión, igual que un terminal. Desactívalo para elegir cuáles reciben.",
-            "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell"
+            "shellEnvToggleLabel": "Alternar el uso del entorno de tu shell",
+            "resumeCopy": "Cuando Orca se cierra o instala una actualización, los chats que estaban trabajando se reanudan automáticamente al volver a abrir Orca."
           },
           "agentDashboard": {
             "title": "Panel de agentes",
@@ -7813,7 +7827,18 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
-            "a9f3d7b5c8": "inicio de sesión"
+            "a9f3d7b5c8": "inicio de sesión",
+            "cursor": {
+              "description": "Uso mensual del plan obtenido del inicio de sesión de Cursor que ya está en este equipo (cursor-agent login).",
+              "kw": {
+                "cursor": "cursor",
+                "rateLimit": "rate limit",
+                "spend": "gasto",
+                "statusBar": "barra de estado",
+                "usage": "uso"
+              },
+              "title": "Uso de Cursor"
+            }
           }
         },
         "advanced": {
@@ -8040,7 +8065,14 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Porcentajes de uso",
-            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante."
+            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante.",
+            "cursor": {
+              "description": "Muestra el uso mensual del plan de Cursor a partir del inicio de sesión de Cursor en este equipo.",
+              "kw": {
+                "cursor": "cursor"
+              },
+              "title": "Uso de Cursor"
+            }
           }
         },
         "auto": {
@@ -10430,6 +10462,31 @@
           "saveFailed": "No se pudieron guardar los valores predeterminados de visibilidad.",
           "updateServer": "Actualiza este servidor para configurar los valores predeterminados de las fuentes.",
           "updateServerDefaults": "Actualiza este servidor para configurar los valores predeterminados de visibilidad."
+        },
+        "CursorAccountsSection": {
+          "dashboardLink": "Panel de Cursor",
+          "expired": "Inicio de sesión caducado — ejecuta cursor-agent login en el equipo donde se ejecuta Orca y haz clic en Actualizar uso.",
+          "loading": "Cargando…",
+          "noAllowance": "Cursor no reportó ninguna cuota de uso para esta cuenta.",
+          "planTotal": "Plan",
+          "refreshUsage": "Actualizar uso",
+          "resets": "Se restablece {{when}}",
+          "signedIn": "Sesión iniciada",
+          "signedInFrom": "Sesión iniciada. Orca lee la sesión almacenada en {{source}}.",
+          "signedInGeneric": "Sesión iniciada. Orca lee la sesión de Cursor almacenada en este equipo.",
+          "signedOut": "No se encontró ningún inicio de sesión de Cursor en este equipo",
+          "signedOutHelp": "Inicia sesión con el IDE de Cursor o ejecuta cursor-agent login en una terminal, y haz clic en Actualizar uso aquí.",
+          "source": {
+            "cli": "Archivo de autenticación de Cursor CLI",
+            "desktop": "IDE de Cursor",
+            "keychain": "Llavero de macOS (cursor-agent)"
+          },
+          "staleUsage": "Último uso conocido — falló la actualización más reciente: {{reason}}",
+          "subtitle": "Muestra tu uso mensual del plan de Cursor a partir del inicio de sesión que ya está en este equipo. Orca solo lo lee — nunca modifica tu inicio de sesión de Cursor.",
+          "title": "Cursor",
+          "usageDescription": "Cursor factura dos cuotas que se restablecen con tu ciclo de facturación, más gasto bajo demanda cuando se agotan.",
+          "usageLabel": "Uso",
+          "usageTitle": "Uso mensual del plan"
         }
       },
       "right": {
@@ -12972,6 +13029,7 @@
           "f1aa04b5cf": "Este archivo",
           "8b87612461": "Todas las notas no enviadas"
         },
+        "diffCommentSaveFailed": "No se pudo guardar el comentario",
         "DiffSectionBody": {
           "35d6afb5be": "Archivo binario cambiado",
           "cef4cf0ff5": "Reintentar",
@@ -13089,6 +13147,7 @@
           "notPython": "Ese archivo no es un intérprete de Python.",
           "interrupt": "Interrumpir",
           "restart": "Reiniciar kernel",
+          "trustFirst": "Ejecuta una celda para confiar primero en este notebook",
           "runAll": "Ejecutar todo",
           "clearAll": "Borrar todas las salidas",
           "notResponding": "Sin respuesta. Reinicia el kernel",
@@ -13104,7 +13163,22 @@
           "noPython": "No se encontró Python en este equipo. Instálalo desde [python.org](https://www.python.org/downloads/) y vuelve a ejecutar la celda.",
           "kernelDied": "El kernel murió.",
           "localOnly": "Las celdas del notebook solo pueden ejecutarse para archivos de este equipo.",
-          "pythonOnly": "Solo los notebooks de Python pueden ejecutarse en Orca."
+          "pythonOnly": "Solo los notebooks de Python pueden ejecutarse en Orca.",
+          "commandCopied": "Comando copiado",
+          "createVenv": "Crear .venv",
+          "createVenvItem": "Crear entorno virtual…",
+          "createVenvTitle": "¿Crear un entorno virtual?",
+          "creatingButton": "Creando…",
+          "creatingVenvDescription": "Creando .venv en {{folder}} e instalando ipykernel en él. Esto puede tardar un minuto.",
+          "creatingVenvTitle": "Creando entorno virtual…",
+          "installingButton": "Instalando…",
+          "installingDescription": "Instalando ipykernel en '{{env}}' con pip. Esto puede tardar un minuto.",
+          "installingTitle": "Instalando ipykernel…",
+          "kernelCreatingVenv": "Creando .venv…",
+          "setupFailed": "No funcionó. Salida de Python:",
+          "tryAgain": "Intentar de nuevo",
+          "useAnotherPython": "Usar otro Python…",
+          "venvDescription": "Orca creará un .venv en {{folder}} desde '{{env}}', instalará ipykernel en él y ejecutará este notebook allí."
         },
         "MarkdownPreview": {
           "e4683f70c4": "Cancelar",
@@ -13552,7 +13626,10 @@
             "2b3ce6d394": "Cancelar",
             "e05063cfc1": "Línea {{value0}}",
             "c845170b3b": "Líneas {{value0}}-{{value1}}",
-            "commentTooLarge": "El comentario es demasiado grande para enviarlo de forma segura."
+            "commentTooLarge": "El comentario es demasiado grande para enviarlo de forma segura.",
+            "f6c449191e": "Agregar nota para la IA",
+            "5fa4bfebaa": "Agregar nota",
+            "5e9b3d0c2e": "Agregando..."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "esta nota"
@@ -14745,7 +14822,17 @@
         "notConfirmedOtherOne": "No se pudo confirmar que 1 otro chat se reanudó",
         "notConfirmedOtherMany": "No se pudo confirmar que {{value0}} otros chats se reanudaron",
         "show": "Mostrar",
-        "dismiss": "Descartar"
+        "dismiss": "Descartar",
+        "activityApproval": "Esperando tu aprobación: {{value0}}",
+        "activityMidReply": "Estaba respondiendo",
+        "activityMonitorMany": "Supervisando {{value0}} tareas en segundo plano",
+        "activityMonitorOne": "Supervisando: {{value0}}",
+        "activityQuestion": "Esperando tu respuesta: {{value0}}",
+        "activitySubagentMany": "{{value0}} subagentes en ejecución",
+        "activitySubagentOne": "Subagente en ejecución: {{value0}}",
+        "activityUnnamed": "sin nombre",
+        "updateBody": "Estos chats estaban trabajando cuando Orca instaló una actualización. Al reanudarlos, cada uno se restaura donde se detuvo, con su contexto completo, y se pide al agente que revise lo que estaba haciendo antes de continuar. Tu propio prompt no se vuelve a enviar.",
+        "body": "Estos chats estaban trabajando cuando Orca se cerró. Al reanudarlos, cada uno se restaura donde se detuvo, con su contexto completo, y se pide al agente que revise lo que estaba haciendo antes de continuar. Tu propio prompt no se vuelve a enviar."
       },
       "NativeChatResumeOutcomeRow": {
         "openChat": "Abrir chat",
@@ -14766,6 +14853,13 @@
         "dispatchRejected": "El agente rechazó el mensaje “continue”. Abre el chat y envía uno tú mismo.",
         "unsupported": "Orca no puede reanudar este chat. Ábrelo para ver dónde se detuvo.",
         "fallback": "Orca no pudo reanudar este chat. Ábrelo para continuar manualmente."
+      },
+      "web": {
+        "preloadApi": {
+          "cursorAccounts": {
+            "hostOnly": "Los detalles del inicio de sesión de Cursor solo se pueden leer en el equipo donde se ejecuta Orca."
+          }
+        }
       }
     },
     "i18n": {
@@ -15159,6 +15253,54 @@
       "working": "trabajando",
       "stopped": "detenido",
       "finished": "finalizado"
+    }
+  },
+  "featureTips": {
+    "sessionSearch": {
+      "ageHours": "2 h",
+      "ageMinutes": "12 min",
+      "ageYesterday": "1 d",
+      "agentsInstruction": "Tus agentes también pueden buscar en él. Pide a uno que “encuentre la sesión donde corregimos el tiempo de espera del inicio de sesión”.",
+      "consentInstruction": "Cámbialo o desactívalo cuando quieras en",
+      "continueInBackground": "Continuar en segundo plano",
+      "demoHit1Age": "3 d",
+      "demoHit1Snippet": "Aumentó el [[tiempo de espera de inicio de sesión]] a 30 s y agregó un reintento en la actualización del token.",
+      "demoHit1Title": "Corregir redirección de autenticación inestable",
+      "demoHit2Age": "1 sem",
+      "demoHit2Snippet": "¿Por qué se cuelga la página de [[inicio de sesión]] después de un [[tiempo de espera]] al reactivar?",
+      "demoHit2Title": "Actualización de sesión tras suspensión",
+      "demoHit3Age": "2 sem",
+      "demoHit3Snippet": "Agregó una prueba que cubre la ruta de [[tiempo de espera de inicio de sesión]] de principio a fin.",
+      "demoHit3Title": "Refuerzo e2e de autenticación",
+      "demoHit4Age": "5 d",
+      "demoHit4Snippet": "La [[reversión]] elimina primero el índice nuevo y luego restaura la columna anterior.",
+      "demoHit4Title": "Migración de la tabla de pedidos",
+      "demoHit5Age": "3 sem",
+      "demoHit5Snippet": "¿Puedes escribir un plan de [[reversión]] de la [[migración]] antes de reintentar?",
+      "demoHit5Title": "Falló la implementación en staging",
+      "demoHit6Age": "1 mes",
+      "demoHit6Snippet": "Cada [[migración]] aquí es reversible excepto el cambio de nombre del enum.",
+      "demoHit6Title": "Notas de revisión del esquema",
+      "demoQuery": "tiempo de espera de inicio de sesión",
+      "demoQuery2": "reversión de migración",
+      "demoRoleAssistant": "Asistente",
+      "demoRoleUser": "Usuario",
+      "enableFailed": "No se pudo activar la búsqueda de sesiones. Inténtalo de nuevo.",
+      "indexingDescription": "Orca está leyendo tus transcripciones anteriores de agentes para que puedas buscar en ellas. Esto puede tardar unos minutos.",
+      "indexingTitle": "Indexando tus sesiones de agentes",
+      "progressStarting": "Buscando tus sesiones…",
+      "readyDescription": "Todas las sesiones de agentes de este equipo ya se pueden encontrar por lo que se dijo en ellas.",
+      "readyTitle": "La búsqueda de sesiones está lista",
+      "readyToast": "La búsqueda de sesiones está lista",
+      "readyToastOpen": "Abrir",
+      "recent1Text": "Movió las entradas de búsqueda a Flujos de trabajo y actualizó las pruebas.",
+      "recent1Title": "Ordenar la barra lateral de ajustes",
+      "recent2Text": "Actualiza las dependencias y asegúrate de que la compilación siga pasando.",
+      "recent2Title": "Actualizar el archivo de bloqueo",
+      "recent3Text": "Esta es una primera versión de las notas, agrupadas por área.",
+      "recent3Title": "Borrador de notas de la versión",
+      "settingsLink": "Ajustes → Búsqueda de sesiones de agentes",
+      "startSearching": "Empezar a buscar"
     }
   }
 }

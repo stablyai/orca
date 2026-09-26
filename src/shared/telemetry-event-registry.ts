@@ -21,6 +21,7 @@ import {
   daemonPtyCwdVerdictSchema,
   daemonStartFailedSchema,
   mainThreadHangDetectedSchema,
+  profileStateAuthoritySelectedSchema,
   remoteOutboundBudgetCloseSchema,
   runtimeRpcStartFailedSchema,
   settingsChangedSchema
@@ -132,6 +133,7 @@ export const eventSchemas = {
   daemon_audit_eligibility: daemonAuditEligibilitySchema,
   runtime_rpc_start_failed: runtimeRpcStartFailedSchema,
   remote_outbound_budget_close: remoteOutboundBudgetCloseSchema,
+  profile_state_authority_selected: profileStateAuthoritySelectedSchema,
 
   codex_trust_grant: codexTrustGrantSchema,
 

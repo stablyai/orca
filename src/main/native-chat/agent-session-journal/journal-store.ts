@@ -76,6 +76,7 @@ export class AgentSessionJournal {
   private readOnly = false
   private malformedRows = 0
   private database: OpenJournalDatabase | null = null
+  private onCommitted: (() => void) | null = null
   private readonly queue: JournalWriteQueue
   private readonly closer: JournalConnectionCloser
   private readonly rowWriter: JournalRowWriter
@@ -111,8 +112,14 @@ export class AgentSessionJournal {
         this.readOnly = readOnly
       },
       cursor: this.cursor,
-      adopt: (loaded) => this.adoptLoadedJournal(loaded),
-      commit: (row) => applyJournalRow(this.state, row),
+      adopt: (loaded) => {
+        this.adoptLoadedJournal(loaded)
+        this.onCommitted?.()
+      },
+      commit: (row) => {
+        applyJournalRow(this.state, row)
+        this.onCommitted?.()
+      },
       loaded: () => this.loaded,
       malformedRows: () => this.malformedRows,
       setMalformedRows: (count) => {
@@ -165,6 +172,12 @@ export class AgentSessionJournal {
   close(): Promise<void> {
     this.queue.markClosed()
     return this.closer.close()
+  }
+
+  /** Told of every durable change, epoch replacements included, so a reader learns of a write
+   *  without its writer saying so. One listener: a later call replaces it. It must not throw. */
+  observeCommits(listener: () => void): void {
+    this.onCommitted = listener
   }
 
   cursor = (): AgentJournalCursor => ({

@@ -48,6 +48,7 @@ export type RuntimeStore = {
   getWorkspaceSession?: Store['getWorkspaceSession']
   getWorkspaceSessionHostIds?: Store['getWorkspaceSessionHostIds']
   setWorkspaceSession?: Store['setWorkspaceSession']
+  runDurableMutation?: Store['runDurableMutation']
   flushOrThrow?: Store['flushOrThrow']
   flushPendingOrThrowAsync?: Store['flushPendingOrThrowAsync']
   persistPtyBinding?: Store['persistPtyBinding']

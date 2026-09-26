@@ -169,7 +169,9 @@ export async function clearBufferFromRuntimeController(
   ptyId: string
 ): Promise<void> {
   // Why: desktop xterm and daemon/SSH providers hold separate buffers; clear both so mobile resubscribe can't resurrect cleared history.
-  deps.mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+  if (deps.mainWindow && !deps.mainWindow.isDestroyed()) {
+    deps.mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+  }
   try {
     await getProviderForPty(ptyId).clearBuffer(ptyId)
   } catch {

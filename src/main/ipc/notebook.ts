@@ -49,11 +49,13 @@ export function registerNotebookHandlers(store: Store): void {
     'notebook:listPythonEnvironments',
     async (
       _event,
-      args: { filePath: string; rootPath: string | null }
+      args: { filePath: string; rootPath: string | null; runWorkspaceInterpreters: boolean }
     ): Promise<PythonEnvironments> => {
       await resolveAuthorizedPath(args.filePath, store)
       // Why the unresolved path: rootPath is in the same (possibly symlinked) form, e.g. /tmp.
-      return listPythonEnvironments(args.filePath, args.rootPath)
+      return listPythonEnvironments(args.filePath, args.rootPath, {
+        runWorkspaceInterpreters: args.runWorkspaceInterpreters === true
+      })
     }
   )
 

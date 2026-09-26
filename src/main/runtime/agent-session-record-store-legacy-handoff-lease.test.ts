@@ -125,7 +125,7 @@ describe('a lease the removed terminal handoff wrote', () => {
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       unreconciled: false,
       claimStatus: 'conflicted',
-      handoffStage: 'manual-recovery'
+      handoffStage: 'recovering'
     })
     const settled = await readFile(agentSessionStorePath(directory), 'utf-8')
     await open()

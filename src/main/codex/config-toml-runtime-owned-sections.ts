@@ -5,6 +5,7 @@ import {
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
+import { parseTomlTableHeaderPath } from './config-toml-key-path'
 import {
   normalizeCodexProjectPathForLookup,
   normalizeCodexProjectPathForRevocationLookup,
@@ -89,6 +90,17 @@ export function isRuntimeHookTrustTomlSection(header: string): boolean {
 
 export function isRuntimeProjectTomlSection(header: string): boolean {
   return parseCodexProjectHeaderPath(header) !== null
+}
+
+const CODEX_MCP_SERVER_TABLE_ROOT = 'mcp_servers'
+
+/** Returns the decoded MCP server name for an owner table or nested descendant. */
+export function getMcpServerTomlSectionName(header: string): string | null {
+  const table = parseTomlTableHeaderPath(header)
+  if (!table || table.isArray || table.segments[0] !== CODEX_MCP_SERVER_TABLE_ROOT) {
+    return null
+  }
+  return table.segments[1] ?? null
 }
 
 export function getTomlSectionHeaderKey(header: string): string {
