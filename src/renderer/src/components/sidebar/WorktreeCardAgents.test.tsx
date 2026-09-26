@@ -228,6 +228,8 @@ describe('WorktreeCardAgents', () => {
       mockAgent({
         agentType: 'codex',
         startedAt: 1000,
+        // Why: a zero stateStartedAt is never after the default (unset) ack time, so the row reads visited — this test stays about focus dimming.
+        stateStartedAt: 0,
         prompt: 'Run tests',
         lastAssistantMessage: 'Inspecting changes'
       })
@@ -236,10 +238,10 @@ describe('WorktreeCardAgents', () => {
 
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
-    expect(markup).toContain('<span class="text-muted-foreground/90">Run tests</span>')
+    expect(markup).toContain('<span class="font-normal text-muted-foreground/90">Run tests</span>')
     expect(markup).toContain('<span class="text-muted-foreground/65"> - Inspecting changes</span>')
     expect(markup).not.toContain('data-focused-agent-pane="true"')
-    expect(markup).not.toContain('<span class="text-foreground">Run tests</span>')
+    expect(markup).not.toContain('font-semibold text-foreground">Run tests</span>')
   })
 
   it('keeps focused compact agent row text legible', async () => {
@@ -249,6 +251,8 @@ describe('WorktreeCardAgents', () => {
       mockAgent({
         agentType: 'codex',
         startedAt: 1000,
+        // Why: a zero stateStartedAt is never after the default (unset) ack time, so the row reads visited — this test stays about focus legibility.
+        stateStartedAt: 0,
         prompt: 'Focused prompt',
         lastAssistantMessage: 'Reading output'
       })
@@ -258,9 +262,9 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
     expect(markup).toContain('data-focused-agent-pane="true"')
-    expect(markup).toContain('<span class="text-foreground">Focused prompt</span>')
+    expect(markup).toContain('<span class="font-normal text-foreground">Focused prompt</span>')
     expect(markup).toContain('<span class="text-foreground/70"> - Reading output</span>')
-    expect(markup).not.toContain('<span class="text-muted-foreground/90">Focused prompt</span>')
+    expect(markup).not.toContain('text-muted-foreground/90">Focused prompt</span>')
   })
 
   it('shows a matching pane prompt-cache timer before the compact row age', async () => {

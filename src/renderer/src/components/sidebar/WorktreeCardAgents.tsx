@@ -336,6 +336,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           disclosureInGutter={isRootAgent}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
           cacheTimerActive={cacheTimerActive}
+          // Why: bold the row until the user visits its tab (useAutoAckViewedAgent auto-acks on focus, muting it).
+          isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
         />
         {hasChildAgents ? (
           <CompactAgentExpansion expanded={expanded}>
