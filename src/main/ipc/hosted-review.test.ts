@@ -56,6 +56,7 @@ vi.mock('../repo-worktrees', () => ({
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
+import { WorktreeCatalogUnavailableError } from '../../shared/worktree/worktree-catalog-availability'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -552,6 +553,28 @@ describe('registerHostedReviewHandlers', () => {
         'ghAccount'
       )
     })
+  })
+
+  it('does not rewrite a missing worktree catalog as Access denied', async () => {
+    const catalogError = new WorktreeCatalogUnavailableError(
+      `Worktree catalog unavailable for ${repoPath}: SSH connection "ssh-1" is not connected.`
+    )
+    listRepoWorktreeGraphMock.mockRejectedValue(catalogError)
+
+    registerHostedReviewHandlers(store as never, stats as never)
+
+    await expect(
+      handlers['hostedReview:create'](null, {
+        repoPath,
+        repoId: repo.id,
+        worktreePath,
+        provider: 'github',
+        base: 'main',
+        head: 'feature/pr',
+        title: 'Feature PR'
+      })
+    ).rejects.toBe(catalogError)
+    expect(createHostedReviewMock).not.toHaveBeenCalled()
   })
 
   it('rejects creation when repoId and repoPath point at different registered repos', async () => {
