@@ -311,6 +311,24 @@ describe('terminal exit records', () => {
     expect(reopened.tabs[0]).not.toHaveProperty('exited')
   })
 
+  it('publishes nothing of its own when a close clears a record, leaving that to the removal', () => {
+    const { runtimeStore } = sessionStoreWithHostTab()
+    const { runtime, notifier } = makeRendererRuntime(
+      rendererSnapshot([{ tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }]),
+      runtimeStore
+    )
+    runtime.terminalExitRecords.record(exitRecord())
+    const frames: unknown[] = []
+    runtime.onMobileSessionTabsChanged((frame) => frames.push(frame))
+
+    runtime.closeTerminalSurfaceFromRenderer({ worktreeId: TEST_WORKTREE_ID, tabId: 'host-tab' })
+
+    // Why: a frame here would show the closed leaf, still listed, without its exit.
+    expect(frames).toEqual([])
+    expect(runtime.terminalExitRecords.get(HEADLESS_LEAF_ID)).toBeUndefined()
+    expect(notifier.terminalExitRecordsChanged).toHaveBeenLastCalledWith([])
+  })
+
   it("gives a client without the capability exactly today's projection of an exit", async () => {
     const graph = (ptyId: string | null) => ({
       tabs: [

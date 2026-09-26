@@ -1,5 +1,12 @@
 import type { TerminalExitRecord } from '../../shared/terminal-surface-exit'
 
+type TerminalExitRecordListeners = {
+  /** The desktop renderer's mirror, sent whole on every change. */
+  onRecordsChanged: () => void
+  /** Republishes the worktree's session tabs so clients see the exit appear or end. */
+  onWorktreeChanged: (worktreeId: string) => void
+}
+
 /**
  * Main's in-memory exit record per kept leaf. Deliberately not persisted: after a relaunch a kept
  * leaf spawns a fresh shell. A record dies when its leaf binds a new process, when the surface is
@@ -8,11 +15,12 @@ import type { TerminalExitRecord } from '../../shared/terminal-surface-exit'
 export class TerminalExitRecords {
   private readonly byLeafId = new Map<string, TerminalExitRecord>()
 
-  constructor(private readonly onChange: (worktreeId: string) => void) {}
+  constructor(private readonly listeners: TerminalExitRecordListeners) {}
 
   record(record: TerminalExitRecord): void {
     this.byLeafId.set(record.leafId, record)
-    this.onChange(record.worktreeId)
+    this.listeners.onWorktreeChanged(record.worktreeId)
+    this.listeners.onRecordsChanged()
   }
 
   get(leafId: string): TerminalExitRecord | undefined {
@@ -27,21 +35,23 @@ export class TerminalExitRecords {
   releaseForBinding(leafId: string, incarnationId: string | null | undefined): void {
     const record = this.byLeafId.get(leafId)
     if (record && (!incarnationId || record.incarnationId !== incarnationId)) {
-      this.delete(record)
+      this.byLeafId.delete(leafId)
+      this.listeners.onWorktreeChanged(record.worktreeId)
+      this.listeners.onRecordsChanged()
     }
   }
 
-  clearLeaves(leafIds: Iterable<string>): void {
+  /**
+   * Ends the records of leaves a close removed. The close's own publication carries the cleared
+   * record with the removal; republishing here would first show the closed leaf without its exit.
+   */
+  clearClosedLeaves(leafIds: Iterable<string>): void {
+    let changed = false
     for (const leafId of leafIds) {
-      const record = this.byLeafId.get(leafId)
-      if (record) {
-        this.delete(record)
-      }
+      changed = this.byLeafId.delete(leafId) || changed
     }
-  }
-
-  private delete(record: TerminalExitRecord): void {
-    this.byLeafId.delete(record.leafId)
-    this.onChange(record.worktreeId)
+    if (changed) {
+      this.listeners.onRecordsChanged()
+    }
   }
 }

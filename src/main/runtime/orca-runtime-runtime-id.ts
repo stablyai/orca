@@ -237,9 +237,11 @@ export class OrcaRuntimeWithRuntimeId {
   // leave the renderer's intentional sleeping surface available for wake.
   protected intentionalHandlelessPtyStops = new Map<string, string | null>()
 
-  readonly terminalExitRecords = new TerminalExitRecords((worktreeId) => {
-    this.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
-    this.notifier?.terminalExitRecordsChanged?.(this.terminalExitRecords.list())
+  readonly terminalExitRecords = new TerminalExitRecords({
+    onRecordsChanged: () =>
+      this.notifier?.terminalExitRecordsChanged?.(this.terminalExitRecords.list()),
+    onWorktreeChanged: (worktreeId) =>
+      this.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
   })
 
   // Why: coalesces title/status-driven session.tabs emits so spinner churn

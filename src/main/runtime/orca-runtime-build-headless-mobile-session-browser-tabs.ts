@@ -101,7 +101,7 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
       return []
     }
     this.setWorkspaceSessionForWorktree(worktreeId, result.session)
-    this.terminalExitRecords.clearLeaves(
+    this.terminalExitRecords.clearClosedLeaves(
       options.leafId
         ? [options.leafId]
         : collectPersistedTerminalLeafIds(session.terminalLayoutsByTabId[tabId])
