@@ -81,7 +81,10 @@ export function createTabsMoveActions(
         let nextLayoutByWorktree = state.layoutByWorktree
         let nextActiveGroupIdByWorktreeResolved = nextActiveGroupIdByWorktree
         let filteredGroups = nextGroups
-        if (sourceOrder.length === 0) {
+        // Why keepEmptySourceGroup: batch movers collapse the emptied source group once at
+        // the end (mergeGroupIntoSibling → closeEmptyGroup); collapsing on the first move
+        // that empties it would strand later tabs whose groupId points at the removed group.
+        if (sourceOrder.length === 0 && !opts?.keepEmptySourceGroup) {
           filteredGroups = nextGroups.filter((group) => group.id !== sourceGroup.id)
           const collapsedState = collapseGroupLayout(
             nextLayoutByWorktree,

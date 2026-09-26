@@ -111,7 +111,14 @@ export function createTabsGroupActions(
       const group = (state.groupsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === groupId
       )
-      if (!group || group.tabOrder.length > 0) {
+      // Why owned tabs rather than tabOrder: tabOrder can retain ghost ids (or ids now
+      // owned by a sibling group), so a non-empty tabOrder does not prove a live tab and
+      // left a pane the user asked to close uncollapsable (#21016). The reverse drift is
+      // also guarded: a tabOrder-empty group that still owns a live tab must survive.
+      const hasOwnedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+        (item) => item.groupId === groupId
+      )
+      if (!group || hasOwnedTab) {
         return false
       }
       set((current) => {
