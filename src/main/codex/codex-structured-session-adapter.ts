@@ -259,7 +259,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
           )
           .catch((error) => {
             if (isCodexAppServerRequestError(error)) {
-              return { error: error.message }
+              const detail = error.providerDiagnostic
+              return { error: error.message, ...(detail ? { detail } : {}) }
             }
             throw error
           })

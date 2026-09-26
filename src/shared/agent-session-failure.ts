@@ -89,7 +89,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isProviderDiagnostic(value: unknown): value is ProviderDiagnostic {
+export function isProviderDiagnostic(value: unknown): value is ProviderDiagnostic {
   return (
     isRecord(value) &&
     typeof value.text === 'string' &&

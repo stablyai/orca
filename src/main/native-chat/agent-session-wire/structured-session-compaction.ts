@@ -1,4 +1,8 @@
-import { providerDiagnostic, type ProviderDiagnostic } from '../../../shared/agent-session-failure'
+import {
+  isProviderDiagnostic,
+  providerDiagnostic,
+  type ProviderDiagnostic
+} from '../../../shared/agent-session-failure'
 
 /** `error` is Orca's account of a failed compaction; `detail` is the provider's own words, when it
  *  gave any. */
@@ -69,7 +73,10 @@ export class StructuredSessionCompaction {
     try {
       const admission = record(await invoke())
       if (typeof admission.error === 'string') {
-        this.pending.get(sessionId)?.finish({ error: admission.error })
+        const detail = isProviderDiagnostic(admission.detail) ? admission.detail : undefined
+        this.pending
+          .get(sessionId)
+          ?.finish({ error: admission.error, ...(detail ? { detail } : {}) })
       }
       return await completion
     } catch (error) {
