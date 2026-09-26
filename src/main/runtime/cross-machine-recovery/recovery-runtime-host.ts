@@ -26,6 +26,7 @@ import { cloneWorkspaceSessionState } from '../../persistence/restoring-sessions
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { getRuntimeDesktopSurface } from '../runtime-desktop-surface'
 import type { RuntimeStore } from '../runtime-store-contract'
+import type { RecoveryResumeHolds } from './recovery-resume-holds'
 
 const RENDERER_APPLY_TIMEOUT_MS = 15_000
 
@@ -47,6 +48,8 @@ export type CrossMachineRecoveryHost = {
   ): Promise<RuntimeEnsureAgentSessionResult>
   /** Only local execution counts: an SSH pane showing the session runs it on another machine. */
   isProviderSessionLive(binding: RecoveryBindingKey): boolean
+  /** Runtime-owned so resume and replay hosts built for separate calls share one view. */
+  resumeHolds: RecoveryResumeHolds
   activateWorktree(worktreeId: string): Promise<void>
 }
 
@@ -142,6 +145,7 @@ export function createCrossMachineRecoveryHost(
     invalidateWorktreeCatalog: deps.invalidateWorktreeCatalog,
     resolveWorktree: deps.resolveWorktree,
     ensureAgentSession: deps.ensureAgentSession,
+    resumeHolds: deps.resumeHolds,
     activateWorktree: deps.activateWorktree,
     getLocalSession: () => {
       const session = requireStore().getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)

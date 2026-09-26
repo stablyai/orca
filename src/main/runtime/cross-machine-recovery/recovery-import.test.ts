@@ -1,7 +1,8 @@
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getAgentResumeArgv } from '../../../shared/agent-session-resume'
 import { importRecoveryWorkspaceWithHost } from './recovery-import'
+import { resumeRecoveryBindingWithHost } from './recovery-resume'
 import {
   descriptor,
   emptySession,
@@ -121,6 +122,39 @@ describe('importRecoveryWorkspaceWithHost', () => {
     })
     expect(live.ensureAgentSession).not.toHaveBeenCalled()
     expect(Object.values(live.getSession().sleepingAgentSessionsByPaneKey ?? {})).toHaveLength(1)
+  })
+
+  it('never re-adds a dormant twin while a resume of that binding is between claim and launch', async () => {
+    let finishLaunch = (): void => {}
+    const f = fixture({
+      ensure: () =>
+        new Promise((resolve) => {
+          finishLaunch = () =>
+            resolve({
+              terminal: { handle: 'term-1', worktreeId: 'wt', title: null },
+              disposition: 'created'
+            })
+        })
+    })
+    const request = { descriptor: descriptor(), checkoutPath: f.checkout, checkpointId: 'cp-1' }
+    await importRecoveryWorkspaceWithHost(f.host, request, f.readCommonDir)
+    const resuming = resumeRecoveryBindingWithHost(f.host, {
+      worktree: `id:${f.worktreeId}`,
+      binding: SESSION_ID
+    })
+    await vi.waitFor(() => expect(f.ensureAgentSession).toHaveBeenCalledTimes(1))
+    const replay = await importRecoveryWorkspaceWithHost(f.host, request, f.readCommonDir)
+    expect(replay.bindings[0]).toMatchObject({
+      status: 'refused',
+      reason: 'recovery_session_live_locally'
+    })
+    expect(f.getSession().sleepingAgentSessionsByPaneKey).toEqual({})
+    finishLaunch()
+    await expect(resuming).resolves.toMatchObject({ terminalHandle: 'term-1' })
+    expect(f.getSession().sleepingAgentSessionsByPaneKey).toEqual({})
+    expect(f.host.resumeHolds.isHeld({ agent: 'claude', key: 'session_id', id: SESSION_ID })).toBe(
+      false
+    )
   })
 
   it('refuses a destination that already has tabs', async () => {

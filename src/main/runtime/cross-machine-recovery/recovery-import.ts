@@ -5,6 +5,7 @@ import {
   recoveryBindingKeyOf,
   recoveryBindingKeyString,
   selectRecoveryBinding,
+  type RecoveryBindingKey,
   type RecoveryBindingSelector
 } from '../../../shared/cross-machine-recovery-binding-key'
 import type {
@@ -158,6 +159,8 @@ export async function importRecoveryWorkspaceWithHost(
   const base = { importKey, repoId, worktreeId: worktree.id, instanceId }
 
   if (prior?.importKey === importKey) {
+    const runsLocally = (key: RecoveryBindingKey): boolean =>
+      host.isProviderSessionLive(key) || host.resumeHolds.isHeld(key)
     const records = session.sleepingAgentSessionsByPaneKey
     const fresh = descriptor.bindings.filter(
       (binding) =>
@@ -182,7 +185,7 @@ export async function importRecoveryWorkspaceWithHost(
         return { binding, record: existing, result: { ...result, status: 'dormant' } }
       }
       // Why: a replay never adds a dormant twin beside a session this host already runs.
-      if (host.isProviderSessionLive(localKey)) {
+      if (runsLocally(localKey)) {
         return {
           binding,
           record: null,
@@ -199,7 +202,7 @@ export async function importRecoveryWorkspaceWithHost(
       await host.applyOp({
         kind: 'merge-records',
         records: [...freshPlans.values()].flatMap((p) =>
-          p.record && !host.isProviderSessionLive(recoveryBindingKeyOf(p.record)) ? [p.record] : []
+          p.record && !runsLocally(recoveryBindingKeyOf(p.record)) ? [p.record] : []
         )
       })
     }

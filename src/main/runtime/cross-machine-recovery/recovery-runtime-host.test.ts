@@ -5,6 +5,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { RecoveryProvenance } from '../../../shared/cross-machine-recovery-descriptor'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { RuntimeStore } from '../runtime-store-contract'
+import { createRecoveryResumeHolds } from './recovery-resume-holds'
 import { createCrossMachineRecoveryHost } from './recovery-runtime-host'
 
 const WT = 'repo-1::/work/app'
@@ -109,6 +110,7 @@ function setup(snapshot: readonly AgentStatusIpcPayload[] = []) {
     ensureAgentSession: async () => {
       throw new Error('unused')
     },
+    resumeHolds: createRecoveryResumeHolds(),
     activateWorktree: async () => {}
   })
   return { store, host }

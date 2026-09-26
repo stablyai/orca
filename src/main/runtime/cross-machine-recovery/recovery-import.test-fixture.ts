@@ -10,6 +10,7 @@ import type {
 import { applyCrossMachineRecoveryOp } from '../../../shared/cross-machine-recovery-session-ops'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import { createRecoveryResumeHolds } from './recovery-resume-holds'
 import type { CrossMachineRecoveryHost } from './recovery-runtime-host'
 
 export const SOURCE_TAB = randomUUID()
@@ -174,6 +175,7 @@ export function fixture(
     },
     ensureAgentSession,
     isProviderSessionLive: () => options.live === true,
+    resumeHolds: createRecoveryResumeHolds(),
     activateWorktree: vi.fn()
   }
   const readCommonDir = async () => '.git'

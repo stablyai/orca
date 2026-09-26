@@ -42,32 +42,38 @@ export async function resumeClaimedRecoveryBinding(
     launchPreferences?: RecoveryLaunchPreferences
   } = {}
 ): Promise<RecoveryResumeResult> {
-  const record = await claimRecoveryRecord(host, worktreeId, binding)
-  const restore = (): Promise<unknown> => host.applyOp({ kind: 'restore-record', record })
-  if (host.isProviderSessionLive(recoveryBindingKeyOf(record))) {
-    await restore()
-    throw new Error('recovery_session_live_locally')
-  }
-  const pane = parsePaneKey(record.paneKey)
+  // Why: held before the claim so a concurrent replay never re-adds the record this resume consumes.
+  const release = host.resumeHolds.hold(binding)
   try {
-    // Why: terminal.ensureAgentSession semantics; omitting agentArgs keeps launch args host-owned.
-    const result = await host.ensureAgentSession({
-      kind: 'explicit',
-      worktree: `id:${worktreeId}`,
-      agent: record.agent,
-      providerSession: record.providerSession,
-      ...(options.launchPreferences ? { launchPreferences: options.launchPreferences } : {}),
-      presentation: options.presentation ?? 'background',
-      placement: { tabId: pane?.tabId ?? record.tabId, ...(pane ? { leafId: pane.leafId } : {}) }
-    })
-    return {
-      terminalHandle: result.terminal.handle,
-      disposition: result.disposition,
-      localPaneKey: result.terminal.paneKey ?? record.paneKey
+    const record = await claimRecoveryRecord(host, worktreeId, binding)
+    const restore = (): Promise<unknown> => host.applyOp({ kind: 'restore-record', record })
+    if (host.isProviderSessionLive(recoveryBindingKeyOf(record))) {
+      await restore()
+      throw new Error('recovery_session_live_locally')
     }
-  } catch (error) {
-    await restore()
-    throw error
+    const pane = parsePaneKey(record.paneKey)
+    try {
+      // Why: terminal.ensureAgentSession semantics; omitting agentArgs keeps launch args host-owned.
+      const result = await host.ensureAgentSession({
+        kind: 'explicit',
+        worktree: `id:${worktreeId}`,
+        agent: record.agent,
+        providerSession: record.providerSession,
+        ...(options.launchPreferences ? { launchPreferences: options.launchPreferences } : {}),
+        presentation: options.presentation ?? 'background',
+        placement: { tabId: pane?.tabId ?? record.tabId, ...(pane ? { leafId: pane.leafId } : {}) }
+      })
+      return {
+        terminalHandle: result.terminal.handle,
+        disposition: result.disposition,
+        localPaneKey: result.terminal.paneKey ?? record.paneKey
+      }
+    } catch (error) {
+      await restore()
+      throw error
+    }
+  } finally {
+    release()
   }
 }
 

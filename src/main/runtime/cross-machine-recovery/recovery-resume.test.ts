@@ -3,6 +3,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 import { importRecoveryWorkspaceWithHost } from './recovery-import'
 import { descriptor, emptySession, fixture, SESSION_ID } from './recovery-import.test-fixture'
 import { resumeRecoveryBindingWithHost } from './recovery-resume'
+import { createRecoveryResumeHolds } from './recovery-resume-holds'
 import { createCrossMachineRecoveryHost } from './recovery-runtime-host'
 
 describe('resumeRecoveryBindingWithHost', () => {
@@ -53,6 +54,7 @@ describe('headless runtime writer', () => {
       invalidateWorktreeCatalog: vi.fn(),
       resolveWorktree: vi.fn(),
       ensureAgentSession: vi.fn(),
+      resumeHolds: createRecoveryResumeHolds(),
       activateWorktree: vi.fn()
     })
     const record = {
