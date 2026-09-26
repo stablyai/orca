@@ -205,3 +205,4 @@ export type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
 } from './mobile-markdown-document'
+export type { RuntimeTerminalEqualize } from './runtime-terminal-equalize'

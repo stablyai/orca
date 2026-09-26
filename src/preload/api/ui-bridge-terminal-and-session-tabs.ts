@@ -119,6 +119,11 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:splitTerminal', listener)
     return () => ipcRenderer.removeListener('ui:splitTerminal', listener)
   },
+  onEqualizeTerminal: (callback: (data: { tabId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { tabId: string }) => callback(data)
+    ipcRenderer.on('ui:equalizeTerminal', listener)
+    return () => ipcRenderer.removeListener('ui:equalizeTerminal', listener)
+  },
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null }) => void
   ): (() => void) => {

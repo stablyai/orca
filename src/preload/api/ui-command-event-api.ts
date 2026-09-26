@@ -190,6 +190,7 @@ export type UiCommandEventApi = {
       newLeafId?: string
     }) => void
   ) => () => void
+  onEqualizeTerminal: (callback: (data: { tabId: string }) => void) => () => void
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null }) => void
   ) => () => void

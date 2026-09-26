@@ -92,6 +92,7 @@ export type RuntimeNotifier = {
       newLeafId?: string
     }
   ): void
+  equalizeTerminal?(tabId: string): void
   renameTerminal(tabId: string, title: string | null): void
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void

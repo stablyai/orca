@@ -3,6 +3,7 @@ export {
   AgentTeamsTmuxCompat,
   TerminalCloseAll,
   TerminalCreateParams,
+  TerminalEqualize,
   TerminalFocus,
   TerminalHandle,
   TerminalInspectProcess,

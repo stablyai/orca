@@ -4,6 +4,7 @@ import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-h
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
+  RuntimeTerminalEqualize,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
   RuntimeTerminalVisualLayout,
@@ -236,6 +237,10 @@ export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }
 
 export function formatTerminalSplit(result: { split: RuntimeTerminalSplit }): string {
   return `Split pane ${result.split.handle} in tab ${result.split.tabId}`
+}
+
+export function formatTerminalEqualize(result: { equalize: RuntimeTerminalEqualize }): string {
+  return `Equalized pane sizes for terminal ${result.equalize.handle} (tab ${result.equalize.tabId}).`
 }
 
 export function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): string {

@@ -6,6 +6,7 @@ export const PASTE_TERMINAL_TEXT_EVENT = 'orca-paste-terminal-text'
 export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-terminal-pane-split'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
+export const EQUALIZE_TERMINAL_PANES_EVENT = 'orca-equalize-terminal-panes'
 export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
 
 // Why: mobile wake (experimental agent sleep) must fire the cold-restore
@@ -71,6 +72,10 @@ export type CloseTerminalPaneDetail = {
   preservePty?: boolean
   retireSurface?: boolean
   expectedPtyId?: string
+}
+
+export type EqualizeTerminalPanesDetail = {
+  tabId: string
 }
 
 export type BackgroundMountTerminalWorktreeDetail = {

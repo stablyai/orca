@@ -180,6 +180,7 @@ export async function useIpcEventsForCloseRouting({
         onRequestTerminalTabMount: () => () => {},
         replyTerminalCreate: () => {},
         onSplitTerminal: () => () => {},
+        onEqualizeTerminal: () => () => {},
         onRenameTerminal: () => () => {},
         onFocusTerminal: () => () => {},
         onFocusEditorTab: () => () => {},

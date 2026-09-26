@@ -4,6 +4,7 @@ import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { TERMINAL_EQUALIZE_COMMAND_SPEC } from './terminal-equalize'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -298,5 +299,6 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal split --terminal term_abc123 --direction horizontal --json',
       'orca terminal split --terminal term_abc123 --command "codex"'
     ]
-  }
+  },
+  TERMINAL_EQUALIZE_COMMAND_SPEC
 ]
