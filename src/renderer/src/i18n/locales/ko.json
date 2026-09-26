@@ -877,6 +877,15 @@
       }
     },
     "components": {
+      "ClaudeAccountPromptDialog": {
+        "title": "Claude 계정 선택",
+        "description": "{{value0}}에서 시작할 Claude 계정을 선택하세요.",
+        "accountLabel": "계정",
+        "remember": "이 프로젝트에 기억",
+        "rememberHint": "설정 → 리포지토리에서 변경할 수 있습니다",
+        "cancel": "취소",
+        "start": "시작"
+      },
       "CodexRestartChip": {
         "c72a5fb234": "다시 시작",
         "9263e75f49": "Codex는 이전 계정을 사용하고 있습니다",
@@ -2780,7 +2789,20 @@
             "a7e2fd2699": "이슈 등록",
             "5c8ce20be6": "문제가 계속되면",
             "cc6d997c65": "오래된 데몬 상태를 지우려면 여기에서 terminal 데몬을 다시 시작하세요.",
-            "remoteTerminalClosed": "원격 터미널이 종료되었습니다."
+            "remoteTerminalClosed": "원격 터미널이 종료되었습니다.",
+            "startOnActiveAccount": "활성 계정으로 시작"
+          },
+          "ClaudePinnedLaunch": {
+            "hostSessions": "이 Claude 계정은 활성 계정이었을 때 시작한 터미널에서 아직 사용 중입니다. 해당 터미널을 닫거나 이번에는 활성 계정으로 시작하세요.",
+            "hostMutation": "Claude 계정을 업데이트하는 중입니다. 잠시 후 다시 시도하세요.",
+            "usageFetch": "계정 사용량 확인이 너무 오래 걸렸습니다. 다시 시도하세요.",
+            "accountMissing": "이 프로젝트에 저장된 Claude 계정이 더 이상 로그인되어 있지 않습니다. 설정 → 리포지토리에서 변경하거나 활성 계정으로 시작하세요.",
+            "becameActive": "해당 계정이 방금 활성 계정이 되었습니다. 다시 시도하세요.",
+            "credentials": "이 Claude 계정은 다시 로그인해야 합니다. 설정 → 계정에서 다시 인증하세요.",
+            "provenance": "이 세션의 Claude 계정을 확인할 수 없어 시작하지 않았습니다.",
+            "unsupportedHost": "저장된 Claude 계정은 아직 WSL에서 사용할 수 없습니다. 활성 계정으로 시작하거나 설정 → 리포지토리에서 이 프로젝트의 계정을 기본값으로 설정하세요.",
+            "hostSessionsDetail_one": "{{email}} 계정은 활성 계정이었을 때 시작한 Claude 터미널 {{count}}개에서 아직 사용 중입니다. 해당 터미널을 닫거나 이번에는 활성 계정으로 시작하세요.",
+            "hostSessionsDetail_other": "{{email}} 계정은 활성 계정이었을 때 시작한 Claude 터미널 {{count}}개에서 아직 사용 중입니다. 해당 터미널을 닫거나 이번에는 활성 계정으로 시작하세요."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash 콘솔 한도에 도달했습니다",
@@ -5489,6 +5511,8 @@
           "remoteServerFallback": "원격 서버",
           "loadAccountsFailed": "프로바이더 계정을 불러오지 못했습니다.",
           "remoteScopeAccounts": "{{value0}}에서 관리하는 계정을 표시하고 있습니다. 계정 추가나 재인증은 해당 서버에서 진행하세요.",
+          "askClaudeAccountPerProjectTitle": "프로젝트마다 사용할 Claude 계정 묻기",
+          "askClaudeAccountPerProjectDescription": "켜면 저장된 Claude 계정이 없는 프로젝트에서 Claude를 시작하기 전에 묻습니다.",
           "accountScopePrefix": "계정 범위",
           "accountScopeRemoteServerUnnamed": "원격 서버",
           "remoteScopeLocalAccountsKept": "이 데스크탑에서 관리되는 계정은 그대로 유지됩니다. 기본 런타임을 로컬 데스크탑으로 다시 전환하면 확인할 수 있습니다.",
@@ -7758,7 +7782,13 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "OAuth",
-            "a9f3d7b5c8": "로그인"
+            "a9f3d7b5c8": "로그인",
+            "askPerProjectAccounts": "계정",
+            "askPerProjectProject": "프로젝트",
+            "askPerProjectPerProject": "프로젝트별",
+            "askPerProjectAsk": "묻기",
+            "askPerProjectAskWhich": "어떤 계정 묻기",
+            "askPerProjectPrompt": "확인 창"
           }
         },
         "advanced": {
@@ -8959,6 +8989,11 @@
             "ghAccount": "gh 계정",
             "login": "로그인",
             "token": "token",
+            "claudeAccount": "Claude 계정",
+            "claudeAccountDescription": "이 프로젝트에서 시작할 Claude 계정을 선택합니다.",
+            "claudeAccountKeyword": "claude 계정",
+            "claudeAccountsKeyword": "claude 계정 목록",
+            "accountsKeyword": "계정",
             "externalWorktrees": "외부 작업 트리",
             "externalWorktreesDescription": "이 프로젝트에서 Orca 외부 작업 트리를 표시할지 재정의합니다.",
             "copy": "copy",
@@ -9385,6 +9420,18 @@
           "capabilityBlocked": "이 런타임의 GitHub CLI가 `gh auth token --user`(gh ≥ 2.40)를 지원할 때까지 바인딩을 사용할 수 없습니다.",
           "capabilityUnknownHint": "이 런타임에서 GitHub CLI 계정 바인딩 지원을 확인할 수 없습니다. 바인딩을 지우거나 다시 시도하세요.",
           "notEnforced": "저장되었지만 이 런타임(혼합 버전 호스트)에서는 적용되지 않습니다."
+        },
+        "RepositoryClaudeAccountSection": {
+          "title": "Claude 계정",
+          "description": "이 프로젝트에서 시작할 Claude 계정을 선택합니다.",
+          "selectLabel": "계정",
+          "default": "기본값",
+          "ask": "매번 묻기",
+          "unsupported": "프로젝트별 Claude 계정은 아직 이 프로젝트의 호스트에서 지원되지 않습니다.",
+          "saveFailed": "Claude 계정 설정을 저장할 수 없습니다.",
+          "notEnforced": "저장되었지만 이 런타임에서는 적용되지 않습니다(버전이 다른 호스트).",
+          "loadFailed": "Claude 계정을 불러올 수 없습니다.",
+          "removedAccountOption": "삭제된 계정(사용할 수 없음)"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 상태 훅",

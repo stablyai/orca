@@ -872,6 +872,15 @@
       }
     },
     "components": {
+      "ClaudeAccountPromptDialog": {
+        "title": "Claude アカウントを選択",
+        "description": "{{value0}} で開始する Claude アカウントを選択してください。",
+        "accountLabel": "アカウント",
+        "remember": "このプロジェクトで記憶する",
+        "rememberHint": "[設定] → [リポジトリ] で変更できます",
+        "cancel": "キャンセル",
+        "start": "開始"
+      },
       "CodexRestartChip": {
         "c72a5fb234": "再起動",
         "9263e75f49": "Codex は前のアカウントを使用しています",
@@ -2775,7 +2784,20 @@
             "a7e2fd2699": "Issue を登録",
             "5c8ce20be6": "この状態が続く場合は、",
             "cc6d997c65": "ここからターミナルデーモンを再起動して、古いデーモン状態をクリアします。",
-            "remoteTerminalClosed": "リモートターミナルが閉じられました。"
+            "remoteTerminalClosed": "リモートターミナルが閉じられました。",
+            "startOnActiveAccount": "アクティブなアカウントで開始"
+          },
+          "ClaudePinnedLaunch": {
+            "hostSessions": "この Claude アカウントは、アクティブなアカウントだったときに開始したターミナルでまだ使用されています。それらを閉じるか、今回はアクティブなアカウントで開始してください。",
+            "hostMutation": "Claude アカウントを更新しています。しばらくしてから再試行してください。",
+            "usageFetch": "アカウントの使用状況の確認に時間がかかりすぎました。再試行してください。",
+            "accountMissing": "このプロジェクトに保存された Claude アカウントはサインインしていません。[設定] → [リポジトリ] で変更するか、アクティブなアカウントで開始してください。",
+            "becameActive": "そのアカウントがアクティブなアカウントになりました。再試行してください。",
+            "credentials": "この Claude アカウントは再度サインインする必要があります。[設定] → [アカウント] で再認証してください。",
+            "provenance": "このセッションの Claude アカウントを確認できなかったため、開始しませんでした。",
+            "unsupportedHost": "保存された Claude アカウントは WSL ではまだ使用できません。アクティブなアカウントで開始するか、[設定] → [リポジトリ] でこのプロジェクトのアカウントを [デフォルト] に設定してください。",
+            "hostSessionsDetail_one": "{{email}} は、アクティブなアカウントだったときに開始した {{count}} 個の Claude ターミナルでまだ使用されています。それを閉じるか、今回はアクティブなアカウントで開始してください。",
+            "hostSessionsDetail_other": "{{email}} は、アクティブなアカウントだったときに開始した {{count}} 個の Claude ターミナルでまだ使用されています。それらを閉じるか、今回はアクティブなアカウントで開始してください。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash のコンソール上限に達しました",
@@ -5484,6 +5506,8 @@
           "remoteServerFallback": "リモートサーバー",
           "loadAccountsFailed": "プロバイダーアカウントを読み込めませんでした。",
           "remoteScopeAccounts": "{{value0}} が管理するアカウントを表示しています。アカウントの追加や再認証はそのサーバー上で行ってください。",
+          "askClaudeAccountPerProjectTitle": "プロジェクトごとに使用する Claude アカウントを確認する",
+          "askClaudeAccountPerProjectDescription": "オンにすると、Claude アカウントが保存されていないプロジェクトでは、Claude を開始する前に確認します。",
           "accountScopePrefix": "アカウントスコープ",
           "accountScopeRemoteServerUnnamed": "リモートサーバー",
           "remoteScopeLocalAccountsKept": "このデスクトップで管理されているアカウントはそのまま残っています。デフォルトランタイムをローカルデスクトップに戻すと表示されます。",
@@ -7790,7 +7814,13 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "認証",
-            "a9f3d7b5c8": "ログイン"
+            "a9f3d7b5c8": "ログイン",
+            "askPerProjectAccounts": "アカウント",
+            "askPerProjectProject": "プロジェクト",
+            "askPerProjectPerProject": "プロジェクトごと",
+            "askPerProjectAsk": "確認",
+            "askPerProjectAskWhich": "どれか確認",
+            "askPerProjectPrompt": "プロンプト"
           }
         },
         "advanced": {
@@ -8991,6 +9021,11 @@
             "ghAccount": "gh アカウント",
             "login": "ログイン",
             "token": "token",
+            "claudeAccount": "Claude アカウント",
+            "claudeAccountDescription": "このプロジェクトで開始する Claude アカウントを選択します。",
+            "claudeAccountKeyword": "claude アカウント",
+            "claudeAccountsKeyword": "claude アカウント一覧",
+            "accountsKeyword": "アカウント",
             "externalWorktrees": "外部ワークツリー",
             "externalWorktreesDescription": "このプロジェクトで Orca 外のワークツリーを表示するかどうかを上書きします。",
             "copy": "コピー",
@@ -9417,6 +9452,18 @@
           "capabilityBlocked": "このランタイムの GitHub CLI が `gh auth token --user` (gh ≥ 2.40) をサポートするまで、バインディングは使用できません。",
           "capabilityUnknownHint": "このランタイムでの GitHub CLI アカウントバインディングのサポートを確認できませんでした。バインディングをクリアするか、再試行してください。",
           "notEnforced": "保存されましたが、このランタイム (混合バージョンのホスト) では適用されません。"
+        },
+        "RepositoryClaudeAccountSection": {
+          "title": "Claude アカウント",
+          "description": "このプロジェクトで開始する Claude アカウントを選択します。",
+          "selectLabel": "アカウント",
+          "default": "デフォルト",
+          "ask": "毎回尋ねる",
+          "unsupported": "プロジェクトごとの Claude アカウントは、このプロジェクトのホストではまだサポートされていません。",
+          "saveFailed": "Claude アカウントの設定を保存できませんでした。",
+          "notEnforced": "保存しましたが、このランタイムでは適用されません (バージョンが異なるホスト)。",
+          "loadFailed": "Claude アカウントを読み込めませんでした。",
+          "removedAccountOption": "削除されたアカウント (使用不可)"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 状態フック",

@@ -875,6 +875,15 @@
       }
     },
     "components": {
+      "ClaudeAccountPromptDialog": {
+        "title": "选择 Claude 账户",
+        "description": "选择要在 {{value0}} 中启动的 Claude 账户。",
+        "accountLabel": "账户",
+        "remember": "为此项目记住",
+        "rememberHint": "你可以在设置 → 仓库中更改此项",
+        "cancel": "取消",
+        "start": "开始"
+      },
       "CodexRestartChip": {
         "c72a5fb234": "重新启动",
         "9263e75f49": "Codex 正在使用之前的账户",
@@ -2790,7 +2799,20 @@
             "a7e2fd2699": "提交议题",
             "5c8ce20be6": "如果这种情况持续存在，请",
             "cc6d997c65": "从此处重新启动终端守护进程以清除失效的守护进程状态。",
-            "remoteTerminalClosed": "远程终端已关闭。"
+            "remoteTerminalClosed": "远程终端已关闭。",
+            "startOnActiveAccount": "使用当前账户启动"
+          },
+          "ClaudePinnedLaunch": {
+            "hostSessions": "此 Claude 账户仍在被它作为当前账户时启动的终端使用。请关闭这些终端，或者这次使用当前账户启动。",
+            "hostMutation": "正在更新 Claude 账户。请稍后重试。",
+            "usageFetch": "检查账户用量耗时过长。请重试。",
+            "accountMissing": "此项目保存的 Claude 账户已不再登录。请在设置 → 仓库中更改，或使用当前账户启动。",
+            "becameActive": "该账户刚刚成为当前账户。请重试。",
+            "credentials": "此 Claude 账户需要重新登录。请在设置 → 账户中重新认证。",
+            "provenance": "无法确认此会话的 Claude 账户，因此未启动。",
+            "unsupportedHost": "已保存的 Claude 账户暂时无法在 WSL 中使用。请使用当前账户启动，或在设置 → 仓库中将此项目的账户设为默认。",
+            "hostSessionsDetail_one": "{{email}} 仍在被它作为当前账户时启动的 {{count}} 个 Claude 终端使用。请关闭该终端，或者这次使用当前账户启动。",
+            "hostSessionsDetail_other": "{{email}} 仍在被它作为当前账户时启动的 {{count}} 个 Claude 终端使用。请关闭这些终端，或者这次使用当前账户启动。"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已达到 Git Bash 控制台上限",
@@ -5526,6 +5548,8 @@
           "remoteServerFallback": "远程服务器",
           "loadAccountsFailed": "无法加载提供商账户。",
           "remoteScopeAccounts": "正在显示由 {{value0}} 管理的账户。请在该服务器上添加或重新验证账户。",
+          "askClaudeAccountPerProjectTitle": "为每个项目询问要使用的 Claude 账户",
+          "askClaudeAccountPerProjectDescription": "开启后，没有保存 Claude 账户的项目会在启动 Claude 前询问。",
           "accountScopePrefix": "账户范围",
           "accountScopeRemoteServerUnnamed": "远程服务器",
           "remoteScopeLocalAccountsKept": "此桌面端管理的账户并未改变。将默认运行时切换回本地桌面即可查看。",
@@ -7823,7 +7847,13 @@
             "b2c4e7f1a8": "端点",
             "3a9b6d2c4e": "API 密钥",
             "5d8f1a3b7c": "中国",
-            "7e2a4b8c1d": "海外"
+            "7e2a4b8c1d": "海外",
+            "askPerProjectAccounts": "账户",
+            "askPerProjectProject": "项目",
+            "askPerProjectPerProject": "按项目",
+            "askPerProjectAsk": "询问",
+            "askPerProjectAskWhich": "询问哪个",
+            "askPerProjectPrompt": "提示"
           }
         },
         "advanced": {
@@ -9024,6 +9054,11 @@
             "ghAccount": "gh 账户",
             "login": "登录",
             "token": "token",
+            "claudeAccount": "Claude 账户",
+            "claudeAccountDescription": "选择在此项目中启动的 Claude 账户。",
+            "claudeAccountKeyword": "claude 账户",
+            "claudeAccountsKeyword": "claude 账户列表",
+            "accountsKeyword": "账户",
             "externalWorktrees": "外部工作树",
             "externalWorktreesDescription": "覆盖是否为此项目显示在 Orca 外部创建的工作树。",
             "copy": "复制",
@@ -9450,6 +9485,18 @@
           "capabilityBlocked": "在此运行时的 GitHub CLI 支持 `gh auth token --user`（gh ≥ 2.40）之前，无法使用账户绑定。",
           "capabilityUnknownHint": "无法确定此运行时的 GitHub CLI 是否支持账户绑定。请清除绑定或重试。",
           "notEnforced": "已保存，但此运行时（混合版本主机）不会强制执行。"
+        },
+        "RepositoryClaudeAccountSection": {
+          "title": "Claude 账户",
+          "description": "选择在此项目中启动的 Claude 账户。",
+          "selectLabel": "账户",
+          "default": "默认",
+          "ask": "每次都问",
+          "unsupported": "此项目的主机暂不支持按项目设置 Claude 账户。",
+          "saveFailed": "无法保存 Claude 账户偏好。",
+          "notEnforced": "已保存，但此运行时不会执行（主机版本不同）。",
+          "loadFailed": "无法加载 Claude 账户。",
+          "removedAccountOption": "已删除的账户（不可用）"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",
