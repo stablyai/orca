@@ -1,5 +1,64 @@
 # CI efficiency and runner capacity
 
+## September 25 follow-up
+
+The current queue is a bigger part of PR latency than setup. Successful full PR
+[36212793136](https://github.com/stablyai/orca/actions/runs/36212793136) used
+**74.6 aggregate runner-minutes**, including **55.5** for its eight unit shards.
+Those jobs ran for 315–448 seconds but waited 229–1,076 seconds to start. The
+three-second final `verify` job waited another 264 seconds. These are observed
+job creation-to-start and start-to-completion intervals, not billing figures.
+
+This follow-up keeps the existing tests, isolation, eight unit shards, platform
+coverage, and release behavior:
+
+- Make the reusable unit-test call and final aggregate respect cancellation.
+  Their old `always()` conditions kept superseded work alive despite workflow
+  cancellation. In [36215475069](https://github.com/stablyai/orca/actions/runs/36215475069),
+  a newer push cancelled ordinary jobs while all eight unit shards remained
+  queued and the replacement workflow remained pending. `!cancelled()` still
+  evaluates after failed/skipped dependencies, without resisting cancellation.
+- Combine root/README guards with change detection. A real sparse checkout kept
+  all 29,487 index entries while materializing only 12 files (192 KB). This
+  eliminates one runner allocation and checkout per PR. README link checks still
+  see tracked targets outside the working tree and run on docs-only PRs.
+- Use free `ubuntu-slim` containers for small guard/aggregate/API jobs; trial
+  free `ubuntu-24.04-arm` for typechecking, which needs no native runtime.
+  Both share the account's standard concurrency limit. Different labels do
+  **not** grant extra concurrent jobs; hosted timings determine their value.
+- Cancel superseded PR attempts in the Git termination, Pi owner, and Pi provider
+  runtime workflows, retaining independent manual runs.
+- Fetch only complete HEAD ancestry for cloud secret scanning. The old checkout
+  fetched every branch and tag and took 55 seconds in
+  [36214130174](https://github.com/stablyai/orca/actions/runs/36214130174).
+  Real Git fixtures prove both merge parents and deleted historical contents
+  still produce the identical scanned patches.
+- Remove the cloud lockfile from the eight unit shards' download-cache key; the
+  dedicated relay integration job still includes it. Record actual per-file
+  environment, setup, import, and test durations for the existing shard planner.
+  Shard 4 spent 535 worker-seconds importing and 357 executing tests; a uniform
+  per-file import estimate misses that cost. See [timing refresh](../../config/scripts/ci-shard-timings.md).
+- Seed Node 24 native modules and TypeScript state on the default branch, hourly
+  and when dependency/toolchain inputs change. One ten-minute-bounded hosted job
+  reuses existing cache keys and skips typechecking an already-cached commit.
+  New PRs can restore default-branch caches, while caches saved by another PR
+  are inaccessible. The audit found 80 entries totaling 10.67 GiB, including
+  9.31 GiB of pnpm stores, but no main-branch Node 24 native or TypeScript state.
+  Seven PRs held separate copies of the same pnpm key (2.36 GB combined).
+
+No account settings, paid services, or runner entitlements changed. Standard
+public-repository runners remain free. GitHub documents plan concurrency limits
+of Free 20, Pro 40, Team 60, Enterprise 500, and permits support requests for
+increases. The organization's actual entitlement was not exposed by the API.
+See [runner specifications](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+and [concurrency limits](https://docs.github.com/en/actions/reference/limits).
+
+Hosted validation and timing results for [PR #23053](https://github.com/stablyai/orca/pull/23053)
+are in progress. Queue changes are observational and should not be attributed to
+this PR without separating account traffic from active job duration.
+
+## September 5 audit
+
 Audit date: September 5, 2026. No paid capacity or provider configuration changed.
 
 ## Measurements and changes

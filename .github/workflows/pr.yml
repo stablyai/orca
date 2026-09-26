@@ -598,8 +598,9 @@ jobs:
 
   test:
     needs: [code_paths, test_native_cache]
+    # Honor cancellation while allowing the optional native-cache primer to skip.
     if: >-
-      always() &&
+      !cancelled() &&
       needs.code_paths.outputs.test == 'true' &&
       (needs.test_native_cache.result == 'success' || needs.test_native_cache.result == 'skipped')
     uses: ./.github/workflows/unit-tests.yml
@@ -1083,7 +1084,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
 
   verify:
-    if: always()
+    if: ${{ !cancelled() }}
     needs:
       - code_paths
       - static_analysis

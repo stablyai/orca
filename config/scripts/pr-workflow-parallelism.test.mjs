@@ -60,6 +60,9 @@ describe('PR workflow parallelism', () => {
   it('cancels superseded runs for the same pull request', () => {
     expect(workflow.concurrency.group).toBe('pr-checks-${{ github.event.pull_request.number }}')
     expect(workflow.concurrency['cancel-in-progress']).toBe(true)
+    expect(workflow.jobs.test.if).toContain('!cancelled()')
+    expect(workflow.jobs.test.if).not.toContain('always()')
+    expect(workflow.jobs.verify.if).toBe('${{ !cancelled() }}')
   })
 
   it('grants the PR workflow read-only repository access', () => {
