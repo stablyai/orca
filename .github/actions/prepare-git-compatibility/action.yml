@@ -4,6 +4,8 @@ description: Restore or build the pinned Linux Git binary for the compatibility 
 runs:
   using: composite
   steps:
+    # The default-branch warmer shares this key across PRs; a PR save is private to its merge ref.
+    # Cache eviction remains possible, so keep the checksum-verified cold build below.
     - name: Cache baseline Git build
       uses: actions/cache@v5
       with:

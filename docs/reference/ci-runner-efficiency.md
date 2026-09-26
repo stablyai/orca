@@ -1,5 +1,66 @@
 # CI efficiency and runner capacity
 
+## September 26 verification
+
+[PR #23053](https://github.com/stablyai/orca/pull/23053) was merged before its
+latest full run finished. That run,
+[36221874572](https://github.com/stablyai/orca/actions/runs/36221874572), ultimately
+failed the mobile pending-frame precondition, just as the previous run had.
+All eight unit shards passed, but the aggregate did not. An unchanged assertion
+was not enough evidence to label the failure an unrelated flake.
+
+Main subsequently received the deterministic frame hold in PR #22635. The real
+terminal refit now queues a frame that the recorder holds until disposal has
+finished, then releases surviving work against a remounted terminal. This
+follow-up adds a negative control: cancellation is disabled only during disposal,
+and the same recorder must report a document-owned callback after disposal.
+The normal case retains its pending-work and zero-leak assertions. Both cases
+passed five fresh headless Chromium runs locally; the complete terminal-render
+file passed all 13 tests. Browser dependencies were required, so these were real
+render checks rather than skipped bundles.
+
+Unit model tests now import Monaco's editor API directly, preserving real models
+and undo stacks without loading every language contribution. The registry bridge
+requires only the editor and URI interfaces it actually uses. The full application
+still imports its existing Monaco entry point; no production runtime behavior,
+assertions, worker counts, timeouts or isolation settings changed.
+A controlled local comparison (macOS arm64, Node 26.6.0, Vitest 4.1.11,
+`--maxWorkers=1` only for this comparison) kept six files and all 32 tests.
+Three warm original samples took 14.53/12.84/11.62 seconds; three editor-API
+samples took 12.95/9.81/7.99 seconds, alternating back to the original imports
+between measurements. Median elapsed time fell 12.84 to 9.81 seconds (23.6%);
+median import time fell 10.73 to 7.94 seconds (26.0%). The initial cold original
+sample, 20.29 seconds, is excluded. Shared-host variance remains; this is a
+focused measurement, not a claim of a 23.6% improvement to the full unit suite.
+
+The default-branch warmer
+[36221917346](https://github.com/stablyai/orca/actions/runs/36221917346) successfully
+published native modules and TypeScript state. Fresh PRs
+[#23101](https://github.com/stablyai/orca/pull/23101) and
+[#23104](https://github.com/stablyai/orca/pull/23104) restored both on their first
+runs. Scope inventories showed neither PR had a private copy; the TypeScript
+key existed only on main. Native restore took 0.45/0.54 seconds; TypeScript restore
+took 0.38/1.31 seconds, with compiler steps of 8/39 seconds versus the warmer's
+80-second cold compiler step. PR #23104 used the prefix fallback after its base
+advanced, confirming reuse across commits as well as PRs.
+
+The same warmer saved a 22.5 MB Git cache, but the exact key disappeared before
+it was reused. Quota eviction is plausible, not proven: the usage API reported
+17.48 GiB while a separate live 100-entry sample contained 15.15 GiB of pnpm
+stores alone. These rapidly changing inventories are not atomic. The root-only
+warmer does not seed the root-plus-mobile download-store key used by static
+analysis, so both fresh PRs saved another roughly 350 MiB store. Controlling that
+cache duplication is a remaining opportunity; hourly warming alone cannot
+promise retention. Git's checksum-verified cold-build fallback remains required.
+
+The unit scheduling baseline now comes from every successful Node 24 shard in
+run 36221874572. The importer verified 9,683 measurements against all eight
+assignments. Current discovery selects 9,732 files exactly once, using a 230ms
+median for 49 new files. With the same measurements applied to both assignments,
+the largest projected load falls 7.48%; total work is unchanged. See
+[provenance and reproduction](../../config/scripts/ci-shard-timings.md).
+This is a scheduling projection; hosted elapsed time must be measured separately.
+
 ## September 25 follow-up
 
 The current queue is a bigger part of PR latency than setup. Successful full PR
@@ -121,8 +182,8 @@ seven seconds after restoring earlier incremental state.
 These are small observational samples from different revisions, not controlled
 benchmarks. The cold typecheck log confirms an incremental-cache miss. Queue
 changes must be separated from active duration and concurrent account traffic.
-The checked-in shard weights remain unchanged; the new reports make future
-refreshes possible from complete successful runs.
+At the time of that trial, checked-in shard weights were unchanged; the September
+26 refresh above now uses the complete successful unit reports.
 
 ## September 5 audit
 
