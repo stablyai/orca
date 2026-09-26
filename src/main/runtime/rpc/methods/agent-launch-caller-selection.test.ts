@@ -123,6 +123,19 @@ describe('launches that keep the host-wide behaviour', () => {
     expect(runtime.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
   })
 
+  it("the host's own desktop window, a runtime client with no paired device, still activates the chat", async () => {
+    const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
+
+    await launch(EXISTING_LAUNCH, runtime, {
+      ...CAPABLE_CLIENT,
+      clientKind: 'runtime',
+      pairedDeviceId: undefined
+    })
+
+    expect(chatActivation()).toBe(true)
+    expect(runtime.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
+  })
+
   it('a workspace-creating launch from a paired client keeps the create navigation', async () => {
     const runtime = selectionRuntime({ settings: STRUCTURED_PREFERENCE })
 
