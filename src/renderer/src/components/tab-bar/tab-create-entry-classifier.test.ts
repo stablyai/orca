@@ -194,9 +194,9 @@ describe('tab create entry classification', () => {
       relativePath: 'src/components/Button.tsx'
     })
     expect(classifyTabEntryQuery('btn', files)).toEqual({
-      kind: 'existing-file',
-      matchKind: 'fuzzy',
-      relativePath: 'src/components/Button.tsx'
+      kind: 'search',
+      engine: 'google',
+      query: 'btn'
     })
   })
 
@@ -224,7 +224,7 @@ describe('tab create entry classification', () => {
     ])
   })
 
-  it('keeps single-token quick-open matches ahead of search, but not phrases', () => {
+  it('keeps literal filename matches ahead of search, but not phrases', () => {
     expect(
       getTabEntryOptions('typescript', readyFiles(['docs/typescript-guide.md'])).map(
         (option) => option.classification
@@ -232,7 +232,7 @@ describe('tab create entry classification', () => {
     ).toEqual([
       {
         kind: 'existing-file',
-        matchKind: 'fuzzy',
+        matchKind: 'literal-basename',
         relativePath: 'docs/typescript-guide.md'
       },
       { kind: 'search', engine: 'google', query: 'typescript' },
@@ -260,7 +260,7 @@ describe('tab create entry classification', () => {
   })
 
   // Fuzzy matching is a subsequence scan, so a short token matches broadly.
-  it('keeps a search slot when fuzzy matches would fill the whole list', () => {
+  it('puts search ahead of fuzzy filename and path matches', () => {
     const files = [
       'src/components/Button.tsx',
       'src/lib/bootstrap-nav.ts',
@@ -269,15 +269,14 @@ describe('tab create entry classification', () => {
       'src/bin/tune.ts'
     ]
     expect(getTabEntryOptions('btn', readyFiles(files)).map((o) => o.classification.kind)).toEqual([
+      'search',
       'existing-file',
       'existing-file',
-      'existing-file',
-      'search'
+      'existing-file'
     ])
-    // A one-slot list still answers with the file, so Enter keeps quick-open.
     expect(
       getTabEntryOptions('btn', readyFiles(files), 1).map((o) => o.classification.kind)
-    ).toEqual(['existing-file'])
+    ).toEqual(['search'])
   })
 
   it('ranks search before ordinary create-file actions', () => {

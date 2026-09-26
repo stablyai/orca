@@ -3,7 +3,11 @@ import type { RuntimeFileListState } from '../quick-open-file-list'
 import { translate } from '@/i18n/i18n'
 import { getTabEntryOmniboxPlaceholder } from './tab-create-entry-copy'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../shared/browser-url'
-import { findExistingFileMatches, isLikelyNewFileIntent } from './tab-create-entry-file-matches'
+import {
+  findExistingFileMatches,
+  isLikelyNewFileIntent,
+  type ExistingFileMatch
+} from './tab-create-entry-file-matches'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
 import {
   isTabEntryAbsolutePathLike,
@@ -31,11 +35,7 @@ export const TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE =
 export type TabEntryClassification =
   | { kind: 'empty'; message: string }
   | { kind: 'explicit-url'; url: string }
-  | {
-      kind: 'existing-file'
-      matchKind: 'exact-path' | 'exact-basename' | 'fuzzy'
-      relativePath: string
-    }
+  | ExistingFileMatch
   | { kind: 'host-url'; url: string }
   | { kind: 'search'; engine: SearchEngine; query: string }
   | { kind: 'new-file'; relativePath: string }
@@ -223,8 +223,9 @@ export function getTabEntryOptions(
     getPreparedQuickOpenFiles(fileList.files),
     Math.max(actionLimit, 1)
   )
-  const exactExistingFiles = existingFiles.filter((file) => file.matchKind !== 'fuzzy')
-  const fuzzyExistingFiles = existingFiles.filter((file) => file.matchKind === 'fuzzy')
+  const exactExistingFiles = existingFiles.filter(
+    (file) => file.matchKind === 'exact-path' || file.matchKind === 'exact-basename'
+  )
 
   if (exactExistingFiles.length > 0) {
     const options: TabEntryActionClassification[] = [...exactExistingFiles]
@@ -239,31 +240,34 @@ export function getTabEntryOptions(
     return [blockedOption('invalid-url', hostUrl.message)]
   }
   if (hostUrl?.kind === 'host-url') {
-    return toOptions([hostUrl, ...fuzzyExistingFiles], actionLimit)
+    return toOptions([hostUrl, ...existingFiles], actionLimit)
   }
   if (pathError || !newFile) {
     // Why: an unusable path is still a live quick-open prefix — "src/" cannot be
     // created, but it matches real files, and dropping them turns every typed
     // separator into an error row mid-keystroke.
-    return fuzzyExistingFiles.length > 0
-      ? toOptions(fuzzyExistingFiles, actionLimit)
+    return existingFiles.length > 0
+      ? toOptions(existingFiles, actionLimit)
       : [invalidPathOption(pathError)]
   }
   if (isLikelyNewFileIntent(trimmed)) {
-    return toOptions([newFile, search, ...fuzzyExistingFiles], actionLimit)
+    return toOptions([newFile, search, ...existingFiles], actionLimit)
   }
   // Why no create row: a spaced, extension-less phrase is a web query, and a
   // stray arrow/click on "Create file" leaves an empty `release notes` on disk
   // that then outranks search as an exact match forever after.
   if (/\s/.test(trimmed)) {
-    return toOptions([search, ...fuzzyExistingFiles], actionLimit)
+    return toOptions([search, ...existingFiles], actionLimit)
   }
-  // Why: a single token is still a quick-open attempt ("btn" → Button.tsx), so
-  // only phrases promote web search over fuzzy matches. Fuzzy matching is a
-  // subsequence scan that fills every slot in a real repo, so hold one back —
-  // otherwise search silently disappears from the list it should always offer.
+  // Short Latin tokens match too many filenames to imply file intent; CJK words can be short.
+  if (/^[\p{Script=Latin}\p{Nd}]{1,2}$/u.test(trimmed.normalize('NFC'))) {
+    return toOptions([search, ...existingFiles, newFile], actionLimit)
+  }
+  const literalFiles = existingFiles.filter((file) => file.matchKind === 'literal-basename')
+  const fuzzyFiles = existingFiles.filter((file) => file.matchKind === 'fuzzy')
+  // Reserve a search slot even when literal filename matches fill the list.
   return toOptions(
-    [...fuzzyExistingFiles.slice(0, Math.max(actionLimit - 1, 1)), search, newFile],
+    [...literalFiles.slice(0, Math.max(actionLimit - 1, 1)), search, ...fuzzyFiles, newFile],
     actionLimit
   )
 }
