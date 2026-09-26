@@ -32,3 +32,19 @@ func hideKeyboardAccessoryBar(of webView: WKWebView) {
   }
   object_setClass(content, subclass)
 }
+
+/// Stops WKWebView reacting to the keyboard itself. It listens for the keyboard's frame and scrolls
+/// the document to reveal the focused field, on top of the lift the page already applies from the
+/// height the shell sends, so the page moved twice. The shell's own listeners are unaffected.
+func ignoreKeyboardNotifications(in webView: WKWebView) {
+  for name in [
+    UIResponder.keyboardWillShowNotification,
+    UIResponder.keyboardDidShowNotification,
+    UIResponder.keyboardWillHideNotification,
+    UIResponder.keyboardDidHideNotification,
+    UIResponder.keyboardWillChangeFrameNotification,
+    UIResponder.keyboardDidChangeFrameNotification
+  ] {
+    NotificationCenter.default.removeObserver(webView, name: name, object: nil)
+  }
+}

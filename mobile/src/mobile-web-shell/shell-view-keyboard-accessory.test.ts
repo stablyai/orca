@@ -19,4 +19,13 @@ describe("the iOS WebView's keyboard", () => {
     const accessory = readFileSync(join(SHELL, 'MobileWebShellKeyboardAccessory.swift'), 'utf8')
     expect(accessory).toContain('inputAccessoryView')
   })
+
+  it('does not scroll the page to reveal a focused field, which the page lifts itself', () => {
+    // iPhone 17 simulator: focusing the page's commit message scrolled the whole document up, the
+    // header off screen and the bar 384 pt above the keyboard (shot ios-43).
+    const view = readFileSync(join(SHELL, 'MobileWebShellView.swift'), 'utf8')
+    expect(view).toContain('ignoreKeyboardNotifications(in: webView)')
+    const accessory = readFileSync(join(SHELL, 'MobileWebShellKeyboardAccessory.swift'), 'utf8')
+    expect(accessory).toContain('keyboardWillChangeFrameNotification')
+  })
 })
