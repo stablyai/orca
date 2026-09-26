@@ -465,9 +465,11 @@ describeRender(
       // The witness has to be owed whenever the dispose lands. A single refit is not: the retry
       // loop commits on its first attempt whenever the grid still measures, so one resize buys
       // one frame and a dispose after it owes nothing — which agrees with an empty leak list for
-      // exactly the reason under test, once in five runs. So the refit is re-armed from a frame
-      // of the test's own, which leaves the document owed a frame at the end of every frame the
-      // browser serves, and dispose cannot land inside one.
+      // exactly the reason under test, once in five runs. So the refit is re-armed every frame,
+      // and the order inside the frame matters: a resize that runs before the document's attempt
+      // is committed by it, the refit then finds the box already fitted, and the document owes
+      // nothing at the end of every other frame. Re-arming from a resize observer made after the
+      // document's puts the resize after the attempt in the next frame, so every frame ends owed.
       //
       // And the leak has to be counted from the moment dispose returned, not from the moment the
       // host element left the DOM. React unmounts in two steps: the mutation phase detaches the
@@ -522,6 +524,7 @@ describeRender(
         })
         observer.observe(host, { attributes: true, attributeFilter: ['class'] })
         // The page's refit follows the host's box, not the window, so the pulse resizes the host.
+        // The observer's first delivery starts the one chain; each resize it causes re-arms it.
         let narrow = false
         const pulse = () => {
           if (state.disposed !== null) {
@@ -529,9 +532,8 @@ describeRender(
           }
           narrow = !narrow
           host.style.width = narrow ? '99%' : ''
-          requestAnimationFrame(pulse)
         }
-        requestAnimationFrame(pulse)
+        new ResizeObserver(() => requestAnimationFrame(pulse)).observe(host)
         globalThis.setTimeout(() => globalThis.__orcaTerminalProbe.setMounted(false), 200)
       }, documentChunk)
       await page.locator('#terminal-container').waitFor({ state: 'detached', timeout: 30_000 })
