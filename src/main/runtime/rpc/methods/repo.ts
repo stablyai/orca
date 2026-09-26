@@ -1,6 +1,7 @@
 import { defineMethod } from '../core'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
+import { projectRepoSearchRefsForClient } from './repo-search-ref-projection'
 import { RepoSelector } from './github-repo-target-schemas'
 import {
   projectRepoResultVisibilityForClient,
@@ -183,8 +184,11 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.searchRefs',
     params: RepoSearchRefs,
-    handler: async (params, { runtime }) =>
-      runtime.searchRepoRefs(params.repo, params.query, params.limit)
+    handler: async (params, { runtime, clientCapabilities }) =>
+      projectRepoSearchRefsForClient(
+        await runtime.searchRepoRefs(params.repo, params.query, params.limit),
+        clientCapabilities
+      )
   }),
   defineMethod({
     name: 'repo.hooks',
