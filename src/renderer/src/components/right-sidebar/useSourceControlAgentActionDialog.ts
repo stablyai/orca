@@ -14,6 +14,7 @@ import type { SourceControlAgentActionDialogProps } from './SourceControlAgentAc
 import type { UseSourceControlAgentActionDialogResult } from './source-control-agent-action-dialog-result'
 import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { sourceControlLaunchAppliesAgentArgs } from './source-control-launch-agent-args-applicability'
+import { useSourceControlAgentDetection } from './useSourceControlAgentDetection'
 import { useSavedSourceControlAgentActionAutoStart } from './useSavedSourceControlAgentActionAutoStart'
 import {
   buildSourceControlAgentSaveTargets,
@@ -57,15 +58,13 @@ export function useSourceControlAgentActionDialog({
   // place instead of writing a global default the override would still shadow.
   const defaultSaveTargetValue =
     launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
-  const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
-  const ensureRemoteDetectedAgents = useAppStore((state) => state.ensureRemoteDetectedAgents)
+  const { connectionUnavailable, detectedAgents, detecting, refreshDetectedAgents } =
+    useSourceControlAgentDetection({ connectionId, worktreeId })
   const [commandTemplate, setCommandTemplate] = useState(
     savedCommandInputTemplate ?? '{basePrompt}'
   )
   const [agentArgs, setAgentArgs] = useState(savedAgentArgs ?? '')
   const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(savedAgentId ?? null)
-  const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
-  const [detecting, setDetecting] = useState(false)
   const openCycleRef = useRef(0)
   const wasOpenRef = useRef(false)
   const [openCycle, setOpenCycle] = useState(0)
@@ -75,27 +74,6 @@ export function useSourceControlAgentActionDialog({
   const [saveTargetValue, setSaveTargetValue] = useState(defaultSaveTargetValue)
 
   const disabledAgents = settings?.disabledTuiAgents
-  const connectionUnavailable = Boolean(worktreeId && connectionId === undefined)
-
-  const refreshDetectedAgents = useCallback(async (): Promise<TuiAgent[]> => {
-    if (connectionUnavailable) {
-      setDetectedAgents([])
-      setDetecting(false)
-      return []
-    }
-    setDetecting(true)
-    try {
-      const nextAgents =
-        typeof connectionId === 'string'
-          ? await ensureRemoteDetectedAgents(connectionId)
-          : await ensureDetectedAgents()
-      setDetectedAgents(nextAgents)
-      return nextAgents
-    } finally {
-      setDetecting(false)
-    }
-  }, [connectionId, connectionUnavailable, ensureDetectedAgents, ensureRemoteDetectedAgents])
-
   useEffect(() => {
     if (!open) {
       wasOpenRef.current = false
