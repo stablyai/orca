@@ -30,7 +30,7 @@ export function isCodexCompactionComplete(method: string, params: unknown): bool
 }
 
 /** A receipt is not completion; keep listening through the provider's terminal frame. There is no
- *  deadline: the command ends by that frame, the child's end, or Stop. */
+ *  deadline: the command ends by that frame, Stop, or the host's `ended` when the child ends. */
 export class StructuredSessionCompaction {
   private readonly pending = new Map<string, PendingCompaction>()
 
@@ -101,6 +101,7 @@ export class StructuredSessionCompaction {
     }
   }
 
+  /** The child ended: drop the entry whatever state it is in, so nothing later is claimed into it. */
   ended(sessionId: string): void {
     this.finish(sessionId, { outcome: 'failure', error: 'The provider exited during compaction.' })
   }

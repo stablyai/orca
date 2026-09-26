@@ -181,6 +181,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     compactClaudeSession(this.session(input.sessionId), this.compactions, input)
 
   abandonCommand = (sessionId: string): void => this.compactions.abandon(sessionId)
+  releaseCommand = (sessionId: string): void => this.compactions.ended(sessionId)
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (request) =>
     cancelClaudeStructuredTurn({

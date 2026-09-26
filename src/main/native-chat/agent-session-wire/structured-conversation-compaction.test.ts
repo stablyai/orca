@@ -280,7 +280,7 @@ it('settles a command whose adapter call threw after the start as unknown (B4)',
   ).toMatchObject({ dispatchState: 'unknown', reason: 'codex app-server session is not live' })
 })
 
-it('writes one exit row when the child dies mid-command, and the loop writes nothing (B4)', async () => {
+it('writes one exit row when the child dies mid-command, and the loop writes nothing but moves on (B4)', async () => {
   state.acquire.mockImplementation(async ({ fence, spawnToken }) => ({
     process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
     acquisitionGeneration: 'generation-1',
@@ -297,7 +297,11 @@ it('writes one exit row when the child dies mid-command, and the loop writes not
   const cmid = params.envelope.clientOperationId
   await state.host.conversationCommand(CALLER, params)
   await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
+  await expect(state.host.send(CALLER, sendParams('queued behind it'))).resolves.toMatchObject({
+    ok: true
+  })
 
+  // The adapter never answers the command: the host's own record of the child's end is enough.
   await state.host.handleAdapterEvent({
     type: 'ended',
     sessionId: SESSION,
@@ -306,12 +310,12 @@ it('writes one exit row when the child dies mid-command, and the loop writes not
     reason: 'provider exited',
     cause: 'unexpected-exit'
   })
-  finish({ outcome: 'failure', error: 'The provider exited during compaction.' })
 
   await vi.waitFor(async () =>
     expect(readAgentJournalTurn((await commandTurn(cmid))?.body)?.state).toBe('interrupted')
   )
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  // Released from the command, the loop starts a child for what waited behind it.
+  await vi.waitFor(() => expect(state.acquire).toHaveBeenCalledTimes(2))
   const snapshot = await journal()
   expect(
     snapshot.items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')

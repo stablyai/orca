@@ -39,9 +39,6 @@ export function observeClaudeCompaction(
   if (event.type === 'message') {
     compactions.claude(event.sessionId, event.message)
   }
-  if (event.type === 'ended') {
-    compactions.ended(event.sessionId)
-  }
 }
 
 export function isClaudeCompactionContent(

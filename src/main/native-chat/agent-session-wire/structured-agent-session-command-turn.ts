@@ -2,10 +2,10 @@
 //
 // The command is an ordinary queued message until the delivery loop hands it over. There the loop
 // opens the command's turn, starts the provider on it, and waits off the session's queue for the
-// provider's end — a command turn takes no input, so nothing queued behind it is handed over
-// meanwhile. The settle re-reads the journal: a child that died in between already wrote the
-// verdict, so a turn no longer running or a message no longer in flight means there is nothing
-// left to write.
+// provider's end or the child's — a command turn takes no input, so nothing queued behind it is
+// handed over meanwhile. The settle re-reads the journal: a child that died in between already
+// wrote the verdict, so a turn no longer running or a message no longer in flight means there is
+// nothing left to write.
 
 import {
   agentJournalItemKey,

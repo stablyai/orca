@@ -234,6 +234,9 @@ export type StructuredAgentSessionAdapter = {
   }): Promise<StructuredSessionCompactionResult>
   /** Stop on a running command: it ends as cancelled at once, before any interrupt lands. */
   abandonCommand?(sessionId: string): void
+  /** The child a command ran on ended: forget the command, so no later provider turn is claimed
+   *  into it and a later command may run. The host calls it for every ending. */
+  releaseCommand?(sessionId: string): void
   /** Cancels one turn, not the session: a session-wide interrupt would also kill
    *  a turn the client never asked to stop. */
   cancelTurn(input: {

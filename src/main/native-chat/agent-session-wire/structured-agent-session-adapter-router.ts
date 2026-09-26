@@ -86,6 +86,13 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   abandonCommand: NonNullable<StructuredAgentSessionAdapter['abandonCommand']> = (sessionId) =>
     this.owner(sessionId).abandonCommand?.(sessionId)
 
+  /** The child is gone, and its route with it, so every adapter forgets the session's command. */
+  releaseCommand: NonNullable<StructuredAgentSessionAdapter['releaseCommand']> = (sessionId) => {
+    for (const adapter of Object.values(this.adapters)) {
+      adapter.releaseCommand?.(sessionId)
+    }
+  }
+
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) =>
     this.owner(input.sessionId).cancelTurn(input)
 

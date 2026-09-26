@@ -27,6 +27,7 @@ import {
   oldestQueuedSubmission,
   recordStructuredAgentSessionStartFailure
 } from './structured-agent-session-start-failure-row'
+import { providerChildEnded } from './structured-agent-session-provider-child'
 import { handOverSubmission } from './structured-agent-session-turns'
 import {
   settleStructuredAgentSessionCommand,
@@ -57,6 +58,8 @@ type Step = 'continue' | 'stop'
 /** A command handed to this child, whose end the loop waits for before handing over anything. */
 type CommandRun = StructuredAgentSessionCommandHandover & {
   child: StructuredAgentSessionProviderChildIdentity
+  /** The child's end, which ends the command however the adapter reported it. */
+  childEnded: Promise<void>
 }
 
 type Prepared =
@@ -115,9 +118,12 @@ export class StructuredAgentSessionDeliveryLoop {
           return
         }
         if (handed !== 'continue') {
-          // Off the queue, so a Stop reaches the command meanwhile.
-          const end = await handed.completion
-          await this.deps.serialize(sessionId, () => this.settleCommand(sessionId, handed, end))
+          // Off the queue, so a Stop reaches the command meanwhile. The child's end ends the wait
+          // too, and its dead-generation settlement already wrote the command's verdict.
+          const end = await Promise.race([handed.completion, handed.childEnded.then(() => null)])
+          if (end) {
+            await this.deps.serialize(sessionId, () => this.settleCommand(sessionId, handed, end))
+          }
         }
       }
     } catch (error) {
@@ -216,9 +222,17 @@ export class StructuredAgentSessionDeliveryLoop {
       },
       next
     )
-    return command
-      ? { ...command, child: { generation: awaitedChild.generation, fence: awaitedChild.fence } }
-      : 'continue'
+    if (!command) {
+      return 'continue'
+    }
+    const ranOn = { generation: awaitedChild.generation, fence: awaitedChild.fence }
+    const childEnded = providerChildEnded(session, ranOn)
+    // Outlives the wait: a command Stop answered keeps its provider entry until the provider's own
+    // end, which a dead child never sends.
+    void childEnded
+      .then(() => this.deps.adapter.releaseCommand?.(sessionId))
+      .catch((error: unknown) => this.deps.onError(sessionId, error))
+    return { ...command, child: ranOn, childEnded }
   }
 
   /** Writes the command's end only while the child it was handed to is still the session's: one

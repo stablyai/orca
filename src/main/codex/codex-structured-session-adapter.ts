@@ -162,9 +162,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         this.deps.onBackgroundTasksChanged?.(event.sessionId, session.backgroundTasks.state)
       }
     }
-    if (event.type === 'ended') {
-      this.compactions.ended(event.sessionId)
-    }
     this.deps.onEvent?.(event)
     return admission
   }
@@ -271,6 +268,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   }
 
   abandonCommand = (sessionId: string): void => this.compactions.abandon(sessionId)
+  releaseCommand = (sessionId: string): void => this.compactions.ended(sessionId)
 
   changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) =>
     changeCodexThreadGoal(
