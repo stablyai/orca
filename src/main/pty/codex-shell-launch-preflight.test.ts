@@ -10,7 +10,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, isAbsolute, join } from 'node:path'
+import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -474,6 +474,47 @@ describe('Codex shell launch preflight command', () => {
         managedHomePath: '/home/jin/.local/share/orca/codex-runtime-home/home',
         userDataPath,
         resourcesPath,
+        platform: 'win32'
+      })
+    ).toBe(launcherPath)
+  })
+
+  it('runs the launcher the terminal names as its CLI, so the CLI never hands off to it', () => {
+    // Why: packaged Linux names the userData shim, not the bundled launcher behind it; running the
+    // launcher directly would re-run the preflight through the shim and boot Electron twice.
+    const { userDataPath, resourcesPath } = makeCliRoot()
+    writeExecutable(join(resourcesPath, 'bin', 'orca-ide'), '#!/bin/sh\nexit 0\n')
+    const shimPath = join(userDataPath, 'linux-orca-cli-shim', 'orca')
+    mkdirSync(dirname(shimPath), { recursive: true })
+    writeExecutable(shimPath, '#!/bin/sh\nexit 0\n')
+
+    expect(
+      resolveCodexShellLaunchPreflightCommand({
+        hooksEnabled: true,
+        isPackaged: true,
+        managedHomePath: '/managed/home',
+        userDataPath,
+        resourcesPath,
+        cliLauncher: shimPath,
+        platform: 'linux'
+      })
+    ).toBe(shimPath)
+  })
+
+  it('keeps the Windows launcher for WSL even when the host terminal names a CLI', () => {
+    const { userDataPath, resourcesPath } = makeCliRoot()
+    const launcherPath = join(resourcesPath, 'bin', 'orca.exe')
+    writeExecutable(launcherPath, '#!/bin/sh\nexit 0\n')
+
+    expect(
+      resolveCodexShellLaunchPreflightCommand({
+        hooksEnabled: true,
+        isPackaged: true,
+        isWsl: true,
+        managedHomePath: '/home/jin/.local/share/orca/codex-runtime-home/home',
+        userDataPath,
+        resourcesPath,
+        cliLauncher: join(userDataPath, 'elsewhere', 'orca.exe'),
         platform: 'win32'
       })
     ).toBe(launcherPath)

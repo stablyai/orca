@@ -7,7 +7,7 @@ import {
   mergePtyEnvDeletions,
   removeCodexHomeDeletionRequests,
   getInheritedAgentHookEnvKeysToDelete,
-  getInheritedClaudeSessionStampEnvKeysToDelete
+  getInheritedAgentSessionStampEnvKeysToDelete
 } from '../host-env/pi-agent'
 import { promoteAgentTeamsShimPath, deleteRequestedEnvKeys } from '../host-env/path'
 import { beginPtySpawnForWorktree } from '../host-env/fresh-spawn-routing'
@@ -43,7 +43,7 @@ export async function buildPtyIpcSpawnOptions(
     // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
     ctx.isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
     ctx.isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(ctx.spawnEnv) : [],
-    getInheritedClaudeSessionStampEnvKeysToDelete(ctx.spawnEnv),
+    getInheritedAgentSessionStampEnvKeysToDelete(ctx.spawnEnv),
     ctx.skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
     // Why: the persistent daemon compares its own merged CODEX_HOME pair;
     // main cannot safely decide ownership for a process it may not parent.

@@ -23,6 +23,7 @@ import {
 import { getBundledLauncherPath } from './bundled-cli-launcher-path'
 import { buildBareOrcaCliScript } from './linux-bare-orca-dispatcher'
 import { quoteShell } from './cli-install-path-format'
+import { ORCA_CLI_SELF_EXPORT } from './cli-self-export'
 
 const SHIM_DIR_NAME = 'linux-orca-cli-shim'
 
@@ -203,7 +204,7 @@ runtime_identity="$(stat -Lc '%d:%i:%s:%Y:%Z' -- "$runtime_root" 2>/dev/null)" |
 launcher_identity="$(stat -Lc '%d:%i:%s:%Y:%Z' -- "$launcher" 2>/dev/null)" || fail
 [[ "$launcher_identity" == "$expected_launcher_identity" ]] || fail
 [[ -f "$launcher" && -x "$launcher" ]] || fail
-exec "$launcher" "$@"
+${ORCA_CLI_SELF_EXPORT}exec "$launcher" "$@"
 `
 }
 

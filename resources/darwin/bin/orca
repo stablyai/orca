@@ -25,6 +25,8 @@ ELECTRON="$CONTENTS/MacOS/Orca"
 # launcher model instead of requiring a separate npm-distributed binary.
 CLI="$CONTENTS/Resources/app.asar.unpacked/out/cli/index.js"
 
+# Why: names the entry the caller ran, so the CLI can hand off to a session's own launcher.
+export ORCA_CLI_SELF="${ORCA_CLI_SELF:-${BASH_SOURCE[0]}}"
 export ORCA_NODE_OPTIONS="${NODE_OPTIONS-}"
 export ORCA_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS

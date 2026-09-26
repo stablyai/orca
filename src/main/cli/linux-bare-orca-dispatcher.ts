@@ -15,6 +15,7 @@ import { pruneAppImageExtractedRoots } from './appimage-extraction-pruning'
 import { withAppImageRegistrationLock } from './appimage-registration-lock'
 import { getBundledLauncherPath } from './bundled-cli-launcher-path'
 import { quoteShell } from './cli-install-path-format'
+import { ORCA_CLI_SELF_EXPORT } from './cli-self-export'
 
 // Why: marks a dispatcher this function wrote so repeat serve starts overwrite
 // our own file idempotently but never clobber a user's own ~/.local/bin/orca.
@@ -74,9 +75,12 @@ export async function installLinuxBareOrcaDispatcher(
     : { state: 'skipped-foreign', dispatcherPath, target: null }
 }
 
-/** Bare-`orca` script that execs the one Linux CLI launcher. */
+/**
+ * Bare-`orca` script that execs the one Linux CLI launcher. It names itself as the CLI entry, so a
+ * session that names this script as its CLI does not hand off to the launcher behind it.
+ */
 export function buildBareOrcaCliScript(launcherPath: string): string {
-  return `#!/usr/bin/env bash\nexec ${quoteShell(launcherPath)} "$@"\n`
+  return `#!/usr/bin/env bash\n${ORCA_CLI_SELF_EXPORT}exec ${quoteShell(launcherPath)} "$@"\n`
 }
 
 /**

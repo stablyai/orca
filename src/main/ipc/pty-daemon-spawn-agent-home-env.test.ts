@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { piBuildPtyEnvMock } from './pty-ipc-mock-registry'
+import { piBuildPtyEnvMock, statSyncMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   type DaemonSpawnCall,
@@ -413,6 +413,17 @@ describe('registerPtyHandlers', () => {
           ])
         )
       })
+      it('strips an inherited agent session id', async () => {
+        // Why: a daemon forked by an Orca launched inside a structured session inherits its id,
+        // and every daemon pane would present that session as its orchestration caller.
+        const inherited = await daemonSpawnAndGetOptions(undefined, undefined, undefined, {
+          ORCA_AGENT_SESSION_ID: 'a0b1c2d3-0000-4000-8000-00000000abcd',
+          ORCA_STRUCTURED_SESSION: '1'
+        })
+        expect(inherited.envToDelete).toEqual(
+          expect.arrayContaining(['ORCA_AGENT_SESSION_ID', 'ORCA_STRUCTURED_SESSION'])
+        )
+      })
       it('preserves an explicitly requested Claude child-session stamp', async () => {
         // Why: only inherited values are poison; a caller deliberately spawning a
         // nested Claude child passes the stamp in args.env and must keep it.
@@ -443,7 +454,39 @@ describe('registerPtyHandlers', () => {
           // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca (the GNOME screen reader) in Orca terminals (#7904).
           expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
           expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
-          expect(env.ORCA_CLI_COMMAND).toBeUndefined()
+          // The same absolute spelling a structured session gets.
+          expect(env.ORCA_CLI_COMMAND).toBe(join(shimDir, 'orca'))
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
+      })
+      it('runs the Codex launch preflight through the CLI the packaged Linux terminal names', async () => {
+        // Why: the bundled launcher behind the shim is a different file, so running it directly
+        // made the CLI hand the preflight off to the shim and boot Electron twice per launch.
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: 'linux'
+        })
+        const shimPath = join('/tmp/orca-user-data', 'linux-orca-cli-shim', 'orca')
+        statSyncMock.mockImplementation((target: string) => ({
+          isDirectory: () => target !== shimPath,
+          isFile: () => target === shimPath,
+          mode: 0o755,
+          size: 1
+        }))
+        try {
+          const env = await daemonSpawnAndGetEnv(
+            { PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter) },
+            () => '/tmp/orca-codex-home'
+          )
+          expect(env.ORCA_CLI_COMMAND).toBe(
+            join('/tmp/orca-user-data', 'linux-orca-cli-shim', 'orca')
+          )
+          expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(env.ORCA_CLI_COMMAND)
         } finally {
           Object.defineProperty(process, 'platform', {
             configurable: true,
@@ -460,6 +503,7 @@ describe('registerPtyHandlers', () => {
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
           expect(env.PATH.split(delimiter)[0]).toBe(join('/tmp/orca-resources', 'bin'))
+          expect(env.ORCA_CLI_COMMAND?.startsWith(join('/tmp/orca-resources', 'bin'))).toBe(true)
         } finally {
           if (resourcesPathDescriptor) {
             Object.defineProperty(process, 'resourcesPath', resourcesPathDescriptor)

@@ -20,6 +20,8 @@ import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
 import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
+import { runAsSessionCli } from './session-cli-reexec'
+import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
 
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
@@ -110,6 +112,10 @@ export async function main(
     // lookup so users do not get misleading "Orca is not running" failures for
     // simple command typos or unsupported flags.
     validateCommandAndFlags(COMMAND_SPECS, parsed)
+    refuseConflictingSessionCallerFlags(
+      findCommandSpec(COMMAND_SPECS, parsed.commandPath),
+      parsed.flags
+    )
     const RuntimeClientClass = await loadRuntimeClientClass()
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
@@ -232,5 +238,7 @@ async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
 }
 
 if (require.main === module) {
-  void main()
+  // Why here and not in main(): main() is also called in-process by tests and by wrappers that
+  // require this module, where exiting or consuming process.env would hit the caller's process.
+  void runAsSessionCli(() => main())
 }

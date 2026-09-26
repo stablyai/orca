@@ -1,17 +1,19 @@
 import { isAgentSessionId } from './agent-session-record'
+import { STRUCTURED_WORKER_HANDLE_PREFIX } from './structured-worker-handle'
+import { ORCA_SESSION_ADDRESS_PREFIX } from './orca-session-address-prefix'
 
 /**
- * The Orca session id is the id Orca minted for a structured session (its session record id), never
- * the provider's own session id. Orchestration stores, bare, the one the agent is addressed by: for
- * a `/clear`ed chat, its lineage root's, not the live session's. Mail addresses the session as
- * `session:<id>`, beside `run:<id>` and `dispatch:<id>`, and derives that spelling here rather than
- * storing it.
+ * The Orca session id is the id Orca minted for a structured session (its session record id, the
+ * value of `ORCA_AGENT_SESSION_ID`), never the provider's own session id. Orchestration stores,
+ * bare, the one the agent is addressed by: for a `/clear`ed chat, its lineage root's, not the live
+ * session's. Mail addresses the session as `session:<id>`, beside `run:<id>` and `dispatch:<id>`,
+ * and derives that spelling here rather than storing it.
  *
  * Where the session runs is not part of the id; it is read from the session record when needed. PTY
  * agents have none today, and never a pane-keyed one: a pane outlives the agent in it, so such an id
  * would be inherited by the pane's next occupant.
  */
-export const ORCA_SESSION_ADDRESS_PREFIX = 'session:'
+export { ORCA_SESSION_ADDRESS_PREFIX }
 
 declare const orcaSessionIdBrand: unique symbol
 declare const orcaSessionAddressBrand: unique symbol
@@ -24,7 +26,7 @@ export type OrcaSessionAddress = string & { readonly [orcaSessionAddressBrand]: 
 // Terminal handles (`term_` from the PTY runtime, `structworker_` from structured-worker-identity)
 // share the session-id charset. A handle is never a session, so one handed over by mistake must not
 // become a durable Orca session id.
-const TERMINAL_HANDLE_PREFIXES = ['term_', 'structworker_'] as const
+const TERMINAL_HANDLE_PREFIXES = ['term_', STRUCTURED_WORKER_HANDLE_PREFIX] as const
 
 export function isOrcaSessionId(id: string): id is OrcaSessionId {
   return isAgentSessionId(id) && !TERMINAL_HANDLE_PREFIXES.some((prefix) => id.startsWith(prefix))

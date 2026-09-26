@@ -64,6 +64,27 @@ describe('packaged Windows legacy ask protocol', () => {
     }
   )
 
+  it("names `orca` when a session's ORCA_CLI_COMMAND is the launcher's absolute path", async () => {
+    process.env.ORCA_CLI_COMMAND = 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe'
+    callMock.mockResolvedValue({
+      result: {
+        answer: 'yes',
+        messageId: 'msg_question',
+        threadId: 'msg_question',
+        timedOut: false
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invokeAsk(new Map([['resume', 'msg_question']]))
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.ask',
+      expect.objectContaining({ compatibilityWindowsCommand: 'orca' }),
+      expect.any(Object)
+    )
+  })
+
   it('resumes the committed question without another exit-75 handoff', async () => {
     process.env.ORCA_CLI_COMMAND = 'orca'
     callMock.mockResolvedValue({

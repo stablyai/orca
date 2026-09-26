@@ -2,15 +2,28 @@ import type { RuntimeClient } from '../../runtime-client'
 import { getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { getTerminalHandle } from '../../selectors'
-import { isStructuredSessionWithoutIdentity } from '../../../shared/structured-session-marker'
+import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
+import {
+  injectedSessionAddress,
+  readInjectedAgentSessionId
+} from '../../../shared/agent-session-caller-env'
 
+/**
+ * The caller's terminal handle, or `undefined` when an injected agent session id names the caller:
+ * the orchestration envelope carries that id and the host binds the caller param to it, so nothing
+ * is resolved or guessed here.
+ */
 export async function resolveOrchestrationTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: RuntimeClient,
   flagName: 'from' | 'terminal',
   options: { validateEnvHandle?: boolean } = {}
-): Promise<string> {
+): Promise<string | undefined> {
+  // A caller flag naming anyone else was already refused at the CLI entry, from the command's spec.
+  if (readInjectedAgentSessionId()) {
+    return undefined
+  }
   const explicit = getOptionalStringFlag(flags, flagName)
   if (explicit) {
     return explicit
@@ -35,7 +48,7 @@ export async function resolveOrchestrationTerminalHandle(
   // default, so that guess consumed another pane's oldest unread batch and marked it read, and the
   // rightful worker never saw its mail. Refusing is the only honest answer: this child genuinely
   // cannot infer its own identity.
-  if (isStructuredSessionWithoutIdentity()) {
+  if (hasStructuredSessionMarker()) {
     throw structuredSessionRefusal(flagName)
   }
   if (flagName === 'from') {
@@ -157,11 +170,16 @@ function getClientErrorMessage(err: unknown): string | undefined {
   return typeof message === 'string' ? message : undefined
 }
 
+/** How check output names its caller: the handle, or the session's address. */
+export function orchestrationCallerLabel(handle: string | undefined): string {
+  return handle ?? injectedSessionAddress() ?? 'unknown'
+}
+
 export async function resolveCoordinatorTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: RuntimeClient
-): Promise<string> {
+): Promise<string | undefined> {
   return await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from', {
     validateEnvHandle: true
   })
@@ -204,7 +222,7 @@ export function throwNoActiveSenderTerminal(): never {
   // place left that would tell an identity-less session to pass a handle it does not have. A stale
   // ORCA_TERMINAL_HANDLE is a different case — that caller HAS an identity, so it keeps the advice
   // to re-run under a live one.
-  if (isStructuredSessionWithoutIdentity() && !process.env.ORCA_TERMINAL_HANDLE) {
+  if (hasStructuredSessionMarker() && !process.env.ORCA_TERMINAL_HANDLE) {
     throw structuredSessionRefusal('from')
   }
   throw new RuntimeClientError(
