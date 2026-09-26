@@ -12,6 +12,7 @@ type PluginLanguagePackState = {
 }
 
 let requestGeneration = 0
+let latestRequestPending = false
 let changeSubscriptionStarted = false
 
 export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((set) => ({
@@ -19,9 +20,11 @@ export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((set
   loaded: false,
   fetchPacks: async () => {
     const generation = ++requestGeneration
+    latestRequestPending = true
     const api = window.api?.plugins
     if (!api?.listLanguagePacks) {
       if (generation === requestGeneration) {
+        latestRequestPending = false
         set({ packs: [], loaded: true })
       }
       return
@@ -44,13 +47,17 @@ export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((set
       if (generation === requestGeneration) {
         set({ packs: [], loaded: true })
       }
+    } finally {
+      if (generation === requestGeneration) {
+        latestRequestPending = false
+      }
     }
   }
 }))
 
 export function ensurePluginLanguagePacksLoaded(): void {
   const state = usePluginLanguagePackStore.getState()
-  if (!state.loaded) {
+  if (!state.loaded && !latestRequestPending) {
     void state.fetchPacks()
   }
   if (!changeSubscriptionStarted && window.api?.plugins?.onChanged) {
