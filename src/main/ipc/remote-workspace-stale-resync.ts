@@ -47,17 +47,27 @@ export function resyncStaleRemoteWorkspace(
         const observation = await readRemoteSnapshot(target, (snapshot) => {
           // An own patch reply can update the cache while this read is pending.
           const previous = getCachedRemoteWorkspaceSnapshot(target.id)
-          if (
-            cachedBeforeRead
-              ? !remoteWorkspaceSnapshotsAreIdentical(previous, cachedBeforeRead)
-              : previous !== undefined
-          ) {
-            // Reread a conflicting observation; revision comparisons would reject valid relay resets.
-            pending.requeued ||= !remoteWorkspaceSnapshotsAreIdentical(previous, snapshot)
-            return null
+          const changedDuringRead = cachedBeforeRead
+            ? !remoteWorkspaceSnapshotsAreIdentical(previous, cachedBeforeRead)
+            : previous !== undefined
+          if (changedDuringRead) {
+            if (!remoteWorkspaceSnapshotsAreIdentical(previous, snapshot)) {
+              // Reread a conflicting observation; revision comparisons would reject valid relay resets.
+              pending.requeued = true
+              return null
+            }
+            // Only a same-token own ack proves the renderer has this; a stale-revision reply caches undelivered peer state.
+            if (
+              !cachedBeforeRead ||
+              previous?.hostObservationToken === cachedBeforeRead.hostObservationToken
+            ) {
+              return null
+            }
           }
           return {
-            unchanged: remoteWorkspaceSessionMatchesSnapshot(previous, snapshot.session),
+            unchanged:
+              !changedDuringRead &&
+              remoteWorkspaceSessionMatchesSnapshot(previous, snapshot.session),
             snapshot: rememberRemoteWorkspaceSnapshot(target.id, snapshot)
           }
         })

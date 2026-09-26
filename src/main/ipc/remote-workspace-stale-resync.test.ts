@@ -204,6 +204,29 @@ describe('workspace.stale resync', () => {
     }
   )
 
+  it('delivers a peer snapshot cached by a stale-revision patch reply during the read', async () => {
+    rememberRemoteWorkspaceSnapshot('target-1', snapshot(1, 'tab-before-peer'))
+    const peerSnapshot = snapshot(2, 'tab-from-peer')
+    let releaseRead: ((value: RemoteWorkspaceSnapshot) => void) | undefined
+    request.mockImplementationOnce(
+      () =>
+        new Promise<RemoteWorkspaceSnapshot>((resolve) => {
+          releaseRead = resolve
+        })
+    )
+
+    handleRemoteWorkspaceNotification('target-1', REMOTE_WORKSPACE_STALE_NOTIFICATION, {
+      namespace: 'target-1'
+    })
+    // A rejected local patch caches the peer snapshot, but the renderer only records a conflict.
+    rememberRemoteWorkspaceSnapshot('target-1', peerSnapshot)
+    releaseRead?.(peerSnapshot)
+    await vi.waitFor(() => expect(isRemoteWorkspaceResyncInFlight('target-1')).toBe(false))
+
+    expect(sent.map((event) => event.snapshot.session.activeTabId)).toEqual(['tab-from-peer'])
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+
   it('suppresses an own reply already acknowledged before the marker', async () => {
     const ownSnapshot = snapshot(2, 'tab-from-own-patch')
     rememberLocallyPatchedRemoteWorkspaceSnapshot('target-1', ownSnapshot)
