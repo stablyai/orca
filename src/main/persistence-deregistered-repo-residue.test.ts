@@ -1,3 +1,12 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  writeDataFile,
+  readDataFile,
+  makeRepo,
+  makeTerminalTab
+} from './persistence-test-harness'
 // Why this file exists: deregistering a project used to strand every row it owned. No sweeper could
 // reach them because the missing-directory prune is gated on the repo still being registered.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -8,14 +17,6 @@ import { getDefaultWorkspaceSession } from '../shared/constants'
 import { composeWorktreeHostIdentity } from '../shared/worktree/host-qualified-identity'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import type { PersistedState } from '../shared/persisted-state-types'
-import {
-  testState,
-  createStore,
-  writeDataFile,
-  readDataFile,
-  makeRepo,
-  makeTerminalTab
-} from './persistence-test-harness'
 
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -67,7 +68,8 @@ describe('deregistered repo residue', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-orphan-sweep-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

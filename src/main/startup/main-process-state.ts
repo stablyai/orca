@@ -46,13 +46,11 @@ import {
 import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/gpu-crash-diagnostics'
 import { createWebContentsTimedFlag } from './web-contents-timed-flag'
 import type { ProfileStateStorageClassification } from '../persistence/profile-state/profile-state-storage-classification'
-import type { ProfileStateStoreAuthorityMode } from '../persistence/profile-state/profile-state-store-factory'
 import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
 
 export type ProfileStateStartupMetadata = {
-  backend: 'json' | 'sqlite'
+  backend: 'sqlite'
   classification: ProfileStateStorageClassification
-  authorityMode: ProfileStateStoreAuthorityMode
   runtime: 'desktop' | 'orcad'
   migrated: boolean
 }

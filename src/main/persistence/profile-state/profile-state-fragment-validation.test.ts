@@ -66,7 +66,7 @@ describe('independent profile state JSON fragments', () => {
       db.close()
 
       expect(() => {
-        const result = createProfileStateStore({ ...paths, authorityMode: 'sqlite-established' })
+        const result = createProfileStateStore({ ...paths })
         result.store.freezeWrites()
       }).toThrow()
     }

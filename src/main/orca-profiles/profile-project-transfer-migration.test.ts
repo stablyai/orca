@@ -21,7 +21,10 @@ import {
   profileStateDatabaseBackupPath
 } from '../persistence/profile-state/profile-state-backup-path'
 import { transferOrcaProfileProject } from './profile-project-transfer'
-import { readProfileStateWithRevision } from './profile-project-state-file'
+import {
+  readProfileStateWithRevision,
+  writeSerializedProfileState
+} from './profile-project-state-file'
 import { recoverPendingProfileProjectMoves } from './profile-project-move-intent'
 import * as profileProjectDomainState from './profile-project-domain-state'
 
@@ -198,17 +201,62 @@ describe('profile transfer migration', () => {
     expect(readProfileStateWithRevision('target', directory).state.repos).toHaveLength(1)
   })
 
-  it('keeps JSON-only transfers compatible on runtimes without SQLite', () => {
-    writeState('source', false, [repo])
-    writeState('target', false)
-    const getBuiltin = process.getBuiltinModule
-    vi.spyOn(process, 'getBuiltinModule').mockImplementation((name) =>
-      name === 'node:sqlite' ? undefined : getBuiltin(name)
+  it.each(['copy', 'move'] as const)(
+    '%s migrates every mutated JSON participant while preserving storage-form values',
+    (mode) => {
+      const sourceJson = writeState('source', false, [repo])
+      const targetJson = writeState('target', false)
+      expect(transfer(mode)).toMatchObject({ status: 'transferred', mode })
+      expect(existsSync(paths('source').databaseFile)).toBe(mode === 'move')
+      expect(existsSync(paths('target').databaseFile)).toBe(true)
+      expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(
+        mode === 'move' ? 0 : 1
+      )
+      expect(readProfileStateWithRevision('target', directory)).toMatchObject({
+        revision: 2,
+        state: { repos: [expect.objectContaining({ path: repo.path })] }
+      })
+      for (const [profileId, rawJson] of [
+        ['source', sourceJson],
+        ['target', targetJson]
+      ]) {
+        expect(readFileSync(paths(profileId).dataFile, 'utf8')).toBe(rawJson)
+        const current = readProfileStateWithRevision(profileId, directory)
+        expect(current.state.settings.opencodeSessionCookie).toBe('enc:v1:sealed-inactive-secret')
+        expect(JSON.parse(current.serialized ?? '{}').futureDomain).toEqual({ profileId })
+      }
+    }
+  )
+
+  it.each(['copy', 'move'] as const)(
+    '%s rejects JSON-only mutation without SQLite and preserves both legacy sources',
+    (mode) => {
+      const sourceJson = writeState('source', false, [repo])
+      const targetJson = writeState('target', false)
+      const getBuiltin = process.getBuiltinModule
+      vi.spyOn(process, 'getBuiltinModule').mockImplementation((name) =>
+        name === 'node:sqlite' ? undefined : getBuiltin(name)
+      )
+      expect(() => transfer(mode)).toThrow('Unable to open profile state database')
+      expect(existsSync(paths('source').databaseFile)).toBe(false)
+      expect(existsSync(paths('target').databaseFile)).toBe(false)
+      expect(readFileSync(paths('source').dataFile, 'utf8')).toBe(sourceJson)
+      expect(readFileSync(paths('target').dataFile, 'utf8')).toBe(targetJson)
+      expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(1)
+    }
+  )
+
+  it('refuses a legacy JSON write outside participant migration', () => {
+    const sourceJson = writeState('source', false, [repo])
+    expect(() => writeSerializedProfileState('source', directory, '{}')).toThrow(
+      'established SQLite participant'
     )
-    expect(transfer()).toMatchObject({ status: 'transferred' })
-    expect(existsSync(paths('source').databaseFile)).toBe(false)
+    expect(readFileSync(paths('source').dataFile, 'utf8')).toBe(sourceJson)
+    expect(() => writeSerializedProfileState('target', directory, '{}')).toThrow(
+      'established SQLite participant'
+    )
+    expect(existsSync(paths('target').dataFile)).toBe(false)
     expect(existsSync(paths('target').databaseFile)).toBe(false)
-    expect(readProfileStateWithRevision('source', directory).state.repos).toHaveLength(0)
   })
 
   it('refuses mixed storage on a runtime without SQLite before migrating or editing JSON', () => {
@@ -287,11 +335,15 @@ describe('profile transfer migration', () => {
     expect(readFileSync(paths('target').dataFile, 'utf8')).toBe(targetJson)
   })
 
-  it.each([false, true])(
-    'replays an interrupted move after migrating JSON source=%s',
-    (sourceJson) => {
-      writeState('source', !sourceJson, [repo])
-      writeState('target', sourceJson)
+  it.each([
+    [true, false],
+    [false, true],
+    [false, false]
+  ])(
+    'replays an interrupted move with initial SQLite source=%s target=%s',
+    (sourceSqlite, targetSqlite) => {
+      writeState('source', sourceSqlite, [repo])
+      writeState('target', targetSqlite)
       const originalWrite = profileProjectDomainState.writeProfileProjectDomainChanges
       const write = vi
         .spyOn(profileProjectDomainState, 'writeProfileProjectDomainChanges')

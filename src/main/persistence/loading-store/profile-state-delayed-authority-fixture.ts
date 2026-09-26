@@ -5,7 +5,7 @@ import { afterEach, vi } from 'vitest'
 import type { AutomationRun } from '../../../shared/automations-types'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
-import { writeVersionedProfileStateExport } from '../profile-state/profile-state-versioned-export'
+import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
 import type {
   AsyncProfileStateAuthority,
   ProfileStateDomainReplacement

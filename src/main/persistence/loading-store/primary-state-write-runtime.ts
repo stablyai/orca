@@ -3,7 +3,6 @@ import type { StoreRuntimeState } from './store-runtime-state'
 export type PrimaryStateWriteOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
-  | 'backupRotationInFlight'
   | 'dataFile'
   | 'dirtyProfileStateDomains'
   | 'durableMutationPhase'
@@ -11,7 +10,6 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'flushOrThrow'
   | 'runDurableMutation'
   | 'firstPendingSaveAt'
-  | 'inFlightAsyncTmpFile'
   | 'lastDurableWriteGeneration'
   | 'lastWrittenStateHash'
   | 'pendingSnapshotFileWork'
@@ -21,7 +19,6 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'profileStateAuthority'
   | 'protectedSecrets'
   | 'quitFlushStarted'
-  | 'staleTempCleanup'
   | 'state'
   | 'writeGeneration'
   | 'writeTimer'

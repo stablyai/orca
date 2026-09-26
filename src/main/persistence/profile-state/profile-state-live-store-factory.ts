@@ -16,12 +16,6 @@ export async function createLiveProfileStateStore(
   } = {}
 ): Promise<ProfileStateStoreFactoryResult> {
   const { initialState: initial, ...prepared } = prepareProfileStateStore(options)
-  if (!initial) {
-    return {
-      ...prepared,
-      store: new Store({ dataFile: options.dataFile, storageAuthority: options.storageAuthority })
-    }
-  }
 
   // Consume before retirement: the bootstrap snapshot carries the original revision fence.
   const parsed = initial.takeParsedState?.()

@@ -11,7 +11,7 @@ import {
   profileStateDatabaseBackups,
   profileStateDatabaseBackupFiles
 } from './profile-state-backup-path'
-import { profileStateJsonExportPaths } from './profile-state-export-path'
+import { profileStateJsonExportPaths } from './legacy-json/profile-state-export-path'
 import { assertProfileStateMaintenance, type ProfileStateMaintenance } from './profile-state-access'
 import {
   quarantineProfileStateDatabase,
