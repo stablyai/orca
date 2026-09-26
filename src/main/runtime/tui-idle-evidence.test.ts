@@ -76,3 +76,45 @@ describe('isTuiIdleSatisfied muse lane', () => {
     ).toBe(false)
   })
 })
+
+describe('a DSH pane settles tui-idle on its own hook', () => {
+  const record = { lastAgentStatus: null, lastOutputAt: null, lastOscTitle: '✦ \u{1F40B} repo' }
+  const input = {
+    record,
+    readPositiveBodyEvidence: () => false,
+    readMuseReadyBodyEvidence: () => false,
+    agent: 'dsh' as const,
+    firstPartyStatus: { state: 'done' as const, updatedAt: Date.now() },
+    quiescenceMs: 1_000
+  }
+
+  it('settles on a fresh first-party done', () => {
+    // The regression: DSH's title carries no idle (its rest glyph is Gemini's working one),
+    // so every title-reading tier failed and `terminal wait --for tui-idle` ran to timeout
+    // against an already-ready composer.
+    expect(isTuiIdleSatisfied(input)).toBe(true)
+  })
+
+  it('does not settle while the same pane reports working', () => {
+    expect(
+      isTuiIdleSatisfied({
+        ...input,
+        firstPartyStatus: { state: 'working', updatedAt: Date.now() }
+      })
+    ).toBe(false)
+  })
+
+  it('does not settle on a stale done', () => {
+    expect(
+      isTuiIdleSatisfied({
+        ...input,
+        firstPartyStatus: { state: 'done', updatedAt: Date.now() - 31 * 60 * 1000 }
+      })
+    ).toBe(false)
+  })
+
+  it('leaves other agents on the title lanes', () => {
+    // Scoped on purpose: an agent whose hooks report child turns can emit `done` mid-turn.
+    expect(isTuiIdleSatisfied({ ...input, agent: 'claude' })).toBe(false)
+  })
+})
