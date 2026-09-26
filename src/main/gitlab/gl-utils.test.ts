@@ -125,6 +125,29 @@ describe('gitlab project ref resolution', () => {
     expect(gitRemoteGetUrlCalls('origin')).toHaveLength(1)
   })
 
+  it('resolves a sole non-origin GitLab remote after origin/upstream miss (#13816)', async () => {
+    mockGitRemoteCommands({ myremote: 'ssh://git@gitlab.example.com:2222/group/project.git' })
+
+    await expect(getIssueProjectRef('/repo', ['gitlab.example.com'])).resolves.toEqual({
+      host: 'gitlab.example.com',
+      path: 'group/project'
+    })
+    expect(gitRemoteGetUrlCalls('myremote').length).toBeGreaterThan(0)
+  })
+
+  it('keeps origin over a secondary GitLab remote when both resolve', async () => {
+    mockGitRemoteCommands({
+      origin: 'git@gitlab.com:fork/orca.git\n',
+      gitlab: 'git@gitlab.com:canonical/orca.git\n'
+    })
+
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'fork/orca'
+    })
+    expect(gitRemoteGetUrlCalls('gitlab')).toHaveLength(0)
+  })
+
   it('falls back to origin when upstream is present but non-GitLab', async () => {
     mockGitRemoteCommands({
       origin: 'git@gitlab.com:fork/orca.git\n',
