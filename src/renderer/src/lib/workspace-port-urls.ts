@@ -1,5 +1,12 @@
+import { classifyRemotePairingHostname } from '../../../shared/remote-pairing-address'
 import type { PortForwardEntry, EnrichedDetectedPort } from '../../../shared/ssh-types'
-import type { WorkspacePort } from '../../../shared/workspace-ports'
+import { parseLoopbackUrlWithPort } from '../../../shared/localhost-worktree-labels'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import {
+  isWildcardBindHost,
+  type WorkspacePort,
+  type WorkspacePortScanResult
+} from '../../../shared/workspace-ports'
 
 const HTTPS_PORTS = new Set([443, 8443])
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::'])
@@ -34,6 +41,62 @@ export function browserUrlForPort(port: WorkspacePort): string {
   }
   const protocol = port.protocol === 'https' ? 'https' : 'http'
   return `${protocol}://${hostForLocalAction(port.connectHost)}:${port.port}`
+}
+
+export { isWildcardBindHost }
+
+// Why: the address this client already uses to reach the runtime is reachable by
+// definition, whatever carries it — LAN, VPN, tailnet, public. Deriving the host from
+// the live connection keeps this transport-agnostic instead of probing for a provider.
+export function reachableHostnameForEndpoint(endpoint: string | null | undefined): string | null {
+  if (!endpoint) {
+    return null
+  }
+  try {
+    // Why: URL returns IPv6 hostnames already bracketed, and assigning a *bare* IPv6
+    // back to `hostname` silently leaves the original host in place. Passing this
+    // value through untouched is what keeps both the substituted and synthesized
+    // shapes correct, so do not strip or re-add brackets here.
+    const { hostname } = new URL(endpoint)
+    if (!hostname) {
+      return null
+    }
+    // An SSH-tunnelled pairing terminates on this client's own loopback, so its address
+    // says nothing about how to reach the runtime's dev servers.
+    return classifyRemotePairingHostname(hostname) === 'loopback' ? null : hostname
+  } catch {
+    return null
+  }
+}
+
+/** URL for a remote workspace's port that the client machine can open in any browser,
+ *  or null when no such URL exists — a loopback-bound listener, a relay-only or
+ *  SSH-tunnelled connection. Null means "do not offer this", never "try anyway". */
+export function clientReachableBrowserUrlForPort(
+  port: WorkspacePort,
+  runtimeEndpoint: string | null | undefined
+): string | null {
+  if (!isWildcardBindHost(port.bindHost)) {
+    return null
+  }
+  const hostname = reachableHostnameForEndpoint(runtimeEndpoint)
+  if (!hostname) {
+    return null
+  }
+  const advertisedUrl = port.kind === 'workspace' ? port.advertisedUrl : undefined
+  if (advertisedUrl) {
+    try {
+      // Why: the advertised origin carries the scheme the dev server actually speaks;
+      // only its host is wrong for this machine. Its port already matches this listener.
+      const url = new URL(advertisedUrl)
+      url.hostname = hostname
+      return url.toString()
+    } catch {
+      // Fall through to the OS-derived shape.
+    }
+  }
+  const protocol = port.protocol === 'https' ? 'https' : 'http'
+  return `${protocol}://${hostname}:${port.port}`
 }
 
 /** Extract a custom DNS hostname from an advertised URL for reuse with a
@@ -115,4 +178,52 @@ export function advertisedBrowserUrlForDetectedPort(port: EnrichedDetectedPort):
     remotePort: port.port
   })
   return `${protocol}://${host}:${port.port}`
+}
+
+function preferredEndpointForEnvironment(
+  environment: PublicKnownRuntimeEnvironment
+): string | null {
+  const endpoint =
+    environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
+    environment.endpoints[0]
+  return endpoint?.endpoint ?? null
+}
+
+/**
+ * Reachable URL for a loopback link a remote pane printed, or null.
+ *
+ * A terminal link carries no WorkspacePort, so the bind is unknown from the text alone
+ * and rewriting blind would hand out a URL that cannot connect. The port scan for that
+ * environment is the missing half: it says whether the listener behind this port is
+ * wildcard-bound. Non-loopback links are left alone — they already name a real host.
+ */
+export function resolveClientReachableUrlForLoopbackLink(
+  state: {
+    runtimeEnvironments?: readonly PublicKnownRuntimeEnvironment[]
+    workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
+  },
+  rawUrl: string,
+  environmentId: string
+): string | null {
+  const parsed = parseLoopbackUrlWithPort(rawUrl)
+  if (!parsed) {
+    return null
+  }
+  const scan = state.workspacePortScansByKey?.[`environment:${environmentId}:all`]
+  const port = scan?.ports.find((candidate) => candidate.port === Number(parsed.port))
+  if (!port || !isWildcardBindHost(port.bindHost)) {
+    return null
+  }
+  const environment = (state.runtimeEnvironments ?? []).find((entry) => entry.id === environmentId)
+  if (!environment || environment.connectionDependency === 'ssh-tunnel') {
+    return null
+  }
+  const hostname = reachableHostnameForEndpoint(preferredEndpointForEnvironment(environment))
+  if (!hostname) {
+    return null
+  }
+  // Why rewrite the parsed URL rather than rebuild it: the printed link may carry a
+  // path, query or fragment the user needs, and only the host is wrong for this machine.
+  parsed.hostname = hostname
+  return parsed.toString()
 }

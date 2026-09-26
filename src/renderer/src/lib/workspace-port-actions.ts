@@ -67,8 +67,16 @@ export function getPortSystemBrowserHint(isMac: boolean = isMacShortcutPlatform(
   return isMac ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
 }
 
-export function getPortOpenBrowserTooltipLabel(openLabel: string, isMac?: boolean): string {
-  return `${openLabel}. ${getPortSystemBrowserHint(isMac)}`
+export function getPortOpenBrowserTooltipLabel(
+  openLabel: string,
+  isMac?: boolean,
+  // Why: a remote loopback-bound port has no address this machine can open, so the
+  // modifier falls through to the in-app browser. Advertising it there promises an
+  // action that does nothing. Omitting the hint needs no new string; local ports and
+  // reachable remote ones keep it.
+  systemBrowserAvailable = true
+): string {
+  return systemBrowserAvailable ? `${openLabel}. ${getPortSystemBrowserHint(isMac)}` : openLabel
 }
 
 type PortOpenClickEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>
@@ -107,6 +115,10 @@ export async function openWorkspacePortInBrowser(args: {
   setRemoteBrowserPageHandle: RemoteBrowserPageHandleSetter
   openInOrcaBrowser?: boolean
   localhostLabelRoute?: LocalhostWorktreeLabelRoute | null
+  /** Remote-workspace URL this machine can open directly, from
+   *  resolveClientReachableUrlForPort. Null when the port is loopback-bound or the
+   *  connection has no client-reachable address. */
+  clientReachableUrl?: string | null
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
   if (!args.runtimeTarget) {
     return { ok: false, reason: WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON }
@@ -120,9 +132,14 @@ export async function openWorkspacePortInBrowser(args: {
       url = rawUrl
     }
   }
-  if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
+  // Why: a remote workspace's `localhost:<port>` resolves against *this* machine, so the
+  // raw URL must never reach the system browser. Only a separately resolved reachable URL
+  // may go out; without one this falls through to the in-app path, which does work.
+  const systemBrowserUrl =
+    args.runtimeTarget.kind === 'local' ? url : (args.clientReachableUrl ?? null)
+  if (args.openInOrcaBrowser === false && systemBrowserUrl) {
     try {
-      await window.api.shell.openUrl(url)
+      await window.api.shell.openUrl(systemBrowserUrl)
       return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
