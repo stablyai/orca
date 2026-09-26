@@ -1,14 +1,22 @@
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
+const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock, readFileMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
-  ptySpawnMock: vi.fn()
+  ptySpawnMock: vi.fn(),
+  readFileMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+// Why: fetchCodexRateLimits() now tries the backend usage endpoint before RPC/PTY —
+// without this, these tests would read this machine's real ~/.codex/auth.json and
+// make a live authenticated network call.
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -60,6 +68,13 @@ describe('fetchCodexRateLimits auth errors', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
+    readFileMock.mockRejectedValue(new Error('no auth fixture'))
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('returns Codex RPC auth refresh errors without masking them behind PTY fallback', async () => {
