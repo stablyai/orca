@@ -3,6 +3,7 @@ import { isAbsolute } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import type {
+  NestedRepoScanOptions,
   NestedRepoScanResult,
   ProjectGroupImportMode,
   ProjectGroupImportResult
@@ -33,12 +34,23 @@ function sanitizeImportError(fallback: string, error: unknown): string {
 export class RuntimeNestedRepoImport {
   constructor(private readonly deps: RuntimeNestedRepoImportDependencies) {}
 
-  async scan(path: string): Promise<NestedRepoScanResult> {
+  async scan(
+    path: string,
+    options?: Pick<NestedRepoScanOptions, 'maxDepth' | 'maxRepos'>
+  ): Promise<NestedRepoScanResult> {
     if (!isAbsolute(path)) {
       throw new Error('Project path must be an absolute path')
     }
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
-    return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
+    // Why: the RPC forwards only the bounds; the runtime timeout is not client-controlled.
+    return scanNestedRepos({
+      path,
+      options: {
+        timeoutMs: 15_000,
+        ...(options?.maxDepth !== undefined ? { maxDepth: options.maxDepth } : {}),
+        ...(options?.maxRepos !== undefined ? { maxRepos: options.maxRepos } : {})
+      }
+    })
   }
 
   async import(args: {

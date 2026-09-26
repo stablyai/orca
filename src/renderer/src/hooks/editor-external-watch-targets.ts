@@ -162,7 +162,9 @@ export function selectEditorExternalWatchTargets(
     activeWorktreeId !== null &&
     state.rightSidebarOpen &&
     ((state.rightSidebarTab === 'explorer' && state.rightSidebarExplorerView === 'files') ||
-      (state.rightSidebarTab === 'source-control' && sourceControlCanConsumeWatch))
+      (state.rightSidebarTab === 'source-control' && sourceControlCanConsumeWatch) ||
+      (state.rightSidebarTab === 'workspace-changes' &&
+        parseWorkspaceKey(activeWorktreeId)?.type === 'folder'))
   if (activeWorktreeNeedsSidebarWatch) {
     // Why: this app-level watcher owns Explorer/Source-Control subscriptions so downstream consumers don't fight over watch/unwatch IPC.
     let owners = targetOwnersByWorktreeId.get(activeWorktreeId)

@@ -65,7 +65,7 @@ function getFolderWorkspaceConnectionId(
   )
 }
 
-function getLocalFolderScopeRoots(store: Store, repos: readonly Repo[]): string[] {
+export function getLocalFolderScopeRoots(store: Store, repos: readonly Repo[]): string[] {
   const scopeStore = store as FolderScopeStore
   // Why: many filesystem tests use narrow Store doubles; folder scopes are additive.
   const projectGroups = scopeStore.getProjectGroups?.() ?? []

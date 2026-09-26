@@ -1049,6 +1049,10 @@
         }
       },
       "rightSidebar": {
+        "FolderWorkspaceChangesPanel": {
+          "discardRepoFileCount_one": "{{count}} changed file",
+          "discardRepoFileCount_other": "{{count}} changed files"
+        },
         "FolderWorkspacePrChecksPanel": {
           "openChecksTab": "Open {{value0}} Checks tab",
           "summary": "{{value0}} attached · {{value1}} with PR/MR · {{value2}} attention · {{value3}} pending · {{value4}} passing · {{value5}} no PR · {{value6}} unknown"

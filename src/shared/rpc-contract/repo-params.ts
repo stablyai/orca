@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
+import {
+  OptionalFiniteNumber,
+  OptionalPositiveInt,
+  OptionalString,
+  requiredString
+} from './rpc-param-primitives'
 import { createRepoUpdateSchema } from './repo-update-params'
 import { RepoSelector } from './github-repo-target-params'
 
@@ -69,7 +74,13 @@ export const ProjectGroupMoveProject = z.object({
 })
 
 export const ProjectGroupScanNested = z.object({
-  path: requiredString('Missing folder path')
+  path: requiredString('Missing folder path'),
+  options: z
+    .object({
+      maxDepth: OptionalPositiveInt,
+      maxRepos: OptionalPositiveInt
+    })
+    .optional()
 })
 
 export const ProjectGroupImportNested = z.discriminatedUnion('mode', [

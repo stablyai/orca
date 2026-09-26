@@ -92,6 +92,7 @@ export type RightSidebarTab =
   | 'vault'
   | 'workspaces'
   | 'pr-checks'
+  | 'workspace-changes'
   | 'source-control'
   | 'checks'
   | 'ports'

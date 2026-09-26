@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import { Plug, Files, FolderGit2, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -87,6 +87,16 @@ export function useRightSidebarActivityItems({
         id: 'pr-checks',
         icon: ListChecks,
         title: translate('auto.components.right.sidebar.index.parentPrChecks', 'PR Checks'),
+        shortcut: '',
+        folderOnly: true
+      },
+      {
+        id: 'workspace-changes',
+        icon: FolderGit2,
+        title: translate(
+          'auto.components.right.sidebar.index.folderWorkspaceChanges',
+          'Workspace changes'
+        ),
         shortcut: '',
         folderOnly: true
       },

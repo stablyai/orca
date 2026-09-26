@@ -2,6 +2,7 @@ import type { GhAccountBinding } from '../../../../shared/github/account-binding
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type {
+  NestedRepoScanOptions,
   NestedRepoScanResult,
   ProjectGroup,
   ProjectGroupImportResult
@@ -86,6 +87,7 @@ export type FolderWorkspaceUpdates = Partial<
 export type NestedRepoScanControls = {
   scanId?: string
   onProgress?: (scan: NestedRepoScanResult) => void
+  options?: NestedRepoScanOptions
   runtimeEnvironmentId?: string | null
 }
 

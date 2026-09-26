@@ -13105,7 +13105,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "folderWorkspaceChanges": "Workspace changes"
           },
           "right": {
             "panel": {
@@ -16827,6 +16828,41 @@
           "actionsUnavailable": "Plugin actions are not available in this client.",
           "messageTooLarge": "Message exceeds the size limit.",
           "tooManyRequests": "Too many requests."
+        },
+        "FolderWorkspaceChangesPanel": {
+          "discardRepoTitle": "Discard all changes in \"{{value0}}\"?",
+          "discardRepoDescription": "This will revert modified files, unstage staged changes and delete untracked files and folders. This cannot be undone.",
+          "discardRepoConfirm": "Discard all",
+          "discardTitle": "Discard changes?",
+          "discardDescription": "This cannot be undone.",
+          "discardRepoFileCount_one": "{{count}} changed file",
+          "discardRepoFileCount_other": "{{count}} changed files",
+          "discardRepoBlockedByLimit": "Too many changes in {{value0}} to discard all at once",
+          "discardRepoBlockedByLimitCopy": "Git status was cut short, so only part of the change list is known. Discard from the repo itself.",
+          "cancel": "Cancel",
+          "discardConfirm": "Discard",
+          "unavailable": "Workspace changes are only shown for folder workspaces.",
+          "summary": "{{value0}} of {{value1}} repos · {{value2}} files",
+          "refresh": "Refresh workspace changes",
+          "title": "Workspace changes",
+          "expandAll": "Expand all repos",
+          "collapseAll": "Collapse all repos",
+          "hostUnavailableTitle": "Folder host unavailable",
+          "hostUnavailableCopy": "Orca cannot tell which host owns this folder, so git status is not read.",
+          "runtimeHostUnsupportedCopy": "Workspace changes are not available for folders on a runtime environment yet.",
+          "scanFailedTitle": "Could not scan this folder",
+          "scanFailedCopy": "Refresh to try again.",
+          "scanRepoCapCopy": "Only the first {{value0}} repositories in this folder are scanned. Repositories beyond that are not shown.",
+          "noReposTitle": "No git repositories found",
+          "noReposCopy": "Only repositories directly inside this folder are scanned.",
+          "noChangesTitle": "No changes",
+          "noChangesCopy": "Edited files appear here as you save them.",
+          "statusFailed": "Could not read git status.",
+          "discardAllInRepo": "Discard all changes in {{value0}}",
+          "discardAllInRepoBlocked": "Too many changes in {{value0}} to discard all at once",
+          "discardRepoAborted": "Discard all failed in {{value0}}: unable to unstage files before discard",
+          "discardRepoFailed": "Failed to discard {{value0}} of the changes in {{value1}}",
+          "discardRepoFailedMore": ", +{{value0}} more"
         }
       },
       "link": {
