@@ -41,6 +41,13 @@ describe('selectNativeChatViewState', () => {
     expect(state).toEqual({ kind: 'error', message: 'boom' })
   })
 
+  // The pane's own translated line fills in, which for the structured chat says the read retries.
+  it('maps an error with no text to no message', () => {
+    expect(selectNativeChatViewState(session({ messages: [], status: 'error' }))).toEqual({
+      kind: 'error'
+    })
+  })
+
   it('keeps a loaded transcript on screen when a later read fails (P2-21)', () => {
     const state = selectNativeChatViewState(session({ status: 'error', error: 'boom' }), {
       readRetries: true
