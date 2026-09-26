@@ -13,7 +13,11 @@ const runtimePath =
 describe.skipIf(
   process.platform === 'win32' || !existsSync(runtimePath) || !existsSync('/bin/bash')
 )('Bun terminal user job control', () => {
-  for (const shell of ['/bin/bash', '/bin/zsh']) {
+  // Bash re-raises SIGHUP; Zsh exits with the signal number.
+  for (const [shell, expectedExitCode] of [
+    ['/bin/bash', 129],
+    ['/bin/zsh', 1]
+  ] as const) {
     it.skipIf(!existsSync(shell))(
       `gracefully closes an interactive ${shell} before the daemon force-kill deadline`,
       async () => {
@@ -54,7 +58,8 @@ const waitFor = async predicate => {
 }
 ;(async()=>{
   try {
-    proc.write(${JSON.stringify('trap \'printf cleaned > "$ORCA_TEST_CLEANUP"; exit 0\' HUP; printf ready > "$ORCA_TEST_READY"\r')})
+    // Observe normal hangup cleanup without replacing the shell's SIGHUP handler.
+    proc.write(${JSON.stringify('trap \'printf cleaned > "$ORCA_TEST_CLEANUP"\' EXIT; printf ready > "$ORCA_TEST_READY"\r')})
     await waitFor(() => existsSync(ready))
     startedAt = Date.now()
     controller.kill()
@@ -84,7 +89,7 @@ const waitFor = async predicate => {
           expect(evidence).toEqual({
             cleaned: true,
             forced: false,
-            exitCode: 0,
+            exitCode: expectedExitCode,
             elapsedMs: expect.any(Number),
             reaped: true
           })
