@@ -7,6 +7,7 @@ import {
   updateTransform
 } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
+import type { TerminalViewportChange } from './document-host-seams'
 import { scheduleDocumentFrame } from './document-frame-registry'
 
 /** The narrowest grid a fit or a text-scale change will fit to. */
@@ -65,23 +66,15 @@ export function adjustRowsForViewport() {}
 // so a backgrounded WebView never spins forever.
 const FIT_RETRY_MAX_FRAMES = 60
 
-function isFittedBox(scope: TerminalDocumentScope) {
-  const { width, height } = scope.viewportRect()
-  const fitted = scope.fittedBox
-  return fitted !== null && fitted.width === width && fitted.height === height
-}
-
-function hasViewportWidth(scope: TerminalDocumentScope) {
-  const width = scope.viewportRect().width
-  return Number.isFinite(width) && width > 0
+function isViewportShown(scope: TerminalDocumentScope) {
+  const { width, hidden } = scope.viewportRect()
+  return hidden !== true && Number.isFinite(width) && width > 0
 }
 
 export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
   if (!scope.term || !scope.term.element) {
     return
   }
-  // Why: a fit asked for while hidden is dropped until a box arrives, and that box may be the old one.
-  scope.fittedBox = null
   const token = ++scope.fitRetryToken
   let attempts = 0
   let lastScrollWidth = -1
@@ -92,8 +85,9 @@ export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
     if (!scope.term || !scope.term.element) {
       return
     }
-    // Why: a display:none host measures 0 wide; the fit stays pending until observeViewport reports a box.
-    if (!hasViewportWidth(scope)) {
+    // Why: a hidden grid may not measure its cells, so the fit is held until the host is shown.
+    if (!isViewportShown(scope)) {
+      scope.fitPending = reason
       return
     }
     attempts++
@@ -134,8 +128,7 @@ export function commitFitScale(
     return
   }
   const preSnapScale = computeFitScale(scope)
-  const { width, height } = scope.viewportRect()
-  scope.fittedBox = { width, height }
+  scope.fitPending = null
   scope.currentScale = preSnapScale
   // Why: when scale is very close to 1 (e.g. 0.97 from xterm scrollbar
   // sub-pixels) snap to 1 to avoid imperceptible shrinkage that prevents
@@ -181,10 +174,12 @@ export function commitFitScale(
  * had to copy the five calls into its mount to get it at all (ruling 24).
  */
 export function startFitScale(scope: TerminalDocumentScope) {
-  const refit = () => {
-    // Why: a hidden screen reports 0x0 and then its old box again; native never refits on that, so
-    // only a box other than the one last fitted refits, and the user's pan and zoom survive.
-    if (!hasViewportWidth(scope) || isFittedBox(scope)) {
+  const refit = (change: TerminalViewportChange) => {
+    // Why: showing the same box again is not a resize; only a fit held while hidden runs, so pan and zoom survive.
+    if (change === 'shown') {
+      if (scope.fitPending !== null) {
+        applyFitScale(scope, scope.fitPending)
+      }
       return
     }
     applyFitScale(scope, 'window-resize')

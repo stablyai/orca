@@ -103,6 +103,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       // scrollback, and the controller's identity changes with every callback prop.
     }, [generation])
 
+    const handleHostLayout = useCallback(() => {
+      documentRef.current?.notifyViewport()
+    }, [])
+
     const handleReload = useCallback(() => {
       clearEngineError()
       resetReadiness()
@@ -112,7 +116,13 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
 
     return (
       <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}>
-        <View key={generation} ref={hostRef} style={TERMINAL_WEBVIEW_FRAME_STYLES.webview} />
+        {/* Why: mounted with onLayout, so react-native-web observes it; the document sizes to this box. */}
+        <View
+          key={generation}
+          ref={hostRef}
+          style={TERMINAL_WEBVIEW_FRAME_STYLES.webview}
+          onLayout={handleHostLayout}
+        />
         {engineError ? (
           <TerminalWebViewEngineErrorOverlay message={engineError} onReload={handleReload} />
         ) : null}

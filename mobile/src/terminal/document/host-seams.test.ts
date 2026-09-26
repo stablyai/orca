@@ -6,7 +6,7 @@ import { handleMsg } from './host-message-router'
 import { notify } from './host-notify'
 import { flog } from './viewport-transform'
 import { attachWebglAddon } from './webgl-recovery'
-import type { TerminalDocumentHost } from './document-host-seams'
+import type { TerminalDocumentHost, TerminalViewportChange } from './document-host-seams'
 import { documentSourceText } from './document-module-source.test-support'
 
 /**
@@ -299,7 +299,7 @@ describe('the document host seams, once the page sets them', () => {
 
 describe("the document's viewport", () => {
   it('refits when the host says its box changed, and not on a window resize it does not own', () => {
-    const changes: (() => void)[] = []
+    const changes: ((change: TerminalViewportChange) => void)[] = []
     const scope = startedScope({
       createTerminal: () => terminalDouble(),
       observeViewport: (onChange) => {
@@ -312,7 +312,10 @@ describe("the document's viewport", () => {
     window.dispatchEvent(new Event('resize'))
     expect(scope.panX).toBe(50)
     expect(changes).toHaveLength(1)
-    changes[0]!()
+    // The same box shown again with no fit held is not a resize: the pan stays.
+    changes[0]!('shown')
+    expect(scope.panX).toBe(50)
+    changes[0]!('resized')
     expect(scope.panX).toBe(0)
   })
 

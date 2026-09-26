@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
-import type { TerminalDocumentHost } from './document-host-seams'
+import type { TerminalDocumentHost, TerminalViewportChange } from './document-host-seams'
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
 import { handleMsg } from './host-message-router'
 import { viewportToMouseReportCell } from './mouse-report-cell'
@@ -110,10 +110,12 @@ describe("the document's frame on the page", () => {
     expect(computeFitScale(scope)).toBe(1)
   })
 
-  it('commits no fit while the host is hidden, and one once it has a box', async () => {
+  it('commits no fit before the host has a box, and one once it has', async () => {
+    // A page host mounted under a hidden screen has no box until RN lays it out; hide and show after
+    // that are the mount's to absorb (terminal-web-document-mount.test.ts).
     let box = { left: 0, top: 0, width: 0, height: 0 }
     const widthsRead: number[] = []
-    const changes: (() => void)[] = []
+    const changes: ((change: TerminalViewportChange) => void)[] = []
     const scope = startedWithGrid({
       viewportRect: () => {
         widthsRead.push(box.width)
@@ -135,7 +137,7 @@ describe("the document's frame on the page", () => {
     await nextFrame()
     expect(scales).toEqual([])
     box = { left: 0, top: 0, width: 390, height: 600 }
-    changes.forEach((onChange) => onChange())
+    changes.forEach((onChange) => onChange('resized'))
     await framesUntil(() => scales.length === 2)
     // The refit repaints at the scale it has, then the fit commits once: 390 / (7.5 x 55).
     expect(scales).toEqual(['1', String(FIT_390)])
@@ -156,93 +158,5 @@ describe("the document's frame on the page", () => {
     expect(edge(680)).toBe(1)
     expect(edge(400)).toBe(0)
     expect(edge(120)).toBe(-1)
-  })
-
-  it('keeps pan and zoom across hide and show, and refits when the box really changes', async () => {
-    // react-native-screens hides the session when another screen covers it and shows it again at
-    // the same size; native never refits on navigation, so the pan the user left must survive.
-    let box = { left: 0, top: 0, width: 390, height: 600 }
-    const changes: (() => void)[] = []
-    const scope = startedWithGrid({
-      viewportRect: () => box,
-      observeViewport: (onChange) => {
-        changes.push(onChange)
-        return () => {}
-      }
-    })
-    const resize = async (width: number, height: number) => {
-      box = { left: 0, top: 0, width, height }
-      changes.forEach((onChange) => onChange())
-      await nextFrame()
-      await nextFrame()
-    }
-    await framesUntil(() => scope.currentScale === FIT_390)
-    scope.panX = -40
-    scope.panY = -30
-    scope.userScale = 1.5
-    const kept = { panX: -40, panY: -30, userScale: 1.5, currentScale: scope.currentScale }
-    const view = () => {
-      const { panX, panY, userScale, currentScale } = scope
-      return { panX, panY, userScale, currentScale }
-    }
-
-    await resize(0, 0)
-    expect(view()).toEqual(kept)
-    await resize(390, 600)
-    expect(view()).toEqual(kept)
-
-    box = { left: 0, top: 0, width: 300, height: 600 }
-    changes.forEach((onChange) => onChange())
-    await framesUntil(() => scope.currentScale === 300 / (7.5 * 55))
-    expect(view()).toEqual({ panX: 0, panY: 0, userScale: 1, currentScale: 300 / (7.5 * 55) })
-  })
-
-  it('refits on show when a fit was asked for while hidden, even at the same box', async () => {
-    let box = { left: 0, top: 0, width: 390, height: 600 }
-    const changes: (() => void)[] = []
-    const scope = startedWithGrid({
-      viewportRect: () => box,
-      observeViewport: (onChange) => {
-        changes.push(onChange)
-        return () => {}
-      }
-    })
-    const show = (width: number, height: number) => {
-      box = { left: 0, top: 0, width, height }
-      changes.forEach((onChange) => onChange())
-    }
-    await framesUntil(() => scope.currentScale === FIT_390)
-    show(0, 0)
-    handleMsg(scope, { type: 'resize', cols: 80, rows: 40 })
-    await nextFrame()
-    show(390, 600)
-    await framesUntil(() => scope.currentScale !== FIT_390, { required: false })
-    expect(scope.currentScale).toBe(390 / (7.5 * 80))
-  })
-
-  it('refits on show after a text-scale change while hidden', async () => {
-    let box = { left: 0, top: 0, width: 390, height: 600 }
-    const changes: (() => void)[] = []
-    const scope = startedWithGrid({
-      viewportRect: () => box,
-      observeViewport: (onChange) => {
-        changes.push(onChange)
-        return () => {}
-      }
-    })
-    const show = (width: number, height: number) => {
-      box = { left: 0, top: 0, width, height }
-      changes.forEach((onChange) => onChange())
-    }
-    await framesUntil(() => scope.currentScale === FIT_390)
-    show(0, 0)
-    handleMsg(scope, { type: 'set-font-scale', fontScale: 0.8 })
-    await nextFrame()
-    await nextFrame()
-    show(390, 600)
-    // The smaller font's cells: 55 columns at fontPxForScale(0.8) = 10 px, 7.5 x 10/13 each.
-    const fitted = 390 / (7.5 * (10 / 13) * 55)
-    await framesUntil(() => scope.currentScale !== FIT_390, { required: false })
-    expect(scope.currentScale).toBe(Math.min(1, fitted) >= 0.95 ? 1 : fitted)
   })
 })
