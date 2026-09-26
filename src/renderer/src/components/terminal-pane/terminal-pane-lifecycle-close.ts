@@ -1,7 +1,7 @@
 import type { CloseTerminalPaneDetail } from '@/constants/terminal'
 import type { PaneProcessExit } from './pty-connection-types'
 
-type TerminalPaneCloseManager = {
+export type TerminalPaneCloseManager = {
   closePane: (paneId: number) => void
   detachPaneForExternalMove: (paneId: number) => boolean
   retirePanePreservingPty: (paneId: number) => boolean

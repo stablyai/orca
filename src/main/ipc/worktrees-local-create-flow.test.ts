@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../shared/typed-setup-shell-command'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { computeWorkspaceRootAsync } from './worktree-logic'
 import type * as WorktreeLogic from './worktree-logic'
@@ -758,7 +759,7 @@ describe('registerWorktreeHandlers', () => {
       .mockResolvedValueOnce({ handle: 'term-startup', surface: 'visible' })
       .mockRejectedValueOnce(new Error('setup creation failed'))
 
-    const result = (await handlers['worktrees:create'](null, {
+    const result = await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'improve-dashboard',
       createdWithAgent: 'claude',
@@ -771,15 +772,35 @@ describe('registerWorktreeHandlers', () => {
           request_kind: 'new'
         }
       }
-    })) as { setup?: { command?: string; runnerScriptPath: string } }
+    })
 
-    expect(result.setup).toEqual(
+    // Why the handed-back command no longer names the runner: it is a constant now, and the script
+    // it evaluates rides the setup env so a pair-inserting line editor has nothing to corrupt (#18059).
+    expect(result).toEqual(
       expect.objectContaining({
-        runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
-        command: expect.stringContaining('bash /mnt/c/workspace/repo/.git/orca/setup-runner.sh')
+        setup: expect.objectContaining({
+          runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
+          command:
+            `bash -lc 'if test -z "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"; ` +
+            'then echo "Orca: the setup script did not reach this shell; skipping it." >&2; ' +
+            `exit 127; fi; eval "$${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}"'`,
+          envVars: expect.objectContaining({
+            [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(
+              'bash /mnt/c/workspace/repo/.git/orca/setup-runner.sh'
+            )
+          })
+        })
       })
     )
-    expect(result.setup?.command).toContain('printf')
+    expect(result).toEqual(
+      expect.objectContaining({
+        setup: expect.objectContaining({
+          envVars: expect.objectContaining({
+            [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining('printf')
+          })
+        })
+      })
+    )
   })
 
   it('rejects ask-policy creates before mutating git state when setup decision is missing', async () => {

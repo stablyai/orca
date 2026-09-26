@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
   computeWorktreePathMock,
   createSetupRunnerScript,
@@ -104,15 +105,18 @@ describe('OrcaRuntimeService', () => {
     }
     const startupCommand = startup.command
     const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
-    const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
+    const setup = spawn.mock.calls[1]![0]
+    // Why env: both gates are typed into a shell whose line editor pairs brackets (#18059).
+    const setupScript = setup.env[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]!
     const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
     expect(nonceMatch?.[1]).toBeTruthy()
     expect(startupCommand.length).toBeLessThan(256)
+    expect(setup.command.length).toBeLessThan(256)
     expect(startupScript).toContain('exec claude')
     expect(startupScript).toContain('/mnt/c/tmp/repo/.git/orca/setup-runner.sh')
-    expect(setupCommand).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
-    expect(setupCommand).toContain('printf')
-    expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
+    expect(setupScript).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
+    expect(setupScript).toContain('printf')
+    expect(setupScript).toContain(`${nonceMatch![1]} "$status"`)
     expect(result.setup).toBeUndefined()
   })
 
@@ -184,7 +188,11 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        command: expect.stringContaining('__ORCA_SETUP_COMPLETE__:')
+        command: expect.stringContaining(`eval "$ORCA_SETUP_OBSERVED_SCRIPT"'`),
+        env: expect.objectContaining({
+          ORCA_ROOT_PATH: '/tmp/repo',
+          ORCA_SETUP_OBSERVED_SCRIPT: expect.stringContaining('__ORCA_SETUP_COMPLETE__:')
+        })
       })
     )
     expect(result.setupReceipt).toMatchObject({
@@ -257,9 +265,16 @@ describe('OrcaRuntimeService', () => {
     })
 
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
-    const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
-    expect(setupCommand).toContain('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
-    expect(setupCommand).toContain('__ORCA_SETUP_COMPLETE__:')
+    expect(spawn).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        env: expect.objectContaining({
+          ORCA_SETUP_OBSERVED_SCRIPT: expect.stringMatching(
+            /bash \/mnt\/c\/tmp\/repo\/\.git\/orca\/setup-runner\.sh.*__ORCA_SETUP_COMPLETE__:/
+          )
+        })
+      })
+    )
   })
 
   it('creates the first terminal for CLI-created worktrees without activating them', async () => {

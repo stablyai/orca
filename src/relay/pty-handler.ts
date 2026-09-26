@@ -28,6 +28,7 @@ import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
+import { SETUP_SCRIPT_CARRIER_ENV_NAMES } from '../shared/typed-setup-shell-command'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -1893,8 +1894,10 @@ export class PtyHandler {
     }
     const wslShell = isRelayWslShell(shell)
     if (wslShell) {
-      // WSLENV is the only channel that carries a host env var into the guest.
-      addWslEnvKeys(spawnEnv, [ORCA_IMAGE_PROTOCOL_ENV])
+      // WSLENV is the only channel that carries a host env var into the guest. Setup and
+      // startup scripts ride env because the typed command must stay bracket-free (#18059),
+      // so a missing entry here is a setup that silently never runs.
+      addWslEnvKeys(spawnEnv, [ORCA_IMAGE_PROTOCOL_ENV, ...SETUP_SCRIPT_CARRIER_ENV_NAMES])
     }
     if (historyIsolationEnabled && worktreeId) {
       const historyRoot = injectRelayHistoryEnv(spawnEnv, worktreeId, shell, { wsl: wslShell })
@@ -3035,7 +3038,7 @@ export class PtyHandler {
       injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
     }
     if (wslShell) {
-      addWslEnvKeys(spawnEnv, [ORCA_IMAGE_PROTOCOL_ENV])
+      addWslEnvKeys(spawnEnv, [ORCA_IMAGE_PROTOCOL_ENV, ...SETUP_SCRIPT_CARRIER_ENV_NAMES])
     }
     if (historyIsolationEnabled && entry.worktreeId) {
       const historyRoot = injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell, {

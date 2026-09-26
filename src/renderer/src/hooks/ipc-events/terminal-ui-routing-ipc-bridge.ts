@@ -94,6 +94,7 @@ export function routeRuntimeTerminalSplitRequest(request: RuntimeTerminalSplitRe
     paneRuntimeId: request.paneRuntimeId,
     direction: request.direction,
     command: request.command,
+    env: request.env,
     sourceLeafId: request.sourceLeafId,
     telemetrySource: request.telemetrySource,
     newLeafId: request.newLeafId

@@ -149,7 +149,10 @@ import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
 } from '../../shared/setup-runner-command'
-import { createSequencedSetupAgentCommands } from '../../shared/setup-agent-sequencing'
+import {
+  createSequencedSetupAgentCommands,
+  withSequencedSetupEnv
+} from '../../shared/setup-agent-sequencing'
 import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
 import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
 import {
@@ -413,6 +416,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
   let startupTerminal: CreateWorktreeResult['startupTerminal']
 
   let sequencedStartup = startup
+  let sequencedSetup = setup
   let wrappedSetupCommandStr: string | undefined
   if (startup && setup?.waitForAgentStartup === true) {
     const platform = getSetupRunnerCommandPlatformForLaunch(
@@ -431,6 +435,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
       ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommandStr = sequenced.setupCommand
+    sequencedSetup = withSequencedSetupEnv(setup, sequenced.setupEnv)
   }
 
   try {
@@ -495,14 +500,14 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         await runtime.splitTerminal(startupTerminalHandle, {
           direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
           command: setupCommand,
-          env: setup.envVars,
+          env: sequencedSetup?.envVars ?? setup.envVars,
           activate: false
         })
       } else {
         await runtime.createTerminal(`id:${worktree.id}`, {
           title: 'Setup',
           command: setupCommand,
-          env: setup.envVars,
+          env: sequencedSetup?.envVars ?? setup.envVars,
           activate: false
         })
       }
@@ -519,7 +524,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
     ...(setup && !didSpawnSetup
       ? {
           activationSetup: {
-            ...setup,
+            ...(sequencedSetup ?? setup),
             ...(startupTerminalHandle && wrappedSetupCommandStr
               ? { command: wrappedSetupCommandStr }
               : {})

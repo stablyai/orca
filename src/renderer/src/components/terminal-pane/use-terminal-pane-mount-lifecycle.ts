@@ -99,7 +99,6 @@ export function useTerminalPaneMountLifecycle(
     deps.persistLayoutSnapshot()
     scheduleRuntimeGraphSync()
     const removeMountEvents = installTerminalPaneMountEvents({
-      manager,
       deps: {
         tabId: deps.tabId,
         worktreeId: deps.worktreeId,

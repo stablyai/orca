@@ -1,4 +1,3 @@
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { CLOSE_TERMINAL_PANE_EVENT, type CloseTerminalPaneDetail } from '@/constants/terminal'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -7,27 +6,40 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   splitPaneWithOneShotStartup,
-  recordRuntimeCreatedTerminalPaneSplit
+  recordRuntimeCreatedTerminalPaneSplit,
+  type SplitStartupPayload
 } from './terminal-pane-lifecycle-primitives'
-import { applyTerminalPaneCloseRequest } from './terminal-pane-lifecycle-close'
+import {
+  applyTerminalPaneCloseRequest,
+  type TerminalPaneCloseManager
+} from './terminal-pane-lifecycle-close'
 import {
   registerTerminalPaneSplitRequestHandler,
   resolveTerminalPaneSplitSourceId
 } from './terminal-pane-split-request-routing'
-import type { PtyConnectionDeps } from './pty-connection-types'
+
+/** The pane-manager surface these handlers drive; narrow so a split can be exercised without a
+ *  live `PaneManager`. `PaneManager` satisfies it structurally. */
+export type TerminalPaneMountEventsManager = TerminalPaneCloseManager & {
+  splitPane: (
+    paneId: number,
+    direction: 'vertical' | 'horizontal',
+    opts?: { leafId?: string; ptyId?: string }
+  ) => unknown
+}
 
 export function installTerminalPaneMountEvents(args: {
-  manager: PaneManager
   deps: {
     tabId: string
     worktreeId: string
     isActive: boolean
-    managerRef: React.RefObject<PaneManager | null>
+    managerRef: React.RefObject<TerminalPaneMountEventsManager | null>
     persistLayoutSnapshot: () => void
     syncCanExpandState: () => void
     queueResizeAll: (focusActive: boolean) => void
   }
-  ptyDeps: PtyConnectionDeps
+  /** Only the one-shot startup slot is touched here; the full PTY deps satisfy it structurally. */
+  ptyDeps: { startup?: SplitStartupPayload | null }
 }): () => void {
   const { deps, ptyDeps } = args
   const unregisterTerminalPaneSplitRequestHandler = registerTerminalPaneSplitRequestHandler(
@@ -52,8 +64,10 @@ export function installTerminalPaneMountEvents(args: {
         ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
       }
       if (detail.command) {
-        const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
-          mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
+        const createdPane = splitPaneWithOneShotStartup(
+          ptyDeps,
+          { command: detail.command, ...(detail.env ? { env: detail.env } : {}) },
+          () => mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
         recordRuntimeCreatedTerminalPaneSplit(createdPane, {
           source: detail.telemetrySource ?? 'command',

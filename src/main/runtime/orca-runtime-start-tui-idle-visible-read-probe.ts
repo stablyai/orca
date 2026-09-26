@@ -169,7 +169,8 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         })
           .then((wait) => {
             if (wait.satisfied && wait.condition === 'exit' && wait.status === 'exited') {
-              finish(wait.exitCode)
+              // Why: an observed shell that exits before printing its marker never proved setup ran.
+              finish(scanner ? null : wait.exitCode)
             }
           })
           .catch(fail)

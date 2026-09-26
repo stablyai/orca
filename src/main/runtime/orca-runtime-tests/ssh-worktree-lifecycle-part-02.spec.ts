@@ -3,6 +3,7 @@ import { resetWorktreeTestSshHostHome } from '../../worktree-removal-test-ssh-ho
 
 import {
   OrcaRuntimeService,
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
   addWorktree,
   closeRemoteWatcherForWorktreePathMock,
@@ -174,9 +175,13 @@ describe('OrcaRuntimeService', () => {
         2,
         expect.objectContaining({
           cwd: '/remote/mobile-setup',
-          command: expect.stringContaining(
-            'bash /remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh'
-          ),
+          // Why env: the sequenced setup script rides env so the typed command stays free of the
+          // brackets a line editor would pair (#18059).
+          env: expect.objectContaining({
+            [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(
+              'bash /remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh'
+            )
+          }),
           worktreeId: result.worktree.id
         })
       )
@@ -186,15 +191,17 @@ describe('OrcaRuntimeService', () => {
       }
       const startupCommand = startup.command
       const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
-      const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
+      const setup = spawn.mock.calls[1]![0]
+      const setupScript = setup.env[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]!
       const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
       expect(nonceMatch?.[1]).toBeTruthy()
       const markerPath = `/remote/repo/.git/worktrees/mobile-setup/orca/setup-runner.sh.${nonceMatch![1]}.done`
       expect(startupCommand.length).toBeLessThan(256)
-      expect(setupCommand).toContain('printf')
-      expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
+      expect(setup.command.length).toBeLessThan(256)
+      expect(setupScript).toContain('printf')
+      expect(setupScript).toContain(`${nonceMatch![1]} "$status"`)
       expect(startupScript).toContain(markerPath)
-      expect(setupCommand).toContain(markerPath)
+      expect(setupScript).toContain(markerPath)
       expect(revealTerminalSession).toHaveBeenLastCalledWith(
         result.worktree.id,
         expect.objectContaining({

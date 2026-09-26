@@ -3,6 +3,11 @@ import {
   type SetupRunnerCommandPlatform,
   type SetupRunnerShell
 } from '../../../shared/setup-runner-command'
+import {
+  buildTypedSetupScriptCommand,
+  POSIX_SETUP_OBSERVED_SCRIPT_ENV,
+  SETUP_SCRIPT_MISSING_STATUS
+} from '../../../shared/typed-setup-shell-command'
 
 const SETUP_COMPLETION_PREFIX = '__ORCA_SETUP_COMPLETE__:'
 const SETUP_COMPLETION_CARRY_LENGTH = SETUP_COMPLETION_PREFIX.length + 96
@@ -42,7 +47,17 @@ export function buildObservedSetupCommand(
     `printf '\\n${completionPrefix(completionToken)}%s\\n' "$status"`,
     'exit "$status"'
   ].join('; ')
-  return { command: `bash -lc ${quotePosixArg(script)}` }
+  // Why: the command is typed into the user's line editor, where pair-inserting widgets
+  // (zsh-autopair) rewrite `( ` and corrupt it (#18059); the script rides env instead.
+  // Why the marker on the miss: the observer settles on the marker alone, so a carrier that
+  // never delivered the script has to say so or setup stays "running" forever.
+  return {
+    command: buildTypedSetupScriptCommand(
+      POSIX_SETUP_OBSERVED_SCRIPT_ENV,
+      `printf "\\n${completionPrefix(completionToken)}${SETUP_SCRIPT_MISSING_STATUS}\\n"`
+    ),
+    env: { [POSIX_SETUP_OBSERVED_SCRIPT_ENV]: script }
+  }
 }
 
 export function createSetupCompletionScanner(
@@ -77,8 +92,4 @@ export function createSetupCompletionScanner(
 
 function completionPrefix(completionToken: string): string {
   return `${SETUP_COMPLETION_PREFIX}${completionToken}:`
-}
-
-function quotePosixArg(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
 }

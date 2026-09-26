@@ -4,10 +4,7 @@ import {
   ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
 } from '../../shared/orchestration-compatibility-evidence'
-import {
-  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
-  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
-} from '../../shared/setup-agent-sequencing'
+import { SETUP_SCRIPT_CARRIER_ENV_NAMES } from '../../shared/typed-setup-shell-command'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 import { ORCA_IMAGE_PROTOCOL_ENV } from '../../shared/terminal-image-protocol'
 
@@ -89,8 +86,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     // The guest plugin uses this marker to select the OpenCode variant that
     // owns the pane when both native and WSL installations are present.
     'ORCA_OPENCODE_AGENT/u',
-    `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
-    `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
+    // Why /u: every entry carries a script or command the guest shell evaluates verbatim.
+    ...SETUP_SCRIPT_CARRIER_ENV_NAMES.map((name) => `${name}/u`),
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID/u',
     'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u',

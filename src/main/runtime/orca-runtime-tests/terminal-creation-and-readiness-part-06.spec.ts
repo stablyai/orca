@@ -103,6 +103,33 @@ describe('OrcaRuntimeService', () => {
     await expect(waiting).resolves.toEqual({ exitCode: 9 })
   })
 
+  it('reports an unproven setup when its observed shell exits before the completion marker', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-unmarked-setup' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    ;(
+      runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
+    ).setupCompletionTokenByPtyId.set('pty-unmarked-setup', 'token-unmarked')
+
+    const waiting = runtime.waitForSetupTerminalCompletion(handle)
+    runtime.onPtyData(
+      'pty-unmarked-setup',
+      "bash: -c: line 1: syntax error near unexpected token `)'\r\n$ ",
+      100
+    )
+    // Why exit 0: the interactive shell's own status says nothing about the setup it never finished.
+    runtime.onPtyExit('pty-unmarked-setup', 0)
+
+    await expect(waiting).resolves.toEqual({ exitCode: null })
+  })
+
   it('cancels setup completion observation when the caller aborts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

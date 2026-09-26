@@ -31,6 +31,8 @@ export const RUNTIME_GRAPH_RELOAD_TIMEOUT_MS =
 export const RecentPtyOutputBuffer = importedValues.exportedRecentPtyOutputBuffer
 export const RpcDispatcher = importedValues.exportedRpcDispatcher
 export const RuntimeBrowserCommands = importedValues.exportedRuntimeBrowserCommands
+export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV =
+  importedValues.exportedSETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV =
   importedValues.exportedSETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV =
