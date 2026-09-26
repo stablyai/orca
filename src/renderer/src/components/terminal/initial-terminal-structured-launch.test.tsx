@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
+import type * as ActivationGateModule from '@/lib/worktree-agent-activation-gate'
 
 const mocks = vi.hoisted(() => ({
   gate: vi.fn(),
@@ -16,7 +17,8 @@ vi.mock('@/store', () => ({
     getState: () => ({ activeWorktreeId: 'wt-1' })
   })
 }))
-vi.mock('@/lib/worktree-agent-activation-gate', () => ({
+vi.mock('@/lib/worktree-agent-activation-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof ActivationGateModule>()),
   gateWorktreeAgentActivation: mocks.gate
 }))
 vi.mock('@/lib/structured-agent-session-launch', () => ({

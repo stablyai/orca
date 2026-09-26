@@ -87,7 +87,8 @@ function resolveDirectSshAuthority(
  */
 export function resolveWorkspaceTerminalHostAuthority(
   state: WorkspaceTerminalHostAuthorityState,
-  worktreeId: string | null | undefined
+  worktreeId: string | null | undefined,
+  opts?: { hostAnsweredActivationCensus?: boolean }
 ): WorkspaceTerminalHostAuthority {
   if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'none'
@@ -104,7 +105,10 @@ export function resolveWorkspaceTerminalHostAuthority(
     // Why the git-worktree narrowing: the snapshot replaces exactly DirectSshTargetScope.gitWorktreeIds
     // (remote-workspace-snapshot-apply.ts). A folder workspace's rows are never replaced by the host,
     // so waiting on an answer that will never name them would leave it terminal-less for good.
-    return resolveDirectSshAuthority(state, host.targetId)
+    // A census this host just answered is fresher than target-wide sync state.
+    return opts?.hostAnsweredActivationCensus === true
+      ? 'none'
+      : resolveDirectSshAuthority(state, host.targetId)
   }
   // Local, or outside the host's replace scope: this client is the execution host and its own rows are
   // the whole truth. Absence of a catalog row is not evidence of a remote owner, and refusing to act

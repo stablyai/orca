@@ -10,7 +10,10 @@ import {
   type ParkedTerminalTabWatcherSyncEntry
 } from './terminal-pane/terminal-parked-tab-watchers'
 import { useAppStore } from '@/store'
-import { gateWorktreeAgentActivation } from '@/lib/worktree-agent-activation-gate'
+import {
+  activationOutcomeNeedsSeed,
+  gateWorktreeAgentActivation
+} from '@/lib/worktree-agent-activation-gate'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace-terminal-host-authority'
 import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
 import { AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS } from '../../../shared/agent-session-provider-handle'
@@ -215,7 +218,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     void gateWorktreeAgentActivation(activeWorktreeId).then((outcome) => {
       if (
         cancelled ||
-        outcome !== 'empty' ||
+        !activationOutcomeNeedsSeed(outcome) ||
         useAppStore.getState().activeWorktreeId !== activeWorktreeId
       ) {
         return

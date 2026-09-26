@@ -158,6 +158,12 @@ describe('workspace terminal seeding authority', () => {
     )
     expect(ensureWorktreeHasInitialTerminal(store.getState(), SSH_WORKTREE_ID)).toBeNull()
     expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(0)
+    // A census the host just answered outranks the target-wide sync phase.
+    expect(
+      resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID, {
+        hostAnsweredActivationCensus: true
+      })
+    ).toBe('none')
   })
 
   it('leaves terminal creation to the host of a paired runtime workspace', () => {
@@ -223,6 +229,12 @@ describe('workspace terminal seeding authority', () => {
       'unverifiable'
     )
     expect(ensureWorktreeHasInitialTerminal(store.getState(), PAIRED_WORKTREE_ID)).toBeNull()
+    // A client-side census is no licence here: the paired host creates its own terminals.
+    expect(
+      resolveWorkspaceTerminalHostAuthority(store.getState(), PAIRED_WORKTREE_ID, {
+        hostAnsweredActivationCensus: true
+      })
+    ).toBe('unverifiable')
     expect(terminalTabCount(store, PAIRED_WORKTREE_ID)).toBe(0)
   })
 })

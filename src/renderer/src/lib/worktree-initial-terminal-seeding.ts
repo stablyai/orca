@@ -40,7 +40,8 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
 export function reseedGatedEmptyWorkspace(
   workspaceKey: string,
   callerProvidesSurface: boolean,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  hostListedNoLivePty = false
 ): void {
   const state = useAppStore.getState()
   if (
@@ -58,7 +59,8 @@ export function reseedGatedEmptyWorkspace(
     undefined,
     undefined,
     {
-      reseedEmptiedWorkspace: true
+      reseedEmptiedWorkspace: true,
+      hostAnsweredActivationCensus: hostListedNoLivePty
     }
   )
 }
@@ -98,7 +100,7 @@ export function ensureWorktreeHasInitialTerminal(
   }
 
   const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
-  const hostAuthority = resolveWorkspaceTerminalHostAuthority(ownerState, worktreeId)
+  const hostAuthority = resolveWorkspaceTerminalHostAuthority(ownerState, worktreeId, opts)
   // Why: explicit spawn evidence survives the new-worktree ownership race; a host that owns terminal creation provides the same authority for later activations.
   if (backendStartupTerminalSpawned || hostAuthority === 'live') {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id

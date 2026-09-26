@@ -1,5 +1,6 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
+  activationOutcomeNeedsSeed,
   gateWorktreeAgentActivation,
   type WorktreeAgentActivationOutcome
 } from './worktree-agent-activation-gate'
@@ -31,8 +32,13 @@ export function gateAndReseedEmptyWorkspace(
       return
     }
     latestReseedIntentByGate.delete(gate)
-    if (outcome === 'empty') {
-      reseedGatedEmptyWorkspace(workspaceKey, intent.callerProvidesSurface, intent.executionHostId)
+    if (activationOutcomeNeedsSeed(outcome)) {
+      reseedGatedEmptyWorkspace(
+        workspaceKey,
+        intent.callerProvidesSurface,
+        intent.executionHostId,
+        outcome === 'empty'
+      )
     }
   })
 }

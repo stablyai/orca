@@ -431,7 +431,9 @@ describe('renderer startup runtime routing', () => {
     expect(gateBlock).not.toContain('hydrationSucceeded')
     expect(gateIndex).toBeGreaterThanOrEqual(0)
     expect(gateIndex).toBeLessThan(createIndex)
-    expect(gateBlock.slice(gateIndex, createIndex)).toContain("outcome !== 'empty'")
+    expect(gateBlock.slice(gateIndex, createIndex)).toContain(
+      '!activationOutcomeNeedsSeed(outcome)'
+    )
   })
 
   it('does not load the terminal workbench on the no-workspace landing path', () => {

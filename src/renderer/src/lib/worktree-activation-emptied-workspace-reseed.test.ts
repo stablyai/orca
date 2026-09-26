@@ -14,6 +14,8 @@ import {
   seedEmptyActivatableWorktree
 } from '@/lib/worktree-activation-created-agent-test-state'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
+import { resolveWorkspaceTerminalHostAuthority } from './workspace-terminal-host-authority'
+import type { Worktree } from '../../../shared/worktree/types'
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -29,6 +31,35 @@ function seedClosedLastTerminal(worktreeId: string): void {
   useAppStore.setState({ tabsByWorktree: { [worktreeId]: [] } })
   const { renderableTabCount } = useAppStore.getState().reconcileWorktreeTabModel(worktreeId)
   expect(renderableTabCount).toBe(0)
+}
+
+/** Answers the activation gate's census: an empty structured listing (it must name the scope it
+ *  listed, or the gate blocks) plus the given PTY listing. */
+function stubActivationCensus(
+  workspaceKey: string,
+  listSessions: () => Promise<unknown[]> = async () => []
+): ReturnType<typeof vi.fn> {
+  const listSessionsMock = vi.fn(listSessions)
+  vi.stubGlobal('window', {
+    api: {
+      runtime: {
+        call: vi.fn(async () => ({
+          ok: true,
+          result: {
+            worktree: workspaceKey,
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: null,
+            activeTabId: null,
+            activeTabType: null,
+            tabs: []
+          }
+        }))
+      },
+      pty: { listSessions: listSessionsMock }
+    }
+  })
+  return listSessionsMock
 }
 
 describe('activating a workspace whose last terminal was closed', () => {
@@ -459,27 +490,7 @@ describe('activating a folder workspace whose last terminal was closed', () => {
       workspaceSessionReady: true,
       terminalStartupRestorationReady: true
     })
-    vi.stubGlobal('window', {
-      api: {
-        runtime: {
-          // A `session.tabs.list` answer must name the scope it listed, or the gate refuses it and
-          // blocks — which would leave the row empty for the wrong reason.
-          call: vi.fn(async () => ({
-            ok: true,
-            result: {
-              worktree: FOLDER_KEY,
-              publicationEpoch: 'epoch-1',
-              snapshotVersion: 1,
-              activeGroupId: null,
-              activeTabId: null,
-              activeTabType: null,
-              tabs: []
-            }
-          }))
-        },
-        pty: { listSessions: vi.fn(async () => []) }
-      }
-    })
+    stubActivationCensus(FOLDER_KEY)
 
     const result = activateAndRevealFolderWorkspace(FOLDER_ID, {
       executionHostId: 'local',
@@ -504,5 +515,89 @@ describe('activating a folder workspace whose last terminal was closed', () => {
     expect(result).not.toBe(false)
     expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(1)
     expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(SSH_HOST_ID)
+  })
+})
+
+/** An SSH git worktree whose last tab was closed, on a target whose workspace sync has not given a
+ *  `none` verdict — the state #22015 reported. */
+function seedEmptiedSshWorktree(phase?: 'pulling' | 'conflict'): Worktree {
+  const worktree = { ...makeWorktree(), hostId: SSH_HOST_ID }
+  seedEmptyActivatableWorktree(worktree)
+  seedClosedLastTerminal(worktree.id)
+  const state = useAppStore.getState()
+  useAppStore.setState({
+    repos: state.repos.map((repo) => ({ ...repo, connectionId: 'conn-1' })),
+    workspaceSessionReady: true,
+    terminalStartupRestorationReady: true
+  })
+  if (phase) {
+    state.setRemoteWorkspaceSyncStatus('conn-1', { phase })
+  }
+  expect(resolveWorkspaceTerminalHostAuthority(useAppStore.getState(), worktree.id)).toBe(
+    'unverifiable'
+  )
+  return worktree
+}
+
+describe('activating an emptied SSH git worktree', () => {
+  it.each([undefined, 'pulling', 'conflict'] as const)(
+    're-seeds once the SSH host answers the census (sync phase: %s)',
+    async (phase) => {
+      const worktree = seedEmptiedSshWorktree(phase)
+      const listSessions = stubActivationCensus(worktree.id)
+
+      activateAndRevealWorktree(worktree.id, {
+        executionHostId: SSH_HOST_ID,
+        notifyHostRuntime: false
+      })
+      await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('empty')
+
+      expect(listSessions).toHaveBeenCalledWith({ connectionId: 'conn-1' })
+      expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+    }
+  )
+
+  // Live PTYs the gate could not surface may be tabs the pending sync still carries.
+  it.each([
+    ['a local worktree still seeds', false, 1],
+    ['an SSH worktree mid-sync waits', true, 0]
+  ])('when the census lists a live PTY it cannot surface, %s', async (_label, ssh, tabCount) => {
+    let worktree: Worktree
+    if (ssh) {
+      worktree = seedEmptiedSshWorktree('pulling')
+    } else {
+      worktree = makeWorktree()
+      seedEmptyActivatableWorktree(worktree)
+      seedClosedLastTerminal(worktree.id)
+      useAppStore.setState({ workspaceSessionReady: true, terminalStartupRestorationReady: true })
+    }
+    stubActivationCensus(worktree.id, async () => [
+      { id: `${worktree.id}@@live`, cwd: '/', title: 'bash', agentOwnership: 'absent' }
+    ])
+
+    activateAndRevealWorktree(worktree.id, {
+      ...(ssh ? { executionHostId: SSH_HOST_ID } : {}),
+      notifyHostRuntime: false
+    })
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe(
+      'unsurfaced'
+    )
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(tabCount)
+  })
+
+  it('stays empty when the SSH host could not answer the census', async () => {
+    const worktree = seedEmptiedSshWorktree()
+    stubActivationCensus(worktree.id, async () => {
+      throw new Error('No PTY provider for connection "conn-1"')
+    })
+
+    activateAndRevealWorktree(worktree.id, {
+      executionHostId: SSH_HOST_ID,
+      notifyHostRuntime: false
+    })
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('blocked')
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
   })
 })

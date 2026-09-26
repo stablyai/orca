@@ -43,7 +43,14 @@ export type WorktreeAgentActivationOutcome =
   | 'structured'
   | 'resumed'
   | 'empty'
+  | 'unsurfaced'
   | 'blocked'
+
+/** Both ask the caller to seed (STA-5701): no surface came out of the gate. Only `empty` means the
+ *  host listed no live PTY here; `unsurfaced` PTYs may belong to tabs a pending sync still carries. */
+export function activationOutcomeNeedsSeed(outcome: WorktreeAgentActivationOutcome): boolean {
+  return outcome === 'empty' || outcome === 'unsurfaced'
+}
 
 const inFlightByWorktreeId = new Map<string, Promise<WorktreeAgentActivationOutcome>>()
 const WORKSPACE_SESSION_READY_TIMEOUT_MS = 30_000
@@ -240,15 +247,15 @@ export async function runWorktreeAgentActivationGate(
     return 'blocked'
   }
   const launched = deps.resume(worktreeId, { skipClaimKeys: claims.keys })
-  // 'empty' is the caller's directive — "this gate produced no surface, seed one" — not a
-  // claim the host had nothing; the callers re-check their own seeding guards first.
   return launched > 0
     ? 'resumed'
     : liveSurfaceAdopted
       ? 'adopted'
       : structured
         ? 'structured'
-        : 'empty'
+        : liveWorkspaceSessions.length > 0
+          ? 'unsurfaced'
+          : 'empty'
 }
 
 export function gateWorktreeAgentActivation(
