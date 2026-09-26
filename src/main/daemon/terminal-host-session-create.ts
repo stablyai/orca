@@ -26,6 +26,7 @@ type TerminalHostSessionCreateDependencies = {
   onDeadSessionRemoved: (sessionId: string) => void
   onSessionCreated: (sessionId: string, generation: string | undefined, isAlive: boolean) => void
   onSessionExit: (sessionId: string, generation: string | undefined) => void
+  onPtySpawned?: TerminalHostOptions['onPtySpawned']
   reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
 }
 
@@ -176,6 +177,16 @@ async function spawnAndPublishSession(
   }
 
   deps.sessions.set(opts.sessionId, session)
+  try {
+    deps.onPtySpawned?.({
+      sessionId: opts.sessionId,
+      incarnationId: session.incarnationId,
+      pid: subprocess.pid,
+      ...(subprocess.slavePath ? { slavePath: subprocess.slavePath } : {})
+    })
+  } catch {
+    // Ownership bookkeeping must never turn a live PTY into a failed create.
+  }
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
   const token = session.attachClient(opts.streamClient)
 

@@ -24,6 +24,15 @@ export type TerminalHostOptions = {
   }) => SubprocessHandle | Promise<SubprocessHandle>
   // Why: login-session death detection (#7936) needs subprocess exits even when no client is attached.
   onSessionReaped?: (sessionId: string) => void
+  /** Records the OS identity of a PTY the moment it exists, so a daemon that dies before it can
+   *  tear the PTY down still leaves behind enough to find the survivors. Bookkeeping: never
+   *  awaited, and a throw from it must not fail the create. */
+  onPtySpawned?: (identity: {
+    sessionId: string
+    incarnationId: string
+    pid: number
+    slavePath?: string
+  }) => void
   /** Reports a shell-readiness outcome worth diagnosing. Why threaded rather
    *  than console: the detached daemon runs with stdio 'ignore', so the only
    *  durable sink is its NDJSON file log. */
