@@ -50,6 +50,13 @@ export class PerforceHandler {
     on('sync', (cwd) => backend.sync(cwd))
     on('shelve', (cwd, p) => backend.shelve(cwd, requireChangelistId(p.changelist)))
     on('unshelve', (cwd, p) => backend.unshelve(cwd, requireChangelistId(p.changelist)))
+    on('unshelveFrom', (cwd, p) =>
+      backend.unshelveFrom(
+        cwd,
+        requireChangelistId(p.sourceChangelist),
+        requireChangelistTarget(p.changelist)
+      )
+    )
     on('deleteShelf', (cwd, p) => backend.deleteShelf(cwd, requireChangelistId(p.changelist)))
     on('createChangelist', (cwd, p) =>
       backend.createChangelist(

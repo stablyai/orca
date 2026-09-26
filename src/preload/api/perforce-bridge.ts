@@ -12,6 +12,7 @@ export const perforceApi = {
   sync: (args) => ipcRenderer.invoke('perforce:sync', args),
   shelve: (args) => ipcRenderer.invoke('perforce:shelve', args),
   unshelve: (args) => ipcRenderer.invoke('perforce:unshelve', args),
+  unshelveFrom: (args) => ipcRenderer.invoke('perforce:unshelveFrom', args),
   deleteShelf: (args) => ipcRenderer.invoke('perforce:deleteShelf', args),
   editDescription: (args) => ipcRenderer.invoke('perforce:editDescription', args),
   createChangelist: (args) => ipcRenderer.invoke('perforce:createChangelist', args),

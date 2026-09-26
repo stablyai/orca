@@ -22,6 +22,9 @@ export type PerforceApi = {
   sync: (args: WorktreeArgs) => Result
   shelve: (args: WorktreeArgs & { changelist: number }) => Result
   unshelve: (args: WorktreeArgs & { changelist: number }) => Result
+  unshelveFrom: (
+    args: WorktreeArgs & { sourceChangelist: number; changelist: 'default' | number }
+  ) => Result
   deleteShelf: (args: WorktreeArgs & { changelist: number }) => Result
   createChangelist: (
     args: WorktreeArgs & { description: string; filePaths: string[] }

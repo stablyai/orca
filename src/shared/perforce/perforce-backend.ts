@@ -5,6 +5,7 @@ import {
   deleteEmptyChangelist,
   deleteShelf,
   editChangelistDescription,
+  unshelveFrom,
   moveFilesToChangelist,
   shelveChangelist,
   unshelveChangelist
@@ -48,6 +49,7 @@ export type PerforceBackend = {
   shelve: (cwd: Cwd, changelist: number) => Promise<PerforceOperationResult>
   unshelve: (cwd: Cwd, changelist: number) => Promise<PerforceOperationResult>
   deleteShelf: (cwd: Cwd, changelist: number) => Promise<PerforceOperationResult>
+  unshelveFrom: (cwd: Cwd, source: number, target: Target) => Promise<PerforceOperationResult>
   createChangelist: (
     cwd: Cwd,
     description: string,
@@ -83,6 +85,7 @@ export const localPerforceBackend: PerforceBackend = {
   shelve: shelveChangelist,
   unshelve: unshelveChangelist,
   deleteShelf,
+  unshelveFrom,
   createChangelist: createChangelistWithFiles,
   editDescription: editChangelistDescription,
   moveToChangelist: moveFilesToChangelist,

@@ -27,6 +27,12 @@ Row actions: click to diff against `#have`; **Open** runs `p4 reconcile` (add/ed
 **Close** runs `p4 revert -k` (keeps local content); **Discard** reverts opened files, force-syncs modified ones,
 and deletes new ones. The header has Refresh and Get Latest (`p4 sync`).
 
+Selection: Cmd/Ctrl-click toggles a row, Shift-click selects a range. Right-clicking a checked-out file (or the
+selection) offers **Move to existing changelist** (a list of the other pending changelists, plus Default) and
+**Move to new changelist…**, which asks for a description first and only then creates the changelist and moves the
+files. The Unshelve button in the panel header restores any changelist's shelf by number (including another user's)
+into the default or an existing changelist.
+
 Saving a read-only workspace file from Orca's editor first runs `p4 edit` on it.
 
 ## Code map

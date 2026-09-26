@@ -91,6 +91,14 @@ describe.skipIf(process.platform === 'win32')('localPerforceBackend with a fake 
     expect(calls).toContainEqual(['shelve', '-d', '-c', '12'])
   })
 
+  it('unshelves any changelist into the default or a numbered changelist', async () => {
+    await localPerforceBackend.unshelveFrom(dir, 99, 'default')
+    await localPerforceBackend.unshelveFrom(dir, 99, 12)
+    const calls = await invocations()
+    expect(calls).toContainEqual(['unshelve', '-f', '-s', '99', '-c', 'default'])
+    expect(calls).toContainEqual(['unshelve', '-f', '-s', '99', '-c', '12'])
+  })
+
   it('submits the default changelist with a description and numbered ones by id', async () => {
     await localPerforceBackend.submit(dir, 'default', 'Do it')
     await localPerforceBackend.submit(dir, 12)

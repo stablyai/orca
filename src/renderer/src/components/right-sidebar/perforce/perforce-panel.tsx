@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowDownToLine, FolderPlus, Plus, RefreshCw, Undo2, X } from 'lucide-react'
+import { FolderPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { detectLanguage } from '@/lib/language-detect'
@@ -7,7 +7,12 @@ import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { PerforceEntry } from '../../../../../shared/perforce/perforce-types'
 import { PerforceChangelistHeader } from './perforce-changelist-section'
+import { NewChangelistDialog, UnshelveDialog } from './perforce-dialogs'
+import { PerforceFileActions } from './perforce-file-actions'
+import { PerforceFileContextMenu } from './perforce-file-context-menu'
 import { PerforceFileRow } from './perforce-file-row'
+import { PerforcePanelHeader } from './perforce-panel-header'
+import { usePerforceSelection } from './use-perforce-selection'
 import { usePerforceStatus } from './use-perforce-status'
 
 function SectionHeader({
@@ -30,6 +35,10 @@ function SectionHeader({
   )
 }
 
+function rowKey(entry: PerforceEntry): string {
+  return `${entry.group}:${entry.path}`
+}
+
 export function PerforcePanel({
   worktreeId,
   worktreePath,
@@ -43,6 +52,9 @@ export function PerforcePanel({
   const { status, error, busy, refresh, run } = usePerforceStatus(target)
   const openDiff = useAppStore((s) => s.openDiff)
   const [message, setMessage] = useState('')
+  const [newChangelistPaths, setNewChangelistPaths] = useState<string[] | null>(null)
+  const [unshelveOpen, setUnshelveOpen] = useState(false)
+  const { selected, select, focusForContextMenu } = usePerforceSelection()
   const api = window.api.perforce
 
   const groups = useMemo(() => {
@@ -87,50 +99,68 @@ export function PerforcePanel({
     }
   }
 
-  const fileActions = (entry: PerforceEntry) => (
-    <>
-      {entry.group === 'opened' ? (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title="Close file (keep local changes)"
-          disabled={busy}
-          onClick={() => void run(() => api.close({ ...target, filePaths: [entry.path] }))}
-        >
-          <X />
-        </Button>
-      ) : (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title={entry.group === 'new' ? 'Mark for add' : 'Open for edit'}
-          disabled={busy}
-          onClick={() => void run(() => api.open({ ...target, filePaths: [entry.path] }))}
-        >
-          <Plus />
-        </Button>
-      )}
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        title="Discard changes"
-        disabled={busy}
-        onClick={() => confirmDiscard([entry])}
-      >
-        <Undo2 />
-      </Button>
-    </>
+  const orderedKeys = useMemo(
+    () =>
+      [
+        ...groups.defaultList,
+        ...groups.numbered.flatMap(({ files }) => files),
+        ...groups.modified,
+        ...groups.fresh
+      ].map((entry) => rowKey(entry)),
+    [groups]
   )
 
+  const openedTargets = (clicked: PerforceEntry): PerforceEntry[] => {
+    const picked = (status?.entries ?? []).filter(
+      (entry) => entry.group === 'opened' && selected.has(rowKey(entry))
+    )
+    return picked.some((entry) => entry.path === clicked.path) ? picked : [clicked]
+  }
+
   const renderRows = (entries: PerforceEntry[]) =>
-    entries.map((entry) => (
-      <PerforceFileRow
-        key={`${entry.group}:${entry.path}`}
-        entry={entry}
-        onOpen={() => openEntryDiff(entry)}
-        actions={fileActions(entry)}
-      />
-    ))
+    entries.map((entry) => {
+      const row = (
+        <PerforceFileRow
+          key={rowKey(entry)}
+          entry={entry}
+          selected={selected.has(rowKey(entry))}
+          onSelect={(event) => {
+            if (select(rowKey(entry), event, orderedKeys) === 'plain') {
+              openEntryDiff(entry)
+            }
+          }}
+          onContextMenu={() => focusForContextMenu(rowKey(entry))}
+          actions={
+            <PerforceFileActions
+              entry={entry}
+              busy={busy}
+              onClose={() => void run(() => api.close({ ...target, filePaths: [entry.path] }))}
+              onOpen={() => void run(() => api.open({ ...target, filePaths: [entry.path] }))}
+              onDiscard={() => confirmDiscard([entry])}
+            />
+          }
+        />
+      )
+      if (entry.group !== 'opened') {
+        return row
+      }
+      const targets = openedTargets(entry)
+      return (
+        <PerforceFileContextMenu
+          key={rowKey(entry)}
+          targets={targets}
+          changelists={status?.changelists ?? []}
+          onMoveToChangelist={(changelist) =>
+            void run(() =>
+              api.moveToChangelist({ ...target, filePaths: paths(targets), changelist })
+            )
+          }
+          onMoveToNewChangelist={() => setNewChangelistPaths(paths(targets))}
+        >
+          {row}
+        </PerforceFileContextMenu>
+      )
+    })
 
   if (!status) {
     return (
@@ -147,36 +177,13 @@ export function PerforcePanel({
   const canSubmit = message.trim().length > 0 && groups.defaultList.length > 0
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium" title={info.root}>
-            {info.client}
-          </div>
-          <div className="truncate text-xs text-muted-foreground">
-            {[info.stream, info.haveChange ? `synced to @${info.haveChange}` : null]
-              .filter(Boolean)
-              .join(' · ') || info.port}
-          </div>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title="Refresh"
-          disabled={busy}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title="Get latest revisions (p4 sync)"
-          disabled={busy}
-          onClick={() => void run(() => api.sync(target), 'Workspace synced')}
-        >
-          <ArrowDownToLine />
-        </Button>
-      </div>
+      <PerforcePanelHeader
+        info={info}
+        busy={busy}
+        onRefresh={() => void refresh()}
+        onSync={() => void run(() => api.sync(target), 'Workspace synced')}
+        onUnshelve={() => setUnshelveOpen(true)}
+      />
       {error ? <div className="px-2 py-1 text-xs text-destructive">{error}</div> : null}
       <div className="flex flex-col gap-2 border-b border-border p-2">
         <Textarea
@@ -294,6 +301,30 @@ export function PerforcePanel({
           </>
         ) : null}
       </div>
+      {newChangelistPaths ? (
+        <NewChangelistDialog
+          fileCount={newChangelistPaths.length}
+          onCancel={() => setNewChangelistPaths(null)}
+          onCreate={(description) =>
+            run(
+              () => api.createChangelist({ ...target, description, filePaths: newChangelistPaths }),
+              'Created changelist'
+            )
+          }
+        />
+      ) : null}
+      {unshelveOpen ? (
+        <UnshelveDialog
+          changelists={status.changelists}
+          onCancel={() => setUnshelveOpen(false)}
+          onUnshelve={(source, changelist) =>
+            run(
+              () => api.unshelveFrom({ ...target, sourceChangelist: source, changelist }),
+              `Unshelved changelist ${source}`
+            )
+          }
+        />
+      ) : null}
     </div>
   )
 }

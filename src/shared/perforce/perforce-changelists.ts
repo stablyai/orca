@@ -105,6 +105,17 @@ export async function unshelveChangelist(
   )
 }
 
+/** Unshelves any pending changelist's shelf (including another user's) into the default or a numbered changelist. */
+export async function unshelveFrom(
+  cwd: string,
+  sourceChangelist: number,
+  target: 'default' | number
+): Promise<PerforceOperationResult> {
+  return toResult(
+    await runP4(['unshelve', '-f', '-s', String(sourceChangelist), '-c', String(target)], { cwd })
+  )
+}
+
 export async function deleteShelf(
   cwd: string,
   changelist: number

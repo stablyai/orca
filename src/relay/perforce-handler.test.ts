@@ -37,7 +37,8 @@ describe('PerforceHandler', () => {
         'status',
         'submit',
         'sync',
-        'unshelve'
+        'unshelve',
+        'unshelveFrom'
       ].map((name) => `perforce.${name}`)
     )
   })

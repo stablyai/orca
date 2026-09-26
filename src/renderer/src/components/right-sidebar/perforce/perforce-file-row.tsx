@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import type {
   PerforceEntry,
   PerforceFileAction
@@ -24,11 +24,15 @@ const ACTION_COLORS: Partial<Record<PerforceFileAction, string>> = {
 
 export function PerforceFileRow({
   entry,
-  onOpen,
+  selected,
+  onSelect,
+  onContextMenu,
   actions
 }: {
   entry: PerforceEntry
-  onOpen: () => void
+  selected: boolean
+  onSelect: (event: MouseEvent) => void
+  onContextMenu?: () => void
   actions: ReactNode
 }) {
   const slash = entry.path.lastIndexOf('/')
@@ -38,11 +42,15 @@ export function PerforceFileRow({
   const color =
     entry.group === 'new' ? 'var(--git-decoration-untracked)' : ACTION_COLORS[entry.action]
   return (
-    <div className="group flex items-center gap-1 px-2 py-0.5 text-[13px] hover:bg-accent">
+    <div
+      className="group flex items-center gap-1 px-2 py-0.5 text-[13px] hover:bg-accent data-[selected=true]:bg-accent"
+      data-selected={selected}
+      onContextMenu={onContextMenu}
+    >
       <button
         type="button"
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
-        onClick={onOpen}
+        onClick={onSelect}
         title={entry.depotPath ?? entry.path}
       >
         <span className="w-3 shrink-0 text-center text-[11px] font-semibold" style={{ color }}>

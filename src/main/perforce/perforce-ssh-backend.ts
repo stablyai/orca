@@ -35,6 +35,8 @@ function createSshPerforceBackend(connectionId: string): PerforceBackend {
     sync: (cwd) => call<Result>('sync', cwd),
     shelve: (cwd, changelist) => call<Result>('shelve', cwd, { changelist }),
     unshelve: (cwd, changelist) => call<Result>('unshelve', cwd, { changelist }),
+    unshelveFrom: (cwd, sourceChangelist, changelist) =>
+      call<Result>('unshelveFrom', cwd, { sourceChangelist, changelist }),
     deleteShelf: (cwd, changelist) => call<Result>('deleteShelf', cwd, { changelist }),
     createChangelist: (cwd, description, filePaths) =>
       call('createChangelist', cwd, { description, filePaths }),

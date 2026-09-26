@@ -75,6 +75,15 @@ export function registerPerforceHandlers(store: Store): void {
   handle<ChangelistArgs, Result>('unshelve', (b, cwd, a) =>
     b.unshelve(cwd, requireChangelistId(a.changelist))
   )
+  handle<WorktreeArgs & { sourceChangelist: number; changelist: 'default' | number }, Result>(
+    'unshelveFrom',
+    (b, cwd, a) =>
+      b.unshelveFrom(
+        cwd,
+        requireChangelistId(a.sourceChangelist),
+        requireChangelistTarget(a.changelist)
+      )
+  )
   handle<ChangelistArgs, Result>('deleteShelf', (b, cwd, a) =>
     b.deleteShelf(cwd, requireChangelistId(a.changelist))
   )
