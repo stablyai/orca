@@ -7,6 +7,7 @@ import {
   updateTransform
 } from './viewport-transform'
 import type { TerminalDocumentScope } from './document-scope'
+import type { TerminalViewportChange } from './document-host-seams'
 import { scheduleDocumentFrame } from './document-frame-registry'
 
 /** The narrowest grid a fit or a text-scale change will fit to. */
@@ -65,9 +66,9 @@ export function adjustRowsForViewport() {}
 // so a backgrounded WebView never spins forever.
 const FIT_RETRY_MAX_FRAMES = 60
 
-function hasViewportWidth(scope: TerminalDocumentScope) {
-  const width = scope.viewportRect().width
-  return Number.isFinite(width) && width > 0
+function isViewportShown(scope: TerminalDocumentScope) {
+  const { width, hidden } = scope.viewportRect()
+  return hidden !== true && Number.isFinite(width) && width > 0
 }
 
 export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
@@ -84,8 +85,9 @@ export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
     if (!scope.term || !scope.term.element) {
       return
     }
-    // Why: a page host that mounted under a hidden screen has no box until RN lays it out once.
-    if (!hasViewportWidth(scope)) {
+    // Why: a hidden grid may not measure its cells, so the fit is held until the host is shown.
+    if (!isViewportShown(scope)) {
+      scope.fitPending = reason
       return
     }
     attempts++
@@ -126,6 +128,7 @@ export function commitFitScale(
     return
   }
   const preSnapScale = computeFitScale(scope)
+  scope.fitPending = null
   scope.currentScale = preSnapScale
   // Why: when scale is very close to 1 (e.g. 0.97 from xterm scrollbar
   // sub-pixels) snap to 1 to avoid imperceptible shrinkage that prevents
@@ -171,7 +174,14 @@ export function commitFitScale(
  * had to copy the five calls into its mount to get it at all (ruling 24).
  */
 export function startFitScale(scope: TerminalDocumentScope) {
-  const refit = () => {
+  const refit = (change: TerminalViewportChange) => {
+    // Why: showing the same box again is not a resize; only a fit held while hidden runs, so pan and zoom survive.
+    if (change === 'shown') {
+      if (scope.fitPending !== null) {
+        applyFitScale(scope, scope.fitPending)
+      }
+      return
+    }
     applyFitScale(scope, 'window-resize')
     adjustRowsForViewport()
     repositionOverlay(scope)

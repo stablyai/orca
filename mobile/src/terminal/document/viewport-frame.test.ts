@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
-import type { TerminalDocumentHost } from './document-host-seams'
+import type { TerminalDocumentHost, TerminalViewportChange } from './document-host-seams'
 import { terminalDocumentDouble } from './document-terminal-double.test-support'
 import { handleMsg } from './host-message-router'
 import { viewportToMouseReportCell } from './mouse-report-cell'
@@ -115,7 +115,7 @@ describe("the document's frame on the page", () => {
     // that are the mount's to absorb (terminal-web-document-mount.test.ts).
     let box = { left: 0, top: 0, width: 0, height: 0 }
     const widthsRead: number[] = []
-    const changes: (() => void)[] = []
+    const changes: ((change: TerminalViewportChange) => void)[] = []
     const scope = startedWithGrid({
       viewportRect: () => {
         widthsRead.push(box.width)
@@ -137,7 +137,7 @@ describe("the document's frame on the page", () => {
     await nextFrame()
     expect(scales).toEqual([])
     box = { left: 0, top: 0, width: 390, height: 600 }
-    changes.forEach((onChange) => onChange())
+    changes.forEach((onChange) => onChange('resized'))
     await framesUntil(() => scales.length === 2)
     // The refit repaints at the scale it has, then the fit commits once: 390 / (7.5 x 55).
     expect(scales).toEqual(['1', String(FIT_390)])

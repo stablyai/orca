@@ -51,7 +51,7 @@ export function computeFitScale(scope: TerminalDocumentScope) {
     return 1
   }
   const vpWidth = scope.viewportRect().width
-  // Why: a host hidden with display:none measures 0; a 0 scale would blank it when shown again.
+  // Why: a viewport with no width yet (a page host never laid out) would give scale 0 and blank the grid.
   if (vpWidth <= 0) {
     return 1
   }

@@ -20,8 +20,8 @@ import { TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
  */
 /** Set for the length of one case; the factory throws it instead of building a document. */
 let startThrows: Error | null = null
-/** Set for the length of one case; the document builds this grid instead of xterm. */
-let gridTerminal: TerminalDocumentTerminal | null = null
+/** Set for the length of one case; the document builds its terminals here instead of xterm. */
+let gridTerminal: (() => TerminalDocumentTerminal) | null = null
 
 vi.mock('./document/create-terminal-document', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./document/create-terminal-document')>()
@@ -32,7 +32,7 @@ vi.mock('./document/create-terminal-document', async (importOriginal) => {
         throw startThrows
       }
       const grid = gridTerminal
-      return actual.createTerminalDocument(grid ? { ...host, createTerminal: () => grid } : host)
+      return actual.createTerminalDocument(grid ? { ...host, createTerminal: grid } : host)
     }
   }
 })
@@ -257,11 +257,15 @@ describe('the component names the cause of a start that threw', () => {
 const CELL = { width: 7.5, height: 15 }
 const FIT_390 = 390 / (7.5 * 55)
 
-/** A laid-out 55x40 grid whose cells scale with the font, as xterm's do. */
-function gridDouble(): TerminalDocumentTerminal {
+/**
+ * A laid-out 55x40 grid whose cells scale with the font, as xterm's do, or read 0 while `cells`
+ * says they cannot be measured: xterm's DOM measure on a `display:none` host, where no
+ * OffscreenCanvas is available.
+ */
+function gridDouble(cells: { measurable: boolean }): TerminalDocumentTerminal {
   const terminal = terminalDocumentDouble().terminal
   const cell = () => {
-    const k = terminal.options.fontSize / 13
+    const k = cells.measurable ? terminal.options.fontSize / 13 : 0
     return { width: CELL.width * k, height: CELL.height * k }
   }
   const grid = Object.assign(terminal, {
@@ -286,8 +290,14 @@ function gridDouble(): TerminalDocumentTerminal {
  * A mounted page document over a grid, whose host box the case sets and pushes as RN layout does:
  * react-native-web's `onLayout` reports a `display:none` screen as 0x0 and its return as the old box.
  */
-async function mountedOverGrid() {
-  gridTerminal = gridDouble()
+async function mountedOverGrid({ laidOutFirst = true } = {}) {
+  const cells = { measurable: true }
+  const grids: TerminalDocumentTerminal[] = []
+  gridTerminal = () => {
+    const grid = gridDouble(cells)
+    grids.push(grid)
+    return grid
+  }
   const host = plantHost()
   let box = { width: 390, height: 600 }
   host.getBoundingClientRect = () => new DOMRect(0, 134, box.width, box.height)
@@ -315,16 +325,18 @@ async function mountedOverGrid() {
     box = { width, height }
     mounted.notifyViewport()
   }
-  layOut(390, 600)
+  if (laidOutFirst) {
+    layOut(390, 600)
+  }
   send({ type: 'init', cols: 55, rows: 40, initialData: '', preserveScroll: false })
   await framesUntil(() => scales.at(-1) === FIT_390)
-  return { mounted, scales, send, layOut }
+  return { mounted, scales, send, layOut, cells, grid: () => grids.at(-1)! }
 }
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
-async function framesUntil(done: () => boolean) {
-  for (let frame = 0; frame < 30 && !done(); frame++) {
+async function framesUntil(done: () => boolean, frames = 30) {
+  for (let frame = 0; frame < frames && !done(); frame++) {
     await nextFrame()
   }
   expect(done()).toBe(true)
@@ -345,7 +357,8 @@ describe("the page pushes its terminal frame's box into the document", () => {
     )
     try {
       const host = plantHost()
-      host.getBoundingClientRect = () => new DOMRect(0, 134, 390, 600)
+      let height = 600
+      host.getBoundingClientRect = () => new DOMRect(0, 134, 390, height)
       act(() => {
         renderer = create(createElement(TerminalWebView, {}), { createNodeMock: () => host })
       })
@@ -353,8 +366,9 @@ describe("the page pushes its terminal frame's box into the document", () => {
       expect(surface.style.transform).toBe('')
       const laidOut = renderer!.root.findAll((node) => typeof node.props.onLayout === 'function')
       expect(laidOut).toHaveLength(1)
+      height = 560
       act(() => {
-        laidOut[0]!.props.onLayout({ nativeEvent: { layout: { width: 390, height: 600 } } })
+        laidOut[0]!.props.onLayout({ nativeEvent: { layout: { width: 390, height: 560 } } })
       })
       expect(surface.style.transform).toContain('scale(1)')
       expect(observers).toBe(0)
@@ -378,28 +392,58 @@ describe("the page pushes its terminal frame's box into the document", () => {
     mounted.dispose()
   })
 
-  it('fits a grid resized while hidden to the last box RN laid out, as the WebView does', async () => {
-    const { mounted, scales, send, layOut } = await mountedOverGrid()
-    layOut(0, 0)
-    send({ type: 'resize', cols: 80, rows: 40 })
-    await framesUntil(() => scales.at(-1) === 390 / (7.5 * 80))
+  it('keeps pan and zoom when RN laid the host out before the mount existed', async () => {
+    // The first layout can land before the document does; the box it reported is still the box.
+    const { mounted, scales, layOut } = await mountedOverGrid({ laidOutFirst: false })
     const fitted = scales.length
+    layOut(0, 0)
     layOut(390, 600)
+    await nextFrame()
     await nextFrame()
     expect(scales).toHaveLength(fitted)
     mounted.dispose()
   })
 
-  it('fits a text-scale change made while hidden to the last box RN laid out', async () => {
+  it('holds a fit asked for while hidden and lands it on show', async () => {
     const { mounted, scales, send, layOut } = await mountedOverGrid()
     layOut(0, 0)
-    send({ type: 'set-font-scale', fontScale: 0.8 })
-    // The smaller font's cells: fontPxForScale(0.8) = 10 px, so 390 / (7.5 x 10/13) = 67 columns.
-    await framesUntil(() => scales.at(-1) === 1)
-    const fitted = scales.length
-    layOut(390, 600)
+    send({ type: 'resize', cols: 80, rows: 40 })
     await nextFrame()
-    expect(scales).toHaveLength(fitted)
+    await nextFrame()
+    expect(scales.at(-1)).toBe(FIT_390)
+    layOut(390, 600)
+    await framesUntil(() => scales.at(-1) === 390 / (7.5 * 80))
+    mounted.dispose()
+  })
+
+  it('never commits a blind fit when the grid cannot be measured while hidden', async () => {
+    // A reconnect re-inits under a covering screen, where xterm's DOM measure reads every cell as 0.
+    const { mounted, scales, send, layOut, cells } = await mountedOverGrid()
+    layOut(0, 0)
+    const shown = scales.length
+    cells.measurable = false
+    send({ type: 'init', cols: 55, rows: 40, initialData: '', preserveScroll: false })
+    // Past the retry loop's 60-frame cap, where a fit that did not wait commits scale 1.
+    for (let frame = 0; frame < 75; frame++) {
+      await nextFrame()
+    }
+    expect(scales.slice(shown)).not.toContain(1)
+    cells.measurable = true
+    layOut(390, 600)
+    await framesUntil(() => scales.at(-1) === FIT_390)
+    mounted.dispose()
+  })
+
+  it('resizes the grid to a text scale changed while hidden, and fits it on show', async () => {
+    const { mounted, scales, send, layOut, grid } = await mountedOverGrid()
+    layOut(0, 0)
+    send({ type: 'set-font-scale', fontScale: 0.8 })
+    // fontPxForScale(0.8) = 10 px: 390 / (7.5 x 10/13) = 67 columns, where stale cells give 52.
+    await framesUntil(() => grid().cols === 67)
+    const hidden = scales.length
+    layOut(390, 600)
+    await framesUntil(() => scales.length > hidden)
+    expect(scales.at(-1)).toBe(1)
     mounted.dispose()
   })
 })

@@ -2,6 +2,7 @@ import { Terminal } from '@xterm/xterm'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
+import type { TerminalViewportChange } from './document/document-host-seams'
 import { TERMINAL_DOCUMENT_ELEMENT_STYLE, TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
 import { scopeStyleToHost } from '../style-scoping/document-style-scoping'
 import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
@@ -147,20 +148,23 @@ function startDocumentOrGiveTheHostBack(
 type PageViewport = ReturnType<typeof pageViewport>
 
 /**
- * The host's box, pushed by RN layout. A WebView keeps its size under a covering screen; RN web lays
- * that `display:none` host out as 0x0 and its return as the same box, so neither is a change. Sizes
- * are the client rect's, since RN web's layout numbers are whole-pixel `offsetWidth`s.
+ * The host's box, pushed by RN layout. RN web lays a `display:none` host out as 0x0 and its return
+ * as the same box: the size stays the last real one, as a covered WebView's does, and the return is
+ * a show rather than a resize. Sizes are the client rect's; RN web's are whole-pixel `offsetWidth`s.
  */
 function pageViewport(host: HTMLElement) {
-  let laidOut = { width: 0, height: 0 }
-  let onChange: (() => void) | null = null
+  // Seeded from the host, since RN's first layout can land before this mount exists.
+  const seed = host.getBoundingClientRect()
+  let laidOut = { width: seed.width, height: seed.height }
+  let onChange: ((change: TerminalViewportChange) => void) | null = null
   return {
     rect: () => {
       const box = host.getBoundingClientRect()
-      const size = box.width > 0 ? box : laidOut
-      return { left: box.left, top: box.top, width: size.width, height: size.height }
+      const hidden = box.width <= 0
+      const size = hidden ? laidOut : box
+      return { left: box.left, top: box.top, width: size.width, height: size.height, hidden }
     },
-    observe: (change: () => void) => {
+    observe: (change: (change: TerminalViewportChange) => void) => {
       onChange = change
       return () => {
         onChange = null
@@ -168,11 +172,15 @@ function pageViewport(host: HTMLElement) {
     },
     notify: () => {
       const { width, height } = host.getBoundingClientRect()
-      if (width <= 0 || (width === laidOut.width && height === laidOut.height)) {
+      if (width <= 0) {
+        return
+      }
+      if (width === laidOut.width && height === laidOut.height) {
+        onChange?.('shown')
         return
       }
       laidOut = { width, height }
-      onChange?.()
+      onChange?.('resized')
     }
   }
 }
