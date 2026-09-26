@@ -171,7 +171,10 @@ export async function runCodexAppServerSession<T>(
       }
     },
     onRejected: () => undefined,
-    onFatal: failPending
+    onFatal: (error) => {
+      spawnError = error
+      failPending(error)
+    }
   })
 
   function failPending(error: Error): void {
