@@ -6,6 +6,7 @@
     "review-ai-diff",
     "jump-worktrees",
     "design-mode-fix",
-    "remote-worktrees"
+    "remote-worktrees",
+    "web-search"
   ]
 }
