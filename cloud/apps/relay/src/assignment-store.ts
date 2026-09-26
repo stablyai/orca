@@ -7466,10 +7466,16 @@ export class RelayAssignmentStore {
   }
 
   private async connectionHeadroomByCell(
-    database: RelayDatabase
+    database: RelayDatabase,
+    cellId?: string
   ): Promise<Map<string, boolean>> {
     const now = this.now()
-    const rows = await database.query(ASSIGNMENT_CONNECTION_HEADROOM_QUERY)
+    const rows = await database.query(
+      cellId === undefined
+        ? ASSIGNMENT_CONNECTION_HEADROOM_QUERY
+        : `${ASSIGNMENT_CONNECTION_HEADROOM_QUERY} WHERE limits.cell_id = ?`,
+      cellId === undefined ? [] : [cellId]
+    )
     return new Map(
       rows.map((row) => {
         const heartbeat = optionalInteger(row, 'last_heartbeat_at')
@@ -7503,7 +7509,7 @@ export class RelayAssignmentStore {
     database: RelayDatabase,
     cellId: string
   ): Promise<boolean> {
-    return (await this.connectionHeadroomByCell(database)).get(cellId) !== false
+    return (await this.connectionHeadroomByCell(database, cellId)).get(cellId) !== false
   }
 
   private async cellIsLive(

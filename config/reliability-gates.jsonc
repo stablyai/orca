@@ -20437,6 +20437,82 @@
         "Retain red/green count and latency assertions; collect cross-platform and CI soak evidence."
       ],
       "demotionRule": "Keep experimental until soak evidence; investigate lifecycle failures without retries or weakening count, identity or cleanup assertions."
+    },
+    {
+      "id": "relay.assignment-headroom-scope",
+      "title": "Single-cell admission preserves capacity with bounded headroom reads",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "relay",
+      "layer": "sqlite-store-integration",
+      "surfaces": ["relay assignment admission", "relay migration target capacity"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["relay"],
+      "coverageNotes": "Actual assignment store and SQLite tests on macOS. No real PostgreSQL or live remote host/physical phone run. Local/daemon PTY, SSH execution ownership, WSL, folder/git workspace behavior and transport framing are unaffected.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/23035"],
+      "invariant": "A single-cell capacity check reads only that cell while retaining snapshot freshness, incarnation, outstanding reservation and missing-limit policy; new placement retains the full fleet inventory.",
+      "oracle": "With 32 capped cells, an existing active host stays on its pinned cell and reads one headroom row; new placement reads all 32. Missing, expired or prior-incarnation snapshots, capacity exhaustion and outstanding debt still refuse the active pinned host; an uncapped cell remains admissible.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment-store-lock-order.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false"
+      ],
+      "testFiles": [
+        "cloud/apps/relay/src/assignment-headroom-scope.test.ts",
+        "cloud/apps/relay/src/assignment-connection-headroom.test.ts",
+        "cloud/apps/relay/src/assignment-store.test.ts",
+        "cloud/apps/relay/src/assignment-store-lock-order.test.ts",
+        "cloud/apps/relay/src/cell-inventory-lock-contention.test.ts",
+        "cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts",
+        "cloud/apps/relay/src/regional-rehome-target-selection.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "cloud/apps/relay/src/assignment-headroom-scope.test.ts",
+          "assertions": [
+            "reads one cell for a sticky assignment even when the capped fleet grows",
+            "still considers the full fleet for a new placement",
+            "rejects the pinned active host with %s",
+            "preserves admission for cells without a connection limit",
+            "counts outstanding reservations at the admission boundary"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-25",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir cloud/apps/relay exec vitest run ../../../cloud/apps/relay/src/assignment-headroom-scope.test.ts ../../../cloud/apps/relay/src/assignment-connection-headroom.test.ts ../../../cloud/apps/relay/src/assignment-store.test.ts ../../../cloud/apps/relay/src/assignment-store-lock-order.test.ts ../../../cloud/apps/relay/src/cell-inventory-lock-contention.test.ts ../../../cloud/apps/relay/src/assignment-isolated-cell-replacement.test.ts ../../../cloud/apps/relay/src/regional-rehome-target-selection.test.ts --silent=false",
+          "result": "passed",
+          "durationSeconds": 0.513,
+          "summary": "189 tests across seven files passed; independent root rerun also passed189 tests. Relay typecheck passed separately."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Focused SQLite store/capacity/lock-order suites; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Baseline two count regressions failed: sticky headroom 32 rows instead of 1 and uncapped target 31 unrelated rows instead of 0. Narrowed query passes all eight regression cases."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Actual sticky path result rows 32 to 1; no new timer, polling, queue, cache or provider call. Supplemental SQLite query benchmark with 32 cells and 400 active reservations each measured median per-query 0.285ms to 0.022ms; not a production PostgreSQL latency claim."
+      },
+      "knownGaps": [
+        "Real PostgreSQL query plan and concurrent admission not rerun for the scoped variant.",
+        "Windows/Linux execution, live remote host/mobile flows and CI soak are not recorded."
+      ],
+      "promotionCriteria": [
+        "Retain red/green row budget and semantic admission cases; collect PostgreSQL, cross-platform and CI soak evidence."
+      ],
+      "demotionRule": "Keep experimental until soak evidence; investigate admission/ownership regressions without weakening row or capacity assertions."
     }
   ]
 }
