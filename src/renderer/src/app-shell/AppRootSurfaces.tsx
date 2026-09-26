@@ -10,6 +10,7 @@ import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
 import { StarNagCard } from '../components/StarNagCard'
 import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeOnRestartModal'
+import { CrossMachineRecoveryDialog } from '../components/cross-machine-recovery/CrossMachineRecoveryDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
@@ -299,6 +300,7 @@ export function AppRootSurfaces(props: {
       </NotificationCardStack>
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>
         <NativeChatResumeOnRestartModal />
+        <CrossMachineRecoveryDialog />
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
         <StarNagToastHost />

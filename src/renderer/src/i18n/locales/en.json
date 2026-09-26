@@ -3270,7 +3270,7 @@
             "missing": {
               "tui": {
                 "title": "This ZCode build has no terminal UI",
-                "description": "Orca's hooks installed correctly \u2014 the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
+                "description": "Orca's hooks installed correctly — the zcode on your PATH just cannot open a session. The ZCode desktop app bundles the agent runtime without its terminal UI. Install a zcode that ships the TUI, then run zcode outside Orca to confirm."
               }
             }
           },
@@ -15652,7 +15652,10 @@
             "2b3ce6d394": "Cancel",
             "e05063cfc1": "Line {{value0}}",
             "c845170b3b": "Lines {{value0}}-{{value1}}",
-            "commentTooLarge": "Comment is too large to submit safely."
+            "commentTooLarge": "Comment is too large to submit safely.",
+            "f6c449191e": "Add note for the AI",
+            "5fa4bfebaa": "Add note",
+            "5e9b3d0c2e": "Adding..."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "This note"
@@ -18122,6 +18125,74 @@
             "spaces": "spaces"
           }
         }
+      }
+    },
+    "cross-machine-recovery": {
+      "quickAction": {
+        "title": "Recover Sessions",
+        "description": "Pick up workspaces and agent sessions from another computer.",
+        "verbs": {
+          "recover": "recover sessions",
+          "pickUp": "pick up work",
+          "otherMachine": "other computer"
+        }
+      },
+      "dialog": {
+        "title": "Recover work from another computer",
+        "destinationNamed": "Recovers to this computer ({{machineName}})",
+        "destination": "Recovers to this computer",
+        "filter": "Filter workspaces and sessions",
+        "loading": "Looking for recoverable work…",
+        "empty": "No work from other computers yet.",
+        "unreachable": "{{hostName}} (unreachable)",
+        "cancel": "Cancel",
+        "recover": "Recover"
+      },
+      "row": {
+        "ageUnknown": "unknown time",
+        "notReadyMissing": "Not ready: missing {{missing}}",
+        "notReady": "Not ready to recover yet",
+        "sessions": "{{count}} sessions",
+        "partial": "Partial transcript",
+        "collision": "Already running on this computer",
+        "resumeAge": "Resume · last used {{age}}",
+        "dormantAge": "Restore without starting · last used {{age}}",
+        "collisionTooltip": "This session is live here; resuming it again would fork the conversation."
+      },
+      "status": {
+        "countOne": "1 recoverable workspace",
+        "count": "{{count}} recoverable workspaces",
+        "stopped": "Sync helper is not running",
+        "tooltip": "Recover work from your other computers. Click to choose."
+      },
+      "copy": {
+        "pause": {
+          "cellular": "Paused on cellular",
+          "expensive": "Paused on an expensive network",
+          "constrained": "Paused in Low Data Mode",
+          "unknownNetwork": "Paused on an unknown network",
+          "disconnected": "Paused while offline",
+          "manualMetered": "Paused on a metered network",
+          "peerOffline": "Paused until the other computer is back",
+          "unknown": "Sync paused"
+        },
+        "error": {
+          "notInstalled": "The recovery provider (cc-sync) is not installed.",
+          "timeout": "The recovery provider did not answer in time.",
+          "outputTooLarge": "The recovery provider answer was too large.",
+          "invalidOutput": "The recovery provider answered in an unknown format."
+        },
+        "phase": {
+          "select": "Choosing checkpoint…",
+          "restoreCode": "Restoring code…",
+          "restoreSessions": "Restoring sessions…",
+          "orcaImport": "Restoring the workspace layout…",
+          "orcaResume": "Resuming sessions…",
+          "unknown": "Recovering…"
+        }
+      },
+      "web": {
+        "unsupported": "Cross-machine recovery runs in the desktop app only."
       }
     }
   },

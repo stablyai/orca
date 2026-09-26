@@ -9,6 +9,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getNativeChatSplitQuickActions } from './native-chat-split-quick-actions'
+import { getCrossMachineRecoveryQuickActions } from './cross-machine-recovery-quick-actions'
 
 export type CmdJQuickActionRunResult =
   | { status: 'ok' }
@@ -127,6 +128,7 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     run: (ctx) => runWorkspaceAction(ctx, ctx.openNewTerminalTab)
   },
   ...getNativeChatSplitQuickActions(),
+  ...getCrossMachineRecoveryQuickActions(),
   {
     id: CREATE_WORKSPACE_QUICK_ACTION_ID,
     kind: 'action',

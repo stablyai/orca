@@ -32,6 +32,7 @@ import { createMacosTccPromptsApi } from './preload-api/web-macos-tcc-api'
 import { createEmptyMemorySnapshot } from './preload-api/web-memory-api'
 import { createWebMobileApi } from './preload-api/web-mobile-api'
 import { createWebNativeChatApi } from './preload-api/web-native-chat-api'
+import { createWebCrossMachineRecoveryApi } from './preload-api/web-cross-machine-recovery-api'
 import { createNotificationsApi } from './preload-api/web-notifications-api'
 import { createWebOnboardingApi } from './preload-api/web-onboarding-api'
 import { createWebOrcaProfilesApi } from './preload-api/web-orca-profiles-api'
@@ -75,16 +76,11 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     ui: createWebUiApi(),
     ...createWebDiagnosticsApi(),
     ...createWebWorkspaceSessionApi(),
-    // Why: recovery imports target this computer's desktop runtime; the web client never hosts one.
-    crossMachineRecovery: {
-      onApply: () => () => {},
-      reply: () => {},
-      resumeLocal: () => Promise.reject(new Error('recovery_unsupported'))
-    },
     ...createWebOnboardingApi(),
     ...createWebGithubCacheApi(),
     runtime: createWebRuntimeApi(),
     nativeChat: createWebNativeChatApi(),
+    crossMachineRecovery: createWebCrossMachineRecoveryApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
     worktrees: createWorktreesApi(),

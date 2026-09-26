@@ -4,8 +4,9 @@ import type {
   CrossMachineRecoveryApplyRequest,
   CrossMachineRecoveryResumeLocalArgs
 } from '../../shared/cross-machine-recovery-session-ops'
+import type { CrossMachineRecoveryProviderApi } from '../../shared/cross-machine-recovery-provider-ipc'
 
-export type CrossMachineRecoveryApi = {
+export type CrossMachineRecoveryApi = CrossMachineRecoveryProviderApi & {
   /** Host-authored session writes; the renderer applies and persists each before replying. */
   onApply: (callback: (request: CrossMachineRecoveryApplyRequest) => void) => () => void
   reply: (reply: CrossMachineRecoveryApplyReply) => void

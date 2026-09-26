@@ -20,6 +20,7 @@ import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChan
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
+import { CrossMachineRecoveryStatusSegment } from '../cross-machine-recovery/CrossMachineRecoveryStatusSegment'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -248,6 +249,7 @@ export function StatusBarSurface({
         <RemoteServerUpdateStatusSegment iconOnly={iconOnly} />
         <SkillUpdateStatusSegment iconOnly={iconOnly} />
         <NativeChatResumeStatusSegment iconOnly={iconOnly} />
+        <CrossMachineRecoveryStatusSegment iconOnly={iconOnly} />
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         <React.Suspense fallback={null}>
           {petEnabled ? <PetStatusSegment /> : null}
