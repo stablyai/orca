@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react'
+import { measureTerminalViewportOnce } from './mobile-terminal-first-subscribe-viewport'
 import type { MobileSessionNativeChatDictationModel } from './use-mobile-session-native-chat-dictation'
 
 export function useMobileSessionTerminalSubscriptionFoundation(
@@ -84,21 +85,17 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     }
   }, [clearNativeChatInputLease])
 
-  // Why: measure the phone viewport once from the first TerminalWebView; dims ride every subscribe so the server auto-fits without a separate RPC.
   const measureViewportOnce = useCallback(
-    async (handle: string) => {
-      if (viewportMeasuredRef.current) {
-        return
-      }
-      const dims = await getTerminalRef(handle)?.measureFitDimensions(
-        terminalFrameHeightRef.current || undefined
-      )
-      terminalDiagnosticsRef.current.viewportMeasured(handle, dims, terminalFrameHeightRef.current)
-      if (dims) {
-        viewportRef.current = dims
-        viewportMeasuredRef.current = true
-      }
-    },
+    (handle: string) =>
+      measureTerminalViewportOnce({
+        handle,
+        ref: getTerminalRef(handle),
+        viewportRef,
+        viewportMeasuredRef,
+        terminalFrameHeightRef,
+        onMeasured: (measuredHandle, dims, frameHeight) =>
+          terminalDiagnosticsRef.current.viewportMeasured(measuredHandle, dims, frameHeight)
+      }),
     [getTerminalRef]
   )
   return {
