@@ -1,4 +1,5 @@
 import { isAgentSessionId, type AgentSessionRecord } from '../../shared/agent-session-record'
+import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import { isAgentSessionSurfaceTabId } from '../../shared/agent-session-surface-tab-id'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
@@ -92,7 +93,7 @@ export class AgentSessionTabTable {
   private put(tabId: string, sessionId: string): void {
     const owner = this.sessionByTab.get(tabId)
     if (owner !== undefined && owner !== sessionId) {
-      throw new Error('agent_session_conflict')
+      throw agentSessionRefusalError('agent_session_conflict', 'tabIdTaken')
     }
     this.hide(sessionId)
     this.sessionByTab.set(tabId, sessionId)
@@ -120,7 +121,7 @@ export function setAgentSessionTabVisibility(
   tabId?: string
 ): void {
   if (visible && !state.records.has(sessionId)) {
-    throw new Error('agent_session_identity_required')
+    throw agentSessionRefusalError('agent_session_identity_required', 'recordMissing')
   }
   state.sessionTabs ??= new AgentSessionTabTable()
   if (visible) {
