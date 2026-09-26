@@ -228,23 +228,22 @@ describe('profile state authority bootstrap', () => {
     const options = { ...paths(directory), allowEmptyProfileState: true }
     const initializationFailure = new Error('injected initial schema failure')
     const originalExec = Database.prototype.exec
-    const execSpy = vi.spyOn(Database.prototype, 'exec').mockImplementation(function (
-      this: Database,
-      sql
-    ) {
-      originalExec.call(this, sql)
-      if (sql.includes('CREATE TABLE')) {
-        const row = this.prepare('PRAGMA database_list').get()
-        if (typeof row?.file !== 'string') {
-          throw new Error('Expected a file-backed database during initialization')
+    const execSpy = vi
+      .spyOn(Database.prototype, 'exec')
+      .mockImplementation(function (this: Database, sql) {
+        originalExec.call(this, sql)
+        if (sql.includes('CREATE TABLE')) {
+          const row = this.prepare('PRAGMA database_list').get()
+          if (typeof row?.file !== 'string') {
+            throw new Error('Expected a file-backed database during initialization')
+          }
+          expect(existsSync(`${row.file}-journal`)).toBe(true)
+          for (const suffix of ['-wal', '-shm']) {
+            writeFileSync(`${row.file}${suffix}`, 'interrupted schema initialization')
+          }
+          throw initializationFailure
         }
-        expect(existsSync(`${row.file}-journal`)).toBe(true)
-        for (const suffix of ['-wal', '-shm']) {
-          writeFileSync(`${row.file}${suffix}`, 'interrupted schema initialization')
-        }
-        throw initializationFailure
-      }
-    })
+      })
 
     expect(() => bootstrapProfileStateAuthority(options)).toThrowError(
       expect.objectContaining({ cause: initializationFailure })

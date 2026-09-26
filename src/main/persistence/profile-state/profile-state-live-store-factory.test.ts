@@ -163,19 +163,19 @@ describe('live profile authority admission', () => {
   it('never adopts a competing revision between bootstrap and worker readiness', async () => {
     const input = options()
     const original = ProfileStateSqliteAuthority.prototype.retireForWorker
-    vi.spyOn(ProfileStateSqliteAuthority.prototype, 'retireForWorker').mockImplementation(function (
-      this: ProfileStateSqliteAuthority
-    ) {
-      const handoff = original.call(this)
-      const peer = new ProfileStateSqliteAuthority(input.databaseFile, input.profileId)
-      try {
-        peer.readSerializedState()
-        peer.writeSerializedDomains([{ domain: 'peer', payload: '{"retained":true}' }])
-      } finally {
-        peer.close()
+    vi.spyOn(ProfileStateSqliteAuthority.prototype, 'retireForWorker').mockImplementation(
+      function (this: ProfileStateSqliteAuthority) {
+        const handoff = original.call(this)
+        const peer = new ProfileStateSqliteAuthority(input.databaseFile, input.profileId)
+        try {
+          peer.readSerializedState()
+          peer.writeSerializedDomains([{ domain: 'peer', payload: '{"retained":true}' }])
+        } finally {
+          peer.close()
+        }
+        return handoff
       }
-      return handoff
-    })
+    )
     await expect(open(input)).rejects.toThrow('Profile state revision changed')
     expect(readState(input).peer).toEqual({ retained: true })
   })
