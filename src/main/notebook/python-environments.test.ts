@@ -107,6 +107,22 @@ describe('listPythonEnvironments', () => {
     expect(unversioned.workspace).toEqual([{ path: venvPython(), name: '.venv' }])
   })
 
+  it('reads only the head of pyvenv.cfg, whatever size it reports', async () => {
+    // procfs files report size 0 yet never end, so the read must be bounded, not size-gated.
+    const padding = `# ${'x'.repeat(1022)}\n`.repeat(128)
+    const cfg = join(root, '.venv', 'pyvenv.cfg')
+    const list = () =>
+      listPythonEnvironments(join(root, 'a.ipynb'), root, { runWorkspaceInterpreters: false })
+
+    writeFileSync(cfg, `version_info = 3.12.1.final.0\n${padding}`)
+    expect((await list()).workspace).toEqual([
+      { path: venvPython(), name: '.venv', version: '3.12.1' }
+    ])
+
+    writeFileSync(cfg, `${padding}version_info = 3.12.1.final.0\n`)
+    expect((await list()).workspace).toEqual([{ path: venvPython(), name: '.venv' }])
+  })
+
   it('probes workspace envs once the notebook is trusted, dropping ones that fail', async () => {
     runProcessMock.mockImplementation(async ({ program }: { program: string }) =>
       program === condaPython()

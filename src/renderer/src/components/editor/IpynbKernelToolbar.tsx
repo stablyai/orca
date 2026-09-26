@@ -148,7 +148,8 @@ export function IpynbKernelToolbar({
       ) : null}
       <IpynbToolbarButton
         label={translate('auto.components.editor.IpynbViewer.restart', 'Restart kernel')}
-        disabled={!kernel.environment || settling}
+        // No kernel can start before trust, so a restart there would silently do nothing.
+        disabled={!kernel.environment || !kernel.trusted || settling}
         onClick={() => restartKernel(filePath)}
       >
         <RotateCcw />

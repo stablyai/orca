@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative } from 'node:path'
 import { runProcess } from '../../shared/child-process/run-process'
 import type { ProcessResult } from '../../shared/child-process/process-spec'
@@ -76,19 +76,29 @@ function environmentName(executable: string): string {
   return basename(environmentDir(executable) ?? executable)
 }
 
+/** The head of a regular file, read once into a fixed buffer. */
+function readFileHead(path: string, maxBytes: number): string | undefined {
+  // Why not a FIFO or device: opening one can block; a symlinked procfs file passes and reports size 0.
+  if (!existsSync(path) || !statSync(path).isFile()) {
+    return undefined
+  }
+  const fd = openSync(path, 'r')
+  try {
+    const buffer = Buffer.alloc(maxBytes)
+    return buffer.toString('utf8', 0, readSync(fd, buffer, 0, maxBytes, 0))
+  } finally {
+    closeSync(fd)
+  }
+}
+
 /** The Python version an environment records on disk: venv `pyvenv.cfg`, else conda's `conda-meta`. */
 function recordedVersion(envDir: string): string | undefined {
   try {
-    const cfg = join(envDir, 'pyvenv.cfg')
-    const stat = existsSync(cfg) ? statSync(cfg) : null
-    // Why the size cap: a hostile repo can point pyvenv.cfg at something endless.
-    if (stat?.isFile() && stat.size <= PYVENV_CFG_MAX_BYTES) {
-      const match = /^\s*version(?:_info)?\s*=\s*(\d+\.\d+(?:\.\d+)?)/m.exec(
-        readFileSync(cfg, 'utf8')
-      )
-      if (match) {
-        return match[1]
-      }
+    // Why bounded, not size-checked: a hostile repo can point pyvenv.cfg at an endless file.
+    const cfg = readFileHead(join(envDir, 'pyvenv.cfg'), PYVENV_CFG_MAX_BYTES)
+    const match = cfg && /^\s*version(?:_info)?\s*=\s*(\d+\.\d+(?:\.\d+)?)/m.exec(cfg)
+    if (match) {
+      return match[1]
     }
     const condaMeta = join(envDir, 'conda-meta')
     if (existsSync(condaMeta)) {
