@@ -42,6 +42,7 @@ import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
 import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
+import { pageKeyboardInset } from './page-keyboard-inset'
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
   switch (reason) {
@@ -219,6 +220,11 @@ export function MobileWebShellScreen({
         bottomInset: insets.bottom,
         platform: Platform.OS
       })
+  const keyboardInset = pageKeyboardInset({
+    keyboardHeight,
+    bottomInset: insets.bottom,
+    platform: Platform.OS
+  })
   const pageInsets = pageSafeAreaInsets({
     insets,
     viewShortenedBy,
@@ -246,7 +252,7 @@ export function MobileWebShellScreen({
     hostId,
     route,
     safeAreaInsets: pageInsets,
-    keyboardInset: keyboardHeight,
+    keyboardInset,
     pageRoutes,
     pageRouteGrants,
     routeGrants,
@@ -331,8 +337,8 @@ export function MobileWebShellScreen({
   // Every keyboard event, a height change while open included, so the page never holds a stale one.
   const publishKeyboardInset = bridge.publishKeyboardInset
   useEffect(() => {
-    publishKeyboardInset(keyboardHeight)
-  }, [publishKeyboardInset, keyboardHeight])
+    publishKeyboardInset(keyboardInset)
+  }, [publishKeyboardInset, keyboardInset])
 
   // The navigation object rather than the router: what this takes away is this screen's own place
   // on the stack, which is a screen option, and the router has no member that says it.
