@@ -31,6 +31,11 @@ export type CreateMainWindowOptions = {
     webContentsId: number
     recentRecoveryCount: number
     cause?: RecoveryExhaustionCause
+    /**
+     * This verdict corrects one already reported for a prompt that is still on screen. Record it, but do not
+     * raise a second box: a native message box cannot be dismissed programmatically, so another one stacks.
+     */
+    supersedesStandingPrompt?: boolean
     /** Watched manual retry for the recovery prompt; an unwatched one cannot re-raise the prompt when it stalls too. */
     retry?: () => void
   }) => void
