@@ -724,7 +724,7 @@ function showBrowserBesideTerminal(wt = 'wt-1'): void {
   }
   storeState.activeGroupIdByWorktree = { [wt]: 'term' }
 }
-const PLACED = { activate: true, targetGroupId: 'web', placementFixed: true }
+const PLACED = { activate: true, targetGroupId: 'web' }
 
 describe('openHttpLink with a browser on screen', () => {
   it('opens a local link as a new tab in the visible browser group, then focuses it', () => {

@@ -45,7 +45,7 @@ type StoreAccessor = () => VisibleBrowserLinkState & {
   createBrowserTab: (
     worktreeId: string,
     url: string,
-    opts: { activate: boolean; targetGroupId?: string; placementFixed?: boolean }
+    opts: { activate: boolean; targetGroupId?: string }
   ) => unknown
   focusGroup?: (worktreeId: string, groupId: string) => void
   repos?: readonly LocalhostLinkRepo[]

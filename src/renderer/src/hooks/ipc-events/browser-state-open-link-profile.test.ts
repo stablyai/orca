@@ -188,7 +188,6 @@ describe('link-opened Orca tabs', () => {
         title: 'https://docs.example.com/new',
         activate: true,
         targetGroupId: 'web',
-        placementFixed: true,
         sessionProfileId: 'profile-a',
         sessionPartition: 'persist:a'
       }
@@ -207,7 +206,7 @@ describe('link-opened Orca tabs', () => {
     expect(createBrowserTabMock).toHaveBeenCalledWith(
       'worktree-1',
       'https://x.example/',
-      expect.objectContaining({ activate: false, targetGroupId: 'web', placementFixed: true })
+      expect.objectContaining({ activate: false, targetGroupId: 'web' })
     )
     expect(focusGroupMock).not.toHaveBeenCalled()
   })
