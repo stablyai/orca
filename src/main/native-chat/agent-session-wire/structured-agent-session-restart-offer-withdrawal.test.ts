@@ -259,6 +259,22 @@ it('keeps a failed resume retryable more than a day later, after the ledger prun
   expect(retried.continued).toMatchObject([{ sessionId: SESSION, outcome: 'continued' }])
 })
 
+// The rejected continuation is the chat's newest user message; the row still names the user's.
+it("names the user's prompt on a failed retry, not the rejected continuation", async () => {
+  const state = await offered('submission')
+  const { host } = state
+  state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  const first = await host.restartResume.continueAfterRestart([SESSION], 'modal')
+  expect(first.failed).toMatchObject([{ latestPrompt: 'Perform the original task' }])
+
+  state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  const retried = await host.restartResume.continueAfterRestart([SESSION], 'retry')
+
+  expect(retried.failed).toMatchObject([
+    { latestPrompt: 'Perform the original task', retryable: true }
+  ])
+})
+
 // Resume that runs by itself at launch goes through the same call a click does, and the same rule
 // decides: whichever of the two was accepted first since the restart wins.
 it("refuses an automatic continuation when the user's message was accepted first, and writes nothing", async () => {

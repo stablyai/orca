@@ -138,9 +138,14 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     }
     const completed: string[] = []
     const failures: AgentSessionResumeFailureInput[] = []
-    const promptBySession = new Map(
-      action.candidates.map((candidate) => [candidate.sessionId, candidate.latestPrompt])
-    )
+    // A retry keeps the prompt its first failure named: the chat's newest user message since then
+    // is the rejected continuation, and a message of the user's own would have ended the offer.
+    const promptBySession = new Map([
+      ...action.candidates.map(
+        (candidate) => [candidate.sessionId, candidate.latestPrompt] as const
+      ),
+      ...(await read()).map((filed) => [filed.marker.sessionId, filed.latestPrompt] as const)
+    ])
     for (const outcome of outcomes) {
       const resumed = outcome.outcome === 'resumed'
       // Ineligible means the offer no longer applies (record gone, conversation forked), and
