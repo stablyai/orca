@@ -2,6 +2,7 @@ import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
+import { readRunMailboxHome } from '../../../../orchestration/run-mailbox-home'
 import {
   RunCreateParams,
   RunCurrentParams,
@@ -123,7 +124,10 @@ export const ORCHESTRATION_RUN_METHODS = [
       if (!run) {
         throw new OrchestrationError('run_not_found', `Run ${params.id} was not found.`)
       }
-      return { run: exposeRun(run) }
+      return {
+        run: exposeRun(run),
+        routing: readRunMailboxHome(runtime.getOrchestrationDb(), run, runtime.getRuntimeId())
+      }
     }
   })
 ]

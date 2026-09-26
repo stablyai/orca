@@ -105,6 +105,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_unsupported_for_agent_session',
   'recipient_ambiguous',
   'recipient_run_mismatch',
+  'run_destination_unsupported',
+  'run_destination_unresolved',
   'dispatch_inactive',
   'worker_identity_changed',
   'cursor_invalid',
