@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { WorkspacePinTarget } from '../../store/slices/worktree-helpers'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type * as WorkspaceBoardTaskStatusSync from './workspace-board-task-status-sync'
 
@@ -15,15 +16,15 @@ type PointerDragParams = {
     status: string
     dropIndex: number
   }) => void
-  onPinWorktrees: (worktreeIds: readonly string[]) => void
+  onPinWorktrees: (targets: readonly WorkspacePinTarget[]) => void
 }
 
 type DocumentDropCapture = {
   onMoveWorktreeToStatus: (worktreeId: string, status: string) => void
-  onPinWorktree: (worktreeId: string) => void
+  onPinWorktree: (target: WorkspacePinTarget) => void
   options?: {
     onMoveWorktreesToStatus?: (worktreeIds: readonly string[], status: string) => void
-    onPinWorktrees?: (worktreeIds: readonly string[]) => void
+    onPinWorktrees?: (targets: readonly WorkspacePinTarget[]) => void
   }
 }
 
@@ -381,9 +382,16 @@ describe('WorkspaceKanbanDrawer task status sync wiring', () => {
     renderDrawer(item)
 
     act(() => {
-      pointerDragState.current?.onPinWorktrees([item.id])
-      documentDropState.current?.onPinWorktree(item.id)
-      documentDropState.current?.options?.onPinWorktrees?.([item.id])
+      pointerDragState.current?.onPinWorktrees([
+        { worktreeId: item.id, executionHostId: item.hostId ?? 'local' }
+      ])
+      documentDropState.current?.onPinWorktree({
+        worktreeId: item.id,
+        executionHostId: item.hostId ?? 'local'
+      })
+      documentDropState.current?.options?.onPinWorktrees?.([
+        { worktreeId: item.id, executionHostId: item.hostId ?? 'local' }
+      ])
     })
 
     expect(syncWorkspaceBoardTaskStatusesMock).not.toHaveBeenCalled()

@@ -30,7 +30,7 @@ function commitStatusOrPinDrop(
 ): void {
   const { drag, ctx } = args
   if (target.isPinDrop) {
-    ctx.onPinWorktrees(drag.draggedIds)
+    ctx.onPinWorktrees(drag.pinTargets)
     return
   }
   if (!target.status) {
@@ -66,7 +66,7 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
     args.onWorkspaceBoardDragPreviewCommit()
   }
   if (boardDropTarget.isPinDrop) {
-    ctx.onPinWorktrees(drag.draggedIds)
+    ctx.onPinWorktrees(drag.pinTargets)
   } else if (boardDropTarget.status) {
     args.onDropWorktreesOnWorkspaceBoard({
       worktreeIds: drag.reorderDraggedIds,

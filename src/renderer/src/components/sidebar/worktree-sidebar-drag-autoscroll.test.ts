@@ -153,8 +153,14 @@ describe('refreshWorktreeSidebarDragSession', () => {
             key: 'repo:one',
             worktreeIds: ['a', 'b'],
             units: [
-              { worktreeId: 'a', worktreeIds: ['a'] },
-              { worktreeId: 'b', worktreeIds: ['b', 'child'] }
+              {
+                worktreeId: 'a',
+                worktreeIds: ['a']
+              },
+              {
+                worktreeId: 'b',
+                worktreeIds: ['b', 'child']
+              }
             ]
           }
         ],
@@ -228,8 +234,14 @@ describe('refreshWorktreeSidebarDragSession', () => {
             key: 'repo:one',
             worktreeIds: ['parent', 'sibling'],
             units: [
-              { worktreeId: 'parent', worktreeIds: ['parent', 'child'] },
-              { worktreeId: 'sibling', worktreeIds: ['sibling'] }
+              {
+                worktreeId: 'parent',
+                worktreeIds: ['parent', 'child']
+              },
+              {
+                worktreeId: 'sibling',
+                worktreeIds: ['sibling']
+              }
             ]
           }
         ],

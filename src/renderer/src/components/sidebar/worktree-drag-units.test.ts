@@ -12,7 +12,12 @@ function item(
   id: string,
   depth = 0,
   sectionKey = 'all'
-): { type: 'item'; worktree: { id: string }; depth: number; sectionKey: string } {
+): {
+  type: 'item'
+  worktree: { id: string }
+  depth: number
+  sectionKey: string
+} {
   return { type: 'item', worktree: { id }, depth, sectionKey }
 }
 
@@ -35,7 +40,10 @@ describe('getWorktreeDragUnitGroups', () => {
         key: 'all',
         worktreeIds: ['parent', 'sibling'],
         units: [
-          { worktreeId: 'parent', worktreeIds: ['parent', 'child', 'grandchild'] },
+          {
+            worktreeId: 'parent',
+            worktreeIds: ['parent', 'child', 'grandchild']
+          },
           { worktreeId: 'sibling', worktreeIds: ['sibling'] }
         ]
       }
@@ -82,8 +90,14 @@ describe('getWorktreeDragUnitGroups', () => {
         key: 'pinned',
         worktreeIds: ['pinned-copy', 'other-pinned'],
         units: [
-          { worktreeId: 'pinned-copy', worktreeIds: ['pinned-copy'] },
-          { worktreeId: 'other-pinned', worktreeIds: ['other-pinned'] }
+          {
+            worktreeId: 'pinned-copy',
+            worktreeIds: ['pinned-copy']
+          },
+          {
+            worktreeId: 'other-pinned',
+            worktreeIds: ['other-pinned']
+          }
         ]
       }
     ])
@@ -103,7 +117,10 @@ describe('getWorktreeDragUnitGroups', () => {
         key: 'all',
         worktreeIds: ['pinned-copy', 'other'],
         units: [
-          { worktreeId: 'pinned-copy', worktreeIds: ['pinned-copy'] },
+          {
+            worktreeId: 'pinned-copy',
+            worktreeIds: ['pinned-copy']
+          },
           { worktreeId: 'other', worktreeIds: ['other'] }
         ]
       }

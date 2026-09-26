@@ -1,4 +1,11 @@
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
+import {
+  getExecutionHostIdFromWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import type { WorkspacePinTarget } from '../../store/slices/worktree-helpers'
+import { getWorktreePinTarget } from './worktree-drag-units'
 
 /**
  * Which rows a Kanban pointer-drag actually moves.
@@ -11,19 +18,37 @@ export function resolveWorkspaceKanbanPointerDragSelection(args: {
   sourceWorktreeIdentity: string
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
-}): { worktreeIds: string[]; worktreeIdentities: string[] } {
+}): {
+  worktreeIds: string[]
+  worktreeIdentities: string[]
+  pinTargets: WorkspacePinTarget[]
+} {
   if (
     args.selectedWorktreeIds.has(args.sourceWorktreeIdentity) &&
     args.selectedWorktrees.length > 1
   ) {
     return {
       worktreeIds: args.selectedWorktrees.map((worktree) => worktree.id),
-      worktreeIdentities: [...args.selectedWorktreeIds]
+      worktreeIdentities: [...args.selectedWorktreeIds],
+      pinTargets: args.selectedWorktrees.map(getWorktreePinTarget)
     }
   }
+  const sourceWorktree = args.selectedWorktrees.find(
+    (worktree) => getWorktreeHostIdentity(worktree) === args.sourceWorktreeIdentity
+  )
   return {
     worktreeIds: [args.sourceWorktreeId],
-    worktreeIdentities: [args.sourceWorktreeIdentity]
+    worktreeIdentities: [args.sourceWorktreeIdentity],
+    pinTargets: [
+      sourceWorktree
+        ? getWorktreePinTarget(sourceWorktree)
+        : {
+            worktreeId: args.sourceWorktreeId,
+            executionHostId:
+              getExecutionHostIdFromWorktreeHostIdentity(args.sourceWorktreeIdentity) ??
+              LOCAL_EXECUTION_HOST_ID
+          }
+    ]
   }
 }
 
@@ -39,7 +64,7 @@ export type UseWorkspaceKanbanCardPointerDragParams = {
     dropIndex: number
   }) => void
   onShouldShowDropIndicator: (worktreeIds: readonly string[], status: WorkspaceStatus) => boolean
-  onPinWorktrees: (worktreeIds: readonly string[]) => void
+  onPinWorktrees: (targets: readonly WorkspacePinTarget[]) => void
   onDragTargetChange: (status: WorkspaceStatus | null) => void
   onPinDragTargetChange: (isOver: boolean) => void
 }

@@ -99,7 +99,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   updateWorktreeMeta: createUpdateWorktreeMeta(set, get),
   ensureHostedReviewPushTarget: createEnsureHostedReviewPushTarget(set, get),
   updateWorktreesMeta: createUpdateWorktreesMeta(set, get),
-  setWorktreesPinnedAndReveal: createSetWorktreesPinnedAndReveal(set, get),
+  setWorktreesPinnedAndReveal: createSetWorktreesPinnedAndReveal(get),
   markWorktreeUnread: createMarkWorktreeUnread(set, get),
   observeTerminalGitHubPullRequestLink: createObserveTerminalGitHubPullRequestLink(set, get),
   clearWorktreeUnread: createClearWorktreeUnread(set, get),
