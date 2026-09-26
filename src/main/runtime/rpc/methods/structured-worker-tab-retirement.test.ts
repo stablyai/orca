@@ -43,6 +43,7 @@ function installHost(options: { closeThrows?: boolean; lease?: Record<string, un
     }
     attached = false
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the release reads only the members stubbed here.
   setStructuredAgentSessionHost({
     setSessionTabVisibility,
     close,
