@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTuiIdleRuntime } from './tui-idle-wait-test-harness'
+import { makePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 
 // Follow-ons to #6011. The evidence ranking that fixed the wait path did not reach two
 // other consumers of the same signal: mailbox delivery, which TYPES INTO the pane, and
@@ -35,10 +37,15 @@ const GRAPH: RuntimeSyncWindowGraph = {
   ]
 }
 
-async function makeRuntime(launchAgent: TuiAgent | null, foreground = 'codex') {
+async function makeRuntime(
+  launchAgent: TuiAgent | null,
+  foreground = 'codex',
+  hookRows?: () => AgentStatusIpcPayload[]
+) {
   const runtime = makeTuiIdleRuntime({
     repoPath: '/tmp/followups',
-    getForegroundProcess: async () => foreground
+    getForegroundProcess: async () => foreground,
+    getAgentStatusSnapshot: hookRows
   })
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, GRAPH)
@@ -169,6 +176,47 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
     const deliver = watchDelivery(runtime)
     runtime.onPtyData(PTY_ID, `${osc('⠋ Grok')}working\n`, Date.now())
     runtime.onPtyData(PTY_ID, `${osc('grok')}banner\n`, Date.now())
+    expect(deliver).toHaveBeenCalled()
+  })
+
+  it('does not deliver into a pane when Claude is waiting on an interactive question', async () => {
+    let hookRows: AgentStatusIpcPayload[] = [
+      {
+        paneKey: makePaneKey(TAB_ID, LEAF_ID),
+        connectionId: null,
+        state: 'waiting',
+        agentType: 'claude',
+        toolName: 'AskUserQuestion',
+        interactivePrompt: JSON.stringify({
+          questions: [{ question: 'Which branch to use?', options: ['main', 'develop'] }]
+        }),
+        prompt: 'Which branch to use?',
+        receivedAt: Date.now(),
+        stateStartedAt: Date.now()
+      }
+    ]
+    const { runtime } = await makeRuntime('claude', 'claude', () => hookRows)
+    const deliver = watchDelivery(runtime)
+
+    // Claude repaints its title to name or ready while rendering the prompt question.
+    runtime.onPtyData(PTY_ID, `${osc('Claude')}\n`, Date.now())
+    expect(deliver).not.toHaveBeenCalled()
+
+    // Even after long quiescence, delivery remains parked while the question is pending.
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(deliver).not.toHaveBeenCalled()
+
+    // Once user answers the question, hook reports done and delivery unblocks.
+    hookRows = [
+      {
+        ...hookRows[0],
+        state: 'done',
+        toolName: undefined,
+        interactivePrompt: undefined,
+        receivedAt: Date.now()
+      }
+    ]
+    await vi.advanceTimersByTimeAsync(1_000)
     expect(deliver).toHaveBeenCalled()
   })
 })

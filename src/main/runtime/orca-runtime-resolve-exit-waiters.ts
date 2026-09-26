@@ -12,6 +12,9 @@ import {
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { isTuiIdleSatisfied } from './tui-idle-evidence'
 import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
+import { makePaneKey } from '../../shared/stable-pane-id'
+import { selectRuntimeHookAgentRowForPane } from './runtime-mobile-agent-status-projection'
+import { isAskUserQuestionTool } from '../../shared/agent-question-answered-intent'
 
 export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolveExitWaiters(leaf: RuntimeLeafRecord): void {
@@ -160,7 +163,10 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     // stream to go quiet, so wake just after the window could have elapsed. A pane that is
     // still producing output re-arms from its own fresher timestamp rather than spinning.
     const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
-    const delay = Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
+    const isWaitingPrompt = live ? this.isPaneWaitingOnInteractivePrompt(live) : false
+    const delay = isWaitingPrompt
+      ? 1000
+      : Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByLeafKey.delete(leafKey)
       const current = this.leaves.get(leafKey)
@@ -189,7 +195,30 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
    */
   protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
     const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    return live ? this.isTuiIdleSatisfiedForLeaf(live) : false
+    if (!live || !this.isTuiIdleSatisfiedForLeaf(live)) {
+      return false
+    }
+    // Why: an active prompt/question waiting for human answers must not be answered by mailbox keystrokes (#21745).
+    return !this.isPaneWaitingOnInteractivePrompt(leaf)
+  }
+
+  protected isPaneWaitingOnInteractivePrompt(leaf: { tabId: string; leafId: string }): boolean {
+    const paneKey = makePaneKey(leaf.tabId, leaf.leafId)
+    const rows =
+      this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ??
+      this.getAgentStatusSnapshotFn?.().filter((s) => s.paneKey === paneKey) ??
+      []
+    const hookRow = selectRuntimeHookAgentRowForPane(rows)
+    const payload = hookRow.live?.payload
+    if (!payload) {
+      return false
+    }
+    return (
+      payload.interactivePrompt != null ||
+      isAskUserQuestionTool(payload.toolName) ||
+      payload.state === 'waiting' ||
+      payload.state === 'blocked'
+    )
   }
 
   protected isTuiIdleSatisfiedForPty(pty: RuntimePtyWorktreeRecord): boolean {

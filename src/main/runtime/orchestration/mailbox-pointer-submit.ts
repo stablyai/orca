@@ -24,6 +24,7 @@ type PointerSubmitDependencies<TWaiter extends OrchestrationMessageWaiter> = {
   ) => OrchestrationMailboxPointerSubmitTarget | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  isAgentSettledForDelivery?: (leaf: OrchestrationMailboxLeaf) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
@@ -85,7 +86,8 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       const queueSafe =
         exactTarget?.leaf.lastAgentStatusObservedLive === true &&
         (exactTarget.leaf.lastAgentStatus === 'idle' ||
-          exactTarget.leaf.lastAgentStatus === 'working')
+          exactTarget.leaf.lastAgentStatus === 'working') &&
+        (deps.isAgentSettledForDelivery ? deps.isAgentSettledForDelivery(exactTarget.leaf) : true)
       if (!exactTarget?.leaf.writable || !sameMailbox) {
         clearAndRedrive = true
       } else if (

@@ -1,6 +1,7 @@
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 
 /**
  * Shared fixtures for the tui-idle wait suites.
@@ -106,6 +107,8 @@ function makeStore(repoPath: string) {
 export type TuiIdleRuntimeOptions = {
   repoPath: string
   getForegroundProcess: () => Promise<string | null>
+  getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+  getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
 }
 
 /** A runtime wired with the narrowest store and controller the wait path needs. */
@@ -114,7 +117,12 @@ export function makeTuiIdleRuntime(options: TuiIdleRuntimeOptions): OrcaRuntimeS
   // members provided here, and a missing one throws loudly rather than silently passing.
   const runtime = new OrcaRuntimeService(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial store double; the wait path reads only the members defined above.
-    makeStore(options.repoPath) as never
+    makeStore(options.repoPath) as never,
+    undefined,
+    {
+      getAgentStatusSnapshot: options.getAgentStatusSnapshot,
+      getAgentProviderSessionRowsForPane: options.getAgentProviderSessionRowsForPane
+    }
   )
   runtime.setPtyController(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial controller double; the wait path calls only the members listed here.
