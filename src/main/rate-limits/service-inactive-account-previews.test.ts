@@ -296,7 +296,7 @@ describe('RateLimitService', () => {
     const accountFetch = deferred<ProviderRateLimits>()
     let inactiveAccounts = [inactiveCodexAccount('account-b', '/tmp/account-b/home')]
     service.setInactiveCodexAccountsResolver(() => inactiveAccounts)
-    service.setCodexHomePathResolver(() => ({
+    service.setCodexHomePathResolver(async () => ({
       kind: 'ready',
       codexHomePath: '/tmp/account-b/home'
     }))

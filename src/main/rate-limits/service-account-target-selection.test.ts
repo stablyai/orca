@@ -66,7 +66,7 @@ describe('RateLimitService', () => {
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
     const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
-    const resolver = vi.fn((target) => ({
+    const resolver = vi.fn(async (target) => ({
       kind: 'ready' as const,
       codexHomePath: target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
     }))
@@ -93,7 +93,7 @@ describe('RateLimitService', () => {
     ]
   ])('settles %s when managed-home resolution skips before the fetch', async (_label, refresh) => {
     const service = new RateLimitService()
-    service.setCodexHomePathResolver(() => ({ kind: 'skip' }))
+    service.setCodexHomePathResolver(async () => ({ kind: 'skip' }))
 
     await refresh(service)
 
@@ -105,8 +105,8 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     const resolver = vi
       .fn()
-      .mockReturnValueOnce({ kind: 'ready', codexHomePath: '/tmp/codex-home' })
-      .mockReturnValue({ kind: 'skip' })
+      .mockResolvedValueOnce({ kind: 'ready', codexHomePath: '/tmp/codex-home' })
+      .mockResolvedValue({ kind: 'skip' })
     service.setCodexHomePathResolver(resolver)
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
 
@@ -122,8 +122,8 @@ describe('RateLimitService', () => {
     service.setCodexHomePathResolver(
       vi
         .fn()
-        .mockReturnValueOnce({ kind: 'ready', codexHomePath: '/tmp/codex-home' })
-        .mockReturnValue({ kind: 'skip' })
+        .mockResolvedValueOnce({ kind: 'ready', codexHomePath: '/tmp/codex-home' })
+        .mockResolvedValue({ kind: 'skip' })
     )
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
@@ -137,7 +137,10 @@ describe('RateLimitService', () => {
   it('reuses a caller-provided idempotency key when consuming a Codex reset credit', async () => {
     const service = new RateLimitService()
     const idempotencyKey = '11111111-1111-4111-8111-111111111111'
-    service.setCodexHomePathResolver(() => ({ kind: 'ready', codexHomePath: '/tmp/codex-home' }))
+    service.setCodexHomePathResolver(async () => ({
+      kind: 'ready',
+      codexHomePath: '/tmp/codex-home'
+    }))
     vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
 
@@ -211,7 +214,10 @@ describe('RateLimitService', () => {
     )
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
 
-    service.setCodexHomePathResolver(() => ({ kind: 'ready', codexHomePath: '/tmp/new-selection' }))
+    service.setCodexHomePathResolver(async () => ({
+      kind: 'ready',
+      codexHomePath: '/tmp/new-selection'
+    }))
     const pending = service.consumeCodexRateLimitResetCredit({
       idempotencyKey,
       target: { runtime: 'host', wslDistro: null },
@@ -246,7 +252,7 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     const idempotencyKey = '33333333-3333-4333-8333-333333333333'
     const hostRefresh = deferred<ProviderRateLimits>()
-    service.setCodexHomePathResolver((target) => ({
+    service.setCodexHomePathResolver(async (target) => ({
       kind: 'ready',
       codexHomePath: target?.runtime === 'wsl' ? '/tmp/wsl-selection' : '/tmp/approved-selection'
     }))
@@ -281,7 +287,7 @@ describe('RateLimitService', () => {
   it('does not let an older full refresh overwrite the post-reset Codex state', async () => {
     const service = new RateLimitService()
     const slowClaude = deferred<ProviderRateLimits>()
-    service.setCodexHomePathResolver(() => ({
+    service.setCodexHomePathResolver(async () => ({
       kind: 'ready',
       codexHomePath: '/tmp/approved-selection'
     }))
@@ -312,7 +318,7 @@ describe('RateLimitService', () => {
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
     const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
-    const resolver = vi.fn((target) => ({
+    const resolver = vi.fn(async (target) => ({
       kind: 'ready' as const,
       codexHomePath: target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
     }))
@@ -332,7 +338,7 @@ describe('RateLimitService', () => {
 
   it('does not fetch host Codex usage when WSL home resolution fails', async () => {
     const service = new RateLimitService()
-    const resolver = vi.fn(() => ({ kind: 'ready' as const, codexHomePath: null }))
+    const resolver = vi.fn(async () => ({ kind: 'ready' as const, codexHomePath: null }))
     service.setCodexHomePathResolver(resolver)
     service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
 
@@ -466,7 +472,7 @@ describe('RateLimitService', () => {
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
     const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
-    service.setCodexHomePathResolver((target) => ({
+    service.setCodexHomePathResolver(async (target) => ({
       kind: 'ready',
       codexHomePath: target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
     }))
@@ -577,6 +583,48 @@ describe('RateLimitService', () => {
     expect(service.getState().inactiveClaudeAccounts).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ accountId: 'wsl-account-1' })])
     )
+  })
+
+  // Regression: resolveCodexHome now awaits listing running WSL distros, a gap
+  // long enough for a concurrent reset (which never goes through the
+  // isFetching queue) to bump codexFetchGeneration mid-await. The older
+  // cycle must capture its generation before that await, or it reads the
+  // already-bumped generation as its own and re-applies its stale fetch.
+  it('does not apply a stale full-refresh cycle codex result over a newer reset', async () => {
+    const service = new RateLimitService()
+    const staleHome = deferred<{ kind: 'ready'; codexHomePath: string | null }>()
+    const resolver = vi
+      .fn()
+      .mockReturnValueOnce(staleHome.promise)
+      .mockResolvedValue({ kind: 'ready', codexHomePath: '/tmp/approved-selection' })
+    service.setCodexHomePathResolver(resolver)
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(okProvider('codex', 0, Date.now())) // reset flow's own probe
+      .mockResolvedValueOnce(okProvider('codex', 100, Date.now())) // stale cycle, applied late
+    vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
+
+    const staleRefresh = service.refresh()
+    await vi.waitFor(() => expect(resolver).toHaveBeenCalledTimes(1))
+
+    // Why: consumeCodexRateLimitResetCredit never checks isFetching, so it
+    // runs to completion while the stale cycle's resolveCodexHome call above
+    // is still pending, bumping codexFetchGeneration along the way.
+    await expect(
+      service.consumeCodexRateLimitResetCredit({
+        idempotencyKey: '55555555-5555-4555-8555-555555555555',
+        target: { runtime: 'host', wslDistro: null },
+        codexHomePath: '/tmp/approved-selection'
+      })
+    ).resolves.toMatchObject({ outcome: 'reset' })
+
+    staleHome.resolve({ kind: 'ready', codexHomePath: '/tmp/approved-selection' })
+    await staleRefresh
+
+    // Why: the stale cycle's own fetch result (usedPercent 100) must never
+    // land, whatever the final Codex slot looks like after the reset's own
+    // transitional "fetching" markers settle.
+    expect(service.getState().codex?.session?.usedPercent).not.toBe(100)
   })
 })
 

@@ -24,6 +24,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       isPackaged: true,
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu', 'Debian', 'Fedora'],
+      listRunningDistros: async () => ['Ubuntu', 'Debian'],
       registry,
       createInstaller: (distro) => {
         if (distro === 'Ubuntu') {
@@ -62,6 +63,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       appVersion: '1.4.138',
       listDistros: async () => ['Ubuntu'],
+      listRunningDistros: async () => ['Ubuntu'],
       getHostLauncherTarget: async () => 'C:\\Orca\\resources\\bin\\orca.exe',
       registry,
       createInstaller: () => ({
@@ -98,6 +100,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       isPackaged: true,
       userDataPath: '/user-data',
       listDistros: async () => ['Broken Distro', 'No Interop'],
+      listRunningDistros: async () => ['Broken Distro', 'No Interop'],
       registry,
       createInstaller: (distro) => ({
         repairManagedRegistration: async () => {
@@ -133,6 +136,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
         isPackaged: true,
         userDataPath: '/user-data',
         listDistros: async () => ['Ubuntu'],
+        listRunningDistros: async () => ['Ubuntu'],
         registry: {
           getCandidates: async () => ['Ubuntu'],
           recordObservations: async () => {
@@ -174,6 +178,71 @@ describe('reconcileManagedWslCliRegistrations', () => {
     expect(listDistros).not.toHaveBeenCalled()
   })
 
+  // Regression for https://github.com/stablyai/orca/issues/20184: repairing a
+  // registration execs into the distro, which boots it if stopped. A passive
+  // startup staleness check must never do that on its own.
+  it('does not repair a candidate distro that is not currently running', async () => {
+    const repair = vi.fn(async () => ({
+      changed: true,
+      managed: true,
+      status: { state: 'installed' as const }
+    }))
+    const registry = {
+      getCandidates: vi.fn(async () => ['Ubuntu']),
+      recordObservations: vi.fn(async () => undefined)
+    }
+
+    const results = await reconcileManagedWslCliRegistrations({
+      platform: 'win32',
+      isPackaged: true,
+      userDataPath: '/user-data',
+      listDistros: async () => ['Ubuntu'],
+      listRunningDistros: async () => [],
+      registry,
+      createInstaller: () => ({ repairManagedRegistration: repair })
+    })
+
+    expect(repair).not.toHaveBeenCalled()
+    expect(registry.recordObservations).not.toHaveBeenCalled()
+    expect(results).toEqual([])
+  })
+
+  it('repairs only the candidates that are currently running, leaving stopped ones untouched', async () => {
+    const repairUbuntu = vi.fn(async () => ({
+      changed: true,
+      managed: true,
+      status: { state: 'installed' as const }
+    }))
+    const repairDebian = vi.fn(async () => ({
+      changed: false,
+      managed: false,
+      status: { state: 'not_installed' as const }
+    }))
+    const registry = {
+      getCandidates: vi.fn(async () => ['Ubuntu', 'Debian']),
+      recordObservations: vi.fn(async () => undefined)
+    }
+
+    const results = await reconcileManagedWslCliRegistrations({
+      platform: 'win32',
+      isPackaged: true,
+      userDataPath: '/user-data',
+      listDistros: async () => ['Ubuntu', 'Debian'],
+      // Why: only Ubuntu is running; Debian is a candidate but stopped.
+      listRunningDistros: async () => ['Ubuntu'],
+      registry,
+      createInstaller: (distro) => ({
+        repairManagedRegistration: distro === 'Ubuntu' ? repairUbuntu : repairDebian
+      })
+    })
+
+    expect(repairUbuntu).toHaveBeenCalledOnce()
+    expect(repairDebian).not.toHaveBeenCalled()
+    expect(results).toEqual([
+      { distro: 'Ubuntu', outcome: 'repaired', state: 'installed', managed: true }
+    ])
+  })
+
   it('lets a Settings removal win over a late startup repair for the same distro', async () => {
     const events: string[] = []
     let repairStarted!: () => void
@@ -192,6 +261,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       isPackaged: true,
       userDataPath: '/user-data',
       listDistros: async () => ['Ubuntu'],
+      listRunningDistros: async () => ['Ubuntu'],
       registry,
       createInstaller: () => ({
         repairManagedRegistration: async () => {

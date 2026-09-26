@@ -129,7 +129,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       true
     )
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getRuntimeCodexHomePath()
     })
@@ -201,7 +201,7 @@ describe('CodexRuntimeHomeService', () => {
     try {
       // Background fetchers prefer ambient CODEX_HOME when passed null, so an
       // explicit path proves nested Orca launches cannot poll the managed home.
-      expect(service.prepareForRateLimitFetch()).toEqual({
+      expect(await service.prepareForRateLimitFetch()).toEqual({
         kind: 'ready',
         codexHomePath: getSystemCodexHomePath()
       })
@@ -210,7 +210,7 @@ describe('CodexRuntimeHomeService', () => {
       expect(service.isHostSystemDefaultRealHome()).toBe(true)
       process.env.CODEX_HOME = join(testState.fakeHomeDir, 'user-owned-codex-home')
       expect(service.isHostSystemDefaultRealHome()).toBe(false)
-      expect(service.prepareForRateLimitFetch()).toEqual({
+      expect(await service.prepareForRateLimitFetch()).toEqual({
         kind: 'ready',
         codexHomePath: getRuntimeCodexHomePath()
       })
@@ -273,7 +273,7 @@ describe('CodexRuntimeHomeService', () => {
 
       service.reconcileLegacySharedHomeForRetainedPanes()
       expect(service.prepareForCodexLaunch()).toBeNull()
-      expect(service.prepareForRateLimitFetch()).toEqual({
+      expect(await service.prepareForRateLimitFetch()).toEqual({
         kind: 'ready',
         codexHomePath: getSystemCodexHomePath()
       })

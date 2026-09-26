@@ -133,7 +133,7 @@ describe('STA-4422 Codex sessions keep logging out', () => {
     const service = new CodexRuntimeHomeService(store as never)
 
     // Anchor: a healthy poll resolves the managed home and touches nothing.
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: managedHomePath
     })
@@ -145,7 +145,7 @@ describe('STA-4422 Codex sessions keep logging out', () => {
     const markerPath = join(realpathSync(managedHomePath), '.orca-managed-home')
     lstatFaults.hold(markerPath)
 
-    const duringLock = service.prepareForRateLimitFetch()
+    const duringLock = await service.prepareForRateLimitFetch()
 
     // The fault really was consumed by the code under test.
     expect(lstatFaults.heldReads(markerPath)).toBeGreaterThan(0)
@@ -163,13 +163,13 @@ describe('STA-4422 Codex sessions keep logging out', () => {
     expect(store.updateSettings).not.toHaveBeenCalled()
 
     // Repeated evaluation must not accumulate into a destructive verdict.
-    expect(service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
-    expect(service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
+    expect(await service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
+    expect(await service.prepareForRateLimitFetch()).toEqual({ kind: 'skip' })
     expect(store.updateSettings).not.toHaveBeenCalled()
 
     // Recovery is automatic: the next readable poll resolves normally.
     lstatFaults.release(markerPath)
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: managedHomePath
     })
@@ -206,7 +206,7 @@ describe('STA-4422 Codex sessions keep logging out', () => {
 
     // Why this case matters: the fix must not make the gate toothless. A
     // successful observation that fails a trust check still deselects.
-    expect(service.prepareForRateLimitFetch()).toEqual({
+    expect(await service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
       codexHomePath: getSystemCodexHomePath()
     })

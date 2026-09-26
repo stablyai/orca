@@ -41,7 +41,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      listRunningWslDistrosAsync: async () => ['Ubuntu']
     }))
     const store = createStore(
       createSettings({
@@ -56,11 +57,11 @@ describe('CodexRuntimeHomeService', () => {
       const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
       const expectedHome = join(wslHome, '.codex')
 
-      expect(service.prepareForRateLimitFetch(target)).toEqual({
+      expect(await service.prepareForRateLimitFetch(target)).toEqual({
         kind: 'ready',
         codexHomePath: expectedHome
       })
-      expect(service.prepareForRateLimitFetch(target)).toEqual({
+      expect(await service.prepareForRateLimitFetch(target)).toEqual({
         kind: 'ready',
         codexHomePath: expectedHome
       })
@@ -77,7 +78,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      listRunningWslDistrosAsync: async () => ['Ubuntu']
     }))
     const ubuntuAuth = createCodexAuthJson('ubuntu@example.com', 'acct-ubuntu', 'ubuntu-token')
     const debianAuth = createCodexAuthJson('debian@example.com', 'acct-debian', 'debian-token')
@@ -126,7 +128,7 @@ describe('CodexRuntimeHomeService', () => {
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
 
-      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: null })).toEqual({
+      expect(await service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: null })).toEqual({
         kind: 'ready',
         codexHomePath: ubuntuHomePath
       })
@@ -144,7 +146,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      listRunningWslDistrosAsync: async () => ['Ubuntu']
     }))
     const managedAuth = createCodexAuthJson('wsl@example.com', 'acct-wsl', 'managed-old', 1_000)
     const systemDefaultAuth = createCodexAuthJson(
@@ -183,7 +186,9 @@ describe('CodexRuntimeHomeService', () => {
     try {
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
-      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toEqual({
+      expect(
+        await service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      ).toEqual({
         kind: 'ready',
         codexHomePath: systemCodexHomePath
       })
@@ -195,7 +200,9 @@ describe('CodexRuntimeHomeService', () => {
         3_000
       )
       writeFileSync(join(systemCodexHomePath, 'auth.json'), externallyRefreshedAuth, 'utf-8')
-      expect(service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toEqual({
+      expect(
+        await service.prepareForRateLimitFetch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      ).toEqual({
         kind: 'ready',
         codexHomePath: systemCodexHomePath
       })
@@ -215,7 +222,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      listRunningWslDistrosAsync: async () => ['Ubuntu']
     }))
     const systemAuth = createCodexAuthJson('wsl@example.com', 'acct-wsl', 'system-old', 1_000)
     const refreshedAuth = createCodexAuthJson(
@@ -256,7 +264,8 @@ describe('CodexRuntimeHomeService', () => {
     const wslHome = join(testState.userDataDir, 'wsl-home')
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => wslHome
+      getWslHome: () => wslHome,
+      listRunningWslDistrosAsync: async () => ['Ubuntu']
     }))
     const systemAuth = createCodexAuthJson('wsl@example.com', 'acct-wsl', 'system-old', 1_000)
     const refreshedAuth = createCodexAuthJson(
@@ -305,7 +314,8 @@ describe('CodexRuntimeHomeService', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     vi.doMock('../wsl', () => ({
       getDefaultWslDistro: () => 'Ubuntu',
-      getWslHome: () => 'C:\\Users\\alice'
+      getWslHome: () => 'C:\\Users\\alice',
+      listRunningWslDistrosAsync: async () => ['Ubuntu']
     }))
     const syncConfig = vi.fn()
     vi.doMock('../codex/codex-config-mirror', async () => ({
