@@ -10,9 +10,10 @@
  *
  * So each site is classified, and `rpc-subscription-boundary.test.ts` makes the classification
  * bind: a new site with no entry fails, an entry whose file no longer subscribes fails, an entry
- * naming the wrong method fails, and a `recorded` entry whose family is not in the scenario
- * manifest fails. A wall must name itself; "not recorded yet" and "cannot be recorded" are
- * different claims and only one of them is a backlog item.
+ * naming the wrong method fails, a `ready-id` release the transport's table does not name fails,
+ * and a `recorded` entry whose family is not in the scenario manifest fails. A wall must name
+ * itself; "not recorded yet" and "cannot be recorded" are different claims and only one of them is
+ * a backlog item.
  */
 export type RpcSubscriptionCoverage =
   /** A golden holds this stream. `family` is a family in `pilot-scenarios.json`. */
@@ -22,9 +23,22 @@ export type RpcSubscriptionCoverage =
   /** Something structural stops a recording. Not a backlog item until the wall moves. */
   | { readonly kind: 'walled'; readonly wall: string }
 
+/**
+ * How the phone ends this stream on the host. `ready-id` must match `READY_STREAM_RELEASE_METHODS`:
+ * a stream whose host id arrives only in `ready` and is missing there is never released.
+ */
+export type RpcSubscriptionRelease =
+  /** The transport releases it by the id from the current `ready`. */
+  | 'ready-id'
+  /** The transport builds the unsubscribe from the subscribe params. */
+  | 'params'
+  /** The phone sends no release; the host drops it when the connection closes. */
+  | 'connection-close'
+
 export type RpcSubscriptionSite = {
   readonly file: string
   readonly method: string
+  readonly release: RpcSubscriptionRelease
   readonly coverage: RpcSubscriptionCoverage
 }
 
@@ -35,6 +49,7 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
   {
     file: 'app/h/[hostId]/accounts.tsx',
     method: 'accounts.subscribe',
+    release: 'ready-id',
     coverage: {
       kind: 'walled',
       wall: 'The screen renders `react-native.ScrollView` and calls `react-native.Alert` to report a failed switch, neither a substituted member, so the mount trap refuses on the first render: `Unsubstituted native member: react-native.ScrollView`.'
@@ -43,6 +58,7 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
   {
     file: 'src/home/use-mobile-home-host-connections.ts',
     method: 'accounts.subscribe',
+    release: 'ready-id',
     coverage: {
       kind: 'walled',
       wall: 'Wired on a per-host client from `useAllHostClients`, and the runner hands an adapter one client rather than the multi-host context that hook reads.'
@@ -52,6 +68,7 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
   {
     file: 'src/browser/use-mobile-browser-stream.ts',
     method: 'browser.screencast',
+    release: 'ready-id',
     coverage: {
       kind: 'walled',
       wall: 'Writes to a webview terminal/browser ref this runner has no substitute for, and a substitute that shaped what the stream delivered would be inventing the device.'
@@ -60,11 +77,13 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
   {
     file: 'src/notifications/mobile-notifications.ts',
     method: 'notifications.subscribe',
+    release: 'ready-id',
     coverage: { kind: 'recorded', family: 'notifications.desktop-stream' }
   },
   {
     file: 'src/session/mobile-terminal-stream-subscribe.ts',
     method: 'terminal.subscribe',
+    release: 'params',
     coverage: {
       kind: 'walled',
       wall: 'Writes to a webview terminal ref this runner has no substitute for: the stream consumer calls `ref.init` and `dataRef.write`, so what a frame does is a device effect rather than an observation.'
@@ -73,11 +92,13 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
   {
     file: 'src/session/use-live-worktree-name.ts',
     method: 'runtime.clientEvents.subscribe',
+    release: 'ready-id',
     coverage: { kind: 'recorded', family: 'live-worktree-name' }
   },
   {
     file: 'src/session/use-mobile-native-chat-session.ts',
     method: 'nativeChat.subscribe',
+    release: 'params',
     coverage: { kind: 'recorded', family: 'session.native-chat-page' }
   },
   // The structured agent session's event stream. Mountable: its listener guards the payload, and
@@ -85,6 +106,7 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
   {
     file: 'src/session/use-mobile-structured-agent-state.ts',
     method: 'agentSession.subscribe',
+    release: 'connection-close',
     coverage: { kind: 'unwritten-scenario' }
   },
   // The session tab snapshot. Mountable behind the reconciliation controller the hook already
@@ -92,11 +114,13 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
   {
     file: 'src/session/use-mobile-session-tabs-reconciliation.ts',
     method: 'session.tabs.subscribe',
+    release: 'params',
     coverage: { kind: 'unwritten-scenario' }
   },
   {
     file: 'src/worktree/host-worktree-refresh.ts',
     method: 'runtime.clientEvents.subscribe',
+    release: 'ready-id',
     coverage: { kind: 'recorded', family: 'host-worktree-refresh' }
   }
 ]
