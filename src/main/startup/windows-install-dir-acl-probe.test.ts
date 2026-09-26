@@ -207,6 +207,19 @@ describe('probeWindowsInstallDirAcl', () => {
     expect(isInstallDirAclPoisonVerdict(verdict)).toBe(false)
   })
 
+  it.each([1, null])('ignores a saved DACL when icacls exits with %s', async (exitCode) => {
+    const fake = fakeSpawn(() => [ORPHAN], undefined, exitCode)
+    let verdict: CrashReportBreadcrumbData = {}
+    const data = await probe({
+      fileExists: () => false,
+      spawnFn: fake.spawnFn,
+      onDone: (done) => (verdict = done)
+    })
+    expect(data).toMatchObject({ status: 'failed', reason: 'all-targets-unreadable' })
+    expect(isInstallDirAclPoisonVerdict(verdict)).toBe(false)
+    expect(fake.calls.every((call) => !existsSync(call.args[2]))).toBe(true)
+  })
+
   it('does not report malformed saved output as a clean DACL', async () => {
     const data = await probe({
       fileExists: () => false,

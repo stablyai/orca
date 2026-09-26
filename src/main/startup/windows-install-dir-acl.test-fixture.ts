@@ -34,7 +34,8 @@ export function icaclsSavedAcl(target: string, aces: string[]): Buffer {
  */
 export function fakeIcaclsSpawn(
   saved: (target: string) => string[] | Buffer | null,
-  display: (target: string) => string = () => ''
+  display: (target: string) => string = () => '',
+  exitCode: number | null = 0
 ): {
   spawnFn: typeof spawn
   calls: { file: string; args: string[] }[]
@@ -62,7 +63,7 @@ export function fakeIcaclsSpawn(
       } else {
         child.stdout.emit('data', Buffer.from(display(target), 'utf-8'))
       }
-      child.emit('close', 0)
+      child.emit('close', exitCode)
     })
     return child
   }) as unknown as typeof spawn

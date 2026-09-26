@@ -103,7 +103,7 @@ function readSavedDacl(spawnFn: typeof spawn, target: string, deadlineMs: number
     }, deadlineMs)
     timer.unref?.()
     child.on('error', () => settle(false))
-    child.on('close', () => settle(true))
+    child.on('close', (code) => settle(code === 0))
   })
 }
 
