@@ -288,7 +288,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(pathExistsCache.get('active\0/root/.claude/settings.jsonroot@ubuntu')).toBe(false)
   })
 
-  it('drops a slow probed click once a later click has been made', async () => {
+  it('drops a slow probed click once a later click has opened something else', async () => {
     setPlatform('Macintosh')
     const firstProbe = createDeferred<boolean>()
     vi.mocked(window.api.shell.pathExists).mockImplementation(async (path: string) =>
@@ -296,7 +296,8 @@ describe('createFilePathLinkProvider range bounds', () => {
     )
     const buffer = makeBuffer([
       makeBufferLine('/root/.claude/settings.json'),
-      makeBufferLine('root@ubuntu:/mnt/data/sniper_eco_paper_final# ')
+      makeBufferLine('root@ubuntu:/mnt/data/sniper_eco_paper_final# '),
+      makeBufferLine('package.json')
     ])
     const deps = {
       startupCwd: '/mnt/data/sniper_eco_paper_final',
@@ -306,10 +307,16 @@ describe('createFilePathLinkProvider range bounds', () => {
     }
 
     openFilePathLinkAtBufferPosition(buffer, { x: 8, y: 1 }, 80, deps)
-    openFilePathLinkAtBufferPosition(buffer, { x: 8, y: 1 }, 80, deps)
+    // Why: the second click is a lone candidate that opens synchronously; it
+    // must still cancel the first click's pending probe.
+    openFilePathLinkAtBufferPosition(buffer, { x: 4, y: 3 }, 80, deps)
     firstProbe.resolve(true)
     await flushAsyncWork()
+
     expect(statMock).toHaveBeenCalledTimes(1)
+    expect(statMock).toHaveBeenCalledWith({
+      filePath: '/mnt/data/sniper_eco_paper_final/package.json'
+    })
   })
 
   it('does not open an unknown trailing-slash directory from direct fallback', async () => {

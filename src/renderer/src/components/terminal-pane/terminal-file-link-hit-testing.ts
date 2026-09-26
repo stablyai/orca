@@ -41,6 +41,7 @@ export function openFilePathLinkAtBufferPosition(
   terminalColumns: number,
   deps: FileLinkHitTestDeps
 ): boolean {
+  const gesture = ++latestProbedClickGesture
   const logicalLines = buildCandidateLogicalLinesForBufferPosition(buffer, position.y)
   if (logicalLines.length === 0) {
     return false
@@ -137,7 +138,6 @@ export function openFilePathLinkAtBufferPosition(
   // path glued to the next row; opening the first unprobed guess fails silently
   // when the hover probe has not answered yet, so probe them all first.
   const pathExists = createTerminalPathExistenceBatch()
-  const gesture = ++latestProbedClickGesture
   // Why: allSettled so one candidate's probe error (permission, transport) does
   // not discard a sibling that resolved; a lost host connection rejects every
   // probe and the click opens nothing rather than a guessed path.
