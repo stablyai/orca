@@ -1,7 +1,5 @@
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
-import type { TerminalViewportDims } from './mobile-terminal-viewport-resubscribe'
-
-type MutableRef<T> = { current: T }
+import type { MutableRef, TerminalViewportDims } from './mobile-terminal-viewport-resubscribe'
 
 /** Any size opens xterm; cell metrics, not the grid, are what the measure needs. */
 const EMPTY_TERMINAL_COLS = 80

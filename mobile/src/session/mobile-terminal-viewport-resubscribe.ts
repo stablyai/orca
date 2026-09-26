@@ -173,7 +173,7 @@ export class TerminalViewportResubscribeBudget {
   }
 }
 
-type MutableRef<T> = { current: T }
+export type MutableRef<T> = { current: T }
 
 type TerminalFitWebView = {
   awaitReady: () => Promise<unknown>

@@ -131,13 +131,10 @@ describe('deferFirstSubscribeUntilViewportMeasured', () => {
     await vi.waitFor(() => expect(args.subscribe).toHaveBeenCalledTimes(1))
   })
 
-  it('drops the held subscribe when the handle was torn down during the measure', async () => {
+  function heldSubscribe(subscribeSeq = new Map([['term-1', 1]])) {
     let finishMeasure = (): void => {}
-    const subscribeSeq = new Map([['term-1', 1]])
-    const subscribingHandles = new Set<string>()
     const args = gateArgs({
       subscribeSeq,
-      subscribingHandles,
       measure: vi.fn(
         () =>
           new Promise<void>((resolve) => {
@@ -146,12 +143,27 @@ describe('deferFirstSubscribeUntilViewportMeasured', () => {
       )
     })
     deferFirstSubscribeUntilViewportMeasured(args)
-    // unsubscribeTerminal bumps the seq and clears the in-flight mark.
+    return { args, finish: () => finishMeasure() }
+  }
+  const flush = async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  }
+
+  it('drops the held subscribe when a newer subscribe generation started during the measure', async () => {
+    const subscribeSeq = new Map([['term-1', 1]])
+    const { args, finish } = heldSubscribe(subscribeSeq)
     subscribeSeq.set('term-1', 2)
-    subscribingHandles.delete('term-1')
-    finishMeasure()
-    await Promise.resolve()
-    await Promise.resolve()
+    finish()
+    await flush()
+    expect(args.subscribe).not.toHaveBeenCalled()
+  })
+
+  it('drops the held subscribe when its in-flight mark was cleared during the measure', async () => {
+    const { args, finish } = heldSubscribe()
+    args.subscribingHandles.delete('term-1')
+    finish()
+    await flush()
     expect(args.subscribe).not.toHaveBeenCalled()
   })
 
