@@ -28,14 +28,7 @@ let rig: RestTestRig
 let dispatcher: RpcDispatcher
 
 function subscriberCount(): number {
-  const delivery: unknown = Reflect.get(rig.host, 'clientDelivery')
-  const subscribers: unknown =
-    typeof delivery === 'object' && delivery !== null ? Reflect.get(delivery, 'subscribers') : null
-  const bySession: unknown =
-    typeof subscribers === 'object' && subscribers !== null
-      ? Reflect.get(subscribers, 'bySession')
-      : null
-  return bySession instanceof Map ? (bySession.get(SESSION)?.size ?? 0) : -1
+  return rig.host.collaboratorsForTests().subscribers.subscriberCountForTests(SESSION)
 }
 
 async function stream(id: string, frames: RpcResponse[]): Promise<void> {

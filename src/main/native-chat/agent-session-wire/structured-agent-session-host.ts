@@ -329,4 +329,14 @@ export class StructuredAgentSessionHost {
 
   /** Turns that settle from now on. Live-only: nothing missed is replayed. */
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
+
+  /** Test rigs only: the collaborators the host builds itself, typed, for tests that drive them. */
+  collaboratorsForTests = () => ({
+    sessions: this.sessions,
+    subscribers: this.subscribers,
+    runtimeState: this.runtimeState,
+    conversationDelivery: this.conversationDelivery,
+    lifetime: this.lifetime,
+    serialize: this.serialize
+  })
 }

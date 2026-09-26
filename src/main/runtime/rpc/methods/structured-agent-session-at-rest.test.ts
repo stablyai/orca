@@ -161,11 +161,7 @@ describe('the accessor', () => {
     await rig.restart()
     setStructuredAgentSessionHost(rig.host)
     rig.adapter.acquire.mockClear()
-    const open = vi.spyOn(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private open, spied to count journal opens.
-      Reflect.get(rig.host, 'conversationDelivery') as { open: (id: string) => Promise<unknown> },
-      'open'
-    )
+    const open = vi.spyOn(rig.host.collaboratorsForTests().conversationDelivery, 'open')
     await Promise.all([
       ...Array.from({ length: 5 }, () =>
         call('agentSession.history', { sessionId: SESSION, direction: 'tail' })
@@ -181,11 +177,8 @@ describe('the accessor', () => {
 
   it('opens nothing once quit began, for a read that was already waiting on the lock', async () => {
     await restingChat()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private per-session queue, held so the read waits behind it.
-    const serialize = Reflect.get(rig.host, 'serialize') as (
-      sessionId: string,
-      task: () => Promise<void>
-    ) => Promise<void>
+    // The host's per-session queue, held so the read waits behind it.
+    const { serialize, lifetime } = rig.host.collaboratorsForTests()
     let release = (): void => undefined
     const held = new Promise<void>((started) => {
       void serialize(SESSION, () => {
@@ -196,8 +189,8 @@ describe('the accessor', () => {
     await held
     const read = rig.host.history({ sessionId: SESSION, direction: 'tail' })
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private lifetime, disposed as quit's first teardown step does.
-    ;(Reflect.get(rig.host, 'lifetime') as { dispose: () => void }).dispose()
+    // Disposed as quit's first teardown step does.
+    lifetime.dispose()
     release()
 
     await expect(read).rejects.toThrow()
@@ -290,19 +283,14 @@ describe('options at rest', () => {
 describe('an agent exit', () => {
   it('is shown, not respawned; the next send starts the agent (P2-18)', async () => {
     await foundRestTestChat(rig)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private map, read for the child's fence and acquisition.
-    const sessions = Reflect.get(rig.host, 'sessions') as Map<
-      string,
-      { child: { fence: number; generation: string } | null }
-    >
-    const running = sessions.get(SESSION)!.child!
+    const running = rig.host.collaboratorsForTests().sessions.get(SESSION)!.child!
     await rig.host.handleAdapterEvent({
       type: 'ended',
       sessionId: SESSION,
       reason: 'killed',
       cause: 'unexpected-exit',
       fence: running.fence,
-      acquisitionGeneration: running.generation
+      acquisitionGeneration: running.generation!
     })
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
@@ -315,15 +303,7 @@ describe('an agent exit', () => {
 
   it('whose settlement write failed is settled by the next send, which is delivered', async () => {
     await foundRestTestChat(rig)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private map, read for the child and its journal.
-    const sessions = Reflect.get(rig.host, 'sessions') as Map<
-      string,
-      {
-        child: { fence: number; generation: string } | null
-        journal: { appendLifecycleBatch: (...args: never[]) => Promise<unknown> }
-      }
-    >
-    const open = sessions.get(SESSION)!
+    const open = rig.host.collaboratorsForTests().sessions.get(SESSION)!
     const running = open.child!
     // A turn in flight, so the exit has something to settle.
     rig.adapter.acquire.mock.calls
@@ -340,7 +320,7 @@ describe('an agent exit', () => {
       reason: 'killed',
       cause: 'unexpected-exit',
       fence: running.fence,
-      acquisitionGeneration: running.generation
+      acquisitionGeneration: running.generation!
     })
     await vi.waitFor(() =>
       expect(rig.store.getRecord(SESSION)?.lease.settlementRetryRequired).toBe(true)
@@ -375,9 +355,7 @@ describe('every close withdraws what is queued (P2-29)', () => {
   ])('%s rejects a message accepted before any start, and starts nothing', async (_, close) => {
     await restingChat()
     // The delivery loop has not reached its first start yet.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private delivery loop, held before its first start.
-    const loop = (Reflect.get(rig.host, 'conversationDelivery') as { loop: { wake: () => void } })
-      .loop
+    const { loop } = rig.host.collaboratorsForTests().conversationDelivery
     vi.spyOn(loop, 'wake').mockImplementation(() => undefined)
     const reader: unknown[] = []
     await rig.host.subscribe({

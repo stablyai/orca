@@ -58,6 +58,10 @@ export class AgentSessionSubscribers {
     return this.activityBySession.size
   }
 
+  subscriberCountForTests(sessionId: string): number {
+    return this.bySession.get(sessionId)?.size ?? 0
+  }
+
   open(input: {
     id: string
     sessionId: string
