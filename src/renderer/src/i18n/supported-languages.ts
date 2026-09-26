@@ -6,6 +6,7 @@ import {
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_TURKISH,
   UI_LANGUAGE_SYSTEM,
   type BuiltInUiLanguage,
   type UiLanguage
@@ -27,7 +28,8 @@ export const UI_LANGUAGE_CHOICES: UiLanguageChoice[] = [
   { value: UI_LANGUAGE_KOREAN, labelKey: 'settings.appearance.language.korean' },
   { value: UI_LANGUAGE_JAPANESE, labelKey: 'settings.appearance.language.japanese' },
   { value: UI_LANGUAGE_SPANISH, labelKey: 'settings.appearance.language.spanish' },
-  { value: UI_LANGUAGE_FRENCH, labelKey: 'settings.appearance.language.french' }
+  { value: UI_LANGUAGE_FRENCH, labelKey: 'settings.appearance.language.french' },
+  { value: UI_LANGUAGE_TURKISH, labelKey: 'settings.appearance.language.turkish' }
 ]
 
 const UI_LANGUAGE_CHOICE_FALLBACKS: Record<BuiltInUiLanguage, string> = {
@@ -37,7 +39,8 @@ const UI_LANGUAGE_CHOICE_FALLBACKS: Record<BuiltInUiLanguage, string> = {
   [UI_LANGUAGE_KOREAN]: '한국어',
   [UI_LANGUAGE_JAPANESE]: '日本語',
   [UI_LANGUAGE_SPANISH]: 'Español',
-  [UI_LANGUAGE_FRENCH]: 'Français'
+  [UI_LANGUAGE_FRENCH]: 'Français',
+  [UI_LANGUAGE_TURKISH]: 'Türkçe'
 }
 
 export function getUiLanguageChoiceLabel(

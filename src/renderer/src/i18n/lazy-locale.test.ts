@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
-  UI_LANGUAGE_SPANISH
+  UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_TURKISH
 } from '../../../shared/ui-language'
 import { i18n, setRendererPluginLanguagePacks, setRendererUiLanguage } from './i18n'
 import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-language-pack-artifact'
@@ -30,6 +31,12 @@ describe('renderer i18n lazy locale loading', () => {
     await setRendererUiLanguage(UI_LANGUAGE_SPANISH)
     expect(i18n.language).toBe('es')
     expect(i18n.t('menu.file', { defaultValue: 'File' })).toBe('Archivo')
+  })
+
+  it('lazy-loads Turkish via setRendererUiLanguage before it resolves', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_TURKISH)
+    expect(i18n.language).toBe('tr')
+    expect(i18n.t('menu.file', { defaultValue: 'File' })).toBe('Dosya')
   })
 
   it('lazy-loads a catalog through a direct changeLanguage call', async () => {
