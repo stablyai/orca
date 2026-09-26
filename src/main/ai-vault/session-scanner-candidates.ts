@@ -38,7 +38,8 @@ export async function sessionCandidatesFromDiscoveries(
       isCodex: (candidate) => candidate.agent === 'codex',
       getFilePath: (candidate) => candidate.file.path,
       getCodexHome: (candidate) => candidate.codexHome,
-      getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
+      getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file),
+      getSizeBytes: (candidate) => candidate.file.sizeBytes
     },
     (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
     options.signal

@@ -130,6 +130,7 @@ export async function dedupeCodexRolloutAliases<T>(
     getFilePath: (candidate: T) => string
     getCodexHome: (candidate: T) => string | null
     getHardlinkIdentity: (candidate: T) => string | null
+    getSizeBytes?: (candidate: T) => number | undefined
   },
   readSessionMetaId: (filePath: string) => Promise<string | null>,
   signal?: AbortSignal
@@ -144,8 +145,9 @@ const COPY_PROOF_READ_CONCURRENCY = 8
 
 /**
  * Drops cross-volume rollout copies only when bounded session metadata proves
- * the same Codex session id. Unreadable or ambiguous candidates remain for the
- * full parser and its existing post-parse identity check.
+ * the same Codex session id and the files are the same size. Unreadable,
+ * ambiguous, or diverged candidates remain for the full parser and its
+ * post-parse identity check, which keeps the copy with the latest activity.
  */
 export async function dedupeCodexRolloutCopyAliases<T>(
   candidates: readonly T[],
@@ -153,6 +155,7 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     isCodex: (candidate: T) => boolean
     getFilePath: (candidate: T) => string
     getCodexHome: (candidate: T) => string | null
+    getSizeBytes?: (candidate: T) => number | undefined
   },
   readSessionMetaId: (filePath: string) => Promise<string | null>,
   signal?: AbortSignal
@@ -200,22 +203,28 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     if (group.length < 2) {
       continue
     }
-    const bestById = new Map<string, { candidate: T; rank: number; filePath: string }>()
-    for (const candidate of group) {
+    const bestByCopy = new Map<string, { candidate: T; rank: number; filePath: string }>()
+    const copyKey = (candidate: T): string | null => {
       const id = idByCandidate.get(candidate)
-      if (!id) {
+      // Why size: a copy resumed in another home grows there while the original
+      // stays frozen; root rank alone would hide the newer turns (#22478).
+      return id ? `${id}\0${accessors.getSizeBytes?.(candidate) ?? ''}` : null
+    }
+    for (const candidate of group) {
+      const key = copyKey(candidate)
+      if (!key) {
         continue
       }
       const filePath = accessors.getFilePath(candidate)
       const rank = codexSessionRootRank(accessors.getCodexHome(candidate))
-      const best = bestById.get(id)
+      const best = bestByCopy.get(key)
       if (!best || rank < best.rank || (rank === best.rank && filePath < best.filePath)) {
-        bestById.set(id, { candidate, rank, filePath })
+        bestByCopy.set(key, { candidate, rank, filePath })
       }
     }
     for (const candidate of group) {
-      const id = idByCandidate.get(candidate)
-      if (id && bestById.get(id)?.candidate !== candidate) {
+      const key = copyKey(candidate)
+      if (key && bestByCopy.get(key)?.candidate !== candidate) {
         aliasesToDrop.add(candidate)
       }
     }
@@ -235,6 +244,17 @@ export function codexSessionAliasKey(session: AiVaultSession): string | null {
 }
 
 export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
+  // Why content time before root rank: a diverged copy's last record is later;
+  // identical copies tie here and keep the root preference (#22478).
+  const candidateActivity = candidate.updatedAt ? Date.parse(candidate.updatedAt) : Number.NaN
+  const bestActivity = best.updatedAt ? Date.parse(best.updatedAt) : Number.NaN
+  if (
+    !Number.isNaN(candidateActivity) &&
+    !Number.isNaN(bestActivity) &&
+    candidateActivity !== bestActivity
+  ) {
+    return candidateActivity > bestActivity
+  }
   const candidateRank = codexSessionRootRank(candidate.codexHome)
   const bestRank = codexSessionRootRank(best.codexHome)
   if (candidateRank !== bestRank) {

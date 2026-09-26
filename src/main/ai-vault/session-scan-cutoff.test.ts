@@ -72,7 +72,13 @@ describe('canStopParsingSessions', () => {
     }
     const sessions = collection([session(100, { ...alias, codexHome: '/custom' }), session(100)])
     expect(canStopParsingSessions(sessions, 2, 50)).toBe(true)
-    const preferred = session(10, { ...alias, codexHome: null })
+    // No transcript activity time, so root rank decides and the mtime fallback lowers it.
+    const preferred = session(10, {
+      ...alias,
+      codexHome: null,
+      updatedAt: null,
+      modifiedAt: new Date(10).toISOString()
+    })
     sessions.add(preferred)
     expect(sessions.size).toBe(2)
     expect(canStopParsingSessions(sessions, 2, 50)).toBe(false)

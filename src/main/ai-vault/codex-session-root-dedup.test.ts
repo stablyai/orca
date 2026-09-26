@@ -12,6 +12,9 @@ const MANAGED_HOME_ROLLOUT =
   '/Users/ada/Library/Application Support/orca/codex-runtime-home/home/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
 const MANAGED_HOME = '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
 
+const CUSTOM_HOME = '/Users/ada/private-codex'
+const CUSTOM_HOME_ROLLOUT = `${CUSTOM_HOME}/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl`
+
 function codexSession(overrides: Partial<AiVaultSession>): AiVaultSession {
   return {
     id: `local:codex:${overrides.sessionId ?? 'session-1'}:${overrides.filePath ?? '/tmp/x.jsonl'}`,
@@ -286,6 +289,43 @@ describe('dedupeCodexRolloutCopyAliases', () => {
     expect(readSessionMetaId).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps a diverged copy for the parser while collapsing same-size copies', async () => {
+    type SizedCandidate = Candidate & { sizeBytes?: number }
+    const sizedAccessors = {
+      ...accessors,
+      getSizeBytes: (candidate: SizedCandidate) => candidate.sizeBytes
+    }
+    const staleManaged = {
+      agent: 'codex',
+      path: MANAGED_HOME_ROLLOUT,
+      codexHome: MANAGED_HOME,
+      sizeBytes: 100
+    }
+    const newerCustom = {
+      agent: 'codex',
+      path: CUSTOM_HOME_ROLLOUT,
+      codexHome: CUSTOM_HOME,
+      sizeBytes: 300
+    }
+    const readSessionMetaId = async () => 'shared-session-id'
+
+    for (const order of [
+      [staleManaged, newerCustom],
+      [newerCustom, staleManaged]
+    ]) {
+      await expect(
+        dedupeCodexRolloutCopyAliases(order, sizedAccessors, readSessionMetaId)
+      ).resolves.toEqual(order)
+    }
+    await expect(
+      dedupeCodexRolloutCopyAliases(
+        [{ ...newerCustom, sizeBytes: 100 }, staleManaged],
+        sizedAccessors,
+        readSessionMetaId
+      )
+    ).resolves.toEqual([staleManaged])
+  })
+
   // Why: the proof reads run inside the scan's 130s deadline, so a superseded
   // scan must stop rather than drain a whole second history copy (#17888).
   it('stops proving copies once the scan is cancelled', async () => {
@@ -400,6 +440,34 @@ describe('dedupeScannedSessions', () => {
       codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.codex'
     })
     expect(dedupeScannedSessions([wslReal, wslManaged])).toEqual([wslManaged])
+  })
+
+  it('shows the copy with later activity over a stale managed-home copy', () => {
+    const staleManaged = codexSession({
+      filePath: MANAGED_HOME_ROLLOUT,
+      codexHome: MANAGED_HOME,
+      updatedAt: '2026-07-01T10:05:00.000Z',
+      messageCount: 2
+    })
+    const newerCustom = codexSession({
+      filePath: CUSTOM_HOME_ROLLOUT,
+      codexHome: CUSTOM_HOME,
+      updatedAt: '2026-07-01T11:00:00.000Z',
+      messageCount: 6
+    })
+    expect(dedupeScannedSessions([staleManaged, newerCustom])).toEqual([newerCustom])
+    expect(dedupeScannedSessions([newerCustom, staleManaged])).toEqual([newerCustom])
+  })
+
+  it('keeps the managed home when copies have the same activity', () => {
+    const managed = codexSession({ filePath: MANAGED_HOME_ROLLOUT, codexHome: MANAGED_HOME })
+    const custom = codexSession({
+      filePath: CUSTOM_HOME_ROLLOUT,
+      codexHome: CUSTOM_HOME,
+      modifiedAt: '2026-07-02T00:00:00.000Z'
+    })
+    expect(dedupeScannedSessions([custom, managed])).toEqual([managed])
+    expect(dedupeScannedSessions([managed, custom])).toEqual([managed])
   })
 
   it('never collapses matching host and WSL session identities', () => {
