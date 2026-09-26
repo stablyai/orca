@@ -15496,7 +15496,10 @@
             "2b3ce6d394": "キャンセル",
             "e05063cfc1": "{{value0}} 行目",
             "c845170b3b": "行 {{value0}}-{{value1}}",
-            "commentTooLarge": "コメントが大きすぎるため安全に送信できません。"
+            "commentTooLarge": "コメントが大きすぎるため安全に送信できません。",
+            "f6c449191e": "AI に関するメモを追加",
+            "5fa4bfebaa": "メモを追加",
+            "5e9b3d0c2e": "追加中…"
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "このメモ"
