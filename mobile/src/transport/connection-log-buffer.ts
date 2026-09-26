@@ -31,7 +31,8 @@ export function createConnectionLogStore(
   const hydratedHosts = new Set<string>()
   const hydrationFailedHosts = new Set<string>()
   const hydrationByHost = new Map<string, Promise<void>>()
-  const saveByHost = new Map<string, Promise<void>>()
+  const savingHosts = new Set<string>()
+  const pendingPersistenceAttemptsByHost = new Map<string, number>()
   const persistenceRevisionByHost = new Map<
     string,
     { snapshot: readonly ConnectionLogEntry[]; saved: boolean }
@@ -65,30 +66,59 @@ export function createConnectionLogStore(
     }
     let revision = persistenceRevisionByHost.get(hostId)
     if (!revision) {
-      revision = { snapshot: [...(entriesByHost.get(hostId) ?? [])], saved: false }
+      revision = {
+        snapshot: [...(entriesByHost.get(hostId) ?? [])],
+        saved: false
+      }
       persistenceRevisionByHost.set(hostId, revision)
     }
-    const currentRevision = revision
-    if (currentRevision.saved) {
+    if (revision.saved) {
       return
     }
-    const previous = saveByHost.get(hostId) ?? Promise.resolve()
-    const pending = previous
-      .catch(() => {})
-      .then(async () => {
-        // Duplicate requests retain retry opportunities until this revision is durable.
-        if (currentRevision.saved) {
-          return
+    pendingPersistenceAttemptsByHost.set(
+      hostId,
+      (pendingPersistenceAttemptsByHost.get(hostId) ?? 0) + 1
+    )
+    if (savingHosts.has(hostId)) {
+      return
+    }
+    savingHosts.add(hostId)
+    void Promise.resolve().then(async () => {
+      try {
+        let current = persistenceRevisionByHost.get(hostId)
+        while (
+          current &&
+          !current.saved &&
+          (pendingPersistenceAttemptsByHost.get(hostId) ?? 0) > 0
+        ) {
+          pendingPersistenceAttemptsByHost.set(
+            hostId,
+            (pendingPersistenceAttemptsByHost.get(hostId) ?? 1) - 1
+          )
+          try {
+            try {
+              await persistence.save(hostId, current.snapshot)
+            } catch {
+              await persistence.save(hostId, current.snapshot)
+            }
+            current.saved = true
+          } catch {
+            // Later requests can retry the latest revision after both attempts fail.
+          }
+          // Slow storage retains only the in-flight snapshot and the latest pending revision.
+          current = persistenceRevisionByHost.get(hostId)
         }
-        try {
-          await persistence.save(hostId, currentRevision.snapshot)
-        } catch {
-          await persistence.save(hostId, currentRevision.snapshot)
+      } finally {
+        // An append can invalidate the revision before its persistence microtask runs.
+        if (
+          persistenceRevisionByHost.get(hostId)?.saved ||
+          pendingPersistenceAttemptsByHost.get(hostId) === 0
+        ) {
+          pendingPersistenceAttemptsByHost.delete(hostId)
         }
-        currentRevision.saved = true
-      })
-      .catch(() => {})
-    saveByHost.set(hostId, pending)
+        savingHosts.delete(hostId)
+      }
+    })
   }
 
   const hydrateHost = async (hostId: string, retryAfterFailure: boolean): Promise<void> => {
