@@ -246,21 +246,28 @@ export function projectRuntimeMobileSessionTabs(
             }
           }
         : null
+    // Why derived here: the record plus the process this leaf still resolves to decide it, so a
+    // frame published before the dead process's records catch up still shows the exit. The whole
+    // record rides along because an older client's retirement proof needs its process ids.
+    const exitRecord = host.getTerminalExitRecord(tab.leafId)
+    const exited =
+      exitRecord && (resolvedLivePtyId === null || resolvedLivePtyId === exitRecord.ptyId)
+        ? exitRecord
+        : undefined
     // Why: web/mobile clients hold handles across renderer graph syncs; leaf handles are epoch-bound but PTY handles stay streamable.
-    const terminalHandle = liveLeafPtyId
-      ? host.issuePtyHandle(
-          host.recordPty(liveLeafPtyId, snapshot.worktree, {
-            tabId: tab.parentTabId,
-            paneKey,
-            connected: true
-          })
-        )
-      : livePty
-        ? host.issuePtyHandle(livePty)
-        : null
-    // Why the whole record: the per-client projection needs its process ids for an older client's
-    // retirement proof, and strips them for every client.
-    const exited = terminalHandle ? undefined : host.getTerminalExitRecord(tab.leafId)
+    const terminalHandle = exited
+      ? null
+      : liveLeafPtyId
+        ? host.issuePtyHandle(
+            host.recordPty(liveLeafPtyId, snapshot.worktree, {
+              tabId: tab.parentTabId,
+              paneKey,
+              connected: true
+            })
+          )
+        : livePty
+          ? host.issuePtyHandle(livePty)
+          : null
     const projectedAgentStatus =
       agentStatus ??
       host.buildPtyStatus(

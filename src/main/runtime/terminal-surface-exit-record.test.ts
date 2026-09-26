@@ -128,6 +128,15 @@ function makeRendererRuntime(
   return { runtime, spawn, notifier }
 }
 
+/** The process that is about to die, registered live under the kept leaf. */
+function registerDeadProcess(runtime: Runtime): void {
+  runtime.registerPty(DEAD_PTY_ID, TEST_WORKTREE_ID, null, {
+    tabId: TAB_ID,
+    leafId: HEADLESS_LEAF_ID,
+    incarnationId: 'inc-dead'
+  })
+}
+
 /** The desktop renderer's graph holding every terminal leaf of `snapshot`. */
 function publishDesktopGraph(runtime: Runtime, snapshot: RuntimeMobileSessionTabsSnapshot): void {
   const leaves = snapshot.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab] : []))
@@ -409,6 +418,90 @@ describe('terminal exit records', () => {
     expect(notifier.terminalExitRecordsChanged).toHaveBeenLastCalledWith([otherWorktreeRecord])
   })
 
+  it("ends a desktop-deleted worktree's records when the renderer stops publishing it", () => {
+    const { runtime, notifier } = makeRendererRuntime(
+      rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }])
+    )
+    runtime.terminalExitRecords.record(exitRecord())
+
+    // Delete Workspace (`worktrees:remove`) purges the renderer's tabs, so its next graph omits it.
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [] })
+
+    expect(runtime.terminalExitRecords.list()).toEqual([])
+    expect(notifier.terminalExitRecordsChanged).toHaveBeenLastCalledWith([])
+  })
+
+  it('shows the exit in the frame its record publishes, while stale state still names the dead process live', () => {
+    const snapshot = rendererSnapshot([
+      { tabId: TAB_ID, leafId: HEADLESS_LEAF_ID, ptyId: DEAD_PTY_ID }
+    ])
+    const { runtime } = makeRendererRuntime(snapshot)
+    publishDesktopGraph(runtime, snapshot)
+    registerDeadProcess(runtime)
+    const frames: RuntimeMobileSessionTabsResult[] = []
+    runtime.onMobileSessionTabsChanged((frame) => frames.push(frame))
+
+    runtime.terminalExitRecords.record(exitRecord())
+
+    const frame = frames.at(-1)!
+    expect(
+      projectSessionTabsForClient(
+        frame,
+        'runtime',
+        [SESSION_TABS_TERMINAL_EXIT_STATE_RUNTIME_CAPABILITY],
+        false
+      ).tabs
+    ).toEqual([
+      expect.objectContaining({
+        leafId: HEADLESS_LEAF_ID,
+        status: 'pending-handle',
+        exited: expect.objectContaining({ exitCode: 3 })
+      })
+    ])
+    const old = projectSessionTabsForClient(frame, 'runtime', [], false)
+    expect(old.tabs).toEqual([])
+    expect(old.retiredTerminalSurfaces).toEqual([
+      expect.objectContaining({ leafId: HEADLESS_LEAF_ID, ptyId: DEAD_PTY_ID })
+    ])
+  })
+
+  it('never shows a capable client a restarting leaf as gone, even when its dead process exits again', async () => {
+    const snapshot = rendererSnapshot([
+      { tabId: TAB_ID, leafId: HEADLESS_LEAF_ID, ptyId: DEAD_PTY_ID }
+    ])
+    const { runtime, spawn } = makeRendererRuntime(snapshot)
+    publishDesktopGraph(runtime, snapshot)
+    registerDeadProcess(runtime)
+    const frames: RuntimeMobileSessionTabsResult[] = []
+    runtime.onMobileSessionTabsChanged((frame) =>
+      frames.push(
+        projectSessionTabsForClient(
+          frame,
+          'runtime',
+          [SESSION_TABS_TERMINAL_EXIT_STATE_RUNTIME_CAPABILITY],
+          false
+        )
+      )
+    )
+    runtime.terminalExitRecords.record(exitRecord())
+
+    // The exit main kept, reported again the way a failed reattach during a restart reports it.
+    runtime.onPtyExit(DEAD_PTY_ID, 3, 'inc-dead')
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, TAB_ID, HEADLESS_LEAF_ID, {
+      notifyClients: false,
+      intent: 'user'
+    })
+
+    expect(spawn).toHaveBeenCalledTimes(1)
+    const leafInEachFrame = frames.map((frame) =>
+      frame.tabs.find((tab) => tab.type === 'terminal' && tab.leafId === HEADLESS_LEAF_ID)
+    )
+    expect(leafInEachFrame.length).toBeGreaterThan(1)
+    expect(leafInEachFrame).not.toContain(undefined)
+    expect(leafInEachFrame.at(-1)).toMatchObject({ status: 'ready' })
+    expect(frames.flatMap((frame) => frame.retiredTerminalSurfaces ?? [])).toEqual([])
+  })
+
   it("gives a client without the capability exactly today's projection of an exit", async () => {
     const graph = (ptyId: string | null) => ({
       tabs: [
@@ -563,7 +656,7 @@ describe('terminal exit records', () => {
     expect(
       resolveStablePaneOwner(
         runtime,
-        store,
+        undefined,
         makePaneKey(TAB_ID, HEADLESS_LEAF_ID),
         TEST_WORKTREE_ID,
         null
