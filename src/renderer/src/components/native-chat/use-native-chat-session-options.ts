@@ -22,6 +22,7 @@ import {
   resolveNativeChatModelDiscoveryContext
 } from './native-chat-session-option-discovery'
 import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
+import { readMuseSessionOptionsFromTerminalScreen } from './muse-terminal-session-options'
 
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 
@@ -112,7 +113,9 @@ export function useNativeChatSessionOptions(args: {
             readTerminalScreen?.(),
             discoveredModels ?? undefined
           )
-        : null
+        : agent === 'muse'
+          ? readMuseSessionOptionsFromTerminalScreen(readTerminalScreen?.())
+          : null
     return createNativeChatPtySessionOptions({
       agent,
       scopeKey,

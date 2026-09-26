@@ -23,7 +23,10 @@ const MUSE_EFFORT: CatalogOption = {
   apply: {
     launchArgs: (value) => ['--reasoning-effort', String(value)],
     agentArgsOverride: (tokens) => hasFlag(tokens, ['--reasoning-effort']),
-    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--reasoning-effort'])
+    removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['--reasoning-effort']),
+    // Why: the TUI honors `/effort <level>` mid-session, so a live terminal tab
+    // switches the same way Claude's `/model` does — typed into the PTY.
+    midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
   }
 }
 
