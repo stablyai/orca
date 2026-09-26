@@ -35,6 +35,11 @@ const TASK_SUBTYPES: ReadonlySet<string> = new Set([
   'task_notification'
 ])
 
+const SILENT_ROW_REFRESH_SUBTYPES: ReadonlySet<string> = new Set([
+  'task_progress',
+  'background_tasks_changed'
+])
+
 export type ClaudeBackgroundTaskRowsDeps = {
   sink: StructuredAgentSessionEventSink
   /** Whether a tool id names a tool call this session forwarded at the TOP
@@ -269,7 +274,14 @@ export class ClaudeBackgroundTaskRows {
       id,
       row,
       () => {
-        if (journaling && openOutputTurn) {
+        // Why: progress and roster ticks refresh the row only. Opening a turn
+        // here flips an idle chat back to working.
+        const subtype = journaling?.frame.subtype
+        if (
+          journaling &&
+          openOutputTurn &&
+          (typeof subtype !== 'string' || !SILENT_ROW_REFRESH_SUBTYPES.has(subtype))
+        ) {
           this.deps.openOutputTurn?.(journaling.frame, journaling.observedAt)
         }
       },
