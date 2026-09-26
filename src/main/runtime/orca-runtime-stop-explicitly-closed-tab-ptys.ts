@@ -7,6 +7,27 @@ import { countTerminalLayoutLeaves } from './headless-terminal-split-layout'
 import type { RuntimePtyTabCloseAuthority } from './runtime-terminal-state-records'
 
 export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithFocusTerminal {
+  /** Resolves a close target from the handle-indexed runtime state without host I/O. */
+  getTerminalCloseTarget(handle: string): { tabId: string } | null {
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      const authority: RuntimePtyTabCloseAuthority = {
+        handle,
+        ptyId: pty.pty.ptyId,
+        incarnationId: pty.pty.incarnationId,
+        worktreeId: pty.pty.worktreeId
+      }
+      const tabId =
+        this.resolvePtyTabCloseSurfaceAuthority(authority)?.surface.tab.parentTabId ?? pty.pty.tabId
+      return tabId ? { tabId } : null
+    }
+    try {
+      return { tabId: this.getLiveLeafForHandle(handle).leaf.tabId }
+    } catch {
+      return null
+    }
+  }
+
   protected async stopExplicitlyClosedTabPtys(
     ptyIds: readonly string[],
     addressedPtyId: string
