@@ -26,7 +26,8 @@ export const CROSS_MACHINE_RECOVERY_ERROR_CODES = [
   'recovery_descriptor_too_large',
   'recovery_session_live_locally',
   'recovery_binding_not_found',
-  'recovery_binding_ambiguous'
+  'recovery_binding_ambiguous',
+  'recovery_placement_occupied'
 ] as const
 
 export type CrossMachineRecoveryErrorCode = (typeof CROSS_MACHINE_RECOVERY_ERROR_CODES)[number]

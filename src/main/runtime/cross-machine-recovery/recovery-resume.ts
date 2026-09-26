@@ -1,3 +1,4 @@
+import { AgentLaunchPaneAlreadyLiveError } from '../../../shared/agent-launch-pane-already-live'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import {
   recoveryBindingKeyOf,
@@ -97,11 +98,15 @@ export async function resumeClaimedRecoveryBinding(
         ...(options.launchPreferences ? { launchPreferences: options.launchPreferences } : {}),
         presentation: options.presentation ?? 'background',
         ...(extraResumeArgv.length > 0 ? { extraResumeArgv } : {}),
-        placement: { tabId: pane?.tabId ?? record.tabId, ...(pane ? { leafId: pane.leafId } : {}) }
+        placement: { tabId: pane?.tabId ?? record.tabId, ...(pane ? { leafId: pane.leafId } : {}) },
+        // Why: a dormant pane has no PTY; adopting one that appeared would resume into a shell.
+        requireFreshPane: true
       })
     } catch (error) {
       await restore()
-      throw error
+      throw error instanceof AgentLaunchPaneAlreadyLiveError
+        ? new Error('recovery_placement_occupied')
+        : error
     }
     await recordConsumedRecoveryBinding(host, worktreeId, binding)
     return {

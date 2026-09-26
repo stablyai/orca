@@ -159,6 +159,7 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
+      ...(request.requireFreshPane ? { requireFreshPane: true } : {}),
       agentSessionClaim: claim,
       signal: _caller.signal
     })

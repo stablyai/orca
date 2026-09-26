@@ -175,6 +175,23 @@ describe('OrcaRuntimeService', () => {
     expect(releaseStablePaneCreate).toHaveBeenCalled()
   })
 
+  it('refuses a live placement pane for an explicit agent session that requires a fresh one', async () => {
+    const { runtime, revealTerminalSession } = runtimeWithDesktopWindow(LIVE_PANE_SPAWN)
+
+    await expect(
+      runtime.ensureAgentSession({
+        kind: 'explicit',
+        worktree: `id:${TEST_WORKTREE_ID}`,
+        agent: 'omp',
+        providerSession: { key: 'session_id', id: 'provider-session-1' },
+        ompResumeFilePath: '/custom/omp/project/session.jsonl',
+        placement: { tabId: RESERVED_TAB_ID, leafId: RESERVED_LEAF_ID },
+        requireFreshPane: true
+      })
+    ).rejects.toThrow('agent_launch_pane_already_live')
+    expect(revealTerminalSession).not.toHaveBeenCalled()
+  })
+
   it('still attaches to a live pane when the caller did not require a fresh one', async () => {
     // `terminal.create` keeps its reattach; only agent.launch opts into the refusal.
     const { runtime, revealTerminalSession } = runtimeWithDesktopWindow(LIVE_PANE_SPAWN)

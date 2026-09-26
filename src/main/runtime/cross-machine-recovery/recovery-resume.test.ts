@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AgentLaunchPaneAlreadyLiveError } from '../../../shared/agent-launch-pane-already-live'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { importRecoveryWorkspaceWithHost } from './recovery-import'
 import { descriptor, emptySession, fixture, SESSION_ID } from './recovery-import.test-fixture'
@@ -31,6 +33,50 @@ describe('resumeRecoveryBindingWithHost', () => {
         binding: 'missing'
       })
     ).rejects.toThrow('recovery_binding_not_found')
+  })
+
+  it('launches claude --resume fresh into the recovered pane instead of adopting its PTY', async () => {
+    const f = fixture()
+    await importRecoveryWorkspaceWithHost(
+      f.host,
+      { descriptor: descriptor(), checkoutPath: f.checkout, checkpointId: 'cp' },
+      f.readCommonDir
+    )
+    const [record] = Object.values(f.getSession().sleepingAgentSessionsByPaneKey ?? {})
+    const pane = parsePaneKey(record!.paneKey)
+    await resumeRecoveryBindingWithHost(f.host, {
+      worktree: `id:${f.worktreeId}`,
+      binding: SESSION_ID
+    })
+    expect(f.ensureAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'explicit',
+        agent: 'claude',
+        providerSession: expect.objectContaining({ id: SESSION_ID }),
+        placement: { tabId: pane!.tabId, leafId: pane!.leafId },
+        requireFreshPane: true
+      })
+    )
+  })
+
+  it('fails with recovery_placement_occupied and keeps the record when the pane is already live', async () => {
+    const f = fixture({
+      ensure: async () => {
+        throw new AgentLaunchPaneAlreadyLiveError()
+      }
+    })
+    await importRecoveryWorkspaceWithHost(
+      f.host,
+      { descriptor: descriptor(), checkoutPath: f.checkout, checkpointId: 'cp' },
+      f.readCommonDir
+    )
+    await expect(
+      resumeRecoveryBindingWithHost(f.host, {
+        worktree: `id:${f.worktreeId}`,
+        binding: SESSION_ID
+      })
+    ).rejects.toThrow('recovery_placement_occupied')
+    expect(Object.values(f.getSession().sleepingAgentSessionsByPaneKey ?? {})).toHaveLength(1)
   })
 })
 

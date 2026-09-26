@@ -119,6 +119,8 @@ export type RuntimeEnsureAgentSessionRequest =
       placement?: { tabId?: string; leafId?: string }
       /** Cross-machine recovery only: extra resume argv entries, each quoted, never shell-parsed. */
       extraResumeArgv?: readonly string[]
+      /** Cross-machine recovery only: refuse to adopt a PTY already live in `placement`. */
+      requireFreshPane?: boolean
     }
 
 export type RuntimeEnsureAgentSessionResult = {
