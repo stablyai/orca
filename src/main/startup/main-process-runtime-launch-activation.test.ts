@@ -91,8 +91,12 @@ vi.mock('../window/foreground-activation-policy', () => ({
   showWindowWithoutStealingFocus
 }))
 
-vi.mock('./main-process-ready-foundation', () => ({ initializeReadyFoundation: vi.fn() }))
-vi.mock('./main-process-ready-runtime', () => ({ initializeReadyRuntimeServices: vi.fn() }))
+vi.mock('./main-process-ready-foundation', () => ({
+  initializeReadyFoundation: vi.fn(async () => {})
+}))
+vi.mock('./main-process-ready-runtime', () => ({
+  initializeReadyRuntimeServices: vi.fn(async () => {})
+}))
 vi.mock('./main-process-i18n-menu', () => ({
   initializeMainProcessI18nAndMenu: vi.fn(async () => {})
 }))
