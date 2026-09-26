@@ -107,13 +107,16 @@ function readSavedDacl(spawnFn: typeof spawn, target: string, deadlineMs: number
   })
 }
 
-function collectAclFacts(savedDacl: string): AclFacts {
+function collectAclFacts(savedDacl: string): AclFacts | null {
   const orphanPackageSids: string[] = []
   let hasWellKnownPackageGrant = false
   let hasRestrictedPackageGrant = false
-  // The ACEs straight after `D:<flags>`; a following `S:` (SACL) is not a '(' and ends it.
-  const dacl = /D:[A-Z]*((?:\([^()]*\))*)/i.exec(savedDacl)?.[1] ?? ''
-  for (const [, type, flags, rawSid] of dacl.matchAll(SDDL_ACE)) {
+  // A partial DACL can hide a later grant; unsupported ACEs must stay unreadable.
+  const dacl = /^D:[A-Z]*((?:\([^()]*\))*)(?:S:.*)?$/im.exec(savedDacl)
+  if (!dacl) {
+    return null
+  }
+  for (const [, type, flags, rawSid] of dacl[1].matchAll(SDDL_ACE)) {
     const sid = rawSid.toUpperCase()
     if (!WELL_KNOWN_PACKAGE_SIDS.has(sid)) {
       if (PACKAGE_SID.test(sid)) {
@@ -156,7 +159,7 @@ async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void
       // Why one shared budget: two targets must never cost two full timeouts.
       outputs.push(remaining > 0 ? await readSavedDacl(spawnFn, target, remaining) : '')
     }
-    const facts = outputs.map(collectAclFacts)
+    const facts = outputs.map(collectAclFacts).filter((fact) => fact !== null)
     const orphans = [...new Set(facts.flatMap((f) => f.orphanPackageSids))]
     const hasWellKnownPackageGrant = facts.some((f) => f.hasWellKnownPackageGrant)
     const hasRestrictedPackageGrant = facts.some((f) => f.hasRestrictedPackageGrant)
@@ -166,21 +169,22 @@ async function runProbe(options: WindowsInstallDirAclProbeOptions): Promise<void
     const poisoned = facts.some(
       (f) => f.orphanPackageSids.length > 0 && !f.hasWellKnownPackageGrant
     )
-    data = outputs.every((out) => out === '')
-      ? { status: 'failed', reason: 'all-targets-unreadable' }
-      : {
-          status: 'ok',
-          probedTargetCount: targets.length,
-          orphanPackageSidCount: orphans.length,
-          // Capped: correlating the same orphan across reports is what would
-          // identify the tool that left it, which is the point of recording it.
-          orphanPackageSids: sanitizeCrashReportString(orphans.slice(0, 3).join(','), 200),
-          // The verdict rides on this one: either well-known grant satisfies the orphan.
-          hasWellKnownPackageGrant,
-          // Diagnostic only — the -1-only shape launches clean on real hardware.
-          hasRestrictedPackageGrant,
-          matchesPoisonSignature: poisoned
-        }
+    data =
+      facts.length === 0
+        ? { status: 'failed', reason: 'all-targets-unreadable' }
+        : {
+            status: 'ok',
+            probedTargetCount: targets.length,
+            orphanPackageSidCount: orphans.length,
+            // Capped: correlating the same orphan across reports is what would
+            // identify the tool that left it, which is the point of recording it.
+            orphanPackageSids: sanitizeCrashReportString(orphans.slice(0, 3).join(','), 200),
+            // The verdict rides on this one: either well-known grant satisfies the orphan.
+            hasWellKnownPackageGrant,
+            // Diagnostic only — the -1-only shape launches clean on real hardware.
+            hasRestrictedPackageGrant,
+            matchesPoisonSignature: poisoned
+          }
   } catch (error) {
     data = { status: 'failed', reason: sanitizeCrashReportString(`probe: ${String(error)}`, 200) }
   }

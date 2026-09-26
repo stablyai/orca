@@ -191,6 +191,31 @@ describe('probeWindowsInstallDirAcl', () => {
     expect(data.matchesPoisonSignature).toBe(poisoned)
   })
 
+  it('keeps a conditional DACL unreadable instead of hiding a later package grant', async () => {
+    const saved =
+      'orca\r\nD:AI(A;OICI;0x1200a9;;;S-1-15-2-999-999-999)' +
+      '(XA;OICI;FA;;;WD;(@User.Department == "Finance"))' +
+      '(A;OICIID;0x1200a9;;;S-1-15-2-2)\r\n'
+    let verdict: CrashReportBreadcrumbData = {}
+    const data = await probe({
+      fileExists: () => false,
+      spawnFn: fakeSpawn(() => Buffer.from(saved, 'utf16le')).spawnFn,
+      onDone: (done) => (verdict = done)
+    })
+    expect(data).toMatchObject({ status: 'failed', reason: 'all-targets-unreadable' })
+    expect(data.matchesPoisonSignature).toBeUndefined()
+    expect(isInstallDirAclPoisonVerdict(verdict)).toBe(false)
+  })
+
+  it('does not report malformed saved output as a clean DACL', async () => {
+    const data = await probe({
+      fileExists: () => false,
+      spawnFn: fakeSpawn(() => Buffer.from('orca\r\n', 'utf16le')).spawnFn
+    })
+    expect(data).toMatchObject({ status: 'failed', reason: 'all-targets-unreadable' })
+    expect(data.matchesPoisonSignature).toBeUndefined()
+  })
+
   it('records a failure instead of throwing when icacls cannot be read', async () => {
     const data = await probe({ spawnFn: fakeSpawn(() => null).spawnFn })
     expect(data.status).toBe('failed')
