@@ -16,7 +16,7 @@ describe('locale brand matching', () => {
       })
     )
     try {
-      for (const locale of ['zh', 'ja', 'ko', 'es']) {
+      for (const locale of ['zh', 'zh-TW', 'ja', 'ko', 'es']) {
         expect(
           repairTranslatedValue({
             key: 'fixture.endpoint',

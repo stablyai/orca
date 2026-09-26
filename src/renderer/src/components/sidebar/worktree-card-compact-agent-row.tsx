@@ -195,9 +195,14 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             'auto.components.sidebar.worktree.card.compact.agents.a128d7006b',
             '{{value0}} {{value1}} child {{value2}}',
             {
-              value0: childAgentsExpanded ? 'Hide' : 'Show',
+              value0: childAgentsExpanded
+                ? translate('common.childAgentDisclosure.hide', 'Hide')
+                : translate('common.childAgentDisclosure.show', 'Show'),
               value1: childAgentCount,
-              value2: childAgentCount === 1 ? 'agent' : 'agents'
+              value2:
+                childAgentCount === 1
+                  ? translate('common.childAgentDisclosure.agent', 'agent')
+                  : translate('common.childAgentDisclosure.agents', 'agents')
             }
           )}
           aria-expanded={childAgentsExpanded}

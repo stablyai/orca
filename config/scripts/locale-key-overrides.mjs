@@ -9,9 +9,9 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.TaskPage.94f0339621': { ja: '私に割り当てられた Issue' },
   // aria-label describing the assignee picker state; the past-passive sentence reads oddly for a static label.
   'auto.components.TaskPage.bb63046423': { ja: '{{value0}} に割り当て済み' },
-  // Bare "Cursor" terminal/theme settings = on-screen カーソル, not the Cursor product.
-  'auto.components.settings.TerminalWindowSection.c9e1fdf42f': { ja: 'カーソル' },
-  'auto.components.onboarding.ThemeStep.ab2a583a97': { ja: 'カーソル' },
+  // Bare "Cursor" terminal/theme settings refer to the on-screen cursor, not the product.
+  'auto.components.settings.TerminalWindowSection.c9e1fdf42f': { ja: 'カーソル', 'zh-TW': '游標' },
+  'auto.components.onboarding.ThemeStep.ab2a583a97': { ja: 'カーソル', 'zh-TW': '游標' },
   // File-row "Duplicate" is the action, and it sits beside "Copy" (复制) in the same menu; keyed
   // because the skills-dialog chip shares the English string but reads as a noun.
   'auto.components.right.sidebar.FileExplorerRow.0fec99bfd7': { zh: '创建副本' },

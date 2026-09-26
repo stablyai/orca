@@ -29,7 +29,8 @@ const NON_DEFAULT_LOCALE_LOADERS: Record<
   fr: () => import('./locales/fr.json'),
   ja: () => import('./locales/ja.json'),
   ko: () => import('./locales/ko.json'),
-  zh: () => import('./locales/zh.json')
+  zh: () => import('./locales/zh.json'),
+  'zh-TW': () => import('./locales/zh-TW.json')
 }
 
 const lazyLocaleBackend: BackendModule = {
@@ -56,6 +57,7 @@ void i18n
   .init({
     fallbackLng: DEFAULT_LOCALE,
     lng: DEFAULT_LOCALE,
+    load: 'currentOnly',
     // Why: `resources` seeds the eager English catalog while
     // `partialBundledLanguages` lets the backend supply the lazy locales — so
     // i18next uses bundled `en` immediately and only hits the backend for the

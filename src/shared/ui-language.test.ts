@@ -8,6 +8,7 @@ import {
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
   UI_LANGUAGE_SYSTEM,
+  UI_LANGUAGE_TRADITIONAL_CHINESE,
   normalizeUiLanguage
 } from './ui-language'
 
@@ -16,6 +17,7 @@ describe('normalizeUiLanguage', () => {
     expect(normalizeUiLanguage(UI_LANGUAGE_SYSTEM)).toBe('system')
     expect(normalizeUiLanguage(UI_LANGUAGE_ENGLISH)).toBe('en')
     expect(normalizeUiLanguage(UI_LANGUAGE_CHINESE)).toBe('zh')
+    expect(normalizeUiLanguage(UI_LANGUAGE_TRADITIONAL_CHINESE)).toBe('zh-TW')
     expect(normalizeUiLanguage(UI_LANGUAGE_KOREAN)).toBe('ko')
     expect(normalizeUiLanguage(UI_LANGUAGE_JAPANESE)).toBe('ja')
     expect(normalizeUiLanguage(UI_LANGUAGE_SPANISH)).toBe('es')

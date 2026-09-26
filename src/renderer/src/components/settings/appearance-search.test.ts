@@ -14,7 +14,7 @@ describe('getLanguageEntries', () => {
     await i18n.changeLanguage('en')
   })
 
-  it.each(['en', 'zh', 'ko', 'ja', 'es', 'fr'])(
+  it.each(['en', 'zh', 'zh-TW', 'ko', 'ja', 'es', 'fr'])(
     'indexes every native word for "language" under the %s UI locale',
     async (locale) => {
       await i18n.changeLanguage(locale)
@@ -33,5 +33,10 @@ describe('getLanguageEntries', () => {
   it('matches the French native language name in English UI', async () => {
     await i18n.changeLanguage('en')
     expect(matchesSettingsSearch('Français', getLanguageEntries()[0])).toBe(true)
+  })
+
+  it('finds Traditional Chinese by its native name in English UI', async () => {
+    await i18n.changeLanguage('en')
+    expect(matchesSettingsSearch('繁體中文', getLanguageEntries()[0])).toBe(true)
   })
 })
