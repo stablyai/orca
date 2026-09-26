@@ -102,6 +102,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.nim': 'nim',
   '.nims': 'nim',
   '.nimble': 'nim',
+  '.typ': 'typst',
   '.tf': 'hcl',
   '.hcl': 'hcl',
   '.abap': 'abap',

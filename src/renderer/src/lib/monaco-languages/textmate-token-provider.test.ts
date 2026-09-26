@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { createOnigScanner, createOnigString, loadWASM } from 'vscode-oniguruma'
 import type { IOnigLib, IRawGrammar } from 'vscode-textmate'
 import nimGrammar from './textmate-grammars/nim.tmLanguage.json'
+import { loadTypstTextMateGrammar } from './register-typst'
 import { createTextMateTokensProvider } from './textmate-token-provider'
 
 const require = createRequire(import.meta.url)
@@ -44,6 +45,43 @@ describe('createTextMateTokensProvider', () => {
     expect(commentLine.tokens.map((token) => token.scopes)).toContain(
       'comment.line.number-sign.nim'
     )
+  })
+
+  it('tokenizes Typst markup, code, and math through the lazy grammar loader', async () => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.typst',
+      loadGrammar: loadTypstTextMateGrammar,
+      loadOniguruma: loadNodeOniguruma
+    })
+    const scopesOf = (line: string) =>
+      provider.tokenize(line, provider.getInitialState()).tokens.map((token) => token.scopes)
+
+    expect(scopesOf('#let width = 12pt')).toEqual(
+      expect.arrayContaining(['keyword.other.typst', 'constant.numeric.length.typst'])
+    )
+    expect(scopesOf('#set text(font: "Inter")')).toEqual(
+      expect.arrayContaining(['entity.name.function.typst', 'string.quoted.double.typst'])
+    )
+    expect(scopesOf('// note')).toContain('comment.line.double-slash.typst')
+    expect(scopesOf('$ sum_(k=0)^n k $')).toContain('string.other.math.typst')
+  })
+
+  it('carries a Typst raw block across lines until its fence closes', async () => {
+    const provider = await createTextMateTokensProvider({
+      scopeName: 'source.typst',
+      loadGrammar: loadTypstTextMateGrammar,
+      loadOniguruma: loadNodeOniguruma
+    })
+
+    let state = provider.getInitialState()
+    const lineScopes = ['```rust', 'let x = 1', '```', '#let y = 2'].map((line) => {
+      const result = provider.tokenize(line, state)
+      state = result.endState
+      return result.tokens.map((token) => token.scopes)
+    })
+
+    expect(lineScopes[1]).toEqual(['markup.raw.block.typst'])
+    expect(lineScopes[3]).toContain('keyword.other.typst')
   })
 
   it('fails clearly when a scope has no grammar', async () => {
