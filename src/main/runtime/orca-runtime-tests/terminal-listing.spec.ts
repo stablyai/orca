@@ -6,14 +6,20 @@ import {
   listWorktrees
 } from '../orca-runtime-test-mocks.spec'
 import {
+  HEADLESS_LEAF_ID,
+  HEADLESS_SECOND_LEAF_ID,
+  HEADLESS_THIRD_LEAF_ID,
   TEST_FOLDER_WORKSPACE_PATH,
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   createRuntime,
+  makeRuntimeStoreWithWorkspaceSession,
+  makeWorkspaceSessionWithHeadlessTerminal,
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import { makePaneKey } from '../../../shared/stable-pane-id'
 
 describe('OrcaRuntimeService', () => {
   it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', () => {
@@ -70,6 +76,168 @@ describe('OrcaRuntimeService', () => {
     })
     const split = internals.getMobileSessionTabsForWorktree(TEST_WORKTREE_ID)
     expect(split.tabs.filter((tab) => tab.type === 'terminal')).toHaveLength(2)
+  })
+
+  it('marks a live persisted terminal detached when its visual tab is missing', async () => {
+    const runtime = createRuntime()
+    const internals = runtime as unknown as {
+      recordPtyWorktree: (
+        ptyId: string,
+        worktreeId: string,
+        state?: Record<string, unknown>
+      ) => void
+      mobileSessionTabsByWorktree: Map<string, unknown>
+    }
+    internals.recordPtyWorktree('pty-visible', TEST_WORKTREE_ID, {
+      connected: true,
+      incarnationId: 'visible-incarnation',
+      tabId: 'tab-visible',
+      paneKey: makePaneKey('tab-visible', HEADLESS_LEAF_ID)
+    })
+    internals.recordPtyWorktree('pty-detached', TEST_WORKTREE_ID, {
+      connected: true,
+      incarnationId: 'detached-incarnation',
+      tabId: 'tab-detached',
+      paneKey: makePaneKey('tab-detached', HEADLESS_SECOND_LEAF_ID)
+    })
+    internals.recordPtyWorktree('pty-unverified', TEST_WORKTREE_ID, {
+      connected: true,
+      incarnationId: 'unverified-incarnation',
+      tabId: 'tab-unverified',
+      paneKey: makePaneKey('tab-unverified', HEADLESS_THIRD_LEAF_ID)
+    })
+    internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
+      worktree: TEST_WORKTREE_ID,
+      publicationEpoch: 'renderer:after-restart:1',
+      snapshotVersion: 1,
+      activeGroupId: 'group-1',
+      activeTabId: `tab-visible::${HEADLESS_LEAF_ID}`,
+      activeTabType: 'terminal',
+      tabGroups: [
+        {
+          id: 'group-1',
+          activeTabId: 'tab-visible',
+          tabOrder: ['tab-visible', 'tab-unverified']
+        }
+      ],
+      tabs: [
+        {
+          type: 'terminal',
+          id: `tab-visible::${HEADLESS_LEAF_ID}`,
+          parentTabId: 'tab-visible',
+          leafId: HEADLESS_LEAF_ID,
+          ptyId: 'pty-visible',
+          incarnationId: 'visible-incarnation',
+          title: 'Visible',
+          isActive: true
+        },
+        {
+          type: 'terminal',
+          id: `tab-unverified::${HEADLESS_THIRD_LEAF_ID}`,
+          parentTabId: 'tab-unverified',
+          leafId: HEADLESS_THIRD_LEAF_ID,
+          ptyId: 'pty-unverified',
+          title: 'Old publisher without incarnation',
+          isActive: false
+        }
+      ]
+    })
+
+    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`, 100, {
+      includeVisualLayouts: true
+    })
+    const visible = listed.terminals.find((terminal) => terminal.ptyId === 'pty-visible')
+    const detached = listed.terminals.find((terminal) => terminal.ptyId === 'pty-detached')
+    const unverified = listed.terminals.find((terminal) => terminal.ptyId === 'pty-unverified')
+
+    expect(visible).toMatchObject({ visualTopologyState: 'projected' })
+    expect(detached).toMatchObject({
+      connected: true,
+      writable: true,
+      orphaned: false,
+      tabId: 'tab-detached',
+      leafId: HEADLESS_SECOND_LEAF_ID,
+      visualTopologyState: 'detached'
+    })
+    expect(unverified).toMatchObject({ connected: true })
+    expect(unverified).not.toHaveProperty('visualTopologyState')
+    await expect(runtime.showTerminal(detached!.handle)).resolves.toMatchObject({
+      visualTopologyState: 'detached'
+    })
+    await expect(runtime.showTerminal(visible!.handle)).resolves.toMatchObject({
+      visualTopologyState: 'projected'
+    })
+
+    const withoutLayouts = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`, 100, {
+      includeVisualLayouts: false
+    })
+    expect(withoutLayouts.visualLayouts).toBeUndefined()
+    expect(withoutLayouts.terminals[0]).not.toHaveProperty('visualTopologyState')
+  })
+
+  it('does not project a replacement PTY through a stale persisted restart binding', async () => {
+    const paneKey = makePaneKey('host-tab', HEADLESS_LEAF_ID)
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        terminalPtyIncarnationsByPaneKey: { [paneKey]: 'incarnation-old' }
+      })
+    )
+    type RestartInternals = {
+      recordPtyWorktree: (
+        ptyId: string,
+        worktreeId: string,
+        state?: Record<string, unknown>
+      ) => void
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (worktreeId: string) => Set<string>
+    }
+
+    const listAfterRecording = async (
+      ptyId: string,
+      incarnationId: string
+    ): Promise<Awaited<ReturnType<OrcaRuntimeService['listTerminals']>>> => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the workspace-session fixture spreads the shared store; this restart test only reads that session.
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recordPtyWorktree and headless hydration are protected on the split runtime; this test seeds them before listing.
+      const internals = runtime as unknown as RestartInternals
+      internals.recordPtyWorktree(ptyId, TEST_WORKTREE_ID, {
+        connected: true,
+        incarnationId,
+        tabId: 'host-tab',
+        paneKey
+      })
+      internals.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(TEST_WORKTREE_ID)
+      return runtime.listTerminals(`id:${TEST_WORKTREE_ID}`, 100, {
+        includeVisualLayouts: true
+      })
+    }
+
+    const before = await listAfterRecording('persisted-pty', 'incarnation-old')
+    expect(before.terminals).toEqual([
+      expect.objectContaining({
+        ptyId: 'persisted-pty',
+        visualTopologyState: 'projected'
+      })
+    ])
+
+    const after = await listAfterRecording('replacement-pty', 'incarnation-new')
+    expect(after.visualLayouts).toBeUndefined()
+    expect(after.terminals).toEqual([
+      expect.objectContaining({
+        ptyId: 'replacement-pty',
+        incarnationId: 'incarnation-new',
+        connected: true,
+        visualTopologyState: 'detached'
+      })
+    ])
+
+    const reused = await listAfterRecording('persisted-pty', 'incarnation-new')
+    expect(reused.terminals).toEqual([
+      expect.objectContaining({
+        ptyId: 'persisted-pty',
+        incarnationId: 'incarnation-new',
+        visualTopologyState: 'detached'
+      })
+    ])
   })
 
   it('resolves projected split authority from the parent layout PTY binding', () => {
