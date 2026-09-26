@@ -104,6 +104,65 @@ describe('activateAndRevealWorktree', () => {
     await vi.waitFor(() => expect(shouldSkipWebRuntimeWakeTerminalRespawn(worktree.id)).toBe(false))
   })
 
+  it('forwards sidebar seedStartupIfEmpty to the web-runtime wake helper on a live runtime host', async () => {
+    const worktree = {
+      ...makeCreatedAgentWorktree(),
+      hostId: 'runtime:web-runtime-1' as const,
+      runtimeOwnerEnvironmentId: 'web-runtime-1'
+    }
+    const seedStartupIfEmpty = {
+      command: 'codex',
+      launchAgent: 'codex' as const
+    }
+    const callRuntimeEnvironment = vi.fn(
+      async (request: { method: string; params?: Record<string, unknown> }) =>
+        request.method === 'session.tabs.createTerminal'
+          ? {
+              ok: true,
+              result: {
+                tab: { id: 'host-agent-tab', leafId: 'host-agent-leaf' },
+                publicationEpoch: 'epoch-1',
+                snapshotVersion: 1
+              }
+            }
+          : { ok: false, error: { code: 'test', message: 'stop after recording the request' } }
+    )
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: callRuntimeEnvironment } }
+    })
+    seedEmptyActivatableWorktree(worktree)
+    const settings = useAppStore.getState().settings
+    useAppStore.setState({
+      settings: settings
+        ? { ...settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
+        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof settings)
+    })
+
+    activateAndRevealWorktree(worktree.id, { seedStartupIfEmpty })
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toEqual([])
+    await vi.waitFor(() =>
+      expect(callRuntimeEnvironment).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'worktree.activate' })
+      )
+    )
+
+    const createRequests = callRuntimeEnvironment.mock.calls.filter(
+      ([request]) => request.method === 'session.tabs.createTerminal'
+    )
+    expect(createRequests).toHaveLength(1)
+    expect(createRequests[0]?.[0]).toEqual(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          command: 'codex',
+          launchAgent: 'codex'
+        })
+      })
+    )
+    await vi.waitFor(() => expect(shouldSkipWebRuntimeWakeTerminalRespawn(worktree.id)).toBe(false))
+  })
+
   it('does not request another host terminal when backend startup already spawned', async () => {
     const worktree = {
       ...makeCreatedAgentWorktree(),

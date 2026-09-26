@@ -246,4 +246,42 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       launchAgent: 'codex'
     })
   })
+
+  it('queues seedStartupIfEmpty only when auto-creating an empty workspace', () => {
+    const store = createMockStore()
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, undefined, undefined, {
+      seedStartupIfEmpty: { command: 'codex', launchAgent: 'codex' }
+    })
+
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      launchAgent: 'codex'
+    })
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
+      command: 'codex',
+      launchAgent: 'codex'
+    })
+  })
+
+  it('does not treat seedStartupIfEmpty as explicit launch work when tabs already exist', () => {
+    const store = createMockStore({
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-existing' }] },
+      reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 }))
+    })
+
+    const result = ensureWorktreeHasInitialTerminal(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { seedStartupIfEmpty: { command: 'codex', launchAgent: 'codex' } }
+    )
+
+    expect(result).toBeNull()
+    expect(store.createTab).not.toHaveBeenCalled()
+    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
+  })
 })

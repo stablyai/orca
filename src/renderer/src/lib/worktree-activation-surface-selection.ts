@@ -17,6 +17,8 @@ export type WorktreeActivationSurfaceSelection = {
 
 export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
   startup?: WorktreeStartupPayload
+  /** Seed only when the workspace is empty to adopt. Never counts as explicit launch work. */
+  seedStartupIfEmpty?: WorktreeStartupPayload
   initialCwd?: string
   setup?: WorktreeSetupLaunch
   defaultTabs?: WorktreeDefaultTabsLaunch

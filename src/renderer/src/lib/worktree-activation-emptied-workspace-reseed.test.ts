@@ -302,6 +302,98 @@ describe('activating a workspace whose last terminal was closed', () => {
   })
 })
 
+describe('seedStartupIfEmpty after the activation gate', () => {
+  const seedStartupIfEmpty = { command: 'codex', launchAgent: 'codex' as const }
+
+  function stubInspectableActivationInventory(): void {
+    vi.stubGlobal('window', {
+      api: {
+        runtime: { call: vi.fn() },
+        pty: { listSessions: vi.fn(async () => []) }
+      }
+    })
+  }
+
+  function seedGatedEmptyWorktree() {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    stubInspectableActivationInventory()
+    return worktree
+  }
+
+  it('queues the seed-if-empty startup only after an empty gate outcome', async () => {
+    const worktree = seedGatedEmptyWorktree()
+    const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
+    gate.mockResolvedValue('empty')
+
+    activateAndRevealWorktree(worktree.id, {
+      seedStartupIfEmpty,
+      notifyHostRuntime: false
+    })
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
+
+    await gate.mock.results[0]?.value
+
+    const tabs = useAppStore.getState().tabsByWorktree[worktree.id]
+    expect(tabs).toHaveLength(1)
+    const tabId = tabs?.[0]?.id
+    expect(tabId).toBeTruthy()
+    expect(useAppStore.getState().pendingStartupByTabId[tabId ?? '']).toEqual(
+      expect.objectContaining(seedStartupIfEmpty)
+    )
+  })
+
+  it.each(['adopted', 'blocked', 'structured', 'resumed'] as const)(
+    'does not seed when the gate outcome is %s',
+    async (outcome) => {
+      const worktree = seedGatedEmptyWorktree()
+      const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
+      gate.mockResolvedValue(outcome)
+
+      activateAndRevealWorktree(worktree.id, {
+        seedStartupIfEmpty,
+        notifyHostRuntime: false
+      })
+      await gate.mock.results[0]?.value
+
+      expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
+      expect(useAppStore.getState().pendingStartupByTabId).toEqual({})
+    }
+  )
+
+  it('does not skip the gate when only seedStartupIfEmpty is present', () => {
+    const worktree = seedGatedEmptyWorktree()
+    const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
+    gate.mockResolvedValue('adopted')
+
+    activateAndRevealWorktree(worktree.id, {
+      seedStartupIfEmpty,
+      notifyHostRuntime: false
+    })
+
+    expect(gate).toHaveBeenCalledWith(worktree.id)
+  })
+
+  it('still skips the gate for explicit startup', () => {
+    const worktree = seedGatedEmptyWorktree()
+    const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
+
+    activateAndRevealWorktree(worktree.id, {
+      startup: seedStartupIfEmpty,
+      notifyHostRuntime: false
+    })
+
+    expect(gate).not.toHaveBeenCalled()
+    const tabs = useAppStore.getState().tabsByWorktree[worktree.id]
+    expect(tabs).toHaveLength(1)
+    const tabId = tabs?.[0]?.id
+    expect(useAppStore.getState().pendingStartupByTabId[tabId ?? '']).toEqual(
+      expect.objectContaining(seedStartupIfEmpty)
+    )
+  })
+})
+
 const FOLDER_ID = 'folder-1'
 const FOLDER_KEY = folderWorkspaceKey(FOLDER_ID)
 const SSH_HOST_ID = toSshExecutionHostId('conn-1')
