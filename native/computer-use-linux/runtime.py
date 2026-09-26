@@ -406,8 +406,10 @@ def render_accessibility_tree(root, window_rect, root_path, compact_browser_tabs
                 truncation["maxDepthReached"] = True
             return
         item = record(node, len(records), path, window_rect)
-        child_items = list(children(node))
         role_key = (item["controlType"] or "").lower()
+        title = item["name"] or item["automationId"] or ""
+        suppressed = suppress_children(role_key, title, item["value"], None)
+        child_items = [] if suppressed else list(children(node))
         generic_summary = None
         if role_key in {"panel", "filler", "unknown", "section"} and not item["name"] and not item["value"]:
             summary_values = text_snippets(node, limit=8, max_depth=4)
@@ -418,7 +420,6 @@ def render_accessibility_tree(root, window_rect, root_path, compact_browser_tabs
                 walk(child, depth, path + [child_index])
             return
         records.append(item)
-        title = item["name"] or item["automationId"] or ""
         role_label = item["localizedControlType"] or item["controlType"]
         line = f'{item["index"]} {role_label} {sanitize_text(title)}'.rstrip()
         line += formatted_value(role_key, title, item["value"])
@@ -432,7 +433,7 @@ def render_accessibility_tree(root, window_rect, root_path, compact_browser_tabs
         if filtered_actions:
             line += ", Secondary Actions: " + ", ".join(display_action(action) for action in filtered_actions)
         lines.append(("\t" * depth) + line)
-        if generic_summary or suppress_children(role_key, title, item["value"], generic_summary):
+        if generic_summary or suppressed:
             return
         child_line_start = len(lines)
         for child_index, child in child_items:

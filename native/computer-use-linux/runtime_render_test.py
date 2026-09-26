@@ -113,7 +113,60 @@ class RuntimeRenderTest(unittest.TestCase):
 
         self.assertEqual([record["name"] for record in records], ["Save"])
         self.assertEqual(lines, ["0 button Save"])
+        self.assertEqual(root.counter["child_reads"], 0)
+        self.assertFalse(truncation["truncated"])
+
+    def test_wide_labeled_controls_never_enumerate_suppressed_children(self):
+        roles = (
+            "button", "check box", "checkbox", "combo box", "heading", "link",
+            "menu item", "page tab", "push button", "radio button",
+        )
+        for role in roles:
+            with self.subTest(role=role):
+                root = FakeAccessible(
+                    role, "Save", children=[FakeAccessible("text", str(i)) for i in range(10000)]
+                )
+
+                records, lines, truncation = render(root)
+
+                self.assertEqual([item["runtimeId"] for item in records], [[0]])
+                self.assertEqual(lines, [f"0 {role} Save"])
+                self.assertEqual(root.counter["child_reads"], 0)
+                self.assertFalse(truncation["truncated"])
+
+    def test_control_value_or_identifier_keeps_suppression(self):
+        value_node = FakeAccessible("combo box", value="Choice", children=[FakeAccessible("text", "Child")])
+        identifier_node = FakeAccessible("button", children=[FakeAccessible("text", "Child")])
+        identifier_node.get_accessible_id = lambda: "save-button"
+        for root, expected in (
+            (value_node, "0 combo box, Value: Choice"),
+            (identifier_node, "0 button save-button"),
+        ):
+            with self.subTest(expected=expected):
+                records, lines, truncation = render(root)
+
+                self.assertEqual(len(records), 1)
+                self.assertEqual(lines, [expected])
+                self.assertEqual(root.counter["child_reads"], 0)
+                self.assertFalse(truncation["truncated"])
+
+    def test_unlabeled_controls_keep_child_indices_and_depth(self):
+        root = FakeAccessible("button", children=[FakeAccessible("button", "Nested")])
+
+        records, lines, truncation = render(root)
+
+        self.assertEqual([item["runtimeId"] for item in records], [[0], [0, 0]])
+        self.assertEqual(lines, ["0 button", "\t1 button Nested"])
         self.assertEqual(root.counter["child_reads"], 2)
+        self.assertFalse(truncation["truncated"])
+
+    def test_suppressed_child_failure_keeps_control_output(self):
+        root = FailingChildrenAccessible("button", "Save")
+
+        records, lines, truncation = render(root)
+
+        self.assertEqual([item["name"] for item in records], ["Save"])
+        self.assertEqual(lines, ["0 button Save"])
         self.assertFalse(truncation["truncated"])
 
     def test_named_generic_node_skips_unused_summary_walk(self):
