@@ -70,7 +70,10 @@ export async function detectPerforceWorkspace(cwd: string): Promise<PerforceDete
     return cached.result
   }
   const result = await detectUncached(cwd)
-  detectCache.set(cwd, { at: Date.now(), result })
+  // Negative answers are not cached so a fresh `p4 set`/login is picked up on the next check.
+  if (result.isWorkspace) {
+    detectCache.set(cwd, { at: Date.now(), result })
+  }
   return result
 }
 

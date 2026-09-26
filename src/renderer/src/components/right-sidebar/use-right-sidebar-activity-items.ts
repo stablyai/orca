@@ -24,6 +24,8 @@ export type RightSidebarActivityItems = {
   pluginSystemEnabled: boolean
   pluginFetchStatus: PluginPanelsFetchStatus
   installedPluginTabKeys: Set<string>
+  /** Set only for folder projects not yet detected as Perforce. */
+  redetectPerforce?: () => void
 }
 
 export function useRightSidebarActivityItems({
@@ -46,7 +48,7 @@ export function useRightSidebarActivityItems({
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
-  const isPerforce = usePerforceWorkspace(
+  const { isPerforce, redetect: redetectPerforce } = usePerforceWorkspace(
     activeWorktree?.path ?? null,
     activeRepo?.connectionId,
     isFolder && !isFolderWorkspace
@@ -150,6 +152,7 @@ export function useRightSidebarActivityItems({
     activeFolderWorkspaceKey,
     pluginSystemEnabled,
     pluginFetchStatus,
-    installedPluginTabKeys
+    installedPluginTabKeys,
+    redetectPerforce: isFolder && !isFolderWorkspace && !isPerforce ? redetectPerforce : undefined
   }
 }

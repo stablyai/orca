@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 // Why: detection shells out to `p4 info` (over SSH for remote folders), so remember answers per workspace.
 const detectionByKey = new Map<string, Promise<boolean>>()
@@ -10,8 +10,8 @@ function detectPerforceWorkspace(worktreePath: string, connectionId?: string): P
     pending = Promise.resolve()
       .then(() => window.api.perforce.detect({ worktreePath, connectionId }))
       .then((result) => {
-        // Failures (offline host, p4 missing) must be retried on the next mount, not remembered.
-        if (!result.isWorkspace && result.reason !== 'not-in-workspace') {
+        // Only positive answers are remembered so a later p4 setup/login is detected on retry.
+        if (!result.isWorkspace) {
           detectionByKey.delete(key)
         }
         return result.isWorkspace
@@ -30,24 +30,44 @@ export function usePerforceWorkspace(
   worktreePath: string | null,
   connectionId: string | null | undefined,
   eligible: boolean
-): boolean {
+): { isPerforce: boolean; redetect: () => void } {
   const [detected, setDetected] = useState<{ key: string; value: boolean } | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const key = `${connectionId ?? ''}|${worktreePath ?? ''}`
+
+  const redetect = useCallback(() => {
+    detectionByKey.delete(key)
+    setAttempt((n) => n + 1)
+  }, [key])
 
   useEffect(() => {
     if (!worktreePath || !eligible) {
       return
     }
     let cancelled = false
-    void detectPerforceWorkspace(worktreePath, connectionId ?? undefined).then((value) => {
-      if (!cancelled) {
-        setDetected({ key, value })
+    const run = (): void => {
+      void detectPerforceWorkspace(worktreePath, connectionId ?? undefined).then((value) => {
+        if (!cancelled) {
+          setDetected({ key, value })
+        }
+      })
+    }
+    run()
+    // Why: a workspace set up while Orca is open should appear when the user returns to it.
+    const onFocus = (): void => {
+      if (!detectionByKey.has(key)) {
+        run()
       }
-    })
+    }
+    window.addEventListener('focus', onFocus)
     return () => {
       cancelled = true
+      window.removeEventListener('focus', onFocus)
     }
-  }, [worktreePath, connectionId, eligible, key])
+  }, [worktreePath, connectionId, eligible, key, attempt])
 
-  return Boolean(eligible && worktreePath && detected?.key === key && detected.value)
+  return {
+    isPerforce: Boolean(eligible && worktreePath && detected?.key === key && detected.value),
+    redetect
+  }
 }

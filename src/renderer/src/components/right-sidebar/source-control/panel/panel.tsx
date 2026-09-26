@@ -8,7 +8,7 @@ import { useSourceControlPanelModel } from './use-panel-model'
 export function SourceControlPanel() {
   const model = useSourceControlPanelModel()
   const { activeRepo, activeWorktree, isFolder, worktreePath } = model
-  const isPerforce = usePerforceWorkspace(worktreePath, activeRepo?.connectionId, isFolder)
+  const { isPerforce } = usePerforceWorkspace(worktreePath, activeRepo?.connectionId, isFolder)
 
   if (!activeWorktree || !activeRepo || !worktreePath) {
     return (
