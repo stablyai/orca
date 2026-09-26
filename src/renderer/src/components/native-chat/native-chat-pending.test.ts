@@ -57,6 +57,39 @@ function imageMessage(id: string, ...paths: string[]): NativeChatMessage {
 const pendingOf = (id: string, text: string): NativeChatPendingSend => ({ id, text, sentAt: 100 })
 
 describe('prunePendingSends', () => {
+  it.each(['/remote/.orca/drops/Screenshot 2026-09-20 at 18.25.43.png', '/tmp/local photo.png'])(
+    'reconciles a pasted attachment path recorded as text: %s',
+    (path) => {
+      const pending = [
+        { ...pendingOf('pending', '看一下'), imagePaths: [path], afterMessageId: null }
+      ]
+      const user = userMessage('real', `${path} 看一下`, 101)
+      expect(pendingSendsAsMessages(pending, [user])).toEqual([])
+      expect(prunePendingSends(pending, [user])).toEqual(pending)
+      expect(prunePendingSends(pending, [user, assistantMessage('reply', '好的', 102)])).toEqual([])
+      expect(
+        prunePendingSends(pending, [
+          userMessage('unrelated', `${path}.other 看一下`, 101),
+          assistantMessage('reply', 'ok', 102)
+        ])
+      ).toEqual(pending)
+    }
+  )
+
+  it('reconciles image-only and multiple attachments without consuming a prior turn', () => {
+    const paths = ['/remote/a.png', '/remote/b.png']
+    const pending = [{ ...pendingOf('pending', ''), imagePaths: paths, afterMessageId: 'old' }]
+    const old = userMessage('old', paths.join(' '), 99)
+    expect(prunePendingSends(pending, [old, assistantMessage('old-reply', 'old', 100)])).toEqual(
+      pending
+    )
+    const messages = [
+      old,
+      userMessage('new', paths.join(''), 101),
+      assistantMessage('reply', 'ok', 102)
+    ]
+    expect(prunePendingSends(pending, messages)).toEqual([])
+  })
   it('returns the same reference when there is nothing pending', () => {
     const pending: NativeChatPendingSend[] = []
     expect(prunePendingSends(pending, [userMessage('m1', 'hi')])).toBe(pending)

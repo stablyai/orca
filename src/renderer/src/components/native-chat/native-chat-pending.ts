@@ -183,9 +183,10 @@ export function prunePendingSends(
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
     const available =
-      advancedNativeChatUserContentCounts(messagesAfterPendingBoundary(messages, entry)).get(
-        contentKey
-      ) ?? 0
+      advancedNativeChatUserContentCounts(
+        messagesAfterPendingBoundary(messages, entry),
+        entry.imagePaths
+      ).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
@@ -228,7 +229,8 @@ export function pendingSendsAsMessages(
     const key = nativeChatPendingMatchKey(entry)
     const represented =
       matchingNativeChatUserContentCounts(
-        messagesAfterPendingBoundary(existingMessages, entry)
+        messagesAfterPendingBoundary(existingMessages, entry),
+        entry.imagePaths
       ).get(contentKey) ?? 0
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
