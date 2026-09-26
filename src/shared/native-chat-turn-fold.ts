@@ -24,6 +24,9 @@ export type NativeChatTurnFoldRow = {
    *  spawn roster or a background task. That row is the durable report of how
    *  the work ended — often the only one — so it never folds. */
   outlivesTurn: boolean
+  /** Whether the row reports how its turn ended — an error, or a compaction's result. A fold
+   *  that hid it would leave the turn's status as the only trace of why it stopped. */
+  reportsTurnOutcome: boolean
 }
 
 export type NativeChatTurnFold = {
@@ -77,11 +80,12 @@ export function nativeChatTurnFold({
   for (const [index, row] of rows.entries()) {
     const { turnKey } = row
     // Outside the fold by construction: the reader's own message anchors the
-    // turn, and a roster or background-task row outlives it.
+    // turn, a roster or background-task row outlives it, and an end report explains it.
     if (
       turnKey === undefined ||
       row.role === 'user' ||
       row.outlivesTurn ||
+      row.reportsTurnOutcome ||
       !settledTurnKeys.has(turnKey)
     ) {
       continue

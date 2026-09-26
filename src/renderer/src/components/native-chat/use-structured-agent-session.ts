@@ -136,6 +136,7 @@ export function useStructuredAgentSession(args: {
           )
       }),
     journalItems: transportState.journalItems,
+    submissions: transportState.submissions,
     messages,
     status: transportEnabled ? state.status : 'ready',
     error: transportEnabled

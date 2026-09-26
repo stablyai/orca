@@ -11,6 +11,7 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
     role: 'assistant',
     rendersProse: true,
     outlivesTurn: false,
+    reportsTurnOutcome: false,
     ...overrides
   }
 }
@@ -145,5 +146,22 @@ describe('nativeChatTurnFold', () => {
       expandedTurnKeys: NONE
     })
     expect(foldedRows.size).toBe(0)
+  })
+
+  it('never folds a row reporting how its turn ended, and keeps the last prose as the answer', () => {
+    const rows = [
+      row({ role: 'user' }),
+      row(),
+      row({ role: 'system', rendersProse: true, reportsTurnOutcome: true }),
+      row(),
+      row({ role: 'system', rendersProse: true, reportsTurnOutcome: true })
+    ]
+    const { foldedRows } = nativeChatTurnFold({
+      rows,
+      settledTurnKeys: SETTLED,
+      expandedTurnKeys: NONE
+    })
+    expect([...foldedRows]).toEqual([1])
+    expect(nativeChatTurnAnswerRows(rows).get('turn-1')).toBe(3)
   })
 })

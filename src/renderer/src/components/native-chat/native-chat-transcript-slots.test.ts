@@ -205,3 +205,54 @@ describe('a send the host rejected', () => {
     ])
   })
 })
+
+describe('a turn no message opened', () => {
+  const settled = (workedSeconds: number): NativeChatTurnStatus => ({
+    startedAt: 1,
+    thinking: false,
+    workedSeconds
+  })
+
+  it('draws its status at its first row and folds its work behind it', () => {
+    const messages = [
+      text('u1', 'List three fruits', 'user'),
+      text('a1', 'Apple, banana, cherry.'),
+      toolRun('wake-tool'),
+      text('wake-answer', 'The background task finished.')
+    ]
+    const slots = build(messages, {
+      turnKeys: ['u1', 'u1', 'wake', 'wake'],
+      latestUserIndex: 0,
+      turnStatuses: {
+        active: settled(4),
+        completedByTurn: { u1: settled(4), wake: settled(9) }
+      }
+    })
+    const statusOf = (id: string) =>
+      slots.find((slot) => slot.message.id === id)?.status?.workedSeconds
+    expect(statusOf('u1')).toBe(4)
+    expect(statusOf('wake-tool')).toBe(9)
+    expect(statusOf('wake-answer')).toBeUndefined()
+    const toolSlot = slots.find((slot) => slot.message.id === 'wake-tool')
+    expect(toolSlot).toMatchObject({ folded: true, turnFolds: true, turnKey: 'wake' })
+  })
+
+  it('keeps a row that reports its turn ending visible in a folded turn', () => {
+    const messages = [
+      text('u1', 'go', 'user'),
+      toolRun('work'),
+      {
+        ...text('exit', 'The agent exited unexpectedly.', 'system'),
+        blocks: [{ type: 'text' as const, text: 'The agent exited unexpectedly.', tone: 'error' }]
+      }
+    ]
+    const slots = build(messages, {
+      turnStatuses: { active: settled(3), completedByTurn: { u1: settled(3) } }
+    })
+    // The folded work takes no slot; the report of the end still does.
+    expect(slots.map((slot) => [slot.message.id, slot.folded])).toEqual([
+      ['u1', false],
+      ['exit', false]
+    ])
+  })
+})

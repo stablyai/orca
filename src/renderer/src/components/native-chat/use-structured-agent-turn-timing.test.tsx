@@ -76,7 +76,8 @@ describe('useStructuredAgentTurnTiming', () => {
     vi.useFakeTimers()
     vi.setSystemTime(CLIENT_NOW)
     const running = [
-      user('u1', 1),
+      // The acknowledged send: its entry's key is the submission's, not the provider's.
+      user('orca:first', 1),
       lifecycle(
         't1',
         2,

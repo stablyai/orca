@@ -39,7 +39,11 @@ import type {
 import { useNativeChatRailHistoryJump } from './use-native-chat-rail-history-jump'
 import { nativeChatReaderScrollInputHandlers } from './native-chat-reader-scroll-input'
 
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
+import { nativeChatTurnKeys } from '../../../../shared/native-chat-turn-membership'
 import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import {
@@ -60,6 +64,7 @@ type NativeChatNavigationRequest =
 export function NativeChatMessageList({
   session,
   journalItems,
+  journalSubmissions,
   railOutline = null,
   isVisible = true,
   isWorking,
@@ -77,6 +82,8 @@ export function NativeChatMessageList({
 }: {
   session: NativeChatLiveSession
   journalItems?: readonly AgentJournalRenderItem[]
+  /** With the items, what places each row in its turn (structured lane). */
+  journalSubmissions?: readonly AgentJournalSubmission[]
   /** User messages older than the loaded window, from the host's outline. */
   railOutline?: readonly NativeChatRailOutlineEntry[] | null
   isVisible?: boolean
@@ -152,19 +159,17 @@ export function NativeChatMessageList({
     ? isWorking
     : shouldShowNativeChatTypingIndicator({ messages, isWorking })
   const latestUserIndex = messages.findLastIndex((message) => message.role === 'user')
-  const currentTurnKey =
-    latestUserIndex === -1 ? undefined : (messages[latestUserIndex]?.id ?? undefined)
-  // Resolve each row's turn boundary once. Prefix slice/findLast in the render
-  // loop becomes quadratic for long transcripts.
-  const turnKeys = useMemo(() => {
-    let currentTurnKey: string | undefined
-    return messages.map((message) => {
-      if (message.role === 'user') {
-        currentTurnKey = message.id
-      }
-      return currentTurnKey
-    })
-  }, [messages])
+  // Resolve each row's turn once, from the turn record when the host states scopes.
+  const turnKeys = useMemo(
+    () =>
+      nativeChatTurnKeys(
+        messages,
+        journalItems ? { items: journalItems, submissions: journalSubmissions ?? [] } : null
+      ),
+    [journalItems, journalSubmissions, messages]
+  )
+  // A steer keys on the turn it joined, so the live turn is the latest message's turn.
+  const currentTurnKey = latestUserIndex === -1 ? undefined : turnKeys[latestUserIndex]
   const turnDiffs = useMemo(
     () =>
       journalItems

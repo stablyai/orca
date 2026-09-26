@@ -2,6 +2,10 @@ import { useCallback, useMemo, useState } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
+  nativeChatTurnKeys,
+  type NativeChatTurnJournal
+} from '../../../src/shared/native-chat-turn-membership'
+import {
   MOBILE_UNANCHORED_TURN_KEY,
   useMobileNativeChatTurnStatus,
   type NativeChatTurnStatus
@@ -28,6 +32,7 @@ export function useMobileNativeChatTurnDisclosure({
   isWorking,
   workingStartedAt,
   settledTurns,
+  turnJournal = null,
   thinking = false,
   activityText = null,
   scopeKey
@@ -38,6 +43,8 @@ export function useMobileNativeChatTurnDisclosure({
   workingStartedAt?: number | null
   /** Host-recorded durations; they outrank whatever this client observed. */
   settledTurns?: NativeChatSettledTurns | null
+  /** The journal that places each row in its turn; absent groups rows by position. */
+  turnJournal?: NativeChatTurnJournal | null
   /** Whether the turn is reasoning right now, derived from its journal content. */
   thinking?: boolean
   /** What the provider says the live turn is doing; outranks the other labels. */
@@ -84,32 +91,35 @@ export function useMobileNativeChatTurnDisclosure({
     },
     [scopeKey]
   )
-  // Resolve each row's turn boundary once — a findLast per row is quadratic on a
-  // long transcript.
-  const turnKeys = useMemo(() => {
-    if (!enabled) {
-      return EMPTY_TURN_KEYS
-    }
-    let turnKey: string | undefined
-    return messages.map((message) => {
-      if (message.role === 'user') {
-        turnKey = message.id
+  // Resolve each row's turn once, from the turn record when the host states scopes.
+  const turnKeys = useMemo(
+    () => (enabled ? nativeChatTurnKeys(messages, turnJournal) : EMPTY_TURN_KEYS),
+    [enabled, messages, turnJournal]
+  )
+  // A settled turn's status draws at its first row; a steer keys on the turn it joined.
+  const { firstRowOfTurn, liveTurnKey } = useMemo(() => {
+    const first = new Map<string, number>()
+    for (const [index, turnKey] of turnKeys.entries()) {
+      if (turnKey !== undefined && !first.has(turnKey)) {
+        first.set(turnKey, index)
       }
-      return turnKey
-    })
-  }, [enabled, messages])
+    }
+    const latestUserIndex = messages.findLastIndex((message) => message.role === 'user')
+    return {
+      firstRowOfTurn: first,
+      liveTurnKey: latestUserIndex === -1 ? undefined : turnKeys[latestUserIndex]
+    }
+  }, [messages, turnKeys])
 
   const { active, activeTurnKey, completedByTurn } = turnStatuses
   const activeActivityText = enabled && isWorking ? (activityText ?? null) : null
   const resolveRow = useCallback(
-    (index: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
+    (index: number, _message: NativeChatMessage): MobileNativeChatTurnRow => {
       const turnKey = turnKeys[index]
       const turnStatus =
-        !enabled || message.role !== 'user'
-          ? null
-          : turnKey
-            ? (completedByTurn[turnKey] ?? null)
-            : null
+        enabled && turnKey !== undefined && firstRowOfTurn.get(turnKey) === index
+          ? (completedByTurn[turnKey] ?? null)
+          : null
       return {
         turnStatus,
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
@@ -122,11 +132,21 @@ export function useMobileNativeChatTurnDisclosure({
         activeTurnIsWorking:
           enabled &&
           isWorking &&
-          (turnKey === activeTurnKey ||
-            (turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY))
+          (liveTurnKey !== undefined
+            ? turnKey === liveTurnKey
+            : turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY)
       }
     },
-    [turnKeys, enabled, activeTurnKey, completedByTurn, expandedTurnIds, isWorking]
+    [
+      turnKeys,
+      firstRowOfTurn,
+      liveTurnKey,
+      enabled,
+      activeTurnKey,
+      completedByTurn,
+      expandedTurnIds,
+      isWorking
+    ]
   )
 
   return {

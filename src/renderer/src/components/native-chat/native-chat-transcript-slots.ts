@@ -99,6 +99,10 @@ export function buildNativeChatTranscriptSlots(
       // and its plain-text twin is then the only record the spawn happened.
       outlivesTurn: message.blocks.some(
         (block) => isSubagentGroupBlock(block) || isBackgroundTaskBlock(block)
+      ),
+      reportsTurnOutcome: message.blocks.some(
+        (block) =>
+          block.type === 'text' && (block.tone === 'error' || block.presentation === 'compaction')
       )
     }
   })
@@ -125,6 +129,14 @@ export function buildNativeChatTranscriptSlots(
     settledTurnKeys,
     expandedTurnKeys
   })
+  // A settled turn's status draws at its first row: the message that opened it, or — for a turn
+  // the provider opened on its own — the first thing it produced.
+  const firstRowOfTurn = new Map<string, number>()
+  for (const [index, turnKey] of turnKeys.entries()) {
+    if (turnKey !== undefined && !firstRowOfTurn.has(turnKey)) {
+      firstRowOfTurn.set(turnKey, index)
+    }
+  }
   const slots: NativeChatTranscriptSlot[] = []
   for (const [index, message] of messages.entries()) {
     const turnKey = turnKeys[index]
@@ -132,7 +144,7 @@ export function buildNativeChatTranscriptSlots(
     const candidateStatus =
       index === latestUserIndex
         ? turnStatuses.active
-        : message.role === 'user' && turnKey
+        : turnKey !== undefined && firstRowOfTurn.get(turnKey) === index
           ? turnStatuses.completedByTurn[turnKey]
           : undefined
     const status =
