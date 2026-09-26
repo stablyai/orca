@@ -80,7 +80,10 @@ describe('structured compaction lifecycle', () => {
     const tracker = new StructuredSessionCompaction()
     const pending = tracker.run('s', 'p', async () => {})
     tracker.ended('s')
-    await expect(pending).resolves.toEqual({ error: 'The provider exited during compaction.' })
+    await expect(pending).resolves.toEqual({
+      error: 'The provider exited during compaction.',
+      unconfirmed: true
+    })
     const next = tracker.run('s', 'p', async () => {
       tracker.claude('s', { type: 'system', subtype: 'compact_boundary', session_id: 'p' })
       tracker.claude('s', { type: 'result', subtype: 'success', session_id: 'p' })
@@ -111,6 +114,37 @@ describe('structured compaction lifecycle', () => {
     const result = tracker.run('s', 't', async () => ({}))
     tracker.codex('s', 'turn/started', { threadId: 't', turn: { id: 'c' } })
     tracker.codex('s', 'turn/completed', { threadId: 't', turn: { id: 'c', status: 'completed' } })
+    await expect(result).resolves.toEqual({
+      error: 'Compaction was not confirmed by the provider.',
+      unconfirmed: true
+    })
+  })
+
+  it('fails, not merely unconfirmed, a Codex compaction turn that did not complete', async () => {
+    const tracker = new StructuredSessionCompaction()
+    const result = tracker.run('s', 't', async () => ({}))
+    tracker.codex('s', 'turn/started', { threadId: 't', turn: { id: 'c' } })
+    tracker.codex('s', 'turn/completed', {
+      threadId: 't',
+      turn: { id: 'c', status: 'interrupted' }
+    })
+    await expect(result).resolves.toEqual({ error: 'Compaction did not complete.' })
+  })
+
+  it('leaves a Claude turn that ended without confirming compaction unconfirmed', async () => {
+    const tracker = new StructuredSessionCompaction()
+    const result = tracker.run('s', 'p', async () => {})
+    tracker.claude('s', { type: 'result', subtype: 'success', session_id: 'p' })
+    await expect(result).resolves.toEqual({
+      error: 'Compaction was not confirmed by the provider.',
+      unconfirmed: true
+    })
+  })
+
+  it('fails a Claude compaction whose turn ended in error', async () => {
+    const tracker = new StructuredSessionCompaction()
+    const result = tracker.run('s', 'p', async () => {})
+    tracker.claude('s', { type: 'result', subtype: 'error_during_execution', session_id: 'p' })
     await expect(result).resolves.toEqual({ error: 'Compaction did not complete.' })
   })
 })

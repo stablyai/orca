@@ -148,10 +148,28 @@ describe('host conversation commands', () => {
   })
 
   it("keeps Orca's own compaction error out of the sentence", async () => {
-    compact.mockResolvedValue({ error: 'The provider exited during compaction.' })
+    compact.mockResolvedValue({ error: 'Compaction did not complete.' })
     expect(await host.conversationCommand(caller, commandParams('compact'))).toMatchObject({
       ok: true,
       value: { error: 'Compaction failed.', failure: { kind: 'compactionFailed' } }
+    })
+  })
+
+  it('records a compaction the provider never confirmed as unconfirmed, not failed', async () => {
+    compact.mockResolvedValue({
+      error: 'The provider exited during compaction.',
+      unconfirmed: true
+    })
+    const failure = { kind: 'compactionUnconfirmed' }
+    expect(await host.conversationCommand(caller, commandParams('compact'))).toMatchObject({
+      ok: true,
+      value: { error: 'Compaction completion is unconfirmed.', failure }
+    })
+    const rows = host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
+    expect(rows.ok && rows.page.items.map((item) => item.body)).toContainEqual({
+      kind: 'status',
+      text: 'Compaction completion is unconfirmed.',
+      failure
     })
   })
 

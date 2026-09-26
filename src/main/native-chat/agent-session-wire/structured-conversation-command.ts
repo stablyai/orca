@@ -27,12 +27,15 @@ import { agentSessionRefusalReference } from '../../../shared/agent-session-wire
 import { agentSessionFailureText } from './structured-agent-session-failure-text'
 import type { StructuredSessionCompactionResult } from './structured-session-compaction'
 
-/** A failed compaction, keeping only what the provider wrote for a person. */
+/** A compaction that did not succeed, keeping only what the provider wrote for a person. */
 function compactionFailure(
   result: StructuredSessionCompactionResult
 ): AgentSessionFailureFact | undefined {
-  return result.error === undefined
-    ? undefined
+  if (result.error === undefined) {
+    return undefined
+  }
+  return result.unconfirmed
+    ? agentSessionFailureFact('compactionUnconfirmed')
     : agentSessionFailureFact('compactionFailed', { detail: result.detail })
 }
 

@@ -4,9 +4,13 @@ import {
   type ProviderDiagnostic
 } from '../../../shared/agent-session-failure'
 
-/** `error` is Orca's account of a failed compaction; `detail` is the provider's own words, when it
- *  gave any. */
-export type StructuredSessionCompactionResult = { error?: string; detail?: ProviderDiagnostic }
+/** `error` is Orca's account of a compaction that did not succeed; `unconfirmed` when the provider
+ *  never said whether it compacted, so it may have; `detail` is the provider's own words, if any. */
+export type StructuredSessionCompactionResult = {
+  error?: string
+  unconfirmed?: true
+  detail?: ProviderDiagnostic
+}
 
 type PendingCompaction = {
   identity: string
@@ -103,7 +107,9 @@ export class StructuredSessionCompaction {
   }
 
   ended(sessionId: string): void {
-    this.pending.get(sessionId)?.finish({ error: 'The provider exited during compaction.' })
+    this.pending
+      .get(sessionId)
+      ?.finish({ error: 'The provider exited during compaction.', unconfirmed: true })
   }
 
   codex(sessionId: string, method: string, value: unknown): void {
@@ -123,8 +129,10 @@ export class StructuredSessionCompaction {
       const error = record(turn.error).message
       const detail = typeof error === 'string' ? providerDiagnostic(error, 'person') : undefined
       pending.finish(
-        turn.status === 'completed' && pending.compacted
-          ? {}
+        turn.status === 'completed'
+          ? pending.compacted
+            ? {}
+            : { error: 'Compaction was not confirmed by the provider.', unconfirmed: true }
           : {
               error: typeof error === 'string' ? error : 'Compaction did not complete.',
               ...(detail ? { detail } : {})
@@ -156,10 +164,13 @@ export class StructuredSessionCompaction {
       ) {
         pending.error ??= 'Compaction did not complete.'
       }
-      const error =
-        pending.error ??
-        (pending.compacted ? undefined : 'Compaction was not confirmed by the provider.')
-      pending.finish(error ? { error, ...(pending.detail ? { detail: pending.detail } : {}) } : {})
+      pending.finish(
+        pending.error !== undefined
+          ? { error: pending.error, ...(pending.detail ? { detail: pending.detail } : {}) }
+          : pending.compacted
+            ? {}
+            : { error: 'Compaction was not confirmed by the provider.', unconfirmed: true }
+      )
     }
   }
 }
