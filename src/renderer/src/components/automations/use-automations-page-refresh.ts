@@ -37,11 +37,17 @@ export function useAutomationsPageRefresh({
     automationHostTargetKey,
     setRelativeNow,
     runHistoryReloadToken,
+    setRunHistoryReloadToken,
     workspaceNameCacheRef
   } = local
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
   const reloadExternalManagers = scopedExternal.reload
+  const runHistoryRequestRevision = useRef(0)
+  const invalidateSelectedRunHistory = useCallback(() => {
+    runHistoryRequestRevision.current += 1
+    setRunHistoryReloadToken((current) => current + 1)
+  }, [setRunHistoryReloadToken])
 
   const refresh = useCallback(
     async (options?: { awaitExternalManagers?: boolean }): Promise<void> => {
@@ -137,6 +143,7 @@ export function useAutomationsPageRefresh({
     legacyTarget: automationHostTargetFor,
     navigation: pendingAutomationRunNavigation,
     reloadToken: runHistoryReloadToken,
+    requestRevision: runHistoryRequestRevision,
     onSettled: local.setSelectedAutomationRuns
   })
   useEffect(() => {
@@ -160,7 +167,12 @@ export function useAutomationsPageRefresh({
     }
   }, [refresh])
 
-  return { getDefaultTarget: destination.getDefaultTarget, refresh, hydratePersistedUIState }
+  return {
+    getDefaultTarget: destination.getDefaultTarget,
+    refresh,
+    hydratePersistedUIState,
+    invalidateSelectedRunHistory
+  }
 }
 
 export type AutomationsPageRefresh = ReturnType<typeof useAutomationsPageRefresh>

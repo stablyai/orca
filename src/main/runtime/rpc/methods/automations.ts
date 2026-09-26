@@ -6,6 +6,7 @@ import {
   AutomationId,
   AutomationList,
   AutomationRuns,
+  AutomationRerun,
   AutomationUpdate
 } from './automation-schemas'
 
@@ -76,6 +77,17 @@ export const AUTOMATION_METHODS = [
     handler: async (params, context) => ({
       run: await context.runtime.runAutomationNow(
         params.id,
+        mutationOwner(params.id, params.expectedOwner, context)
+      )
+    })
+  }),
+  defineMethod({
+    name: 'automation.rerun',
+    params: AutomationRerun,
+    handler: async (params, context) => ({
+      run: await context.runtime.rerunAutomation(
+        params.id,
+        params.runId,
         mutationOwner(params.id, params.expectedOwner, context)
       )
     })

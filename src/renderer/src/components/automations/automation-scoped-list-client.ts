@@ -298,6 +298,20 @@ export async function listOrphanAutomationRunsPage(
   return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
 }
 
+export async function rerunAutomationForOwner(
+  owner: AutomationOwnerRef,
+  id: string,
+  runId: string
+): Promise<AutomationRun> {
+  await assertOwnerFencingSupported(owner.authority)
+  const result = await callAuthority<{ run: AutomationRun }>(owner.authority, 'automation.rerun', {
+    id,
+    runId,
+    expectedOwner: ownerPrecondition(owner)
+  })
+  return result.run
+}
+
 export async function runAutomationNowForOwner(
   owner: AutomationOwnerRef,
   id: string

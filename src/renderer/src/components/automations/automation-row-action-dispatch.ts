@@ -28,6 +28,7 @@ import {
   listOwnedAutomationRuns,
   listOwnedAutomationRunsPage,
   runOwnedAutomationNow,
+  rerunOwnedAutomation,
   showOwnedAutomation,
   updateOwnedAutomation,
   type AutomationActionResult
@@ -154,6 +155,21 @@ export async function dispatchAutomationDelete(
     row,
     'delete',
     (availability) => deleteOwnedAutomation(availability, context.authority, row.automationId),
+    legacy
+  )
+}
+
+export async function dispatchAutomationRerun(
+  context: AutomationDispatchContext,
+  row: AutomationDispatchRow,
+  runId: string,
+  legacy: () => Promise<AutomationRun>
+): Promise<AutomationDispatchResult<AutomationRun>> {
+  return await dispatch(
+    context,
+    row,
+    'run',
+    (availability) => rerunOwnedAutomation(availability, row.automationId, runId),
     legacy
   )
 }

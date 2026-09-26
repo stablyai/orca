@@ -139,6 +139,16 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     )
   }
 
+  rerunAutomation(
+    id: string,
+    runId: string,
+    expectedOwner?: AutomationOwnerPrecondition
+  ): Promise<AutomationRun> {
+    return this.automation.withExternalProbePriority(() =>
+      this.automation.runNow(id, expectedOwner, runId)
+    )
+  }
+
   listAutomationsForScope(params = {}): AutomationListResult {
     return this.automation.withExternalProbePriority(() => this.automation.listForScope(params))
   }

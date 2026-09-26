@@ -139,6 +139,10 @@ export type AutomationRun = {
   sourceContext?: TaskSourceContext | null
   title: string
   scheduledFor: number
+  /** Absent on legacy runs; null when a retry cannot recover the original timezone. */
+  scheduledTimezone?: string | null
+  /** Retains the selected attempt and original occurrence across chained reruns. */
+  rerun?: { sourceRunId: string; originalRunId: string }
   status: AutomationRunStatus
   trigger: AutomationRunTrigger
   workspaceId: string | null

@@ -47,6 +47,7 @@ import {
   AutomationCreate,
   AutomationId,
   AutomationList,
+  AutomationRerun,
   AutomationRuns,
   AutomationUpdate
 } from './automation-params'
@@ -612,6 +613,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.create': AutomationCreate,
   'automation.delete': AutomationId,
   'automation.list': AutomationList,
+  'automation.rerun': AutomationRerun,
   'automation.runNow': AutomationId,
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,

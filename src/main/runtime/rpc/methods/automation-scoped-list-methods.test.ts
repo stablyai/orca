@@ -42,6 +42,7 @@ function runtimeStub() {
     automationOwnerPrecondition: vi.fn(() => SSH_OWNER),
     updateAutomation: vi.fn(async () => ({ id: 'a1' })),
     deleteAutomation: vi.fn(() => ({ removed: true, id: 'a1' })),
+    rerunAutomation: vi.fn(async () => ({ id: 'retry-1' })),
     runAutomationNow: vi.fn(async () => ({ id: 'run-1' }))
   }
 }
@@ -133,10 +134,16 @@ describe('owner preconditions', () => {
     await invoke('automation.runs', { automationId: 'a1', expectedOwner: SSH_OWNER }, runtime)
     await invoke('automation.delete', { id: 'a1', expectedOwner: SSH_OWNER }, runtime)
     await invoke('automation.runNow', { id: 'a1', expectedOwner: SSH_OWNER }, runtime)
+    await invoke(
+      'automation.rerun',
+      { id: 'a1', runId: 'historical', expectedOwner: SSH_OWNER },
+      runtime
+    )
     expect(runtime.showAutomation).toHaveBeenCalledWith('a1', SSH_OWNER)
     expect(runtime.listAutomationRuns).toHaveBeenCalledWith('a1', SSH_OWNER)
     expect(runtime.deleteAutomation).toHaveBeenCalledWith('a1', SSH_OWNER)
     expect(runtime.runAutomationNow).toHaveBeenCalledWith('a1', SSH_OWNER)
+    expect(runtime.rerunAutomation).toHaveBeenCalledWith('a1', 'historical', SSH_OWNER)
   })
 
   // Why: a client with no SSH target registry of its own — the CLI — can only satisfy

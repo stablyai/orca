@@ -176,6 +176,11 @@ export const AutomationId = z.object({
   expectedOwner: ExpectedOwner
 })
 
+// A distinct method prevents older hosts from dropping the run ID and running today.
+export const AutomationRerun = AutomationId.extend({
+  runId: requiredString('Missing automation run id')
+})
+
 export const AutomationRuns = z.object({
   automationId: OptionalString,
   expectedOwner: ExpectedOwner,
