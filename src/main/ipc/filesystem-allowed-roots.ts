@@ -14,13 +14,21 @@ import {
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
+import { getSshTargetIdForExecutionHost } from '../../shared/execution-host'
 
 type FolderScopeStore = Pick<Store, 'getRepos'> &
   Partial<Pick<Store, 'getProjectGroups' | 'getFolderWorkspaces'>>
 
-// Why: SSH repo paths are remote-host paths; treating them as local roots could authorize unrelated local folders or probe SSH-only paths.
+function hasRemoteFilesystemOwner(scope: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): boolean {
+  // Keep legacy exclusions, including runtime rows whose connection belongs to that runtime.
+  return Boolean(scope.connectionId || getSshTargetIdForExecutionHost(scope.executionHostId))
+}
+
 function filterLocalRepos(repos: readonly Repo[]): Repo[] {
-  return repos.filter((repo) => !repo.connectionId)
+  return repos.filter((repo) => !hasRemoteFilesystemOwner(repo))
 }
 
 export function getLocalRepos(store: Store) {
@@ -30,11 +38,11 @@ export function getLocalRepos(store: Store) {
 function isRemoteOnlyFolderScope(
   folderPath: string,
   projectGroupId: string,
-  connectionId: string | null | undefined,
+  hasRemoteOwner: boolean,
   childGroupIndex: ProjectGroupChildIndex,
   repos: readonly Repo[]
 ): boolean {
-  if (connectionId) {
+  if (hasRemoteOwner) {
     return true
   }
   const groupIds = collectProjectGroupSubtreeIds(childGroupIndex, projectGroupId)
@@ -45,7 +53,7 @@ function isRemoteOnlyFolderScope(
       isPathInsideOrEqual(folderPath, repo.path)
     ) {
       // One local candidate settles the scope without scanning the remaining repositories.
-      if (!repo.connectionId) {
+      if (!hasRemoteFilesystemOwner(repo)) {
         return false
       }
       hasRemoteCandidate = true
@@ -54,15 +62,15 @@ function isRemoteOnlyFolderScope(
   return hasRemoteCandidate
 }
 
-function getFolderWorkspaceConnectionId(
+function hasRemoteFolderWorkspaceOwner(
   workspace: FolderWorkspace,
   projectGroups: readonly ProjectGroup[]
-): string | null {
-  return (
-    workspace.connectionId ??
-    projectGroups.find((group) => group.id === workspace.projectGroupId)?.connectionId ??
-    null
-  )
+): boolean {
+  const group = projectGroups.find((group) => group.id === workspace.projectGroupId)
+  return hasRemoteFilesystemOwner({
+    connectionId: workspace.connectionId ?? group?.connectionId,
+    executionHostId: workspace.executionHostId ?? group?.executionHostId
+  })
 }
 
 function getLocalFolderScopeRoots(store: Store, repos: readonly Repo[]): string[] {
@@ -77,7 +85,7 @@ function getLocalFolderScopeRoots(store: Store, repos: readonly Repo[]): string[
       !isRemoteOnlyFolderScope(
         group.parentPath,
         group.id,
-        group.connectionId,
+        hasRemoteFilesystemOwner(group),
         childGroupIndex,
         repos
       )
@@ -90,7 +98,7 @@ function getLocalFolderScopeRoots(store: Store, repos: readonly Repo[]): string[
       !isRemoteOnlyFolderScope(
         workspace.folderPath,
         workspace.projectGroupId,
-        getFolderWorkspaceConnectionId(workspace, projectGroups),
+        hasRemoteFolderWorkspaceOwner(workspace, projectGroups),
         childGroupIndex,
         repos
       )
