@@ -29,10 +29,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import {
-  STRUCTURED_AGENT_SESSION_IDLE_MS,
-  StructuredAgentSessionIdleSweep
-} from './structured-agent-session-idle-sweep'
+import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
 
 export const REST_TEST_CALLER = { callerKey: 'client-1' }
 export const IDLE_MS = STRUCTURED_AGENT_SESSION_IDLE_MS
@@ -216,13 +213,7 @@ export async function foundRestTestChat(rig: RestTestRig): Promise<void> {
 
 /** Runs one sweep pass now, for a test that set `idleSweep.intervalMs` out of reach. */
 export function sweepOnce(host: StructuredAgentSessionHost): Promise<void> {
-  const lifetime: unknown = Reflect.get(host, 'lifetime')
-  const sweep: unknown =
-    typeof lifetime === 'object' && lifetime !== null ? Reflect.get(lifetime, 'idleSweep') : null
-  if (!(sweep instanceof StructuredAgentSessionIdleSweep)) {
-    throw new Error('the host has no idle sweep')
-  }
-  return sweep.tick()
+  return host.collaboratorsForTests().lifetime.idleSweep.tick()
 }
 
 /** Waits long enough for several sweep ticks to have run. */

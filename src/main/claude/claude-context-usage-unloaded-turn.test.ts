@@ -83,7 +83,11 @@ function readOptions(
   journal: AgentSessionJournal,
   adapter: Partial<StructuredAgentSessionAdapter>
 ) {
-  const running = { journal, fence: 1, hasProviderChild: true, params: { provider: 'claude' } }
+  const running = {
+    journal,
+    child: { fence: 1, generation: 'generation-1' },
+    params: { provider: 'claude' }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the options read touches only these members.
   const context = {
     deps: {
