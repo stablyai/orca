@@ -7,6 +7,7 @@ import { useProjectGroupDialogs, type ProjectGroupDialogs } from './use-project-
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 
 const mocks = vi.hoisted(() => ({
+  openModal: vi.fn(),
   moveProjectToGroup: vi.fn(),
   createProjectGroup: vi.fn(),
   updateProjectGroup: vi.fn(),
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
+      openModal: mocks.openModal,
       moveProjectToGroup: mocks.moveProjectToGroup,
       createProjectGroup: mocks.createProjectGroup,
       updateProjectGroup: mocks.updateProjectGroup,
@@ -131,6 +133,17 @@ describe('project group dialogs carry the owner host', () => {
     expect(mocks.deleteProjectGroupWithContainedProjects).toHaveBeenCalledWith(remoteGroup.id, {
       removeContainedProjects: false,
       hostId: 'runtime:env-1'
+    })
+  })
+
+  it('opens Add Project targeted at the group and the host that owns it', async () => {
+    await renderHookProbe()
+    await act(async () => {
+      latest!.handleAddProjectToGroup(remoteGroup)
+    })
+
+    expect(mocks.openModal).toHaveBeenCalledWith('add-repo', {
+      addProjectTarget: { groupId: 'group-1', hostId: 'runtime:env-1' }
     })
   })
 })

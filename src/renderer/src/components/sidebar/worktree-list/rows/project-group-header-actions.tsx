@@ -134,3 +134,45 @@ export function ProjectGroupCreateWorkspaceButton({
     </Tooltip>
   )
 }
+
+export function ProjectGroupAddProjectButton({
+  projectGroup,
+  label,
+  onAddProject
+}: {
+  projectGroup: ProjectGroup
+  label: string
+  onAddProject: (projectGroup: ProjectGroup) => void
+}): React.JSX.Element {
+  const addLabel = translate(
+    'auto.components.sidebar.WorktreeList.addProjectToGroup',
+    'Add project to {{value0}}',
+    { value0: label }
+  )
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          data-repo-header-action=""
+          className={REPO_HEADER_ACTION_BUTTON_CLASS}
+          aria-label={addLabel}
+          onKeyDown={stopRepoHeaderKeyboardToggle}
+          onPointerDown={handleRepoHeaderActionPointerDown}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onAddProject(projectGroup)
+          }}
+        >
+          <Plus className="size-3" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {addLabel}
+      </TooltipContent>
+    </Tooltip>
+  )
+}

@@ -55,6 +55,8 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
 
   const openNonGitConfirmation = useCallback(() => {
     closeModal()
+    // Why: this dialog is opened from the file explorer, never from a group header, so it
+    // deliberately carries no Add Project target into the confirm step.
     openModal('confirm-non-git-folder', {
       folderPath,
       ...(connectionId ? { connectionId } : {}),

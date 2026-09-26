@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { SidebarHostOption } from './sidebar-host-options'
+import type { AddProjectTarget } from '@/lib/added-project-group-assignment'
 
 const mocks = vi.hoisted(() => ({
   stateValues: [] as unknown[],
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   refIndex: 0,
   hostOptions: [] as SidebarHostOption[],
   storeState: {
+    addProjectTarget: null as AddProjectTarget | null,
     settings: { activeRuntimeEnvironmentId: null as string | null },
     setActiveRuntimeEnvironmentPreference: vi.fn(),
     setSshConnectionState: vi.fn(),
@@ -102,6 +104,7 @@ describe('useAddRepoHostSelection', () => {
         presence: 'active'
       }
     ]
+    mocks.storeState.addProjectTarget = null
     mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
     mocks.storeState.setActiveRuntimeEnvironmentPreference.mockResolvedValue(true)
     mocks.storeState.sshConnectionStates = new Map()
@@ -117,6 +120,28 @@ describe('useAddRepoHostSelection', () => {
         }
       }
     })
+  })
+
+  // Why: a group header's Add Project names the group's host; seeding from the focused host would
+  // route the add elsewhere and only fail after the project is already added.
+  it('seeds the host from the Add Project target when the dialog opens', async () => {
+    mocks.storeState.addProjectTarget = { groupId: 'group-1', hostId: 'ssh:ssh-1' }
+    mocks.stateValues = ['local', false]
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
+
+    expect(mocks.stateSetters[0]).toHaveBeenCalledWith('ssh:ssh-1')
+  })
+
+  it('falls back to the focused host when the target host is not selectable', async () => {
+    mocks.storeState.addProjectTarget = { groupId: 'group-1', hostId: 'ssh:missing' }
+    mocks.stateValues = ['local', false]
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
+
+    expect(mocks.stateSetters[0]).toHaveBeenCalledWith('local')
   })
 
   it('exposes the selected SSH target id', async () => {
