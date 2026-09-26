@@ -3,8 +3,9 @@
 // quotes.
 //
 // A request is either a turn, whose record carries the provider's verdict, or a send that never
-// became one because the agent or its start refused it. A send inside a running turn (a steer)
-// is not a request of its own: the turn it joined answers for it. Nor is a conversation command.
+// became one because the agent or its start refused it. A send its handover placed inside a
+// running turn (a steer) is not a request of its own: the turn it joined answers for it. Nor is a
+// conversation command.
 
 import type {
   AgentJournalRenderItem,
@@ -70,7 +71,8 @@ export function latestStructuredAgentSessionRequest(
     if (
       submission &&
       dispatchRejectionVerdict(submission.reason) === 'failure' &&
-      !deliveredIntoRunningTurn(items, index, submission)
+      // Handed into a running turn (a steer): that turn answers for it.
+      item.turnScope?.kind !== 'turn'
     ) {
       return {
         kind: 'refused-send',
@@ -123,31 +125,6 @@ function rejectedSubmissionsByItem(
     }
   }
   return rejected
-}
-
-/** A send handed over while the turn before it was still running joined that turn. Read off the
- *  host clock, because a turn record's end revises it in place and keeps no sequence of its own.
- *  A send never handed over reached no turn. */
-function deliveredIntoRunningTurn(
-  items: readonly AgentJournalRenderItem[],
-  index: number,
-  submission: AgentJournalSubmission
-): boolean {
-  // Older hosts dispatched a send as they recorded it.
-  const deliveredAt =
-    submission.handedOverAt ?? (submission.handoverRecorded ? undefined : submission.submittedAt)
-  if (deliveredAt === undefined) {
-    return false
-  }
-  for (let previous = index - 1; previous >= 0; previous -= 1) {
-    const item = items[previous]
-    const turn = readAgentJournalTurn(item?.body)
-    if (item && turn) {
-      const endedAt = turnEndedAt(item, turn)
-      return turn.state === 'running' || (endedAt !== undefined && endedAt > deliveredAt)
-    }
-  }
-  return false
 }
 
 /** A turn recovery settled ended when that settle was written: when the user learns it stopped. */

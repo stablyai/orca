@@ -7,6 +7,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
+import { latestStructuredAgentSessionRequest } from '../../../shared/structured-agent-session-latest-request'
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
 import { projectTurnItemHistory } from '../../runtime/rpc/methods/structured-agent-session-turn-item-capability'
 import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-working-at-teardown'
@@ -119,6 +120,22 @@ describe('the sidebar after /compact (B7)', () => {
       latestPrompt: 'List three fruits'
     })
   })
+})
+
+describe('the completion feed around /compact (B6)', () => {
+  // The feed announces on a change of latest request; /compact running or settled leaves it be.
+  it.each(['running', 'completed'] as const)(
+    'keeps the last real turn latest while it is %s',
+    (state) => {
+      const { items, submissions } = compactedAfterARealTurn(state)
+      expect(latestStructuredAgentSessionRequest(items, submissions)).toMatchObject({
+        kind: 'turn',
+        id: 'turn-1',
+        running: false,
+        outcome: 'success'
+      })
+    }
+  )
 })
 
 describe('restart resume around /compact (B14)', () => {
