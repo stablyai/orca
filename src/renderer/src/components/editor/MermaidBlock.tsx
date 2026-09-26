@@ -72,21 +72,30 @@ export default function MermaidBlock({
         // broken foreignObject label path again.
         mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
         const { svg } = await mermaid.render(`mermaid-${id}`, content)
-        if (!cancelled && containerRef.current) {
-          // Why: although mermaid uses DOMPurify internally, we add an explicit
-          // sanitization pass as defense-in-depth against XSS in case upstream
-          // behaviour changes or a mermaid version ships without sanitization.
-          containerRef.current.innerHTML = DOMPurify.sanitize(svg, {
-            USE_PROFILES: { svg: true }
-          })
-          setError(null)
+        if (cancelled) {
+          return
         }
+        // Why: although mermaid uses DOMPurify internally, we add an explicit
+        // sanitization pass as defense-in-depth against XSS in case upstream
+        // behaviour changes or a mermaid version ships without sanitization.
+        const sanitized = DOMPurify.sanitize(svg, {
+          USE_PROFILES: { svg: true }
+        })
+        if (containerRef.current) {
+          containerRef.current.innerHTML = sanitized
+        }
+        setError(null)
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Invalid mermaid syntax')
           // Mermaid leaves an error element in the DOM on failure — clean it up.
           const errorEl = document.getElementById(`d${`mermaid-${id}`}`)
           errorEl?.remove()
+          // Why: the SVG host stays mounted (hidden) during error; clear it so
+          // the previous diagram cannot linger in the DOM.
+          if (containerRef.current) {
+            containerRef.current.innerHTML = ''
+          }
         }
       }
     }
@@ -99,18 +108,21 @@ export default function MermaidBlock({
     }
   }, [content, htmlLabels, isDark, id])
 
-  if (error) {
-    return (
-      <div className="mermaid-block">
-        <div className="mermaid-error">
-          {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')} {error}
-        </div>
-        <pre>
-          <code>{content}</code>
-        </pre>
-      </div>
-    )
-  }
-
-  return <div className="mermaid-block" ref={containerRef} />
+  return (
+    <div className="mermaid-block">
+      {error ? (
+        <>
+          <div className="mermaid-error">
+            {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')} {error}
+          </div>
+          <pre>
+            <code>{content}</code>
+          </pre>
+        </>
+      ) : null}
+      {/* Why: keep the SVG host mounted during error so a later successful
+          parse can write the diagram and clear the stale error (#18370). */}
+      <div ref={containerRef} hidden={error !== null} />
+    </div>
+  )
 }
