@@ -55,7 +55,7 @@ export type NativeChatTranscriptSlot = {
 export type NativeChatTranscriptSlotsInput = {
   messages: readonly NativeChatMessage[]
   turnKeys: readonly (string | undefined)[]
-  latestUserIndex: number
+  /** The live turn (`nativeChatTurnMembership`); undefined when no row has opened one. */
   currentTurnKey: string | undefined
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
   turnStatuses: {
@@ -77,7 +77,6 @@ export function buildNativeChatTranscriptSlots(
   const {
     messages,
     turnKeys,
-    latestUserIndex,
     currentTurnKey,
     receipts,
     turnStatuses,
@@ -129,8 +128,8 @@ export function buildNativeChatTranscriptSlots(
     settledTurnKeys,
     expandedTurnKeys
   })
-  // A settled turn's status draws at its first row: the message that opened it, or — for a turn
-  // the provider opened on its own — the first thing it produced.
+  // A turn's status draws at its first row: the message that opened it, or — for a turn the
+  // provider opened on its own — the first thing it produced, so none draws before that exists.
   const firstRowOfTurn = new Map<string, number>()
   for (const [index, turnKey] of turnKeys.entries()) {
     if (turnKey !== undefined && !firstRowOfTurn.has(turnKey)) {
@@ -142,11 +141,11 @@ export function buildNativeChatTranscriptSlots(
     const turnKey = turnKeys[index]
     const receipt = receipts.get(message.id)
     const candidateStatus =
-      index === latestUserIndex
-        ? turnStatuses.active
-        : turnKey !== undefined && firstRowOfTurn.get(turnKey) === index
-          ? turnStatuses.completedByTurn[turnKey]
-          : undefined
+      turnKey === undefined || firstRowOfTurn.get(turnKey) !== index
+        ? undefined
+        : turnKey === currentTurnKey
+          ? turnStatuses.active
+          : turnStatuses.completedByTurn[turnKey]
     const status =
       showTurnStatus && candidateStatus?.workedSeconds != null ? candidateStatus : undefined
     const turnDiff = turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined

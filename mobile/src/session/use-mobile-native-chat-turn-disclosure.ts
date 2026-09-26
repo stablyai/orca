@@ -2,8 +2,9 @@ import { useCallback, useMemo, useState } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
-  nativeChatTurnKeys,
-  type NativeChatTurnJournal
+  nativeChatTurnMembership,
+  type NativeChatTurnJournal,
+  type NativeChatTurnMembership
 } from '../../../src/shared/native-chat-turn-membership'
 import {
   MOBILE_UNANCHORED_TURN_KEY,
@@ -12,7 +13,7 @@ import {
 } from './use-mobile-native-chat-turn-status'
 
 const EMPTY_TURN_IDS: ReadonlySet<string> = new Set()
-const EMPTY_TURN_KEYS: readonly undefined[] = []
+const NO_MEMBERSHIP: NativeChatTurnMembership = { turnKeys: [], liveTurnKey: undefined }
 const MAX_EXPANDED_TURNS = 128
 
 export type MobileNativeChatTurnRow = {
@@ -58,8 +59,15 @@ export function useMobileNativeChatTurnDisclosure({
   onToggleTurn: (turnKey: string) => void
   resolveRow: (index: number, message: NativeChatMessage) => MobileNativeChatTurnRow
 } {
+  // Resolve each row's turn, and which turn is live, once from the turn record when the host
+  // states scopes.
+  const { turnKeys, liveTurnKey } = useMemo(
+    () => (enabled ? nativeChatTurnMembership(messages, turnJournal) : NO_MEMBERSHIP),
+    [enabled, messages, turnJournal]
+  )
   const turnStatuses = useMobileNativeChatTurnStatus({
-    messages,
+    turnKeys,
+    liveTurnKey,
     enabled,
     isWorking,
     workingStartedAt,
@@ -91,25 +99,16 @@ export function useMobileNativeChatTurnDisclosure({
     },
     [scopeKey]
   )
-  // Resolve each row's turn once, from the turn record when the host states scopes.
-  const turnKeys = useMemo(
-    () => (enabled ? nativeChatTurnKeys(messages, turnJournal) : EMPTY_TURN_KEYS),
-    [enabled, messages, turnJournal]
-  )
-  // A settled turn's status draws at its first row; a steer keys on the turn it joined.
-  const { firstRowOfTurn, liveTurnKey } = useMemo(() => {
+  // A settled turn's status draws at its first row.
+  const firstRowOfTurn = useMemo(() => {
     const first = new Map<string, number>()
     for (const [index, turnKey] of turnKeys.entries()) {
       if (turnKey !== undefined && !first.has(turnKey)) {
         first.set(turnKey, index)
       }
     }
-    const latestUserIndex = messages.findLastIndex((message) => message.role === 'user')
-    return {
-      firstRowOfTurn: first,
-      liveTurnKey: latestUserIndex === -1 ? undefined : turnKeys[latestUserIndex]
-    }
-  }, [messages, turnKeys])
+    return first
+  }, [turnKeys])
 
   const { active, activeTurnKey, completedByTurn } = turnStatuses
   const activeActivityText = enabled && isWorking ? (activityText ?? null) : null

@@ -1,4 +1,5 @@
-// Which turn each transcript row belongs to, read from the turn record rather than from position.
+// Which turn each transcript row belongs to, and which turn is live, read from the turn record
+// rather than from position.
 //
 // A turn's anchor is the user entry that opened it — its record's `userItemId`, directly or
 // through the provider item a submission adopted — or, for a turn no entry opened (one the
@@ -16,6 +17,7 @@ import type {
 } from './agent-session-journal-types'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { NativeChatRole } from './native-chat-types'
+import { liveStructuredAgentSessionTurnScope } from './structured-agent-session-live-turn'
 
 export type NativeChatTurnJournal = {
   items: readonly AgentJournalRenderItem[]
@@ -79,23 +81,31 @@ function anchorOf(
   return aliased !== undefined && userItemIds.has(aliased) ? aliased : turnItemId
 }
 
+export type NativeChatTurnMembership = {
+  /** Each row's turn by index: the anchor of the turn it belongs to, or undefined for none. */
+  turnKeys: (string | undefined)[]
+  /** The turn live now: the running root turn's anchor, else the newest user row's turn (a send
+   *  whose turn has not opened yet). A turn the provider opened on its own is live without one. */
+  liveTurnKey: string | undefined
+}
+
 /**
- * The turn key of each row, by index: the anchor of the turn it belongs to, or undefined for a row
- * that belongs to none. A user entry that anchors a turn, or is scoped to none, keys itself; one
- * delivered into a running turn (a steer) takes that turn's key.
+ * Places each row in its turn. A user entry that anchors a turn, or is scoped to none, keys
+ * itself; one delivered into a running turn (a steer) takes that turn's key.
  */
-export function nativeChatTurnKeys(
+export function nativeChatTurnMembership(
   messages: readonly { id: string; role: NativeChatRole }[],
   journal?: NativeChatTurnJournal | null
-): (string | undefined)[] {
+): NativeChatTurnMembership {
   const scoped = journal?.items.some((item) => item.turnScope !== undefined)
   if (!journal || !scoped) {
-    return positionalTurnKeys(messages)
+    const turnKeys = positionalTurnKeys(messages)
+    return { turnKeys, liveTurnKey: newestUserTurnKey(messages, turnKeys) }
   }
   const anchors = structuredAgentTurnAnchors(journal.items, journal.submissions)
   const anchoring = new Set(anchors.values())
   const scopes = new Map(journal.items.map((item) => [item.itemId, item.turnScope]))
-  return messages.map((message) => {
+  const turnKeys = messages.map((message) => {
     const scope = scopes.get(message.id)
     const turnKey =
       scope?.kind === 'turn' && scope.turnItemId ? anchors.get(scope.turnItemId) : undefined
@@ -104,6 +114,17 @@ export function nativeChatTurnKeys(
     }
     return anchoring.has(message.id) ? message.id : (turnKey ?? message.id)
   })
+  const running = liveStructuredAgentSessionTurnScope(journal.items)
+  const runningKey = running.kind === 'turn' ? anchors.get(running.turnItemId) : undefined
+  return { turnKeys, liveTurnKey: runningKey ?? newestUserTurnKey(messages, turnKeys) }
+}
+
+function newestUserTurnKey(
+  messages: readonly { role: NativeChatRole }[],
+  turnKeys: readonly (string | undefined)[]
+): string | undefined {
+  const index = messages.findLastIndex((message) => message.role === 'user')
+  return index === -1 ? undefined : turnKeys[index]
 }
 
 /** What a host that states no scope leaves: each user row opens a turn that runs to the next. */

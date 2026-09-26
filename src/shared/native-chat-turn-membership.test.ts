@@ -6,7 +6,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnScope
 } from './agent-session-journal-types'
-import { nativeChatTurnKeys, structuredAgentTurnAnchors } from './native-chat-turn-membership'
+import { nativeChatTurnMembership, structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import type { NativeChatRole } from './native-chat-types'
 
 const THREAD: AgentJournalTurnScope = { kind: 'thread' }
@@ -42,14 +42,15 @@ const status = (itemId: string, scope?: AgentJournalTurnScope | null) =>
 const turn = (
   itemId: string,
   userItemId: string | undefined,
-  scope?: AgentJournalTurnScope | null
+  scope?: AgentJournalTurnScope | null,
+  state: 'running' | 'completed' = 'completed'
 ) =>
   item(
     itemId,
     {
       kind: 'turn',
       turnId: itemId,
-      state: 'completed',
+      state,
       ...(userItemId === undefined ? {} : { userItemId })
     },
     scope
@@ -70,10 +71,14 @@ function keys(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
 ) {
-  return nativeChatTurnKeys(rows(items), { items, submissions })
+  return nativeChatTurnMembership(rows(items), { items, submissions }).turnKeys
 }
 
-describe('nativeChatTurnKeys', () => {
+function liveTurnKey(items: readonly AgentJournalRenderItem[]) {
+  return nativeChatTurnMembership(rows(items), { items, submissions: [] }).liveTurnKey
+}
+
+describe('nativeChatTurnMembership', () => {
   it('groups rows by the turn their scope names, and a steer into the turn it joined', () => {
     const items = [
       user('u1'),
@@ -152,6 +157,44 @@ describe('nativeChatTurnKeys', () => {
   it('groups by position for a host that states no scope, and with no journal', () => {
     const items = [user('u1', null), assistant('a1', null), user('u2', null), status('s', null)]
     expect(keys(items)).toEqual(['u1', 'u1', 'u2', 'u2'])
-    expect(nativeChatTurnKeys(rows(items))).toEqual(['u1', 'u1', 'u2', 'u2'])
+    expect(nativeChatTurnMembership(rows(items)).turnKeys).toEqual(['u1', 'u1', 'u2', 'u2'])
+  })
+})
+
+describe('the live turn', () => {
+  it('is a running turn the provider opened on its own, not the settled user turn before it', () => {
+    const settled = [user('u1'), turn('t1', 'u1'), assistant('a1', inTurn('t1'))]
+    const wake = turn('wake', 'codex:thread:wake:0', THREAD, 'running')
+    // Just opened: nothing drawn for it yet, and still the live turn.
+    expect(liveTurnKey([...settled, wake])).toBe('wake')
+    expect(liveTurnKey([...settled, wake, assistant('a2', inTurn('wake'))])).toBe('wake')
+  })
+
+  it('is the user row that opened the running turn, including after a steer into it', () => {
+    const items = [
+      user('u1'),
+      turn('t1', 'u1', THREAD, 'running'),
+      assistant('a1', inTurn('t1')),
+      user('steer', inTurn('t1'))
+    ]
+    expect(liveTurnKey(items)).toBe('u1')
+  })
+
+  it('is the newest user row while its send has not opened a turn', () => {
+    const items = [user('u1'), turn('t1', 'u1'), assistant('a1', inTurn('t1')), user('u2')]
+    expect(liveTurnKey(items)).toBe('u2')
+  })
+
+  it('is the newest user row for a host that states no scope, and with no journal', () => {
+    const items = [
+      user('u1', null),
+      turn('wake', undefined, null, 'running'),
+      assistant('a1', null),
+      user('u2', null),
+      status('s', null)
+    ]
+    expect(liveTurnKey(items)).toBe('u2')
+    expect(nativeChatTurnMembership(rows(items)).liveTurnKey).toBe('u2')
+    expect(nativeChatTurnMembership([]).liveTurnKey).toBeUndefined()
   })
 })

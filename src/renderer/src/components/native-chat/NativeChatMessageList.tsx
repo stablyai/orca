@@ -43,7 +43,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import { nativeChatTurnKeys } from '../../../../shared/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-membership'
 import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import {
@@ -158,18 +158,16 @@ export function NativeChatMessageList({
   const showTypingIndicator = showTurnStatus
     ? isWorking
     : shouldShowNativeChatTypingIndicator({ messages, isWorking })
-  const latestUserIndex = messages.findLastIndex((message) => message.role === 'user')
-  // Resolve each row's turn once, from the turn record when the host states scopes.
-  const turnKeys = useMemo(
+  // Resolve each row's turn, and which turn is live, once from the turn record when the host
+  // states scopes.
+  const { turnKeys, liveTurnKey: currentTurnKey } = useMemo(
     () =>
-      nativeChatTurnKeys(
+      nativeChatTurnMembership(
         messages,
         journalItems ? { items: journalItems, submissions: journalSubmissions ?? [] } : null
       ),
     [journalItems, journalSubmissions, messages]
   )
-  // A steer keys on the turn it joined, so the live turn is the latest message's turn.
-  const currentTurnKey = latestUserIndex === -1 ? undefined : turnKeys[latestUserIndex]
   const turnDiffs = useMemo(
     () =>
       journalItems
@@ -184,8 +182,8 @@ export function NativeChatMessageList({
     [journalItems]
   )
   const turnStatuses = useNativeChatTurnStatus({
-    messages,
-    latestUserIndex,
+    turnKeys,
+    liveTurnKey: currentTurnKey,
     isWorking: showTurnStatus && isWorking,
     workingStartedAt: showTurnStatus ? workingStartedAt : null,
     settledTurns: showTurnStatus ? settledTurns : null,
@@ -197,7 +195,6 @@ export function NativeChatMessageList({
       buildNativeChatTranscriptSlots({
         messages,
         turnKeys,
-        latestUserIndex,
         currentTurnKey,
         receipts,
         turnStatuses,
@@ -211,7 +208,6 @@ export function NativeChatMessageList({
       currentTurnKey,
       expandedTurnIds,
       isWorking,
-      latestUserIndex,
       lifecycleWorking,
       messages,
       receipts,

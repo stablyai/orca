@@ -78,7 +78,8 @@ function fruitTurn(): AgentJournalRenderItem[] {
 
 function renderJournal(
   items: AgentJournalRenderItem[],
-  submissions: AgentJournalSubmission[] = []
+  submissions: AgentJournalSubmission[] = [],
+  isWorking = false
 ): void {
   render(
     <NativeChatMessageList
@@ -96,7 +97,7 @@ function renderJournal(
       journalItems={items}
       journalSubmissions={submissions}
       settledTurns={selectStructuredAgentSettledTurns(items, submissions)}
-      isWorking={false}
+      isWorking={isWorking}
       expandSignal={false}
       fontScale={1}
     />
@@ -191,5 +192,29 @@ describe('NativeChatMessageList turns from the turn record', () => {
     expect(screen.queryByText('The background build finished.')).toBeNull()
     expect(screen.getByText('All tests pass now.')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Toggle turn details' })).toHaveLength(2)
+  })
+
+  it("keeps the settled turn's duration while a turn the provider opened runs after it", () => {
+    const wake = agentJournalItemKey({
+      provider: 'legacy',
+      agent: 'claude',
+      sessionId: 'session-1',
+      recordId: 'turn-lifecycle:wake'
+    })
+    const items = [
+      ...fruitTurn(),
+      item(wake, {
+        kind: 'turn',
+        turnId: wake,
+        state: 'running',
+        userItemId: wake,
+        startedAt: 20_000
+      }),
+      say('wake-answer', 'assistant', 'Checking the background build.', inTurn(wake))
+    ]
+    renderJournal(items, [], true)
+
+    expect(screen.getByText('Worked for 4s')).toBeInTheDocument()
+    expect(screen.getByText('Checking the background build.')).toBeInTheDocument()
   })
 })
