@@ -9,6 +9,7 @@ import {
   projectStructuredItemsToNativeChat,
   latestStructuredAgentSessionAssistantMessage,
   projectStructuredAgentSessionStatus,
+  projectStructuredAgentSessionStatusState,
   projectStructuredAgentSessionStatusSummary,
   structuredAgentSessionPaneKey
 } from './structured-agent-session-projection'
@@ -238,6 +239,42 @@ describe('structured agent session status projection', () => {
       status: null,
       latestPrompt: ''
     })
+  })
+
+  it('still reports owed work beneath a pending prompt, which the attention status hides', () => {
+    const asked = item('asked', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const prompt = item('prompt', 3, {
+      kind: 'approval',
+      title: 'Run command?',
+      detail: null,
+      options: [{ id: 'yes', label: 'Allow' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    })
+    const running = item('turn', 2, { kind: 'turn', turnId: 't1', state: 'running' })
+    const settled = item('turn', 2, {
+      kind: 'turn',
+      turnId: 't1',
+      state: 'completed',
+      outcome: 'success'
+    })
+    const accepted = [submission('m1', 'accepted')]
+    const owes = (items: AgentJournalRenderItem[], submissions = accepted) => {
+      const state = projectStructuredAgentSessionStatusState(items, submissions)
+      return [state.summary.status, state.owesWork]
+    }
+
+    expect(owes([asked, running, prompt])).toEqual(['attention', true])
+    expect(owes([asked, settled, prompt])).toEqual(['attention', false])
+    expect(owes([asked, settled, prompt], [...accepted, submission('m2', 'pending')])).toEqual([
+      'attention',
+      true
+    ])
+    expect(owes([asked, running])).toEqual(['working', true])
+    expect(owes([asked, settled])).toEqual(['idle', false])
   })
 
   it('carries the running tool and the newest assistant prose the sidebar row shows', () => {
