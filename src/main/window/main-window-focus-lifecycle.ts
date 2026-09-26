@@ -41,8 +41,16 @@ export function installMainWindowFocusLifecycle(args: {
   opts?: CreateMainWindowOptions
   reloadMainWindow: (observer: MainWindowLoadObserver) => void
   rendererWebContentsId: number
+  revealInitialWindow: () => void
 }): MainWindowFocusLifecycle {
-  const { isWindowClosing, mainWindow, opts, reloadMainWindow, rendererWebContentsId } = args
+  const {
+    isWindowClosing,
+    mainWindow,
+    opts,
+    reloadMainWindow,
+    rendererWebContentsId,
+    revealInitialWindow
+  } = args
   // Why: mirror markdown-editor focus so before-input-event skips Cmd/Ctrl+B while TipTap owns focus (docs/markdown-cmd-b-bold-design.md).
   let markdownEditorFocused = false
   let terminalInputFocused = false
@@ -214,6 +222,13 @@ export function installMainWindowFocusLifecycle(args: {
   }
   mainWindow.webContents.on('render-process-gone', (_event, details) => {
     rendererProcessGone = true
+    // Why here and not only on the reveal timer: a renderer that traps before first paint never fires
+    // ready-to-show, and the recovery prompt is a sheet inside this window. Waiting the full fallback
+    // lost the window entirely when the main thread wedged first (fa0a6033: wedged ~2s after the last
+    // reload, ~4s before the timer would have run).
+    if (!isWindowClosing() && opts?.getIsQuitting?.() !== true) {
+      revealInitialWindow()
+    }
     retireBrowserClientPageRenderer(rendererWebContents)
     browserRouteWebContentsRegistry.retireRenderer(rendererWebContentsId)
     resetMarkdownEditorFocus()
