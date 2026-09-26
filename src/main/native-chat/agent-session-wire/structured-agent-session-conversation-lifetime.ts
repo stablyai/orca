@@ -96,9 +96,6 @@ export function createStructuredAgentSessionConversationLifetime(host: {
       if (open) {
         return open
       }
-      if (disposed) {
-        throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
-      }
       const record = deps().store.getRecord(sessionId)
       if (!record) {
         throw new Error('agent_session_identity_required')
@@ -107,6 +104,10 @@ export function createStructuredAgentSessionConversationLifetime(host: {
         throw new Error('structured_agent_session_unsupported')
       }
       return serialize(sessionId, async () => {
+        // Read at the open itself: a read queued before quit began runs after it.
+        if (disposed) {
+          throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
+        }
         const session = await host.open(sessionId)
         if (!session) {
           throw new Error('agent_session_identity_required')

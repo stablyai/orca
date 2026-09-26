@@ -175,6 +175,31 @@ describe('the accessor', () => {
     expect(rig.adapter.acquire).not.toHaveBeenCalled()
   })
 
+  it('opens nothing once quit began, for a read that was already waiting on the lock', async () => {
+    await restingChat()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private per-session queue, held so the read waits behind it.
+    const serialize = Reflect.get(rig.host, 'serialize') as (
+      sessionId: string,
+      task: () => Promise<void>
+    ) => Promise<void>
+    let release = (): void => undefined
+    const held = new Promise<void>((started) => {
+      void serialize(SESSION, () => {
+        started()
+        return new Promise<void>((resolve) => (release = resolve))
+      })
+    })
+    await held
+    const read = rig.host.history({ sessionId: SESSION, direction: 'tail' })
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private lifetime, disposed as quit's first teardown step does.
+    ;(Reflect.get(rig.host, 'lifetime') as { dispose: () => void }).dispose()
+    release()
+
+    await expect(read).rejects.toThrow()
+    expect(rig.host.hasSession(SESSION)).toBe(false)
+  })
+
   it('opens a corrupt journal through the recovering open and still accepts a send (P2-03)', async () => {
     await foundRestTestChat(rig)
     await rig.host.flushAllStreamedEvents()
