@@ -22,21 +22,21 @@ const processExit: PaneProcessExit = {
 function renderExitActions() {
   const pane = { id: PANE_ID, leafId: '11111111-1111-4111-8111-111111111111' }
   const manager = { getPanes: () => [pane], setActivePane: vi.fn() }
-  const controller = new Proxy(
-    {
-      managerRef: { current: manager },
-      paneTransportsRef: { current: new Map() },
-      panePtyBindingsRef: { current: new Map() },
-      pendingCodexPaneRestartIds: {},
-      savedLayout: {},
-      setPaneProcessExitsByPaneId: vi.fn(),
-      setTerminalErrorsByPaneId: vi.fn(),
-      tabId: 'tab-1',
-      worktreeId: 'wt-1'
-    },
-    // Why: every other controller member is a callback or ref the restart only forwards.
-    { get: (target, key) => (key in target ? Reflect.get(target, key) : vi.fn()) }
-  )
+  const members: Record<string | symbol, unknown> = {
+    managerRef: { current: manager },
+    paneTransportsRef: { current: new Map() },
+    panePtyBindingsRef: { current: new Map() },
+    pendingCodexPaneRestartIds: {},
+    savedLayout: {},
+    setPaneProcessExitsByPaneId: vi.fn(),
+    setTerminalErrorsByPaneId: vi.fn(),
+    tabId: 'tab-1',
+    worktreeId: 'wt-1'
+  }
+  // Why: every other controller member is a callback or ref the restart only forwards.
+  const controller = new Proxy(members, {
+    get: (target, key) => (key in target ? target[key] : vi.fn())
+  })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proxy answers every controller member; the restart path reads the listed ones and forwards the rest.
   const typedController = controller as unknown as TerminalPaneCloseController
   const { result } = renderHook(() => useTerminalPaneProcessExitActions(typedController))
