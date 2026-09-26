@@ -220,7 +220,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     expect(bridge.tabList).toHaveBeenCalledWith(undefined)
   })
 
-  it('creates the first explicit-worktree browser tab without waiting for an existing registration', async () => {
+  it('creates the first explicit workspace browser tab without waiting for an existing registration', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const webContents = { send: vi.fn() }
     const send = vi.fn((channel: string, data: { requestId: string }) => {
@@ -249,16 +249,20 @@ describe('RuntimeBrowserCommands browser screencast', () => {
       setActiveTab: vi.fn(),
       tabList: vi.fn(() => ({ tabs: [] }))
     } as unknown as AgentBrowserBridge
+    const resolveBrowserWorkspace = vi.fn(async () => ({ id: 'folder:folder-1' }))
+    const resolveWorktreeSelector = vi.fn(async () => ({ id: 'wrong-worktree' }))
     const commands = new RuntimeBrowserCommands(
       createHost({
         getAgentBrowserBridge: () => bridge,
+        resolveBrowserWorkspace,
+        resolveWorktreeSelector,
         getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
         getAuthoritativeWindow: vi.fn(() => ({ webContents }) as never)
       })
     )
 
     await expect(
-      commands.browserTabCreate({ worktree: 'id:wt-1', url: 'about:blank' })
+      commands.browserTabCreate({ worktree: 'id:folder:folder-1', url: 'about:blank' })
     ).resolves.toEqual({ browserPageId: 'page-new' })
 
     expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
@@ -270,13 +274,15 @@ describe('RuntimeBrowserCommands browser screencast', () => {
       'browser:requestTabCreate',
       expect.objectContaining({
         url: 'about:blank',
-        worktreeId: 'wt-1',
+        worktreeId: 'folder:folder-1',
         sessionProfileId: undefined,
         sessionPartition: undefined
       })
     )
     expect(waitForTabRegistrationMock).toHaveBeenCalledWith('page-new')
-    expect(bridge.setActiveTab).toHaveBeenCalledWith(101, 'wt-1')
+    expect(bridge.setActiveTab).toHaveBeenCalledWith(101, 'folder:folder-1')
+    expect(resolveBrowserWorkspace).toHaveBeenCalledWith('id:folder:folder-1')
+    expect(resolveWorktreeSelector).not.toHaveBeenCalled()
   })
 
   it('sends the resolved isolated profile partition when creating a renderer tab', async () => {
