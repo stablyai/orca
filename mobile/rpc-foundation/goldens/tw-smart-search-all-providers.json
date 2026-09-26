@@ -1,0 +1,736 @@
+{
+  "operation": "tasks.smart-source-search",
+  "family": "tasks.smart-source-search",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
+  "scenarioSha256": "5d869d55848aea469954eb945ddc2b74f366387f8fc2853b7ae01de779208c4a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "005749a0bd75": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 36,
+            "query": "bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "author": {
+                  "$rpc": "null"
+                },
+                "id": "issue:1",
+                "labels": [],
+                "number": 1,
+                "state": "open",
+                "title": "one",
+                "type": "issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": ""
+              }
+            ]
+          }
+        }
+      }
+    },
+    "017731afa453": {
+      "name": "repo.searchRefs#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.searchRefs\",\"params\":{\"repo\":\"id:repo-1\",\"query\":\"bug\",\"limit\":20}}"
+    },
+    "2868ae2bd70e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:2",
+          "labels": [],
+          "number": 2,
+          "repoId": "repo-1",
+          "state": "opened",
+          "title": "two",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ]
+    },
+    "2d9caaaffaed": {
+      "name": "github.listWorkItems#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"limit\":36,\"query\":\"bug\"}}"
+    },
+    "40d2922bb77c": {
+      "name": "linear.searchIssues#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.searchIssues"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 50,
+            "query": "bug",
+            "workspaceId": "linear-workspace"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "id": "issue-1",
+                "identifier": "ENG-1",
+                "labels": [],
+                "priority": 0,
+                "state": {
+                  "color": "#000",
+                  "name": "Todo",
+                  "type": "unstarted"
+                },
+                "team": {
+                  "id": "team-1",
+                  "key": "ENG",
+                  "name": "Engineering"
+                },
+                "title": "A searched issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": "",
+                "workspaceId": "linear-workspace"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "4d156675db06": {
+      "branches": [
+        {
+          "localBranchName": "main",
+          "refName": "main"
+        },
+        {
+          "localBranchName": "release",
+          "refName": "release"
+        }
+      ],
+      "github": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:1",
+          "labels": [],
+          "number": 1,
+          "repoId": "repo-1",
+          "state": "open",
+          "title": "one",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ],
+      "gitlab": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:2",
+          "labels": [],
+          "number": 2,
+          "repoId": "repo-1",
+          "state": "opened",
+          "title": "two",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ],
+      "linear": [
+        {
+          "id": "issue-3",
+          "identifier": "ENG-3",
+          "labels": [],
+          "priority": 2,
+          "state": {
+            "color": "#111",
+            "name": "In Progress",
+            "type": "started"
+          },
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering"
+          },
+          "title": "An assigned issue",
+          "updatedAt": "2020-01-02T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "6a6dbfc00478": {
+      "github": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:1",
+          "labels": [],
+          "number": 1,
+          "repoId": "repo-1",
+          "state": "open",
+          "title": "one",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ],
+      "gitlab": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:2",
+          "labels": [],
+          "number": 2,
+          "repoId": "repo-1",
+          "state": "opened",
+          "title": "two",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ],
+      "linear": [
+        {
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering"
+          },
+          "title": "A searched issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "9c65a9888b9c": {
+      "branches": [
+        {
+          "localBranchName": "main",
+          "refName": "main"
+        },
+        {
+          "localBranchName": "release",
+          "refName": "release"
+        }
+      ],
+      "github": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:1",
+          "labels": [],
+          "number": 1,
+          "repoId": "repo-1",
+          "state": "open",
+          "title": "one",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ],
+      "gitlab": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:2",
+          "labels": [],
+          "number": 2,
+          "repoId": "repo-1",
+          "state": "opened",
+          "title": "two",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ],
+      "linear": [
+        {
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering"
+          },
+          "title": "A searched issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "9ca31589d6b9": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.listWorkItems"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": 1,
+            "perPage": 50,
+            "query": "bug",
+            "repo": "id:repo-1",
+            "state": "opened"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "missing",
+              "type": "not_found"
+            },
+            "items": [
+              {
+                "author": {
+                  "$rpc": "null"
+                },
+                "id": "issue:2",
+                "labels": [],
+                "number": 2,
+                "state": "opened",
+                "title": "two",
+                "type": "issue",
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "url": ""
+              }
+            ]
+          }
+        }
+      }
+    },
+    "9e3a28140ba7": {
+      "name": "gitlab.listWorkItems#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.listWorkItems\",\"params\":{\"repo\":\"id:repo-1\",\"state\":\"opened\",\"page\":1,\"perPage\":50,\"query\":\"bug\"}}"
+    },
+    "aa71e896eae4": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:1",
+          "labels": [],
+          "number": 1,
+          "repoId": "repo-1",
+          "state": "open",
+          "title": "one",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ]
+    },
+    "b015aaf3a53a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "localBranchName": "main",
+          "refName": "main"
+        },
+        {
+          "localBranchName": "release",
+          "refName": "release"
+        }
+      ]
+    },
+    "b4056bfa00e3": {
+      "github": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:1",
+          "labels": [],
+          "number": 1,
+          "repoId": "repo-1",
+          "state": "open",
+          "title": "one",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ],
+      "gitlab": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:2",
+          "labels": [],
+          "number": 2,
+          "repoId": "repo-1",
+          "state": "opened",
+          "title": "two",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ]
+    },
+    "bb2ecdf1f3da": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "id": "issue-3",
+          "identifier": "ENG-3",
+          "labels": [],
+          "priority": 2,
+          "state": {
+            "color": "#111",
+            "name": "In Progress",
+            "type": "started"
+          },
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering"
+          },
+          "title": "An assigned issue",
+          "updatedAt": "2020-01-02T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "c6df6f81c539": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "id": "issue-1",
+          "identifier": "ENG-1",
+          "labels": [],
+          "priority": 0,
+          "state": {
+            "color": "#000",
+            "name": "Todo",
+            "type": "unstarted"
+          },
+          "team": {
+            "id": "team-1",
+            "key": "ENG",
+            "name": "Engineering"
+          },
+          "title": "A searched issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": "",
+          "workspaceId": "linear-workspace"
+        }
+      ]
+    },
+    "df9cac7fb20b": {
+      "name": "linear.searchIssues#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.searchIssues\",\"params\":{\"query\":\"bug\",\"limit\":50,\"workspaceId\":\"linear-workspace\"}}"
+    },
+    "eae99168231b": {
+      "name": "repo.searchRefs#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.searchRefs"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 20,
+            "query": "bug",
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "refs": ["main", "release"]
+          }
+        }
+      }
+    },
+    "ef18db5bf24a": {
+      "name": "linear.listIssues#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"linear.listIssues\",\"params\":{\"filter\":\"assigned\",\"limit\":50}}"
+    },
+    "f0fd94109299": {
+      "github": [
+        {
+          "author": {
+            "$rpc": "null"
+          },
+          "id": "issue:1",
+          "labels": [],
+          "number": 1,
+          "repoId": "repo-1",
+          "state": "open",
+          "title": "one",
+          "type": "issue",
+          "updatedAt": "2020-01-01T00:00:00.000Z",
+          "url": ""
+        }
+      ]
+    },
+    "f1d5de4d4483": {
+      "name": "linear.listIssues#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "linear.listIssues"
+        },
+        {
+          "name": "params",
+          "value": {
+            "filter": "assigned",
+            "limit": 50,
+            "workspaceId": {
+              "$rpc": "undefined"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": [
+            {
+              "id": "issue-3",
+              "identifier": "ENG-3",
+              "labels": [],
+              "priority": 2,
+              "state": {
+                "color": "#111",
+                "name": "In Progress",
+                "type": "started"
+              },
+              "team": {
+                "id": "team-1",
+                "key": "ENG",
+                "name": "Engineering"
+              },
+              "title": "An assigned issue",
+              "updatedAt": "2020-01-02T00:00:00.000Z",
+              "url": "",
+              "workspaceId": "linear-workspace"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-smart-search-all-providers",
+    "checkpoints": [
+      {
+        "id": "github-items",
+        "observation": {
+          "sender": ["005749a0bd75"],
+          "payloads": ["2d9caaaffaed"],
+          "settlements": {
+            "github": "aa71e896eae4"
+          },
+          "state": "f0fd94109299",
+          "effects": []
+        }
+      },
+      {
+        "id": "gitlab-items",
+        "observation": {
+          "sender": ["005749a0bd75", "9ca31589d6b9"],
+          "payloads": ["2d9caaaffaed", "9e3a28140ba7"],
+          "settlements": {
+            "github": "aa71e896eae4",
+            "gitlab": "2868ae2bd70e"
+          },
+          "state": "b4056bfa00e3",
+          "effects": []
+        }
+      },
+      {
+        "id": "linear-search",
+        "observation": {
+          "sender": ["005749a0bd75", "9ca31589d6b9", "40d2922bb77c"],
+          "payloads": ["2d9caaaffaed", "9e3a28140ba7", "df9cac7fb20b"],
+          "settlements": {
+            "github": "aa71e896eae4",
+            "gitlab": "2868ae2bd70e",
+            "linear": "c6df6f81c539"
+          },
+          "state": "6a6dbfc00478",
+          "effects": []
+        }
+      },
+      {
+        "id": "branch-refs",
+        "observation": {
+          "sender": ["005749a0bd75", "9ca31589d6b9", "40d2922bb77c", "eae99168231b"],
+          "payloads": ["2d9caaaffaed", "9e3a28140ba7", "df9cac7fb20b", "017731afa453"],
+          "settlements": {
+            "github": "aa71e896eae4",
+            "gitlab": "2868ae2bd70e",
+            "linear": "c6df6f81c539",
+            "branches": "b015aaf3a53a"
+          },
+          "state": "9c65a9888b9c",
+          "effects": []
+        }
+      },
+      {
+        "id": "linear-assigned-listed",
+        "observation": {
+          "sender": [
+            "005749a0bd75",
+            "9ca31589d6b9",
+            "40d2922bb77c",
+            "eae99168231b",
+            "f1d5de4d4483"
+          ],
+          "payloads": [
+            "2d9caaaffaed",
+            "9e3a28140ba7",
+            "df9cac7fb20b",
+            "017731afa453",
+            "ef18db5bf24a"
+          ],
+          "settlements": {
+            "github": "aa71e896eae4",
+            "gitlab": "2868ae2bd70e",
+            "linear": "c6df6f81c539",
+            "branches": "b015aaf3a53a",
+            "linear-assigned": "bb2ecdf1f3da"
+          },
+          "state": "4d156675db06",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

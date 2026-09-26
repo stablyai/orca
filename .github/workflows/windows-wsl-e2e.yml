@@ -1,0 +1,74 @@
+name: Windows WSL terminal E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit to validate
+        type: string
+        required: false
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-wsl-e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wsl-terminal:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-wsl-test-runtime
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - name: Build relay and Electron
+        run: |
+          pnpm run build:relay
+          if ($LASTEXITCODE -ne 0) { throw 'Relay build failed' }
+          pnpm exec electron-vite build --mode e2e
+          if ($LASTEXITCODE -ne 0) { throw 'Electron build failed' }
+      - name: Exercise real WSL launch and paste
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/wsl-results.json
+        run: >-
+          pnpm exec playwright test
+          tests/e2e/golden-tab-bar-agent-launch.spec.ts
+          tests/e2e/terminal-windows-shell-paste-ownership.spec.ts
+          --config tests/playwright.config.ts
+          --project=electron-headless
+          --grep "WSL"
+          --repeat-each=3
+          --workers=1
+          --reporter=list,json
+      - name: Require all nine WSL executions
+        if: always()
+        run: node config/scripts/verify-wsl-e2e-participation.mjs test-results/wsl-results.json
+      - name: Upload WSL participation report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-wsl-participation-report
+          path: test-results/wsl-results.json
+          retention-days: 3
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: windows-wsl-terminal-traces
+          path: test-results/
+          retention-days: 7

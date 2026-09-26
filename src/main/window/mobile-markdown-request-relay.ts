@@ -24,31 +24,68 @@ export async function requestMobileMarkdownFromRenderer(
   if (mainWindow.isDestroyed()) {
     throw new Error('renderer_unavailable')
   }
+  const webContents = mainWindow.webContents
   const id = randomUUID()
   return await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
+    let settled = false
+    const onRendererUnavailable = (): void => finish(new Error('renderer_unavailable'))
+    const finish = (
+      error?: Error,
+      result?: RuntimeMarkdownReadTabResult | RuntimeMarkdownSaveTabResult
+    ): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
       ipcMain.removeListener('ui:mobileMarkdownResponse', onResponse)
-      reject(new Error('renderer_timeout'))
-    }, MOBILE_MARKDOWN_RENDERER_TIMEOUT_MS)
+      if (typeof mainWindow.removeListener === 'function') {
+        mainWindow.removeListener('closed', onRendererUnavailable)
+      }
+      if (typeof webContents.removeListener === 'function') {
+        webContents.removeListener('destroyed', onRendererUnavailable)
+        webContents.removeListener('render-process-gone', onRendererUnavailable)
+      }
+      if (error) {
+        reject(error)
+      } else if (result) {
+        resolve(result)
+      } else {
+        reject(new Error('renderer_unavailable'))
+      }
+    }
+    const timeout = setTimeout(
+      () => finish(new Error('renderer_timeout')),
+      MOBILE_MARKDOWN_RENDERER_TIMEOUT_MS
+    )
     const onResponse = (
       event: Electron.IpcMainEvent,
       response: RuntimeMobileMarkdownResponse
     ): void => {
-      if (event.sender !== mainWindow.webContents) {
+      if (event.sender !== webContents) {
         return
       }
       if (response.id !== id) {
         return
       }
-      clearTimeout(timeout)
-      ipcMain.removeListener('ui:mobileMarkdownResponse', onResponse)
       if (response.ok) {
-        resolve(response.result)
+        finish(undefined, response.result)
       } else {
-        reject(new Error(response.error))
+        finish(new Error(response.error))
       }
     }
     ipcMain.on('ui:mobileMarkdownResponse', onResponse)
-    mainWindow.webContents.send('ui:mobileMarkdownRequest', { id, ...request })
+    if (typeof mainWindow.once === 'function') {
+      mainWindow.once('closed', onRendererUnavailable)
+    }
+    if (typeof webContents.once === 'function') {
+      webContents.once('destroyed', onRendererUnavailable)
+      webContents.once('render-process-gone', onRendererUnavailable)
+    }
+    try {
+      webContents.send('ui:mobileMarkdownRequest', { id, ...request })
+    } catch {
+      finish(new Error('renderer_unavailable'))
+    }
   })
 }

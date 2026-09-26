@@ -1,0 +1,171 @@
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  registerSshGitProvider,
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE,
+  unregisterSshGitProvider
+} from './providers/ssh-git-dispatch'
+import {
+  registerSshFilesystemProvider,
+  unregisterSshFilesystemProvider
+} from './providers/ssh-filesystem-dispatch'
+import { ExecutionHostNotDispatchableError } from './providers/execution-host-provider-dispatch'
+import type { ExecutionHostId } from '../shared/execution-host'
+import {
+  getWorktreeRemovalConnectionId,
+  resolveWorktreeRemovalHome,
+  resolveWorktreeRemovalHomeForHost,
+  resolveWorktreeRemovalRoute,
+  setWorktreeRemovalSshHostHomeResolver
+} from './worktree-removal-execution-host-route'
+
+const HOST_A = 'target-a'
+const HOST_B = 'target-b'
+
+function gitProvider(name: string): never {
+  return { name } as never
+}
+
+function fsProvider(name: string): never {
+  return { name } as never
+}
+
+afterEach(() => {
+  setWorktreeRemovalSshHostHomeResolver(() => null)
+  unregisterSshGitProvider(HOST_A)
+  unregisterSshGitProvider(HOST_B)
+  unregisterSshFilesystemProvider(HOST_A)
+  unregisterSshFilesystemProvider(HOST_B)
+})
+
+describe('resolveWorktreeRemovalRoute', () => {
+  it('routes a local host to this machine with no connection', () => {
+    const route = resolveWorktreeRemovalRoute('local')
+
+    expect(route).toEqual({ kind: 'local', hostId: 'local' })
+    expect(getWorktreeRemovalConnectionId(route)).toBeUndefined()
+  })
+
+  it('keeps two simultaneously registered SSH hosts on their own providers', () => {
+    registerSshGitProvider(HOST_A, gitProvider('git-a'))
+    registerSshGitProvider(HOST_B, gitProvider('git-b'))
+    registerSshFilesystemProvider(HOST_A, fsProvider('fs-a'))
+    registerSshFilesystemProvider(HOST_B, fsProvider('fs-b'))
+
+    const routeA = resolveWorktreeRemovalRoute('ssh:target-a')
+    const routeB = resolveWorktreeRemovalRoute('ssh:target-b')
+
+    expect(routeA).toMatchObject({
+      kind: 'ssh',
+      hostId: 'ssh:target-a',
+      connectionId: HOST_A,
+      provider: { name: 'git-a' },
+      fsProvider: { name: 'fs-a' }
+    })
+    expect(routeB).toMatchObject({
+      kind: 'ssh',
+      hostId: 'ssh:target-b',
+      connectionId: HOST_B,
+      provider: { name: 'git-b' },
+      fsProvider: { name: 'fs-b' }
+    })
+    expect(getWorktreeRemovalConnectionId(routeA)).toBe(HOST_A)
+    expect(getWorktreeRemovalConnectionId(routeB)).toBe(HOST_B)
+  })
+
+  it('carries a null filesystem provider without falling back to the local one', () => {
+    registerSshGitProvider(HOST_A, gitProvider('git-a'))
+
+    expect(resolveWorktreeRemovalRoute('ssh:target-a')).toMatchObject({
+      kind: 'ssh',
+      fsProvider: null
+    })
+  })
+
+  it('refuses an unreachable SSH host instead of answering local', () => {
+    expect(() => resolveWorktreeRemovalRoute('ssh:target-a')).toThrow(
+      SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
+    )
+  })
+
+  it('refuses a runtime host with no nested SSH target', () => {
+    expect(() => resolveWorktreeRemovalRoute('runtime:env-1')).toThrow(
+      ExecutionHostNotDispatchableError
+    )
+  })
+
+  it('refuses a runtime host even when a same-named target is dialable here', () => {
+    // The nested target lives in the environment's namespace; a same-named local one is a
+    // different machine, and removing a worktree through it deletes the wrong checkout.
+    registerSshGitProvider(HOST_A, gitProvider('git-a'))
+
+    expect(() => resolveWorktreeRemovalRoute('runtime:target-a')).toThrow(
+      ExecutionHostNotDispatchableError
+    )
+  })
+})
+
+describe('resolveWorktreeRemovalHome', () => {
+  it('takes the home from the SSH host that will run the delete', () => {
+    registerSshGitProvider(HOST_A, gitProvider('git-a'))
+    setWorktreeRemovalSshHostHomeResolver((id) => (id === HOST_A ? '/srv/homes/alice' : null))
+
+    expect(resolveWorktreeRemovalHome(resolveWorktreeRemovalRoute('ssh:target-a'))).toEqual({
+      kind: 'executionHost',
+      homePath: '/srv/homes/alice'
+    })
+  })
+
+  it('reports an unresolved SSH home as unknown, never as this client s home', () => {
+    registerSshGitProvider(HOST_A, gitProvider('git-a'))
+    setWorktreeRemovalSshHostHomeResolver(() => null)
+
+    expect(resolveWorktreeRemovalHome(resolveWorktreeRemovalRoute('ssh:target-a'))).toEqual({
+      kind: 'executionHost',
+      homePath: null
+    })
+  })
+
+  it('keeps a local removal on this client s home', () => {
+    expect(resolveWorktreeRemovalHome(resolveWorktreeRemovalRoute('local'))).toEqual({
+      kind: 'client'
+    })
+  })
+})
+
+describe('resolveWorktreeRemovalHomeForHost', () => {
+  it('answers an ssh host id without needing a registered provider', () => {
+    // The IPC entry point resolves the home before it has a route, and a row naming its owner only
+    // as `executionHostId: 'ssh:<target>'` has no `connectionId` to key on at all.
+    setWorktreeRemovalSshHostHomeResolver((id) => (id === HOST_A ? '/srv/homes/alice' : null))
+
+    expect(resolveWorktreeRemovalHomeForHost('ssh:target-a')).toEqual({
+      kind: 'executionHost',
+      homePath: '/srv/homes/alice'
+    })
+    expect(resolveWorktreeRemovalHomeForHost('ssh:target-b')).toEqual({
+      kind: 'executionHost',
+      homePath: null
+    })
+  })
+
+  it('keeps the client home for the local host', () => {
+    expect(resolveWorktreeRemovalHomeForHost('local')).toEqual({ kind: 'client' })
+  })
+
+  it('refuses to answer a runtime host with this client s home', () => {
+    // `runtime:<env>` deletes on that environment's own server; this client's home vouches for
+    // nothing there, so the authority stays unknown and the guard refuses.
+    expect(resolveWorktreeRemovalHomeForHost('runtime:env-1')).toEqual({
+      kind: 'executionHost',
+      homePath: null
+    })
+  })
+
+  it('refuses to answer an id that names no host', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: host ids also arrive from persistence and IPC, where the compiler cannot vouch for them; this pins what an unparseable one answers.
+    expect(resolveWorktreeRemovalHomeForHost('nonsense' as ExecutionHostId)).toEqual({
+      kind: 'executionHost',
+      homePath: null
+    })
+  })
+})

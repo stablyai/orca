@@ -1,8 +1,16 @@
 import type {
+  AgentMainAgentStatus,
   AgentStatusState,
   AgentSubagentSnapshot,
   AgentWorkingMode
 } from '../../agent-status-types'
+import {
+  continueMainAgentStatus,
+  mainAgentTurnInterrupted,
+  foldAgentLeadStatus,
+  type AgentLeadStatusResolution
+} from '../../agent-lead-status-fold'
+import { agentChildWorkLivenessFromEvidence } from '../../agent-status-child-work-liveness'
 import {
   claudeRosterHasWorkingSubagent,
   reapUnconfirmedRestoredClaudeSubagents,
@@ -26,8 +34,8 @@ const CLAUDE_SESSION_OWNER_EVENTS: ReadonlySet<string> = new Set([
 ])
 
 /** A pane whose `session_id` changed is running a different conversation, so claims the previous one
- *  owned are void — the hook-independent backstop for /clear, relaunch and resume, which emit no
- *  terminating hook (SessionEnd covers about a third of exit paths).
+ *  owned are void — the hook-independent backstop for /clear, relaunch and resume. Modern Claude
+ *  emits SessionEnd on /clear, but Orca previously did not install it and older binaries emit none.
  *
  *  Voids only what the replaced session provably owned. Deliberately NOT voided:
  *  - `claudeRunningNonAgentTaskPaneKeys`: a background shell is an OS process that survives /clear,
@@ -102,53 +110,100 @@ export function getOrCreateClaudeSubagentRoster(
   return roster
 }
 
+/** The inventory is the only judge of a running shell: it retires the gate when it omits the
+ *  shell, and nothing about how the main agent's turn ended may override what it positively reports. */
 export function updateClaudeRunningNonAgentTask(
   state: HookListenerState,
   paneKey: string,
-  hasRunningNonAgentTask: boolean,
-  /** Lead-turn property. Pass `false` from any non-lead fold: an interrupt clears the gate even when
-   *  the inventory positively reports a running shell, which is a live-shell judgement no new call
-   *  site may inherit by copying this signature. */
-  interrupted: boolean
+  hasRunningNonAgentTask: boolean
 ): void {
-  if (hasRunningNonAgentTask && !interrupted) {
+  if (hasRunningNonAgentTask) {
     state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
   } else {
     state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   }
 }
 
-export type ClaudePaneStatusResolution = {
-  stateName: AgentStatusState
-  workingMode?: AgentWorkingMode
+export type ClaudePaneStatusResolution = AgentLeadStatusResolution
+
+/** The only writer of the main agent record. The main agent's clock keeps continuity across
+ *  same-state writes; a caller restoring a stash passes the stashed instant and wins. */
+export function setClaudeMainAgentTurnState(
+  state: HookListenerState,
+  paneKey: string,
+  next: Omit<ClaudeLeadTurnState, 'stateStartedAt'> & { stateStartedAt?: number },
+  now = Date.now()
+): ClaudeLeadTurnState {
+  const previous = state.claudeLeadStateByPaneKey.get(paneKey)
+  const { state: nextState, outcome, stateStartedAt, ...rest } = next
+  const record: ClaudeLeadTurnState = {
+    ...rest,
+    ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now)
+  }
+  state.claudeLeadStateByPaneKey.set(paneKey, record)
+  return record
+}
+
+/** The `mainAgent` fact a row publishes from its record: nothing invented, so a pane whose main
+ *  agent was never observed publishes none and readers fall back to the combined `state`.
+ *  A child-induced wait occupies the record but is child work, so the main agent is the state it displaced. */
+export function claudeMainAgentStatusForPayload(
+  record: ClaudeLeadTurnState
+): AgentMainAgentStatus | undefined {
+  const own = record.waitingAgentId !== undefined ? record.stateBeforeWait : record
+  if (!own) {
+    return undefined
+  }
+  return {
+    state: own.state,
+    ...(own.state === 'done' && own.outcome ? { outcome: own.outcome } : {}),
+    stateStartedAt: own.stateStartedAt
+  }
 }
 
 export function resolveClaudePaneStatus(
   state: HookListenerState,
   paneKey: string,
-  lead: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
+  lead: Pick<ClaudeLeadTurnState, 'state'>
 ): ClaudePaneStatusResolution {
-  if (lead.state !== 'done') {
-    return { stateName: lead.state }
-  }
-  const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-  if (claudeRosterHasWorkingSubagent(roster)) {
-    return { stateName: 'working' }
-  }
-  if (
-    !lead.interrupted &&
-    (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-      state.claudeActiveSessionCronPaneKeys.has(paneKey))
-  ) {
-    return { stateName: 'working', workingMode: 'monitoring' }
-  }
-  return { stateName: 'done' }
+  return foldAgentLeadStatus({
+    leadState: lead.state,
+    childWorkLiveness: agentChildWorkLivenessFromEvidence({
+      // A child's permission wait displaces the main agent record itself (`waitingAgentId`,
+      // `stateBeforeWait`) instead of living on the roster, so the roster never carries one.
+      hasWaitingChildWork: false,
+      hasLiveAgentWork: claudeRosterHasWorkingSubagent(
+        state.claudeSubagentRosterByPaneKey.get(paneKey)
+      ),
+      hasLiveNonAgentWork:
+        state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
+        state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    })
+  })
 }
-/** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
-export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
-  state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
-  state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
-  state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+
+/** The SERVER inferred a cancel of a LOCAL pane outside the hook stream (Ctrl+C with no Stop;
+ *  current Claude sends no hook on a cancel, and a bare Esc is never inferred for Claude): record
+ *  the main agent's verdict and fold it with the child work the turn left running, exactly as a
+ *  Stop would be. This is the primary source of `mainAgent.outcome: 'cancellation'` in the CLI
+ *  lane, and the record is what keeps a later child lifecycle event from resurrecting the
+ *  cancelled main agent. Nothing here retires a shell, cron or subagent: they outlive the cancel
+ *  and leave only when their inventory says so. */
+export function markClaudeLeadTurnInterrupted(
+  state: HookListenerState,
+  paneKey: string
+): { state: AgentStatusState; workingMode?: AgentWorkingMode; mainAgent?: AgentMainAgentStatus } {
+  const record = setClaudeMainAgentTurnState(state, paneKey, {
+    state: 'done',
+    outcome: 'cancellation'
+  })
+  const resolved = resolveClaudePaneStatus(state, paneKey, record)
+  const mainAgent = claudeMainAgentStatusForPayload(record)
+  return {
+    state: resolved.stateName,
+    ...(resolved.workingMode ? { workingMode: resolved.workingMode } : {}),
+    ...(mainAgent ? { mainAgent } : {})
+  }
 }
 
 /** Rebuild a pane's working roster from a persisted snapshot; live activity confirms a seed, a complete task inventory may reap an unconfirmed one whose finish hook arrived while Orca was offline. */
@@ -179,16 +234,25 @@ export function seedClaudeSubagentRosterFromSnapshots(
   }
 }
 
+/** Restore a settled main agent so its children's drain can still complete the row after a restart.
+ *  A running shell's liveness is not restored, so only a row that says no shell ran is seeded; one
+ *  that says nothing (rewritten without the fact) stays unseeded rather than falsely settling. */
 export function seedClaudeLeadTurnFromPersistedStatus(
   state: HookListenerState,
   paneKey: string,
-  status: Pick<AgentHookEventPayload, 'payload'>,
-  options: { childOnlyBoundary: boolean }
+  status: Pick<AgentHookEventPayload, 'payload' | 'claudeRunningNonAgentTask'>
 ): void {
-  if (options.childOnlyBoundary && status.payload.agentType === 'claude') {
-    state.claudeLeadStateByPaneKey.set(paneKey, {
+  const mainAgent = status.payload.mainAgent
+  // Why: a row old enough to lack `mainAgent` was mapped from its legacy child-only flag at hydrate.
+  if (
+    status.payload.agentType === 'claude' &&
+    mainAgent?.state === 'done' &&
+    status.claudeRunningNonAgentTask === false
+  ) {
+    setClaudeMainAgentTurnState(state, paneKey, {
       state: 'done',
-      ...(status.payload.interrupted === true ? { interrupted: true } : {}),
+      ...(mainAgent.outcome ? { outcome: mainAgent.outcome } : {}),
+      stateStartedAt: mainAgent.stateStartedAt,
       ...(status.payload.turnCompletedAt !== undefined
         ? { turnCompletedAt: status.payload.turnCompletedAt }
         : {})
@@ -198,7 +262,8 @@ export function seedClaudeLeadTurnFromPersistedStatus(
     }
     if (status.payload.lastAssistantMessage) {
       state.lastToolByPaneKey.set(paneKey, {
-        lastAssistantMessage: status.payload.lastAssistantMessage
+        lastAssistantMessage: status.payload.lastAssistantMessage,
+        lastAssistantMessageIsToolOutput: status.payload.lastAssistantMessageIsToolOutput
       })
     }
   }
@@ -233,12 +298,15 @@ export function clearClaudePendingWaitForAgent(
   if (lead?.state !== 'waiting' || !lead.waitingAgentId || !ownsWait(lead.waitingAgentId)) {
     return
   }
-  state.claudeLeadStateByPaneKey.set(paneKey, lead.stateBeforeWait ?? { state: 'working' })
+  setClaudeMainAgentTurnState(state, paneKey, lead.stateBeforeWait ?? { state: 'working' })
   const previousTool = state.lastToolByPaneKey.get(paneKey)
   state.lastToolByPaneKey.set(
     paneKey,
     previousTool?.lastAssistantMessage
-      ? { lastAssistantMessage: previousTool.lastAssistantMessage }
+      ? {
+          lastAssistantMessage: previousTool.lastAssistantMessage,
+          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
+        }
       : {}
   )
 }
@@ -247,31 +315,36 @@ export function clearClaudePendingWaitForAgent(
 export function clearClaudeAnsweredQuestionWait(
   state: HookListenerState,
   paneKey: string
-): Pick<ClaudeLeadTurnState, 'state' | 'interrupted' | 'turnCompletedAt'> & {
+): Pick<ClaudeLeadTurnState, 'state' | 'turnCompletedAt'> & {
+  interrupted?: true
   workingMode?: AgentWorkingMode
+  mainAgent?: AgentMainAgentStatus
 } {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
-  const restored =
+  const stash =
     lead?.state === 'waiting'
       ? (lead.stateBeforeWait ?? { state: 'working' as const })
       : { state: 'working' as const }
-  state.claudeLeadStateByPaneKey.set(paneKey, { ...restored })
+  const restored = setClaudeMainAgentTurnState(state, paneKey, { ...stash })
+  const publishedMainAgent = claudeMainAgentStatusForPayload(restored)
   const previousTool = state.lastToolByPaneKey.get(paneKey)
   state.lastToolByPaneKey.set(
     paneKey,
     previousTool?.lastAssistantMessage
-      ? { lastAssistantMessage: previousTool.lastAssistantMessage }
+      ? {
+          lastAssistantMessage: previousTool.lastAssistantMessage,
+          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
+        }
       : {}
   )
   const resolved = resolveClaudePaneStatus(state, paneKey, restored)
-  return resolved.stateName === restored.state && resolved.workingMode === undefined
-    ? restored
-    : {
-        state: resolved.stateName,
-        ...(resolved.workingMode ? { workingMode: resolved.workingMode } : {}),
-        ...(restored.interrupted ? { interrupted: true as const } : {}),
-        ...(restored.turnCompletedAt !== undefined
-          ? { turnCompletedAt: restored.turnCompletedAt }
-          : {})
-      }
+  return {
+    state: resolved.stateName,
+    ...(resolved.workingMode ? { workingMode: resolved.workingMode } : {}),
+    ...(mainAgentTurnInterrupted(restored) ? { interrupted: true as const } : {}),
+    ...(restored.turnCompletedAt !== undefined
+      ? { turnCompletedAt: restored.turnCompletedAt }
+      : {}),
+    ...(publishedMainAgent ? { mainAgent: publishedMainAgent } : {})
+  }
 }

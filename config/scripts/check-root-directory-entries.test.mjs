@@ -105,6 +105,15 @@ describe('root directory guard', () => {
     expect(output).toContain('new-root.md')
   })
 
+  it('allows the reviewed cloud workspace directory', () => {
+    const fixture = makeFixture()
+    const head = commitFiles(fixture.root, [['cloud/package.json', '{}\n']])
+
+    const result = runGuard({ ...fixture, head })
+
+    expect(result.status).toBe(0)
+  })
+
   it('rejects a new top-level directory', () => {
     const fixture = makeFixture()
     const head = commitFiles(fixture.root, [['new-folder/file.txt', 'too prominent\n']])
@@ -212,14 +221,15 @@ describe('root directory guard', () => {
 
   it('is wired into the PR verify gate', () => {
     const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
-    const guardJob = workflow.jobs.root_directory_guard
+    const guardJob = workflow.jobs.code_paths
     const guardStep = guardJob.steps.find(
       (step) => step.name === 'Reject new root-level files and folders'
     )
 
-    expect(guardJob.name).toBe('root directory guard')
+    expect(guardJob.if).toBeUndefined()
+    expect(guardStep.if).toBeUndefined()
     expect(guardJob.steps[0].with['fetch-depth']).toBe(0)
     expect(guardStep.run).toContain('node .github/scripts/check-root-directory-entries.mjs')
-    expect(workflow.jobs.verify.needs).toContain('root_directory_guard')
+    expect(workflow.jobs.verify.needs).toContain('code_paths')
   })
 })

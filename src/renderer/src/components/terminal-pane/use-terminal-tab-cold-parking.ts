@@ -6,7 +6,7 @@
  * the overlay layer only consumes the final parked tab set when deciding to
  * render a slot as null.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
@@ -15,6 +15,11 @@ import {
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
 import { getTerminalTabColdParkRecheckDelayMs } from './terminal-cold-park-recheck-deadlines'
+import {
+  clearTerminalTabColdParkRecheckTimers,
+  reconcileTerminalTabColdParkRecheckTimers,
+  type TerminalTabColdParkRecheckTimers
+} from './terminal-cold-park-recheck-timers'
 import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
   selectPairedRuntimeParkingEnvironmentIdsFromState,
@@ -31,6 +36,7 @@ import {
 import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exemption'
 import { usePendingStartupParkPresence } from './terminal-pending-startup-park-presence'
 import { canWatcherCoverParkedTerminalTab } from './terminal-parked-tab-watchers'
+import { captureNewlyParkedTerminalTabs } from './parked-terminal-tab-capture-episodes'
 import { createTerminalTabActivationOrder } from './terminal-tab-activation-order'
 import { buildTerminalTabColdParkCandidates } from './terminal-tab-park-candidates'
 import {
@@ -38,6 +44,10 @@ import {
   getTerminalParkingInputsKey,
   useParkedTerminalWatcherSynchronization
 } from './use-parked-terminal-watcher-synchronization'
+import {
+  getTerminalPaneSplitMountLeaseTabIds,
+  subscribeTerminalPaneSplitMountLeases
+} from './terminal-pane-split-request-routing'
 
 type TerminalOverlayTabAssignment = {
   groupId: string
@@ -99,27 +109,34 @@ export function useTerminalTabColdParking(args: {
   const terminalSshParkingEnabled = useAppStore(
     (state) => state.settings?.terminalSshViewParking !== false
   )
+  const terminalPaneSplitMountLeaseTabIds = useSyncExternalStore(
+    subscribeTerminalPaneSplitMountLeases,
+    getTerminalPaneSplitMountLeaseTabIds,
+    getTerminalPaneSplitMountLeaseTabIds
+  )
   const pairedRuntimeParkingEnvironmentIds = useAppStore(
     selectPairedRuntimeParkingEnvironmentIdsFromState
   )
   // Why the worktree-scoped set, not the record map: the map is app-global, so
   // subscribing to it re-rendered this worktree on every other worktree's write.
   const sleepingRecordOwnedTabIds = useAppStore(
-    useShallow((state) =>
-      selectSleepingRecordParkExemptTabIds(state.sleepingAgentSessionsByPaneKey, worktreeId)
-    )
+    useShallow((state) => selectSleepingRecordParkExemptTabIds(state, worktreeId))
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   // Why: view switches hide every tab at once, so the park clock cannot rank them.
-  const terminalTabActivationOrderRef = useRef(createTerminalTabActivationOrder())
+  const terminalTabActivationOrderRef = useRef<ReturnType<typeof createTerminalTabActivationOrder>>(
+    undefined!
+  )
+  terminalTabActivationOrderRef.current ??= createTerminalTabActivationOrder()
   // Why (shared measure-clock contract with Terminal.tsx): tab hiddenSince
   // survives a background-measure window so per-tab park deadlines stay in
   // sync with the worktree retention/TTL clock, and a post-measure cool-down
   // re-grants the hysteresis so measure end can't immediately re-park.
   const wasMeasuringHiddenWorktreeRef = useRef(false)
   const measureParkCooldownUntilRef = useRef<number | null>(null)
-  const terminalTabParkingTimersRef = useRef(new Map<string, number>())
+  const terminalTabParkingTimersRef = useRef<TerminalTabColdParkRecheckTimers>(new Map())
   const parkVerdictRecordsRef = useRef(new Map<string, ParkVerdictFlipRecord>())
+  const parkedTabCaptureDoneRef = useRef(new Set<string>())
   const [terminalTabParkingRevision, setTerminalTabParkingRevision] = useState(0)
   const [coldParkedTerminalTabIds, setColdParkedTerminalTabIds] = useState<ReadonlySet<string>>(
     () => new Set()
@@ -129,12 +146,7 @@ export function useTerminalTabColdParking(args: {
 
   useEffect(() => {
     const timers = terminalTabParkingTimersRef.current
-    return () => {
-      for (const timer of timers.values()) {
-        window.clearTimeout(timer)
-      }
-      timers.clear()
-    }
+    return () => clearTerminalTabColdParkRecheckTimers(timers)
   }, [])
 
   // Why: per-tab cold-park policy — hiddenSince bookkeeping, parked-set
@@ -142,11 +154,6 @@ export function useTerminalTabColdParking(args: {
   // re-renders exactly when the hysteresis elapses instead of polling.
   useEffect(() => {
     const timers = terminalTabParkingTimersRef.current
-    for (const timer of timers.values()) {
-      window.clearTimeout(timer)
-    }
-    timers.clear()
-
     const nowMs = Date.now()
     const overrides = getTerminalParkingPolicyOverrides()
     const currentTerminalTabIds = new Set(terminalTabs.map((tab) => tab.id))
@@ -212,6 +219,8 @@ export function useTerminalTabColdParking(args: {
       parkVerdictRecords: parkVerdictRecordsRef.current,
       nowMs
     })
+    // Why before the commit: the panes are still mounted in this flush — the last moment the only client-side copy of a remote tab's scrollback can be serialized.
+    captureNewlyParkedTerminalTabs(worktreeId, parkedTabIds, parkedTabCaptureDoneRef.current)
     // Why the ref and not the updater form: returning `current` still dispatches,
     // and React only bails eagerly while the fiber has no pending lanes. This
     // effect re-runs on every tab-model write (runtime titles, unread bumps),
@@ -223,6 +232,7 @@ export function useTerminalTabColdParking(args: {
       setColdParkedTerminalTabIds(parkedTabIds)
     }
 
+    const recheckDeadlineMsByTabId = new Map<string, number>()
     for (const candidate of candidates) {
       if (
         candidate.isVisible ||
@@ -241,14 +251,16 @@ export function useTerminalTabColdParking(args: {
         ...overrides
       })
       if (delayMs !== null && delayMs > 0) {
-        const tabId = candidate.id
-        const timer = window.setTimeout(() => {
-          timers.delete(tabId)
-          setTerminalTabParkingRevision((revision) => revision + 1)
-        }, delayMs)
-        timers.set(tabId, timer)
+        recheckDeadlineMsByTabId.set(candidate.id, nowMs + delayMs)
       }
     }
+
+    reconcileTerminalTabColdParkRecheckTimers({
+      timers,
+      deadlineMsByTabId: recheckDeadlineMsByTabId,
+      nowMs,
+      onDeadline: () => setTerminalTabParkingRevision((revision) => revision + 1)
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- semantic keys own the tab and assignment dependencies.
   }, [
     activityTerminalPortals,
@@ -311,6 +323,8 @@ export function useTerminalTabColdParking(args: {
         // force-parks: ordinary parks never contain exempt tabs (eligibility
         // requires every tab restorable, so the memo is empty for them).
         !evictionExemptTerminalTabIds.has(terminalTab.id) &&
+        // Why: CLI splits against a parked tab replay as soon as its exact pane remounts.
+        !terminalPaneSplitMountLeaseTabIds.has(terminalTab.id) &&
         // Why: the hidden-measuring startup probe needs mounted panes; gate
         // here too so the reveal lands in the same render that starts it.
         !shouldMeasureHiddenWorktree
@@ -340,6 +354,7 @@ export function useTerminalTabColdParking(args: {
     shouldMeasureHiddenWorktree,
     sleepingRecordOwnedTabIds,
     terminalTabs,
+    terminalPaneSplitMountLeaseTabIds,
     worktreeId
   ])
 
@@ -350,7 +365,8 @@ export function useTerminalTabColdParking(args: {
   const parkedTerminalTabIds = useTerminalParkVerdictPin({
     records: parkVerdictRecordsRef,
     terminalTabs,
-    candidateParkedTabIds: candidateParkedTerminalTabIds
+    candidateParkedTabIds: candidateParkedTerminalTabIds,
+    allowSustainedPin: !isForceParked
   })
 
   // Why: runs in the same effect flush as the commit that parked/revealed the

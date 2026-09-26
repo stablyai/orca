@@ -1,5 +1,5 @@
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
+import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
 import { useAppStore } from '@/store'
 import type {
   BrowserLoadError,
@@ -7,7 +7,10 @@ import type {
 } from '../../../../shared/browser-workspace-types'
 import { toHttpsRecoveryUrl } from '../../../../shared/browser-url'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
-import { readBrowserClientPageGuestMetadata } from './browser-client-page-guest-metadata'
+import {
+  readBrowserClientPageGuestMetadataIfLive,
+  createBrowserClientPageLoadFailureHandler
+} from './browser-client-page-guest-metadata'
 import {
   forgetBrowserClientPageMetadataReports,
   startBrowserClientPageMetadataPublisher
@@ -18,7 +21,9 @@ import { useBrowserClientHostedPopupNotices } from './browser-client-hosted-popu
 import { useBrowserClientHostedPermissionNotices } from './browser-client-hosted-permission-notices'
 import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-intro-tour'
 import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
+import { watchBrowserClientPageGuestLoss } from './host-guest/browser-client-page-guest-loss'
 import { useRestoredClientHostedRecoveryWindow } from './restored-client-hosted-recovery-window'
+import { useClientHostedBrowserMarkup } from './annotate/use-client-hosted-browser-markup'
 import BrowserFind from './assemble-chrome/BrowserFind'
 import { BrowserNavigationControlRow } from './assemble-chrome/browser-navigation-control-row'
 import BrowserAddressBar from './assemble-chrome/BrowserAddressBar'
@@ -36,7 +41,6 @@ import { BrowserLoadFailureOverlay } from './navigate/browser-load-failure-overl
 import { useClientHostedPageUrlSubmission } from './navigate/use-client-hosted-page-url-submission'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
 import { useBrowserPageReloadActions } from './navigate/use-browser-page-reload-actions'
-import { resolveBrowserWebviewLoadFailure } from './navigate/browser-webview-load-failure'
 import { resolveActiveBrowserLoadFailure } from './navigate/browser-load-failure-for-url'
 import { consumeBrowserPageDeferredNavigation } from './navigate/browser-page-deferred-navigation'
 import {
@@ -46,7 +50,6 @@ import {
 } from './describe-page/browser-page-url-display'
 import type {
   BrowserChromeShortcutScope,
-  BrowserPageFailLoadEvent,
   BrowserPageUrlSetter,
   BrowserTabPageState
 } from './describe-page/browser-page-types'
@@ -112,11 +115,9 @@ export function ClientHostedBrowserPagePane({
   }, [browserTab.id, isActive, onUpdatePageState])
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
+  const shortcutOwner = { browserTabId: browserTab.id, workspaceId, isActive, chromeShortcutScope }
   const { keepAddressBarFocusRef, startAddressBarFocusGrab } = useBrowserPageChromeFocus({
-    browserTabId: browserTab.id,
-    workspaceId,
-    isActive,
-    chromeShortcutScope,
+    ...shortcutOwner,
     addressBarInputRef,
     guestFocus
   })
@@ -145,15 +146,11 @@ export function ClientHostedBrowserPagePane({
   // one-way write that would burn the tour on a pane the user has not really seen.
   useClientHostedBrowserIntroTour(isActive && !attachmentError && placement !== null)
   useBrowserPageFindShortcuts({
-    browserTabId: browserTab.id,
-    workspaceId,
-    isActive,
-    chromeShortcutScope,
+    ...shortcutOwner,
     setFindOpen
   })
   useBrowserPageWebviewShortcuts({
-    browserTabId: browserTab.id,
-    isActive,
+    ...shortcutOwner,
     isActiveRef,
     webviewRef,
     paneZoomLevelRef: zoom.paneZoomLevelRef,
@@ -174,9 +171,7 @@ export function ClientHostedBrowserPagePane({
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current
-    // Why: no placement means the host has not minted this page yet. Attaching would throw for an
-    // id the retained registry has never seen and strand the pane on the unavailable notice, whose
-    // only exit is reopening on the server — so mount quiet and wait for adoption to supply it.
+    // Wait for host adoption before attaching an optimistic page the registry has not seen.
     if (
       !viewport ||
       pageHostGeneration === null ||
@@ -200,6 +195,24 @@ export function ClientHostedBrowserPagePane({
       return
     }
     const webview = attachment.webview
+    // Guest loss uses the existing recovery notice and clears pending loading state.
+    let releaseGuest = (): void => attachment.detach()
+    const guestLoss = watchBrowserClientPageGuestLoss({
+      webview,
+      webviewRef,
+      browserPageId: browserTab.id,
+      pageHostGeneration,
+      onLost: () => {
+        releaseGuest()
+        retryGuestRecoveryRef.current()
+      }
+    })
+    // Main can destroy the guest while its tag still holds the stale id.
+    const attachedMetadata = readBrowserClientPageGuestMetadataIfLive(webview)
+    if (!attachedMetadata) {
+      guestLoss.lose('unreadable')
+      return guestLoss.dispose()
+    }
     const publisher = startBrowserClientPageMetadataPublisher({
       browserPageId: browserTab.id,
       environmentId: runtimeEnvironmentId,
@@ -213,23 +226,21 @@ export function ClientHostedBrowserPagePane({
     })
     webviewRef.current = webview
     setAttachmentError(null)
-    // Why: the failure carried in from the store is hearsay — this pane may be remounting over a
-    // guest that navigated on while nothing was listening — so it is checked once against where
-    // the guest actually is. Failures this session observes are trusted as they arrive, because a
-    // navigation that fails outright often never commits and leaves the guest on the old URL.
+    // Reconcile restored failures once; failed navigations this session may never commit a URL.
     activeLoadFailureRef.current = resolveActiveBrowserLoadFailure(
       activeLoadFailureRef.current,
-      readBrowserClientPageGuestMetadata(webview).url
+      attachedMetadata.url
     )
     const syncNavigation = (event?: Event): void => {
       const eventUrl = (event as (Event & { url?: string }) | undefined)?.url
-      const metadata = readBrowserClientPageGuestMetadata(webview, eventUrl)
-      // Why: did-stop-loading fires after did-fail-load, so an unconditional null here would
-      // wipe the failure the overlay is about to show.
+      const metadata = readBrowserClientPageGuestMetadataIfLive(webview, eventUrl)
+      if (!metadata) {
+        guestLoss.lose('unreadable')
+        return
+      }
+      // did-stop-loading must preserve the preceding did-fail-load overlay.
       const activeLoadFailure = activeLoadFailureRef.current
-      // Why: a URL write drops the page's certificate challenge by design (challenges are
-      // transient across navigation), so a standing failure must not run through one — the
-      // local pane returns before its own setUrl for the same reason.
+      // URL writes clear certificate challenges, so preserve them while a failure stands.
       if (!activeLoadFailure) {
         setUrlFromGuest(browserTab.id, metadata.url, {
           preserveLoadError: true
@@ -243,26 +254,41 @@ export function ClientHostedBrowserPagePane({
         loadError: activeLoadFailure
       })
       publisher.publish(metadata)
-      // Why: the address bar's suggestions read the client's shared URL history, so a page
-      // hosted here has to file its navigations there like a local guest does.
-      recordHistoryFromGuest(metadata.url, getBrowserDisplayTitle(webview.getTitle(), metadata.url))
+      // Address-bar suggestions use the client's URL history, including client-hosted pages.
+      recordHistoryFromGuest(metadata.url, getBrowserDisplayTitle(metadata.title, metadata.url))
       setAddressBarValueFromPage(toDisplayUrl(metadata.url))
     }
     const onStart = (): void => {
       activeLoadFailureRef.current = null
       updatePageStateFromGuest(browserTab.id, { loading: true, loadError: null })
-      publisher.publish(readBrowserClientPageGuestMetadata(webview, undefined, true))
-    }
-    const onFailLoad = (event: Event): void => {
-      const loadError = resolveBrowserWebviewLoadFailure(event as BrowserPageFailLoadEvent, {
-        fallbackUrl: webview.getURL()
-      })
-      if (!loadError) {
+      const startMetadata = readBrowserClientPageGuestMetadataIfLive(webview, undefined, true)
+      if (!startMetadata) {
+        guestLoss.lose('unreadable')
         return
       }
-      activeLoadFailureRef.current = loadError
-      updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
+      publisher.publish(startMetadata)
     }
+    const onFailLoad = createBrowserClientPageLoadFailureHandler(
+      webview,
+      () => guestLoss.lose('unreadable'),
+      (loadError) => {
+        activeLoadFailureRef.current = loadError
+        updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
+      }
+    )
+    const cleanupGuest = (): void => {
+      webview.removeEventListener('did-start-loading', onStart)
+      webview.removeEventListener('did-stop-loading', syncNavigation)
+      webview.removeEventListener('did-navigate', syncNavigation)
+      webview.removeEventListener('did-navigate-in-page', syncNavigation)
+      webview.removeEventListener('page-title-updated', syncNavigation)
+      webview.removeEventListener('did-fail-load', onFailLoad)
+      guestLoss.dispose()
+      publisher.dispose()
+      forgetBrowserClientPageMetadataReports(browserTab.id)
+      attachment.detach()
+    }
+    releaseGuest = cleanupGuest
     webview.addEventListener('did-start-loading', onStart)
     webview.addEventListener('did-stop-loading', syncNavigation)
     webview.addEventListener('did-navigate', syncNavigation)
@@ -270,26 +296,12 @@ export function ClientHostedBrowserPagePane({
     webview.addEventListener('page-title-updated', syncNavigation)
     webview.addEventListener('did-fail-load', onFailLoad)
     syncNavigation()
-    // Why: the user pressed Enter while this page was still an optimistic stage, so the navigation
-    // was parked rather than sent to a host page that did not exist yet. The guest exists now.
+    // Resume navigation submitted before host adoption.
     const deferredUrl = consumeBrowserPageDeferredNavigation(browserTab.id)
     if (deferredUrl) {
       runDeferredNavigation(deferredUrl)
     }
-    return () => {
-      webview.removeEventListener('did-start-loading', onStart)
-      webview.removeEventListener('did-stop-loading', syncNavigation)
-      webview.removeEventListener('did-navigate', syncNavigation)
-      webview.removeEventListener('did-navigate-in-page', syncNavigation)
-      webview.removeEventListener('page-title-updated', syncNavigation)
-      webview.removeEventListener('did-fail-load', onFailLoad)
-      if (webviewRef.current === webview) {
-        webviewRef.current = null
-      }
-      publisher.dispose()
-      forgetBrowserClientPageMetadataReports(browserTab.id)
-      attachment.detach()
-    }
+    return cleanupGuest
   }, [
     browserTab.id,
     browserHostClientId,
@@ -299,7 +311,7 @@ export function ClientHostedBrowserPagePane({
     setAddressBarValueFromPage
   ])
 
-  useClientHostedGuestActivationFocus({ isActive, webviewRef, keepAddressBarFocusRef })
+  useClientHostedGuestActivationFocus({ isActive, guestFocus, keepAddressBarFocusRef })
 
   const showFailureOverlay = !attachmentError && Boolean(browserTab.loadError)
   // Why: the failure is about the URL that failed, not whatever page is still loaded — feeding
@@ -310,15 +322,15 @@ export function ClientHostedBrowserPagePane({
     isDefaultZoom: zoom.browserZoomPercent === zoom.browserDefaultZoomPercent
   })
 
-  useEffect(() => {
-    const webview = webviewRef.current
-    if (!webview) {
-      return
-    }
-    // Why: the retained guest is a body-level fixed host painted over this pane's viewport, so a
-    // React overlay inside the viewport cannot cover it — drop the guest from layout instead.
-    webview.style.display = showFailureOverlay || attachmentError ? 'none' : 'flex'
-  }, [attachmentError, showFailureOverlay])
+  const markup = useClientHostedBrowserMarkup({
+    webviewRef,
+    browserPageId: browserTab.id,
+    runtimeEnvironmentId,
+    placement,
+    isActive,
+    unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
+    showFailureOverlay
+  })
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
@@ -364,20 +376,16 @@ export function ClientHostedBrowserPagePane({
             />
           }
           reloadLabel={reload.reloadButtonLabel}
-        />
+        >
+          {markup.drawButton}
+        </BrowserNavigationControlRow>
       </div>
       <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
-        <div
-          role="status"
-          aria-live="polite"
-          aria-hidden={browserZoomIndicatorState.ariaHidden}
-          className={cn(
-            'pointer-events-none absolute top-3 right-3 z-30 rounded-md border border-border bg-popover/95 px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-xs transition-opacity duration-300 ease-out',
-            browserZoomIndicatorState.opacityClassName
-          )}
-        >
-          {zoom.browserZoomPercent}%
-        </div>
+        {markup.overlay}
+        <BrowserPageZoomIndicator
+          state={browserZoomIndicatorState}
+          percent={zoom.browserZoomPercent}
+        />
         <BrowserFind
           isOpen={findOpen}
           onClose={() => setFindOpen(false)}

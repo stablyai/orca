@@ -49,6 +49,19 @@ function splitLayout(): TerminalLayoutSnapshot {
   }
 }
 
+function unboundSplitLayout(): TerminalLayoutSnapshot {
+  return {
+    root: {
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId: LEAF_1 },
+      second: { type: 'leaf', leafId: LEAF_2 }
+    },
+    activeLeafId: LEAF_2,
+    expandedLeafId: null
+  }
+}
+
 function createTerminalTab(id: string, ptyId: string | null, shellOverride?: string): TerminalTab {
   return {
     id,
@@ -117,6 +130,38 @@ function createStore(
     }
   }
   return store as unknown as TerminalPaneTabDetachStore
+}
+
+type SourcePaneCwd = NonNullable<Parameters<typeof detachTerminalPaneToTab>[0]['sourcePaneCwd']>
+
+function expectDeferredSplitDetachRejected(sourcePaneCwd: SourcePaneCwd): void {
+  const store = createStore(unboundSplitLayout())
+  const manager = {
+    getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
+    getLeafId: vi.fn(() => LEAF_2),
+    detachPaneForExternalMove: vi.fn(() => true)
+  }
+  const persistLayoutSnapshot = vi.fn()
+
+  const result = detachTerminalPaneToTab({
+    getStore: () => store,
+    manager,
+    persistLayoutSnapshot,
+    sourcePaneCwd,
+    sourcePaneId: 2,
+    sourceTabId: SOURCE_TAB_ID,
+    targetGroupId: TARGET_GROUP_ID,
+    worktreeId: WORKTREE_ID
+  })
+
+  expect(result).toBeNull()
+  expect(persistLayoutSnapshot).not.toHaveBeenCalled()
+  expect(manager.detachPaneForExternalMove).not.toHaveBeenCalled()
+  expect(store.createTab).not.toHaveBeenCalled()
+  expect(store.setTabLayout).not.toHaveBeenCalled()
+  expect(store.syncPaneDetachPtyOwnership).not.toHaveBeenCalled()
+  expect(store.setActiveTab).not.toHaveBeenCalled()
+  expect(store.setActiveTabType).not.toHaveBeenCalled()
 }
 
 describe('resolveTerminalTabStripDropTarget', () => {
@@ -226,6 +271,31 @@ describe('resolveTerminalTabStripDropTarget', () => {
 })
 
 describe('detachTerminalPaneToTab', () => {
+  it.each([LEAF_1, LEAF_2])('moves chat mode only with its owning leaf %s', (chatLeafId) => {
+    const store = createStore({ ...splitLayout(), chatLeafId })
+    detachTerminalPaneToTab({
+      getStore: () => store,
+      manager: {
+        getPanes: () => [{ id: 1 }, { id: 2 }],
+        getLeafId: () => LEAF_2,
+        detachPaneForExternalMove: () => true
+      },
+      persistLayoutSnapshot: vi.fn(),
+      sourcePaneId: 2,
+      sourceTabId: SOURCE_TAB_ID,
+      targetGroupId: TARGET_GROUP_ID,
+      worktreeId: WORKTREE_ID
+    })
+    const options = vi.mocked(store.createTab).mock.calls[0]?.[3]
+    expect(options?.viewMode ?? 'terminal').toBe(chatLeafId === LEAF_2 ? 'chat' : 'terminal')
+    expect(store.terminalLayoutsByTabId['tab-detached']?.chatLeafId).toBe(
+      chatLeafId === LEAF_2 ? LEAF_2 : undefined
+    )
+    expect(store.terminalLayoutsByTabId[SOURCE_TAB_ID]?.chatLeafId).toBe(
+      chatLeafId === LEAF_1 ? LEAF_1 : undefined
+    )
+  })
+
   it('creates a new terminal tab with the detached leaf layout and PTY id', () => {
     const store = createStore()
     const manager = {
@@ -239,6 +309,12 @@ describe('detachTerminalPaneToTab', () => {
       manager,
       getStore: () => store,
       persistLayoutSnapshot,
+      sourcePaneCwd: {
+        cwd: '/remote/repo',
+        confirmed: false,
+        deferredSplitSpawn: true,
+        pendingCwd: Promise.resolve('/remote/repo/packages/app')
+      },
       sourcePaneId: 2,
       sourceTabId: SOURCE_TAB_ID,
       targetGroupId: TARGET_GROUP_ID,
@@ -279,7 +355,7 @@ describe('detachTerminalPaneToTab', () => {
       targetTabId: 'tab-detached'
     })
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-detached')
-    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', WORKTREE_ID)
     expect(persistLayoutSnapshot).toHaveBeenCalled()
   })
 
@@ -403,6 +479,12 @@ describe('detachTerminalPaneToTab', () => {
       getStore: () => store,
       manager,
       persistLayoutSnapshot: vi.fn(),
+      sourcePaneCwd: {
+        cwd: '/remote/repo',
+        confirmed: false,
+        deferredSplitSpawn: true,
+        pendingCwd: Promise.resolve('/remote/repo/packages/app')
+      },
       sourcePaneId: 2,
       sourceTabId: SOURCE_TAB_ID,
       targetGroupId: TARGET_GROUP_ID,
@@ -417,17 +499,31 @@ describe('detachTerminalPaneToTab', () => {
     })
   })
 
-  it('keeps a detached null-PTY leaf eligible to finish its pending activation', () => {
-    const store = createStore({
-      root: {
-        type: 'split',
-        direction: 'vertical',
-        first: { type: 'leaf', leafId: LEAF_1 },
-        second: { type: 'leaf', leafId: LEAF_2 }
-      },
-      activeLeafId: LEAF_2,
-      expandedLeafId: null
+  it('rejects a deferred split while inherited cwd is pending', () => {
+    expectDeferredSplitDetachRejected({
+      cwd: '/remote/repo',
+      deferredSplitSpawn: true,
+      pendingCwd: new Promise<string>(() => {})
     })
+  })
+
+  it('rejects a pending cwd even when the deferred marker is absent', () => {
+    expectDeferredSplitDetachRejected({
+      cwd: '/remote/repo',
+      pendingCwd: new Promise<string>(() => {})
+    })
+  })
+
+  it('still rejects a deferred split after cwd resolves but before PTY bind', () => {
+    expectDeferredSplitDetachRejected({
+      cwd: '/remote/repo/packages/app',
+      confirmed: false,
+      deferredSplitSpawn: true
+    })
+  })
+
+  it('carries resolved cwd when detaching an unbound non-deferred pane', () => {
+    const store = createStore(unboundSplitLayout())
     const manager = {
       getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
       getLeafId: vi.fn(() => LEAF_2),
@@ -438,6 +534,10 @@ describe('detachTerminalPaneToTab', () => {
       getStore: () => store,
       manager,
       persistLayoutSnapshot: vi.fn(),
+      sourcePaneCwd: {
+        cwd: '/remote/repo/packages/app',
+        confirmed: false
+      },
       sourcePaneId: 2,
       sourceTabId: SOURCE_TAB_ID,
       targetGroupId: TARGET_GROUP_ID,
@@ -448,7 +548,8 @@ describe('detachTerminalPaneToTab', () => {
     expect(store.createTab).toHaveBeenCalledWith(WORKTREE_ID, TARGET_GROUP_ID, 'powershell.exe', {
       activate: true,
       pendingActivationSpawn: true,
-      recordInteraction: true
+      recordInteraction: true,
+      startupCwd: '/remote/repo/packages/app'
     })
   })
 })

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const FLOW_SOURCE = readFileSync(join(__dirname, 'worktree-creation-flow-execute.ts'), 'utf8')
+const PREFLIGHT_SOURCE = readFileSync(join(__dirname, 'agent-trust-preflight.ts'), 'utf8')
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -13,12 +14,8 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('worktree creation flow agent trust preflight', () => {
-  it('forwards the repo SSH connection id when pre-marking agent trust', () => {
-    const preflight = sourceBetween(
-      FLOW_SOURCE,
-      'async function preflightAgentTrust',
-      'async function executeWorktreeCreation'
-    )
+  it('forwards the repo SSH connection id when pre-marking terminal agent trust', () => {
+    const preflight = PREFLIGHT_SOURCE
     const createFlow = sourceBetween(
       FLOW_SOURCE,
       'const backendSpawned = result.startupTerminal?.spawned === true',
@@ -26,11 +23,10 @@ describe('worktree creation flow agent trust preflight', () => {
     )
 
     expect(preflight).toContain('connectionId?: string | null')
-    expect(preflight).toContain('...(connectionId ? { connectionId } : {})')
+    expect(preflight).toContain('...(args.connectionId ? { connectionId: args.connectionId } : {})')
     expect(createFlow).toContain('repoConnectionId')
     expect(createFlow).toContain('repo.id === worktree.repoId')
-    expect(createFlow).toContain(
-      'await preflightAgentTrust(preparedRequest, worktree.path, repoConnectionId)'
-    )
+    expect(createFlow).toContain('await preflightAgentTrust({')
+    expect(createFlow).toContain('connectionId: repoConnectionId')
   })
 })

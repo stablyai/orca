@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 import type * as pty from 'node-pty'
 import { readPtsName } from '../pty/node-pty-pts-name'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
+import { ptyShellProcessId } from '../windows/windows-pty-job'
 import { isWslAvailableAsync } from '../wsl'
 import { resolveGitBashPath } from '../git-bash'
 import { resolveProcessCwd } from './process-cwd'
@@ -12,7 +13,7 @@ import {
   ptyIncarnations,
   ptyInitialCwd,
   ptyProcesses,
-  ptyShellName,
+  getPtyShellName,
   ptyTerminalHandle,
   ptyWorktreeId,
   ptyWslDistroById,
@@ -74,6 +75,10 @@ export async function sendLocalPtySignal(id: string, signal: string): Promise<vo
   if (!proc) {
     return
   }
+  if ('signalProcess' in proc && typeof proc.signalProcess === 'function') {
+    proc.signalProcess(signal)
+    return
+  }
   const signalRootPid = (): void => {
     try {
       process.kill(proc.pid, signal)
@@ -97,7 +102,8 @@ export async function getLocalPtyCwd(id: string): Promise<string> {
     return ''
   }
   // Why: let resolveProcessCwd's '' surface for the renderer fallback chain; a fabricated cwd would short-circuit it.
-  return resolveProcessCwd(proc.pid)
+  const shellPid = ptyShellProcessId(proc)
+  return shellPid === undefined ? '' : resolveProcessCwd(shellPid)
 }
 
 export async function clearLocalPtyBuffer(id: string): Promise<void> {
@@ -120,7 +126,7 @@ export async function listLocalPtyProcesses(): Promise<PtyProcessInfo[]> {
     id,
     ...(ptyIncarnations.get(id) ? { incarnationId: ptyIncarnations.get(id) } : {}),
     cwd: ptyInitialCwd.get(id) ?? '',
-    title: proc.process || ptyShellName.get(id) || 'shell',
+    title: proc.process || getPtyShellName(id) || 'shell',
     ...(ptyWorktreeId.get(id) ? { worktreeId: ptyWorktreeId.get(id) } : {}),
     ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {}),
     ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {})
@@ -133,7 +139,7 @@ export async function getDefaultLocalPtyShell(
   if (process.platform === 'win32') {
     return getOptions().getWindowsShell?.() || process.env.COMSPEC || 'powershell.exe'
   }
-  return process.env.SHELL || '/bin/zsh'
+  return process.env.SHELL?.trim() || '/bin/zsh'
 }
 
 export async function getLocalPtyProfiles(): Promise<{ name: string; path: string }[]> {

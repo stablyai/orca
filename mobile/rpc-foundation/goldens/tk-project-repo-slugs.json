@@ -1,0 +1,109 @@
+{
+  "operation": "tasks.project-repo-slugs",
+  "family": "tasks.project-repo-slugs",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "c4272385ed3b0de4feab38de9e4f6363ecd6317fdd4de47f76a98eb18abaf371",
+  "scenarioSha256": "a83d5768892764af2dd6866f03d51c09aef63d1c5d3e0645bd5e1c16454b201f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "3df58008cdfa": {
+      "name": "githubRepoSlugCache",
+      "ordinal": 3,
+      "value": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "host": "github.com",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        }
+      }
+    },
+    "49d6f5f60c9c": {
+      "name": "github.repoSlug#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    },
+    "60d253ed9645": {
+      "name": "github.repoSlug#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.repoSlug"
+        },
+        {
+          "name": "params",
+          "value": {
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "host": "github.com",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        }
+      }
+    },
+    "bdec8bbb3c04": {
+      "cache": {
+        "repo-1": {
+          "path": "/repo",
+          "repository": {
+            "host": "github.com",
+            "owner": "owner",
+            "repo": "repo"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tk-project-repo-slugs",
+    "checkpoints": [
+      {
+        "id": "mounted",
+        "observation": {
+          "sender": ["60d253ed9645"],
+          "payloads": ["49d6f5f60c9c"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "bdec8bbb3c04",
+          "effects": ["3df58008cdfa"]
+        }
+      }
+    ]
+  }
+}

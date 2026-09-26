@@ -1,18 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
-  vi.hoisted(() => ({
-    execFileMock: vi.fn(),
-    webContentsFromIdMock: vi.fn(),
-    existsSyncMock: vi.fn(() => false),
-    readFileSyncMock: vi.fn(() => Buffer.from('')),
-    stdinWrites: [] as string[]
-  }))
+const {
+  execFileMock,
+  webContentsFromIdMock,
+  existsSyncMock,
+  readFileSyncMock,
+  lstatSyncMock,
+  stdinWrites
+} = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  webContentsFromIdMock: vi.fn(),
+  existsSyncMock: vi.fn(() => false),
+  readFileSyncMock: vi.fn(() => Buffer.from('')),
+  lstatSyncMock: vi.fn(),
+  stdinWrites: [] as string[]
+}))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
+  lstatSync: lstatSyncMock,
   accessSync: vi.fn(),
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
@@ -73,6 +81,14 @@ function closeCallCount(): number {
 describe('AgentBrowserBridge', () => {
   let bridge: AgentBrowserBridge
 
+  // The mocked fs has no mkdirSync, so the constructor never claims a socket directory itself.
+  function ownSocketDirectory(): void {
+    Object.assign(bridge, {
+      ownsAgentBrowserSocketDirectory: true,
+      agentBrowserEnv: { AGENT_BROWSER_SOCKET_DIR: '/tmp/orca-ab-test' }
+    })
+  }
+
   beforeEach(() => {
     resetAgentBrowserBridgeMocks({
       webContentsFromIdMock,
@@ -81,11 +97,29 @@ describe('AgentBrowserBridge', () => {
       stdinWrites,
       cdpWsProxyInstances: CdpWsProxyMock.instances
     })
+    // Default to a socket that exists so an unprepared test still takes the reset path.
+    lstatSyncMock.mockReset()
+    lstatSyncMock.mockReturnValue({})
     bridge = new AgentBrowserBridge(mockBrowserManager())
     bridge.setActiveTab(100)
   })
 
+  it('snapshots a fresh owned session without launching a helper just to close it', async () => {
+    ownSocketDirectory()
+    lstatSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('No socket'), { code: 'ENOENT' })
+    })
+    webContentsFromIdMock.mockReturnValue(mockWebContents(100))
+    succeedWith({ snapshot: 'ready' })
+
+    expect(await bridge.snapshot()).toMatchObject({ snapshot: 'ready' })
+    expect(closeCallCount()).toBe(0)
+    expect(lstatSyncMock).toHaveBeenCalledWith('/tmp/orca-ab-test/orca-tab-tab-1.sock')
+  })
+
   it('fails closed when stale agent-browser session ownership cannot be reset', async () => {
+    ownSocketDirectory()
+    lstatSyncMock.mockReturnValue({})
     vi.useFakeTimers()
     try {
       const closeKill = vi.fn()
@@ -153,29 +187,6 @@ describe('AgentBrowserBridge', () => {
 
     succeedWith(null)
     await bridge.onPageClosed('tab-1')
-
-    const closeCall = execFileMock.mock.calls.find((call: unknown[]) =>
-      (call[1] as string[]).includes('close')
-    )
-    expect(closeCall?.[2]).toMatchObject({ timeout: 5_000 })
-  })
-
-  it('uses the cleanup timeout when a target swap retires its session', async () => {
-    succeedWith({ snapshot: 'initial' })
-    await bridge.snapshot()
-    execFileMock.mockClear()
-
-    succeedWith(null)
-    await (
-      bridge as unknown as {
-        restartSessionForTarget: (
-          sessionName: string,
-          browserPageId: string,
-          webContentsId: number,
-          options: { recreate: boolean }
-        ) => Promise<void>
-      }
-    ).restartSessionForTarget('orca-tab-tab-1', 'tab-1', 100, { recreate: false })
 
     const closeCall = execFileMock.mock.calls.find((call: unknown[]) =>
       (call[1] as string[]).includes('close')
@@ -361,6 +372,66 @@ describe('AgentBrowserBridge', () => {
     const lastSnapshotArgs = snapshotCalls.at(-1)![1] as string[]
     // After process swap + session destroy, the new session must re-init with --cdp
     expect(lastSnapshotArgs).toContain('--cdp')
+  })
+
+  it('rejects commands queued behind a running command when the page swaps guests', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const b = new AgentBrowserBridge(mockBrowserManager(tabs))
+    b.setActiveTab(100)
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === 100 || id === 200 ? mockWebContents(id) : null
+    )
+
+    let finishSnapshot: (() => void) | null = null
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+        if (args.includes('snapshot')) {
+          finishSnapshot = () =>
+            cb(null, JSON.stringify({ success: true, data: { snapshot: 'x' } }), '')
+          return { kill: vi.fn(() => finishSnapshot?.()) }
+        }
+        cb(null, JSON.stringify({ success: true, data: null }), '')
+        return { kill: vi.fn() }
+      }
+    )
+
+    const snapshot = b.snapshot(undefined, 'tab-1')
+    await vi.waitFor(() => expect(finishSnapshot).not.toBeNull())
+    const click = b.mouseClick(10, 20, 'left', undefined, 'tab-1')
+
+    tabs.set('tab-1', 200)
+    await b.onProcessSwap('tab-1', 200, 100)
+
+    await expect(click).rejects.toMatchObject({ code: 'browser_tab_closed' })
+    await snapshot.catch(() => {})
+  })
+
+  it('replays saved intercept routes onto the new guest after a process swap', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const b = new AgentBrowserBridge(mockBrowserManager(tabs))
+    b.setActiveTab(100)
+    webContentsFromIdMock.mockImplementation((id: number) =>
+      id === 100 || id === 200 ? mockWebContents(id) : null
+    )
+    const commandCalls: string[][] = []
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+        commandCalls.push(args)
+        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+      }
+    )
+
+    await b.interceptEnable(['https://old.example/**'])
+    tabs.set('tab-1', 200)
+    await b.onProcessSwap('tab-1', 200, 100)
+    await expect(b.exec('get title')).resolves.toEqual({ ok: true })
+
+    const routeCalls = commandCalls.filter(
+      (args) => args.includes('network') && args.includes('route')
+    )
+    expect(routeCalls).toHaveLength(2)
+    expect(routeCalls.at(-1)).toContain('https://old.example/**')
+    expect(routeCalls.at(-1)).toContain('--cdp')
   })
 
   it('does not replay stale intercept routes after process swap when the first command disables routing', async () => {
@@ -600,48 +671,6 @@ describe('AgentBrowserBridge', () => {
     expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
     expect(sessions.size).toBe(0)
     expect(proxy.stop).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not recreate a session after shutdown observes its pending retirement', async () => {
-    succeedWith({ snapshot: 'initial' })
-    await bridge.snapshot()
-    execFileMock.mockClear()
-
-    let releaseClose: (() => void) | null = null
-    execFileMock.mockImplementation(
-      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
-        if (!args.includes('close')) {
-          throw new Error(`unexpected agent-browser args ${args.join(' ')}`)
-        }
-        releaseClose = () => cb(null, JSON.stringify({ success: true, data: null }), '')
-        return { kill: vi.fn() }
-      }
-    )
-
-    const restart = (
-      bridge as unknown as {
-        restartSessionForTarget: (
-          sessionName: string,
-          browserPageId: string,
-          webContentsId: number
-        ) => Promise<void>
-      }
-    ).restartSessionForTarget('orca-tab-tab-1', 'tab-1', 100)
-    await vi.waitFor(() => expect(releaseClose).not.toBeNull())
-
-    const shutdown = bridge.destroyAllSessions()
-    releaseClose!()
-
-    await expect(restart).rejects.toMatchObject({
-      code: 'browser_owner_unavailable',
-      message: 'Browser runtime is shutting down'
-    })
-    await shutdown
-
-    const sessions = (bridge as unknown as { sessions: Map<string, unknown> }).sessions
-    expect(sessions.size).toBe(0)
-    expect(CdpWsProxyMock.instances).toHaveLength(1)
-    expect(execFileMock).toHaveBeenCalledTimes(1)
   })
 
   // Why: quit awaits destroyAllSessions inside a 20s barrier, so an unbounded close can hold the

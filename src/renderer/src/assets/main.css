@@ -60,6 +60,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-editor-surface: var(--editor-surface);
   --color-agent-question: var(--agent-question);
   --color-agent-question-text: var(--agent-question-text);
   --color-chart-1: var(--chart-1);
@@ -103,6 +104,9 @@
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-background: var(--status-warning-background);
+  --color-status-warning-border: var(--status-warning-border);
   --color-workspace-status-done: var(--workspace-status-done);
   --color-workspace-status-review: var(--workspace-status-review);
   --color-workspace-status-progress: var(--workspace-status-progress);
@@ -176,14 +180,19 @@
   --terminal-pane-locate: var(--color-blue-600);
   --ai-action-accent: var(--color-violet-500);
   /* "An agent is asking you something" — one hue for every surface that shows
-     it (sidebar, tabs, dashboard, agent map). Orange, not amber: on the map it
-     has to stay separable from working-yellow at a glance. */
+     it (sidebar, tabs, dashboard, kanban). Orange, not amber: it has to stay
+     separable from working-yellow at a glance. */
   --agent-question: var(--color-orange-600);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Needs-attention state that is not an error: a resume that did not carry on, an update that
+     failed. Yellow, so it stays apart from destructive red and from the orange working state. */
+  --status-warning: #ca8a04;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
      identity when the theme flips. */
   --workspace-status-done: #c7a594;
@@ -229,6 +238,10 @@
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
   --git-decoration-ignored: #8c8c8c;
+  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 13%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 26%, transparent);
+  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 11%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 22%, transparent);
   --git-graph-ref: #007acc;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -294,6 +307,9 @@
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  --status-warning: #eab308;
+  --status-warning-background: color-mix(in srgb, var(--status-warning) 10%, transparent);
+  --status-warning-border: color-mix(in srgb, var(--status-warning) 25%, transparent);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -341,6 +357,10 @@
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
   --git-decoration-ignored: #6e6e6e;
+  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
+  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
   --git-graph-ref: #3794ff;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -392,9 +412,9 @@
   z-index: 40 !important;
 }
 
-/* Keep interruption controls above unrelated updater/onboarding chrome. */
-.native-chat-pane-shell:has([data-native-chat-working='true']) {
-  z-index: 50;
+/* Keep errors above standard modal backdrops at the existing popover tier. */
+body:has([data-slot='dialog-overlay'], [data-slot='sheet-overlay']) [data-sonner-toaster] {
+  z-index: 60 !important;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
@@ -503,6 +523,18 @@
 
   :where(button:disabled) {
     cursor: default;
+  }
+}
+
+/* Why @utility, not a plain class: this is a Tailwind-shaped name, so it has to be
+   one Tailwind generates or `scrollbar-none` silently produces no CSS. */
+@utility scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 }
 
@@ -840,6 +872,14 @@ html.native-shell .app-layout {
   flex-shrink: 0;
 }
 
+/* Why: a viewport preset is a window-DIP size that CDP emulates on the guest, but
+   UI zoom redefines this renderer's CSS px. Dividing by the live zoom factor keeps
+   the host box exactly as wide as the emulated page (STA-7568). */
+.browser-page-preset-viewport {
+  width: calc(var(--browser-page-viewport-width) / var(--ui-zoom-factor, 1));
+  height: calc(var(--browser-page-viewport-height) / var(--ui-zoom-factor, 1));
+}
+
 /* Why: small identity anchor on desktop custom titlebars where native window
    chrome is hidden. Sized to sit comfortably in the 36px titlebar with a
    little horizontal breathing room. The SVG fill is white; light mode inverts
@@ -1070,14 +1110,18 @@ html.native-shell .app-layout {
 .editor-header-text {
   min-width: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .editor-header-path {
-  display: block;
+  display: flex;
+  align-items: center;
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   padding: 0;
   max-width: 100%;
+  width: 100%;
+  overflow: hidden;
   border: none;
   background: transparent;
   color: var(--muted-foreground);
@@ -1092,9 +1136,21 @@ html.native-shell .app-layout {
     Consolas,
     monospace;
   white-space: nowrap;
+  text-align: left;
+}
+
+.path-display-prefix,
+.editor-header-path-prefix {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: left;
+  white-space: nowrap;
+}
+
+.path-display-file,
+.editor-header-path-file {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .editor-header-path:hover,
@@ -1116,6 +1172,7 @@ html.native-shell .app-layout {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .editor-header-copy-toast {
@@ -1155,20 +1212,24 @@ html.native-shell .app-layout {
    this selector must beat that utility so light-mode selection is actually visible.
    The role='option' arm covers virtualized rows that render outside cmdk. */
 [data-slot='command-item'].jump-palette-item[data-selected='true'],
-[role='option'].jump-palette-item[data-selected='true'] {
+[role='option'].jump-palette-item[data-selected='true'],
+.jump-palette-command [data-slot='command-item'][data-selected='true'],
+.jump-palette-command [role='option'][data-selected='true'] {
   /* Why: flat --accent (#f5f5f5) on the palette surface (#fff) is nearly invisible
      in light mode — the keyboard cursor has to read as a solid selected row.
      Mix foreground into background and draw an inset ring; expose the surface
      as a var so status-pip cutouts can match without hardcoding. */
-  --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 12%, var(--background));
+  --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 13%, var(--background));
   background: var(--jump-palette-selection-surface);
   border-color: transparent;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 19%, transparent);
   color: var(--foreground);
 }
 
 .dark [data-slot='command-item'].jump-palette-item[data-selected='true'],
-.dark [role='option'].jump-palette-item[data-selected='true'] {
+.dark [role='option'].jump-palette-item[data-selected='true'],
+.dark .jump-palette-command [data-slot='command-item'][data-selected='true'],
+.dark .jump-palette-command [role='option'][data-selected='true'] {
   /* Why accent, not the light-mode mix: --accent (#404040) already reads clearly on
      dark surfaces; a low-%% foreground mix was a visible step down from the old row. */
   --jump-palette-selection-surface: var(--accent);
@@ -1248,6 +1309,29 @@ html.native-shell .app-layout {
   border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
+}
+
+/* Why: a sleeping card dims by mixing the theme's own text tokens toward the
+   sidebar surface in oklab, not by painting opacity over whatever is behind it.
+   An opacity step shrinks as the surface lightens, so the cue faded on lighter
+   themes and custom tints; an oklab mix is a fixed perceptual step, keeps themed
+   hues instead of greying them, and reaches every descendant through the tokens
+   they already use (#19624). The amber unread badge sits outside this family and
+   stays full-bright. */
+[data-worktree-sleeping-dim] {
+  color: color-mix(in oklab, var(--worktree-sidebar-foreground) 52%, var(--worktree-sidebar));
+  --foreground: color-mix(
+    in oklab,
+    var(--worktree-sidebar-foreground) 52%,
+    var(--worktree-sidebar)
+  );
+  --muted-foreground: color-mix(
+    in oklab,
+    var(--worktree-sidebar-foreground) 34%,
+    var(--worktree-sidebar)
+  );
+  --muted: color-mix(in oklab, var(--worktree-sidebar-foreground) 5%, var(--worktree-sidebar));
+  --border: color-mix(in oklab, var(--worktree-sidebar-foreground) 5%, var(--worktree-sidebar));
 }
 
 .worktree-agent-row-hover:hover {
@@ -1506,18 +1590,16 @@ html.native-shell .app-layout {
   grid-template-rows: 1fr;
 }
 
-/* Why: must stay a compositor-driven CSS animation — a JS clock writing
-   per-element transforms blocks the renderer input thread (STA-3328: 41
-   spinners ⇒ ~490 style writes/s, keystroke p90 363ms). The component anchors
-   each animation's startTime once; steps(12) preserves the retired cadence. */
+/* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */
+/* One day per iteration avoids per-second React animation events; still 12 steps/second. */
 @keyframes agent-spinner-rotate {
   to {
-    transform: rotate(360deg);
+    transform: rotate(86400turn);
   }
 }
 
 .agent-working-spinner {
-  animation: agent-spinner-rotate 1s steps(12, end) infinite;
+  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1918,7 +2000,8 @@ html.native-shell .app-layout {
   overflow: visible;
   border-radius: var(--radius);
   opacity: 0.96;
-  filter: drop-shadow(0 10px 24px color-mix(in srgb, var(--foreground) 18%, transparent));
+  background: var(--worktree-sidebar);
+  box-shadow: var(--shadow-floating);
   will-change: transform;
 }
 
@@ -1956,7 +2039,9 @@ html.native-shell .app-layout {
     transform 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
     width 120ms cubic-bezier(0.2, 0.8, 0.2, 1),
     opacity 80ms ease-out;
-  will-change: transform, width, opacity;
+  /* Why no `width`: it is not compositable, so hinting it only pins a layer that
+     has to be re-rastered every frame of the transition anyway. */
+  will-change: transform, opacity;
 }
 
 [data-workspace-board-card-drop-indicator='true']::before,
@@ -2146,6 +2231,18 @@ html.native-shell .app-layout {
   justify-content: center !important;
   width: 100% !important;
   height: 100% !important;
+}
+
+/* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */
+.ipynb-code-surface .monaco-editor,
+.ipynb-code-surface .monaco-editor-background,
+.ipynb-code-surface .monaco-editor .margin {
+  background-color: transparent;
+}
+
+/* Why: bracket-pair colouring is a global Monaco model option; notebook cells neutralise it locally to match their preview. */
+.ipynb-code-surface .monaco-editor [class*='bracket-highlighting-'] {
+  color: inherit;
 }
 
 .monaco-editor .monaco-search-result-highlight {
@@ -2736,12 +2833,22 @@ html.native-shell .app-layout {
   outline-offset: 1px;
 }
 
-.orca-diff-comment-range-highlight {
-  background: rgba(59, 130, 246, 0.14);
+/* Why: the band a gutter drag paints, and the band that stays lit under an open composer.
+   Mixed from --ring (the token for active selection) rather than an invented accent, and
+   carried mostly by the solid left bar so it still reads on top of the added/removed row
+   tints. Matches the .orca-conflict-* recipe above. */
+.monaco-editor .orca-diff-comment-range-highlight {
+  background: color-mix(in srgb, var(--ring) 38%, transparent);
+  border-left: 3px solid var(--ring);
 }
 
-.dark .orca-diff-comment-range-highlight {
-  background: rgba(96, 165, 250, 0.18);
+.monaco-editor .orca-diff-comment-range-margin {
+  background: color-mix(in srgb, var(--ring) 26%, transparent);
+}
+
+/* Why: while a drag is live the pane stops trying to select text under the sweeping pointer. */
+.orca-diff-comment-range-dragging {
+  user-select: none;
 }
 
 .orca-diff-comment-inline {

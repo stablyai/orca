@@ -81,3 +81,40 @@ export function explicitGhRepoHostname(args: readonly string[]): string | undefi
   }
   return undefined
 }
+
+/** Every host named in argv (`--hostname`, `--repo HOST/OWNER/REPO`, attached `-R…`), lowercased. */
+export function collectGhArgvHostSignals(args: readonly string[]): string[] {
+  const hosts: string[] = []
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '--hostname') {
+      const value = args[i + 1]?.trim()
+      if (value) {
+        hosts.push(value.toLowerCase())
+      }
+      continue
+    }
+    if (args[i].startsWith('--hostname=')) {
+      const value = args[i].slice('--hostname='.length).trim()
+      if (value) {
+        hosts.push(value.toLowerCase())
+      }
+      continue
+    }
+    let repoValue: string | undefined
+    if (args[i] === '--repo' || args[i] === '-R') {
+      repoValue = args[i + 1]
+    } else if (args[i].startsWith('--repo=')) {
+      repoValue = args[i].slice('--repo='.length)
+    } else if (args[i].startsWith('-R=')) {
+      repoValue = args[i].slice('-R='.length)
+    } else if (args[i].startsWith('-R') && args[i].length > 2 && !args[i].startsWith('-R-')) {
+      // Why: gh accepts attached `-Rhost/owner/repo`; reject host drift on bound calls.
+      repoValue = args[i].slice(2)
+    }
+    const parts = repoValue?.trim().split('/')
+    if (parts?.length === 3 && parts.every(Boolean)) {
+      hosts.push(parts[0].toLowerCase())
+    }
+  }
+  return hosts
+}

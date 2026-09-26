@@ -13,6 +13,7 @@ export type CreateWorktreeCallOptions = {
   startupDraft?: string
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
+  displayNameKind?: CreateWorktreeArgs['displayNameKind']
   /** Parent picked in the composer. Sets sidebar nesting only; ignored if it no longer exists. */
   parentWorktreeId?: string
   provisionedRoot?: {
@@ -51,6 +52,9 @@ function sharedCreateFields(
     setupDecision: request.setupDecision,
     sparseCheckout: request.sparseCheckout,
     ...(request.displayName ? { displayName: request.displayName } : {}),
+    ...((request.displayNameKind ?? options?.displayNameKind)
+      ? { displayNameKind: request.displayNameKind ?? options?.displayNameKind }
+      : {}),
     ...(request.telemetrySource ? { telemetrySource: request.telemetrySource } : {}),
     ...(request.linkedIssue !== undefined ? { linkedIssue: request.linkedIssue } : {}),
     ...(request.linkedPR !== undefined ? { linkedPR: request.linkedPR } : {}),

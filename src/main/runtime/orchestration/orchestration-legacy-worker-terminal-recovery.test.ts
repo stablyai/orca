@@ -26,13 +26,6 @@ function recoveryRow(
 describe('legacy worker terminal recovery planning', () => {
   it('retains completed Dispatches when the worker process row is still live', () => {
     expect(planLegacyWorkerTerminalRecovery([recoveryRow()])).toEqual({
-      blockedPanes: [
-        {
-          worktreeId: 'repo::/workspace',
-          paneKey: `tab-worker:${LEAF_ID}`,
-          contractVersion: 0
-        }
-      ],
       candidates: [
         expect.objectContaining({
           dispatchId: 'dispatch-1',
@@ -44,20 +37,23 @@ describe('legacy worker terminal recovery planning', () => {
     })
   })
 
-  it('blocks resume but refuses recovery when durable handles disagree', () => {
+  it('refuses recovery when durable handles disagree', () => {
     expect(
       planLegacyWorkerTerminalRecovery([recoveryRow({ agent_terminal_handle: 'term-replacement' })])
     ).toEqual({
-      blockedPanes: [
-        {
-          worktreeId: 'repo::/workspace',
-          paneKey: `tab-worker:${LEAF_ID}`,
-          contractVersion: 0
-        }
-      ],
       candidates: [],
       ambiguousDispatchIds: []
     })
+  })
+
+  it('does not let a settled row make a live worker terminal identity ambiguous', () => {
+    const plan = planLegacyWorkerTerminalRecovery([
+      recoveryRow({ dispatch_id: 'dispatch-settled', worker_state: 'succeeded' }),
+      recoveryRow({ dispatch_id: 'dispatch-live' })
+    ])
+
+    expect(plan.candidates).toEqual([expect.objectContaining({ dispatchId: 'dispatch-live' })])
+    expect(plan.ambiguousDispatchIds).toEqual([])
   })
 
   it('fails closed when two Dispatches claim one terminal identity', () => {
@@ -68,7 +64,6 @@ describe('legacy worker terminal recovery planning', () => {
 
     expect(plan.candidates).toEqual([])
     expect(plan.ambiguousDispatchIds).toEqual(['dispatch-1', 'dispatch-2'])
-    expect(plan.blockedPanes).toHaveLength(1)
   })
 
   it('does not trust malformed pane or process identities', () => {
@@ -80,7 +75,6 @@ describe('legacy worker terminal recovery planning', () => {
     ])
 
     expect(plan).toEqual({
-      blockedPanes: [],
       candidates: [],
       ambiguousDispatchIds: []
     })

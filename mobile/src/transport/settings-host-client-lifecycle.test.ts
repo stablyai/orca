@@ -1,3 +1,6 @@
+vi.mock('../notifications/push-registration', () => ({
+  attachPushRegistration: () => () => {}
+}))
 import { createElement, Fragment, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -18,6 +21,12 @@ const connectMock = vi.fn()
 const loadHostsMock = vi.fn()
 const routeFocus = vi.hoisted(() => ({
   effect: null as null | (() => void | (() => void))
+}))
+
+// Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.
+const descriptorProbe = vi.hoisted(() => ({ start: vi.fn(() => vi.fn()) }))
+vi.mock('./runtime-status-probe', () => ({
+  startRuntimeStatusProbe: (...args: unknown[]) => descriptorProbe.start(...args)
 }))
 
 vi.mock('expo-router', () => ({

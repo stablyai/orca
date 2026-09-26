@@ -19,8 +19,15 @@ function providerAnswering(answers: {
       }
       return { stdout: `${answers.localBranchHead}\n`, stderr: '' }
     }
-    if (args[0] === 'for-each-ref') {
-      return { stdout: `${answers.remoteRefs.join('\n')}\n`, stderr: '' }
+    if (args[0] === 'show-ref') {
+      const matches = answers.remoteRefs.filter((ref) => args.includes(ref))
+      if (matches.length > 0) {
+        return {
+          stdout: `${matches.map((ref) => `abc ${ref}`).join('\n')}\n`,
+          stderr: ''
+        }
+      }
+      throw Object.assign(new Error('missing remote ref'), { code: 1 })
     }
     throw new Error(`unexpected git ${args.join(' ')}`)
   })

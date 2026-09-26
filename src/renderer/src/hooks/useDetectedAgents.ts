@@ -155,17 +155,23 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       if (detectedIds === null) {
         void state.ensureRemoteDetectedAgents(targetId)
-      } else if (detectedIds.length === 0 && isNewRemoteTarget) {
-        // Why: a newly opened remote launch surface should get one fresh probe
-        // after a prior empty result, but must not spin while the host has no agents.
+      } else if (isNewRemoteTarget && detectedIds.length > 0) {
+        // Why: a host can install an agent after its cached list was populated;
+        // refresh once when a new launch surface first observes that host.
+        void state.refreshRemoteDetectedAgents(targetId)
+      } else if (isNewRemoteTarget) {
+        // Empty results are intentionally retryable through the normal probe.
         void state.ensureRemoteDetectedAgents(targetId)
       }
     } else if (targetKind === 'runtime' && targetId) {
       if (detectedIds === null) {
         void state.ensureRuntimeDetectedAgents(targetId)
-      } else if (detectedIds.length === 0 && isNewRemoteTarget) {
-        // Why: remote `orca serve` users can install/fix PATH without reconnecting;
-        // retry once per mounted surface so the menu can pick that up.
+      } else if (isNewRemoteTarget && detectedIds.length > 0) {
+        // Why: a host can install an agent after its cached list was populated;
+        // refresh once when a new launch surface first observes that host.
+        void state.refreshRuntimeDetectedAgents(targetId)
+      } else if (isNewRemoteTarget) {
+        // Empty results are intentionally retryable through the normal probe.
         void state.ensureRuntimeDetectedAgents(targetId)
       }
     } else {

@@ -1,12 +1,14 @@
 // The pill and choice-row primitives the session-option card is built from, kept
 // beside it so the card file stays about layout and apply wiring.
 
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Check, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import type {
-  SessionOptionDescriptor,
-  SessionOptionValue
+import {
+  sessionOptionValueMarker,
+  type SessionOptionDescriptor,
+  type SessionOptionValueMarker,
+  type SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
 
 /** Muted one-liner above a group — dispatch state, or why a row is locked. */
@@ -90,6 +92,42 @@ function ChoiceRow({
         ) : null}
       </View>
     </Pressable>
+  )
+}
+
+function ToggleRow({
+  label,
+  checked,
+  marker,
+  disabled,
+  grouped,
+  onToggle
+}: {
+  label: string
+  checked: boolean
+  /** Where the rendered value came from, or null once something picked it. */
+  marker: SessionOptionValueMarker | null
+  disabled: boolean
+  grouped: boolean
+  onToggle: (next: boolean) => void
+}): React.JSX.Element {
+  return (
+    <View style={[styles.row, grouped && styles.rowGrouped, disabled && styles.rowDisabled]}>
+      <View style={styles.rowBody}>
+        <Text style={styles.rowLabel}>{label}</Text>
+      </View>
+      {marker ? (
+        <Text style={styles.rowMarker}>{marker === 'default' ? 'Default' : 'Not reported'}</Text>
+      ) : null}
+      <Switch
+        accessibilityLabel={label}
+        value={checked}
+        onValueChange={onToggle}
+        disabled={disabled}
+        trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
+        thumbColor={colors.textPrimary}
+      />
+    </View>
   )
 }
 
@@ -191,31 +229,19 @@ export function DescriptorRows({
       />
     )
   }
-  // Unknown booleans leave both radios unselected instead of inventing truth.
+  // One switch, not an On/Off pair: the option is binary. The value always
+  // renders; the marker is what keeps an unpicked one from reading as confirmed,
+  // since the switch itself cannot say "nobody said".
   if (descriptor.kind.type === 'boolean') {
-    const current = descriptor.kind.currentValue
     return (
-      <>
-        {current === undefined ? (
-          <SessionOptionCaption>Current value unknown — pick On or Off</SessionOptionCaption>
-        ) : null}
-        <ChoiceRow
-          label="On"
-          selected={current === true}
-          disabled={locked}
-          grouped={grouped}
-          divided={grouped}
-          onPress={() => onSetOption(true)}
-        />
-        <ChoiceRow
-          label="Off"
-          selected={current === false}
-          disabled={locked}
-          grouped={grouped}
-          divided={false}
-          onPress={() => onSetOption(false)}
-        />
-      </>
+      <ToggleRow
+        label={descriptor.label}
+        checked={descriptor.kind.currentValue}
+        marker={sessionOptionValueMarker(descriptor)}
+        disabled={locked}
+        grouped={grouped}
+        onToggle={(next) => onSetOption(next)}
+      />
     )
   }
   const { currentValue, choices } = descriptor.kind
@@ -268,6 +294,10 @@ const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xs
+  },
+  rowMarker: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
   },
   row: {
     flexDirection: 'row',

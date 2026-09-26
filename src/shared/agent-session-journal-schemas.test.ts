@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AgentJournalItemBodySchema,
   isAdmissibleAgentJournalItemBody,
   isAdmissibleAgentJournalMessageBody,
   isAdmissibleAgentJournalRenderItem,
@@ -33,7 +34,15 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
       },
       { type: 'tool-call', name: 'Read', input: { path: 'a' } },
       { type: 'tool-result', output: 'ok', isError: false },
-      { type: 'image-ref', path: '/tmp/a.png', alt: 'screenshot' }
+      { type: 'image-ref', path: '/tmp/a.png', alt: 'screenshot' },
+      {
+        type: 'subagent-group',
+        groupId: 'claude-session:turn-1',
+        agents: [
+          { id: 'task-1', label: 'Explore', state: 'working', startedAt: 1_000 },
+          { id: 'task-2', label: 'Review', state: 'completed', tokens: 42, settledAt: 2_000 }
+        ]
+      }
     ]
   },
   { kind: 'tool-call', name: 'Read', input: undefined, state: 'running' },
@@ -41,8 +50,14 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
   { kind: 'diff', path: 'a.ts', patch: PAYLOAD },
   {
     kind: 'approval',
-    title: 'Run?',
-    detail: null,
+    title: 'Claude wants to present a plan',
+    displayName: 'Present plan',
+    description: 'Review the proposed implementation steps.',
+    decisionReason: 'Plan mode requires approval.',
+    blockedPath: '/repo/PLAN.md',
+    matchedAskRule: { source: 'project', toolName: 'ExitPlanMode', ruleContent: 'ask' },
+    subject: { kind: 'plan', text: '# Plan\n\n- Ship it', filePath: '/repo/PLAN.md' },
+    detail: '# Plan\n\n- Ship it',
     options: [{ id: 'a', label: 'Yes' }],
     resolution: RESOLUTION
   },
@@ -59,6 +74,29 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
     text: 'turn',
     turnLifecycle: { turnId: 'turn-1', state: 'running' },
     providerFrame: { provider: 'codex', kind: 'raw', payload: PAYLOAD }
+  },
+  {
+    kind: 'status',
+    text: 'turn',
+    turnLifecycle: { turnId: 'turn-2', state: 'completed', startedAt: 1_000, completedAt: 188_000 }
+  },
+  {
+    kind: 'status',
+    text: 'turn',
+    turnLifecycle: { turnId: 'turn-3', state: 'unverifiable', startedAt: 1_000 }
+  },
+  {
+    kind: 'status',
+    text: 'turn',
+    turnLifecycle: { turnId: 'turn-4', state: 'completed', outcome: 'failure', startedAt: 1_000 }
+  },
+  {
+    kind: 'turn',
+    turnId: 'turn-5',
+    state: 'interrupted',
+    outcome: 'cancellation',
+    startedAt: 1_000,
+    completedAt: 2_000
   }
 ]
 
@@ -143,6 +181,58 @@ describe('nested corruption is rejected', () => {
     ).toBe(false)
   })
 
+  it('rejects a subagent roster whose entries are malformed', () => {
+    // A KNOWN block type stays a known block: it must not fall through to the
+    // forward-tolerant arm just because its payload is wrong.
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'subagent-group', groupId: 'g', agents: [{ id: 'a', label: 'x' }] }]
+      })
+    ).toBe(false)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'subagent-group', groupId: 'g', agents: 'not-a-roster' }]
+      })
+    ).toBe(false)
+  })
+
+  it('keeps a state string a newer build might write admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'g',
+            agents: [{ id: 'a', label: 'x', state: 'some-future-state' }]
+          }
+        ]
+      })
+    ).toBe(true)
+  })
+
+  it('refuses an empty producer id, which a presence test would read as a subagent', () => {
+    const base = {
+      itemId: 'codex:t:turn:0',
+      revision: 1,
+      body: CANONICAL_BODIES[0] as AgentJournalItemBody,
+      sequence: 1,
+      observedAt: 1_000
+    }
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: 'task-1' })).toBe(true)
+    // `''` is PRESENT. Admitting it would hide the row from its own author on
+    // every parent-scoped surface — the defect linkage exists to remove.
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, agentId: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, parentAgentId: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, providerParentRef: '' })).toBe(false)
+    expect(isAdmissibleAgentJournalRenderItem({ ...base, producerKind: '' })).toBe(false)
+  })
+
   it('rejects shallow render items and submissions', () => {
     expect(
       isAdmissibleAgentJournalRenderItem({
@@ -187,5 +277,187 @@ describe('forward tolerance', () => {
         resolvedAt: null
       })
     ).toBe(true)
+  })
+
+  it('admits a turn outcome from a later vocabulary but rejects a non-string one', () => {
+    // Open like `state`: a verdict a newer build writes keeps the row readable,
+    // and `readAgentJournalTurnOutcome` is what stops it being acted on. A
+    // non-string stays fatal — the row is structurally wrong, not just newer.
+    const turn = { kind: 'turn', turnId: 'turn-1', state: 'completed' }
+    expect(isAdmissibleAgentJournalItemBody({ ...turn, outcome: 'partially-refused' })).toBe(true)
+    expect(isAdmissibleAgentJournalItemBody({ ...turn, outcome: 7 })).toBe(false)
+    expect(isAdmissibleAgentJournalItemBody({ ...turn, outcome: '' })).toBe(false)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'turn',
+        turnLifecycle: { turnId: 'turn-1', state: 'completed', outcome: 'partially-refused' }
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'turn',
+        turnLifecycle: { turnId: 'turn-1', state: 'completed', outcome: 7 }
+      })
+    ).toBe(false)
+  })
+})
+
+describe('optional notice metadata', () => {
+  it.each([
+    {},
+    { presentation: 'compaction' },
+    { presentation: 'plan-document' },
+    { tone: 'warning' },
+    { tone: 'error' },
+    { tone: 'notice' },
+    { presentation: 'future-presentation', tone: 'future-tone' }
+  ])('admits existing status and text kinds with %j', (metadata) => {
+    expect(
+      isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Readable fallback', ...metadata })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'text', text: 'Readable fallback', ...metadata }]
+      })
+    ).toBe(true)
+  })
+  it.each([{ tone: false }, { presentation: {} }])('rejects malformed metadata: %j', (metadata) => {
+    expect(isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Text', ...metadata })).toBe(
+      false
+    )
+  })
+})
+
+describe('optional tool annotations', () => {
+  const body = { kind: 'tool-call', name: 'shell', input: null, state: 'completed' }
+  it('admits old rows and rows with optional annotations without a new kind', () => {
+    expect(isAdmissibleAgentJournalItemBody(body)).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({ ...body, callId: 'call-1', exitCode: 0, durationMs: 0 })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        ...body,
+        webSearchResults: [{ title: 'Docs', url: 'https://example.com' }]
+      })
+    ).toBe(true)
+    const padded = AgentJournalItemBodySchema.safeParse({ ...body, callId: ' call-1 ' })
+    expect(padded.success).toBe(true)
+    if (padded.success && padded.data.kind === 'tool-call') {
+      expect(padded.data.callId).toBe(' call-1 ')
+    }
+  })
+  it('admits explicit MCP identity without constraining the raw name', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        ...body,
+        name: 'my_server/ns.tool',
+        mcpIdentity: { server: 'my_server', tool: 'ns.tool' }
+      })
+    ).toBe(true)
+  })
+  it.each([
+    { callId: '' },
+    { callId: ' \t' },
+    { callId: 1 },
+    { exitCode: '127' },
+    { exitCode: 1.5 },
+    { durationMs: -1 },
+    { webSearchResults: [null] }
+  ])('rejects malformed annotation %s', (metadata) =>
+    expect(isAdmissibleAgentJournalItemBody({ ...body, ...metadata })).toBe(false)
+  )
+
+  it('rejects whitespace-only provider IDs in message blocks too', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', name: 'shell', input: null, callId: '\n\t' }]
+      })
+    ).toBe(false)
+  })
+})
+
+describe('thread goal fields', () => {
+  const GOAL = {
+    objective: 'Ship the parser',
+    status: 'active',
+    tokenBudget: null,
+    tokensUsed: 0,
+    timeUsedSeconds: 0,
+    createdAt: 1_000,
+    updatedAt: 1_000
+  } as const
+
+  it('admits a user message sent as a goal and a typed goal transition', () => {
+    const bodies: AgentJournalItemBody[] = [
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'Ship the parser' }],
+        sentAs: 'goal'
+      },
+      {
+        kind: 'status',
+        text: 'Goal set: Ship the parser',
+        threadGoal: { state: 'set', goal: GOAL }
+      },
+      { kind: 'status', text: 'Goal cleared', threadGoal: { state: 'cleared' } }
+    ]
+    for (const body of bodies) {
+      expect(isAdmissibleAgentJournalItemBody(body)).toBe(true)
+    }
+    expect(isAdmissibleAgentJournalMessageBody(bodies[0])).toBe(true)
+  })
+
+  it('keeps a send mode or goal state a newer build writes admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'user',
+        blocks: [],
+        sentAs: 'scheduled'
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Goal archived',
+        threadGoal: { state: 'archived' }
+      })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, status: 'snoozed' } }
+      })
+    ).toBe(true)
+  })
+
+  it('rejects a malformed send mode or goal snapshot', () => {
+    for (const body of [
+      { kind: 'message', role: 'user', blocks: [], sentAs: 5 },
+      { kind: 'message', role: 'user', blocks: [], sentAs: '' },
+      { kind: 'status', text: 'Goal set', threadGoal: { state: 'set' } },
+      {
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, objective: null } }
+      },
+      {
+        kind: 'status',
+        text: 'Goal set',
+        threadGoal: { state: 'set', goal: { ...GOAL, timeUsedSeconds: 'soon' } }
+      },
+      { kind: 'status', text: 'Goal set', threadGoal: 'set' }
+    ]) {
+      expect(isAdmissibleAgentJournalItemBody(body)).toBe(false)
+    }
   })
 })

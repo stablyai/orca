@@ -1,15 +1,39 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import { OrcaRuntimeService } from '../../orca-runtime'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { REPO_SEARCH_REFS_MAX_LIMIT } from '../../../../shared/repo-search-limits'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
 describe('repo RPC methods', () => {
+  it('passes oversized safe ref-search limits to the runtime clamp', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      searchRepoRefs: vi.fn().mockResolvedValue({ refs: [], truncated: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.searchRefs', {
+        repo: 'id:repo-1',
+        query: 'main',
+        limit: REPO_SEARCH_REFS_MAX_LIMIT + 1
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true, result: { refs: [], truncated: true } })
+    expect(runtime.searchRepoRefs).toHaveBeenCalledWith(
+      'id:repo-1',
+      'main',
+      REPO_SEARCH_REFS_MAX_LIMIT + 1
+    )
+  })
+
   it('projects inherited visibility for old clients but preserves inheritance for capable clients', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -363,6 +387,43 @@ describe('repo RPC methods', () => {
       ok: true,
       result: { repo: { id: 'repo-1', forkSyncMode: 'safe-auto' } }
     })
+  })
+
+  it('persists normalized ghAccount bindings and clear sentinels', async () => {
+    const runtime = new OrcaRuntimeService(null)
+    vi.spyOn(runtime, 'updateRepo').mockResolvedValue({
+      id: 'repo-1',
+      path: '/srv/repo',
+      displayName: 'repo',
+      badgeColor: '#000000',
+      addedAt: 0,
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: { host: ' GitHub.COM ', user: ' Alice ' } }
+      }),
+      { clientCapabilities: [WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY] }
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', ghAccount: { host: 'github.com', user: 'Alice' } } }
+    })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: null }
+      })
+    )
+    expect(runtime.updateRepo).toHaveBeenLastCalledWith('repo-1', { ghAccount: null })
   })
 
   it('persists agent worktree visibility updates', async () => {

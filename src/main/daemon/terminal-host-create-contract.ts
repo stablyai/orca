@@ -24,6 +24,7 @@ export type CreateOrAttachOptions = {
   attachOnly?: boolean
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
+  terminalShellArgs?: string[]
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
@@ -54,4 +55,6 @@ export type CreateOrAttachResult = {
   attachToken: symbol
   incarnationId: PtyIncarnationId
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
+  /** Daemon-process verdict on the spawn cwd; only set on a fresh spawn that was given a cwd. */
+  cwdReadableByDaemon?: boolean
 }

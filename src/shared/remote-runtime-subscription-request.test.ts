@@ -214,6 +214,26 @@ describe('remote runtime subscription JSON requests', () => {
       )
     }
   )
+
+  // Why: `ws.on('message')` calls the frame router directly, so before this was guarded a consumer
+  // throw here left the emitter and became main_uncaught_exception, killing the whole app.
+  it('fails the subscription instead of crashing the process when a consumer throws', async () => {
+    const server = await createServer()
+    const onError = vi.fn<(error: unknown) => void>()
+    const onClose = vi.fn<() => void>()
+    await subscribe(server.pairing, {
+      onResponse: () => {
+        throw new Error('Unknown environment: env-1')
+      },
+      onError,
+      onClose
+    })
+
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'runtime_error', message: 'Unknown environment: env-1' })
+    )
+  })
 })
 
 function requireSender(subscription: RemoteRuntimeSubscription) {
@@ -262,7 +282,8 @@ async function createServer(options: ServerOptions = {}): Promise<{
   const nextRequest = new Promise<unknown>((resolve) => {
     resolveRequest = resolve
   })
-  const wss = new WebSocketServer({ port: 0 })
+  // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+  const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   servers.push(wss)
   wss.on('connection', (ws) => {
     let sharedKey: Uint8Array | null = null

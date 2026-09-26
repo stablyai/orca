@@ -19,6 +19,7 @@ export function clearPendingSectionReloadTimers(timers: Map<number, number>): vo
 // and for the callback refs that break the loader <-> retry cycle.
 export type CombinedDiffSectionLoadRegistry = {
   generationRef: React.RefObject<number>
+  deferredLoadRequestsRef: React.RefObject<Set<number>>
   loadSchedulerRef: React.RefObject<CombinedDiffLoadScheduler>
   loadSectionRef: React.RefObject<(index: number) => Promise<void>>
   loadedIndicesRef: React.RefObject<Set<number>>
@@ -36,6 +37,7 @@ export function useCombinedDiffSectionLoadRegistry(
 ): CombinedDiffSectionLoadRegistry {
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
+  const deferredLoadRequestsRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
   // Why: per-section reload token, so a sibling's reload can't discard this section's in-flight load.
@@ -45,11 +47,10 @@ export function useCombinedDiffSectionLoadRegistry(
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
   const retrySectionRef = useRef<(index: number) => void>(() => {})
   const requestSectionReloadRef = useRef<(index: number) => void>(() => {})
-  const loadSchedulerRef = useRef(
-    createCombinedDiffLoadScheduler({
-      loadSection: (index) => loadSectionRef.current(index)
-    })
-  )
+  const loadSchedulerRef = useRef<ReturnType<typeof createCombinedDiffLoadScheduler>>(undefined!)
+  loadSchedulerRef.current ??= createCombinedDiffLoadScheduler({
+    loadSection: (index) => loadSectionRef.current(index)
+  })
   sectionsRef.current = sections
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export function useCombinedDiffSectionLoadRegistry(
 
   return {
     generationRef,
+    deferredLoadRequestsRef,
     loadSchedulerRef,
     loadSectionRef,
     loadedIndicesRef,

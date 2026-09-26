@@ -1,0 +1,595 @@
+{
+  "operation": "session.tab-close",
+  "family": "session.tab-rename",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "scenarioSha256": "55c461287c1d8fb6de3c4fe28f801d095678dcf52bfcce39c336c9d61e8be908",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "056772c9ebd6": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "renamed": true
+          }
+        }
+      }
+    },
+    "0923ddf47a9b": {
+      "name": "fetch-terminals",
+      "ordinal": 3,
+      "value": {}
+    },
+    "1d611ce0704b": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "24798624fc93": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "330257f904ce": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "3e15def58214": {
+      "activeHandle": "terminal-1",
+      "sessionTabs": [
+        {
+          "id": "tab-1",
+          "isActive": true,
+          "terminal": "terminal-1",
+          "title": "Terminal",
+          "type": "terminal"
+        }
+      ],
+      "terminals": [
+        {
+          "handle": "terminal-1",
+          "isActive": true,
+          "title": "Terminal"
+        }
+      ]
+    },
+    "42b6d6d7fdf9": {
+      "activeHandle": "terminal-1",
+      "sessionTabs": [
+        {
+          "id": "tab-1",
+          "isActive": true,
+          "terminal": "terminal-1",
+          "title": "Terminal",
+          "type": "terminal"
+        }
+      ],
+      "terminals": [
+        {
+          "handle": "terminal-1",
+          "isActive": true,
+          "title": "build"
+        }
+      ]
+    },
+    "5edef2bfcf88": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "638bebed5ea5": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "7e43ade02444": {
+      "name": "terminal.rename#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.rename\",\"params\":{\"terminal\":\"terminal-1\",\"title\":\"build\"}}"
+    },
+    "83eae96b12ce": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "a40fd2ac2d57": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "cc17876206bc": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "e2f83d8cb4f5": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f534030ca3f7": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.tab-rename-terminal.rename-1",
+    "checkpoints": [
+      {
+        "id": "session-tab-renamed.normal:renamed",
+        "observation": {
+          "sender": ["056772c9ebd6"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "42b6d6d7fdf9",
+          "effects": ["0923ddf47a9b"]
+        }
+      },
+      {
+        "id": "session-tab-renamed.result-absent:renamed",
+        "observation": {
+          "sender": ["e2f83d8cb4f5"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "42b6d6d7fdf9",
+          "effects": ["0923ddf47a9b"]
+        }
+      },
+      {
+        "id": "session-tab-renamed.result-null:renamed",
+        "observation": {
+          "sender": ["83eae96b12ce"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "42b6d6d7fdf9",
+          "effects": ["0923ddf47a9b"]
+        }
+      },
+      {
+        "id": "session-tab-renamed.inner-ok-missing:renamed",
+        "observation": {
+          "sender": ["330257f904ce"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "42b6d6d7fdf9",
+          "effects": ["0923ddf47a9b"]
+        }
+      },
+      {
+        "id": "session-tab-renamed.inner-false-string-error:renamed",
+        "observation": {
+          "sender": ["24798624fc93"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "42b6d6d7fdf9",
+          "effects": ["0923ddf47a9b"]
+        }
+      },
+      {
+        "id": "session-tab-renamed.inner-false-object-error:renamed",
+        "observation": {
+          "sender": ["1d611ce0704b"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "42b6d6d7fdf9",
+          "effects": ["0923ddf47a9b"]
+        }
+      },
+      {
+        "id": "session-tab-renamed.outer-refused:renamed",
+        "observation": {
+          "sender": ["638bebed5ea5"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "3e15def58214",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-renamed.outer-refused-no-message:renamed",
+        "observation": {
+          "sender": ["cc17876206bc"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "3e15def58214",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-renamed.method-not-found:renamed",
+        "observation": {
+          "sender": ["5edef2bfcf88"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "3e15def58214",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-renamed.transport-rejection:renamed",
+        "observation": {
+          "sender": ["f534030ca3f7"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "3e15def58214",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-tab-renamed.transport-rejection-no-message:renamed",
+        "observation": {
+          "sender": ["a40fd2ac2d57"],
+          "payloads": ["7e43ade02444"],
+          "settlements": {
+            "rename": "eb79a9b3682a"
+          },
+          "state": "3e15def58214",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
+import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../shared/terminal-exit-cause'
 
 const mockSubscribeToPtyData = vi.fn()
 const mockSubscribeToPtyExit = vi.fn()
@@ -151,6 +152,51 @@ describe('observeExistingAutomationSession', () => {
       { connectionId: null }
     )
     expect(onAgentStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a runtime wait that carried no status as unverified, not as a clean exit', async () => {
+    // `exitCode ?? 0` fabricated a clean finish out of an absent status, so a
+    // host that answered without one was read as a completed automation.
+    state.terminalLayoutsByTabId = {
+      'tab-1': { ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-9' } }
+    }
+    state.ptyIdsByTabId = { 'tab-1': ['remote:env-1@@terminal-9'] }
+    mockCallRuntimeRpc.mockResolvedValue({ wait: {} })
+    const onExit = vi.fn()
+    const { observeExistingAutomationSession } = await import('./automation-session-observer')
+
+    await observeExistingAutomationSession({
+      ptyId: 'remote:env-1@@terminal-9',
+      paneKey: PANE_KEY,
+      runId: 'run-1',
+      onData: vi.fn(),
+      onAgentStatus: vi.fn(),
+      onExit
+    })
+
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledTimes(1))
+    expect(onExit).toHaveBeenCalledWith(UNVERIFIED_PROCESS_EXIT_CODE)
+  })
+
+  it('still forwards a status the runtime host did report', async () => {
+    state.terminalLayoutsByTabId = {
+      'tab-1': { ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-9' } }
+    }
+    state.ptyIdsByTabId = { 'tab-1': ['remote:env-1@@terminal-9'] }
+    mockCallRuntimeRpc.mockResolvedValue({ wait: { exitCode: 0 } })
+    const onExit = vi.fn()
+    const { observeExistingAutomationSession } = await import('./automation-session-observer')
+
+    await observeExistingAutomationSession({
+      ptyId: 'remote:env-1@@terminal-9',
+      paneKey: PANE_KEY,
+      runId: 'run-1',
+      onData: vi.fn(),
+      onAgentStatus: vi.fn(),
+      onExit
+    })
+
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledWith(0))
   })
 
   it('stamps the exact SSH PTY in the legacy renderer fallback', async () => {

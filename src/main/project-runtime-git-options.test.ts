@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from './persistence'
 import type { Project } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
 import {
   getLocalProjectGitExecOptions,
+  getWorktreeCreatePrefetchGitOptions,
   getWorktreeMirrorDistro,
   resolveLocalProjectRuntimeForRepo
 } from './project-runtime-git-options'
@@ -173,6 +174,55 @@ describe('project runtime git options', () => {
       _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
 
       expect(withPlatform('win32', () => getWorktreeMirrorDistro({}, makeRepo()))).toBeUndefined()
+    })
+  })
+
+  describe('getWorktreeCreatePrefetchGitOptions', () => {
+    it('routes the warm-up through the distro a resolved WSL project runs in', () => {
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+
+      expect(
+        withPlatform('win32', () =>
+          getWorktreeCreatePrefetchGitOptions(makeStore(project), makeRepo())
+        )
+      ).toEqual({ wslDistro: 'Ubuntu' })
+    })
+
+    // A speculative warm-up must degrade to the host Git it used before routing
+    // existed, never surface the repair state git execution raises.
+    it('falls back to host git instead of throwing when the runtime needs repair', () => {
+      _setWslCachesForTests({ available: true, distros: ['Debian'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+
+      expect(
+        withPlatform('win32', () =>
+          getWorktreeCreatePrefetchGitOptions(makeStore(project), makeRepo())
+        )
+      ).toEqual({})
+    })
+
+    it('does not resolve a project runtime for folder workspaces', () => {
+      _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+      const project = makeProject({
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      })
+      const store = makeStore(project)
+      const getProjects = vi.fn(store.getProjects)
+
+      expect(
+        withPlatform('win32', () =>
+          getWorktreeCreatePrefetchGitOptions(
+            { ...store, getProjects } as unknown as Store,
+            makeRepo({ kind: 'folder' })
+          )
+        )
+      ).toEqual({})
+      expect(getProjects).not.toHaveBeenCalled()
     })
   })
 

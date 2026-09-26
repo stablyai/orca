@@ -15,11 +15,38 @@ const PROBE_TIMEOUT_MS = 10_000
 export const WSL_GIT_READ_ENVIRONMENT_WAIT_MS = 1_500
 const PROBE_MAX_BUFFER = 64 * 1024
 const TRANSIENT_PROBE_RETRY_MS = 30_000
+const MAX_WSL_GIT_READ_ENVIRONMENT_DISTROS = 128
 const environmentByDistro = new Map<string, Promise<WslGitReadEnvironment | null>>()
 // Why the null entries matter: a settled "no direct route" answer is what lets a read skip the
 // bounded probe wait entirely instead of racing an already-decided promise on every call.
 const settledEnvironmentByDistro = new Map<string, WslGitReadEnvironment | null>()
 const transientRetryAfterByDistro = new Map<string, number>()
+
+function touchDistroState(distro: string): void {
+  const settled = settledEnvironmentByDistro.get(distro)
+  if (settledEnvironmentByDistro.has(distro)) {
+    settledEnvironmentByDistro.delete(distro)
+    settledEnvironmentByDistro.set(distro, settled ?? null)
+  }
+  while (settledEnvironmentByDistro.size > MAX_WSL_GIT_READ_ENVIRONMENT_DISTROS) {
+    const oldest = settledEnvironmentByDistro.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    settledEnvironmentByDistro.delete(oldest)
+    environmentByDistro.delete(oldest)
+    transientRetryAfterByDistro.delete(oldest)
+  }
+  while (environmentByDistro.size > MAX_WSL_GIT_READ_ENVIRONMENT_DISTROS) {
+    const oldest = environmentByDistro.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    environmentByDistro.delete(oldest)
+    settledEnvironmentByDistro.delete(oldest)
+    transientRetryAfterByDistro.delete(oldest)
+  }
+}
 
 type ProbeOutcome =
   | { kind: 'resolved'; environment: WslGitReadEnvironment }
@@ -95,17 +122,21 @@ export function getWslGitReadEnvironment(distro: string): Promise<WslGitReadEnvi
       }
       if (outcome.kind === 'resolved') {
         settledEnvironmentByDistro.set(distro, outcome.environment)
+        touchDistroState(distro)
         transientRetryAfterByDistro.delete(distro)
         return outcome.environment
       }
       settledEnvironmentByDistro.set(distro, null)
+      touchDistroState(distro)
       if (outcome.kind === 'transient') {
         transientRetryAfterByDistro.set(distro, Date.now() + TRANSIENT_PROBE_RETRY_MS)
       }
       return null
     })
     environmentByDistro.set(distro, environment)
+    touchDistroState(distro)
   }
+  touchDistroState(distro)
   return environment
 }
 
@@ -133,6 +164,7 @@ export function invalidateWslGitReadEnvironment(distro: string): void {
 export function disableWslGitReadEnvironment(distro: string): void {
   environmentByDistro.set(distro, Promise.resolve(null))
   settledEnvironmentByDistro.set(distro, null)
+  touchDistroState(distro)
   transientRetryAfterByDistro.delete(distro)
 }
 
@@ -148,5 +180,6 @@ export function seedWslGitReadEnvironmentForTests(
 ): void {
   environmentByDistro.set(distro, Promise.resolve(environment))
   settledEnvironmentByDistro.set(distro, environment)
+  touchDistroState(distro)
   transientRetryAfterByDistro.delete(distro)
 }

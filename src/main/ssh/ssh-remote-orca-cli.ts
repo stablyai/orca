@@ -1,4 +1,5 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
 import { projectRemoteAppStatus } from '../../shared/cli-app-status-projection'
 import { randomUUID } from 'node:crypto'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
@@ -20,6 +21,7 @@ import {
   optionalRemoteCliNumber,
   optionalRemoteCliString,
   parseRemoteCliArgs,
+  readRemoteRetryRequestFlag,
   requiredRemoteCliString,
   resolveRemoteCliHandle
 } from './ssh-remote-cli-args'
@@ -155,7 +157,7 @@ async function dispatchRemoteCli(
   const compatibilityEnvelope: RuntimeOrchestrationEnvelope = {
     compatibilityInvocationId: randomUUID(),
     orchestrationRequestId:
-      optionalRemoteCliString(parsed.flags, 'retry-request') ??
+      readRemoteRetryRequestFlag(parsed.flags) ??
       (command === 'orchestration check' || command === 'orchestration ask'
         ? randomUUID()
         : undefined),
@@ -182,7 +184,11 @@ async function dispatchRemoteCli(
         runtime: {
           state: status.graphStatus === 'ready' ? 'ready' : 'graph_not_ready',
           reachable: true,
-          runtimeId: status.runtimeId
+          connectionState: runtimeHostConnectionState({ hasStatusEntry: true, status }),
+          runtimeId: status.runtimeId,
+          // Why: `status.get` ran in-process on the execution host, so these ARE that host's
+          // capabilities; dropping them made `--shell` report an outdated host instead of SSH.
+          ...(status.capabilities ? { capabilities: status.capabilities } : {})
         },
         graph: { state: status.graphStatus }
       }

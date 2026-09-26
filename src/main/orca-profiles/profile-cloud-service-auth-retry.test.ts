@@ -53,6 +53,7 @@ vi.mock('./profile-cloud-pkce', () => ({
 
 vi.mock('./profile-cloud-client', () => ({
   OrcaCloudRequestError: OrcaCloudRequestErrorMock,
+  isAmbiguousCloudRequestFailure: (error: unknown) => !(error instanceof OrcaCloudRequestErrorMock),
   createOrcaCloudProfile: createOrcaCloudProfileMock,
   exchangeOrcaCloudAuthCode: exchangeOrcaCloudAuthCodeMock,
   refreshOrcaCloudCapabilities: refreshOrcaCloudCapabilitiesMock,

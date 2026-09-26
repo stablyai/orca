@@ -16,6 +16,6 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
   registerGitHubPRReviewHandlers(store)
   registerGitHubPRMutationHandlers(store)
   registerGitHubIssueMutationHandlers(store)
-  registerGitHubAccountHandlers()
+  registerGitHubAccountHandlers(store)
   registerGitHubProjectViewHandlers()
 }

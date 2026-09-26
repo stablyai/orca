@@ -67,6 +67,65 @@ describe('running WSL distro discovery', () => {
     })
   })
 
+  it('rejects stale running state for launch admission through failure and backoff', async () => {
+    vi.useFakeTimers()
+    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      callback(null, 'Ubuntu\n')
+    })
+
+    await withPlatform('win32', async () => {
+      await expect(listRunningWslDistrosAsync()).resolves.toEqual(['Ubuntu'])
+      execFileMock.mockImplementation((_command, _args, _options, callback) => {
+        callback(new Error('wsl unavailable'), '')
+      })
+      const paths = ['\\\\wsl.localhost\\Ubuntu\\home\\ada']
+      await expect(
+        filterPathsToRunningWslDistrosAsync(paths, { requireConfirmed: true })
+      ).rejects.toThrow('discovery is unavailable')
+      await expect(listRunningWslDistrosAsync()).resolves.toEqual(['Ubuntu'])
+      await expect(listRunningWslDistrosAsync({ requireConfirmed: true })).rejects.toThrow(
+        'discovery is unavailable'
+      )
+      expect(execFileMock).toHaveBeenCalledTimes(2)
+
+      execFileMock.mockImplementation((_command, _args, _options, callback) => {
+        callback(null, '')
+      })
+      await vi.advanceTimersByTimeAsync(15_001)
+      await expect(
+        filterPathsToRunningWslDistrosAsync(paths, { requireConfirmed: true })
+      ).resolves.toEqual([])
+      expect(execFileMock).toHaveBeenCalledTimes(3)
+    })
+  })
+
+  it.each([true, false])(
+    'shares the probe while preserving admission and observer failure policies (strict first: %s)',
+    async (strictFirst) => {
+      execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, 'Ubuntu\n')
+      })
+
+      await withPlatform('win32', async () => {
+        await listRunningWslDistrosAsync()
+        let finishProbe: ((error: Error | null, output: string) => void) | undefined
+        execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+          finishProbe = callback
+        })
+        const first = listRunningWslDistrosAsync({ requireConfirmed: strictFirst })
+        const second = listRunningWslDistrosAsync({ requireConfirmed: !strictFirst })
+        const strict = strictFirst ? first : second
+        const observer = strictFirst ? second : first
+        const rejected = expect(strict).rejects.toThrow('discovery is unavailable')
+        expect(execFileMock).toHaveBeenCalledTimes(2)
+        finishProbe?.(new Error('wsl unavailable'), '')
+        await rejected
+        await expect(observer).resolves.toEqual(['Ubuntu'])
+        expect(execFileMock).toHaveBeenCalledTimes(2)
+      })
+    }
+  )
+
   it('resolves homes only for the running distro set', async () => {
     execFileMock.mockImplementation((_command, args, _options, callback) => {
       callback(null, args.includes('--running') ? 'Ubuntu\n' : '/home/ada\n')
@@ -136,6 +195,21 @@ describe('running WSL distro discovery', () => {
       expect(
         execFileMock.mock.calls.filter(([, args]) => args.includes('echo $HOME'))
       ).toHaveLength(1)
+    })
+  })
+
+  it('shares a confirmed fresh probe between discovery and launch admission', async () => {
+    execFileMock.mockImplementationOnce((_command, _args, _options, callback) =>
+      callback(null, 'Ubuntu\n')
+    )
+    await withPlatform('win32', async () => {
+      expect(
+        await Promise.all([
+          listRunningWslDistrosAsync(),
+          listRunningWslDistrosAsync({ requireConfirmed: true })
+        ])
+      ).toEqual([['Ubuntu'], ['Ubuntu']])
+      expect(execFileMock).toHaveBeenCalledOnce()
     })
   })
 

@@ -1,7 +1,11 @@
 import type { AgentJournalMessageItem, AgentJournalSubmission } from './agent-session-journal-types'
 import { agentSessionRefusalOperationState } from './agent-session-refusal-retry'
-import type { AgentSessionWireRefusalCode } from './agent-session-wire'
+import type {
+  AgentSessionMutationEnvelope,
+  AgentSessionWireRefusalCode
+} from './agent-session-wire'
 import { structuredAgentSessionPayloadFingerprint } from './structured-agent-session-mutation'
+import { DISPATCH_REJECTED_CANCELLED } from './structured-agent-session-dispatch-rejection'
 
 export type StructuredAgentSessionOutboxState = 'queued' | 'dispatching' | 'unconfirmed'
 
@@ -14,6 +18,7 @@ export type StructuredAgentSessionOutboxEntry = {
   queuedAt: number
   lastAttemptAt: number | null
   retryAfterUnknownSubmittedAt: number | null
+  source?: 'launch'
 }
 
 export type StructuredAgentSessionAttachment = {
@@ -71,15 +76,23 @@ export function updateStructuredAgentSessionOutboxEntry(
 export function requeueStructuredAgentSessionSendRefusal(
   entry: StructuredAgentSessionOutboxEntry,
   code: AgentSessionWireRefusalCode,
-  createOperationId: () => string
+  createOperationId: () => string,
+  retainOperationId = false
 ): StructuredAgentSessionOutboxEntry {
-  if (agentSessionRefusalOperationState('agentSession.send', code) !== 'settled-rejected') {
+  const refusalState = agentSessionRefusalOperationState(code)
+  if (
+    refusalState !== 'settled-rejected' ||
+    retainOperationId ||
+    entry.state === 'unconfirmed' ||
+    entry.retryAfterUnknownSubmittedAt !== null
+  ) {
     return { ...entry, state: 'queued' }
   }
   return {
     ...entry,
     clientMessageId: createOperationId(),
     state: 'queued',
+    lastAttemptAt: null,
     retryAfterUnknownSubmittedAt: null
   }
 }
@@ -95,6 +108,15 @@ export function reconcileStructuredAgentSessionOutbox(
       return []
     }
     if (
+      submission?.dispatchState === 'rejected' &&
+      submission.reason === DISPATCH_REJECTED_CANCELLED
+    ) {
+      return []
+    }
+    if (submission?.dispatchState === 'pending') {
+      return entry.state === 'dispatching' ? [entry] : [{ ...entry, state: 'dispatching' as const }]
+    }
+    if (
       submission?.dispatchState === 'unknown' &&
       entry.retryAfterUnknownSubmittedAt !== -1 &&
       entry.retryAfterUnknownSubmittedAt !== submission.submittedAt
@@ -103,6 +125,36 @@ export function reconcileStructuredAgentSessionOutbox(
     }
     return [entry]
   })
+}
+
+export type StructuredAgentSessionOutboxAdmission =
+  | { state: 'dispatch'; entry: StructuredAgentSessionOutboxEntry }
+  | { state: 'blocked'; entry: StructuredAgentSessionOutboxEntry }
+  | { state: 'idle'; entry: null }
+
+/**
+ * What the queue does next. The drain and the Retry affordance both read it, so neither can
+ * disagree with the other about which entry is holding the queue.
+ *
+ * A `dispatching` entry is not a barrier: the host appended its journal row inside the
+ * per-session serialize chain before dispatching, so nothing behind it can overtake it, and
+ * waiting for its echo costs delivery of everything queued behind it. An `unconfirmed` entry,
+ * or one the user must act on, is a barrier — sending past either would reorder around a
+ * message that may yet land.
+ */
+export function admitStructuredAgentSessionOutboxEntry(
+  entries: readonly StructuredAgentSessionOutboxEntry[],
+  blockedClientMessageId: string | null
+): StructuredAgentSessionOutboxAdmission {
+  for (const entry of entries) {
+    if (entry.state === 'unconfirmed' || entry.clientMessageId === blockedClientMessageId) {
+      return { state: 'blocked', entry }
+    }
+    if (entry.state === 'queued') {
+      return { state: 'dispatch', entry }
+    }
+  }
+  return { state: 'idle', entry: null }
 }
 
 export function parseStructuredAgentSessionOutboxEntry(
@@ -139,14 +191,22 @@ export function parseStructuredAgentSessionOutboxEntry(
     retryAfterUnknownSubmittedAt:
       typeof entry.retryAfterUnknownSubmittedAt === 'number'
         ? entry.retryAfterUnknownSubmittedAt
-        : null
+        : null,
+    ...(entry.source === 'launch' ? { source: 'launch' as const } : {})
   }
 }
 
-export function structuredAgentSessionSendRequest(
+export type StructuredAgentSessionSendMutation = {
+  envelope: AgentSessionMutationEnvelope
+  body: AgentJournalMessageItem
+}
+
+/** The `agentSession.send` arguments an entry stands for. Typed rather than wire-shaped so a host
+ *  calling its own send path builds the same envelope a client would, fingerprint included. */
+export function structuredAgentSessionSendMutation(
   entry: StructuredAgentSessionOutboxEntry,
   expectedRuntimeFence: number
-): Record<string, unknown> {
+): StructuredAgentSessionSendMutation {
   const fields = { body: entry.body }
   return {
     envelope: {
@@ -159,9 +219,15 @@ export function structuredAgentSessionSendRequest(
         fields
       })
     },
-    ...(entry.retryAfterUnknownSubmittedAt !== null ? { retryUnknown: true } : {}),
     ...fields
   }
+}
+
+export function structuredAgentSessionSendRequest(
+  entry: StructuredAgentSessionOutboxEntry,
+  expectedRuntimeFence: number
+): Record<string, unknown> {
+  return structuredAgentSessionSendMutation(entry, expectedRuntimeFence)
 }
 
 export type StructuredAgentSessionSendFailure = 'delivery-unknown' | 'failed'

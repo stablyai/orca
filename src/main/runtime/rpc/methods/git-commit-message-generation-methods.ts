@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
 import {
@@ -13,6 +13,7 @@ type CommitMessageGenerationOverride = {
   sourceControlAi?: GlobalSettings['sourceControlAi']
   sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
   agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
+  defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
   commitMessageDiscoveryHostKey?: string
 }
 
@@ -23,6 +24,7 @@ function buildCommitMessageGenerationOverride(params: {
   sourceControlAi?: unknown
   sourceControlAiResolvedParams?: unknown
   agentCmdOverrides?: unknown
+  defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
   commitMessageDiscoveryHostKey?: string
 }): CommitMessageGenerationOverride | undefined {
   if (
@@ -30,6 +32,7 @@ function buildCommitMessageGenerationOverride(params: {
     params.sourceControlAi === undefined &&
     params.sourceControlAiResolvedParams === undefined &&
     params.agentCmdOverrides === undefined &&
+    params.defaultTuiAgent === undefined &&
     params.commitMessageDiscoveryHostKey === undefined
   ) {
     return undefined
@@ -52,13 +55,14 @@ function buildCommitMessageGenerationOverride(params: {
           agentCmdOverrides: params.agentCmdOverrides as GlobalSettings['agentCmdOverrides']
         }
       : {}),
+    ...(params.defaultTuiAgent !== undefined ? { defaultTuiAgent: params.defaultTuiAgent } : {}),
     ...(params.commitMessageDiscoveryHostKey !== undefined
       ? { commitMessageDiscoveryHostKey: params.commitMessageDiscoveryHostKey }
       : {})
   }
 }
 
-export const GIT_COMMIT_MESSAGE_GENERATION_METHODS: RpcMethod[] = [
+export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
   defineMethod({
     name: 'git.generateCommitMessage',
     params: GitGenerateCommitMessage,

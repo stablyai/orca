@@ -4,6 +4,13 @@ import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from './command-token-scanner'
+import {
+  comparablePath,
+  findInterpreterEntrypointToken,
+  PYTHON_PROCESS_RE,
+  tokenizeCommandLine
+} from './agent-command-line-entrypoint'
+import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
@@ -27,31 +34,13 @@ function normalizeProcessName(
   return withoutProcessExtension
 }
 
-const STATIC_INTERPRETER_PROCESS_NAMES = new Set([
-  'node',
-  'python',
-  'python3',
-  'bash',
-  'zsh',
-  'sh',
-  'fish',
-  'pwsh',
-  'powershell'
-])
-
 const FOREGROUND_AGENT_WRAPPER_PROCESS_NAMES = new Set(['node', 'python', 'python3'])
-const PYTHON_PROCESS_RE = /^python(?:\d+(?:\.\d+)*)?$/
-const INTERPRETER_OPTIONS_WITH_VALUE = new Set([
-  '-r',
-  '--require',
-  '--import',
-  '--loader',
-  '--experimental-loader'
-])
-const INTERPRETER_OPTIONS_WITH_INLINE_SOURCE = new Set(['-e', '--eval', '-p', '--print', '--check'])
 const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
   codex: ['node_modules/@openai/codex/'],
-  gemini: ['node_modules/@google/gemini-cli/']
+  gemini: ['node_modules/@google/gemini-cli/'],
+  // Why: ZCode's npm bin is `dist/zcode.cjs`, so a package install runs as `node …zcode.cjs`
+  // and never shows `zcode` as the foreground name (a SEA build still matches by name).
+  zcode: ['node_modules/@zcode/cli/']
 }
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
@@ -93,113 +82,18 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
   }
+  // Why: the `muse` launcher script execs a versioned `muse-bin-<version>` binary, so
+  // the foreground name never equals `muse` itself. The `muse-bin-` prefix also covers
+  // comm-truncated rows (`muse-bin-1.0.3-R`) without matching unrelated `muse-*` tools.
+  if (normalized.startsWith('muse-bin-')) {
+    return PROCESS_TO_AGENT.get('muse')
+  }
   return undefined
 }
 
 function recognizedAgentForProcess(normalized: string): RecognizedAgentProcess | null {
   const agent = agentForNormalizedProcess(normalized)
   return agent ? { agent, processName: normalized } : null
-}
-
-function tokenizeCommandLine(commandLine: string): string[] {
-  const tokens: string[] = []
-  let current = ''
-  let quote: '"' | "'" | null = null
-  let escaped = false
-  for (let index = 0; index < commandLine.length; index += 1) {
-    const char = commandLine[index]
-    if (escaped) {
-      current += char
-      escaped = false
-      continue
-    }
-    if (char === '\\' && quote !== "'") {
-      const next = commandLine[index + 1]
-      if (next && (/\s/.test(next) || next === '"' || next === "'" || next === '\\')) {
-        escaped = true
-        continue
-      }
-    }
-    if ((char === '"' || char === "'") && quote === null) {
-      quote = char
-      continue
-    }
-    if (quote === char) {
-      quote = null
-      continue
-    }
-    if (/\s/.test(char) && quote === null) {
-      if (current) {
-        tokens.push(current)
-        current = ''
-      }
-      continue
-    }
-    current += char
-  }
-  if (current) {
-    tokens.push(current)
-  }
-  return tokens
-}
-
-function tokenLooksExecutable(token: string, index: number, firstNormalized: string): boolean {
-  if (index === 0) {
-    return true
-  }
-  if (!isInterpreterProcessName(firstNormalized)) {
-    return false
-  }
-  // Why: only inspect interpreter script paths. Prompt text can mention other
-  // agents ("compare opencode vs orca"), and treating every argv token as an
-  // executable would reintroduce the substring-style false identity class that
-  // foreground-process detection is meant to avoid.
-  return token.includes('/') || token.includes('\\') || PROCESS_EXTENSION_RE.test(token)
-}
-
-function isInterpreterProcessName(normalized: string): boolean {
-  return STATIC_INTERPRETER_PROCESS_NAMES.has(normalized) || PYTHON_PROCESS_RE.test(normalized)
-}
-
-const isPythonProcessName = (normalized: string): boolean => PYTHON_PROCESS_RE.test(normalized)
-
-const optionName = (token: string): string => token.split('=', 1)[0] ?? ''
-
-function findInterpreterEntrypointToken(tokens: string[], firstNormalized: string): string | null {
-  if (!isInterpreterProcessName(firstNormalized)) {
-    return null
-  }
-  for (let index = 1; index < tokens.length; index += 1) {
-    const token = tokens[index]
-    if (token === '--') {
-      continue
-    }
-    if (isPythonProcessName(firstNormalized) && token === '-m') {
-      return tokens[index + 1] ?? null
-    }
-    if (token.startsWith('-')) {
-      const name = optionName(token)
-      if (INTERPRETER_OPTIONS_WITH_INLINE_SOURCE.has(name)) {
-        return null
-      }
-      if (INTERPRETER_OPTIONS_WITH_VALUE.has(name) && name === token) {
-        index += 1
-      }
-      continue
-    }
-    if (tokenLooksExecutable(token, index, firstNormalized)) {
-      return token
-    }
-  }
-  return null
-}
-
-function comparablePath(token: string): string {
-  return token
-    .trim()
-    .replace(/^["']|["']$/g, '')
-    .replace(/\\/g, '/')
-    .toLowerCase()
 }
 
 function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | null {
@@ -254,6 +148,10 @@ function recognizePythonEntrypoint(
   return recognizeAgentProcess(entrypoint) ?? recognizePythonScriptEntrypoint(entrypoint)
 }
 
+// Why: `muse` execs a versioned `muse-bin-<version>` binary (see above), so the
+// exact-name check never matches and readiness/follow-up delivery would stall.
+// Scoped to muse: a generic `-suffix` rule would misclassify short agent names
+// (see the ante-obsidian test).
 export function isExpectedAgentProcess(
   processName: string | null | undefined,
   expectedProcess: string
@@ -265,7 +163,8 @@ export function isExpectedAgentProcess(
   }
   return (
     normalizedProcess === normalizedExpected ||
-    normalizedProcess.startsWith(`${normalizedExpected}.`)
+    normalizedProcess.startsWith(`${normalizedExpected}.`) ||
+    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
   )
 }
 
@@ -286,10 +185,13 @@ export function recognizeAgentProcessFromCommandLine(
   if (!commandLine) {
     return null
   }
+  if (isFreshOmpLaunchCommand(commandLine)) {
+    return recognizedAgentForProcess('omp')
+  }
   const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
-  let direct = recognizeAgentProcess(tokens[0])
+  let direct = recognizedAgentForProcess(firstNormalized)
   // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
   if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
     direct = null
@@ -302,7 +204,7 @@ export function recognizeAgentProcessFromCommandLine(
   if (!entrypoint) {
     return null
   }
-  const viaEntrypoint = isPythonProcessName(firstNormalized)
+  const viaEntrypoint = PYTHON_PROCESS_RE.test(firstNormalized)
     ? recognizePythonEntrypoint(tokens, entrypoint)
     : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
   if (

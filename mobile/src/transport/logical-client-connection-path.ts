@@ -1,3 +1,4 @@
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 export class LogicalClientConnectionPath {
@@ -5,6 +6,7 @@ export class LogicalClientConnectionPath {
   private recovery: MobileConnectionPath | null = null
   private recoveryAttempt = 0
   private pairingRejected = false
+  private relayHostReachability: RelayHostReachability = 'connecting'
   private readonly listeners = new Set<() => void>()
 
   constructor(private readonly isConnected: () => boolean) {}
@@ -35,12 +37,23 @@ export class LogicalClientConnectionPath {
     })
   }
 
+  getRelayHostReachability(): RelayHostReachability {
+    return this.relayHostReachability
+  }
+
+  setRelayHostReachability(reachability: RelayHostReachability): void {
+    this.update(() => {
+      this.relayHostReachability = reachability
+    })
+  }
+
   clearAfterConnected(): void {
     this.migration = null
     this.recovery = null
     this.recoveryAttempt = 0
     // Why: an authenticated session is the desktop accepting this device.
     this.pairingRejected = false
+    this.relayHostReachability = 'connecting'
   }
 
   setRecovery(path: MobileConnectionPath | null, attempt?: number): void {
@@ -69,11 +82,13 @@ export class LogicalClientConnectionPath {
     const previousPath = this.pending()
     const previousAttempt = this.reconnectAttempt(0)
     const previousRejected = this.pairingRejected
+    const previousReachability = this.relayHostReachability
     apply()
     if (
       previousPath === this.pending() &&
       previousAttempt === this.reconnectAttempt(0) &&
-      previousRejected === this.pairingRejected
+      previousRejected === this.pairingRejected &&
+      previousReachability === this.relayHostReachability
     ) {
       return
     }

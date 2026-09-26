@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
@@ -25,6 +26,7 @@ export const PR_CHECK_JOBS = [
   'shell_contracts',
   'test',
   'orcad_browser',
+  'mobile_web_app',
   'cross-version-wire',
   'managed_hook_node18',
   'package',
@@ -42,6 +44,7 @@ const GLOBAL_FORCE_PREFIXES = [
 const GLOBAL_FORCE_FILES = new Set(['package.json', 'pnpm-lock.yaml'])
 
 const GIT_COMPAT_PREFIXES = [
+  '.github/actions/prepare-git-compatibility/',
   'src/shared/git-',
   'src/shared/review-head-tracking-ref',
   'src/main/git/',
@@ -105,6 +108,30 @@ const ORCAD_BROWSER_PREFIXES = [
   'src/main/orcad/electron-serve-browser-process'
 ]
 
+// The page bundle the desktop packages: the builder and verifier, the manifest writer and the
+// packaging guard they share, the entry, the route tree it mounts, the mobile source those routes
+// import, and the shell policy the render check runs the page under.
+const MOBILE_WEB_APP_PREFIXES = [
+  'config/scripts/build-mobile-web-app',
+  'config/scripts/verify-mobile-web-app-bundle',
+  'config/scripts/mobile-web-app-',
+  'config/scripts/mobile-web-bundle-',
+  'config/scripts/verify-packaged-mobile-web-bundle',
+  'config/scripts/mobile-web-source-line-endings',
+  'config/scripts/script-entry-detection',
+  'mobile/web-entry/',
+  'mobile/app/',
+  'mobile/src/',
+  'mobile/packages/',
+  'mobile/package.json',
+  'mobile/pnpm-lock.yaml',
+  'mobile/modules/orca-mobile-web-shell/'
+]
+
+function changesMobileWebApp(changedFiles) {
+  return changedFiles.some((file) => matchesPrefix(file, MOBILE_WEB_APP_PREFIXES))
+}
+
 const CROSS_VERSION_WIRE_PREFIXES = [
   'tests/e2e/cross-version-wire/',
   'src/shared/protocol-version',
@@ -112,14 +139,18 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/browser-client-host-protocol',
   'src/shared/browser-network-tunnel-protocol',
   'src/shared/browser-client-host-placement',
+  'src/shared/agent-launch-intent',
+  'src/shared/rpc-contract/agent-launch-params',
   'src/shared/agent-session-wire',
   'src/shared/agent-session-mutation-envelope',
+  'src/shared/agent-session-record',
   'src/shared/agent-session-journal-',
   'src/main/ai-vault/structured-session-ownership.ts',
   'src/main/native-chat/agent-session-journal/',
   'src/main/native-chat/agent-session-wire/',
   'src/main/runtime/agent-session-record-store',
   'src/main/runtime/rpc/dispatcher',
+  'src/main/runtime/rpc/methods/agent-launch',
   'src/main/runtime/rpc/methods/ai-vault.ts',
   'src/main/runtime/rpc/methods/browser-tab-create-schema',
   'src/main/runtime/rpc/methods/session-tabs.ts',
@@ -140,6 +171,11 @@ const NATIVE_RUNTIME_PREFIXES = [
   'config/scripts/ensure-native-runtime',
   'config/scripts/rebuild-native-deps',
   'config/scripts/node-pty-job-ownership',
+  'config/scripts/windows-pe-machine',
+  'config/scripts/windows-pe-image-fixture',
+  'config/scripts/script-module-dependencies',
+  'config/scripts/windows-process-tree-creation-time',
+  'config/scripts/windows-process-tree-gyp-rebuild',
   'config/scripts/electron-builder-native-rebuild',
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree'
@@ -167,6 +203,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/smoke-packaged',
   'config/scripts/install-electron-package-binary',
   'config/scripts/verify-packaged',
+  'config/scripts/verify-skills-cli-runtime',
   'config/scripts/verify-linux-glibc',
   'config/scripts/run-electron-vite',
   'skills/',
@@ -180,6 +217,14 @@ const SHARED_PACKAGE_PREFIXES = [
 
 const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  'config/docker/cli-launch-contract/',
+  'config/docker/headless-pairing/',
+  'config/docker/headless-serve-shutdown/',
+  'config/docker/daemon-shutdown-descendants/',
+  'config/scripts/run-linux-cli-launch-contract',
+  'config/scripts/run-headless-linux-pairing-docker',
+  'config/scripts/run-daemon-shutdown-descendants-docker',
+  'config/scripts/static-appimage-package-contract',
   'native/computer-use-linux/',
   'resources/linux/',
   'config/scripts/run-headless-serve'
@@ -206,12 +251,30 @@ const LINUX_PACKAGE_TESTS = [
 const WINDOWS_PACKAGE_TESTS = [
   ...LINUX_PACKAGE_TESTS,
   'config/scripts/rebuild-native-deps.test.mjs',
+  'config/scripts/rebuild-native-deps-windows-process-tree.test.mjs',
+  'config/scripts/rebuild-native-deps-node-pty.test.mjs',
+  'config/scripts/ensure-native-runtime-job-ownership.test.mjs',
+  'config/scripts/verify-packaged-node-pty-job-ownership.test.mjs',
+  'config/scripts/windows-pe-machine.test.mjs',
+  'config/scripts/script-module-dependencies.test.mjs',
+  'src/main/windows-registry-addon.test.ts',
   'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
   'src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts',
   'src/shared/child-process/windows-command-line.win32.test.ts',
+  'src/shared/child-process/windows-cmd-shim-resolution.test.ts',
+  'src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
+  'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
+  'src/main/codex/windows-hook-command.test.ts',
+  'src/main/codex/windows-hook-upgrade.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
+  'src/main/windows/windows-msys-job.win32.test.ts',
+  'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
   'src/main/windows/windows-host-job.win32.test.ts',
+  'src/main/windows/windows-process-tree-command-line-patch.test.ts',
+  'src/main/windows/windows-process-table-native-addon.win32.test.ts',
+  'src/main/persistence/profile-state/profile-state-access-windows-native.win32.test.ts',
+  'src/main/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/wsl-runner.test.ts',
   'src/main/wsl/wsl-guest-environment.test.ts',
   'src/main/wsl/wsl-invocation-boundary.test.ts',
@@ -219,21 +282,71 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/wsl/wsl-w1-w3-contract.test.ts',
   'src/shared/source-scan/source-tree-scan.test.ts',
   'src/main/cli/wsl-cli-powershell-boundary.test.ts',
+  'src/main/computer/desktop-script-runtime-host.win32.test.ts',
   'src/main/cursor/hook-service.test.ts',
   'src/main/orca-profiles/profile-index-store.test.ts',
+  'src/main/startup/windows-install-dir-acl-repair.win32.test.ts',
   'src/main/runtime/repo-worktree-admin-fingerprint.test.ts',
   'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-file-fsync-flags.test.ts',
+  'src/shared/secure-path-windows-acl.win32.test.ts',
+  'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
   'src/main/ipc/pty-codex-account-attribution.test.ts',
-  'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts'
+  'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts',
+  'src/relay/windows-port-scan.win32.test.ts'
 ]
 
 const DESKTOP_IRRELEVANT_PREFIXES = [
   'mobile/',
+  'cloud/',
+  '.github/workflows/cloud-',
   '.github/workflows/mobile.yml',
   '.github/workflows/mobile-ios-release.yml',
   '.github/workflows/mobile-android-release.yml'
 ]
+
+const STATIC_ANALYSIS_AUDIT_SCRIPTS = [
+  'audit:code-quality:native',
+  'audit:code-quality:type-aware',
+  'audit:anti-slop'
+]
+
+// Positional arguments of an oxlint invocation are the trees it lints. `--config` consumes the
+// next token; every other flag here is valueless.
+function oxlintScanRoots(command) {
+  const roots = []
+  for (const segment of command.split('&&')) {
+    const tokens = segment.trim().split(/\s+/).filter(Boolean)
+    if (tokens[0] !== 'oxlint') {
+      continue
+    }
+    for (let index = 1; index < tokens.length; index += 1) {
+      if (tokens[index] === '--config') {
+        index += 1
+      } else if (!tokens[index].startsWith('-')) {
+        roots.push(tokens[index])
+      }
+    }
+  }
+  return roots
+}
+
+// Why derived from the commands rather than listed here: `mobile/` is desktop-irrelevant for every
+// other job, yet these audits lint it. A second, hand-maintained copy of "which trees the gate
+// reads" is what let #20702 land violations no PR check ran, so read it off the argv instead.
+function readStaticAnalysisScanRoots() {
+  const manifest = join(import.meta.dirname, '../../package.json')
+  const { scripts = {} } = JSON.parse(readFileSync(manifest, 'utf8'))
+  return [
+    ...new Set(
+      STATIC_ANALYSIS_AUDIT_SCRIPTS.flatMap((name) => oxlintScanRoots(scripts[name] ?? ''))
+    )
+  ]
+}
+
+export const STATIC_ANALYSIS_SCAN_ROOTS = readStaticAnalysisScanRoots()
+
+const STATIC_ANALYSIS_SCAN_PREFIXES = STATIC_ANALYSIS_SCAN_ROOTS.map((root) => `${root}/`)
 
 export function isDocsOnlyPath(file) {
   if (DOCS_ONLY_FILES.has(file)) {
@@ -254,6 +367,14 @@ export function shouldRunPrChecks(changedFiles) {
   return changedFiles.some((file) => !isDocsOnlyPath(file) && !isDesktopIrrelevantPath(file))
 }
 
+export function needsMobileDependencies(changedFiles) {
+  // Why: static analysis lints CHANGED files, mobile ones included, and its
+  // type-aware pass resolves types from mobile/node_modules. Mobile is a
+  // separate pnpm project, so without this the root-only install leaves every
+  // mobile type an `error` type and the gate reports phantom findings.
+  return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
+}
+
 export function classifyPrJobs(changedFiles) {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
@@ -264,9 +385,19 @@ export function classifyPrJobs(changedFiles) {
       shouldRun && (forceAll || ALWAYS_ON_CODE_JOBS.has(job) || jobDetector(job)(changedFiles))
     ])
   )
+  // Why outside should_run: a mobile-only diff is desktop-irrelevant and skips every job above,
+  // but the repo-wide audits lint mobile/, and skipping them lands the violation on main, where
+  // it then fails this same gate on every later PR's merge ref.
+  jobs.static_analysis = jobs.static_analysis || changedFiles.some(isStaticAnalysisScannedPath)
+  // Why outside should_run, for the same reason: a mobile-only diff is desktop-irrelevant, and
+  // that is exactly the diff that changes the page this job builds. Gated on should_run it would
+  // skip on every PR that can break it and run on none.
+  jobs.mobile_web_app = jobs.mobile_web_app || changesMobileWebApp(changedFiles)
   return {
     should_run: shouldRun,
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
+    mobile_dependencies:
+      (shouldRun || jobs.static_analysis) && needsMobileDependencies(changedFiles),
     ...jobs
   }
 }
@@ -284,6 +415,10 @@ function jobDetector(job) {
       return (files) => files.some((file) => matchesPrefix(file, SHELL_PREFIXES))
     case 'orcad_browser':
       return (files) => files.some((file) => matchesPrefix(file, ORCAD_BROWSER_PREFIXES))
+    // Not redundant with the lift below the jobs map: without a case here the default detector
+    // returns true, which would run this job on every desktop-relevant PR.
+    case 'mobile_web_app':
+      return changesMobileWebApp
     case 'cross-version-wire':
       return (files) => files.some((file) => matchesPrefix(file, CROSS_VERSION_WIRE_PREFIXES))
     case 'managed_hook_node18':
@@ -323,6 +458,13 @@ function isDesktopIrrelevantPath(file) {
   return matchesPrefix(file, DESKTOP_IRRELEVANT_PREFIXES)
 }
 
+function isStaticAnalysisScannedPath(file) {
+  // Fail closed: roots we failed to parse must keep the gate, not silently drop it.
+  return (
+    STATIC_ANALYSIS_SCAN_PREFIXES.length === 0 || matchesPrefix(file, STATIC_ANALYSIS_SCAN_PREFIXES)
+  )
+}
+
 function isNativeCacheInputPath(file) {
   return NATIVE_CACHE_FILES.has(file) || matchesPrefix(file, NATIVE_CACHE_PREFIXES)
 }
@@ -336,7 +478,14 @@ function matchesPrefix(file, prefixes) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const files = readFileSync(0, 'utf8').split('\n').filter(Boolean)
+  // Why streamed, not readFileSync(0): a single read of fd 0 throws EAGAIN once the writer
+  // outgrows the 64 KB pipe buffer, which a stale PR base.sha reaches easily.
+  let input = ''
+  process.stdin.setEncoding('utf8')
+  for await (const chunk of process.stdin) {
+    input += chunk
+  }
+  const files = input.split(/\r?\n/).filter(Boolean)
   const classification = classifyPrJobs(files)
   for (const [name, value] of Object.entries(classification)) {
     process.stdout.write(`${name}=${value ? 'true' : 'false'}\n`)

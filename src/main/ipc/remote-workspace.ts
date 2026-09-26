@@ -1,18 +1,24 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { getActiveMultiplexer, getSshConnectionStore } from './ssh'
-import { exportRemoteWorkspaceSession } from '../../shared/remote-workspace-session-projection'
-import type {
-  RemoteWorkspaceChangedEvent,
-  RemoteWorkspacePatchResult,
-  RemoteWorkspaceSession
+import {
+  REMOTE_WORKSPACE_CHANGED_NOTIFICATION,
+  REMOTE_WORKSPACE_STALE_NOTIFICATION,
+  type RemoteWorkspaceChangedEvent,
+  type RemoteWorkspaceObservedPatchResult,
+  type RemoteWorkspaceObservedSnapshot
 } from '../../shared/remote-workspace-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { parseExecutionHostId } from '../../shared/execution-host'
+import { createRepoRowExecutionHostLookup } from '../../shared/worktree-execution-host-resolution'
+import {
+  createWorktreeOwnerResolver,
+  createWorktreeTargetResolver,
+  exportSessionForTarget,
+  persistedSessionForTarget
+} from './remote-workspace-target-session-export'
 import { getRemoteWorkspaceNamespace } from './remote-workspace-namespace'
 import { registerRemoteWorkspaceNotificationHandler } from './remote-workspace-events'
-import { CLIENT_ID } from './remote-workspace-client-identity'
+import { CLIENT_ID, type RemoteWorkspaceClientNameSource } from './remote-workspace-client-identity'
 import { listRemoteWorkspaceConnectedClients } from './remote-workspace-connected-clients'
 import {
   clearRemoteWorkspacePatchTails,
@@ -21,11 +27,18 @@ import {
 } from './remote-workspace-patch-queue'
 import { getRemoteSnapshot, patchRemoteWorkspaceSession } from './remote-workspace-relay-sync'
 import {
+  cachedRemoteWorkspaceSnapshotAuthorizesRevision,
   clearRemoteWorkspaceSnapshotCache,
+  getCachedRemoteWorkspaceSnapshot,
   getRemoteWorkspaceSnapshotCacheSize,
+  rememberLocallyPatchedRemoteWorkspaceSnapshot,
   rememberRemoteWorkspaceSnapshot
 } from './remote-workspace-snapshot-cache'
 import { normalizeSnapshot } from './remote-workspace-snapshot-normalization'
+import {
+  _resetRemoteWorkspaceStaleResyncForTests,
+  resyncStaleRemoteWorkspace
+} from './remote-workspace-stale-resync'
 
 let mainWindowGetter: (() => BrowserWindow | null) | null = null
 let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
@@ -33,6 +46,7 @@ let unregisterRemoteWorkspaceNotifications: (() => void) | null = null
 export function _resetRemoteWorkspaceCachesForTests(): void {
   clearRemoteWorkspaceSnapshotCache()
   clearRemoteWorkspacePatchTails()
+  _resetRemoteWorkspaceStaleResyncForTests()
 }
 
 export function _getRemoteWorkspaceCacheSizesForTests(): {
@@ -56,28 +70,56 @@ function getExplicitHydratedTargetIds(value: unknown): Set<string> | null {
   return new Set(value)
 }
 
-function targetForWorktree(
-  store: Store,
-  worktreeId: string,
-  executionHostId?: string
-): string | null {
-  const parsedHostId = parseExecutionHostId(executionHostId)
-  if (parsedHostId?.kind === 'ssh') {
-    return parsedHostId.targetId
+function getExpectedTargetRevisions(
+  value: unknown,
+  targetIds: ReadonlySet<string>
+): Map<string, number> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
   }
-  const repoId = getRepoIdFromWorktreeId(worktreeId)
-  return store.getRepo(repoId)?.connectionId ?? null
+  const revisions = new Map<string, number>()
+  for (const targetId of targetIds) {
+    const revision = (value as Record<string, unknown>)[targetId]
+    if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 0) {
+      return null
+    }
+    revisions.set(targetId, revision)
+  }
+  return revisions
 }
 
-function exportSessionForTarget(
-  store: Store,
+function getExpectedHostObservationTokens(
+  value: unknown,
+  targetIds: ReadonlySet<string>
+): Map<string, string> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  const tokens = new Map<string, string>()
+  for (const targetId of targetIds) {
+    const token = (value as Record<string, unknown>)[targetId]
+    if (typeof token !== 'string' || token.length === 0 || token.length > 128) {
+      return null
+    }
+    tokens.set(targetId, token)
+  }
+  return tokens
+}
+
+function sendRemoteWorkspaceChanged(
   targetId: string,
-  session: WorkspaceSessionState
-): RemoteWorkspaceSession {
-  return exportRemoteWorkspaceSession(session, {
-    isTargetWorktree: (worktreeId, executionHostId) =>
-      targetForWorktree(store, worktreeId, executionHostId) === targetId
-  })
+  snapshot: RemoteWorkspaceObservedSnapshot,
+  sourceClientId: string | undefined
+): void {
+  const event: RemoteWorkspaceChangedEvent = {
+    targetId,
+    snapshot,
+    ...(sourceClientId !== undefined ? { sourceClientId } : {})
+  }
+  const win = mainWindowGetter?.()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('remoteWorkspace:changed', event)
+  }
 }
 
 export function handleRemoteWorkspaceNotification(
@@ -85,7 +127,19 @@ export function handleRemoteWorkspaceNotification(
   method: string,
   params: Record<string, unknown>
 ): void {
-  if (method !== 'workspace.changed') {
+  if (method === REMOTE_WORKSPACE_STALE_NOTIFICATION) {
+    const target = getSshConnectionStore()?.getTarget(targetId)
+    if (!target) {
+      return
+    }
+    // No sourceClientId on the resynced event: the marker names no author, and guessing one would
+    // let the renderer's own-echo filter discard another device's change.
+    void resyncStaleRemoteWorkspace(target, (snapshot) =>
+      sendRemoteWorkspaceChanged(targetId, snapshot, undefined)
+    )
+    return
+  }
+  if (method !== REMOTE_WORKSPACE_CHANGED_NOTIFICATION) {
     return
   }
   const target = getSshConnectionStore()?.getTarget(targetId)
@@ -94,21 +148,19 @@ export function handleRemoteWorkspaceNotification(
   }
   const namespace = getRemoteWorkspaceNamespace(target)
   const snapshot = normalizeSnapshot(params.snapshot, namespace)
-  rememberRemoteWorkspaceSnapshot(targetId, snapshot)
-  const event: RemoteWorkspaceChangedEvent = {
-    targetId,
-    snapshot,
-    sourceClientId: typeof params.sourceClientId === 'string' ? params.sourceClientId : undefined
-  }
-  const win = mainWindowGetter?.()
-  if (win && !win.isDestroyed()) {
-    win.webContents.send('remoteWorkspace:changed', event)
-  }
+  const sourceClientId =
+    typeof params.sourceClientId === 'string' ? params.sourceClientId : undefined
+  const observedSnapshot =
+    sourceClientId === CLIENT_ID
+      ? rememberLocallyPatchedRemoteWorkspaceSnapshot(targetId, snapshot)
+      : rememberRemoteWorkspaceSnapshot(targetId, snapshot)
+  sendRemoteWorkspaceChanged(targetId, observedSnapshot, sourceClientId)
 }
 
 export function registerRemoteWorkspaceHandlers(
   store: Store,
-  getMainWindow: () => BrowserWindow | null
+  getMainWindow: () => BrowserWindow | null,
+  clientNameSource: RemoteWorkspaceClientNameSource
 ): void {
   mainWindowGetter = getMainWindow
   unregisterRemoteWorkspaceNotifications?.()
@@ -131,11 +183,33 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle(
     'remoteWorkspace:setForConnectedTargets',
-    async (_event, args: { session?: WorkspaceSessionState; hydratedTargetIds?: unknown }) => {
+    async (
+      _event,
+      args: {
+        session?: WorkspaceSessionState
+        hydratedTargetIds?: unknown
+        expectedRevisionsByTargetId?: unknown
+        expectedHostObservationTokensByTargetId?: unknown
+      }
+    ) => {
       const hydratedTargetIds = getExplicitHydratedTargetIds(args.hydratedTargetIds)
       if (!hydratedTargetIds) {
         // Why: an omitted hydration set used to broadcast one session to every
         // SSH target, overwriting unrelated remote workspace snapshots.
+        return []
+      }
+      const expectedRevisions = getExpectedTargetRevisions(
+        args.expectedRevisionsByTargetId,
+        hydratedTargetIds
+      )
+      if (!expectedRevisions) {
+        return []
+      }
+      const expectedHostObservationTokens = getExpectedHostObservationTokens(
+        args.expectedHostObservationTokensByTargetId,
+        hydratedTargetIds
+      )
+      if (!expectedHostObservationTokens) {
         return []
       }
       const targets =
@@ -145,20 +219,52 @@ export function registerRemoteWorkspaceHandlers(
             (target) => hydratedTargetIds.has(target.id) && getActiveMultiplexer(target.id)
           ) ?? []
 
-      const workspaceSession = args.session ?? store.getWorkspaceSession()
+      if (targets.length === 0) {
+        // Nothing to project onto, so skip the session and repo-catalog reads entirely.
+        return []
+      }
+
+      // One repo read, and ownership resolutions shared across targets: neither depends on the
+      // target. The publish fallback's catalog attribution reads the same lookup for the same
+      // reason — building it per target re-hydrates every repo row once per connected host.
+      const resolveWorktreeOwner = createWorktreeOwnerResolver(
+        createRepoRowExecutionHostLookup(store.getRepos())
+      )
+      const resolveWorktreeTarget = createWorktreeTargetResolver(resolveWorktreeOwner)
       const results = await Promise.all(
         targets.map(async (target) => {
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
-          const session = exportSessionForTarget(store, target.id, workspaceSession)
-          const result = await queueRemoteWorkspacePatch(target.id, () =>
-            patchRemoteWorkspaceSession(target, session)
+          const session = exportSessionForTarget(
+            resolveWorktreeTarget,
+            target.id,
+            args.session ?? persistedSessionForTarget(store, target.id, resolveWorktreeOwner)
           )
+          const result = await queueRemoteWorkspacePatch(target.id, async () => {
+            const current =
+              getCachedRemoteWorkspaceSnapshot(target.id) ?? (await getRemoteSnapshot(target))
+            const expectedRevision = expectedRevisions.get(target.id)
+            const expectedHostObservationToken = expectedHostObservationTokens.get(target.id)
+            if (
+              !current ||
+              expectedRevision === undefined ||
+              expectedHostObservationToken === undefined ||
+              current.hostObservationToken !== expectedHostObservationToken ||
+              !cachedRemoteWorkspaceSnapshotAuthorizesRevision(target.id, expectedRevision)
+            ) {
+              const latest = getCachedRemoteWorkspaceSnapshot(target.id) ?? current
+              return latest
+                ? ({ ok: false, reason: 'stale-revision', snapshot: latest } as const)
+                : null
+            }
+            return patchRemoteWorkspaceSession(target, session)
+          })
           return result ? { targetId: target.id, result } : null
         })
       )
       return results.filter(
-        (entry): entry is { targetId: string; result: RemoteWorkspacePatchResult } => entry !== null
+        (entry): entry is { targetId: string; result: RemoteWorkspaceObservedPatchResult } =>
+          entry !== null
       )
     }
   )
@@ -174,7 +280,8 @@ export function registerRemoteWorkspaceHandlers(
 
   ipcMain.handle(
     'remoteWorkspace:listConnectedClients',
-    async (_event, args?: { targetIds?: string[] }) => listRemoteWorkspaceConnectedClients(args)
+    async (_event, args?: { targetIds?: string[] }) =>
+      listRemoteWorkspaceConnectedClients(args, clientNameSource)
   )
 
   ipcMain.handle('remoteWorkspace:clientId', () => CLIENT_ID)

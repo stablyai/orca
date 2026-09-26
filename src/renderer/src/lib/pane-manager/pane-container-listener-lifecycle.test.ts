@@ -25,6 +25,7 @@ function makePane(): ManagedPaneInternal {
     unicode11Addon: { dispose: vi.fn() } as never,
     webLinksAddon: { dispose: vi.fn() } as never,
     webglAddon: null,
+    imageAddon: null,
     ligaturesAddon: null,
     panePointerDownHandler: vi.fn(),
     paneMouseEnterHandler: vi.fn(),

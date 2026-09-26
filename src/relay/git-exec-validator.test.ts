@@ -16,6 +16,7 @@ describe('validateGitExecArgs', () => {
       [['branch', '--list']],
       [['log', '--oneline', '-10']],
       [['show-ref', '--heads']],
+      [['show-ref', '--verify', '--quiet', '--', 'refs/remotes/origin/main']],
       [['ls-remote', 'origin']],
       [['remote', '-v']],
       [['remote', 'get-url', 'origin']],

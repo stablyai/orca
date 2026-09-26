@@ -1,5 +1,6 @@
 import type { Store } from './persistence'
 import type { Repo } from '../shared/repo-types'
+import { isFolderRepo } from '../shared/repo-kind'
 import {
   resolveLocalProjectRuntimeForRepo,
   type ProjectRuntimeResolutionStore
@@ -18,6 +19,10 @@ export type LocalProjectGitExecOptions = {
 
 export type LocalProjectWorktreeGitOptions = {
   wslDistro?: string
+}
+
+export type LocalProjectGhExecOptions = LocalProjectWorktreeGitOptions & {
+  ghAccount?: Repo['ghAccount']
 }
 
 export function getLocalProjectGitExecOptions(
@@ -58,6 +63,41 @@ export function getLocalProjectWorktreeGitOptions(
   return wslDistro ? { wslDistro } : {}
 }
 
+/**
+ * Execution options for repo-scoped gh calls: the project's WSL routing plus its account binding.
+ *
+ * Why: every gh call site must resolve options through here — one that reaches for
+ * `getLocalProjectWorktreeGitOptions` instead silently runs as the ambient login.
+ */
+export function getLocalProjectGhExecOptions(store: Store, repo: Repo): LocalProjectGhExecOptions {
+  return {
+    ...getLocalProjectWorktreeGitOptions(store, repo),
+    ...(repo.ghAccount ? { ghAccount: repo.ghAccount } : {})
+  }
+}
+
+/**
+ * Git routing for the speculative worktree-create warm-up.
+ *
+ * Deliberately non-throwing where `getLocalProjectWorktreeGitOptions` throws: an
+ * optimistic prefetch must not report a repair-required runtime as a failure, so
+ * an unresolved runtime falls back to the host Git the warm-up used before
+ * routing existed.
+ */
+export function getWorktreeCreatePrefetchGitOptions(
+  store: Store,
+  repo: Repo
+): LocalProjectWorktreeGitOptions {
+  if (isFolderRepo(repo)) {
+    return {}
+  }
+  const projectRuntime = resolveLocalProjectRuntimeForRepo(store, repo)
+  if (!projectRuntime || projectRuntime.status !== 'resolved') {
+    return {}
+  }
+  return getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
+}
+
 export function getLocalProjectWorktreeGitOptionsForRuntime(
   repo: Repo,
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
@@ -79,7 +119,12 @@ export function getWorktreeMirrorDistro(
   store: ProjectRuntimeResolutionStore,
   repo: Repo
 ): string | undefined {
-  const projectRuntime = resolveLocalProjectRuntimeForRepo(store, repo)
+  return getWorktreeMirrorDistroForRuntime(resolveLocalProjectRuntimeForRepo(store, repo))
+}
+
+export function getWorktreeMirrorDistroForRuntime(
+  projectRuntime: ProjectExecutionRuntimeResolution | undefined
+): string | undefined {
   if (!projectRuntime || projectRuntime.status !== 'resolved') {
     return undefined
   }

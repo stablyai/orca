@@ -189,7 +189,6 @@ export function RemoteBrowserPagePane({
     submitAddressBar
   } = useRemoteBrowserPageNavigation({
     browserTab,
-    isActive,
     stagedPage,
     addressBarValue,
     setAddressBarValueFromPage,
@@ -358,6 +357,7 @@ export function RemoteBrowserPagePane({
             void openWorkspaceBrowserTab({
               workspaceId: worktreeId,
               url: linkUrl,
+              focusOnCreate: false,
               intent: { kind: 'url' },
               expectedRuntimeEnvironmentId: runtimeEnvironmentId,
               placementPreference: 'server'

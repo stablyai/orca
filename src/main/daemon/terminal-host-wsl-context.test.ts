@@ -1,3 +1,4 @@
+import './mock-descendant-sweep'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as WslModule from '../wsl'
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useRpcClientContext } from './client-context'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 export function useReconnectAttempt(hostId: string | undefined): number {
@@ -30,14 +31,16 @@ export function useConnectionPathStatus(hostId: string | undefined): {
 export function useRelayRecoveryStatus(hostId: string | undefined): {
   pendingPath: MobileConnectionPath | null
   pairingRejected: boolean
+  relayHostReachability: RelayHostReachability
 } {
   return useHostMetric(
     hostId,
     (context, id) => ({
       pendingPath: context.getPendingPath(id),
-      pairingRejected: context.isPairingRejected(id)
+      pairingRejected: context.isPairingRejected(id),
+      relayHostReachability: context.getRelayHostReachability(id)
     }),
-    { pendingPath: null, pairingRejected: false }
+    { pendingPath: null, pairingRejected: false, relayHostReachability: 'connecting' }
   )
 }
 

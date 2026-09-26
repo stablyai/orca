@@ -1,4 +1,13 @@
+import {
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../shared/execution-host'
 import type { Repo } from '../shared/repo-types'
+import { githubAvatarIcon, type RepoIcon } from '../shared/repo-icon'
+import { isUnresolvedSshHostAlias } from '../shared/git-remote-host-alias'
+import { getProjectProviderIdentity } from '../shared/project-host-setup-projection'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 
 const NO_IDENTITY_RETRY_TTL_MS = 5 * 60 * 1000
@@ -15,8 +24,12 @@ const MAX_IDENTITY_REFRESHES_PER_SWEEP = 4
 
 type RepoIdentityStore = {
   getRepos(): Repo[]
-  getRepo?(id: string): Repo | undefined
-  updateRepo(id: string, updates: Pick<Partial<Repo>, 'gitRemoteIdentity'>): Repo | null
+  getRepo?(id: string, hostId?: ExecutionHostId): Repo | undefined
+  updateRepo(
+    id: string,
+    updates: Pick<Partial<Repo>, 'gitRemoteIdentity' | 'repoIcon'>,
+    hostId?: ExecutionHostId
+  ): Repo | null
 }
 
 type EnrichmentOptions = {
@@ -39,12 +52,28 @@ const pendingChangeListeners = new Set<() => void>()
 let sweepInFlight: Promise<void> | null = null
 let rerunRequested = false
 
-function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId'>): string {
-  return `${repo.connectionId ?? 'local'}\0${repo.path}`
+// Keyed on the resolved host, not the raw field: two rows at the same path on different hosts are
+// different locations, and collapsing them shares one probe (and one abort) across both.
+function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>): string {
+  return `${getRepoExecutionHostId(repo)}\0${repo.path}`
 }
 
-function getCurrentRepo(store: RepoIdentityStore, id: string): Repo | undefined {
-  return store.getRepo?.(id) ?? store.getRepos().find((repo) => repo.id === id)
+// A peer's nested SSH targets belong to its dispatch table, never this client's.
+function getRepoProbeHostId(repo: Repo): ExecutionHostId | null {
+  const hostId = getRepoExecutionHostId(repo)
+  return hostId === LOCAL_EXECUTION_HOST_ID || getSshTargetIdForExecutionHost(hostId)
+    ? hostId
+    : null
+}
+
+function getCurrentRepo(store: RepoIdentityStore, snapshot: Repo): Repo | undefined {
+  const hostId = getRepoExecutionHostId(snapshot)
+  const found = store.getRepo?.(snapshot.id, hostId)
+  return found && getRepoExecutionHostId(found) === hostId
+    ? found
+    : store
+        .getRepos()
+        .find((repo) => repo.id === snapshot.id && getRepoExecutionHostId(repo) === hostId)
 }
 
 function isSameProbedRepo(snapshot: Repo, current: Repo | undefined): current is Repo {
@@ -52,7 +81,7 @@ function isSameProbedRepo(snapshot: Repo, current: Repo | undefined): current is
     !!current &&
     current.kind !== 'folder' &&
     current.path === snapshot.path &&
-    (current.connectionId ?? null) === (snapshot.connectionId ?? null)
+    getRepoExecutionHostId(current) === getRepoExecutionHostId(snapshot)
   )
 }
 
@@ -69,22 +98,65 @@ function shouldWriteProbedIdentity(current: Repo, probed: Repo['gitRemoteIdentit
   return !!probed && probed.canonicalKey !== existing.canonicalKey
 }
 
+function getAutomaticGitHubIconRefresh(
+  current: Repo,
+  probed: NonNullable<Repo['gitRemoteIdentity']>
+): RepoIcon | undefined {
+  if (
+    (current.upstream?.owner && current.upstream.repo) ||
+    current.repoIcon?.type !== 'image' ||
+    current.repoIcon.source !== 'github'
+  ) {
+    return undefined
+  }
+  const identity = getProjectProviderIdentity({
+    upstream: null,
+    repoIcon: undefined,
+    gitRemoteIdentity: probed
+  })
+  if (!identity || (identity.host && isUnresolvedSshHostAlias(identity.host))) {
+    return undefined
+  }
+  const icon = githubAvatarIcon(identity)
+  return icon.type === 'image' &&
+    current.repoIcon.src === icon.src &&
+    current.repoIcon.label === icon.label
+    ? undefined
+    : icon
+}
+
 function writeIdentity(
   store: RepoIdentityStore,
   snapshot: Repo,
   gitRemoteIdentity: Repo['gitRemoteIdentity']
 ): boolean {
-  const current = getCurrentRepo(store, snapshot.id)
-  if (
-    !isSameProbedRepo(snapshot, current) ||
-    !shouldWriteProbedIdentity(current, gitRemoteIdentity)
-  ) {
+  // A peer's repo metadata must never be repaired from a client-local probe.
+  const hostId = getRepoProbeHostId(snapshot)
+  if (!hostId) {
     return false
   }
-  return !!store.updateRepo(snapshot.id, { gitRemoteIdentity })
+  const current = getCurrentRepo(store, snapshot)
+  if (!isSameProbedRepo(snapshot, current)) {
+    return false
+  }
+  const writeRemote = shouldWriteProbedIdentity(current, gitRemoteIdentity)
+  const icon = gitRemoteIdentity
+    ? getAutomaticGitHubIconRefresh(current, gitRemoteIdentity)
+    : undefined
+  const update = (updates: Pick<Partial<Repo>, 'gitRemoteIdentity' | 'repoIcon'>): Repo | null => {
+    return store.updateRepo(snapshot.id, updates, hostId)
+  }
+  if (icon) {
+    return !!update({ ...(writeRemote ? { gitRemoteIdentity } : {}), repoIcon: icon })
+  }
+  return writeRemote && !!update({ gitRemoteIdentity })
 }
 
 async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo): Promise<boolean> {
+  const hostId = getRepoProbeHostId(repo)
+  if (!hostId) {
+    return false
+  }
   const locationKey = getRepoLocationKey(repo)
   const retryAfter = probeRetryAfterByLocation.get(locationKey) ?? 0
   if (retryAfter > Date.now()) {
@@ -101,7 +173,7 @@ async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo)
     : NO_IDENTITY_RETRY_TTL_MS
   const controller = new AbortController()
   const promise = (async () => {
-    const result = await probeGitRemoteIdentity(repo.path, repo.connectionId, {
+    const result = await probeGitRemoteIdentity(repo.path, hostId, {
       signal: controller.signal
     })
     // Why the signal and not a catch: probeGitRemoteIdentity swallows the AbortError and RESOLVES
@@ -169,7 +241,9 @@ function retireRemovedLocations(allRepos: Repo[]): void {
 
 function selectEnrichmentCandidates(store: RepoIdentityStore): Repo[] {
   const now = Date.now()
-  const repos = store.getRepos().filter((repo) => repo.kind !== 'folder')
+  const repos = store
+    .getRepos()
+    .filter((repo) => repo.kind !== 'folder' && getRepoProbeHostId(repo) !== null)
   // Why: the settled `null` marker stays a candidate on purpose — a repo that
   // gains a remote later must still resolve. Do not tighten this to
   // `=== undefined`; the retry TTL already bounds the cost and `writeIdentity`

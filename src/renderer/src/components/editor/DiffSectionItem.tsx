@@ -34,6 +34,7 @@ export function DiffSectionItem({
   sectionHeight,
   worktreeId,
   loadSection,
+  loadDeferredSection,
   retrySection,
   toggleSection,
   openSection,
@@ -114,6 +115,8 @@ export function DiffSectionItem({
     comments: inlineComments ?? (worktreeId ? diffComments : []),
     commentableLineNumbers: getCommentableLineNumbers?.(section),
     addButtonLabel: addLineCommentLabel,
+    pendingCommentTarget: popover,
+    addNoteShortcutEnabled: hasLineCommentAction,
     onAddCommentClick: ({ lineNumber, startLine, top }) =>
       setPopover({
         lineNumber,
@@ -372,10 +375,12 @@ export function DiffSectionItem({
           isEditable={isEditable}
           diffEditorFontSize={diffEditorFontSize}
           diffWordWrap={settings?.diffWordWrap}
+          diffShowWhitespace={settings?.diffShowWhitespace}
           editorFontFamily={resolveEditorFontFamily(settings)}
           onCancelComment={() => setPopover(null)}
           onSubmitComment={handleSubmitComment}
           onRetrySection={retrySection}
+          onLoadDeferredSection={loadDeferredSection ?? loadSection}
           onSaveLimitedDiff={() => void handleSectionSaveRef.current(index)}
           onMount={handleMount}
         />

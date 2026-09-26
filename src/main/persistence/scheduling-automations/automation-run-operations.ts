@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
+import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import type {
   Automation,
   AutomationDispatchResult,
   AutomationRun,
+  AutomationRunsPage,
   AutomationRunTrigger
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -10,6 +13,10 @@ import {
   nextAutomationRunNumber,
   pruneAutomationRuns
 } from '../../../shared/automation-run-retention'
+import {
+  compareAutomationRunsNewestFirst,
+  paginateAutomationRuns
+} from '../../../shared/automation-run-cursor'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,
@@ -21,6 +28,7 @@ import {
 export type AutomationRunOperations = {
   state: PersistedState
   flush: () => void
+  recordAutomationRunsMutation?: (runs: readonly AutomationRun[]) => void
   recordManualRun: () => void
   getWorkspaceDisplayName: (workspaceId: string | null | undefined) => string | null
 }
@@ -34,14 +42,27 @@ function touchAutomation(state: PersistedState, automationId: string, now: numbe
   )
 }
 
-export function listAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
+function sortedAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
   const runs = state.automationRuns ?? []
   return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
     .map((run) => ({
       ...run,
       precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
     }))
-    .sort((left, right) => right.createdAt - left.createdAt)
+    .sort(compareAutomationRunsNewestFirst)
+}
+
+export function listAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
+  return sortedAutomationRuns(state, automationId)
+}
+
+export function listAutomationRunsPage(
+  state: PersistedState,
+  automationId: string | undefined,
+  limit = 100,
+  cursor?: string
+): AutomationRunsPage {
+  return paginateAutomationRuns(sortedAutomationRuns(state, automationId), limit, cursor)
 }
 
 export function createAutomationRun(
@@ -90,6 +111,7 @@ export function createAutomationRun(
     ...(operations.state.automationRuns ?? []),
     run
   ])
+  operations.recordAutomationRunsMutation?.(operations.state.automationRuns ?? [])
   if (trigger === 'manual') {
     operations.recordManualRun()
   }
@@ -129,6 +151,7 @@ export function recordRepeatedAutomationSkip(
   }
   // Replaced, not patched in place: the list projection caches on array identity.
   operations.state.automationRuns = runs.map((run) => (run.id === latest.id ? updated : run))
+  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
   touchAutomation(operations.state, automationId, now)
   operations.flush()
   return updated
@@ -182,6 +205,11 @@ export function updateAutomationRun(
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>
     run.id === result.runId ? updated : run
   )
+  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
+  if (!isFinalAutomationRunStatus(current.status) && isFinalAutomationRunStatus(updated.status)) {
+    // Why: only a non-final run pins its workspace, so finishing releases the claim (#17775).
+    invalidateLocalWorktreeMetadataPruneInputs()
+  }
   touchAutomation(operations.state, updated.automationId, now)
   operations.flush()
   return updated
@@ -205,6 +233,7 @@ export function snapshotAutomationRunWorkspaceDisplayName(
     return { ...run, workspaceDisplayName: normalizedDisplayName }
   })
   if (updatedCount > 0) {
+    operations.recordAutomationRunsMutation?.(operations.state.automationRuns ?? [])
     operations.flush()
   }
   return updatedCount

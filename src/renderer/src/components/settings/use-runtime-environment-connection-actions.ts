@@ -2,12 +2,14 @@ import { useState, type Dispatch, type MutableRefObject, type SetStateAction } f
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
 import { useAppStore } from '@/store'
 import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { evaluateHostDetails, type RuntimeHostDetails } from './runtime-environment-host-details'
 import { LOCAL_RUNTIME_VALUE, NO_RUNTIME_VALUE } from './runtime-environment-selection'
+import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
 
 type RuntimeEnvironmentConnectionActionParams = {
   allowLocalRuntime: boolean
@@ -38,20 +40,14 @@ export function useRuntimeEnvironmentConnectionActions({
       await window.api.runtimeEnvironments.disconnect({ selector: environment.id })
       // Why: disconnect is non-destructive; keep the saved server but show the
       // user that this live client is no longer attached to it.
-      useAppStore.getState().setRuntimeEnvironmentStatus(
-        environment.id,
-        {
-          status: null,
-          checkedAt: Date.now()
-        },
-        { suppressDisconnectToast: true }
-      )
+      await useAppStore.getState().readRuntimeHostStatusSnapshots()
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
           ...current,
           [environment.id]: {
             status: 'error',
             runtimeStatus: null,
+            remoteControl: null,
             compatibility: null,
             error: null
           }
@@ -93,16 +89,14 @@ export function useRuntimeEnvironmentConnectionActions({
       const compatibility = evaluateHostDetails(runtimeStatus)
       // Why: row Connect is reachability only. The Advanced selector is the
       // explicit default-host control and should be the only active-server path.
-      useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
-        status: runtimeStatus,
-        checkedAt: Date.now()
-      })
+      await useAppStore.getState().readRuntimeHostStatusSnapshots()
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
           ...current,
           [environment.id]: {
             status: 'ready',
             runtimeStatus,
+            remoteControl: runtimeStatus.remoteControl ?? null,
             compatibility,
             error: null
           }
@@ -120,8 +114,12 @@ export function useRuntimeEnvironmentConnectionActions({
       // Why: Connect is not the Active Server selector anymore, but connected
       // hosts should still contribute their projects/workspaces to the sidebar.
       const repos = await store.fetchRuntimeEnvironmentRepos(environment.id)
-      await Promise.all(repos.map((repo) => useAppStore.getState().fetchWorktrees(repo.id)))
-      await useAppStore.getState().fetchWorktreeLineage()
+      await refreshRuntimeProjectWorktreesAndLineage(
+        environment.id,
+        repos,
+        (repoId, options) => useAppStore.getState().fetchWorktrees(repoId, options),
+        (options) => useAppStore.getState().fetchWorktreeLineage(options)
+      )
       if (mountedRef.current) {
         toast.success(
           translate(
@@ -134,16 +132,15 @@ export function useRuntimeEnvironmentConnectionActions({
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to connect server.'
-      useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
-        status: null,
-        checkedAt: Date.now()
-      })
+      const remoteControl = extractRuntimeTransportDiagnostics(error)
+      await useAppStore.getState().readRuntimeHostStatusSnapshots()
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
           ...current,
           [environment.id]: {
             status: 'error',
             runtimeStatus: null,
+            remoteControl: remoteControl ?? null,
             compatibility: null,
             error: message
           }

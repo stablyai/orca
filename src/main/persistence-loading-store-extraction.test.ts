@@ -1,10 +1,18 @@
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import type * as FsModule from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  writeSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../shared/constants'
 import type { PersistedState } from '../shared/persisted-state-types'
-import type * as StartupDiagnosticsModule from './startup/startup-diagnostics'
 import type { Store as PersistenceStore } from './persistence/loading-store/store'
 import {
   createStore,
@@ -14,10 +22,9 @@ import {
   writeDataFile
 } from './persistence-test-harness'
 
-const { trackMock, getCohortAtEmitMock, logStartupDiagnosticMock } = vi.hoisted(() => ({
+const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
-  getCohortAtEmitMock: vi.fn(() => ({ nth_repo_added: 2 })),
-  logStartupDiagnosticMock: vi.fn()
+  getCohortAtEmitMock: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
 
 vi.mock('electron', () => ({
@@ -41,10 +48,20 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(() => ({ hosts: [] })),
   sshConfigHostsToTargets: vi.fn(() => [])
 }))
-vi.mock('./startup/startup-diagnostics', async (importOriginal) => {
-  const actual = await importOriginal<typeof StartupDiagnosticsModule>()
-  return { ...actual, logStartupDiagnostic: logStartupDiagnosticMock }
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsModule>()
+  return { ...actual, writeSync: vi.fn(actual.writeSync) }
 })
+
+function getLoadDoneLines(): string[] {
+  return vi
+    .mocked(writeSync)
+    .mock.calls.flatMap(([fd, text]) =>
+      fd === 2 && typeof text === 'string' && text.startsWith('[startup] persistence-load-done ')
+        ? [text]
+        : []
+    )
+}
 
 describe('loading Store extraction seams', () => {
   beforeEach(() => {
@@ -53,7 +70,7 @@ describe('loading Store extraction seams', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
-    logStartupDiagnosticMock.mockReset()
+    vi.mocked(writeSync).mockClear()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -78,9 +95,7 @@ describe('loading Store extraction seams', () => {
 
     expect(store.getWorkspaceSession().activeTabId).toBe(sentinel)
     expect(workspaceSessionStringifyCalls).toHaveLength(0)
-    expect(
-      logStartupDiagnosticMock.mock.calls.some(([event]) => event === 'persistence-load-done')
-    ).toBe(false)
+    expect(getLoadDoneLines()).toEqual([])
   })
 
   it('reports the unchanged workspace-session byte count when startup diagnostics are enabled', () => {
@@ -104,16 +119,54 @@ describe('loading Store extraction seams', () => {
 
     expect(store.getWorkspaceSession().activeTabId).toBe(sentinel)
     expect(workspaceSessionStringifyCalls).toHaveLength(1)
-    const loadDoneCall = logStartupDiagnosticMock.mock.calls.find(
-      ([event]) => event === 'persistence-load-done'
-    )
-    expect(loadDoneCall).toBeDefined()
-    const details = loadDoneCall?.[1] as Record<string, unknown> | undefined
-    expect(details).toEqual({
-      t: expect.any(Number),
-      repos: state.repos.length,
-      workspaceSessionBytes: Buffer.byteLength(JSON.stringify(store.getWorkspaceSession()))
-    })
+    const expectedBytes = Buffer.byteLength(JSON.stringify(store.getWorkspaceSession()))
+    expect(getLoadDoneLines()).toEqual([
+      expect.stringMatching(
+        new RegExp(
+          `^\\[startup\\] persistence-load-done t=\\d+ repos=${state.repos.length} workspaceSessionBytes=${expectedBytes}\\n$`
+        )
+      )
+    ])
+  })
+
+  it('timestamps persistence-load-done before resolving its details closure', () => {
+    const sentinel = 'startup-diagnostics-workspace-session-sentinel-ordering'
+    vi.stubEnv('ORCA_STARTUP_DIAGNOSTICS', '1')
+    const state = getDefaultPersistedState(testState.dir)
+    state.workspaceSession = { ...state.workspaceSession, activeTabId: sentinel }
+    writeDataFile(state)
+
+    // Fake clock only the details closure advances, so a post-closure timestamp is unambiguous.
+    let clock = 0
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const realStringify = JSON.stringify
+    const stringifySpy = vi.spyOn(JSON, 'stringify').mockImplementation(((
+      value: unknown,
+      ...rest: unknown[]
+    ) => {
+      if (
+        value &&
+        typeof value === 'object' &&
+        (value as { activeTabId?: unknown }).activeTabId === sentinel
+      ) {
+        clock += 1000
+      }
+      return (realStringify as (...args: unknown[]) => string)(value, ...rest)
+    }) as typeof JSON.stringify)
+
+    try {
+      const store = createStore()
+      store.freezeWrites()
+    } finally {
+      stringifySpy.mockRestore()
+      nowSpy.mockRestore()
+    }
+
+    expect(getLoadDoneLines()).toEqual([
+      expect.stringMatching(
+        /^\[startup\] persistence-load-done t=0 repos=\d+ workspaceSessionBytes=\d+\n$/
+      )
+    ])
   })
 
   it('accepts the first JSON-parseable backup even when an older backup has richer state', async () => {

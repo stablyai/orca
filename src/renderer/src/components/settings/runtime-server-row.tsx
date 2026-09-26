@@ -3,13 +3,22 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-e
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { resolveHostDisplay } from '../../../../shared/host-display-resolution'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
+import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import {
   getHostDetailsDescription,
   getHostDetailsSummary,
+  evaluateHostDetails,
   getRuntimeServerConnectionLabel,
   getRuntimeServerConnectionState,
   getRuntimeServerDotClass,
+  isRuntimeServerTransportConnected,
   type RuntimeHostDetails
 } from './runtime-environment-host-details'
 import {
@@ -50,18 +59,57 @@ export function RuntimeServerRow({
   onConnect,
   onRemove
 }: RuntimeServerRowProps): React.JSX.Element {
-  const detailsDescription = getHostDetailsDescription(details)
-  const connectionState = getRuntimeServerConnectionState(details)
+  const runtimeStatusEntry = useAppStore((state) =>
+    state.runtimeStatusByEnvironmentId.get(environment.id)
+  )
+  // Why the shared verdict and not `entry.status`: an unverifiable probe nulls it while the
+  // transport is still up, and this row then read "error" and offered Connect for a host that
+  // RepositoryHostSetupsSection -- which already derives through this same function -- was
+  // showing as reachable. One host, two surfaces, opposite answers. A probe that did not come
+  // back is not a host that went away (docs/reference/ssh-execution-boundary.md).
+  const entryReachable =
+    runtimeStatusEntry !== undefined &&
+    isConnectedRuntimeHostState(runtimeHostConnectionStateForEntry(runtimeStatusEntry))
+  const effectiveDetails = runtimeStatusEntry
+    ? {
+        ...(details ?? {
+          status: entryReachable ? ('ready' as const) : ('error' as const),
+          runtimeStatus: null,
+          compatibility: null,
+          error: null
+        }),
+        status: entryReachable ? ('ready' as const) : ('error' as const),
+        runtimeStatus: runtimeStatusEntry.status,
+        compatibility: runtimeStatusEntry.status
+          ? evaluateHostDetails(runtimeStatusEntry.status)
+          : null,
+        remoteControl:
+          runtimeStatusEntry.remoteControl ?? runtimeStatusEntry.status?.remoteControl ?? null
+      }
+    : details
+  const detailsDescription = getHostDetailsDescription(effectiveDetails)
+  const connectionState =
+    details?.status === 'loading' && !runtimeStatusEntry?.status
+      ? 'checking'
+      : getRuntimeServerConnectionState(effectiveDetails)
   // A connected host exposes Disconnect; otherwise Connect.
-  const isReachable = connectionState === 'connected'
+  const isReachable = isRuntimeServerTransportConnected(connectionState)
   const actionBusy = connecting || switching || disconnecting || removing
+  // Why: the snapshot keeps the last answered status across a lost probe; `status` is only the latest answer.
+  const descriptorStatus = lastVerifiedRuntimeStatus(runtimeStatusEntry)
+  const hostDisplay = resolveHostDisplay({
+    name: environment.name,
+    machineName: descriptorStatus?.machineName,
+    platform: descriptorStatus?.hostPlatform
+  })
+  const hostDescriptorText = hostDisplay.descriptorLine
 
   return (
     <div data-settings-section={environment.id} className="flex items-center gap-3 px-4 py-3">
       <Server className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="truncate text-sm font-medium">{environment.name}</div>
+          <div className="truncate text-sm font-medium">{hostDisplay.title}</div>
           <span
             className={cn(
               'size-2 shrink-0 rounded-full',
@@ -71,12 +119,15 @@ export function RuntimeServerRow({
           <span className="text-[11px] text-muted-foreground">
             {getRuntimeServerConnectionLabel(connectionState)}
           </span>
-          {details?.compatibility?.kind === 'blocked' ? (
+          {effectiveDetails?.compatibility?.kind === 'blocked' ? (
             <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-          ) : details?.status === 'loading' ? (
+          ) : effectiveDetails?.status === 'loading' ? (
             <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
           ) : null}
         </div>
+        {hostDescriptorText ? (
+          <p className="truncate text-xs text-muted-foreground">{hostDescriptorText}</p>
+        ) : null}
         <p className="truncate text-xs text-muted-foreground">
           {environment.connectionDependency === 'ssh-tunnel'
             ? translate(
@@ -88,13 +139,13 @@ export function RuntimeServerRow({
                   'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
                   'Active server for server-routed projects, terminals, and provider checks.'
                 )
-              : getHostDetailsSummary(details)}
+              : getHostDetailsSummary(effectiveDetails)}
         </p>
         {detailsDescription ? (
           <p
             className={cn(
               'mt-0.5 truncate text-xs',
-              details?.compatibility?.kind === 'blocked'
+              effectiveDetails?.compatibility?.kind === 'blocked'
                 ? 'text-destructive'
                 : 'text-muted-foreground'
             )}

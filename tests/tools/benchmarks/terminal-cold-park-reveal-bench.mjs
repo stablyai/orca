@@ -33,19 +33,19 @@ import {
   pickFreePort,
   stopDevApp,
   waitForStoreReady
-} from '../../config/scripts/windows-apphang-repro/electron-dev-session.mjs'
+} from '../../../config/scripts/windows-apphang-repro/electron-dev-session.mjs'
 import {
   createCompletedOnboardingProfile,
   safeRemoveLocalDirectory
-} from '../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
+} from '../../../config/scripts/windows-apphang-repro/wsl-workspace-fixture.mjs'
 import {
   pollUntil,
   rendererActionTimeoutMs,
   runWithTimeout,
   setupTimeoutMs
-} from '../../config/scripts/windows-apphang-repro/repro-timing.mjs'
+} from '../../../config/scripts/windows-apphang-repro/repro-timing.mjs'
 
-const rootDir = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
+const rootDir = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
 const scenarioTimeoutMs = 300_000
 
 // Short enough that a tab parks within a few seconds of being hidden, long

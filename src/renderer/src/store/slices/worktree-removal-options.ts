@@ -9,6 +9,9 @@ export type RemoveWorktreeOptions = {
   // Why (#11960): only an explicit Force Delete waives the proof that every
   // PTY stopped; `force` alone is set by the ordinary delete confirmation.
   allowUnverifiedPtyStop?: boolean
+  // Why (#19334): waives a FAILED archive hook. Set only by the explicit "Delete anyway" retry
+  // after the user has seen the refusal -- never by the ordinary confirmation, never by `force`.
+  allowFailedArchiveHook?: boolean
   snapshotPruneBatchId?: string
   /** Fresh cleanup-scan evidence for a same-id owner not represented in the catalog. */
   sameIdSurvivingHostId?: ExecutionHostId

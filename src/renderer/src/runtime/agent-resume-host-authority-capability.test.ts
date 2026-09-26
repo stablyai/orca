@@ -2,12 +2,27 @@ import { describe, expect, it } from 'vitest'
 import { RESUMABLE_TUI_AGENTS } from '../../../shared/agent-session-resume'
 import {
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
 } from '../../../shared/protocol-version'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 
 describe('agentResumeHostAuthorityCapability', () => {
+  it('gates Muse resume behind its own advertised capability', () => {
+    expect(agentResumeHostAuthorityCapability('muse')).toBe(
+      AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY
+    )
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY)
+  })
+
+  it('gates OpenCode 2 resume behind its own advertised capability', () => {
+    expect(agentResumeHostAuthorityCapability('opencode2')).toBe(
+      AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY
+    )
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY)
+  })
   it('gates Kimi resume behind its own capability', () => {
     expect(agentResumeHostAuthorityCapability('kimi')).toBe(
       AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
@@ -43,13 +58,16 @@ describe('agentResumeHostAuthorityCapability', () => {
       gemini: undefined,
       antigravity: undefined,
       opencode: undefined,
+      opencode2: AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
       pi: undefined,
       'mimo-code': undefined,
       droid: undefined,
       grok: undefined,
       devin: undefined,
       'prime-agent': undefined,
+      zcode: 'agent-session.zcode-resume.v1',
       copilot: undefined,
+      muse: AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
       omp: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
       kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
     })

@@ -1,5 +1,10 @@
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
+  BrowserIdentityModeSetResult,
+  BrowserIdentityModeStatus,
+  BrowserUserAgentMode
+} from '../../shared/browser-user-agent-mode'
+import type {
   BrowserClientPageMetadataParams,
   BrowserClientPageMetadataPublishOutcome
 } from '../../shared/browser-client-page-metadata-protocol'
@@ -33,10 +38,10 @@ import type {
   BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
-  BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
-  BrowserViewportOverride
+  BrowserViewportOverride,
+  BrowserViewportScrollState
 } from '../../shared/browser-workspace-types'
 import type {
   BrowserClientPageRendererOutcome,
@@ -77,6 +82,10 @@ export type BrowserApi = {
     browserPageId: string
     override: BrowserViewportOverride | null
   }) => Promise<boolean>
+  reportViewportScrollState?: (args: {
+    browserPageId: string
+    state: BrowserViewportScrollState
+  }) => void
   setAnnotationViewportBridge: (args: BrowserSetAnnotationViewportBridgeArgs) => Promise<boolean>
   /** Publishes a client-hosted page's url/title to its runtime over that runtime's host lease. */
   publishClientPageMetadata: (args: {
@@ -110,11 +119,14 @@ export type BrowserApi = {
   onActivateView: (
     callback: (data: { worktreeId?: string; browserPageId?: string }) => void
   ) => () => void
+  onCapturePaintHold: (
+    callback: (data: { browserPageId: string; held: boolean }) => void
+  ) => () => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
   onOpenLinkInOrcaTab: (
-    callback: (event: { browserPageId: string; url: string }) => void
+    callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
   ) => () => void
   cancelDownload: (args: { downloadId: string }) => Promise<boolean>
   setGrabMode: (args: BrowserSetGrabModeArgs) => Promise<BrowserSetGrabModeResult>
@@ -135,12 +147,12 @@ export type BrowserApi = {
     browserProfileId?: string
     skipProbe?: boolean
   }) => Promise<{ partition: string }>
-  sessionCreateProfile: (
-    args: {
-      scope: BrowserSessionProfileScope
-      label: string
-    } & BrowserSessionProfileCreateOptions
-  ) => Promise<BrowserSessionProfile | null>
+  sessionCreateProfile: (args: {
+    scope: BrowserSessionProfileScope
+    label: string
+  }) => Promise<BrowserSessionProfile | null>
+  identityGet: () => Promise<BrowserIdentityModeStatus | null>
+  identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
   sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>

@@ -1,12 +1,18 @@
+import { runtimeHostContactFromSnapshot } from '../../../shared/runtime-host-contact'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { isRuntimeWorkspaceWindowClosed } from '../../../shared/runtime-workspace-window-availability'
 
 export type HostStatus = 'connected' | 'disconnected' | 'connecting'
+export type RuntimeHostTransportState = 'connected' | 'checking' | 'disconnected'
 
 // Why: 'workspace-window-closed' is a reachable host that cannot serve graph-backed
 // work — connected for counting purposes, but not interchangeable with 'connected'.
 export type RuntimeHostConnectionState =
   | 'connected'
+  // The SSH/control transport is up, but the Orca runtime did not answer its
+  // status probe. This is distinct from a disconnected transport.
+  | 'runtime-unavailable'
   | 'workspace-window-closed'
   | 'checking'
   | 'reconnecting'
@@ -16,28 +22,48 @@ export type RuntimeHostConnectionState =
 // so a degraded host can never read "Connected" in one place and "Ready" in the other.
 export function runtimeHostConnectionState({
   hasStatusEntry,
-  status
+  status,
+  transportStatus = 'disconnected',
+  remoteControl = null
 }: {
   hasStatusEntry: boolean
   status: RuntimeStatus | null | undefined
+  /** Transport evidence is independent from the runtime status RPC result. */
+  transportStatus?: RuntimeHostTransportState
+  remoteControl?: RuntimeStatus['remoteControl'] | null
 }): RuntimeHostConnectionState {
   if (!hasStatusEntry) {
     return 'checking'
   }
-  const remoteControl = status?.remoteControl
-  if (remoteControl?.state === 'reconnecting') {
+  const transportState =
+    remoteControl?.state === 'ready'
+      ? 'connected'
+      : remoteControl?.state === 'awaiting_ready' ||
+          remoteControl?.state === 'awaiting_authenticated' ||
+          remoteControl?.state === 'reconnecting'
+        ? 'checking'
+        : remoteControl?.state === 'closed'
+          ? 'disconnected'
+          : transportStatus
+  const statusRemoteControl = status?.remoteControl ?? remoteControl
+  if (statusRemoteControl?.state === 'reconnecting') {
     return 'reconnecting'
   }
   if (!status) {
-    return 'disconnected'
+    if (transportState === 'connected') {
+      return 'runtime-unavailable'
+    }
+    // The control channel is still negotiating/reconnecting, so the host's
+    // runtime outcome is not yet knowable.
+    return transportState === 'checking' ? 'checking' : 'disconnected'
   }
   // Why no lastError requirement: a clean close (server restart, host sleep, network
   // blip) leaves lastError null, and demanding an error string painted those hosts green.
-  if (remoteControl?.state === 'closed') {
+  if (statusRemoteControl?.state === 'closed') {
     return 'disconnected'
   }
   // Why: the socket is up but ready/auth has not completed, so nothing can run there yet.
-  if (remoteControl && remoteControl.state !== 'ready') {
+  if (statusRemoteControl && statusRemoteControl.state !== 'ready') {
     return 'checking'
   }
   // Why: reachable but graph-less — the transport is fine, so this is not a network
@@ -57,6 +83,7 @@ export function runtimeStatusForOverall(state: RuntimeHostConnectionState): Host
     // Why: a closed workspace window is a degraded host, not a lost connection —
     // it must keep counting toward the connected-host total.
     case 'connected':
+    case 'runtime-unavailable':
     case 'workspace-window-closed':
       return 'connected'
     case 'checking':
@@ -68,5 +95,60 @@ export function runtimeStatusForOverall(state: RuntimeHostConnectionState): Host
 }
 
 export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
-  return state === 'connected' || state === 'workspace-window-closed'
+  return (
+    state === 'connected' || state === 'runtime-unavailable' || state === 'workspace-window-closed'
+  )
+}
+
+/**
+ * Only this verdict earns the destructive glyph. 'checking' and 'reconnecting' are
+ * unverifiable, not down, per docs/reference/ssh-execution-boundary.md.
+ */
+export function isDisconnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
+  return state === 'disconnected'
+}
+
+/** The same derivation, read straight off a recorded status entry. */
+export function runtimeHostConnectionStateForEntry(
+  entry:
+    | {
+        status: RuntimeStatus | null
+        remoteControl?: RuntimeStatus['remoteControl'] | null
+        snapshot?: RuntimeHostStatusSnapshot
+      }
+    | null
+    | undefined
+): RuntimeHostConnectionState {
+  const snapshot = entry?.snapshot
+  if (snapshot) {
+    // Why the contact and not the snapshot fields: these four branches were the only place that
+    // knew a non-verified probe has kinds, and every other reader had to re-derive them or guess.
+    // Naming them once means the next reader picks an arm instead of re-reading a null.
+    const contact = runtimeHostContactFromSnapshot(snapshot, entry?.status ?? null)
+    if (contact.verdict === 'retired' || contact.verdict === 'refused') {
+      return 'disconnected'
+    }
+    if (contact.verdict === 'unverifiable') {
+      if (contact.reason === 'transport-down') {
+        return 'reconnecting'
+      }
+      if (contact.reason === 'checking') {
+        return 'checking'
+      }
+      if (contact.reason === 'probe-failed') {
+        return 'runtime-unavailable'
+      }
+    }
+  }
+  return runtimeHostConnectionState({
+    hasStatusEntry: Boolean(entry),
+    status: entry?.status ?? null,
+    // Why only 'connecting': a transport mid-handshake fell through to the default and
+    // reported a host still establishing contact as down. 'unknown' keeps that default on
+    // purpose — it means no transport was ever attempted, which for an unreachable paired
+    // host is the permanent state, and 'checking' there withdraws its Connect action and
+    // pins the status bar to "connecting" forever.
+    ...(snapshot?.transport === 'connecting' ? { transportStatus: 'checking' as const } : {}),
+    remoteControl: entry?.remoteControl ?? entry?.status?.remoteControl ?? null
+  })
 }

@@ -140,7 +140,9 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'improve-dashboard',
       'origin/main',
-      false
+      false,
+      false,
+      {}
     )
   })
 
@@ -205,14 +207,14 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
 
-    const result = await handlers['worktrees:create'](null, {
+    const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'improve-dashboard',
       sparseCheckout: {
         directories: [' packages/web ', 'apps\\api\\', 'packages/web/'],
         presetId: 'preset-1'
       }
-    })
+    })) as { timing?: { preparedCheckout?: { status: string; reason?: string } } }
 
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(addSparseWorktreeMock).toHaveBeenCalledWith(
@@ -221,7 +223,8 @@ describe('registerWorktreeHandlers', () => {
       'improve-dashboard',
       ['packages/web', 'apps/api'],
       'origin/main',
-      false
+      false,
+      {}
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',
@@ -239,6 +242,11 @@ describe('registerWorktreeHandlers', () => {
         sparseBaseRef: 'origin/main',
         sparsePresetId: 'preset-1'
       })
+    })
+    // A sparse create can never claim a prepared checkout; say so rather than looking like a miss.
+    expect(result.timing?.preparedCheckout).toEqual({
+      status: 'miss',
+      reason: 'sparse_checkout'
     })
   })
 

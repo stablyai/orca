@@ -11,6 +11,10 @@ const {
   getMediaAccessStatusMock: vi.fn(),
   removeCertificateRequestGuardMock: vi.fn()
 }))
+const processUserAgentMode = vi.hoisted(() => {
+  const state: { value: 'clean' | 'native' } = { value: 'clean' }
+  return state
+})
 
 vi.mock('electron', () => ({
   session: {
@@ -20,6 +24,13 @@ vi.mock('electron', () => ({
     askForMediaAccess: askForMediaAccessMock,
     getMediaAccessStatus: getMediaAccessStatusMock
   }
+}))
+
+vi.mock('./browser-process-user-agent', () => ({
+  getBrowserProcessUserAgentIdentity: () => ({
+    mode: processUserAgentMode.value,
+    userAgent: 'Mozilla/5.0 Chrome/150.0.0.0 Safari/537.36'
+  })
 }))
 
 vi.mock('./browser-manager', () => ({
@@ -33,7 +44,7 @@ vi.mock('./browser-manager', () => ({
 
 import { browserSessionRegistry } from './browser-session-registry'
 import { googleAuthUserAgent } from './browser-google-auth-ua'
-import { setupClientHintsOverride } from './browser-session-ua'
+import { installBrowserSessionUserAgentPolicy } from './browser-session-ua'
 import { setBrowserNetworkProxySettingsResolver } from './browser-session-proxy'
 import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'
 import { applyProxySettingsToSession } from '../network/proxy-settings'
@@ -50,10 +61,13 @@ describe('BrowserSessionRegistry', () => {
     askForMediaAccessMock.mockReset()
     getMediaAccessStatusMock.mockReset()
     removeCertificateRequestGuardMock.mockClear()
+    processUserAgentMode.value = 'clean'
     setBrowserNetworkProxySettingsResolver(null)
     askForMediaAccessMock.mockResolvedValue(true)
     getMediaAccessStatusMock.mockReturnValue('granted')
     sessionFromPartitionMock.mockReturnValue({
+      setUserAgent: vi.fn(),
+      webRequest: { onBeforeSendHeaders: vi.fn() },
       setPermissionRequestHandler: vi.fn(),
       setPermissionCheckHandler: vi.fn(),
       setDevicePermissionHandler: vi.fn(),
@@ -194,13 +208,6 @@ describe('BrowserSessionRegistry', () => {
     expect(profile).toBeNull()
   })
 
-  it('rejects invalid user-agent modes at the registry boundary', async () => {
-    const profile = await browserSessionRegistry.createProfile('isolated', 'Invalid UA', {
-      userAgentMode: 'rotating' as never
-    })
-    expect(profile).toBeNull()
-  })
-
   it('allows created profile partitions', async () => {
     const profile = await browserSessionRegistry.createProfile('isolated', 'Allowed')
     expect(profile).not.toBeNull()
@@ -293,6 +300,20 @@ describe('BrowserSessionRegistry', () => {
     expect(removeCertificateRequestGuardMock).not.toHaveBeenCalled()
   })
 
+  // Why: the Electron Session outlives its partition, so a deleted profile must not keep a header hook.
+  it('retires the user agent policy when deleting a profile', async () => {
+    const profile = await browserSessionRegistry.createProfile('isolated', 'UA Delete Test')
+    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
+    expect(mockSession.webRequest.onBeforeSendHeaders).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(Function)
+    )
+
+    await expect(browserSessionRegistry.deleteProfile(profile!.id)).resolves.toBe(true)
+
+    expect(mockSession.webRequest.onBeforeSendHeaders).toHaveBeenLastCalledWith(null)
+  })
+
   it('keeps the request guard installed while deleted-profile guests remain', async () => {
     setBrowserNetworkProxySettingsResolver(() => ({
       httpProxyUrl: 'http://proxy.example:8080',
@@ -344,8 +365,7 @@ describe('BrowserSessionRegistry', () => {
         scope: 'isolated',
         partition: claimedPartition,
         label: 'Conflicting identity',
-        source: null,
-        userAgentMode: 'native'
+        source: null
       }
     ])
 
@@ -528,83 +548,56 @@ describe('BrowserSessionRegistry', () => {
     })
   })
 
-  describe('setupClientHintsOverride', () => {
-    it('overrides sec-ch-ua headers for Edge UA', () => {
+  describe('installBrowserSessionUserAgentPolicy', () => {
+    function install(): (details: unknown, callback: ReturnType<typeof vi.fn>) => void {
       const onBeforeSendHeaders = vi.fn()
-      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-      const edgeUa =
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36 Edg/147.0.3210.5'
-
-      setupClientHintsOverride(mockSess, edgeUa)
-
+      installBrowserSessionUserAgentPolicy(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only the mocked webRequest member exercised here.
+        { webRequest: { onBeforeSendHeaders } } as never,
+        (request) =>
+          request.currentUserAgent === googleAuthUserAgent()
+            ? { userAgent: googleAuthUserAgent() }
+            : undefined
+      )
       expect(onBeforeSendHeaders).toHaveBeenCalledWith(
-        { urls: ['https://*/*'] },
+        { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
         expect.any(Function)
       )
+      return onBeforeSendHeaders.mock.calls[0][1]
+    }
 
+    it('leaves ordinary-host identity headers untouched', () => {
       const callback = vi.fn()
-      const listener = onBeforeSendHeaders.mock.calls[0][1]
-      listener(
-        { requestHeaders: { 'sec-ch-ua': 'old', 'sec-ch-ua-full-version-list': 'old' } },
+      install()(
+        {
+          url: 'https://example.com/',
+          requestHeaders: {
+            'User-Agent': 'Mozilla/5.0 Chrome/150.0.0.0 Safari/537.36',
+            'sec-ch-ua': 'browser-owned',
+            Cookie: 'abc=123'
+          }
+        },
         callback
       )
-      const modified = callback.mock.calls[0][0].requestHeaders
-      expect(modified['sec-ch-ua']).toContain('Microsoft Edge')
-      expect(modified['sec-ch-ua']).toContain('"147"')
-      expect(modified['sec-ch-ua-full-version-list']).toContain('147.0.3210.5')
-    })
 
-    it('overrides sec-ch-ua headers for Chrome UA', () => {
-      const onBeforeSendHeaders = vi.fn()
-      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-      const chromeUa =
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
-
-      setupClientHintsOverride(mockSess, chromeUa)
-
-      const callback = vi.fn()
-      const listener = onBeforeSendHeaders.mock.calls[0][1]
-      listener({ requestHeaders: { 'sec-ch-ua': 'old' } }, callback)
-      const modified = callback.mock.calls[0][0].requestHeaders
-      expect(modified['sec-ch-ua']).toContain('Google Chrome')
-      expect(modified['sec-ch-ua']).not.toContain('Microsoft Edge')
-    })
-
-    it('registers handler even for non-Chrome UA but leaves sec-ch-ua untouched off auth hosts', () => {
-      const onBeforeSendHeaders = vi.fn()
-      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-
-      // Why: the Google-auth Firefox switch must install regardless of the base UA.
-      setupClientHintsOverride(mockSess, 'Mozilla/5.0 (compatible; MSIE 10.0)')
-
-      expect(onBeforeSendHeaders).toHaveBeenCalledWith(
-        { urls: ['https://*/*'] },
-        expect.any(Function)
-      )
-      const callback = vi.fn()
-      const listener = onBeforeSendHeaders.mock.calls[0][1]
-      listener({ url: 'https://example.com/', requestHeaders: { 'sec-ch-ua': 'old' } }, callback)
-      expect(callback.mock.calls[0][0].requestHeaders['sec-ch-ua']).toBe('old')
+      expect(callback.mock.calls[0][0].requestHeaders).toEqual({
+        'User-Agent': 'Mozilla/5.0 Chrome/150.0.0.0 Safari/537.36',
+        'sec-ch-ua': 'browser-owned',
+        Cookie: 'abc=123'
+      })
     })
 
     it('presents a Firefox UA and strips client hints on Google auth hosts', () => {
-      const onBeforeSendHeaders = vi.fn()
-      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-      setupClientHintsOverride(
-        mockSess,
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
-      )
-
       const callback = vi.fn()
-      const listener = onBeforeSendHeaders.mock.calls[0][1]
-      listener(
+      install()(
         {
           url: 'https://accounts.google.com/v3/signin/identifier',
           requestHeaders: {
             'User-Agent': 'Chrome/147',
             'sec-ch-ua': 'old',
-            'sec-ch-ua-full-version-list': 'old',
-            'sec-ch-ua-platform': '"macOS"'
+            'SEC-CH-UA-Full-Version-List': 'old',
+            'sec-ch-ua-platform': '"macOS"',
+            Accept: 'text/html'
           }
         },
         callback
@@ -612,24 +605,34 @@ describe('BrowserSessionRegistry', () => {
       const modified = callback.mock.calls[0][0].requestHeaders
       expect(modified['User-Agent']).toMatch(/Firefox\/\d/)
       expect(modified['User-Agent']).not.toContain('Chrome')
-      expect(modified['sec-ch-ua']).toBeUndefined()
-      expect(modified['sec-ch-ua-full-version-list']).toBeUndefined()
-      expect(modified['sec-ch-ua-platform']).toBeUndefined()
+      expect(Object.keys(modified).some((key) => key.toLowerCase().startsWith('sec-ch-ua'))).toBe(
+        false
+      )
+      expect(modified.Accept).toBe('text/html')
+    })
+
+    it('keeps native requests untouched on Google auth hosts', () => {
+      processUserAgentMode.value = 'native'
+      const callback = vi.fn()
+      install()(
+        {
+          url: 'https://accounts.google.com/v3/signin/identifier',
+          requestHeaders: {
+            'User-Agent': 'NativeElectron/43.0',
+            'sec-ch-ua': 'browser-owned'
+          }
+        },
+        callback
+      )
+      expect(callback.mock.calls[0][0].requestHeaders).toEqual({
+        'User-Agent': 'NativeElectron/43.0',
+        'sec-ch-ua': 'browser-owned'
+      })
     })
 
     it('strips client hints on a cross-host request that carries the Firefox auth UA', () => {
-      const onBeforeSendHeaders = vi.fn()
-      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-      setupClientHintsOverride(
-        mockSess,
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
-      )
-
       const callback = vi.fn()
-      const listener = onBeforeSendHeaders.mock.calls[0][1]
-      // Subresource/XHR to a non-auth Google host while the auth document is on
-      // screen: the WebContents Firefox UA leaks onto the request header.
-      listener(
+      install()(
         {
           url: 'https://play.google.com/log',
           requestHeaders: {
@@ -651,99 +654,19 @@ describe('BrowserSessionRegistry', () => {
       expect(modified['sec-ch-ua-mobile']).toBeUndefined()
     })
 
-    it('keeps the clean Chrome identity on cross-host requests that carry the Chrome UA', () => {
-      const onBeforeSendHeaders = vi.fn()
-      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-      const chromeUa =
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
-      setupClientHintsOverride(mockSess, chromeUa)
-
+    it('keeps the session identity on Google app subdomains', () => {
       const callback = vi.fn()
-      const listener = onBeforeSendHeaders.mock.calls[0][1]
-      // Regression guard: non-Google sites (Cloudflare) must keep Chrome hints.
-      listener(
+      install()(
         {
-          url: 'https://example.com/api',
-          requestHeaders: { 'User-Agent': chromeUa, 'sec-ch-ua': 'old' }
+          url: 'https://myaccount.google.com/',
+          requestHeaders: { 'User-Agent': 'Chrome/150', 'sec-ch-ua': 'browser-owned' }
         },
         callback
       )
-      expect(callback.mock.calls[0][0].requestHeaders['sec-ch-ua']).toContain('Google Chrome')
-    })
-
-    it('does not strip hints for the Firefox UA when googleAuthOverride is disabled', () => {
-      const onBeforeSendHeaders = vi.fn()
-      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-      const chromeUa =
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
-      setupClientHintsOverride(mockSess, chromeUa, { googleAuthOverride: false })
-
-      const callback = vi.fn()
-      const listener = onBeforeSendHeaders.mock.calls[0][1]
-      listener(
-        {
-          url: 'https://play.google.com/log',
-          requestHeaders: { 'User-Agent': googleAuthUserAgent(), 'sec-ch-ua': 'old' }
-        },
-        callback
-      )
-      // Imported-native profiles never install the Firefox switch, so the strip
-      // branch stays inert and hints are aligned to Chrome instead.
-      expect(callback.mock.calls[0][0].requestHeaders['sec-ch-ua']).toContain('Google Chrome')
-    })
-
-    it('keeps Chrome client hints on Google app subdomains (not auth hosts)', () => {
-      const onBeforeSendHeaders = vi.fn()
-      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-      setupClientHintsOverride(
-        mockSess,
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
-      )
-
-      const callback = vi.fn()
-      const listener = onBeforeSendHeaders.mock.calls[0][1]
-      listener(
-        { url: 'https://myaccount.google.com/', requestHeaders: { 'sec-ch-ua': 'old' } },
-        callback
-      )
-      expect(callback.mock.calls[0][0].requestHeaders['sec-ch-ua']).toContain('Google Chrome')
-    })
-
-    it('keeps an imported native UA on auth hosts while aligning its Chrome hints', () => {
-      const onBeforeSendHeaders = vi.fn()
-      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-      const importedUa =
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.6890.3 Safari/537.36'
-      setupClientHintsOverride(mockSess, importedUa, { googleAuthOverride: false })
-
-      const callback = vi.fn()
-      const listener = onBeforeSendHeaders.mock.calls[0][1]
-      listener(
-        {
-          url: 'https://accounts.google.com/v3/signin/identifier',
-          requestHeaders: { 'User-Agent': importedUa, 'sec-ch-ua': 'old' }
-        },
-        callback
-      )
-      const modified = callback.mock.calls[0][0].requestHeaders
-      expect(modified['User-Agent']).toBe(importedUa)
-      expect(modified['sec-ch-ua']).toContain('Google Chrome')
-    })
-
-    it('leaves non-Client-Hints headers unchanged', () => {
-      const onBeforeSendHeaders = vi.fn()
-      const mockSess = { webRequest: { onBeforeSendHeaders } } as never
-      setupClientHintsOverride(mockSess, 'Mozilla/5.0 Chrome/147.0.0.0 Safari/537.36')
-
-      const callback = vi.fn()
-      const listener = onBeforeSendHeaders.mock.calls[0][1]
-      listener(
-        { requestHeaders: { Cookie: 'abc=123', 'sec-ch-ua': 'old', Accept: 'text/html' } },
-        callback
-      )
-      const modified = callback.mock.calls[0][0].requestHeaders
-      expect(modified.Cookie).toBe('abc=123')
-      expect(modified.Accept).toBe('text/html')
+      expect(callback.mock.calls[0][0].requestHeaders).toEqual({
+        'User-Agent': 'Chrome/150',
+        'sec-ch-ua': 'browser-owned'
+      })
     })
   })
 })

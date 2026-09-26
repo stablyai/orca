@@ -14,6 +14,7 @@ import {
   takeLocalCapacityRetryListeners,
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
+import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 import { scheduleLocalCapacityRetry } from './filesystem-watcher-local-capacity'
 import { installLocalWatcher } from './filesystem-watcher-local-install'
 
@@ -198,8 +199,9 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
   if (root.listeners.size === 0) {
     if (root.batch.timer) {
       clearTimeout(root.batch.timer)
+      // Why: a cleared handle can't be refresh()ed; null it so a grace-window re-subscribe arms a fresh window.
+      root.batch.timer = null
     }
-
     // Why: duplicate unwatch calls for a root would leak overwritten grace timers; keep just one.
     if (watcherLifecycleState.pendingTeardowns.has(rootKey)) {
       return
@@ -213,6 +215,7 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
         return
       }
       void trackDetachedLocalUnsubscribe(rootKey, currentRoot)
+      cancelLocalBatchFlush(currentRoot)
       watcherLifecycleState.watchedRoots.delete(rootKey)
     }, WATCHER_TEARDOWN_GRACE_MS)
 

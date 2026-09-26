@@ -100,6 +100,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
   }
+  if (provider === 'cursor') {
+    return <AgentIcon agent="cursor" size={13} />
+  }
   return <ClaudeIcon size={13} />
 }
 
@@ -149,6 +152,19 @@ export function getWindowSections(
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
     return [
       ...bucketSections,
+      // Why: Cursor reports the plan total in `monthly` and its pools as buckets,
+      // so dropping it here would hide the number closest to the user's cap.
+      ...(p.monthly
+        ? [
+            {
+              label:
+                p.provider === 'cursor'
+                  ? translate('auto.components.status.bar.tooltip.cursor.plan', 'Plan')
+                  : translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
+              window: p.monthly
+            }
+          ]
+        : []),
       {
         label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
         window: p.weekly

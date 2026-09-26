@@ -9,9 +9,11 @@ export function shouldReadMarkdownFromDiskAfterReadTabFailure(response: RpcFailu
   )
 }
 
+// `truncated` is optional because the preview reader salvages it: an absent flag reads as not
+// truncated here, which is the branch main took for a reply that omitted it.
 export function buildMarkdownDiskFallbackDoc(args: {
   content: string
-  truncated: boolean
+  truncated: boolean | undefined
   tabIsDirty: boolean
 }) {
   const readOnlyReason = args.truncated

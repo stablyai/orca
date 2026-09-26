@@ -40,7 +40,7 @@ describe('electron-builder dev-channel identity', () => {
     expect(config.win.signtoolOptions.publisherName).toBe('SignPath Foundation')
     expect(config.win.verifyUpdateCodeSignature).toBeUndefined()
     expect(config.publish.repo).toBe('orca')
-    expect(config.publish.releaseType).toBe('release')
+    expect(config.publish.releaseType).toBe('draft')
   })
 
   // The whole point of the change: an unsigned build that advertised a
@@ -51,6 +51,19 @@ describe('electron-builder dev-channel identity', () => {
 
     expect(config.win.signtoolOptions?.publisherName).toBeUndefined()
     expect(config.win.verifyUpdateCodeSignature).toBe(false)
+  })
+
+  // Why on every channel: the hook is the only handle electron-builder gives on
+  // the NSIS uninstaller, and it signs nothing — it relays the file to and from
+  // the CI SignPath request. Carrying it must not drag a publisherName onto a
+  // dev build, which is the failure the split above exists to prevent.
+  it('carries the uninstaller sign hook without changing publisherName semantics', () => {
+    for (const env of [{}, WIN_ADHOC_ENV]) {
+      const config = loadConfigWithEnv(env)
+      expect(typeof config.win.signtoolOptions.sign).toBe('function')
+    }
+    expect(loadConfigWithEnv({}).win.signtoolOptions.publisherName).toBe('SignPath Foundation')
+    expect(loadConfigWithEnv(WIN_ADHOC_ENV).win.signtoolOptions.publisherName).toBeUndefined()
   })
 
   it.each([

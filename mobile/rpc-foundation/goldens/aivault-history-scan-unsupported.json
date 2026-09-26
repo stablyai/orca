@@ -1,0 +1,92 @@
+{
+  "operation": "aiVault.history-scan",
+  "family": "aiVault.history",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "ec16931c5431d3dbb05729d4670c381a434bff71648d334b7b5224db188fdccb",
+  "scenarioSha256": "e97c6db772a70ee1912419ac67835b6074aaf9a341d4360389a11465f08092c5",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "053ddb72973f": {
+      "activeWorktreePath": "/repo/feature",
+      "hostStatusResult": {
+        "capabilities": ["mobile.tasks.v1"]
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "unsupported"
+      }
+    },
+    "a3b75b607f63": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["mobile.tasks.v1"]
+          }
+        }
+      }
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "aivault-history-scan-unsupported",
+    "checkpoints": [
+      {
+        "id": "unsupported",
+        "observation": {
+          "sender": ["a3b75b607f63"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "053ddb72973f",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

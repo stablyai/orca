@@ -35,6 +35,14 @@ function shouldFocusEmptyEditorFromSurfaceClick(
   return !target.closest('.rich-markdown-editor-shell button, .rich-markdown-editor-shell input')
 }
 
+function shouldReturnFocusToEditor(event: React.MouseEvent<HTMLDivElement>): boolean {
+  if (event.button !== 0) {
+    return false
+  }
+  const target = event.target
+  return target instanceof Element && Boolean(target.closest('.ProseMirror'))
+}
+
 type RichMarkdownEditorSurfaceProps = {
   editor: Editor | null
   editorFontZoomLevel: number
@@ -206,8 +214,14 @@ export function RichMarkdownEditorSurface({
         <div className="relative min-h-0 flex-1">
           <div
             ref={scrollContainerRef}
-            className="relative h-full overflow-auto scrollbar-editor"
+            // Image layout must not anchor-scroll over the restored tab position.
+            className="relative h-full overflow-auto scrollbar-editor [overflow-anchor:none]"
             onMouseDown={(event) => {
+              if (shouldReturnFocusToEditor(event)) {
+                // Keep the find bar open while handing keyboard focus back to the document.
+                searchState.searchInputRef.current?.blur()
+                editor?.commands.focus()
+              }
               if (!shouldFocusEmptyEditorFromSurfaceClick(event, editor)) {
                 return
               }

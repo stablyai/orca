@@ -105,6 +105,7 @@ export class DaemonTerminalAdmission {
         ...(attachOnly ? { attachOnly: true } : {}),
         ...(isTuiAgent(payload.launchAgent) ? { launchAgent: payload.launchAgent } : {}),
         shellOverride: payload.shellOverride,
+        terminalShellArgs: payload.terminalShellArgs,
         terminalWindowsWslDistro: payload.terminalWindowsWslDistro,
         terminalWindowsPowerShellImplementation: payload.terminalWindowsPowerShellImplementation,
         shellReadySupported: payload.shellReadySupported,
@@ -161,7 +162,10 @@ export class DaemonTerminalAdmission {
       ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
       wslDistro: result.wslDistro,
       ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
-      ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
+      ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
+      ...(result.cwdReadableByDaemon !== undefined
+        ? { cwdReadableByDaemon: result.cwdReadableByDaemon }
+        : {})
     }
   }
 

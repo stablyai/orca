@@ -45,6 +45,10 @@ vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('not-needed')
+}))
+
 vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayInstallMarkerModule>()),
   createRelayInstallMarkerFileName: () => '.sftp-namespace-00000000000000000000000000000000'
@@ -134,7 +138,7 @@ describe('cross-version isolation', () => {
       if (command.includes('.gc-claim') && command.includes('echo LOCKED || echo OPEN')) {
         return Promise.resolve('OPEN')
       }
-      if (command.includes('.install-lock') && command.includes('&& echo OK || echo BUSY')) {
+      if (command.startsWith('if mkdir ') && command.includes('.install-lock')) {
         return Promise.resolve('OK')
       }
       if (command.includes('ORCA-NPTY-PROBE-OK')) {

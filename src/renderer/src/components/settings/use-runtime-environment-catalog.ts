@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
 import { useAppStore } from '@/store'
 import {
   isUserManagedRuntimeEnvironment,
@@ -50,10 +51,7 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
         // linger in the sidebar registry.
         useAppStore.getState().setRuntimeEnvironments(nextEnvironments)
         if (verified) {
-          useAppStore.getState().setRuntimeEnvironmentStatus(verified.environmentId, {
-            status: verified.runtimeStatus,
-            checkedAt: Date.now()
-          })
+          await useAppStore.getState().readRuntimeHostStatusSnapshots()
         }
         if (mountedRef.current) {
           setEnvironments(visibleEnvironments)
@@ -65,12 +63,14 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
                   ? {
                       status: 'ready',
                       runtimeStatus: verified.runtimeStatus,
+                      remoteControl: verified.runtimeStatus.remoteControl ?? null,
                       compatibility: evaluateHostDetails(verified.runtimeStatus),
                       error: null
                     }
                   : (current[environment.id] ?? {
                       status: 'loading',
                       runtimeStatus: null,
+                      remoteControl: null,
                       compatibility: null,
                       error: null
                     })
@@ -90,10 +90,7 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
                 const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
                 // Why: feed the live status into the store so sidebar host pickers
                 // reflect manual refreshes, not just the settings pane.
-                useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
-                  status: runtimeStatus,
-                  checkedAt: Date.now()
-                })
+                await useAppStore.getState().readRuntimeHostStatusSnapshots()
                 if (!mountedRef.current) {
                   return
                 }
@@ -102,6 +99,7 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
                   [environment.id]: {
                     status: 'ready',
                     runtimeStatus,
+                    remoteControl: runtimeStatus.remoteControl ?? null,
                     compatibility: evaluateHostDetails(runtimeStatus),
                     error: null
                   }
@@ -109,10 +107,8 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
               } catch (error) {
                 // Why: record the failed probe (null status) so the sidebar can
                 // distinguish unreachable from never-checked.
-                useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
-                  status: null,
-                  checkedAt: Date.now()
-                })
+                const remoteControl = extractRuntimeTransportDiagnostics(error)
+                await useAppStore.getState().readRuntimeHostStatusSnapshots()
                 if (!mountedRef.current) {
                   return
                 }
@@ -121,6 +117,7 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
                   [environment.id]: {
                     status: 'error',
                     runtimeStatus: null,
+                    remoteControl: remoteControl ?? null,
                     compatibility: null,
                     error: error instanceof Error ? error.message : String(error)
                   }

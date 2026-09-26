@@ -1,4 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { serializeCompleteProfileStateDomains } from './profile-state-authority-writes'
+import type { ProfileStateDomainReplacement } from './profile-state-authority'
+import { randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { collectFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
 import {
@@ -7,7 +9,14 @@ import {
   type ProtectedSecretRetentionUpdate
 } from '../../protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
+import { omitDefaultWorktreeMetaFieldsInMap } from '../../../shared/worktree/meta-persisted-defaults'
+import { projectWorktreeMetaByIdentityOntoLocators } from './worktree-meta-alias-projection'
+import { withoutRedundantPartitionGlobals } from '../../../shared/workspace-session-host-field-ownership'
 
+import {
+  applySecretSentinelSubstitutions,
+  type SecretSentinelSubstitution
+} from './secret-sentinel-substitution'
 import type { StoreRuntimeState } from './store-runtime-state'
 
 type StateSerializationSecretHandlingOperationsRuntime = Pick<
@@ -23,8 +32,93 @@ export class StateSerializationSecretHandlingOperations {
     return durable
   }
 
-  buildStateToSave(): {
-    payload: string
+  /** Serialize domains with complete secret handling; unknown domains fall back to a full write. */
+  buildStateDomainsToSave(domains: ReadonlySet<string>):
+    | {
+        payload: Buffer
+        protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
+      }
+    | undefined {
+    // A later save must retry secrets deferred by any domain, until a durable commit succeeds.
+    if (this.runtime.protectedSecrets.hasPendingEncryption()) {
+      return undefined
+    }
+    const stateToSave: Record<string, unknown> = {}
+    const protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
+    const encrypt = (slot: string, plaintext: string): string => {
+      const encrypted = this.runtime.protectedSecrets.encrypt(slot, plaintext)
+      if (encrypted.retentionUpdate) {
+        protectedSecretUpdates.push(encrypted.retentionUpdate)
+      }
+      return encrypted.blob
+    }
+    for (const domain of domains) {
+      switch (domain) {
+        case 'settings':
+          stateToSave[domain] = this.buildSettingsToSave(encrypt)
+          break
+        case 'workspaceSession':
+          stateToSave[domain] = this.runtime.state.workspaceSession
+          break
+        case 'automations':
+        case 'automationRuns':
+          stateToSave[domain] = this.runtime.state[domain]
+          break
+        case 'featureInteractionTelemetryBuckets':
+          stateToSave[domain] = this.runtime.state.featureInteractionTelemetryBuckets
+          break
+        case 'ui':
+          stateToSave[domain] = {
+            ...this.runtime.state.ui,
+            browserKagiSessionLink:
+              encrypt(
+                PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+                this.runtime.state.ui.browserKagiSessionLink ?? ''
+              ) || null
+          }
+          break
+        case 'worktreeMeta':
+          stateToSave[domain] = omitDefaultWorktreeMetaFieldsInMap(this.runtime.state.worktreeMeta)
+          break
+        case 'worktreeMetaByIdentity':
+          if (this.runtime.state.worktreeMetaByIdentity !== undefined) {
+            stateToSave[domain] = omitDefaultWorktreeMetaFieldsInMap(
+              projectWorktreeMetaByIdentityOntoLocators(
+                this.runtime.state.worktreeMetaByIdentity,
+                this.runtime.state
+              )
+            )
+          }
+          break
+        case 'worktreeIdentityAliases':
+          if (this.runtime.state.worktreeIdentityAliases !== undefined) {
+            stateToSave[domain] = this.runtime.state.worktreeIdentityAliases
+          }
+          break
+        case 'workspaceSessionsByHostId':
+          if (this.runtime.state.workspaceSessionsByHostId !== undefined) {
+            stateToSave[domain] = withoutRedundantPartitionGlobals(
+              this.runtime.state.workspaceSessionsByHostId,
+              this.runtime.state.workspaceSession
+            )
+          }
+          break
+        case 'sshRemotePtyLeases':
+          stateToSave[domain] = this.runtime.state.sshRemotePtyLeases
+          break
+        default:
+          return undefined
+      }
+    }
+    return {
+      payload: Buffer.from(JSON.stringify(stateToSave), 'utf8'),
+      protectedSecretUpdates
+    }
+  }
+
+  buildStateToSave(serializeDomains = false): {
+    domains?: readonly ProfileStateDomainReplacement[]
+    payload: Buffer
     stateHash: string
     protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
   } {
@@ -37,7 +131,7 @@ export class StateSerializationSecretHandlingOperations {
     // on deterministic-IV platforms (macOS/legacy-Linux OSCrypt). A per-slot
     // random UUID can't occur anywhere else in the serialized state (the user
     // sets their data before it is minted), so it appears exactly once.
-    const secretSubs: { sentinel: string; blob: string; hashValue: string }[] = []
+    const secretSubs: SecretSentinelSubstitution[] = []
     const protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
     let protectedStorageDegraded = false
     const encryptToSentinel = (slot: string, plaintext: string): string => {
@@ -62,9 +156,41 @@ export class StateSerializationSecretHandlingOperations {
       const encrypted = encryptToSentinel(slot, plaintext ?? '')
       return encrypted || null
     }
+    // Ordered before the default omission on purpose: the two maps hold the SAME row object, so
+    // the projection settles almost every row on a reference check. Omitting first rebuilds each
+    // row twice into two distinct objects and forces a deep compare per row instead. Omission is
+    // a pure function of the value, so a pair equal here is equal after it too -- and it never
+    // touches `hostId`/`instanceId`, which is what the reader re-derives the omitted key from.
+    const projectedWorktreeMetaByIdentity =
+      this.runtime.state.worktreeMetaByIdentity === undefined
+        ? undefined
+        : projectWorktreeMetaByIdentityOntoLocators(
+            this.runtime.state.worktreeMetaByIdentity,
+            this.runtime.state
+          )
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
+      // Default-valued metadata slots are re-filled at load (normalizeWorktreeLinkedItemMetadata),
+      // so omitting them here is lossless and drops ~12% of the file on a heavy install.
+      worktreeMeta: omitDefaultWorktreeMetaFieldsInMap(this.runtime.state.worktreeMeta),
+      ...(projectedWorktreeMetaByIdentity !== undefined
+        ? {
+            worktreeMetaByIdentity: omitDefaultWorktreeMetaFieldsInMap(
+              projectedWorktreeMetaByIdentity
+            )
+          }
+        : {}),
+      // 'local' owns these globals and is the only slice any read takes them from; the load path
+      // re-seeds each partition's default, so writing them per host is pure file weight.
+      ...(this.runtime.state.workspaceSessionsByHostId !== undefined
+        ? {
+            workspaceSessionsByHostId: withoutRedundantPartitionGlobals(
+              this.runtime.state.workspaceSessionsByHostId,
+              this.runtime.state.workspaceSession
+            )
+          }
+        : {}),
       // Why both keys unconditionally: the explicit keys always win over the spread, and
       // JSON.stringify drops the `undefined` value so a note-free profile gains no key on disk.
       // The strip builds a new array here only; this.state records keep their notes in memory.
@@ -83,17 +209,7 @@ export class StateSerializationSecretHandlingOperations {
           )
         })
       ),
-      settings: {
-        ...stripRetiredGlobalSettings(this.runtime.state.settings),
-        opencodeSessionCookie: encryptToSentinel(
-          PROTECTED_SECRET_SLOT.opencodeSessionCookie,
-          this.runtime.state.settings.opencodeSessionCookie
-        ),
-        httpProxyUrl: encryptToSentinel(
-          PROTECTED_SECRET_SLOT.httpProxyUrl,
-          this.runtime.state.settings.httpProxyUrl ?? ''
-        )
-      },
+      settings: this.buildSettingsToSave(encryptToSentinel),
       ui: {
         ...this.runtime.state.ui,
         browserKagiSessionLink: encryptOptionalToSentinel(
@@ -102,24 +218,53 @@ export class StateSerializationSecretHandlingOperations {
         )
       }
     }
+    if (
+      serializeDomains &&
+      !('toJSON' in stateToSave && typeof stateToSave.toJSON === 'function')
+    ) {
+      const serialized = serializeCompleteProfileStateDomains(
+        stateToSave,
+        secretSubs,
+        protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
+      )
+      return {
+        domains: serialized.domains,
+        stateHash: serialized.stateHash,
+        get payload() {
+          return serialized.payload
+        },
+        protectedSecretUpdates
+      }
+    }
     // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
     // One full-state stringify; secret slots currently hold sentinels.
     const serialized = JSON.stringify(stateToSave)
-    // Substitute each unique sentinel exactly once: ciphertext for the on-disk
-    // payload, a stable normalized value for the guard hash. Function-form
-    // replacement keeps `$` inert; both sides read the sentinel as JSON-escaped
-    // in `serialized`, so each replace is byte-for-byte position-exact.
-    let payload = serialized
-    let hashInput = serialized
-    for (const { sentinel, blob, hashValue } of secretSubs) {
-      const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
-      payload = payload.replace(escapedSentinel, () => JSON.stringify(blob).slice(1, -1))
-      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(hashValue).slice(1, -1))
-    }
-    const stateHash = createHash('sha1')
-      .update(protectedStorageDegraded ? 'safeStorage-degraded\0' : '')
-      .update(hashInput)
-      .digest('hex')
+    // Substitute each unique sentinel: ciphertext for the on-disk payload, a stable normalized
+    // value for the guard hash. One pass builds both, so the multi-MB state is never copied per
+    // sentinel and never encoded twice.
+    const { payload, stateHash } = applySecretSentinelSubstitutions(
+      serialized,
+      secretSubs,
+      protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
+    )
     return { payload, stateHash, protectedSecretUpdates }
+  }
+
+  private buildSettingsToSave(encrypt: (slot: string, plaintext: string) => string) {
+    return {
+      ...stripRetiredGlobalSettings(this.runtime.state.settings),
+      opencodeSessionCookie: encrypt(
+        PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+        this.runtime.state.settings.opencodeSessionCookie
+      ),
+      opencodeGoApiKey: encrypt(
+        PROTECTED_SECRET_SLOT.opencodeGoApiKey,
+        this.runtime.state.settings.opencodeGoApiKey ?? ''
+      ),
+      httpProxyUrl: encrypt(
+        PROTECTED_SECRET_SLOT.httpProxyUrl,
+        this.runtime.state.settings.httpProxyUrl ?? ''
+      )
+    }
   }
 }

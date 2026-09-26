@@ -88,6 +88,8 @@ export type SpawnSourceControlAgent = (input: {
   cwd?: string
   env?: NodeJS.ProcessEnv
   wslDistro?: string
+  // WSL applies these in the guest; native callers already merge them into env.
+  commandEnv?: Record<string, string>
   stdinMode: 'ignore' | 'pipe'
   useCwdForNative: boolean
 }) => SpawnedSourceControlAgentProcess

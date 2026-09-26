@@ -1,0 +1,532 @@
+{
+  "runtime": {
+    "node": "26.6.0",
+    "acorn": "8.17.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "libffi": "3.7.1",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "147",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.6.3",
+    "simdjson": "4.6.6",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026a",
+    "undici": "8.9.0",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "14.6.202.34-node.26",
+    "zlib": "1.2.12",
+    "zstd": "1.5.7"
+  },
+  "sourceHashLineEndings": "canonical LF",
+  "crlfLoaderControl": {
+    "syntheticCrlfReads": 2,
+    "identicalSourcesAndHashes": true
+  },
+  "scope": "Actual wrapper, foreground tracker and pre-listener queue, with the installed node-pty event emitter and an inert native process. No native PTY, process scan, OS signal or window. Small object counts, no payload amplification.",
+  "nodePty": {
+    "version": "1.1.0",
+    "eventEmitterSha256": "f1c14613aa90c10def4ca7238329270871997eb26f919f7074dc25533e3e75dd"
+  },
+  "reports": {
+    "before": {
+      "whileLive": {
+        "args": 1,
+        "env": 1
+      },
+      "afterOwnerDrop": {
+        "args": 0,
+        "env": 0
+      },
+      "controls": [
+        "PATH retained",
+        "raw foreground receiver",
+        "pre-listener data/exit",
+        "status unavailable",
+        "signal cause",
+        "dead signal guard",
+        "idempotent dispose"
+      ]
+    },
+    "after": {
+      "whileLive": {
+        "args": 0,
+        "env": 0
+      },
+      "afterOwnerDrop": {
+        "args": 0,
+        "env": 0
+      },
+      "controls": [
+        "PATH retained",
+        "raw foreground receiver",
+        "pre-listener data/exit",
+        "status unavailable",
+        "signal cause",
+        "dead signal guard",
+        "idempotent dispose"
+      ]
+    }
+  },
+  "versions": {
+    "before": {
+      "sourceHashes": {
+        "src/main/daemon/pty-subprocess/subprocess-handle.ts": {
+          "before": "12ec9e8b5e5f7175310f9522c3f827b19b871c3df5b09e8b1b2c4fe1fc92ba4e",
+          "after": "e28a2043f9c68c365109aab0550f97c49ee76fbbadc14c81dd7eb7b9aae6fc7a"
+        }
+      },
+      "bundleSha256": "a546917f2c969df3c010031537338121ed0de0ce6e60f45b39ab52dc776d4a7c",
+      "dependencies": [
+        {
+          "path": "src/shared/pty-slave-line-discipline-echo.ts",
+          "sha256": "3df5bc2c7c45ffce766da5460ed5d888f463768d8d8287792cecf45e5f3618b4"
+        },
+        {
+          "path": "src/main/pty/node-pty-pts-name.ts",
+          "sha256": "aa1a50bd935895cbd1acc03fffd16ca735ede9d563cece849e7fdede99bc95a6"
+        },
+        {
+          "path": "src/main/daemon/daemon-pty-size.ts",
+          "sha256": "cb78f1d5e2cf142f86155595df62fd6f3ccd5f45aa11ed74068efc2de77ab741"
+        },
+        {
+          "path": "src/shared/wsl-paths.ts",
+          "sha256": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a"
+        },
+        {
+          "path": "src/shared/cross-platform-path.ts",
+          "sha256": "d72a91065f535824b17f2d3285f45f6d2f40ec2a2ac7ffb4ae17edaa4f9a97f3"
+        },
+        {
+          "path": "src/shared/workspace-scope.ts",
+          "sha256": "961b4e7d05f044aa58ac0f3e0ca9344d166f4787742836c855c06ba90dd71581"
+        },
+        {
+          "path": "src/shared/pty-session-id-format.ts",
+          "sha256": "42bb5177724f9dd38ae1814b38f795966536fd803d92364e0b5f9f49a8f8a49b"
+        },
+        {
+          "path": "src/shared/worktree/id.ts",
+          "sha256": "d4da9e75db6f0d3301ef5f073d3136282dab4fc4fbd2978bdcdf0e142e7a9d30"
+        },
+        {
+          "path": "src/main/providers/agent-foreground-context-paths.ts",
+          "sha256": "df3ad7d74ff4048999231492aab490336078b915e9033cab77ab9e51b14c062f"
+        },
+        {
+          "path": "src/shared/orca-cli-command-name.ts",
+          "sha256": "c90b037ec7a6143770a40dd907bf9d053fb2cede21128b60b78a78671c0780c0"
+        },
+        {
+          "path": "src/shared/tui-agent-config.ts",
+          "sha256": "ac7407900e6dafad72cc47aae171b169e8e1d7752d28caa0e09441d73a1fe1ad"
+        },
+        {
+          "path": "src/shared/agent-node-entrypoint-identities.ts",
+          "sha256": "f2d58fcb086f30afbee3987a3b3ccbde566983e9f230a6da05f9c1d808ffa2d4"
+        },
+        {
+          "path": "src/shared/print-mode-headless-command.ts",
+          "sha256": "4a632179d794718904989bfb00dabb7c741a0ae35d58585cf07f4aa746c36f7a"
+        },
+        {
+          "path": "src/shared/ante-headless-command.ts",
+          "sha256": "710a59e55ab1dfa32a33f7df9b4ecac77f85e387dc93e740d0bc678c37e61620"
+        },
+        {
+          "path": "src/shared/prime-agent-headless-command.ts",
+          "sha256": "0898cb5322ff91510e81c11ec9c7d4fc1cd6e850491092a78f79931722651ec3"
+        },
+        {
+          "path": "src/shared/agent-headless-command.ts",
+          "sha256": "10f84a57c243c7e9b13b9cd9419ff174cd0c8b20cf4783aeceb6cebbc52def87"
+        },
+        {
+          "path": "src/shared/command-token-scanner.ts",
+          "sha256": "86eeb322b12bb3e5bc48edf5d85ec647c0c0ec24d3beb3526e1ae3c9aa7303a0"
+        },
+        {
+          "path": "src/shared/agent-process-recognition.ts",
+          "sha256": "2a93bfec55fabc7052bf1654d270131a61935c72976bfd3251585c7c1138a0a4"
+        },
+        {
+          "path": "src/shared/synthetic-agent-title.ts",
+          "sha256": "40658e43e59cba687ab2304989d23ae14ed7205c5cae02f6fc7c9634bd0da922"
+        },
+        {
+          "path": "src/shared/foreground-wrapper-agent.ts",
+          "sha256": "87a2caa7daa616c96cf308a5413abf3eac21fe01411ff6bcc1e166d1cd22aa77"
+        },
+        {
+          "path": "src/shared/process-table-snapshot.ts",
+          "sha256": "fe423af1745925a52b5d205a3cb20325220c39996e1c065d56fe2af1e69182e9"
+        },
+        {
+          "path": "src/shared/process-table-snapshot-reader.ts",
+          "sha256": "7d35601a2a7bf7a9c5b4a897995e0e8a15775b4d35939f3dd1abe1a042bb1c5e"
+        },
+        {
+          "path": "src/shared/process-table-index.ts",
+          "sha256": "30f236b7d0275f05673c0a7982bb0aa67c9319762749f5a583c5c31e51e31f36"
+        },
+        {
+          "path": "src/shared/shell-process-detection.ts",
+          "sha256": "d80a58eaba385d17ef3af37a8b7c516c86539c494aa38afaef1418b1a2f4f79f"
+        },
+        {
+          "path": "src/main/windows/windows-command-line-recovery-health.ts",
+          "sha256": "a135da3611d54fecb0dba52b4d81e06ca1532680424b55e7efa315b7c886ec33"
+        },
+        {
+          "path": "src/shared/child-process/windows-command-line.ts",
+          "sha256": "4bf94aa90ee63d965bc6e1198ddafa4a715c05d78be979025d17dc59d90557ca"
+        },
+        {
+          "path": "src/shared/child-process/windows-cmd-shim-resolution.ts",
+          "sha256": "5044e3a9140a19c8bb713044de655b611244659a754f32e5a5df7f519df40eb3"
+        },
+        {
+          "path": "src/shared/child-process/spawn-resolution.ts",
+          "sha256": "8c62c3c14d6f110f25bab23e3f4b2633a68e2f36252bd3aac68cffd7b2e274dc"
+        },
+        {
+          "path": "src/shared/child-process/process-tree-kill-gate.ts",
+          "sha256": "62848f063785e15cb0231deb622b043e81484ed3040c612afdc4f98fa2db06ab"
+        },
+        {
+          "path": "src/shared/child-process/process-tree-termination.ts",
+          "sha256": "49f001659c872e23040fe5bab2dd387f2589178f5bc3ce9361373303d23ff120"
+        },
+        {
+          "path": "src/shared/child-process/bounded-output-sink.ts",
+          "sha256": "7dbab9fc70dac8e5d19dd03d743b55609092b45ca13423e2dc80a69cf7fc4865"
+        },
+        {
+          "path": "src/shared/child-process/child-termination-reporter.ts",
+          "sha256": "d91ff09b26c9a23e26c2a2f92b129879cd6d0bddea14cd3bcac5d4489fecfca0"
+        },
+        {
+          "path": "src/shared/child-process/process-spec.ts",
+          "sha256": "97e52b5e320da1eed4cfb2c0b73a88696b62f355eb4b5fe0df5389764afb8289"
+        },
+        {
+          "path": "src/shared/child-process/run-process.ts",
+          "sha256": "ae4dad239273351ce61269cd7f7abb8325f3f620be600fa9c0ae760c1dd7cbad"
+        },
+        {
+          "path": "src/shared/child-process/windows-system-binary.ts",
+          "sha256": "0c42c7c454534a0937f4153e9708aeb243bd930d130ffc6493ac42d21405606e"
+        },
+        {
+          "path": "src/main/windows/windows-process-table-cim-scan.ts",
+          "sha256": "ecfa487a3139cc087eae78ff61bf358f7eb62aec3b20e9d064d96b6e37862ab0"
+        },
+        {
+          "path": "src/main/windows/windows-process-table.ts",
+          "sha256": "de0565f724f49ca393bb55c1618e697ea34e98bfee132c196d0c3e97713aabe1"
+        },
+        {
+          "path": "src/main/providers/windows-foreground-process-rows.ts",
+          "sha256": "374accddf905f5b60fb1be4010e8160bfaf7f1a3834ecaffbf0119e555c7a765"
+        },
+        {
+          "path": "src/main/providers/windows-agent-foreground-process.ts",
+          "sha256": "a7056960617a9a5c740209a3a96280c4e57da69b7604e17f148c0c2195d0e5e9"
+        },
+        {
+          "path": "src/shared/foreground-process-selection.ts",
+          "sha256": "18005d15f552cb8805148cebb330636f6cec0f8d98d2eca83444aef7794d3767"
+        },
+        {
+          "path": "src/main/providers/agent-foreground-process-remote-evidence.ts",
+          "sha256": "c46feb5f19d873bbf08ff607a6a86a53a9d982ece7aa43e471aaad640621ad4d"
+        },
+        {
+          "path": "src/main/providers/agent-foreground-process-batch.ts",
+          "sha256": "6f8c785ddd701883f7b44231b152a0c32b8a5a3db24529347085c1ac43127ce6"
+        },
+        {
+          "path": "src/main/providers/agent-foreground-process.ts",
+          "sha256": "1f76c512e3c308959f11665c749e9d001da03661ad5bc2230a84125bc4aa8368"
+        },
+        {
+          "path": "src/main/providers/windows-pty-job-membership.ts",
+          "sha256": "4b5031a7cbac09c967c4269a247311e09d6b2617a630dd1743bf0a9ddac37c5f"
+        },
+        {
+          "path": "src/main/daemon/pty-subprocess/pty-shell-foreground-confirmation.ts",
+          "sha256": "aea01ded6b790b26a06314499eaa1db993c86660a076a710a73aa06a6ba1faee"
+        },
+        {
+          "path": "src/main/providers/windows-cached-agent-revalidation.ts",
+          "sha256": "b7e60bf9e939b069488640b291bd025386cfa413b6431edd61563dba30bcc6be"
+        },
+        {
+          "path": "src/main/providers/windows-console-attached-processes.ts",
+          "sha256": "63de2e44605c28139204c196cc1add202c723f4896c6f36757e92ab85a7fe065"
+        },
+        {
+          "path": "src/main/daemon/pty-subprocess/foreground-fallback-process.ts",
+          "sha256": "a2a68908fa5f59a940d8b280073f5737374cb5f6d9938c64be2a4d26433d7827"
+        },
+        {
+          "path": "src/main/daemon/pty-session-id.ts",
+          "sha256": "1c8beaf069eb5e093e45a9489feffac60e8a5635e8f941722d2a3c3124b4f878"
+        },
+        {
+          "path": "src/main/daemon/pty-subprocess/foreground-process-tracker.ts",
+          "sha256": "c29a04d412294f2ef3b46ec2fe7fd8f680ba00aadf11db4f9faea01b1b8c8df3"
+        },
+        {
+          "path": "src/shared/terminal-exit-cause.ts",
+          "sha256": "cdbe03be86d26c6489a257e886cb6ca6b2301dc1a82752d6a028d66de46903a2"
+        },
+        {
+          "path": "src/main/daemon/pty-subprocess/pre-listener-events.ts",
+          "sha256": "32b290969b16c2676bbc9801cf563fc1988f16131678ce3cf0c627ffeaf401a2"
+        },
+        {
+          "path": "src/main/daemon/pty-subprocess/subprocess-handle.ts",
+          "sha256": "12ec9e8b5e5f7175310f9522c3f827b19b871c3df5b09e8b1b2c4fe1fc92ba4e"
+        }
+      ]
+    },
+    "after": {
+      "sourceHashes": {
+        "src/main/daemon/pty-subprocess/subprocess-handle.ts": {
+          "before": "12ec9e8b5e5f7175310f9522c3f827b19b871c3df5b09e8b1b2c4fe1fc92ba4e",
+          "after": "e28a2043f9c68c365109aab0550f97c49ee76fbbadc14c81dd7eb7b9aae6fc7a"
+        }
+      },
+      "bundleSha256": "54e4ef70dd3262f94b679289440b882dfedacfb5e0af325d51d1ec2a2b455929",
+      "dependencies": [
+        {
+          "path": "src/shared/pty-slave-line-discipline-echo.ts",
+          "sha256": "3df5bc2c7c45ffce766da5460ed5d888f463768d8d8287792cecf45e5f3618b4"
+        },
+        {
+          "path": "src/main/pty/node-pty-pts-name.ts",
+          "sha256": "aa1a50bd935895cbd1acc03fffd16ca735ede9d563cece849e7fdede99bc95a6"
+        },
+        {
+          "path": "src/main/daemon/daemon-pty-size.ts",
+          "sha256": "cb78f1d5e2cf142f86155595df62fd6f3ccd5f45aa11ed74068efc2de77ab741"
+        },
+        {
+          "path": "src/shared/wsl-paths.ts",
+          "sha256": "1d9dcf5a1ff6693c02ff60a6b074eb2ebb7e83bda12aceba7e0b208d410b6d1a"
+        },
+        {
+          "path": "src/shared/cross-platform-path.ts",
+          "sha256": "d72a91065f535824b17f2d3285f45f6d2f40ec2a2ac7ffb4ae17edaa4f9a97f3"
+        },
+        {
+          "path": "src/shared/workspace-scope.ts",
+          "sha256": "961b4e7d05f044aa58ac0f3e0ca9344d166f4787742836c855c06ba90dd71581"
+        },
+        {
+          "path": "src/shared/pty-session-id-format.ts",
+          "sha256": "42bb5177724f9dd38ae1814b38f795966536fd803d92364e0b5f9f49a8f8a49b"
+        },
+        {
+          "path": "src/shared/worktree/id.ts",
+          "sha256": "d4da9e75db6f0d3301ef5f073d3136282dab4fc4fbd2978bdcdf0e142e7a9d30"
+        },
+        {
+          "path": "src/main/providers/agent-foreground-context-paths.ts",
+          "sha256": "df3ad7d74ff4048999231492aab490336078b915e9033cab77ab9e51b14c062f"
+        },
+        {
+          "path": "src/shared/orca-cli-command-name.ts",
+          "sha256": "c90b037ec7a6143770a40dd907bf9d053fb2cede21128b60b78a78671c0780c0"
+        },
+        {
+          "path": "src/shared/tui-agent-config.ts",
+          "sha256": "ac7407900e6dafad72cc47aae171b169e8e1d7752d28caa0e09441d73a1fe1ad"
+        },
+        {
+          "path": "src/shared/agent-node-entrypoint-identities.ts",
+          "sha256": "f2d58fcb086f30afbee3987a3b3ccbde566983e9f230a6da05f9c1d808ffa2d4"
+        },
+        {
+          "path": "src/shared/print-mode-headless-command.ts",
+          "sha256": "4a632179d794718904989bfb00dabb7c741a0ae35d58585cf07f4aa746c36f7a"
+        },
+        {
+          "path": "src/shared/ante-headless-command.ts",
+          "sha256": "710a59e55ab1dfa32a33f7df9b4ecac77f85e387dc93e740d0bc678c37e61620"
+        },
+        {
+          "path": "src/shared/prime-agent-headless-command.ts",
+          "sha256": "0898cb5322ff91510e81c11ec9c7d4fc1cd6e850491092a78f79931722651ec3"
+        },
+        {
+          "path": "src/shared/agent-headless-command.ts",
+          "sha256": "10f84a57c243c7e9b13b9cd9419ff174cd0c8b20cf4783aeceb6cebbc52def87"
+        },
+        {
+          "path": "src/shared/command-token-scanner.ts",
+          "sha256": "86eeb322b12bb3e5bc48edf5d85ec647c0c0ec24d3beb3526e1ae3c9aa7303a0"
+        },
+        {
+          "path": "src/shared/agent-process-recognition.ts",
+          "sha256": "2a93bfec55fabc7052bf1654d270131a61935c72976bfd3251585c7c1138a0a4"
+        },
+        {
+          "path": "src/shared/synthetic-agent-title.ts",
+          "sha256": "40658e43e59cba687ab2304989d23ae14ed7205c5cae02f6fc7c9634bd0da922"
+        },
+        {
+          "path": "src/shared/foreground-wrapper-agent.ts",
+          "sha256": "87a2caa7daa616c96cf308a5413abf3eac21fe01411ff6bcc1e166d1cd22aa77"
+        },
+        {
+          "path": "src/shared/process-table-snapshot.ts",
+          "sha256": "fe423af1745925a52b5d205a3cb20325220c39996e1c065d56fe2af1e69182e9"
+        },
+        {
+          "path": "src/shared/process-table-snapshot-reader.ts",
+          "sha256": "7d35601a2a7bf7a9c5b4a897995e0e8a15775b4d35939f3dd1abe1a042bb1c5e"
+        },
+        {
+          "path": "src/shared/process-table-index.ts",
+          "sha256": "30f236b7d0275f05673c0a7982bb0aa67c9319762749f5a583c5c31e51e31f36"
+        },
+        {
+          "path": "src/shared/shell-process-detection.ts",
+          "sha256": "d80a58eaba385d17ef3af37a8b7c516c86539c494aa38afaef1418b1a2f4f79f"
+        },
+        {
+          "path": "src/main/windows/windows-command-line-recovery-health.ts",
+          "sha256": "a135da3611d54fecb0dba52b4d81e06ca1532680424b55e7efa315b7c886ec33"
+        },
+        {
+          "path": "src/shared/child-process/windows-command-line.ts",
+          "sha256": "4bf94aa90ee63d965bc6e1198ddafa4a715c05d78be979025d17dc59d90557ca"
+        },
+        {
+          "path": "src/shared/child-process/windows-cmd-shim-resolution.ts",
+          "sha256": "5044e3a9140a19c8bb713044de655b611244659a754f32e5a5df7f519df40eb3"
+        },
+        {
+          "path": "src/shared/child-process/spawn-resolution.ts",
+          "sha256": "8c62c3c14d6f110f25bab23e3f4b2633a68e2f36252bd3aac68cffd7b2e274dc"
+        },
+        {
+          "path": "src/shared/child-process/process-tree-kill-gate.ts",
+          "sha256": "62848f063785e15cb0231deb622b043e81484ed3040c612afdc4f98fa2db06ab"
+        },
+        {
+          "path": "src/shared/child-process/process-tree-termination.ts",
+          "sha256": "49f001659c872e23040fe5bab2dd387f2589178f5bc3ce9361373303d23ff120"
+        },
+        {
+          "path": "src/shared/child-process/bounded-output-sink.ts",
+          "sha256": "7dbab9fc70dac8e5d19dd03d743b55609092b45ca13423e2dc80a69cf7fc4865"
+        },
+        {
+          "path": "src/shared/child-process/child-termination-reporter.ts",
+          "sha256": "d91ff09b26c9a23e26c2a2f92b129879cd6d0bddea14cd3bcac5d4489fecfca0"
+        },
+        {
+          "path": "src/shared/child-process/process-spec.ts",
+          "sha256": "97e52b5e320da1eed4cfb2c0b73a88696b62f355eb4b5fe0df5389764afb8289"
+        },
+        {
+          "path": "src/shared/child-process/run-process.ts",
+          "sha256": "ae4dad239273351ce61269cd7f7abb8325f3f620be600fa9c0ae760c1dd7cbad"
+        },
+        {
+          "path": "src/shared/child-process/windows-system-binary.ts",
+          "sha256": "0c42c7c454534a0937f4153e9708aeb243bd930d130ffc6493ac42d21405606e"
+        },
+        {
+          "path": "src/main/windows/windows-process-table-cim-scan.ts",
+          "sha256": "ecfa487a3139cc087eae78ff61bf358f7eb62aec3b20e9d064d96b6e37862ab0"
+        },
+        {
+          "path": "src/main/windows/windows-process-table.ts",
+          "sha256": "de0565f724f49ca393bb55c1618e697ea34e98bfee132c196d0c3e97713aabe1"
+        },
+        {
+          "path": "src/main/providers/windows-foreground-process-rows.ts",
+          "sha256": "374accddf905f5b60fb1be4010e8160bfaf7f1a3834ecaffbf0119e555c7a765"
+        },
+        {
+          "path": "src/main/providers/windows-agent-foreground-process.ts",
+          "sha256": "a7056960617a9a5c740209a3a96280c4e57da69b7604e17f148c0c2195d0e5e9"
+        },
+        {
+          "path": "src/shared/foreground-process-selection.ts",
+          "sha256": "18005d15f552cb8805148cebb330636f6cec0f8d98d2eca83444aef7794d3767"
+        },
+        {
+          "path": "src/main/providers/agent-foreground-process-remote-evidence.ts",
+          "sha256": "c46feb5f19d873bbf08ff607a6a86a53a9d982ece7aa43e471aaad640621ad4d"
+        },
+        {
+          "path": "src/main/providers/agent-foreground-process-batch.ts",
+          "sha256": "6f8c785ddd701883f7b44231b152a0c32b8a5a3db24529347085c1ac43127ce6"
+        },
+        {
+          "path": "src/main/providers/agent-foreground-process.ts",
+          "sha256": "1f76c512e3c308959f11665c749e9d001da03661ad5bc2230a84125bc4aa8368"
+        },
+        {
+          "path": "src/main/providers/windows-pty-job-membership.ts",
+          "sha256": "4b5031a7cbac09c967c4269a247311e09d6b2617a630dd1743bf0a9ddac37c5f"
+        },
+        {
+          "path": "src/main/daemon/pty-subprocess/pty-shell-foreground-confirmation.ts",
+          "sha256": "aea01ded6b790b26a06314499eaa1db993c86660a076a710a73aa06a6ba1faee"
+        },
+        {
+          "path": "src/main/providers/windows-cached-agent-revalidation.ts",
+          "sha256": "b7e60bf9e939b069488640b291bd025386cfa413b6431edd61563dba30bcc6be"
+        },
+        {
+          "path": "src/main/providers/windows-console-attached-processes.ts",
+          "sha256": "63de2e44605c28139204c196cc1add202c723f4896c6f36757e92ab85a7fe065"
+        },
+        {
+          "path": "src/main/daemon/pty-subprocess/foreground-fallback-process.ts",
+          "sha256": "a2a68908fa5f59a940d8b280073f5737374cb5f6d9938c64be2a4d26433d7827"
+        },
+        {
+          "path": "src/main/daemon/pty-session-id.ts",
+          "sha256": "1c8beaf069eb5e093e45a9489feffac60e8a5635e8f941722d2a3c3124b4f878"
+        },
+        {
+          "path": "src/main/daemon/pty-subprocess/foreground-process-tracker.ts",
+          "sha256": "c29a04d412294f2ef3b46ec2fe7fd8f680ba00aadf11db4f9faea01b1b8c8df3"
+        },
+        {
+          "path": "src/shared/terminal-exit-cause.ts",
+          "sha256": "cdbe03be86d26c6489a257e886cb6ca6b2301dc1a82752d6a028d66de46903a2"
+        },
+        {
+          "path": "src/main/daemon/pty-subprocess/pre-listener-events.ts",
+          "sha256": "32b290969b16c2676bbc9801cf563fc1988f16131678ce3cf0c627ffeaf401a2"
+        },
+        {
+          "path": "src/main/daemon/pty-subprocess/subprocess-handle.ts",
+          "sha256": "e28a2043f9c68c365109aab0550f97c49ee76fbbadc14c81dd7eb7b9aae6fc7a"
+        }
+      ]
+    }
+  }
+}

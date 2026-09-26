@@ -33,15 +33,37 @@ function runPs(pid: number): string {
   })
 }
 
+let ownRowCache: { pid: number; row: string } | null = null
+
 /**
- * Why two calls instead of `-p a,b`: macOS `ps` only takes the KERN_PROC_PID fast
+ * Orca's own row, read once per process. It feeds exactly one guard — the
+ * "does this process share the PTY" check below — and the only field that guard
+ * reads is the controlling tty, which cannot change for a process's lifetime.
+ * Re-forking `ps` for it on every SIGWINCH doubled a ~3ms synchronous stall that
+ * the renderer fires twice per revealed pane.
+ */
+function readOwnProcessRow(currentPid: number): string {
+  if (ownRowCache?.pid !== currentPid) {
+    // A throw is not cached: the caller already treats a failed read as "no group".
+    ownRowCache = { pid: currentPid, row: runPs(currentPid) }
+  }
+  return ownRowCache.row
+}
+
+/** Test seam: the cache is keyed by pid, but tests reuse one pid across cases. */
+export function resetPosixPtyForegroundGroupOwnRowCache(): void {
+  ownRowCache = null
+}
+
+/**
+ * Why two rows instead of `-p a,b`: macOS `ps` only takes the KERN_PROC_PID fast
  * path for a single pid. ANY pid list — even a duplicate of one pid — walks the
  * whole process table, measured at ~3.6s on a busy machine versus ~3ms here. That
  * blew the timeout below, so the group lookup silently fell back to the very
  * root-pid delivery this module exists to replace.
  */
 function readForegroundGroupTable(rootPid: number, currentPid: number): string {
-  return `${runPs(rootPid)}\n${runPs(currentPid)}`
+  return `${runPs(rootPid)}\n${readOwnProcessRow(currentPid)}`
 }
 
 function parseProcessRows(output: string): ProcessRow[] {

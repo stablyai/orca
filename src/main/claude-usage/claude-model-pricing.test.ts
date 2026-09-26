@@ -1,6 +1,41 @@
 import { describe, expect, it } from 'vitest'
 import { estimateCostUsd } from './claude-model-pricing'
 
+describe('model pricing name matching', () => {
+  it.each([
+    [' ANTHROPIC/claude-opus-4.1-thinking ', 15],
+    ['claude-opus-4.10', 5],
+    ['claude-opus-4-20250514', 15],
+    ['claude-opus-4.20250514', 15],
+    ['claude.opus.4.9', null],
+    ['claude-opus-4.9', 5],
+    ['claude-sonnet-50', null],
+    ['claude-sonnet-5-thinking', 2],
+    ['claude-sonnet-5-opus-5', 5],
+    ['claude-opus-5-5', 4],
+    ['claude-opus-5.5[1m]', 4],
+    ['claude-opus-5-50', 5],
+    ['claude-fable-5-1', 10],
+    ['claude-opus-5-5-thinking', 4],
+    ['claude-3.5-sonnet-20241022', 3]
+  ])('preserves version boundaries and match priority for %s', (model, inputPrice) => {
+    expect(estimateCostUsd(model, 1_000_000, 0, 0, 0)).toBe(inputPrice)
+  })
+})
+
+describe('point-release rates that differ from their major', () => {
+  it('bills Opus 5.5 below Opus 5 across every bucket', () => {
+    expect(estimateCostUsd('claude-opus-5-5', 1_000_000, 1_000_000, 1_000_000, 0)).toBeCloseTo(24.2)
+    expect(estimateCostUsd('claude-opus-5-5', 0, 0, 0, 1_000_000, 400_000)).toBeCloseTo(6.2)
+  })
+
+  it('bills Fable 5.1 cache reads at a quarter of Fable 5', () => {
+    expect(estimateCostUsd('claude-fable-5-1', 0, 0, 1_000_000, 0)).toBeCloseTo(0.25)
+    expect(estimateCostUsd('claude-fable-5', 0, 0, 1_000_000, 0)).toBeCloseTo(1)
+    expect(estimateCostUsd('claude-fable-5-1m', 0, 0, 1_000_000, 0)).toBeCloseTo(1)
+  })
+})
+
 describe('estimateCostUsd cache-write TTL rates', () => {
   it('bills 5-minute cache writes at 1.25x base input', () => {
     expect(estimateCostUsd('claude-opus-5', 0, 0, 0, 1_000_000, 0)).toBeCloseTo(6.25)
@@ -22,19 +57,23 @@ describe('estimateCostUsd cache-write TTL rates', () => {
     expect(estimateCostUsd('claude-opus-5', 0, 0, 0, 1_000, 5_000)).toBeCloseTo(0.01)
   })
 
-  it('applies the long-context tier to 1-hour writes', () => {
-    expect(estimateCostUsd('claude-sonnet-4-6', 0, 0, 0, 400_000, 400_000)).toBeCloseTo(3.6)
+  it('keeps Sonnet 4.6 one-hour writes flat across its full 1M window', () => {
+    expect(estimateCostUsd('claude-sonnet-4-6', 0, 0, 0, 400_000, 400_000)).toBeCloseTo(2.4)
   })
 
-  it('shares one long-context allowance across both TTL buckets', () => {
+  it('applies the legacy long-context tier to Sonnet 4.5 one-hour writes', () => {
+    expect(estimateCostUsd('claude-sonnet-4-5', 0, 0, 0, 400_000, 400_000)).toBeCloseTo(3.6)
+  })
+
+  it('shares one legacy long-context allowance across both TTL buckets', () => {
     // 400k writes split evenly: 200k @ (3.75/7.5) and 200k @ (6/12), each tier
     // getting half of the 200k allowance.
-    expect(estimateCostUsd('claude-sonnet-4-6', 0, 0, 0, 400_000, 200_000)).toBeCloseTo(2.925)
+    expect(estimateCostUsd('claude-sonnet-4-5', 0, 0, 0, 400_000, 200_000)).toBeCloseTo(2.925)
   })
 
-  it('never lowers a long-context estimate as writes shift from 5-minute to 1-hour', () => {
+  it('never lowers a legacy long-context estimate as writes shift to 1-hour', () => {
     const costs = [0, 50_000, 100_000, 200_000, 300_000, 400_000].map((write1h) =>
-      estimateCostUsd('claude-sonnet-4-6', 0, 0, 0, 400_000, write1h)!
+      estimateCostUsd('claude-sonnet-4-5', 0, 0, 0, 400_000, write1h)!
     )
     for (let index = 1; index < costs.length; index++) {
       expect(costs[index]).toBeGreaterThan(costs[index - 1])

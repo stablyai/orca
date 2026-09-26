@@ -217,9 +217,7 @@ describe('registerPtyHandlers', () => {
           expect(spawned.agentResumeUnavailable).toBeUndefined()
           const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
           expect(env.CODEX_HOME).toBe(ORIGIN_HOME)
-          expect(env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(
-            `codex 'resume' '${RESUME_SESSION_ID}'`
-          )
+          expect(env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(`codex 'resume' '${RESUME_SESSION_ID}'`)
           expect(selectedHome).not.toHaveBeenCalled()
         } finally {
           vi.useRealTimers()

@@ -1,0 +1,23 @@
+{
+  "node": "v26.6.0",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "sourcePath": "src/main/ai-vault-search/session-search-index-writer.ts",
+  "database": "Production schema and adapter with an in-memory SQLite database",
+  "before": {
+    "source": "243f4431557471daa05636aed1a30be790485eda",
+    "sourceSha256": "cd636c04251ab98038d696acc8c75a330f79b413657a1dba57a766bd1356017d",
+    "retiredFiles": 1000,
+    "remainingFiles": 0,
+    "retainedPathsAfterRetirement": 1000,
+    "neverIndexedStaleCommitAccepted": false
+  },
+  "after": {
+    "source": "working tree",
+    "sourceSha256": "a130b93059cf6d19814b998c73b56615058eae08c9a84b148cd819d06a04bc1b",
+    "retiredFiles": 1000,
+    "remainingFiles": 0,
+    "retainedPathsAfterRetirement": 0,
+    "neverIndexedStaleCommitAccepted": false
+  }
+}

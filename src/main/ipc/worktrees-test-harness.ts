@@ -11,6 +11,7 @@ import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { createWorktreeRuntimeStub, type WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { handlers, mainWindow, store } from './worktrees-test-ipc-surface'
 import { configureMetadataPruningStoreMocks } from './worktrees-test-metadata-pruning-store'
+import { resetWorktreeTestSshHostHome } from '../worktree-removal-test-ssh-host-home'
 import {
   ORIGINAL_PLATFORM,
   setPlatform,
@@ -76,8 +77,18 @@ export {
   type HandlerMap
 } from './worktrees-test-ipc-surface'
 
+/** The single repo every worktree harness test resolves; exported so a test can vary one field. */
+export const harnessRepo = {
+  id: 'repo-1',
+  path: '/workspace/repo',
+  displayName: 'repo',
+  badgeColor: '#000',
+  addedAt: 0
+}
+
 /** Registers worktree IPC handlers against freshly reset shared mocks and returns the runtime stub. */
 export function setupWorktreeHandlers(): WorktreeRuntimeStub {
+  resetWorktreeTestSshHostHome()
   delete (store as typeof store & { getAllWorktreeMetaForHost?: (...args: unknown[]) => unknown })
     .getAllWorktreeMetaForHost
   setPlatform(ORIGINAL_PLATFORM)
@@ -185,15 +196,8 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     handlers[channel] = handler
   })
 
-  const repo = {
-    id: 'repo-1',
-    path: '/workspace/repo',
-    displayName: 'repo',
-    badgeColor: '#000',
-    addedAt: 0
-  }
-  store.getRepos.mockReturnValue([repo])
-  store.getRepo.mockReturnValue({ ...repo, worktreeBaseRef: null })
+  store.getRepos.mockReturnValue([harnessRepo])
+  store.getRepo.mockReturnValue({ ...harnessRepo, worktreeBaseRef: null })
   store.getProjects.mockReturnValue([])
   store.getSparsePresets.mockReturnValue([])
   const settings = {

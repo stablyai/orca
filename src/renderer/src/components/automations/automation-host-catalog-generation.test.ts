@@ -63,8 +63,20 @@ describe('automation catalog generation', () => {
   it('advances every authority on the first sync', () => {
     registry.sync(buildAutomationHostCatalog(input()))
     expect(registry.get(DESKTOP)).toBe(1)
-    expect(registry.get(ENV_A)).toBe(1)
-    expect(registry.get(ENV_B)).toBe(1)
+    expect(registry.get(ENV_A)).toBe(2)
+    expect(registry.get(ENV_B)).toBe(3)
+  })
+
+  it('bounds authority generations without reopening an evicted fence', () => {
+    const authorities = Array.from({ length: 1_100 }, (_, index) => runtime(`env-${index}`))
+    registry.sync(buildAutomationHostCatalog(input({ runtimes: authorities })))
+
+    const afterEviction = registry.get({ kind: 'runtime', environmentId: 'env-0' })
+    expect(afterEviction).toBeGreaterThan(1)
+    expect(registry.get({ kind: 'runtime', environmentId: 'env-1099' })).toBe(1_101)
+
+    registry.sync(buildAutomationHostCatalog(input({ runtimes: [runtime('env-0')] })))
+    expect(registry.get({ kind: 'runtime', environmentId: 'env-0' })).toBeGreaterThan(afterEviction)
   })
 
   it('advances only the authority whose target bucket hydrated', () => {
@@ -96,7 +108,7 @@ describe('automation catalog generation', () => {
       )
     )
     expect(advanced.advancedAuthorityKeys).toEqual(['authority:runtime:env-a'])
-    expect(registry.get(ENV_A)).toBe(before.a + 1)
+    expect(registry.get(ENV_A)).toBeGreaterThan(before.a)
     expect(registry.get(ENV_B)).toBe(before.b)
     expect(registry.get(DESKTOP)).toBe(before.desktop)
   })
@@ -152,8 +164,8 @@ describe('automation catalog generation', () => {
         input({ runtimes: [runtime('env-a', { pairingRevision: 2 }), runtime('env-b')] })
       )
     )
-    expect(registry.get(ENV_A)).toBe(before + 1)
-    expect(registry.get(ENV_B)).toBe(1)
+    expect(registry.get(ENV_A)).toBeGreaterThan(before)
+    expect(registry.get(ENV_B)).toBe(3)
     expect(advanced.reincarnatedStableKeys).toEqual(['host:runtime:env-a:self'])
   })
 
@@ -204,7 +216,7 @@ describe('automation catalog generation', () => {
     registry.sync(buildAutomationHostCatalog(input()))
     registry.sync(buildAutomationHostCatalog(input({ runtimes: [runtime('env-a')] })))
     const afterRemoval = registry.get(ENV_B)
-    expect(afterRemoval).toBe(2)
+    expect(afterRemoval).toBe(4)
     registry.sync(buildAutomationHostCatalog(input({ runtimes: [runtime('env-a')] })))
     expect(registry.get(ENV_B)).toBe(afterRemoval)
   })

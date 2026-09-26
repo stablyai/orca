@@ -39,7 +39,7 @@ export function installPtySerializeBufferIpc(session: PtyIpcSession): void {
     ) => {
       // Why: the snapshot seeds terminal restore state, so only the main window may settle it.
       if (
-        !isMainWindowPtyIpcEvent(event, session.mainWindow, session.mainWindow.webContents) ||
+        !isMainWindowPtyIpcEvent(event, session.mainWindow) ||
         typeof args?.requestId !== 'string'
       ) {
         return
@@ -86,9 +86,10 @@ export function installPtySerializeBufferIpc(session: PtyIpcSession): void {
 export function requestSerializedBuffer(
   session: PtyIpcSession,
   ptyId: string,
-  opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+  opts?: { scrollbackRows?: number }
 ): Promise<SerializeResult> {
-  if (session.mainWindow.isDestroyed()) {
+  const { mainWindow } = session
+  if (!mainWindow || mainWindow.isDestroyed()) {
     return Promise.resolve(null)
   }
 
@@ -101,11 +102,11 @@ export function requestSerializedBuffer(
     const payload: {
       requestId: string
       ptyId: string
-      opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      opts?: { scrollbackRows?: number }
     } = { requestId, ptyId }
     if (opts) {
       payload.opts = opts
     }
-    session.mainWindow.webContents.send('pty:serializeBuffer:request', payload)
+    mainWindow.webContents.send('pty:serializeBuffer:request', payload)
   })
 }

@@ -10,11 +10,13 @@ import {
   prepareWslLinkedWorktreeGitRouting
 } from '../wsl-linked-worktree-git-routing'
 import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
+import { annotateWslHostFailure } from './wsl-host-failure'
 import type { GitAdmissionTier, GitExecOptions } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './exec-file-capture'
 import {
   pendingWslDirectGitReadEnvironment,
   directWslGitExitCode,
+  isQuietGitControlFlowExit,
   disableDirectWslGitAfterSuccessfulFallback,
   invalidateMissingDirectWslGit,
   resolveGitCommand
@@ -95,7 +97,7 @@ async function gitExecFileAsyncUnlocked(
             ? {}
             : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })
         }
-        return options.terminationBarrier
+        const captured = options.terminationBarrier
           ? execFileCaptureToTermination(
               command.binary,
               command.args,
@@ -103,13 +105,21 @@ async function gitExecFileAsyncUnlocked(
               command.termination
             )
           : execFileCapture(command.binary, command.args, captureOptions)
+        // Why: a dead WSL distro fails with an empty stderr, so the span would carry no cause at all.
+        return captured.catch((error: unknown) => {
+          throw annotateWslHostFailure(error, command)
+        })
       }
       const runCapturedCommand = async (): Promise<{ stdout: string; stderr: string }> => {
         let result: { stdout: string | Buffer; stderr: string | Buffer }
         try {
           result = await capture(resolved)
         } catch (error) {
-          if (directWslGitExitCode(error, resolved) !== null && !options.signal?.aborted) {
+          if (
+            directWslGitExitCode(error, resolved) !== null &&
+            !isQuietGitControlFlowExit(error) &&
+            !options.signal?.aborted
+          ) {
             await terminationState.current
             const wasMissing = invalidateMissingDirectWslGit(error, resolved)
             const fallback = resolveGitCommand(

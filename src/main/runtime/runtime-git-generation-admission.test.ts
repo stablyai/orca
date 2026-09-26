@@ -60,6 +60,7 @@ function makeTarget(path: string, overrides: Partial<RuntimeGitTarget> = {}): Ru
       path,
       git: { path, branch: 'main', isBare: false, isMainWorktree: false, head: 'a'.repeat(40) }
     } as RuntimeGitTarget['worktree'],
+    executionHostId: 'local',
     ...overrides
   }
 }
@@ -104,6 +105,7 @@ describe('RuntimeGitGenerationCommands admission', () => {
   it('marks local pull-request context and linked-issue reads as interactive', async () => {
     mocks.getPullRequestDraftContext.mockImplementation(async (execute) => {
       await execute(['fetch', 'origin', 'main'], { timeout: 123 })
+      await execute(['show-ref', '--verify'], { maxBuffer: 456, timeoutMs: 789 })
       return pullRequestContext
     })
     const commands = makeCommands(
@@ -122,6 +124,13 @@ describe('RuntimeGitGenerationCommands admission', () => {
       timeout: 123,
       admissionTier: 'interactive'
     })
+    expect(mocks.gitExecFileAsync).toHaveBeenCalledWith(['show-ref', '--verify'], {
+      cwd: 'C:\\repo',
+      wslDistro: 'Ubuntu',
+      maxBuffer: 456,
+      timeout: 789,
+      admissionTier: 'interactive'
+    })
     expect(mocks.loadPullRequestLinkedIssue).toHaveBeenCalledWith(
       expect.objectContaining({
         connectionId: undefined,
@@ -135,11 +144,12 @@ describe('RuntimeGitGenerationCommands admission', () => {
     mocks.getSshGitProvider.mockReturnValue({ exec, executeCommitMessagePlan: vi.fn() })
     mocks.getPullRequestDraftContext.mockImplementation(async (execute) => {
       await execute(['log', '--oneline'])
+      await execute(['show-ref', '--verify'], { maxBuffer: 456, timeoutMs: 789 })
       return pullRequestContext
     })
     const commands = makeCommands(
       makeTarget('/remote/repo', {
-        connectionId: 'conn-1',
+        executionHostId: 'ssh:conn-1',
         localGitOptions: { wslDistro: 'Ubuntu' }
       })
     )
@@ -151,6 +161,7 @@ describe('RuntimeGitGenerationCommands admission', () => {
     )
 
     expect(exec).toHaveBeenCalledWith(['log', '--oneline'], '/remote/repo')
+    expect(exec).toHaveBeenCalledWith(['show-ref', '--verify'], '/remote/repo', { timeoutMs: 789 })
     expect(mocks.gitExecFileAsync).not.toHaveBeenCalled()
     expect(mocks.loadPullRequestLinkedIssue).toHaveBeenCalledWith(
       expect.objectContaining({ connectionId: 'conn-1', localGitOptions: {} })

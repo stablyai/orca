@@ -45,6 +45,18 @@ function collectLeafIdsInReplayCreationOrder(
   return leafIdsInReplayCreationOrder
 }
 
+export function collectRuntimePaneLeafIds(
+  node: TerminalPaneLayoutNode | null | undefined
+): string[] {
+  if (!node) {
+    return []
+  }
+  if (node.type === 'leaf') {
+    return [node.leafId]
+  }
+  return [...collectRuntimePaneLeafIds(node.first), ...collectRuntimePaneLeafIds(node.second)]
+}
+
 export function resolveRuntimePaneTitleLeafId(
   tabLayout: { root?: TerminalLayoutSnapshot['root'] } | undefined,
   runtimePaneId: string
@@ -120,4 +132,28 @@ export function resolveRuntimePaneTitleLeafIdFromRoot(
   }
   const leafIds = collectLeafIdsInReplayCreationOrder(root)
   return leafIds[numericPaneId - FIRST_PANE_ID] ?? null
+}
+
+/**
+ * Resolve a sparse live runtime pane slot through the tab's current PTY bindings.
+ * PaneManager ids survive closes with gaps, while the live PTY list retains order.
+ */
+export function resolveRuntimePaneTitleLeafIdFromSparseSlots(args: {
+  layout: Pick<TerminalLayoutSnapshot, 'ptyIdsByLeafId'> | undefined
+  paneId: number
+  liveSlotIds: number[]
+  ptyIds: string[]
+}): string | null {
+  if (args.ptyIds.length !== args.liveSlotIds.length) {
+    return null
+  }
+  const paneIndex = args.liveSlotIds.indexOf(args.paneId)
+  const ptyId = paneIndex === -1 ? undefined : args.ptyIds[paneIndex]
+  if (!ptyId) {
+    return null
+  }
+  const boundLeafIds = Object.entries(args.layout?.ptyIdsByLeafId ?? {})
+    .filter(([, boundPtyId]) => boundPtyId === ptyId)
+    .map(([leafId]) => leafId)
+  return boundLeafIds.length === 1 ? boundLeafIds[0] : null
 }

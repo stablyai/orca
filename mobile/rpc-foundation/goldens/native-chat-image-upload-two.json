@@ -1,0 +1,341 @@
+{
+  "operation": "nativeChat.image-upload",
+  "family": "nativeChat.image-upload",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "db0397f8f6ae28de0cc7afd91552ee9416d7f7054a76a42aac02f480c6f363d5",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "147a6d6af2f1": {
+      "name": "image-uploaded",
+      "ordinal": 15,
+      "value": {
+        "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
+        "path": "/tmp/img-2.png",
+        "previewUri": "file:///b.png"
+      }
+    },
+    "2ec71b490683": {
+      "name": "image-uploaded",
+      "ordinal": 8,
+      "value": {
+        "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
+        "path": "/tmp/img-1.png",
+        "previewUri": "data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }
+    },
+    "4a3413975ca6": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
+          "path": "/tmp/img-1.png",
+          "previewUri": "data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
+          "path": "/tmp/img-2.png",
+          "previewUri": "file:///b.png"
+        }
+      ]
+    },
+    "5c19acb9611e": {
+      "name": "clipboard.commitImageUpload#2",
+      "ordinal": 13,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.commitImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "uploadId": "upload-2"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": "/tmp/img-2.png"
+        }
+      }
+    },
+    "6696a47819e1": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "7c2e3ea286aa": {
+      "name": "clipboard.startImageUpload#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "uploadId": "upload-1"
+          }
+        }
+      }
+    },
+    "814ccd56a769": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-1\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
+    "8452698ac11a": {
+      "name": "clipboard.commitImageUpload#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.commitImageUpload\",\"params\":{\"uploadId\":\"upload-1\"}}"
+    },
+    "8d51e9899739": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "uploaded": [
+        {
+          "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
+          "path": "/tmp/img-1.png",
+          "previewUri": "data:image/png;base64,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        {
+          "contentFingerprint": "f75f583c67e2aaf12284c94d09b56e3caa9d7b93b71565d2fd3e09ef635cef8d",
+          "path": "/tmp/img-2.png",
+          "previewUri": "file:///b.png"
+        }
+      ]
+    },
+    "994fccf9b305": {
+      "name": "upload-start",
+      "ordinal": 1,
+      "value": {}
+    },
+    "a77c2409e01f": {
+      "name": "clipboard.commitImageUpload#2",
+      "ordinal": 14,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.commitImageUpload\",\"params\":{\"uploadId\":\"upload-2\"}}"
+    },
+    "ae523d108575": {
+      "name": "clipboard.appendImageUploadChunk#2",
+      "ordinal": 12,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.appendImageUploadChunk\",\"params\":{\"uploadId\":\"upload-2\",\"offset\":0,\"contentBase64\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}}"
+    },
+    "b437cd69b0bf": {
+      "name": "clipboard.startImageUpload#2",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "uploadId": "upload-2"
+          }
+        }
+      }
+    },
+    "d7c8ee357003": {
+      "name": "clipboard.appendImageUploadChunk#2",
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.appendImageUploadChunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "offset": 0,
+            "uploadId": "upload-2"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "received": 32
+          }
+        }
+      }
+    },
+    "e74ddb684ed1": {
+      "name": "clipboard.startImageUpload#2",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "ec8f73d25f26": {
+      "name": "clipboard.commitImageUpload#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.commitImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "uploadId": "upload-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": "/tmp/img-1.png"
+        }
+      }
+    },
+    "f05e4695ffa3": {
+      "name": "clipboard.appendImageUploadChunk#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.appendImageUploadChunk"
+        },
+        {
+          "name": "params",
+          "value": {
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "offset": 0,
+            "uploadId": "upload-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "received": 32
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-image-upload-two",
+    "checkpoints": [
+      {
+        "id": "uploaded-both",
+        "observation": {
+          "sender": [
+            "7c2e3ea286aa",
+            "f05e4695ffa3",
+            "ec8f73d25f26",
+            "b437cd69b0bf",
+            "d7c8ee357003",
+            "5c19acb9611e"
+          ],
+          "payloads": [
+            "6696a47819e1",
+            "814ccd56a769",
+            "8452698ac11a",
+            "e74ddb684ed1",
+            "ae523d108575",
+            "a77c2409e01f"
+          ],
+          "settlements": {
+            "two": "4a3413975ca6"
+          },
+          "state": "8d51e9899739",
+          "effects": ["994fccf9b305", "2ec71b490683", "147a6d6af2f1"]
+        }
+      }
+    ]
+  }
+}

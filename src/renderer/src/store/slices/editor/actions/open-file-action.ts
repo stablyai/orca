@@ -25,7 +25,8 @@ export function createOpenFileAction(
               : 'editor'
       const scratch = {
         editorItemFileId: file.filePath,
-        editorItemTargetGroupId: options?.targetGroupId
+        editorItemTargetGroupId: options?.targetGroupId,
+        editorItemIsPreview: false
       }
       set((s) => applyOpenFileToState(s, file, options, scratch))
       const editorItemViewStateId = openWorkspaceEditorItem(
@@ -34,7 +35,7 @@ export function createOpenFileAction(
         editorItemWorktreeId,
         editorItemLabel,
         editorItemContentType,
-        options?.preview ?? false,
+        scratch.editorItemIsPreview,
         scratch.editorItemTargetGroupId
       )
       if (options?.focusEditor) {

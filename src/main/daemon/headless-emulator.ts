@@ -57,8 +57,8 @@ const DEFAULT_SCROLLBACK = 5000
 const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
 
 export class HeadlessEmulator {
-  private terminal: Terminal
-  private serializer: SerializeAddon
+  protected terminal: Terminal
+  protected serializer: SerializeAddon
   private oscText: TerminalOscCwdTitleScanner
   private mouseModes = new TerminalMouseModeMirror()
   private readonly pathFlavor?: 'posix' | 'win32'
@@ -229,6 +229,15 @@ export class HeadlessEmulator {
 
   resize(cols: number, rows: number): void {
     if (this.disposed) {
+      return
+    }
+    // Why gated: restored OSC-8 ranges are row-indexed, so a reflow
+    // invalidates them — but a resize to the size already applied is not a
+    // reflow. Cold restore seeds the ranges and then replays records that
+    // resize, and same-size records reach the durable log because every
+    // attach re-asserts the pane's dimensions, so clearing unconditionally
+    // dropped the links a restore had just recovered.
+    if (this.terminal.cols === cols && this.terminal.rows === rows) {
       return
     }
     this.restoredOscLinks = []

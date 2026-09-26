@@ -51,10 +51,12 @@ export function disposeCodexServerRequest(
   switch (request.method) {
     case CODEX_COMMAND_APPROVAL_METHOD:
     case CODEX_FILE_CHANGE_APPROVAL_METHOD:
-      connection.respond(request.id, { decision: 'cancel' })
-      break
     case CODEX_USER_INPUT_METHOD:
-      connection.respond(request.id, { answers: {} })
+      connection.respondWithError(
+        request.id,
+        -32001,
+        `Orca could not model ${request.method} as a durable prompt`
+      )
       break
     case CODEX_MCP_ELICITATION_METHOD:
       connection.respond(request.id, { action: 'decline', content: null, _meta: null })

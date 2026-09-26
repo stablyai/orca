@@ -159,13 +159,7 @@ export function createOptionAsAltProbe(
       return
     }
 
-    // Why: when macOS returns a concrete input source ID, it's authoritative.
-    // The fingerprint can only see the base (unshifted) layer, which is
-    // US-identical on ABC, Polish Pro, US Extended, ABC Extended, and every
-    // CJK Roman IME — so trusting it flips macOptionIsMeta=true on all of
-    // them and silently swallows Option+letter compositions (#1205). The
-    // Only the two known Option-as-Meta layouts are allowed; every other
-    // concrete input source keeps Option available for composition.
+    // Native input-source identity distinguishes composition layouts with a US-shaped base layer.
     const override = classifyInputSourceId(inputSourceId)
     if (override === 'meta') {
       notify('us')

@@ -1,9 +1,11 @@
 import {
   copyFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -50,6 +52,10 @@ function getConfigPath(): string {
 // is Git Bash even on Windows (see the CLI README / KIMI_SHELL_PATH), so a
 // single curl-based script body works on every platform.
 const MANAGED_SCRIPT_FILE_NAME = 'kimi-hook.sh'
+
+// Ownership test for every managed-block path: status, install, remove and the
+// bounded orphan recovery all agree on what counts as an Orca-written hook.
+const isManagedKimiCommand = createManagedCommandMatcher(MANAGED_SCRIPT_FILE_NAME)
 
 function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(MANAGED_SCRIPT_FILE_NAME)
@@ -133,6 +139,8 @@ function readConfigToml(configPath: string): string | null {
 function writeConfigToml(configPath: string, text: string): void {
   const dir = dirname(configPath)
   mkdirSync(dir, { recursive: true })
+  // Why: renameSync replaces the inode, so the temp mode becomes the config mode.
+  let mode = 0o600
   if (existsSync(configPath)) {
     try {
       if (readFileSync(configPath, 'utf-8') === text) {
@@ -141,10 +149,12 @@ function writeConfigToml(configPath: string, text: string): void {
     } catch {
       // Fall through to the atomic write path.
     }
+    mode = statSync(configPath).mode & 0o777
   }
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   try {
-    writeFileSync(tmpPath, text, 'utf-8')
+    writeFileSync(tmpPath, text, { encoding: 'utf-8', mode: 0o600 })
+    chmodSync(tmpPath, mode)
     if (existsSync(configPath)) {
       copyFileSync(configPath, `${configPath}.bak`)
     }
@@ -194,8 +204,7 @@ export class KimiHookService {
         detail: 'Could not read Kimi config.toml'
       }
     }
-    const isManagedCommand = createManagedCommandMatcher(MANAGED_SCRIPT_FILE_NAME)
-    return buildStatus(readManagedKimiHookEvents(text, isManagedCommand), configPath)
+    return buildStatus(readManagedKimiHookEvents(text, isManagedKimiCommand), configPath)
   }
 
   install(): AgentHookInstallStatus {
@@ -214,7 +223,7 @@ export class KimiHookService {
     const command = getManagedCommand(scriptPath)
     // Write the script first so config.toml never points at a missing script.
     writeManagedScript(scriptPath, getManagedScript())
-    writeConfigToml(configPath, applyManagedKimiHooks(text, command))
+    writeConfigToml(configPath, applyManagedKimiHooks(text, command, isManagedKimiCommand))
     return this.getStatus()
   }
 
@@ -235,7 +244,11 @@ export class KimiHookService {
       const command = wrapPosixHookCommand(remoteScriptPath)
       // Write the script first so config.toml never points at a missing script.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeTextFileRemoteAtomic(sftp, remoteConfigPath, applyManagedKimiHooks(text, command))
+      await writeTextFileRemoteAtomic(
+        sftp,
+        remoteConfigPath,
+        applyManagedKimiHooks(text, command, isManagedKimiCommand)
+      )
       return {
         agent: 'kimi',
         state: 'installed',
@@ -266,7 +279,7 @@ export class KimiHookService {
         detail: 'Could not read Kimi config.toml'
       }
     }
-    const { text: nextText, changed } = removeManagedKimiHooks(text)
+    const { text: nextText, changed } = removeManagedKimiHooks(text, isManagedKimiCommand)
     if (changed) {
       writeConfigToml(configPath, nextText)
     }

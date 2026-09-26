@@ -1,5 +1,11 @@
 import type { CSSProperties, RefObject } from 'react'
-import { MessageSquarePlus, SquareSplitVertical, X } from 'lucide-react'
+import {
+  MessageSquare,
+  MessageSquarePlus,
+  SquareSplitVertical,
+  SquareTerminal,
+  X
+} from 'lucide-react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -22,6 +28,7 @@ type TerminalPaneHeaderOverlayProps = {
   showAlwaysOnHeaders: boolean
   /** Used by ephemeral one-off command terminals that omit the header affordance. */
   showSplitButton?: boolean
+  isTabPinned: boolean
   paneCount: number
   activePaneId: number | null | undefined
   panes: readonly ManagedPane[]
@@ -36,6 +43,16 @@ type TerminalPaneHeaderOverlayProps = {
   hiddenStartupStyle: CSSProperties
   managerRef: RefObject<PaneManager | null>
   paneTransportsRef: RefObject<Map<number, PtyTransport>>
+  /** When true, this pane can switch between the terminal and the native chat
+   *  view; renders a chat/terminal toggle as the first button in the pane header
+   *  actions row (beside split/close). The caller gates it to the active pane to
+   *  avoid duplicating it across splits, and to bridge chat only — a structured
+   *  session has no terminal underneath to switch to. */
+  canToggleNativeChat?: boolean
+  /** True when the active pane is currently showing the native chat view. */
+  isChatViewMode?: boolean
+  /** Flip the active pane between the terminal and the native chat view. */
+  onToggleNativeChat?: () => void
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: (pane: ManagedPane) => void
   onSplitPane: (pane: ManagedPane, direction: 'vertical' | 'horizontal') => void
@@ -57,6 +74,7 @@ export default function TerminalPaneHeaderOverlay({
   cwd,
   showAlwaysOnHeaders,
   showSplitButton = true,
+  isTabPinned,
   paneCount,
   activePaneId,
   panes,
@@ -71,6 +89,9 @@ export default function TerminalPaneHeaderOverlay({
   hiddenStartupStyle,
   managerRef,
   paneTransportsRef,
+  canToggleNativeChat,
+  isChatViewMode,
+  onToggleNativeChat,
   canContinueAgentSessionInNewSession,
   onContinueAgentSessionInNewSession,
   onSplitPane,
@@ -107,6 +128,17 @@ export default function TerminalPaneHeaderOverlay({
         const isActivePane = activePaneId === pane.id
         const isChromeless = showAlwaysOnHeaders && !title && !isEditing
         const showHeader = overlayRect && (showAlwaysOnHeaders || Boolean(title) || isEditing)
+        const closeLabel =
+          paneCount > 1
+            ? translate(
+                'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
+                'Close Pane'
+              )
+            : translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
+        // Why: a titled split pane keeps its X as remove-title, but a titled single
+        // pane (agent terminals get runtime titles) still needs a close control.
+        const showCloseButton =
+          showAlwaysOnHeaders && (paneCount > 1 ? !title : showSplitButton && !isTabPinned)
         if (!showHeader || !overlayRect) {
           return null
         }
@@ -255,6 +287,47 @@ export default function TerminalPaneHeaderOverlay({
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
+                  {canToggleNativeChat && isActivePane ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          // Same class as split so it shares the hover/active reveal
+                          // and sits as a peer in the [chat][split][×] cluster.
+                          className="pane-title-split-trigger"
+                          aria-label={
+                            isChatViewMode
+                              ? translate(
+                                  'components.native-chat.toggle.showTerminal',
+                                  'Show terminal'
+                                )
+                              : translate(
+                                  'components.native-chat.toggle.showChat',
+                                  'Show chat view'
+                                )
+                          }
+                          aria-pressed={isChatViewMode}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onToggleNativeChat?.()
+                          }}
+                        >
+                          {isChatViewMode ? (
+                            <SquareTerminal className="size-3" />
+                          ) : (
+                            <MessageSquare className="size-3" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={4}>
+                        {isChatViewMode
+                          ? translate('components.native-chat.toggle.showTerminal', 'Show terminal')
+                          : translate('components.native-chat.toggle.showChat', 'Show chat view')}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
                   {showAlwaysOnHeaders && showSplitButton ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -308,7 +381,8 @@ export default function TerminalPaneHeaderOverlay({
                         )}
                       </TooltipContent>
                     </Tooltip>
-                  ) : paneCount > 1 && showAlwaysOnHeaders ? (
+                  ) : null}
+                  {showCloseButton ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -320,19 +394,13 @@ export default function TerminalPaneHeaderOverlay({
                             event.stopPropagation()
                             onClosePane(pane.id)
                           }}
-                          aria-label={translate(
-                            'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-                            'Close Pane'
-                          )}
+                          aria-label={closeLabel}
                         >
                           <X className="size-3" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={4}>
-                        {translate(
-                          'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-                          'Close Pane'
-                        )}
+                        {closeLabel}
                       </TooltipContent>
                     </Tooltip>
                   ) : null}

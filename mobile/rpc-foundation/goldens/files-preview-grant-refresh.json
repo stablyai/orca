@@ -1,0 +1,248 @@
+{
+  "operation": "files.preview-load",
+  "family": "files.preview-load",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "b93fc8b6f1ece041acaa8cc5699852085e67d7e2f39db13145e483f854ea3309",
+  "scenarioSha256": "055f3b45442c1736f10ee98c493e2ece1885fdb68d925ee627e2ba20853537e0",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0ea42bf424ad": {
+      "name": "files.readTerminalArtifact#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifact"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/run.txt",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "terminal_file_grant_expired",
+            "message": "Grant expired"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "29e625f367a7": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "cwd": "/logs",
+            "pathText": "run.txt",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "exists": true,
+            "isDirectory": false,
+            "openTarget": {
+              "absolutePath": "/logs/run.txt",
+              "grantId": "grant-2",
+              "kind": "absolute-file"
+            }
+          }
+        }
+      }
+    },
+    "3fa46af4bb15": {
+      "name": "files.resolveTerminalPath#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"run.txt\",\"cwd\":\"/logs\",\"terminal\":\"terminal-1\"}}"
+    },
+    "500d95d47092": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "byteLength": 5,
+        "content": "hello",
+        "kind": "text",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "5beb3ae90517": {
+      "name": "files.readTerminalArtifact#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-1\"}}"
+    },
+    "645c5754be42": {
+      "preview": "unloaded"
+    },
+    "679de887534f": {
+      "name": "files.readTerminalArtifact#2",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.readTerminalArtifact\",\"params\":{\"worktree\":\"id:workspace-1\",\"absolutePath\":\"/logs/run.txt\",\"grantId\":\"grant-2\"}}"
+    },
+    "784ea351e5b2": {
+      "preview": {
+        "byteLength": 5,
+        "content": "hello",
+        "kind": "text",
+        "status": "ready",
+        "truncated": false
+      }
+    },
+    "7e162e008509": {
+      "name": "files.readTerminalArtifact#2",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifact"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/run.txt",
+            "grantId": "grant-2",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "byteLength": 5,
+            "content": "hello",
+            "truncated": false
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "d9e395f8cbf2": {
+      "name": "files.readTerminalArtifact#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.readTerminalArtifact"
+        },
+        {
+          "name": "params",
+          "value": {
+            "absolutePath": "/logs/run.txt",
+            "grantId": "grant-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "ddb7adf79b98": {
+      "name": "artifact-source-refreshed",
+      "ordinal": 5,
+      "value": {
+        "absolutePath": "/logs/run.txt",
+        "cwd": "/logs",
+        "grantId": "grant-2",
+        "pathText": "run.txt",
+        "source": "terminalArtifact",
+        "terminalHandle": "terminal-1",
+        "worktreeId": "workspace-1"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "files-preview-grant-refresh",
+    "checkpoints": [
+      {
+        "id": "read-pending",
+        "observation": {
+          "sender": ["d9e395f8cbf2"],
+          "payloads": ["5beb3ae90517"],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "645c5754be42",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["0ea42bf424ad", "29e625f367a7", "7e162e008509"],
+          "payloads": ["5beb3ae90517", "3fa46af4bb15", "679de887534f"],
+          "settlements": {
+            "load": "500d95d47092"
+          },
+          "state": "784ea351e5b2",
+          "effects": ["ddb7adf79b98"]
+        }
+      }
+    ]
+  }
+}

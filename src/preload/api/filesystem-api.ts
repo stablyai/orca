@@ -1,3 +1,4 @@
+import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import type {
   DirEntry,
@@ -5,12 +6,25 @@ import type {
   MarkdownDocument
 } from '../../shared/filesystem-entry-types'
 import type {
+  ImportItemResult,
+  ResolveDroppedPathsResult,
+  StagedExternalImportSource
+} from '../../shared/filesystem-import-result-types'
+import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
   LocalLogTailWatchArgs
 } from '../../shared/local-log-tail-types'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
+import type {
+  CreateVenvResult,
+  KernelFrameEvent,
+  KernelStartResult,
+  PythonEnvironment,
+  PythonEnvironments
+} from '../../shared/notebook-kernel-types'
+import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
 
 export type ExportApi = {
   htmlToPdf: (args: {
@@ -111,6 +125,10 @@ export type FilesystemApi = {
       filePath: string
       connectionId?: string
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
+    pathsExist?: (args: {
+      filePaths: string[]
+      connectionId?: string
+    }) => Promise<PathExistenceResult[]>
     pathExists: (args: { filePath: string; connectionId?: string }) => Promise<boolean>
     listFiles: (args: {
       rootPath: string
@@ -119,6 +137,7 @@ export type FilesystemApi = {
       requestToken?: string
       maxResults?: number
       searchQuery?: string
+      nameFilter?: string
     }) => Promise<string[]>
     cancelListFiles: (args: { requestToken: string }) => Promise<void>
     search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>
@@ -129,81 +148,43 @@ export type FilesystemApi = {
         connectionId?: string
         ensureDir?: boolean
       } & SshMutationExpectation
-    ) => Promise<{
-      results: (
-        | {
-            sourcePath: string
-            status: 'imported'
-            destPath: string
-            kind: 'file' | 'directory'
-            renamed: boolean
-          }
-        | {
-            sourcePath: string
-            status: 'skipped'
-            reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
-          }
-        | {
-            sourcePath: string
-            status: 'failed'
-            reason: string
-          }
-      )[]
-    }>
-    stageExternalPathsForRuntimeUpload: (args: { sourcePaths: string[] }) => Promise<{
-      sources: (
-        | {
-            sourcePath: string
-            status: 'staged'
-            name: string
-            kind: 'file' | 'directory'
-            entries: (
-              | { relativePath: string; kind: 'directory' }
-              | { relativePath: string; kind: 'file'; contentBase64: string }
-            )[]
-          }
-        | {
-            sourcePath: string
-            status: 'skipped'
-            reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
-          }
-        | {
-            sourcePath: string
-            status: 'failed'
-            reason: string
-          }
-      )[]
-    }>
+    ) => Promise<{ results: ImportItemResult[] }>
+    stageExternalPathsForRuntimeUpload: (args: {
+      sourcePaths: string[]
+    }) => Promise<{ sources: StagedExternalImportSource[] }>
+    uploadExternalFileToRuntime: (
+      args: RuntimeUploadFileStreamRequest
+    ) => Promise<{ byteLength: number }>
     resolveDroppedPathsForAgent: (
       args: {
         paths: string[]
         worktreePath: string
         connectionId?: string
       } & SshMutationExpectation
-    ) => Promise<{
-      resolvedPaths: string[]
-      skipped: {
-        sourcePath: string
-        reason: 'missing' | 'symlink' | 'permission-denied' | 'unsupported'
-      }[]
-      failed: { sourcePath: string; reason: string }[]
-    }>
+    ) => Promise<ResolveDroppedPathsResult>
     watchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     unwatchWorktree: (args: { worktreePath: string; connectionId?: string }) => Promise<void>
     onFsChanged: (callback: (payload: FsChangedPayload) => void) => () => void
   }
   notebook: {
-    runPythonCell: (args: {
+    listPythonEnvironments: (args: {
       filePath: string
-      code: string
-      preamble?: string
-      connectionId?: string | null
-    }) => Promise<{
-      stdout: string
-      stderr: string
-      exitCode: number | null
-      error?: string
-    }>
+      rootPath: string | null
+      /** False until the notebook is trusted: workspace envs are then listed without running them. */
+      runWorkspaceInterpreters: boolean
+    }) => Promise<PythonEnvironments>
+    describePython: (args: { path: string }) => Promise<PythonEnvironment | null>
+    startKernel: (args: { filePath: string; python: string }) => Promise<KernelStartResult>
+    installIpykernel: (args: { python: string }) => Promise<{ ok: boolean; detail: string }>
+    createVenv: (args: {
+      filePath: string
+      rootPath: string | null
+      python: string
+    }) => Promise<CreateVenvResult>
+    execute: (args: { filePath: string; code: string }) => Promise<void>
+    interrupt: (args: { filePath: string }) => Promise<void>
+    shutdownKernel: (args: { filePath: string }) => Promise<void>
+    onKernelFrame: (callback: (event: KernelFrameEvent) => void) => () => void
   }
   export: ExportApi
 }

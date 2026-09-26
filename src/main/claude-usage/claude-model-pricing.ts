@@ -25,7 +25,16 @@ const SONNET_LONG_CONTEXT_PRICING = {
 } satisfies Partial<ClaudeModelPricing>
 
 const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
+  // Why: Fable 5.1 keeps Fable 5's rates except cache reads, which drop to $0.25.
+  'claude-fable-5-1': {
+    input: 10,
+    output: 50,
+    cacheRead: 0.25,
+    cacheWrite: 12.5,
+    cacheWrite1h: 20
+  },
   'claude-fable-5': { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5, cacheWrite1h: 20 },
+  'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5, cacheWrite1h: 8 },
   'claude-opus-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25, cacheWrite1h: 10 },
   // Why: Sonnet 5 bills its full 1M window at flat rates, so no long-context tier here.
   // Why: $2/$10 needs no date dimension — it launched as introductory pricing through
@@ -37,13 +46,13 @@ const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
   'claude-opus-4-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25, cacheWrite1h: 10 },
   'claude-opus-4-1': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75, cacheWrite1h: 30 },
   'claude-opus-4': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75, cacheWrite1h: 30 },
+  // Claude 4.6 and later keep standard rates across the full 1M context window.
   'claude-sonnet-4-6': {
     input: 3,
     output: 15,
     cacheRead: 0.3,
     cacheWrite: 3.75,
-    cacheWrite1h: 6,
-    ...SONNET_LONG_CONTEXT_PRICING
+    cacheWrite1h: 6
   },
   'claude-sonnet-4-5': {
     input: 3,
@@ -88,13 +97,7 @@ const MODEL_ALIASES: Record<string, string> = {
   'claude-sonnet-4-6-thinking': 'claude-sonnet-4-6'
 }
 
-function hasClaudeModelVersion(model: string, family: string, version: string): boolean {
-  const normalized = model.replace(/\./g, '-')
-  return new RegExp(`${family}-${version}(?:$|[^0-9])`).test(normalized)
-}
-
-function isLegacyBaseOpus4Model(model: string): boolean {
-  const normalized = model.replace(/\./g, '-')
+function isLegacyBaseOpus4Model(normalized: string): boolean {
   return /opus-4(?:$|-thinking$|-20\d{6}(?:-thinking)?$|@20\d{6}$)/.test(normalized)
 }
 
@@ -110,28 +113,37 @@ function normalizeModelForPricing(model: string | null): string | null {
   if (alias) {
     return alias
   }
-  if (hasClaudeModelVersion(lower, 'fable', '5')) {
+  const normalized = lower.replace(/\./g, '-')
+  // Why: point releases must match before their major, whose pattern also accepts `-5-1`/`-5-5`;
+  // a trailing letter (e.g. `-1m`) is not a point release.
+  if (/fable-5-1(?:$|[^0-9a-z])/.test(normalized)) {
+    return 'claude-fable-5-1'
+  }
+  if (/fable-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-fable-5'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '5')) {
+  if (/opus-5-5(?:$|[^0-9a-z])/.test(normalized)) {
+    return 'claude-opus-5-5'
+  }
+  if (/opus-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-5'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '4-8')) {
+  if (/opus-4-8(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-8'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '4-7')) {
+  if (/opus-4-7(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-7'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '4-6')) {
+  if (/opus-4-6(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-6'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '4-5')) {
+  if (/opus-4-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-5'
   }
-  if (hasClaudeModelVersion(lower, 'opus', '4-1')) {
+  if (/opus-4-1(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-1'
   }
-  if (isLegacyBaseOpus4Model(lower)) {
+  if (isLegacyBaseOpus4Model(normalized)) {
     return 'claude-opus-4'
   }
   if (lower.includes('opus-4')) {
@@ -139,13 +151,13 @@ function normalizeModelForPricing(model: string | null): string | null {
     // avoid overbilling unknown future Claude Code model IDs as legacy Opus 4.
     return 'claude-opus-4-8'
   }
-  if (hasClaudeModelVersion(lower, 'sonnet', '5')) {
+  if (/sonnet-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-sonnet-5'
   }
-  if (hasClaudeModelVersion(lower, 'sonnet', '4-6')) {
+  if (/sonnet-4-6(?:$|[^0-9])/.test(normalized)) {
     return 'claude-sonnet-4-6'
   }
-  if (hasClaudeModelVersion(lower, 'sonnet', '4-5')) {
+  if (/sonnet-4-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-sonnet-4-5'
   }
   if (lower.includes('sonnet-4')) {

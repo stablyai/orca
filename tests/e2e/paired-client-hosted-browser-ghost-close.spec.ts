@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readdirSync, existsSync } from 'node:fs'
+import { mutateStoppedProfileState } from './helpers/persisted-profile-state'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
@@ -12,13 +13,15 @@ import {
   findMirroredBrowserPage,
   openClientHostedFixturePage,
   readClientBrowserRows,
-  refreshAuthorityRuntimeId,
   selectPairedWorktreeGroup,
   startClientHostedMarkerFixture,
   waitForPairedWorktreeId,
-  waitForRelaunchedRuntime,
   waitForRenderedClientWebview
 } from './helpers/client-hosted-browser-fixture'
+import {
+  refreshAuthorityRuntimeId,
+  waitForRelaunchedRuntime
+} from './helpers/client-hosted-runtime-relaunch'
 
 const CLIENT_NAME = 'STA-4150 client-hosted ghost close'
 
@@ -33,61 +36,44 @@ const RECONNECT_GRACE_OVERSHOOT_MS = 20_000
  * nothing on the host answers for.
  */
 function forgetPersistedClientHostedPages(userDataDir: string): number {
-  return listOrcaDataFiles(userDataDir).reduce(
-    (total, dataFile) => total + forgetPersistedClientHostedPagesIn(dataFile),
-    0
-  )
-}
-
-/**
- * Every orca-data.json under a user-data dir.
- *
- * The live one is `profiles/<id>/orca-data.json`; the root file is only the harness's onboarding
- * seed, which the first boot migrates from. Reading the seed alone made the strip a no-op that
- * looked exactly like a runtime that had persisted nothing.
- */
-function listOrcaDataFiles(userDataDir: string): string[] {
   const profilesDir = path.join(userDataDir, 'profiles')
-  let profileFiles: string[] = []
-  try {
-    profileFiles = readdirSync(profilesDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => path.join(profilesDir, entry.name, 'orca-data.json'))
-  } catch {
-    // No profile directory yet; only the harness seed exists.
-  }
-  return [path.join(userDataDir, 'orca-data.json'), ...profileFiles].filter((file) => {
-    try {
-      readFileSync(file, 'utf8')
-      return true
-    } catch {
-      return false
-    }
-  })
-}
-
-function forgetPersistedClientHostedPagesIn(dataFile: string): number {
-  const state = JSON.parse(readFileSync(dataFile, 'utf8')) as {
-    workspaceSession?: { clientHostedBrowserPagesByWorktree?: Record<string, unknown[]> }
-    workspaceSessionsByHostId?: Record<
-      string,
-      { clientHostedBrowserPagesByWorktree?: Record<string, unknown[]> }
-    >
-  }
-  let forgotten = 0
-  for (const session of [
-    state.workspaceSession,
-    ...Object.values(state.workspaceSessionsByHostId ?? {})
-  ]) {
-    const rows = session?.clientHostedBrowserPagesByWorktree
-    if (!rows) {
-      continue
-    }
-    forgotten += Object.values(rows).reduce((total, list) => total + list.length, 0)
-    delete session.clientHostedBrowserPagesByWorktree
-  }
-  writeFileSync(dataFile, `${JSON.stringify(state, null, 2)}\n`)
-  return forgotten
+  return readdirSync(profilesDir, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isDirectory() && existsSync(path.join(profilesDir, entry.name, 'profile-state.db'))
+    )
+    .reduce(
+      (total, entry) =>
+        total +
+        mutateStoppedProfileState(
+          userDataDir,
+          (raw) => {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This test owns the persisted fixture; optional fields are checked at use sites.
+            const state = raw as {
+              workspaceSession?: { clientHostedBrowserPagesByWorktree?: Record<string, unknown[]> }
+              workspaceSessionsByHostId?: Record<
+                string,
+                { clientHostedBrowserPagesByWorktree?: Record<string, unknown[]> }
+              >
+            }
+            let forgotten = 0
+            for (const session of [
+              state.workspaceSession,
+              ...Object.values(state.workspaceSessionsByHostId ?? {})
+            ]) {
+              const rows = session?.clientHostedBrowserPagesByWorktree
+              if (!rows) {
+                continue
+              }
+              forgotten += Object.values(rows).reduce((count, list) => count + list.length, 0)
+              delete session.clientHostedBrowserPagesByWorktree
+            }
+            return forgotten
+          },
+          entry.name
+        ),
+      0
+    )
 }
 
 /**

@@ -26,8 +26,6 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: vi.fn(() => '') }
 }))
 
-vi.mock('@electron-toolkit/preload', () => ({ electronAPI: {} }))
-
 describe('native preload destructive app actions', () => {
   const originalContextIsolated = Object.getOwnPropertyDescriptor(process, 'contextIsolated')
   let eventTarget: EventTarget
@@ -92,6 +90,20 @@ describe('native preload destructive app actions', () => {
     })
   }
 
+  it('exposes the durable checkpoint join the lazy-chunk recovery reload depends on', async () => {
+    const api = await loadApi()
+    invoke.mockResolvedValue({ ok: true })
+
+    await expect(api.app.awaitBeforeUnloadCheckpoint()).resolves.toBeUndefined()
+    expect(invoke).toHaveBeenCalledWith('app:await-before-unload-checkpoint')
+
+    invoke.mockResolvedValue({ ok: false })
+
+    await expect(api.app.awaitBeforeUnloadCheckpoint()).rejects.toThrow(
+      'Failed to persist renderer state before unload.'
+    )
+  })
+
   it('preserves both macOS keyboard preload adapters', async () => {
     const api = await loadApi()
     invoke.mockResolvedValue(undefined)
@@ -112,4 +124,99 @@ describe('native preload destructive app actions', () => {
     expect(onKeyboardLayoutChanged).toHaveBeenCalledExactlyOnceWith(payload)
     expect(removeListener).toHaveBeenCalledWith(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
   })
+
+  it('awaits renderer durability before profile maintenance and preserves its result', async () => {
+    const api = await loadApi()
+    const started = vi.fn()
+    eventTarget.addEventListener(ORCA_APP_RESTART_STARTED_EVENT, started)
+    let finishCheckpoint = (_result: { ok: boolean }): void => {}
+    const checkpoint = new Promise((resolve) => {
+      finishCheckpoint = resolve
+    })
+    const result = { status: 'relaunching' }
+    invoke.mockImplementation((channel: string) =>
+      channel === 'app:await-before-unload-checkpoint' ? checkpoint : Promise.resolve(result)
+    )
+
+    const switching = api.orcaProfiles.switchProfile({ profileId: 'target' })
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('app:await-before-unload-checkpoint')
+    )
+    expect(started).toHaveBeenCalledOnce()
+    expect(invoke).not.toHaveBeenCalledWith('orcaProfiles:switch', expect.anything())
+    finishCheckpoint({ ok: true })
+    await expect(switching).resolves.toBe(result)
+    expect(invoke).toHaveBeenLastCalledWith('orcaProfiles:switch', { profileId: 'target' })
+  })
+
+  it.each(['checkpoint-failed', 'switch-failed', 'already-active'])(
+    'resets restart preparation when profile switching returns %s',
+    async (outcome) => {
+      const api = await loadApi()
+      const aborted = vi.fn()
+      eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, aborted)
+      invoke.mockImplementation(async (channel: string) => {
+        if (channel === 'app:await-before-unload-checkpoint') {
+          return { ok: outcome !== 'checkpoint-failed' }
+        }
+        if (outcome === 'switch-failed') {
+          throw new Error('switch failed')
+        }
+        return { status: 'already-active' }
+      })
+      const switching = api.orcaProfiles.switchProfile({ profileId: 'target' })
+      await (outcome === 'already-active'
+        ? expect(switching).resolves.toEqual({ status: 'already-active' })
+        : expect(switching).rejects.toThrow())
+      expect(aborted).toHaveBeenCalledOnce()
+      if (outcome === 'checkpoint-failed') {
+        expect(invoke).not.toHaveBeenCalledWith('orcaProfiles:switch', expect.anything())
+      }
+    }
+  )
+
+  it.each(['move', 'copy', 'inactive', 'duplicate', 'recovery'] as const)(
+    'prepares only a potentially relaunching project transfer: %s',
+    async (outcome) => {
+      const api = await loadApi()
+      const started = vi.fn()
+      const aborted = vi.fn()
+      eventTarget.addEventListener(ORCA_APP_RESTART_STARTED_EVENT, started)
+      eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, aborted)
+      const args = {
+        sourceProfileId: outcome === 'inactive' ? 'inactive' : 'active',
+        targetProfileId: 'target',
+        repoId: 'repo',
+        mode: outcome === 'copy' ? ('copy' as const) : ('move' as const)
+      }
+      const result =
+        outcome === 'duplicate'
+          ? { status: 'duplicate-target' }
+          : { status: 'transferred', willRelaunch: outcome === 'move' }
+      invoke.mockImplementation(async (channel: string) => {
+        if (channel === 'orcaProfiles:list') {
+          return { activeProfileId: 'active' }
+        }
+        if (channel === 'app:await-before-unload-checkpoint') {
+          return { ok: true }
+        }
+        if (outcome === 'recovery') {
+          const listener = on.mock.calls.find(([name]) => name === 'app:restart-committed')?.[1]
+          expect(listener).toBeTypeOf('function')
+          listener()
+          throw new Error('move requires recovery')
+        }
+        return result
+      })
+
+      const transfer = api.orcaProfiles.transferProject(args)
+      await (outcome === 'recovery'
+        ? expect(transfer).rejects.toThrow('move requires recovery')
+        : expect(transfer).resolves.toBe(result))
+      const needsPreparation = outcome !== 'copy' && outcome !== 'inactive'
+      expect(started).toHaveBeenCalledTimes(needsPreparation ? 1 : 0)
+      expect(aborted).toHaveBeenCalledTimes(outcome === 'duplicate' ? 1 : 0)
+      expect(invoke).toHaveBeenLastCalledWith('orcaProfiles:transferProject', args)
+    }
+  )
 })

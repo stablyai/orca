@@ -19,6 +19,7 @@ export type RemoteWorkspaceSyncStatus = {
   direction?: 'pull' | 'push'
   revision?: number
   updatedAt?: number
+  hostObservationToken?: string
   lastSyncedAt?: number
   message?: string
 }
@@ -26,7 +27,7 @@ export type RemoteWorkspaceSyncStatus = {
 export type SshCredentialRequest = {
   requestId: string
   targetId: string
-  kind: 'passphrase' | 'password'
+  kind: 'passphrase' | 'password' | 'keyboard-interactive'
   detail: string
 }
 
@@ -85,13 +86,27 @@ export type SshSlice = {
 }
 
 const targetConnectionGeneration = new Map<string, number>()
+const MAX_LOCAL_SSH_TARGET_GENERATIONS = 4096
+let targetConnectionGenerationSequence = 0
+let evictedTargetConnectionGeneration = 0
 
 export function getLocalSshTargetConnectionGeneration(targetId: string): number {
-  return targetConnectionGeneration.get(targetId) ?? 0
+  return targetConnectionGeneration.get(targetId) ?? evictedTargetConnectionGeneration
 }
 
 function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
-  targetConnectionGeneration.set(targetId, getLocalSshTargetConnectionGeneration(targetId) + 1)
+  targetConnectionGeneration.set(targetId, ++targetConnectionGenerationSequence)
+  while (targetConnectionGeneration.size > MAX_LOCAL_SSH_TARGET_GENERATIONS) {
+    const oldest = targetConnectionGeneration.keys().next()
+    if (oldest.done) {
+      break
+    }
+    evictedTargetConnectionGeneration = Math.max(
+      evictedTargetConnectionGeneration,
+      targetConnectionGeneration.get(oldest.value) ?? 0
+    )
+    targetConnectionGeneration.delete(oldest.value)
+  }
 }
 
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({

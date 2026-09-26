@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { readWorktreeJumpPaletteSource } from './worktree-jump-palette-source.test-support'
 
-const source = readFileSync(join(__dirname, 'WorktreeJumpPalette.tsx'), 'utf8')
+const source = [
+  readWorktreeJumpPaletteSource('use-worktree-jump-palette-create-action.ts'),
+  readWorktreeJumpPaletteSource('worktree-jump-palette-create-worktree.ts')
+].join('\n')
 
 function sourceBetween(startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -13,15 +15,12 @@ function sourceBetween(startPattern: string, endPattern: string): string {
 }
 
 describe('WorktreeJumpPalette source-context boundaries', () => {
-  it('attaches a resolved GitHub URL entity and leaves GitLab/Jira as raw URLs', () => {
-    // Why: GitHub create reuses the Cmd+J preview (lookup lives in the effect,
-    // not Case 1). GitLab/Jira still hand the raw URL to the composer.
-    const githubLinkSection = sourceBetween(
-      '// Case 1: user pasted a GH/GitLab/Jira URL.',
-      '// Case 2: user typed a raw issue number.'
-    )
-    expect(githubLinkSection).toContain('linkedWorkItem')
-    expect(githubLinkSection).toContain('initialGitHubWorkItem: item')
+  it('defers pasted GitHub URL resolution to the composer so cross-project detection runs', () => {
+    // Why: pasting a cross-project URL must surface the same "Switch project?"
+    // prompt as Cmd+N. The palette hands the raw URL to the composer's name
+    // field instead of pre-resolving it against an arbitrary repo, which
+    // silently linked cross-project items to the wrong project.
+    const githubLinkSection = sourceBetween('if (ghLink) {', 'if (ghNumber !== null) {')
     expect(githubLinkSection).toContain('prefilledName: trimmed')
     expect(githubLinkSection).not.toContain('lookupGitHubWorkItemByOwnerRepoForSource')
   })

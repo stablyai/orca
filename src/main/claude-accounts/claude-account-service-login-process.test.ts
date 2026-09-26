@@ -40,6 +40,9 @@ vi.mock('./keychain', () => ({
   writeManagedClaudeKeychainCredentials: vi.fn(async () => {})
 }))
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the doubles below implement every member the add-account login path reaches; this case drives the service only through addAccount.
+const asServiceDouble = <T>(double: unknown): T => double as T
+
 describe('ClaudeAccountService credential capture', () => {
   beforeEach(() => {
     setPlatform('darwin')
@@ -219,7 +222,7 @@ describe('ClaudeAccountService credential capture', () => {
           '--exec',
           'bash',
           '-lc',
-          "export CLAUDE_CONFIG_DIR='/home/user/.config/orca auth'; exec claude 'auth' 'status' '--json'"
+          "export CLAUDE_CONFIG_DIR='/home/user/.config/orca auth'; export CLAUDE_SECURESTORAGE_CONFIG_DIR='/home/user/.config/orca auth'; exec claude 'auth' 'status' '--json'"
         ],
         expect.objectContaining({ shell: false, windowsVerbatimArguments: false })
       )
@@ -493,6 +496,79 @@ describe('ClaudeAccountService credential capture', () => {
       expect(spawnMock).not.toHaveBeenCalled()
       expect(service.cancelPendingLogin()).toBe(false)
       expect(settings.claudeManagedAccounts).toEqual([])
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
+  })
+
+  it('supersedes the login a closed Settings pane abandoned instead of queueing behind it', async () => {
+    setPlatform('linux')
+    vi.resetModules()
+    vi.mocked(readActiveClaudeKeychainCredentials).mockResolvedValue(null)
+    const children: (EventEmitter & { stdin: PassThrough; kill: ReturnType<typeof vi.fn> })[] = []
+    // No pid: the POSIX teardown signals -pid as a process group, which must
+    // never reach a real group from a test double.
+    const spawnMock = vi.fn(() => {
+      const child = Object.assign(new EventEmitter(), {
+        stdin: new PassThrough(),
+        stdout: new PassThrough(),
+        stderr: new PassThrough(),
+        kill: vi.fn()
+      })
+      children.push(child)
+      return child
+    })
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      let settings = {
+        claudeManagedAccounts: [],
+        activeClaudeManagedAccountId: null,
+        activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+      }
+      const store = {
+        getSettings: vi.fn(() => settings),
+        updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+          settings = { ...settings, ...updates }
+          return settings
+        })
+      }
+      const runtimeAuth = {
+        clearLastWrittenCredentialsJson: vi.fn(),
+        syncForCurrentSelection: vi.fn(async () => {}),
+        forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+      }
+      const rateLimits = {
+        evictInactiveClaudeCache: vi.fn(),
+        refreshForClaudeAccountChange: vi.fn()
+      }
+      const service = new ClaudeAccountService(
+        asServiceDouble(store),
+        asServiceDouble(rateLimits),
+        asServiceDouble(runtimeAuth)
+      )
+
+      const abandoned = service.addAccount({ runtime: 'host' })
+      const abandonedRejection = expect(abandoned).rejects.toThrow('Claude sign-in was cancelled.')
+      await vi.waitFor(() => {
+        expect(children.length).toBe(1)
+      })
+
+      // The user reopens Settings and clicks Add Account again.
+      const retry = service.addAccount({ runtime: 'host' })
+      const retryRejection = expect(retry).rejects.toThrow()
+
+      await abandonedRejection
+      expect(children[0].kill).toHaveBeenCalled()
+      // Why: the point of the fix — the second login starts now, not after the
+      // abandoned one's whole sign-in deadline elapses.
+      await vi.waitFor(() => {
+        expect(children.length).toBe(2)
+      })
+
+      children[1].emit('close', 1)
+      await retryRejection
     } finally {
       vi.doUnmock('node:child_process')
     }

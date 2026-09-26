@@ -1,4 +1,5 @@
 import type { StoreRuntimeState } from './store-runtime-state'
+import type { Store } from './store'
 import { LoadedStateAdaptationOperations } from './loaded-state-adaptation'
 import { BackupRecoveryRotationOperations } from './backup-recovery-rotation'
 import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
@@ -64,6 +65,23 @@ import {
   installSshLeaseRecoveryOperationsContext
 } from './ssh-lease-recovery-operations'
 
+export type StoreDomainOperations = WriteSchedulingOperations &
+  PrimaryStateWriteOperations &
+  ProjectCollectionOperations &
+  RepoLifecycleOperations &
+  MobileTabSelectionPersistence &
+  SparsePresetPersistence &
+  AutomationPersistence &
+  MetadataLineageOperations &
+  ProfilePreferences &
+  SessionHostPartitionOperations &
+  SessionSnapshotOperations &
+  PtyBindingPersistenceOperations &
+  SshProfileOperations &
+  RetiredWorktreeNamePersistence &
+  SshLeaseRecoveryOperations &
+  WriteFlushBarrierOperations
+
 export type StoreDomains = {
   adaptation: LoadedStateAdaptationOperations
   backups: BackupRecoveryRotationOperations
@@ -108,7 +126,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   WriteFlushBarrierOperations
 ] as const
 
-export function installStoreDomainContexts(target: object, domains: StoreDomains): void {
+export function installStoreDomainContexts(target: Store, domains: StoreDomains): void {
   installWriteSchedulingOperationsContext(target, domains.scheduling)
   installPrimaryStateWriteOperationsContext(target, domains.writes)
   installProjectCollectionOperationsContext(target, domains.projects)
@@ -139,7 +157,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const preferences = new ProfilePreferences(runtime, scheduling)
   const repos = new RepoLifecycleOperations(runtime, scheduling)
   const bindingRecovery = new TerminalBindingRecoveryOperations(runtime)
-  const sessions = new SessionHostPartitionOperations(runtime, scheduling)
+  const sessions = new SessionHostPartitionOperations(runtime, scheduling, bindingRecovery)
   const sessionSnapshots = new SessionSnapshotOperations(
     runtime,
     sessions,

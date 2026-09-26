@@ -3,11 +3,15 @@ import { join } from 'node:path'
 import ts from 'typescript'
 
 const TASKS_DIRECTORY = __dirname
-const TASKS_ROUTE = '../../app/h/[hostId]/tasks.tsx'
 const SOURCE_PATTERN = /^(?:MobileTasks.*\.tsx|mobile-tasks-.*\.tsx?|use-mobile-tasks-.*\.tsx?)$/
 
+/**
+ * The screen moved out of `app/h/[hostId]/tasks.tsx` into this directory when the route became the
+ * shell's flag switch, so it arrives through the pattern below rather than as a listed path. The
+ * route file that remains declares no hook and no statement of its own and is covered by the flag
+ * census, not by this family.
+ */
 export const MOBILE_TASKS_SOURCE_FILES = [
-  TASKS_ROUTE,
   ...readdirSync(TASKS_DIRECTORY)
     .filter(
       (name) =>

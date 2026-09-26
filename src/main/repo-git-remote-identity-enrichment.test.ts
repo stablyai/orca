@@ -103,7 +103,7 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     expect(repo.gitRemoteIdentity).toBeUndefined()
     expect(probeGitRemoteIdentity).toHaveBeenCalledWith(
       '/workspace/sample-app',
-      undefined,
+      'local',
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
 
@@ -111,6 +111,53 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
 
     expect(repo.gitRemoteIdentity).toEqual(remoteIdentity)
     expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('probes an SSH row that carries only executionHostId on its own host', async () => {
+    // Why: a row minted with the unified spelling has no `connectionId`, and reading the raw field
+    // would run `git remote -v` against a same-named path on this machine (#11163).
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+    const store = makeStore(makeRepo({ executionHostId: 'ssh:builder' }))
+
+    enrichMissingRepoGitRemoteIdentities(store)
+
+    expect(probeGitRemoteIdentity).toHaveBeenCalledWith(
+      '/workspace/sample-app',
+      'ssh:builder',
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
+    await flushRepoGitRemoteIdentityEnrichmentForTests()
+  })
+
+  it('never probes a runtime row through this client dispatch table', async () => {
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'unavailable' })
+    const store = makeStore(
+      makeRepo({ connectionId: 'nested-1', executionHostId: 'runtime:env-a' })
+    )
+
+    await sweep(store)
+
+    expect(probeGitRemoteIdentity).not.toHaveBeenCalled()
+    expect(store.updateRepo).not.toHaveBeenCalled()
+  })
+
+  it('keeps same-path rows on two different SSH hosts from sharing one backoff', async () => {
+    // Why: the location key decides coalescing and backoff. Keyed on the raw field, two rows that
+    // carry only `executionHostId` collapse onto one key, so the first host being down suppresses
+    // the probe for the second one entirely.
+    vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'unavailable' })
+    const store = makeStore(
+      makeRepo({ id: 'repo-m4air', executionHostId: 'ssh:m4air' }),
+      makeRepo({ id: 'repo-openclaw', executionHostId: 'ssh:openclaw' })
+    )
+
+    await sweep(store)
+
+    expect(probeGitRemoteIdentity).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(probeGitRemoteIdentity).mock.calls.map((call) => call[1])).toEqual([
+      'ssh:m4air',
+      'ssh:openclaw'
+    ])
   })
 
   it('coalesces concurrent probes for the same repo location', async () => {
@@ -154,7 +201,7 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store)
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: null })
+    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: null }, 'local')
     expect(repo.gitRemoteIdentity).toBeNull()
   })
 
@@ -189,7 +236,11 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store)
     await flushRepoGitRemoteIdentityEnrichmentForTests()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: remoteIdentity })
+    expect(store.updateRepo).toHaveBeenCalledWith(
+      'repo-1',
+      { gitRemoteIdentity: remoteIdentity },
+      'local'
+    )
   })
 
   it('does not re-probe a resolved identity before the refresh window elapses', async () => {
@@ -242,7 +293,11 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged })
     await drainEnrichmentSweep()
 
-    expect(store.updateRepo).toHaveBeenCalledWith('repo-1', { gitRemoteIdentity: movedIdentity })
+    expect(store.updateRepo).toHaveBeenCalledWith(
+      'repo-1',
+      { gitRemoteIdentity: movedIdentity },
+      'local'
+    )
     expect(repo.gitRemoteIdentity).toEqual(movedIdentity)
     expect(onChanged).toHaveBeenCalledTimes(1)
   })

@@ -9,11 +9,7 @@ export function installMultiplexCleanup(
 ): asserts build is TerminalMultiplexCleanupStage {
   const state = build as TerminalMultiplexConnection
   const { runtime, streams, pendingPtyWaitControllers, emit, signal } = state
-  state.detachStream = (
-    streamId: number,
-    emitEnd: boolean,
-    releaseRemoteDesktopDriver = true
-  ): void => {
+  state.detachStream = (streamId: number, endVerdict, releaseRemoteDesktopDriver = true): void => {
     const stream = streams.get(streamId)
     if (!stream) {
       return
@@ -54,8 +50,8 @@ export function installMultiplexCleanup(
       // Why: release the width floor only if THIS stream took it, so a passive stream can't release a peer's floor.
       runtime.unregisterRemoteDesktopViewer(stream.ptyId, stream.remoteDesktopSubscriptionKey)
     }
-    if (emitEnd) {
-      emit({ type: 'end', streamId })
+    if (endVerdict) {
+      emit({ type: 'end', streamId, verdict: endVerdict })
     }
   }
   state.cancelPendingPtyWaits = (streamId: number): void => {
@@ -88,7 +84,7 @@ export function installMultiplexCleanup(
         keys.push(stream.remoteDesktopSubscriptionKey)
         remoteDesktopKeysByPty.set(stream.ptyId, keys)
       }
-      state.detachStream(streamId, false, false)
+      state.detachStream(streamId, null, false)
     }
     // Why: one connection can own many panes on the same PTY; remove floors together so close scans each registry once.
     for (const [ptyId, subscriptionKeys] of remoteDesktopKeysByPty) {

@@ -43,7 +43,8 @@ const PID_RECORD: ParsedDaemonPid = {
   launchNonce: 'n',
   linuxStartTicks: null,
   bootId: null,
-  spawnerExecPath: null
+  spawnerExecPath: null,
+  cgroupUnit: 'orca-daemon-n.scope'
 }
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -70,6 +71,9 @@ describe('collectTerminalDaemonHealth', () => {
     expect(health.buildVersion).toBe('1.2.2')
     expect(health.entryPath).toBe('/opt/orcad/daemon-entry.js')
     expect(health.protocolVersion).toBe(36)
+    // The daemon's self-detected cgroup scope round-trips through the pid record as-is —
+    // collectTerminalDaemonHealth must not reinterpret or drop it.
+    expect(health.cgroupUnit).toBe('orca-daemon-n.scope')
     // Why assert the coordinates: a self-test that probed some other endpoint would prove
     // nothing about the daemon this process installed.
     expect(checkDaemonHealthMock).toHaveBeenCalledWith(LIVE_FACTS.socketPath, LIVE_FACTS.tokenPath)
@@ -129,6 +133,24 @@ describe('collectOrcadHealth', () => {
     expect(health.nodeAbi).toBe(process.versions.modules)
     expect(health.platform).toBe(process.platform)
     expect(health.terminalDaemon.state).toBe('live')
+  })
+
+  it('includes bounded profile-state authority metadata when supplied', async () => {
+    const health = await collectOrcadHealth('1.2.3', {
+      backend: 'sqlite',
+      classification: 'sqlite-only',
+      authority_mode: 'sqlite-established',
+      runtime: 'orcad',
+      migrated: false
+    })
+
+    expect(health.profileStateAuthority).toEqual({
+      backend: 'sqlite',
+      classification: 'sqlite-only',
+      authority_mode: 'sqlite-established',
+      runtime: 'orcad',
+      migrated: false
+    })
   })
 })
 

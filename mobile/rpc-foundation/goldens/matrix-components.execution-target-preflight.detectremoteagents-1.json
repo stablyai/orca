@@ -1,0 +1,748 @@
+{
+  "operation": "components.execution-target",
+  "family": "components.execution-target",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "5cfbce3c7d97d908fbd447646d611e41a8aa1f61f684b9b710c4b67d6ff023a7",
+  "scenarioSha256": "79a49cddf66935007afb9be8a30593b778f02237894e5fd4d2898b526fc125df",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0355054e5e71": {
+      "name": "ssh.connect#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.connect"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 120000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "state": {
+              "error": {
+                "$rpc": "null"
+              },
+              "reconnectAttempt": 0,
+              "status": "connected",
+              "targetId": "ssh-1"
+            }
+          }
+        }
+      }
+    },
+    "095deb6732b2": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "10b5ec5ae537": {
+      "name": "preflight.detectRemoteAgents#2",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "12098dde49de": {
+      "name": "ssh.connect#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.connect\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "3dbb3eccbac3": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "4aa26501c485": {
+      "name": "preflight.detectRemoteAgents#2",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
+    "4e2e9a890ced": {
+      "detected": ["codex"],
+      "gate": {
+        "connectInProgress": false,
+        "error": {
+          "$rpc": "null"
+        },
+        "requiresConnection": false,
+        "status": "connected"
+      }
+    },
+    "4f7c1dcd099d": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "50a48d92722f": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "70b1e8fb528a": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": ["codex"]
+        }
+      }
+    },
+    "7bdea59d5964": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "8265ec539d5a": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+    },
+    "88ecd0c754ca": {
+      "detected": [],
+      "gate": {
+        "connectInProgress": false,
+        "error": {
+          "$rpc": "null"
+        },
+        "requiresConnection": false,
+        "status": "connected"
+      }
+    },
+    "a11809a84754": {
+      "name": "ssh.getState#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.getState\",\"params\":{\"targetId\":\"ssh-1\"}}"
+    },
+    "a4b67f6f3051": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "b53739a58194": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "state": {
+              "error": {
+                "$rpc": "null"
+              },
+              "reconnectAttempt": 0,
+              "status": "connected",
+              "targetId": "ssh-1"
+            }
+          }
+        }
+      }
+    },
+    "b6835adccf60": {
+      "name": "ssh.getState#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.getState"
+        },
+        {
+          "name": "params",
+          "value": {
+            "targetId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "c4ea06b327d3": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "cde9da103500": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "d0fca58e471e": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "d23b91bd7660": {
+      "detected": {
+        "$rpc": "null"
+      },
+      "gate": {
+        "connectInProgress": false,
+        "error": {
+          "$rpc": "null"
+        },
+        "requiresConnection": true,
+        "status": {
+          "$rpc": "null"
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f2fdef42b1f0": {
+      "name": "preflight.detectRemoteAgents#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "preflight.detectRemoteAgents"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "ssh-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-components.execution-target-preflight.detectremoteagents-1",
+    "checkpoints": [
+      {
+        "id": "components-target-ssh.prelude:state-pending",
+        "observation": {
+          "sender": ["b6835adccf60"],
+          "payloads": ["a11809a84754"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "d23b91bd7660",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.normal:settled",
+        "observation": {
+          "sender": ["b53739a58194", "70b1e8fb528a", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "4e2e9a890ced",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.result-absent:settled",
+        "observation": {
+          "sender": ["b53739a58194", "4f7c1dcd099d", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "88ecd0c754ca",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.result-null:settled",
+        "observation": {
+          "sender": ["b53739a58194", "c4ea06b327d3", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "88ecd0c754ca",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["b53739a58194", "f2fdef42b1f0", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "88ecd0c754ca",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["b53739a58194", "095deb6732b2", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "88ecd0c754ca",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["b53739a58194", "7bdea59d5964", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "88ecd0c754ca",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.outer-refused:settled",
+        "observation": {
+          "sender": ["b53739a58194", "d0fca58e471e", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "88ecd0c754ca",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["b53739a58194", "3dbb3eccbac3", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "88ecd0c754ca",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.method-not-found:settled",
+        "observation": {
+          "sender": ["b53739a58194", "50a48d92722f", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "88ecd0c754ca",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.transport-rejection:settled",
+        "observation": {
+          "sender": ["b53739a58194", "a4b67f6f3051", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "88ecd0c754ca",
+          "effects": []
+        }
+      },
+      {
+        "id": "components-target-ssh.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["b53739a58194", "cde9da103500", "0355054e5e71", "10b5ec5ae537"],
+          "payloads": ["a11809a84754", "8265ec539d5a", "12098dde49de", "4aa26501c485"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "connect": "eb79a9b3682a"
+          },
+          "state": "88ecd0c754ca",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

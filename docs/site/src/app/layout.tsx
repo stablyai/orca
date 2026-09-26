@@ -44,7 +44,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="bg-background text-foreground" suppressHydrationWarning>
       <body className="font-sans antialiased" suppressHydrationWarning>
-        <RootProvider search={{ enabled: false }}>{children}</RootProvider>
+        <RootProvider search={{ enabled: false }} theme={{ defaultTheme: 'dark' }}>
+          {children}
+        </RootProvider>
       </body>
     </html>
   )

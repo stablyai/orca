@@ -10,15 +10,9 @@
 // would otherwise release a hold that has not landed yet, and the late hold would never be undone.
 
 import { useEffect, useRef } from 'react'
+import { structuredAgentSessionHolderId } from '../../../../shared/structured-agent-session-holder'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-
-let holderOrdinal = 0
-
-export function structuredAgentSessionHolderId(surface: string): string {
-  holderOrdinal += 1
-  return `${surface}:${holderOrdinal}`
-}
 
 export function useStructuredAgentSessionHold(args: {
   sessionId: string
@@ -45,8 +39,10 @@ export function useStructuredAgentSessionHold(args: {
     const held = callStructuredAgentSession(runtimeTarget, 'agentSession.hold', {
       sessionId,
       holderId
-      // An older host has no such method; the session still reads, it just is not held.
-    }).catch(() => undefined)
+    }).catch((error: unknown) => {
+      // The session still reads, and a send restarts the agent itself; this only leaves a trace.
+      console.warn('[structured-agent-session] hold failed:', error)
+    })
     return () => {
       void held.then(() =>
         callStructuredAgentSession(runtimeTarget, 'agentSession.release', {

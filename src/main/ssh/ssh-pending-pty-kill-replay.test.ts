@@ -23,6 +23,7 @@ function createStoreStub(entries: SshPendingPtyKillEntry[]): {
   cleared: string[]
   terminated: string[]
   expired: string[]
+  recycled: string[]
   attempts: string[]
   remaining: () => string[]
 } {
@@ -30,6 +31,7 @@ function createStoreStub(entries: SshPendingPtyKillEntry[]): {
   const cleared: string[] = []
   const terminated: string[] = []
   const expired: string[] = []
+  const recycled: string[] = []
   const attempts: string[] = []
   const store = {
     getSshRemotePtyKillIntents: vi.fn((_target: string, now: number) =>
@@ -42,13 +44,18 @@ function createStoreStub(entries: SshPendingPtyKillEntry[]): {
       backing = backing.filter((item) => item.ptyId !== ptyId)
       cleared.push(ptyId)
     }),
-    markSshRemotePtyLease: vi.fn((_target: string, ptyId: string, state: string) => {
-      if (state === 'terminated') {
-        terminated.push(ptyId)
-      } else if (state === 'expired') {
-        expired.push(ptyId)
+    markSshRemotePtyLease: vi.fn(
+      (_target: string, ptyId: string, state: string, options?: { relayIdRecycled?: true }) => {
+        if (state === 'terminated') {
+          terminated.push(ptyId)
+        } else if (state === 'expired') {
+          expired.push(ptyId)
+          if (options?.relayIdRecycled) {
+            recycled.push(ptyId)
+          }
+        }
       }
-    }),
+    ),
     noteSshRemotePtyKillReplayAttempt: vi.fn((_target: string, ptyId: string) => {
       attempts.push(ptyId)
     })
@@ -58,6 +65,7 @@ function createStoreStub(entries: SshPendingPtyKillEntry[]): {
     cleared,
     terminated,
     expired,
+    recycled,
     attempts,
     remaining: () => backing.map((item) => item.ptyId)
   }
@@ -118,14 +126,19 @@ describe('replayPendingSshPtyKills', () => {
       shouldContinue: () => true,
       now: () => NOW
     })
-    expect(shutdown).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', { immediate: true })
+    expect(shutdown).toHaveBeenCalledWith('ssh:ssh-1@@pty-1', {
+      immediate: true,
+      expectedIncarnationId: 'inc-a'
+    })
     expect(cleared).toEqual(['pty-1'])
     expect(terminated).toEqual(['pty-1'])
   })
 
   // #16970: a redeployed relay renumbers from pty-1, so this id now names someone else's shell.
   it('refuses to kill a recycled relay id and expires the lease that named it', async () => {
-    const { store, cleared, terminated, expired } = createStoreStub([entry('pty-1', 'inc-a')])
+    const { store, cleared, terminated, expired, recycled } = createStoreStub([
+      entry('pty-1', 'inc-a')
+    ])
     const { provider, shutdown } = createProviderStub([
       { relayPtyId: 'pty-1', incarnationId: 'inc-fresh' }
     ])
@@ -141,6 +154,9 @@ describe('replayPendingSshPtyKills', () => {
     // Declining to kill is only half of it: the reattach one step later fences on paneKey/tabId and
     // never on incarnation, so an untouched lease would bind the user's old pane to that stranger.
     expect(expired).toEqual(['pty-1'])
+    // `expired` alone no longer buys that: it also names orphans the reattach is meant to re-adopt,
+    // so the recycling has to be recorded on the lease itself.
+    expect(recycled).toEqual(['pty-1'])
     // `expired`, not `terminated` — losing the route is not evidence the shell died.
     expect(terminated).toEqual([])
   })

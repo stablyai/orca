@@ -1,16 +1,11 @@
-import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import { basename, join, type posix } from 'node:path'
-import type {
-  DiscoveredSkill,
-  SkillDiscoverySource,
-  SkillProvider,
-  SkillSourceKind
-} from '../../shared/skills'
+import type { SkillDiscoverySource, SkillProvider, SkillSourceKind } from '../../shared/skills'
 import type { AgentType } from '../../shared/agent-status-types'
 import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
+import { stablePathId } from './skill-discovery-classification'
 import {
   resolveDefaultHermesSkillsRoot,
   resolveEnvironmentHermesSkillsRoot,
@@ -18,42 +13,16 @@ import {
 } from './skill-provider-runtime-roots'
 
 export type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
+
+// Re-exported so existing importers keep one entry point for discovery helpers.
+export {
+  sortDiscoveredSkills,
+  sortSkillDiscoverySources,
+  sourceKindForSkill,
+  sourceLabelForSkill,
+  stablePathId
+} from './skill-discovery-classification'
 type SkillDiscoveryPathApi = Pick<typeof posix, 'basename' | 'join'>
-
-export function stablePathId(pathValue: string): string {
-  return createHash('sha1').update(pathValue).digest('hex').slice(0, 16)
-}
-
-// Skill classification and ordering are identical for native and WSL discovery;
-// only the path arithmetic differs (node:path vs pathPosix), so both callers
-// share these and pass the matching path adapter.
-type SkillRelativePathApi = { relative: (from: string, to: string) => string; sep: string }
-
-export function sourceKindForSkill(
-  root: SkillScanRoot,
-  skillFilePath: string,
-  pathApi: SkillRelativePathApi
-): SkillSourceKind {
-  if (
-    root.sourceKind === 'home' &&
-    pathApi.relative(root.path, skillFilePath).split(pathApi.sep)[0] === '.system'
-  ) {
-    return 'bundled'
-  }
-  return root.sourceKind
-}
-
-export function sourceLabelForSkill(root: SkillScanRoot, sourceKind: SkillSourceKind): string {
-  return sourceKind === 'bundled' ? `${root.label} bundled` : root.label
-}
-
-export function compareSkills(a: DiscoveredSkill, b: DiscoveredSkill): number {
-  return (
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
-    a.sourceLabel.localeCompare(b.sourceLabel, undefined, { sensitivity: 'base' }) ||
-    a.skillFilePath.localeCompare(b.skillFilePath)
-  )
-}
 
 function source(
   id: string,
@@ -219,6 +188,27 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'aug'
+    ),
+    // Why: user skills live under XDG config home (`~/.config/muse/skills` by
+    // default); project skills are the canonical `.agents/skills` root already
+    // covered by home-agents/repo-agents, so no agent-specific repo source.
+    source(
+      'home-muse',
+      'Muse home',
+      pathApi.join(home, '.config', 'muse', 'skills'),
+      'home',
+      ['agent-skills'],
+      'muse'
+    ),
+    // Why: ZCode loads user skills from `~/.zcode/skills`; project skills are the canonical
+    // `.agents/skills` root already covered by home-agents/repo-agents.
+    source(
+      'home-zcode',
+      'ZCode home',
+      pathApi.join(home, '.zcode', 'skills'),
+      'home',
+      ['agent-skills'],
+      'zcode'
     )
   ]
 

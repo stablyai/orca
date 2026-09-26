@@ -253,6 +253,20 @@ describe('registerWorktreeHandlers', () => {
     expect(runtimeStub.notifyWorktreesChangedForRemoteClients).toHaveBeenCalledWith('repo-1')
   })
 
+  it('persists display-name provenance at the host boundary', () => {
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      updates: { displayName: 'Agent label' }
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      expect.objectContaining({ displayName: 'Agent label', displayNameIsPinned: true })
+    )
+  })
+
   it('does not trust renderer-authored automation provenance during local create', async () => {
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
     listWorktreesMock.mockResolvedValue([
@@ -317,6 +331,29 @@ describe('registerWorktreeHandlers', () => {
         displayName: 'Fix: dashboards for PRs'
       })
     })
+  })
+
+  it('pins a legacy name-only user create when the branch matches', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature',
+        head: 'abc123',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature'
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature',
+      expect.objectContaining({ displayName: 'feature', displayNameIsPinned: true })
+    )
   })
 
   it('persists linked issue and PR metadata during local create', async () => {
@@ -390,7 +427,10 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('configures a PR push target during local create', async () => {
+  // Was "configures a PR push target during local create": create used to mint the
+  // fork remote up front. It now defers to first sync (#17828); the minting itself is
+  // covered by worktree-remote-push-target-materialization.test.ts.
+  it('defers the fork-PR remote during local create and persists the target unmaterialized', async () => {
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -412,19 +452,28 @@ describe('registerWorktreeHandlers', () => {
       }
     })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['remote', 'add', 'pr-prateek-orca', 'git@github.com:prateek/orca.git'],
-      { cwd: '/workspace/repo' }
-    )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       [
-        'fetch',
+        'remote',
+        'add',
+        '-t',
+        'prateek/fix-sidebar-agents-toggle',
+        '--no-tags',
         'pr-prateek-orca',
-        '+refs/heads/prateek/fix-sidebar-agents-toggle:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle'
+        'git@github.com:prateek/orca.git'
       ],
       { cwd: '/workspace/repo' }
     )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      [
+        'fetch',
+        'pr-prateek-orca',
+        '+refs/heads/prateek/fix-sidebar-agents-toggle*:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle*'
+      ],
+      { cwd: '/workspace/repo' }
+    )
+    // Upstream can only be set once the remote exists, so it defers with the remote.
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
       [
         'branch',
         '--set-upstream-to',
@@ -433,20 +482,25 @@ describe('registerWorktreeHandlers', () => {
       ],
       { cwd: '/workspace/improve-dashboard' }
     )
+    // Exact object, not objectContaining: `remoteCreated` must stay absent until
+    // something actually mints the remote.
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',
       expect.objectContaining({
-        pushTarget: expect.objectContaining({
+        pushTarget: {
           remoteName: 'pr-prateek-orca',
           branchName: 'prateek/fix-sidebar-agents-toggle',
-          remoteUrl: 'git@github.com:prateek/orca.git',
-          remoteCreated: true
-        })
+          remoteUrl: 'git@github.com:prateek/orca.git'
+        }
       })
     )
   })
 
-  it('keeps the Orca-created marker when a new worktree reuses an Orca-created fork remote', async () => {
+  // Was "keeps the Orca-created marker ...": create used to inherit the marker while
+  // minting. With minting deferred (#17828) create must not claim ownership it has not
+  // earned; marker inheritance now happens at materialization and is covered by
+  // worktree-push-target-setup.test.ts.
+  it('does not claim the Orca-created marker at create when a sibling worktree minted the fork remote', async () => {
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -493,12 +547,11 @@ describe('registerWorktreeHandlers', () => {
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::/workspace/improve-dashboard',
       expect.objectContaining({
-        pushTarget: expect.objectContaining({
+        pushTarget: {
           remoteName: 'pr-contributor-orca',
           branchName: 'contributor/new-fix',
-          remoteUrl: 'https://github.com/contributor/orca.git',
-          remoteCreated: true
-        })
+          remoteUrl: 'https://github.com/contributor/orca.git'
+        }
       })
     )
   })

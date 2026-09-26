@@ -62,7 +62,7 @@ export function prepareLoadedProfileSettings(
 ): PreparedLoadedProfileSettings {
   const experimentalActivityDefaultedOffForAllUsers =
     parsed.settings?.experimentalActivityDefaultedOffForAllUsers === true
-  // Why: the Agents view moved back behind Experimental; flip pre-migration profiles off once, then preserve opt-ins.
+  // Why: preserve the legacy rollout boundary while loading profiles created before the Agents tab graduated.
   const migratedExperimentalActivity = experimentalActivityDefaultedOffForAllUsers
     ? (parsed.settings?.experimentalActivity ?? false)
     : false
@@ -136,6 +136,8 @@ export function prepareLoadedProfileSettings(
   const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
+    parsed.settings?.agentDefaultArgs?.devin !==
+      migratedAgentYoloDefaults.agentDefaultArgs?.devin ||
     hasUnsupportedTuiAgentArgs('opencode', parsed.settings?.agentDefaultArgs?.opencode) ||
     hasUnsupportedTuiAgentArgs('kilo', parsed.settings?.agentDefaultArgs?.kilo)
   ) {

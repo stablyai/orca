@@ -1,0 +1,91 @@
+{
+  "operation": "aiVault.resume-launch",
+  "family": "aiVault.resume-launch",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
+  "scenarioSha256": "ebf1bbc01ad7704fe79eff0969fcc2d4af8ebfa7c2410d2ed9d3ae8c6976b434",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "3e6273f4fe55": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "worktree_busy",
+            "message": "Workspace is busy"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "62643ed38326": {
+      "failure": "Workspace is busy",
+      "launched": "unlaunched"
+    },
+    "6e913cd7b306": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Workspace is busy",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "88cd0d2b1302": {
+      "name": "session.tabs.createTerminal#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "aivault-resume-launch-create-refused",
+    "checkpoints": [
+      {
+        "id": "create-refused",
+        "observation": {
+          "sender": ["3e6273f4fe55"],
+          "payloads": ["88cd0d2b1302"],
+          "settlements": {
+            "bare": "6e913cd7b306"
+          },
+          "state": "62643ed38326",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

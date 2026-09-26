@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+import { resolveNativeChatTabAgentEvidence } from '../tab-bar/native-chat-tab-agent-evidence'
 import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
@@ -58,6 +58,7 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === group.activeTabId
       )
+      // contentType gates out standalone structured (agent-session) tabs.
       if (!tab || tab.contentType !== 'terminal') {
         return
       }
@@ -75,10 +76,10 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         terminalLayout,
         agentStatusByPaneKey: state.agentStatusByPaneKey
       })
-      const titleFallbackAgent = tabWideFallbackSafe
-        ? (resolveCommittedTitleAgentType(tab.label ?? '') ??
-          (terminalTab ? resolveCommittedTitleAgentType(terminalTab.title) : null))
-        : null
+      const titleFallbackAgent =
+        tabWideFallbackSafe && terminalTab
+          ? resolveNativeChatTabAgentEvidence(terminalTab, tab)
+          : null
       if (
         !canToggleNativeChat({
           experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,

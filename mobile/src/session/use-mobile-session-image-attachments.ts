@@ -11,6 +11,7 @@ import {
 type CurrentRef<T> = { readonly current: T }
 
 type Args = {
+  readonly agent?: string | null
   readonly client: RpcClient | null
   readonly activeHandle: string | null
   readonly activeHandleRef: CurrentRef<string | null>
@@ -29,8 +30,16 @@ type Args = {
   readonly nativeChatBaseSend: (
     text: string,
     images?: string[],
-    deadline?: number
+    deadline?: number,
+    attachments?: readonly {
+      id: string
+      path: string
+      previewUri: string
+      contentFingerprint?: string
+    }[]
   ) => Promise<MobileNativeChatSendOutcome>
+  /** Structured agent sessions do not have a terminal paste path. */
+  readonly structuredNativeChat: boolean
   /** Launch-context text parked on the agent's TUI input line, or null — sizes
    *  the image paste's leading clear so a multi-line draft cannot ride along. */
   readonly readSeededLaunchDraft: () => string | null
@@ -47,6 +56,7 @@ type Args = {
  *  here keeps the already-dense session route to a single wiring point. */
 export function useMobileSessionImageAttachments({
   client,
+  agent,
   activeHandle,
   activeHandleRef,
   canSend,
@@ -57,6 +67,7 @@ export function useMobileSessionImageAttachments({
   getActiveWorktreeConnectionId,
   beforeTerminalSend,
   nativeChatBaseSend,
+  structuredNativeChat,
   readSeededLaunchDraft,
   showToast,
   onNativeChatSendError,
@@ -69,6 +80,7 @@ export function useMobileSessionImageAttachments({
 } {
   const { attachImage, isAttaching } = useMobileImageAttachment({
     client,
+    agent,
     activeHandle,
     canSend,
     connState,
@@ -81,12 +93,14 @@ export function useMobileSessionImageAttachments({
   })
   const nativeChatImages = useMobileNativeChatImageAttachments({
     client,
+    agent,
     activeHandleRef,
     deviceTokenRef,
     getActiveWorktreeConnectionId,
     connState,
     scopeKey: nativeChatScopeKey,
-    enabled: nativeChatInputLeaseReady,
+    enabled: structuredNativeChat ? connState === 'connected' : nativeChatInputLeaseReady,
+    structuredNativeChat,
     showToast,
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,

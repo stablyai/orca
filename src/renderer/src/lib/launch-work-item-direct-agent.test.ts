@@ -6,11 +6,17 @@ vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, value: string) => value }))
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, value: string, vars?: Record<string, string>) =>
+    value.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => vars?.[name] ?? '')
+}))
 
+import { toast } from 'sonner'
+import { track } from '@/lib/telemetry'
 import {
   buildDirectWorkItemAgentStartupPlan,
-  buildDirectWorkItemStartupOpts
+  buildDirectWorkItemStartupOpts,
+  notifyDirectWorkItemAgentStartTimeout
 } from './launch-work-item-direct-agent'
 import type { AgentStartupPlan } from './tui-agent-startup'
 
@@ -106,5 +112,64 @@ describe('buildDirectWorkItemAgentStartupPlan', () => {
       model: 'gpt-5.2-codex',
       effort: 'medium'
     })
+  })
+})
+
+describe('notifyDirectWorkItemAgentStartTimeout', () => {
+  it('toasts the paste hint and records the startup timeout', () => {
+    notifyDirectWorkItemAgentStartTimeout('codex', true)
+
+    expect(toast.message).toHaveBeenCalledWith(expect.stringContaining('paste the prompt'))
+    expect(track).toHaveBeenCalledWith('agent_error', {
+      error_class: 'unknown',
+      agent_kind: 'codex'
+    })
+  })
+
+  it('names the work item context for an unsubmitted paste', () => {
+    notifyDirectWorkItemAgentStartTimeout('codex', false)
+
+    expect(toast.message).toHaveBeenCalledWith(
+      expect.stringContaining('paste the work item context')
+    )
+  })
+})
+
+// Why: the Source Control AI dialogs hide the CLI arguments field on launches that cannot apply
+// it, and then send nothing. Only `undefined` reaches the global Agents arguments here — an
+// empty string is an explicit "no arguments" that would silently suppress the user's setting.
+describe('buildDirectWorkItemAgentStartupPlan global arguments fallback', () => {
+  const withGlobalArgs = {
+    ...settings,
+    openAgentTabsInChatByDefault: false,
+    agentDefaultArgs: { codex: '--sandbox danger-full-access' }
+  }
+
+  it('resolves the global Agents arguments when the launch names none', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      draftContent: 'Fix the broken checks',
+      promptDelivery: 'draft',
+      settings: withGlobalArgs,
+      launchPlatform: 'darwin',
+      nativeChatTranscriptIsLocalReadable: true
+    })
+
+    expect(result.startupPlan?.launchCommand).toContain("'--sandbox' 'danger-full-access'")
+  })
+
+  it('lets an explicit per-action value win over the global one', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      agentArgs: '--model gpt-5',
+      draftContent: 'Fix the broken checks',
+      promptDelivery: 'draft',
+      settings: withGlobalArgs,
+      launchPlatform: 'darwin',
+      nativeChatTranscriptIsLocalReadable: true
+    })
+
+    expect(result.startupPlan?.launchCommand).toContain("'--model' 'gpt-5'")
+    expect(result.startupPlan?.launchCommand).not.toContain('danger-full-access')
   })
 })

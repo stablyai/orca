@@ -1,0 +1,340 @@
+{
+  "operation": "workspace.file-inventory",
+  "family": "legacy-inventory",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "262eaad263a45aa13ec5b27c12b59946b12c202474229fff7a5727dba6d702ca",
+  "scenarioSha256": "23ffc912a432dcd3ff70be1903a8d518cf85634f27a2be6d21585963e338e7e3",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "32c9018052ba": {
+      "name": "files.searchPaths#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "old",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "3b6419fbab75": {
+      "status": "fulfilled",
+      "startedAt": 240,
+      "settledAt": 240,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "602e35a92eec": {
+      "files": []
+    },
+    "82aa78cec383": {
+      "name": "files.list#2",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 240
+      }
+    },
+    "8db0d1234c94": {
+      "name": "files.searchPaths#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+    },
+    "a129552fdc6e": {
+      "files": ["third.ts"]
+    },
+    "a7dc0e022f15": {
+      "name": "files.list#2",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 360,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "files": [
+              {
+                "relativePath": "fresh.ts"
+              },
+              {
+                "relativePath": "third.ts"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "b272f776e5de": {
+      "name": "files.list#2",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+    },
+    "c9b9d7a9b388": {
+      "name": "files.list#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+    },
+    "d2ad71e601c4": {
+      "status": "fulfilled",
+      "startedAt": 120,
+      "settledAt": 120,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "d9f32749aeb3": {
+      "name": "files.list#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 240,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "files": [
+              {
+                "relativePath": "old.ts"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "ea94d4508bba": {
+      "name": "files.list#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 120
+      }
+    },
+    "eae0ce09f0e8": {
+      "name": "files.searchPaths#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"fresh\",\"limit\":16}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f461501d556e": {
+      "name": "files.searchPaths#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "files.searchPaths"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 16,
+            "query": "fresh",
+            "worktree": "id:A"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "b1",
+    "checkpoints": [
+      {
+        "id": "old-pending",
+        "observation": {
+          "sender": ["32c9018052ba", "ea94d4508bba"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "stale-arrived-fresh-pending",
+        "observation": {
+          "sender": ["32c9018052ba", "d9f32749aeb3", "f461501d556e", "82aa78cec383"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388", "eae0ce09f0e8", "b272f776e5de"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "third-query",
+        "observation": {
+          "sender": ["32c9018052ba", "d9f32749aeb3", "f461501d556e", "82aa78cec383"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388", "eae0ce09f0e8", "b272f776e5de"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "602e35a92eec",
+          "effects": []
+        }
+      },
+      {
+        "id": "fresh-arrived",
+        "observation": {
+          "sender": ["32c9018052ba", "d9f32749aeb3", "f461501d556e", "a7dc0e022f15"],
+          "payloads": ["8db0d1234c94", "c9b9d7a9b388", "eae0ce09f0e8", "b272f776e5de"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "old": "eb79a9b3682a",
+            "select-b": "d2ad71e601c4",
+            "reset-a": "d2ad71e601c4",
+            "fresh": "d2ad71e601c4",
+            "third": "3b6419fbab75"
+          },
+          "state": "a129552fdc6e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

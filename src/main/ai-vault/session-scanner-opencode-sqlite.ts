@@ -10,6 +10,10 @@ import {
   shouldCaptureFullFirstUserPrompt
 } from './session-scanner-first-user-prompt'
 import { readOpenCodeDatabase } from './session-scanner-opencode-sqlite-open'
+import {
+  canCountOpenCodeMessages,
+  canReadOpenCodeMessageParts
+} from './session-scanner-opencode-sqlite-schema'
 import { normalizeTitleText } from './session-scanner-values'
 import type SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
@@ -70,14 +74,6 @@ function sessionNumberColumnSelect(db: SyncDatabase, columnName: string): string
   return columnExists(db, 'session', columnName) ? `s.${columnName}` : '0'
 }
 
-function canCountOpenCodeMessages(db: SyncDatabase): boolean {
-  return (
-    tableExists(db, 'message') &&
-    columnExists(db, 'message', 'session_id') &&
-    columnExists(db, 'message', 'data')
-  )
-}
-
 function buildSessionQuery(db: SyncDatabase): string {
   const messageCountSubquery = canCountOpenCodeMessages(db)
     ? `(SELECT COUNT(*) FROM message m
@@ -134,7 +130,8 @@ function mapPreviewRole(role: string | null): AiVaultSessionPreviewMessage['role
   return 'unknown'
 }
 
-function extractPartText(partData: string): string | null {
+/** The text a `type: 'text'` part carries; null for every other part shape. */
+export function extractPartText(partData: string): string | null {
   try {
     const parsed = JSON.parse(partData) as unknown
     const record =
@@ -154,14 +151,7 @@ function extractPartText(partData: string): string | null {
 }
 
 function readFirstUserPromptFromOpenCodeDb(db: SyncDatabase, sessionId: string): string | null {
-  if (
-    !canCountOpenCodeMessages(db) ||
-    !tableExists(db, 'part') ||
-    !columnExists(db, 'message', 'id') ||
-    !columnExists(db, 'part', 'message_id') ||
-    !columnExists(db, 'part', 'time_created') ||
-    !columnExists(db, 'part', 'data')
-  ) {
+  if (!canReadOpenCodeMessageParts(db)) {
     return null
   }
 
@@ -206,14 +196,7 @@ function readFirstUserPromptFromOpenCodeDb(db: SyncDatabase, sessionId: string):
 }
 
 function buildPreviewQuery(db: SyncDatabase): string | null {
-  if (
-    !canCountOpenCodeMessages(db) ||
-    !tableExists(db, 'part') ||
-    !columnExists(db, 'message', 'id') ||
-    !columnExists(db, 'part', 'message_id') ||
-    !columnExists(db, 'part', 'time_created') ||
-    !columnExists(db, 'part', 'data')
-  ) {
+  if (!canReadOpenCodeMessageParts(db)) {
     return null
   }
   return `SELECT json_extract(m.data, '$.role') AS role,
@@ -251,12 +234,13 @@ export async function parseOpenCodeSqliteSession(args: {
 }): Promise<AiVaultSession | null> {
   return readOpenCodeDatabase({
     dbPath: args.dbPath,
-    read: (db) => readSession({ db, ...args })
+    read: (db) => readOpenCodeSqliteSession({ db, ...args })
   })
 }
 
-// Extracted so the open wrapper owns the handle's lifetime.
-function readSession(args: {
+// Exported so a capture read can take the session and its whole transcript from
+// one open of the database rather than opening it twice.
+export function readOpenCodeSqliteSession(args: {
   db: SyncDatabase
   dbPath: string
   sessionId: string

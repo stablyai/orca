@@ -16,8 +16,8 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 
 describe('GitHub Enterprise slug routing boundaries', () => {
   it('keeps work-item URL hosts on TaskPage metadata and issue mutations', () => {
-    const statusSection = componentSource('task-page/github/github-status-cell.tsx')
-    const assigneeSection = componentSource('task-page/github/github-assignees-cell.tsx')
+    const statusSection = componentSource('task-page/github/StatusCell.tsx')
+    const assigneeSection = componentSource('task-page/github/AssigneesCell.tsx')
 
     expect(statusSection).toContain('host: githubProjectHost(parsedOwnerRepo.host)')
     expect(assigneeSection).toContain('parsed?.slug.host')
@@ -25,11 +25,13 @@ describe('GitHub Enterprise slug routing boundaries', () => {
   })
 
   it('uses URL-host fallback for TaskPage reviewer and merge mutations', () => {
-    const reviewSection = componentSource('task-page/github/pr-review-cell.tsx')
-    const mergeSection = componentSource('task-page/github/pr-merge-cell.tsx')
+    const reviewSection = componentSource('task-page/github/ReviewCell.tsx')
+    const reviewActionsSection = componentSource('task-page-github-reviewer-actions.ts')
+    const mergeSection = componentSource('task-page/github/MergeCell.tsx')
 
     expect(reviewSection).toContain('resolveTaskPullRequestRepo(item)')
-    expect(reviewSection.match(/prRepo: reviewRepo/g)).toHaveLength(4)
+    expect(reviewSection).toContain('reviewRepo,')
+    expect(reviewActionsSection.match(/prRepo: reviewRepo/g)).toHaveLength(4)
     expect(mergeSection).toContain('const prRepo = resolveTaskPullRequestRepo(item)')
     expect(mergeSection).not.toContain('prRepo: item.prRepo ?? null')
   })

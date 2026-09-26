@@ -39,7 +39,8 @@ export function useSettingsInteractionController(model: SettingsStoreModel) {
   const pendingScrollTargetWatchRef = useRef<SettingsDeepLinkTargetWatch | null>(null)
   const repoHooksRequestSeqRef = useRef(0)
   const shortcutsEscapeConfirmUntilRef = useRef(0)
-  const sourceControlAiWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const sourceControlAiWriteQueueRef = useRef<Promise<void>>(undefined!)
+  sourceControlAiWriteQueueRef.current ??= Promise.resolve()
 
   const hasUnsavedSourceControlAiPromptChanges =
     hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges

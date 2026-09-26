@@ -2,7 +2,11 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { RestoredStructuredAgentSessionRead } from './structured-agent-session-read-restore'
-import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
+import {
+  restoreOneStructuredAgentSessionRead,
+  restoreOneStructuredAgentSessionReadUnderSerialize,
+  restoreStructuredAgentSessionsOnRestart
+} from './structured-agent-session-restart-restore'
 
 export class StructuredAgentSessionReadableRestorer {
   private restorePromise: Promise<void> | null = null
@@ -17,7 +21,10 @@ export class StructuredAgentSessionReadableRestorer {
       serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
       hasSession: (sessionId: string) => boolean
       onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
-      restoreHandoff: (sessionId: string) => Promise<void>
+      settleStaleState: (
+        sessionId: string,
+        restored: RestoredStructuredAgentSessionRead
+      ) => Promise<void>
     }
   ) {}
 
@@ -27,6 +34,41 @@ export class StructuredAgentSessionReadableRestorer {
       throw error
     })
     return this.restorePromise
+  }
+
+  /**
+   * One session, on demand, after startup.
+   *
+   * Deliberately outside `restorePromise`: that latch answers "has the startup sweep run", and a
+   * surface asking for a session the sweep never covered — or that was closed since — must not be
+   * told yes because the sweep finished. Needs no dedupe of its own; the per-session task queue
+   * `serialize` runs on already orders concurrent callers, and the second one sees `hasSession`.
+   *
+   * Provider-agnostic by construction: eligibility is `supportsRecord`, which the adapter router
+   * answers for Claude and Codex from the record's own provider.
+   */
+  async restoreOne(sessionId: string): Promise<boolean> {
+    if (!this.supports(sessionId)) {
+      return false
+    }
+    await restoreOneStructuredAgentSessionRead(this.input, sessionId)
+    return this.input.hasSession(sessionId)
+  }
+
+  /** `restoreOne` for a caller already inside the session's serialize. Reconciliation is skipped
+   *  on purpose: a lease this host has not adjudicated is the attach's problem, and a replay
+   *  needs only the journal. */
+  async restoreOneUnderSerialize(sessionId: string): Promise<boolean> {
+    if (!this.supports(sessionId)) {
+      return false
+    }
+    await restoreOneStructuredAgentSessionReadUnderSerialize(this.input, sessionId)
+    return this.input.hasSession(sessionId)
+  }
+
+  private supports(sessionId: string): boolean {
+    const record = this.input.store.getRecord(sessionId)
+    return record !== null && this.input.supportsRecord(record)
   }
 
   private async restoreReadableSessions(sessionIds?: readonly string[]): Promise<void> {

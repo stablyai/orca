@@ -23,6 +23,7 @@ import { buildWorkspaceTerminalRowPlan } from './workspace-terminal-row-plan'
 import { buildWorkspaceTerminalReconnectPlan } from './workspace-terminal-reconnect-plan'
 import { buildWorkspaceTerminalLayoutPlan } from './workspace-terminal-layout-plan'
 import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-placeholders'
+import { retainUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 
 export function createWorkspaceTerminalHydrationActions(
   set: TerminalStoreSet,
@@ -171,13 +172,25 @@ export function createWorkspaceTerminalHydrationActions(
           activeTabIdByWorktree,
           restoredRuntimeHostIdByWorkspaceSessionKey:
             options?.runtimeHostIdByWorkspaceSessionKey ?? {},
+          // Why conditional: a mid-session re-hydration (the SSH pull merge) carries no shadow, and
+          // clearing it there would drop the co-claimant rows the next write has to put back.
+          ...(options?.contestedHostWorkspaceSessions
+            ? { contestedHostWorkspaceSessions: options.contestedHostWorkspaceSessions }
+            : {}),
+          ...(options?.contestedPrimaryHostBySessionKey
+            ? { contestedPrimaryHostBySessionKey: options.contestedPrimaryHostBySessionKey }
+            : {}),
           repos: runtimeSessionPlaceholders.repos,
           tabsByWorktree,
           worktreesByRepo,
           // Why: restore the focus-recency map; pruning is deferred to App.tsx (post-hydration) because SSH worktrees may still be appearing in worktreesByRepo.
           lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
-          defaultTerminalTabsAppliedByWorktreeId:
-            session.defaultTerminalTabsAppliedByWorktreeId ?? {},
+          // Why union: a persist snapshot that omits the write-once marker is a writer that never
+          // stamped it, not a report that default tabs were never applied (#18117).
+          defaultTerminalTabsAppliedByWorktreeId: {
+            ...session.defaultTerminalTabsAppliedByWorktreeId,
+            ...s.defaultTerminalTabsAppliedByWorktreeId
+          },
           // Why replace and not union: both callers hand over a map they derived from this store
           // synchronously (the pull merge) or from disk before the store had one (startup), so there
           // is no local tombstone to lose — and a union would resurrect the ones the merge just
@@ -189,6 +202,10 @@ export function createWorkspaceTerminalHydrationActions(
           pendingReconnectTabByWorktree,
           pendingReconnectPtyIdByTabId,
           everActivatedWorktreeIds: nextEverActivated,
+          unverifiedPtyLossTabIds: retainUnverifiedPtyLossTabIds(
+            s.unverifiedPtyLossTabIds,
+            validTabIds
+          ),
           // Why: seed hydrated active worktrees so the first activation has a Back target.
           worktreeNavHistory: activeWorktreeId ? [activeWorktreeId] : [],
           worktreeNavHistoryIndex: activeWorktreeId ? 0 : -1,
@@ -200,7 +217,12 @@ export function createWorkspaceTerminalHydrationActions(
             session,
             tabById,
             validTabIds
-          })
+          }),
+          localOnlyScrollbackByTabId: Object.fromEntries(
+            Object.entries(session.localOnlyScrollbackByTabId ?? {}).filter(([tabId]) =>
+              validTabIds.has(tabId)
+            )
+          )
         }
         return options?.replaceWorkspaceKeys
           ? targetScopedWorkspaceHydrationPatch(s, hydrated, session, options)

@@ -395,4 +395,38 @@ describe('SshGitProvider', () => {
       provider.forceDeletePreservedBranch('/home/user/repo', 'you/fix-auth', 'abc123')
     ).rejects.toBe(error)
   })
+
+  it('markRemoteOrcaCreated sends the narrow provenance-marker request', async () => {
+    await provider.markRemoteOrcaCreated('/home/user/repo', 'pr-contributor-orca')
+    expect(mux.request).toHaveBeenCalledWith('git.markRemoteOrcaCreated', {
+      repoPath: '/home/user/repo',
+      remoteName: 'pr-contributor-orca'
+    })
+  })
+
+  it('markRemoteOrcaCreated degrades to a one-time warning for an older relay', async () => {
+    mux.request.mockRejectedValue(methodNotFound('git.markRemoteOrcaCreated'))
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      await expect(
+        provider.markRemoteOrcaCreated('/home/user/repo', 'pr-contributor-orca')
+      ).resolves.toBeUndefined()
+      await expect(
+        provider.markRemoteOrcaCreated('/home/user/repo', 'pr-contributor-orca')
+      ).resolves.toBeUndefined()
+      expect(warnSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('markRemoteOrcaCreated rethrows non-method-not-found errors', async () => {
+    const error = new Error('remote config write failed')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(
+      provider.markRemoteOrcaCreated('/home/user/repo', 'pr-contributor-orca')
+    ).rejects.toBe(error)
+  })
 })

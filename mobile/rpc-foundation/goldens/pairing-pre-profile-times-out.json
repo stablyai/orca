@@ -1,0 +1,141 @@
+{
+  "operation": "pairing.pre-profile",
+  "family": "pairing.pre-profile",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "57c8ad93d162ea69e4a0ecd5de7d8fae6806f8f7a51945c2c13661d81bae6497",
+  "scenarioSha256": "9ab72231bf97fbe7eed232019c56568a9411433835eae424628af62c7c6a10c1",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "03106dceb986": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "406c8ab0b9b6": {
+      "name": "journal-saved",
+      "ordinal": 1,
+      "value": "pair-fixture-1"
+    },
+    "6d04596c636d": {
+      "name": "status.get#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "6fd2524785ca": {
+      "name": "candidate-closed",
+      "ordinal": 7,
+      "value": "relay"
+    },
+    "76572b132647": {
+      "name": "candidate-closed",
+      "ordinal": 6,
+      "value": "direct"
+    },
+    "86d361a0bf7c": {
+      "outcome": "unpaired",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": false
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "ccefc12fda27": {
+      "outcome": "unpaired",
+      "savedHost": {
+        "$rpc": "null"
+      },
+      "timedOut": true
+    },
+    "edde120654bf": {
+      "name": "status.get#2",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "f6d9975e7a13": {
+      "name": "status.get#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    }
+  },
+  "recording": {
+    "scenario": "pairing-pre-profile-times-out",
+    "checkpoints": [
+      {
+        "id": "racing",
+        "observation": {
+          "sender": ["03106dceb986", "f6d9975e7a13"],
+          "payloads": ["6d04596c636d", "edde120654bf"],
+          "settlements": {
+            "pair": "9270aeb7d9c6"
+          },
+          "state": "86d361a0bf7c",
+          "effects": ["406c8ab0b9b6"]
+        }
+      },
+      {
+        "id": "timed-out",
+        "observation": {
+          "sender": ["03106dceb986", "f6d9975e7a13"],
+          "payloads": ["6d04596c636d", "edde120654bf"],
+          "settlements": {
+            "pair": "9270aeb7d9c6"
+          },
+          "state": "ccefc12fda27",
+          "effects": ["406c8ab0b9b6", "76572b132647", "6fd2524785ca"]
+        }
+      }
+    ]
+  }
+}

@@ -1,5 +1,4 @@
-import { z } from 'zod'
-import { defineMethod, type RpcContext, type RpcMethod } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import type { PluginPanelEntry } from '../../../../shared/plugins/plugin-panel-bridge'
 import { listPluginsForClients } from '../../../plugins/plugin-client-list'
 import type { PluginListEntry } from '../../../plugins/plugin-list-projection'
@@ -8,7 +7,12 @@ import {
   pluginConsentRequestSchema,
   type PluginConsentRequest
 } from '../../../../shared/plugins/plugin-consent-request'
-import { isQualifiedPluginKey } from '../../../../shared/plugins/plugin-manifest'
+import {
+  PluginInvokeCommandParams,
+  PluginReadPanelEntryParams,
+  PluginSetEnabledParams,
+  PluginsPanelActionParams
+} from '../../../../shared/rpc-contract/plugins-params'
 
 /**
  * Serve/headless parity surface: the same consent, enablement, panel-action,
@@ -45,22 +49,6 @@ function requirePluginService(): PluginService {
   return pluginServiceForRpc
 }
 
-const PluginSetEnabledParams = z.object({
-  pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key'),
-  enabled: z.boolean()
-})
-
-const PluginReadPanelEntryParams = z.object({
-  pluginKey: z.string().min(1),
-  panelId: z.string().min(1)
-})
-
-const PluginInvokeCommandParams = z.object({
-  pluginKey: z.string().min(1),
-  commandId: z.string().min(1),
-  args: z.unknown().optional()
-})
-
 async function listForRpc(): Promise<PluginListEntry[]> {
   return listPluginsForClients(requirePluginService())
 }
@@ -77,7 +65,7 @@ function bindRpcPanelOwner(service: PluginService, context: RpcContext): string 
   return ownerKey
 }
 
-export const PLUGIN_METHODS: readonly RpcMethod[] = [
+export const PLUGIN_METHODS = [
   defineMethod({
     name: 'plugins.list',
     params: null,
@@ -118,7 +106,7 @@ export const PLUGIN_METHODS: readonly RpcMethod[] = [
     name: 'plugins.panelAction',
     // Why: raw admission must run before strict schema parsing so malformed
     // and oversized traffic cannot bypass the panel budget.
-    params: z.unknown(),
+    params: PluginsPanelActionParams,
     handler: async (params, context) => {
       const service = requirePluginService()
       await service.whenReady()

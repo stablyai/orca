@@ -93,6 +93,7 @@ type MockStoreState = {
   setRuntimePaneTitle: ReturnType<typeof vi.fn>
   setTabLayout: ReturnType<typeof vi.fn>
   updateTabTitle: ReturnType<typeof vi.fn>
+  markUnverifiedPtyLoss: ReturnType<typeof vi.fn>
   isPtyShutdownPending: ReturnType<typeof vi.fn>
   suppressedPtyExitIds: Record<string, true>
 }
@@ -103,10 +104,6 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => mockStoreState }
 }))
 
-import {
-  isEvictionExemptTerminalTab,
-  selectEvictionExemptTerminalTabIds
-} from './terminal-eviction-exempt-tabs'
 import {
   clearTerminalProviderSnapshotCapabilities,
   synchronizeTerminalProviderSnapshotCapabilities
@@ -162,6 +159,7 @@ describe('terminal-parked-tab-watchers', () => {
       setRuntimePaneTitle: vi.fn(),
       setTabLayout: vi.fn(),
       updateTabTitle: vi.fn(),
+      markUnverifiedPtyLoss: vi.fn(),
       isPtyShutdownPending: vi.fn(() => false),
       suppressedPtyExitIds: {}
     }
@@ -403,6 +401,69 @@ describe('terminal-parked-tab-watchers', () => {
     expect(consumePreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
     expect(startedWatchers[0].dispose).toHaveBeenCalledTimes(1)
     expect(getParkedTerminalWatcherTabIds()).toEqual([])
+  })
+
+  it('preserves a parked tab when the host reports an unverified PTY loss', () => {
+    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+    syncParked()
+
+    exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(-1, { hadPrimary: false })
+
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+    expect(mockStoreState.markUnverifiedPtyLoss).toHaveBeenCalledWith(TAB_ID)
+    expect(startedWatchers[0].dispose).toHaveBeenCalledTimes(1)
+    expect(getParkedTerminalWatcherTabIds()).toEqual([])
+  })
+
+  it('preserves every leaf and the parked registry across split unverified losses', () => {
+    capturePanes([
+      { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
+      { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
+    ])
+    syncParked()
+    const layout = {
+      root: {
+        type: 'split' as const,
+        direction: 'vertical' as const,
+        first: { type: 'leaf' as const, leafId: LEAF_ID },
+        second: { type: 'leaf' as const, leafId: SECOND_LEAF_ID }
+      },
+      activeLeafId: SECOND_LEAF_ID,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [LEAF_ID]: PTY_ID, [SECOND_LEAF_ID]: SECOND_PTY_ID }
+    }
+    mockStoreState.terminalLayoutsByTabId[TAB_ID] = layout
+
+    exitSubscriptions
+      .find((entry) => entry.ptyId === PTY_ID)
+      ?.callback(-1, {
+        hadPrimary: false
+      })
+
+    expect(mockStoreState.setTabLayout).not.toHaveBeenCalled()
+    expect(startedWatchers[0].dispose).toHaveBeenCalledTimes(1)
+    expect(startedWatchers[1].dispose).not.toHaveBeenCalled()
+    expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
+
+    exitSubscriptions
+      .find((entry) => entry.ptyId === SECOND_PTY_ID)
+      ?.callback(-1, {
+        hadPrimary: false
+      })
+
+    expect(mockStoreState.setTabLayout).not.toHaveBeenCalled()
+    expect(startedWatchers[1].dispose).toHaveBeenCalledTimes(1)
+    expect(getParkedTerminalWatcherTabIds()).toEqual([])
+  })
+
+  it('still closes a parked tab after a host-vouched process exit', () => {
+    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+    syncParked()
+
+    exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0, { hadPrimary: false })
+
+    expect(closeTerminalTab).toHaveBeenCalledTimes(1)
+    expect(mockStoreState.markUnverifiedPtyLoss).not.toHaveBeenCalled()
   })
 
   it('retains the buffered exit and empty registry entry when pinned close is cancelled', () => {
@@ -850,93 +911,6 @@ describe('terminal-parked-tab-watchers', () => {
       expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
         false
       )
-    })
-  })
-
-  describe('isEvictionExemptTerminalTab', () => {
-    // Why these pair with coverage: the same split tab that fails coverage (so
-    // force-park targets its worktree) must be exempt, or force-park unmounts
-    // the very live pty the exemption exists to protect.
-    it('exempts a split tab whose SECOND pane holds the unrestorable pty', () => {
-      capturePanes([
-        { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
-        { ptyId: 'other::wt@@session-9', paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
-      ])
-      const tab = { id: TAB_ID, ptyId: PTY_ID }
-      expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, tab)).toBe(false)
-      expect(isEvictionExemptTerminalTab(tab, WORKTREE_ID)).toBe(true)
-    })
-
-    // Why: locks the documented residual — detection is per pane, retention is
-    // per tab, so the snapshot-backed first leaf is pinned by its fail-open
-    // sibling instead of parking on its own.
-    it('exempts a split tab even when its other leaf is snapshot-backed', () => {
-      capturePanes([
-        { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
-        // Why separator-less: the daemon-fail-open class, restorable by nothing.
-        { ptyId: 'pty-local-detached', paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
-      ])
-      expect(isEvictionExemptTerminalTab({ id: TAB_ID, ptyId: PTY_ID }, WORKTREE_ID)).toBe(true)
-    })
-
-    it('exempts a split tab whose second leaf pty comes from the layout fallback', () => {
-      mockStoreState.terminalLayoutsByTabId[TAB_ID] = {
-        root: {
-          type: 'split',
-          direction: 'row',
-          first: { type: 'leaf', leafId: LEAF_ID },
-          second: { type: 'leaf', leafId: SECOND_LEAF_ID }
-        },
-        activeLeafId: LEAF_ID,
-        expandedLeafId: null,
-        ptyIdsByLeafId: { [LEAF_ID]: PTY_ID, [SECOND_LEAF_ID]: 'pty-local-detached' }
-      }
-      expect(isEvictionExemptTerminalTab({ id: TAB_ID, ptyId: PTY_ID }, WORKTREE_ID)).toBe(true)
-    })
-
-    it('does not exempt a split tab whose panes are all snapshot-backed', () => {
-      capturePanes([
-        { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
-        { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
-      ])
-      expect(isEvictionExemptTerminalTab({ id: TAB_ID, ptyId: PTY_ID }, WORKTREE_ID)).toBe(false)
-    })
-
-    it('exempts a preserved daemon whose snapshot is not authoritative', async () => {
-      clearTerminalProviderSnapshotCapabilities()
-      await synchronizeTerminalProviderSnapshotCapabilities([PTY_ID], async () => [
-        { id: PTY_ID, authoritative: false }
-      ])
-      capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
-
-      const tab = { id: TAB_ID, ptyId: PTY_ID }
-      expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, tab)).toBe(false)
-      expect(isEvictionExemptTerminalTab(tab, WORKTREE_ID)).toBe(true)
-    })
-
-    it('exempts on tab.ptyId alone when no panes resolve', () => {
-      expect(
-        isEvictionExemptTerminalTab({ id: TAB_ID, ptyId: 'pty-local-detached' }, WORKTREE_ID)
-      ).toBe(true)
-    })
-
-    it('never exempts remote-runtime or SSH panes', () => {
-      capturePanes([
-        { ptyId: 'remote:env-1@@t-1', paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
-        { ptyId: 'ssh:conn-1@@pty-1', paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
-      ])
-      expect(isEvictionExemptTerminalTab({ id: TAB_ID, ptyId: null }, WORKTREE_ID)).toBe(false)
-    })
-  })
-
-  describe('selectEvictionExemptTerminalTabIds', () => {
-    it('collects only the exempt tabs of one worktree in a single pass', () => {
-      expect(
-        selectEvictionExemptTerminalTabIds(WORKTREE_ID, [
-          { id: TAB_ID, ptyId: 'pty-local-detached' },
-          { id: 'tab-restorable', ptyId: PTY_ID }
-        ])
-      ).toEqual(new Set([TAB_ID]))
     })
   })
 })

@@ -455,6 +455,8 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     const rig = openTerminal()
     await rig.write('안녕하세요\x1b[6D')
     rig.compose('가')
+    const original = viewParts(rig.compositionView)
+    const glyphs = Array.from(original.preedit!.childNodes)
 
     // A TUI repaint: erase from the cursor, draw a different tail, put the cursor back.
     await rig.writeAwaitingRender('\x1b[K체크\x1b[4D')
@@ -462,6 +464,13 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     const { preedit, remainder } = viewParts(rig.compositionView)
     expect(stripMarks(preedit!.textContent)).toBe('가')
     expect(remainder!.textContent).toBe('체크')
+    expect(preedit).toBe(original.preedit)
+    expect(Array.from(preedit!.childNodes)).toEqual(glyphs)
+    expect(viewParts(rig.compositionView).caret).toBe(original.caret)
+
+    await rig.writeAwaitingRender('\x1b[K')
+    expect(viewParts(rig.compositionView).remainder).toBeNull()
+    expect(viewParts(rig.compositionView).preedit).toBe(original.preedit)
   })
 
   it('starts rendering a tail when text lands after an end-of-row composition began', async () => {

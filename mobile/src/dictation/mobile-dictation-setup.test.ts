@@ -62,14 +62,24 @@ describe('isDictationSetupRequiredError', () => {
 
 describe('rpc wrappers', () => {
   it('fetches setup', async () => {
-    const setup: MobileSpeechSetup = { enabled: false, selectedModelId: '', models: [] }
+    const setup: MobileSpeechSetup = {
+      enabled: false,
+      selectedModelId: '',
+      dictationMode: 'toggle',
+      models: []
+    }
     const client = clientWith([ok(setup)])
     await expect(fetchDictationSetup(client)).resolves.toEqual(setup)
     expect(client.calls[0]).toEqual({ method: 'speech.models.list', params: null })
   })
 
   it('retries the idempotent setup read once after logical-client cutover', async () => {
-    const setup: MobileSpeechSetup = { enabled: false, selectedModelId: '', models: [] }
+    const setup: MobileSpeechSetup = {
+      enabled: false,
+      selectedModelId: '',
+      dictationMode: 'toggle',
+      models: []
+    }
     const sendRequest = vi
       .fn()
       .mockRejectedValueOnce(new LogicalClientCutoverError())
@@ -95,14 +105,24 @@ describe('rpc wrappers', () => {
   })
 
   it('deletes a model and returns refreshed setup', async () => {
-    const setup: MobileSpeechSetup = { enabled: true, selectedModelId: '', models: [] }
+    const setup: MobileSpeechSetup = {
+      enabled: true,
+      selectedModelId: '',
+      dictationMode: 'toggle',
+      models: []
+    }
     const client = clientWith([ok(setup)])
     await expect(deleteDictationModel(client, 'm1')).resolves.toEqual(setup)
     expect(client.calls[0]).toEqual({ method: 'speech.models.delete', params: { modelId: 'm1' } })
   })
 
   it('sets config', async () => {
-    const setup: MobileSpeechSetup = { enabled: true, selectedModelId: 'm1', models: [] }
+    const setup: MobileSpeechSetup = {
+      enabled: true,
+      selectedModelId: 'm1',
+      dictationMode: 'hold',
+      models: []
+    }
     const client = clientWith([ok(setup)])
     await expect(setDictationConfig(client, { enabled: true, modelId: 'm1' })).resolves.toEqual(
       setup
@@ -181,6 +201,7 @@ describe('state helpers', () => {
       isDictationReady({
         enabled: true,
         selectedModelId: 'm1',
+        dictationMode: 'toggle',
         models: [model({ status: 'ready' })]
       })
     ).toBe(true)
@@ -188,6 +209,7 @@ describe('state helpers', () => {
       isDictationReady({
         enabled: false,
         selectedModelId: 'm1',
+        dictationMode: 'toggle',
         models: [model({ status: 'ready' })]
       })
     ).toBe(false)
@@ -195,9 +217,17 @@ describe('state helpers', () => {
       isDictationReady({
         enabled: true,
         selectedModelId: 'm1',
+        dictationMode: 'toggle',
         models: [model({ status: 'not-downloaded' })]
       })
     ).toBe(false)
-    expect(isDictationReady({ enabled: true, selectedModelId: '', models: [] })).toBe(false)
+    expect(
+      isDictationReady({
+        enabled: true,
+        selectedModelId: '',
+        dictationMode: 'toggle',
+        models: []
+      })
+    ).toBe(false)
   })
 })

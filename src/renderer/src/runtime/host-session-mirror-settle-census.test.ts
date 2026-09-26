@@ -108,7 +108,7 @@ describe('host-session-mirror settle census', () => {
       // empty inventory, a non-empty inventory, and an empty inventory that
       // settles only after `terminal.list` says the host has no live PTY —
       // `0 === 0` is not host evidence (STA-5377).
-      'runtime/web-session-tabs-sync.ts': { hydrated: 3, worktreeHydrated: 2 }
+      'runtime/web-session-tabs-sync/mirror-settle.ts': { hydrated: 3, worktreeHydrated: 2 }
     })
   })
 
@@ -140,13 +140,19 @@ describe('host-session-mirror settle census', () => {
       }
     }
     expect(callSites, SETTLE_RULE).toEqual({
-      // initial listAll, visibility-resume repair, full inventory, global
-      // singular frame, scoped active frame.
-      'runtime/web-session-tabs-sync.ts': 5,
+      // Initial listAll, visibility-resume repair, full inventory, global
+      // singular frame, and scoped active frame are owned by these extracted
+      // recovery/event modules.
+      'runtime/web-session-tabs-sync/active-session-subscription.ts': 1,
+      'runtime/web-session-tabs-sync/global-session-events.ts': 1,
+      'runtime/web-session-tabs-sync/global-session-inventory-event.ts': 1,
+      'runtime/web-session-tabs-sync/load-initial.ts': 1,
+      'runtime/web-session-tabs-sync/visibility-resume-repair.ts': 1,
       // The eager post-create session.tabs.list refresh.
       'runtime/web-runtime-session-snapshot.ts': 1,
-      // The local structured-session inventory/subscription frame.
-      'runtime/local-structured-session-tabs-sync.ts': 1
+      // The local structured-session mirror owns two: the inventory/subscription
+      // frame, and the toggle-off teardown that retracts the tabs it published.
+      'runtime/local-structured-session-tabs-sync/snapshot-apply.ts': 2
     })
   })
 
@@ -188,12 +194,22 @@ describe('host-session-mirror settle census', () => {
     // Pinning the resolved names keeps the rule from going vacuous: a binding
     // this census misreads settles on some other identifier's invocation.
     expect(receiptBindings, SETTLE_RULE).toEqual({
-      // Four hydration receipts (initial listAll, full inventory, scoped active
-      // frame patch, and its patchless twin) and three mirror ones
-      // (visibility-resume repair, global singular frame patch and patchless).
-      'runtime/web-session-tabs-sync.ts': { settleHydration: 4, settleMirror: 3 },
+      // Hydration and mirror receipts remain pinned by their extracted owners:
+      // the global singular frame owns two hydration completions and the global
+      // inventory frame one, initial loading owns one, active subscription owns
+      // two mirror settles, and visibility resume repair owns one. The local
+      // structured-session apply module owns one settle per direction: the
+      // snapshot it mirrors in, and the teardown that retracts it.
+      'runtime/web-session-tabs-sync/active-session-subscription.ts': { settle: 2 },
+      'runtime/web-session-tabs-sync/global-session-events.ts': { settleHydration: 2 },
+      'runtime/web-session-tabs-sync/global-session-inventory-event.ts': { settleHydration: 1 },
+      'runtime/web-session-tabs-sync/load-initial.ts': { settleHydration: 1 },
+      'runtime/web-session-tabs-sync/visibility-resume-repair.ts': { settle: 1 },
       'runtime/web-runtime-session-snapshot.ts': { settleMirror: 1 },
-      'runtime/local-structured-session-tabs-sync.ts': { settleStructuredSessionMirror: 1 }
+      'runtime/local-structured-session-tabs-sync/snapshot-apply.ts': {
+        settleStructuredSessionClear: 1,
+        settleStructuredSessionMirror: 1
+      }
     })
   })
 
@@ -207,7 +223,9 @@ describe('host-session-mirror settle census', () => {
     }
     expect(patchlessCounts, SETTLE_RULE).toEqual({
       // The definition, the global singular frame, and the scoped active frame.
-      'runtime/web-session-tabs-sync.ts': 3
+      'runtime/web-session-tabs-sync/active-session-subscription.ts': 1,
+      'runtime/web-session-tabs-sync/global-session-events.ts': 1,
+      'runtime/web-session-tabs-sync/mirror-settle.ts': 1
     })
   })
 
@@ -228,11 +246,11 @@ describe('host-session-mirror settle census', () => {
     // to say whether the frame is host evidence — the whole point of the pair.
     expect(settlingCounts, SETTLE_RULE).toEqual({
       // The applied frame (its own patch) and the outranked one (the accepted view).
-      'runtime/web-session-tabs-sync.ts': 2
+      'runtime/web-session-tabs-sync/tracking-decisions.ts': 2
     })
     expect(silentCounts, SETTLE_RULE).toEqual({
       // The unmirrored frame: no accepted view of it ever reached the store.
-      'runtime/web-session-tabs-sync.ts': 1
+      'runtime/web-session-tabs-sync/tracking-decisions.ts': 1
     })
   })
 })

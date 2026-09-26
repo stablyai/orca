@@ -7,8 +7,10 @@ import {
 } from './stable-logical-rpc-client'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
+import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
+import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
 import {
   MobileEndpointSupervisor,
   type MobileEndpointSupervisorDependencies
@@ -81,6 +83,10 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
   // Why: production-realistic constants — fictional fake values hid three
   // live defects in this subsystem (latch, churn, int32 timer overflow).
   getAttachDeadlineAt = () => Date.now() + 10_000
+  readonly dialStage = new RelayDialStageTracker()
+  getDialStage = () => this.dialStage.getDialStage()
+  onDialStageChange = (listener: (stage: RelayDialStage) => void) =>
+    this.dialStage.onDialStageChange(listener)
   getResumeExpiresAt = () => Date.now() + 30 * 24 * 3_600_000
   getResumeConfirmation = () => null
   getFailure = () => this.failure
@@ -140,10 +146,22 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     }
   })
   isPairingRejected = () => this.pairingRejected
+  private relayHostReachability: RelayHostReachability = 'connecting'
+  setRelayHostReachability = vi.fn((reachability: RelayHostReachability) => {
+    if (this.relayHostReachability === reachability) {
+      return
+    }
+    this.relayHostReachability = reachability
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  getRelayHostReachability = () => this.relayHostReachability
   // Mirrors LogicalClientConnectionPath.clearAfterConnected.
   publishState(state: ConnectionState): void {
     if (state === 'connected') {
       this.pairingRejected = false
+      this.relayHostReachability = 'connecting'
     }
     super.publishState(state)
   }
@@ -181,15 +199,6 @@ const host: HostProfile = {
   deviceToken: 'device-token',
   publicKeyB64: 'A'.repeat(44),
   lastConnected: 1,
-  endpoints: [
-    { id: 'direct-primary', kind: 'lan', url: DIRECT_ENDPOINT },
-    {
-      id: 'relay-primary',
-      kind: 'relay',
-      url: 'wss://relay-c1.onorca.dev/v1/connect/id'
-    }
-  ],
-  relayHostId: relay.relayHostId,
   relay
 }
 
@@ -216,11 +225,12 @@ function dependencies(
     resolveRelay: vi.fn(async ({ relay }) => relay),
     readBundle: vi.fn(async () => bundleWith(2, Number.MAX_SAFE_INTEGER)),
     writeBundle: vi.fn(async () => {}),
-    saveHost: vi.fn(async () => {}),
+    setRelayRouting: vi.fn(async () => {}),
+    directPath: 'lan',
     now: Date.now,
     randomBytes: (length: number) => new Uint8Array(length),
-    setTimer: setTimeout,
-    clearTimer: clearTimeout,
+    setTimer: (handler, ms) => setTimeout(handler, ms),
+    clearTimer: (handle) => clearTimeout(handle),
     ...overrides
   }
 }
@@ -247,7 +257,7 @@ describe('relay runtime recovery without direct connectivity', () => {
       .fn(async () => bundleWith(3, Number.MAX_SAFE_INTEGER))
       .mockResolvedValueOnce(bundleWith(2, Number.MAX_SAFE_INTEGER))
     const deps = dependencies({ openRelay, readBundle })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
@@ -259,7 +269,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(openRelay).toHaveBeenLastCalledWith(
       relay,
       expect.objectContaining({ version: 3 }),
-      expect.any(String)
+      expect.any(String),
+      expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
@@ -271,7 +282,7 @@ describe('relay runtime recovery without direct connectivity', () => {
       .fn(async () => bundleWith(2, Number.MAX_SAFE_INTEGER))
       .mockResolvedValueOnce(null)
     const deps = dependencies({ readBundle })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     // Pre-fix, a null first read killed relay recovery for the process lifetime.
     await supervisor.start()
@@ -287,7 +298,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     const expired = bundleWith(2, Date.now() - 1)
     const readBundle = vi.fn(async () => expired)
     const deps = dependencies({ readBundle })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
@@ -314,7 +325,7 @@ describe('relay runtime recovery without direct connectivity', () => {
       )
       .mockImplementation(() => new FakeRelaySession('connected'))
     const deps = dependencies({ openRelay })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
@@ -337,7 +348,7 @@ describe('relay runtime recovery without direct connectivity', () => {
       .mockResolvedValueOnce(expired)
       .mockResolvedValueOnce(expired)
     const deps = dependencies({ readBundle })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
@@ -348,7 +359,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(deps.openRelay).toHaveBeenLastCalledWith(
       relay,
       expect.objectContaining({ version: 2 }),
-      expect.any(String)
+      expect.any(String),
+      expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
@@ -366,7 +378,7 @@ describe('relay runtime recovery without direct connectivity', () => {
       .fn(async () => bundleWith(1, Number.MAX_SAFE_INTEGER))
       .mockResolvedValueOnce(bundleWith(4, Number.MAX_SAFE_INTEGER))
     const deps = dependencies({ openRelay, readBundle })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
@@ -377,7 +389,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(openRelay).toHaveBeenLastCalledWith(
       relay,
       expect.objectContaining({ version: 1 }),
-      expect.any(String)
+      expect.any(String),
+      expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
@@ -393,7 +406,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     // confuse the churn measurement by migrating back to direct.
     const openDirect = vi.fn(() => new FakeSession('disconnected'))
     const deps = dependencies({ openRelay, openDirect })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
@@ -414,7 +427,7 @@ describe('relay runtime recovery without direct connectivity', () => {
       )
       .mockImplementation(() => new FakeRelaySession('connected'))
     const deps = dependencies({ openRelay })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
@@ -432,7 +445,7 @@ describe('relay runtime recovery without direct connectivity', () => {
   it('restarts Relay promptly after the background grace expires', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('disconnected')) })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     expect(deps.openRelay).not.toHaveBeenCalled()
@@ -455,7 +468,7 @@ describe('relay runtime recovery without direct connectivity', () => {
   it('recovers an expired background Relay through the app-resume manual retry nudge', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('disconnected')) })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     supervisor.setForeground(false)
@@ -518,7 +531,7 @@ describe('failover with a real direct rpc-client', () => {
       'tailscale' as MobileConnectionPath
     )
     const deps = dependencies()
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(3_000)
@@ -540,7 +553,7 @@ describe('failover with a real direct rpc-client', () => {
         return bundleWith(2, Number.MAX_SAFE_INTEGER)
       })
     })
-    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
 
     const started = supervisor.start()
     await vi.advanceTimersByTimeAsync(300)

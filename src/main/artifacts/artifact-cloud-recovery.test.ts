@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { isPackaged: false },
@@ -21,7 +21,14 @@ const writeRequest = {
   authToken: 'token-a'
 }
 
+beforeEach(() => {
+  // Keep fixed response expirations independent of the runner's wall clock.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime('2026-08-07T00:00:00.000Z')
+})
+
 afterEach(async () => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   await Promise.all(
     createdPaths.splice(0).map((path) => rm(path, { recursive: true, force: true }))
@@ -200,7 +207,10 @@ class ArtifactFaultServer {
   rejectNextDeleteCode: string | null = null
   rejectNextUpdateStatus: number | null = null
   private readonly artifacts = new Map<string, string>()
-  private readonly createsByKey = new Map<string, { body: string; response: object }>()
+  private readonly createsByKey = new Map<
+    string,
+    { body: string; response: ArtifactResponseBody }
+  >()
 
   artifactSlugs(): string[] {
     return [...this.artifacts.keys()].sort()
@@ -318,14 +328,17 @@ async function publishedLink(userDataPath: string): Promise<string | null> {
   return result.status === 'ok' ? (result.value?.shareUrl ?? null) : null
 }
 
-function jsonResponse(body: object, status: number): Response {
+/** JSON payload the fake artifact API serialises for a response. */
+type ArtifactResponseBody = Record<string, unknown>
+
+function jsonResponse(body: ArtifactResponseBody, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json' }
   })
 }
 
-function createResponseBody(slug: string): object {
+function createResponseBody(slug: string): ArtifactResponseBody {
   return {
     artifact: {
       version: 1,
@@ -336,7 +349,7 @@ function createResponseBody(slug: string): object {
       renderedContentType: 'text/html',
       createdAt: '2026-08-06T00:00:00.000Z',
       updatedAt: '2026-08-06T00:00:00.000Z',
-      expiresAt: '2026-09-06T00:00:00.000Z',
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       byteSize: 17,
       deletedAt: null
     },

@@ -58,7 +58,8 @@ export function CompactAgentExpansion({
       aria-hidden={!expanded}
       inert={!expanded}
     >
-      <div className="min-h-0 overflow-hidden">
+      {/* Why: clip only the height animation; a gutter-hung chevron overflows horizontally. */}
+      <div className="min-h-0 min-w-0 overflow-x-visible overflow-y-clip">
         {shouldRenderChildren && (
           <div
             className={cn(

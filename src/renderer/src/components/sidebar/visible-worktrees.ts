@@ -23,7 +23,13 @@ import {
 } from './visible-worktree-host-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
+export {
+  EMPTY_STRUCTURED_CHAT_WORKTREE_IDS,
+  getWorktreeIdsWithStructuredChat
+} from './visible-worktree-activity-inputs'
+// Runtime edge only one way: the builder imports VisibleWorktreeOptions as a type, which erases.
+import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import {
@@ -41,33 +47,31 @@ import {
   computeRenderedSidebarWorktreeOrder,
   computeRenderedSidebarWorktrees
 } from './rendered-sidebar-worktree-order'
-import {
-  EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-  getPairedDeviceIdsByEnvironment,
-  isWorkspaceFromOtherDevice
-} from './workspace-creator-visibility'
+import { isWorkspaceFromOtherDevice } from './workspace-creator-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
+import { getLineageAncestorIndex, getSortedWorktreeRankIndex } from './visible-worktree-indexes'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 /**
  * Whether the "Hide sleeping" sweep must keep this row (#8873).
  *
  * Why isMainWorktree and not isDefaultBranchWorkspace: the project's primary
- * checkout is the repo's only guaranteed entry point. Folder workspaces and
- * detached-HEAD mains fail the default-branch predicate yet often have no
- * sibling row at all, so sweeping them drops the entire project out of the
- * sidebar, Cmd+J and the board with no way back except changing a filter.
+ * checkout is the repo's only guaranteed entry point. Detached-HEAD and offline
+ * SSH mains fail the default-branch predicate yet often have no sibling row at
+ * all, so sweeping them drops the entire project out of the sidebar, Cmd+J and
+ * the board with no way back except changing a filter.
  *
  * Why shared: the sidebar pipeline and the jump palette both apply this, and a
  * second copy is how the two surfaces drift.
  */
-type VisibleWorktreeOptions = {
+export type VisibleWorktreeOptions = {
   filterRepoIds: readonly string[]
   showSleepingWorkspaces: boolean
   tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
   ptyIdsByTabId: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, { id: string }[]> | null
   worktreeIdsWithLiveAgent: ReadonlySet<string>
+  worktreeIdsWithStructuredChat?: ReadonlySet<string>
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
@@ -96,7 +100,7 @@ export function computeVisibleWorktrees(
 
   // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
   // every other valid ancestor can bypass filters so children never orphan.
-  const lineageAncestorById = new Map(all.map((w) => [w.id, w]))
+  const lineageAncestorById = getLineageAncestorIndex(worktreesByRepo)
 
   if (opts.hideWorkspacesFromOtherDevices) {
     all = all.filter(
@@ -105,7 +109,7 @@ export function computeVisibleWorktrees(
   }
 
   if (opts.hideDefaultBranchWorkspace) {
-    all = all.filter((w) => !isDefaultBranchWorkspace(w))
+    all = all.filter((w) => !isDefaultBranchWorkspace(w, opts.repoMap.get(w.repoId)))
   }
 
   if (opts.hideAutomationGeneratedWorkspaces) {
@@ -152,7 +156,8 @@ export function computeVisibleWorktrees(
           opts.tabsByWorktree,
           opts.ptyIdsByTabId,
           opts.browserTabsByWorktree,
-          opts.worktreeIdsWithLiveAgent
+          opts.worktreeIdsWithLiveAgent,
+          opts.worktreeIdsWithStructuredChat
         )
     )
   }
@@ -170,7 +175,7 @@ export function computeVisibleWorktrees(
 
   // Apply cached sort order. Items not yet in the cache (e.g. brand-new
   // worktrees before the next sortEpoch bump) are appended at the end.
-  const orderIndex = new Map(sortedIds.map((id, i) => [id, i]))
+  const orderIndex = getSortedWorktreeRankIndex(sortedIds)
   all.sort((a, b) => {
     const ai = orderIndex.get(a.id) ?? Infinity
     const bi = orderIndex.get(b.id) ?? Infinity
@@ -256,15 +261,6 @@ export function setVisibleWorktreeShortcutTargets(
   _publishedVisibleShortcutTargets = targets
 }
 
-/**
- * Compute the visible worktree IDs on-demand from the current Zustand store
- * state. Called by the App-level Cmd+1–9 handler (not a React hook — reads
- * store snapshot at call time).
- *
- * If WorktreeList is mounted, returns the exact IDs it rendered. Otherwise
- * recomputes the order the sidebar *would* render from the same row pipeline,
- * so a closed sidebar numbers workspaces the same way an open one does (#9497).
- */
 export function getVisibleWorktreeIds(): string[] {
   // Prefer the published IDs that mirror the rendered sidebar order.
   if (_publishedVisibleIds) {
@@ -299,35 +295,11 @@ export function getVisibleWorktreeIds(): string[] {
     sortedIds = sorted.map((w) => w.id)
   }
 
-  const visibleIds = computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
-    filterRepoIds: state.filterRepoIds,
-    showSleepingWorkspaces: state.showSleepingWorkspaces,
-    tabsByWorktree: state.tabsByWorktree,
-    ptyIdsByTabId: state.ptyIdsByTabId,
-    browserTabsByWorktree: state.browserTabsByWorktree,
-    worktreeIdsWithLiveAgent: getWorktreeIdsWithLiveAgent(
-      state.agentStatusByPaneKey,
-      state.tabsByWorktree,
-      Date.now()
-    ),
-    hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
-    hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
-    hideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
-    hideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
-    hideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
-    pairedDeviceIdsByEnvironment: state.hideWorkspacesFromOtherDevices
-      ? getPairedDeviceIdsByEnvironment(
-          state.runtimeEnvironments,
-          state.runtimeStatusByEnvironmentId
-        )
-      : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-    alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
-    repoMap,
-    workspaceHostScope: state.workspaceHostScope,
-    visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
-    defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
-    worktreeLineageById: state.worktreeLineageById
-  })
+  const visibleIds = computeVisibleWorktreeIds(
+    state.worktreesByRepo,
+    sortedIds,
+    buildVisibleWorktreeOptionsFromState(state, repoMap)
+  )
 
   const visibleIdRank = new Map(visibleIds.map((id, index) => [id, index]))
   const visibleHostIds = getVisibleWorkspaceHostIdSet(state)

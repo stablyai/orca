@@ -4,8 +4,14 @@ import type { Repo } from '../../shared/repo-types'
 import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
+import {
+  replaceKnownEmojiWithShortcodes,
+  setEmojiShortcodeDatasetLoader
+} from '../../shared/emoji-shortcode-catalog'
+import { requireEmojiShortcodeDataset } from './deferred-emoji-shortcode-dataset'
 import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
+
+setEmojiShortcodeDatasetLoader(requireEmojiShortcodeDataset)
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
   /** Distro to mirror the workspace root into when the repo itself sits on a
@@ -61,22 +67,13 @@ function containsEmoji(input: string): boolean {
   )
 }
 
-export function sanitizeWorktreeDisplayName(input: string): string | undefined {
-  const withoutControls = Array.from(input, (char) => {
-    const code = char.charCodeAt(0)
-    return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? ' ' : char
-  }).join('')
-  const sanitized = withoutControls
-    // Why: titles come from external systems. Strip bidi override controls so a
-    // malicious title cannot visually reorder adjacent sidebar text.
-    .replace(/[\u202a-\u202e\u2066-\u2069]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 120)
-    .trim()
-
-  return sanitized || undefined
-}
+export {
+  resolveWorktreeCreateDisplayName,
+  resolveWorktreeCreateDisplayNameRequest,
+  resolveWorktreeCreateDisplayNameMeta,
+  sanitizeWorktreeDisplayName,
+  shouldSetDisplayName
+} from './worktree-display-name'
 
 /**
  * Ensure a target path is within the workspace directory (prevent path traversal).
@@ -106,12 +103,27 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
-  settings: WorktreePathSettings
+  settings: WorktreePathSettings,
+  workspaceRoot?: string
 ): string {
-  const workspaceRoot = computeWorkspaceRoot(repoPath, settings)
-  const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
+  return computeWorktreePathFromWorkspaceRoot(
+    sanitizedName,
+    repoPath,
+    workspaceRoot ?? computeWorkspaceRoot(repoPath, settings),
+    settings.nestWorkspaces
+  )
+}
 
-  if (settings.nestWorkspaces) {
+/** Layout half shared by both computeWorktreePath variants, so the sync and async paths cannot
+ *  disagree on placement once the root is resolved. */
+function computeWorktreePathFromWorkspaceRoot(
+  sanitizedName: string,
+  repoPath: string,
+  workspaceRoot: string,
+  nestWorkspaces: boolean
+): string {
+  const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
+  if (nestWorkspaces) {
     const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
     return pathOps.join(workspaceRoot, repoName, sanitizedName)
   }
@@ -119,52 +131,72 @@ export function computeWorktreePath(
 }
 
 /** Async twin of computeWorktreePath. Same result; resolves the WSL home without blocking the main
- *  thread, so callers off the create path never freeze the app on a stopped distro. */
+ *  thread, so callers never freeze the app on a stopped distro. */
 export async function computeWorktreePathAsync(
   sanitizedName: string,
   repoPath: string,
   settings: WorktreePathSettings
 ): Promise<string> {
-  const workspaceRoot = await computeWorkspaceRootAsync(repoPath, settings)
-  const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
-
-  if (settings.nestWorkspaces) {
-    const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
-    return pathOps.join(workspaceRoot, repoName, sanitizedName)
-  }
-  return pathOps.join(workspaceRoot, sanitizedName)
+  return computeWorktreePathFromWorkspaceRoot(
+    sanitizedName,
+    repoPath,
+    await computeWorkspaceRootAsync(repoPath, settings),
+    settings.nestWorkspaces
+  )
 }
 
-async function computeWorkspaceRootAsync(
+/** Async twin of computeWorkspaceRoot. Same result; the WSL home probe spawns `wsl.exe`, so
+ *  background preparation uses this variant rather than blocking the Electron main thread for up
+ *  to the probe timeout. The sync twin below still serves callers that cannot await (allowed-roots
+ *  resolution, CLI create, watch targets, worktree trash). */
+export async function computeWorkspaceRootAsync(
   repoPath: string,
   settings: { workspaceDir: string; wslMirrorDistro?: string }
 ): Promise<string> {
-  const distro = resolveMirrorDistro(repoPath, settings)
-  if (distro && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
-    const wslHome = await getWslHomeAsync(distro)
-    if (wslHome) {
-      return win32.join(wslHome, 'orca', 'workspaces')
-    }
-  }
-  return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
+  const distro = mirrorDistroForWorkspaceRoot(repoPath, settings)
+  return workspaceRootForMirrorHome(
+    repoPath,
+    settings.workspaceDir,
+    distro ? await getWslHomeAsync(distro) : null
+  )
 }
 
 export function computeWorkspaceRoot(
   repoPath: string,
   settings: { workspaceDir: string; wslMirrorDistro?: string }
 ): string {
+  const distro = mirrorDistroForWorkspaceRoot(repoPath, settings)
+  return workspaceRootForMirrorHome(
+    repoPath,
+    settings.workspaceDir,
+    distro ? getWslHome(distro) : null
+  )
+}
+
+/** Distro to mirror the workspace root into, or undefined when the configured root is used as-is.
+ *  Shared by both resolvers so the sync and async paths can never disagree on placement. */
+function mirrorDistroForWorkspaceRoot(
+  repoPath: string,
+  settings: { workspaceDir: string; wslMirrorDistro?: string }
+): string | undefined {
   const distro = resolveMirrorDistro(repoPath, settings)
-  if (distro && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
-    const wslHome = getWslHome(distro)
-    if (wslHome) {
-      // Why: WSL UNC paths are still Windows paths from Node's perspective.
-      // Mirror absolute local desktop workspace roots inside the distro so
-      // terminals stay on the WSL filesystem; repo-relative roots can resolve
-      // directly against the WSL repo path.
-      return win32.join(wslHome, 'orca', 'workspaces')
-    }
-  }
-  return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
+  return distro && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)
+    ? distro
+    : undefined
+}
+
+function workspaceRootForMirrorHome(
+  repoPath: string,
+  workspaceDir: string,
+  wslHome: string | null
+): string {
+  // Why: WSL UNC paths are still Windows paths from Node's perspective.
+  // Mirror absolute local desktop workspace roots inside the distro so
+  // terminals stay on the WSL filesystem; repo-relative roots can resolve
+  // directly against the WSL repo path.
+  return wslHome
+    ? win32.join(wslHome, 'orca', 'workspaces')
+    : resolveWorkspaceDirForRepo(repoPath, workspaceDir)
 }
 
 export function computeRemoteWorktreePath(
@@ -283,14 +315,6 @@ function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: strin
  * A display name is set only when the user's requested name differs from
  * both the branch name and the sanitized name (i.e. it was modified).
  */
-export function shouldSetDisplayName(
-  requestedName: string,
-  branchName: string,
-  sanitizedName: string
-): boolean {
-  return !(branchName === requestedName && sanitizedName === requestedName)
-}
-
 /**
  * Parse a composite worktreeId ("repoId::worktreePath") into its parts.
  */

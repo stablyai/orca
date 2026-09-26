@@ -8,7 +8,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
+import type { RemoteWorkspaceObservedSnapshot } from '../../../shared/remote-workspace-types'
+import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../shared/ssh-types'
 import { createTestStore, makeWorktree } from '../store/slices/store-test-helpers'
 import {
@@ -57,12 +59,13 @@ function token(snapshotRevision: number): DirectSshSnapshotApplyToken {
   }
 }
 
-function snapshot(revision: number): RemoteWorkspaceSnapshot {
+function snapshot(revision: number): RemoteWorkspaceObservedSnapshot {
   return {
     namespace: 'workspace',
     revision,
     updatedAt: revision,
     schemaVersion: 1,
+    hostObservationToken: `observation-${revision}`,
     session: {
       activeWorktreePath: PATH_A,
       activeTabId: 'tab-a',
@@ -87,7 +90,7 @@ function snapshot(revision: number): RemoteWorkspaceSnapshot {
       lastVisitedAtByWorktreePath: { [PATH_A]: revision },
       defaultTerminalTabsAppliedByWorktreePath: { [PATH_A]: true }
     }
-  } satisfies RemoteWorkspaceSnapshot
+  } satisfies RemoteWorkspaceObservedSnapshot
 }
 
 function seedCatalog(store: TestStore): void {
@@ -138,11 +141,15 @@ describe('session writes deferred by a direct-SSH apply', () => {
     vi.useRealTimers()
   })
 
-  async function applyTargetA(store: TestStore, onApplied: () => void): Promise<void> {
-    await applyDirectSshRemoteWorkspaceSnapshot({
+  async function applyTargetA(
+    store: TestStore,
+    onApplied: () => void,
+    remote = snapshot(1)
+  ): Promise<void> {
+    const result = await applyDirectSshRemoteWorkspaceSnapshot({
       store,
-      snapshot: snapshot(1),
-      token: token(1),
+      snapshot: remote,
+      token: token(remote.revision),
       arrival: 1,
       isArrivalCurrent: () => true,
       isPreparationTokenCurrent: () => true,
@@ -153,6 +160,7 @@ describe('session writes deferred by a direct-SSH apply', () => {
         return 0
       }
     })
+    expect(result).toBe('applied')
   }
 
   function seedBothTargets(store: TestStore): void {
@@ -212,6 +220,78 @@ describe('session writes deferred by a direct-SSH apply', () => {
       cleanup()
     }
   })
+
+  it.each(['missing', 'outdated'] as const)(
+    'preserves a local split awaiting upload when reconnect has a %s layout',
+    async (remoteLayout) => {
+      const store = createTestStore()
+      seedCatalog(store)
+      const first = '11111111-1111-4111-8111-111111111111'
+      const second = '22222222-2222-4222-8222-222222222222'
+      const original: TerminalLayoutSnapshot = {
+        root: { type: 'leaf', leafId: first },
+        activeLeafId: first,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [first]: 'pty-tab-a' }
+      }
+      const initial = snapshot(1)
+      initial.session.terminalLayoutsByTabId = { 'tab-a': original }
+      const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+      const cleanup = createSessionWriteSubscriber({
+        store,
+        persist,
+        shouldSchedulePersist: () => !isDirectSshRemoteWorkspaceApplyInProgress(),
+        subscribeToPersistGateOpen: onDirectSshRemoteWorkspaceApplyWindowClosed
+      })
+      try {
+        store.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+        await applyTargetA(store, () => {}, initial)
+        store.getState().updateTabPtyId('tab-a', toAppSshPtyId(TARGET_A, 'pty-tab-a'))
+        vi.advanceTimersByTime(1_200)
+        persist.mockClear()
+        const generation = store.getState().tabsByWorktree[WORKTREE_A][0].generation
+        const split: TerminalLayoutSnapshot = {
+          ...original,
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: first },
+            second: { type: 'leaf', leafId: second }
+          },
+          activeLeafId: second,
+          ptyIdsByLeafId: {
+            [first]: toAppSshPtyId(TARGET_A, 'pty-tab-a'),
+            [second]: toAppSshPtyId(TARGET_A, 'pty-split')
+          }
+        }
+        store.getState().setTabLayout('tab-a', split)
+        expect(store.getState().tabsByWorktree[WORKTREE_A][0].generation).toBe(generation)
+        expect(persist).not.toHaveBeenCalled()
+
+        store.getState().clearDirectSshTargetPtyBindings(TARGET_A)
+        expect(store.getState().directSshPaneRetryByTabId).toEqual({})
+        expect(store.getState().directSshLivePtyBindingByTabId).toEqual({})
+        expect(store.getState().tabsByWorktree[WORKTREE_A][0].pendingActivationSpawn).toBeFalsy()
+        const stale = snapshot(1)
+        stale.session.tabsByWorktreePath[PATH_A][0].generation = generation
+        if (remoteLayout === 'outdated') {
+          stale.session.terminalLayoutsByTabId = { 'tab-a': original }
+        }
+        await applyTargetA(store, () => {}, stale)
+        vi.advanceTimersByTime(1_200)
+
+        const restored = store.getState().terminalLayoutsByTabId['tab-a']
+        expect(restored?.root).toEqual(split.root)
+        expect(restored?.ptyIdsByLeafId).toEqual(split.ptyIdsByLeafId)
+        expect(persist).toHaveBeenCalledTimes(1)
+        expect(persist.mock.calls[0][0].patch.terminalLayoutsByTabId?.['tab-a']?.root).toEqual(
+          split.root
+        )
+      } finally {
+        cleanup()
+      }
+    }
+  )
 
   it('still wakes the deferred write when the wall clock steps back during the tail', async () => {
     const store = createTestStore()

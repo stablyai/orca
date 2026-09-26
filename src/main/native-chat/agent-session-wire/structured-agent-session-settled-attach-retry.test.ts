@@ -207,7 +207,7 @@ describe('settled attach retry', () => {
     expect(spawnTokens).toEqual(['spawn-safe', 'spawn-safe'])
   })
 
-  it('fences a crash-interrupted reservation replay until positive recovery', async () => {
+  it('releases a reservation a crash left ownerless at restart, so the next start goes ahead', async () => {
     const spawnTokens: string[] = []
     acquire.mockImplementation(async ({ fence, spawnToken }) => {
       spawnTokens.push(spawnToken)
@@ -232,17 +232,17 @@ describe('settled attach retry', () => {
     })
     let token = 0
     const mintSpawnToken = vi.fn(() => `spawn-${++token}`)
-    let reservationUnused = false
     host = new StructuredAgentSessionHost({
       store,
       adapter: adapter(),
       journalRoot: root,
       claimKeyId: 'key-1',
       mintSpawnToken,
-      probeOwner: async () =>
-        reservationUnused
-          ? { outcome: 'reservation-unused' }
-          : { outcome: 'indeterminate', reason: 'spawn token scan unavailable' },
+      // A host that cannot read another process's environment, so no scan can prove anything.
+      probeOwner: async () => ({
+        outcome: 'indeterminate',
+        reason: 'spawn token scan unavailable'
+      }),
       now: () => NOW
     })
     const params = hostTestAttachParams(null)
@@ -268,36 +268,28 @@ describe('settled attach retry', () => {
       journalRoot: root,
       claimKeyId: 'key-1',
       mintSpawnToken,
-      probeOwner: async () =>
-        reservationUnused
-          ? { outcome: 'reservation-unused' }
-          : { outcome: 'indeterminate', reason: 'spawn token scan unavailable' },
+      // A host that cannot read another process's environment, so no scan can prove anything.
+      probeOwner: async () => ({
+        outcome: 'indeterminate',
+        reason: 'spawn token scan unavailable'
+      }),
       now: () => NOW
     })
 
-    const refused = await host.attach(CALLER, params)
-    if (refused.ok) {
-      throw new Error('expected the replayed reservation to stay fenced')
-    }
-    expect(refused.refusal.code).toBe('agent_session_ownership_unknown')
-    expect(acquire).toHaveBeenCalledTimes(1)
+    await host.restoreReadableSessions()
     expect(releaseAcquisition).toHaveBeenCalledTimes(1)
-    expect(mintSpawnToken).toHaveBeenCalledTimes(1)
-    expect(spawnTokens).toEqual(['spawn-1'])
+    // No owner was recorded: released at restart, with no evidence, since nothing proved one.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'manual-recovery',
-      runtimeFence: 1,
-      reservedSpawnToken: 'spawn-1',
-      ownerProcess: null
+      claimStatus: 'released',
+      handoffStage: null,
+      runtimeFence: 2,
+      reservedSpawnToken: null,
+      ownerProcess: null,
+      deathEvidence: null
     })
-    expect(
-      store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
-        ?.outcome
-    ).toEqual({ status: 'pending' })
 
-    reservationUnused = true
-    await host.hold(SESSION, 'desktop-chat:retry')
+    // The interrupted operation's own retry continues it as a fresh reservation.
+    await expect(host.attach(CALLER, params)).resolves.toMatchObject({ ok: true })
     expect(mintSpawnToken).toHaveBeenCalledTimes(2)
     expect(spawnTokens).toEqual(['spawn-1', 'spawn-2'])
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
@@ -310,16 +302,18 @@ describe('settled attach retry', () => {
     })
   })
 
-  it('restores an unknown submission without redispatch before a distinct send', async () => {
+  it('settles a submission the host restart left pending, and never redelivers it', async () => {
     expect((await host.attach(CALLER, hostTestAttachParams(null))).ok).toBe(true)
-    dispatch.mockRejectedValueOnce(new Error('socket closed'))
-    const body = hostTestMessage('possibly delivered')
+    // Admitted: written to the child, acknowledgement still outstanding. The
+    // restart below is the process fact that ends the wait, not a stopwatch.
+    dispatch.mockImplementationOnce(async () => ({ state: 'admitted' as const }))
+    const body = hostTestMessage('written before the host died')
     const unknownParams = {
       envelope: envelope('agentSession.send', { body }),
       body
     }
     const first = await host.send(CALLER, unknownParams)
-    expect(first).toMatchObject({ ok: true, value: { submission: { dispatchState: 'unknown' } } })
+    expect(first).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
 
     await host.flushAllStreamedEvents()
     store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
@@ -360,6 +354,8 @@ describe('settled attach retry', () => {
       )?.dispatchState
     ).toBe('unknown')
 
+    // A restart ends the wait without proving the dead child never took the
+    // frame, so even an explicit retry replays rather than sending a second copy.
     const explicitRetry = await host.send(CALLER, {
       ...unknownParams,
       envelope: {
@@ -370,15 +366,18 @@ describe('settled attach retry', () => {
     })
     expect(explicitRetry).toMatchObject({
       ok: true,
-      value: { submission: { dispatchState: 'accepted' } }
+      value: { submission: { dispatchState: 'unknown' } }
     })
-    expect(dispatch).toHaveBeenCalledTimes(3)
+    expect(dispatch).toHaveBeenCalledTimes(2)
   })
 
   it('records proven acquisition cleanup as durable death evidence', async () => {
     acquire.mockRejectedValueOnce(new Error('resume rejected'))
 
-    await expect(host.attach(CALLER, hostTestAttachParams(null))).rejects.toThrow('resume rejected')
+    await expect(host.attach(CALLER, hostTestAttachParams(null))).resolves.toMatchObject({
+      ok: false,
+      refusal: { message: 'resume rejected', ownerVerdict: 'exited' }
+    })
 
     expect(releaseAcquisition).toHaveBeenCalledTimes(1)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({

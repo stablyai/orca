@@ -108,6 +108,38 @@ describe('TabsSlice', () => {
       expect(result.renderableTabCount).toBe(1)
     })
 
+    it('restores a marker-only terminal when the host loss omitted its unified row', () => {
+      store.setState({
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-lost-terminal',
+              ptyId: null,
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'host-lost-terminal': [] },
+        unverifiedPtyLossTabIds: { 'host-lost-terminal': true },
+        unifiedTabsByWorktree: { [WT]: [] },
+        groupsByWorktree: {},
+        activeGroupIdByWorktree: {}
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+
+      expect(result.renderableTabCount).toBe(1)
+      expect(state.unifiedTabsByWorktree[WT]?.map((tab) => tab.entityId)).toContain(
+        'host-lost-terminal'
+      )
+    })
+
     // A session mirrored from a runtime host used to append a fresh leaf for a
     // group the layout already held, so returning to a split workspace showed the
     // same tab strip in several columns. Reconciliation collapses the repeats.

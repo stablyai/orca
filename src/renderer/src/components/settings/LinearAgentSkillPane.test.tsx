@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   panelProps: [] as Record<string, unknown>[],
   runtime: 'native' as 'native' | 'wsl',
   skillInstalled: true,
+  skillUnverifiable: false,
   updateSkillName: 'orca-linear',
   linearConnected: true,
   visibleTaskProviders: ['github', 'linear'] as string[],
@@ -58,8 +59,11 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   useInstalledAgentSkillNames: () => ({
     installed: mocks.skillInstalled,
     loading: false,
+    settled: true,
+    installedUnverifiable: mocks.skillUnverifiable,
     error: null,
     skills: [],
+    sources: [],
     refresh: vi.fn()
   })
 }))
@@ -135,6 +139,7 @@ describe('LinearAgentSkillPane', () => {
     mocks.panelProps.length = 0
     mocks.runtime = 'native'
     mocks.skillInstalled = true
+    mocks.skillUnverifiable = false
     mocks.updateSkillName = 'orca-linear'
     mocks.linearConnected = true
     mocks.visibleTaskProviders = ['github', 'linear']
@@ -208,6 +213,15 @@ describe('LinearAgentSkillPane', () => {
       expect(example.prompt).toContain('/orca-linear')
       expect(example.prompt).not.toContain('{{value0}}')
     }
+  })
+
+  it('reports an unverifiable skill scan as unknown instead of an unfinished step', () => {
+    mocks.skillInstalled = false
+    mocks.skillUnverifiable = true
+    const markup = renderToStaticMarkup(<LinearAgentSkillPane />)
+
+    expect(markup).toContain('Cannot verify')
+    expect(markup).not.toContain('2 of 3 ready')
   })
 
   it('shows incomplete checklist when the skill is missing', () => {

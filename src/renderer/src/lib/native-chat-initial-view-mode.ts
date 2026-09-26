@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { agentTabsDefaultToNativeChat } from '../../../shared/structured-native-chat-launch-route'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
@@ -27,7 +28,7 @@ export function decideInitialAgentTabViewMode(args: {
   launchDraftText?: string
   nativeChatTranscriptIsLocalReadable?: boolean
 }): Tab['viewMode'] {
-  if (args.experimentalNativeChat !== true || args.openAgentTabsInChatByDefault !== true) {
+  if (!agentTabsDefaultToNativeChat(args)) {
     return undefined
   }
   if (!isNativeChatSupportedAgent(args.agent)) {

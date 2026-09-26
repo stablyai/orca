@@ -6,23 +6,35 @@
 // still looking at, and a lost one leaks the child forever. A set answers both idempotently,
 // because it records WHICH surface holds the session, not how many do.
 
+type Holder = { resumeCapable: boolean; incarnation: symbol }
+
 export class StructuredAgentSessionHolders {
-  private readonly bySession = new Map<string, Set<string>>()
+  private readonly bySession = new Map<string, Map<string, Holder>>()
 
   /** True when the session gained its FIRST holder — the edge that ends a pending release. */
-  add(sessionId: string, holderId: string): boolean {
+  add(sessionId: string, holderId: string, resumeCapable = true): boolean {
     const holders = this.bySession.get(sessionId)
     if (!holders) {
-      this.bySession.set(sessionId, new Set([holderId]))
+      this.bySession.set(sessionId, new Map([[holderId, { resumeCapable, incarnation: Symbol() }]]))
       return true
     }
-    holders.add(holderId)
+    const previous = holders.get(holderId)
+    holders.set(holderId, {
+      resumeCapable: (previous?.resumeCapable ?? false) || resumeCapable,
+      incarnation: previous?.incarnation ?? Symbol()
+    })
     return false
   }
 
   /** True when the session lost its LAST holder — the edge that starts one. */
-  remove(sessionId: string, holderId: string): boolean {
+  remove(sessionId: string, holderId: string, expectedIncarnation?: symbol): boolean {
     const holders = this.bySession.get(sessionId)
+    if (
+      expectedIncarnation !== undefined &&
+      holders?.get(holderId)?.incarnation !== expectedIncarnation
+    ) {
+      return false
+    }
     if (!holders?.delete(holderId) || holders.size > 0) {
       return false
     }
@@ -38,8 +50,18 @@ export class StructuredAgentSessionHolders {
     return this.bySession.get(sessionId)?.has(holderId) ?? false
   }
 
+  incarnation(sessionId: string, holderId: string): symbol | undefined {
+    return this.bySession.get(sessionId)?.get(holderId)?.incarnation
+  }
+
   holderIds(sessionId: string): string[] {
-    return [...(this.bySession.get(sessionId) ?? [])]
+    return [...(this.bySession.get(sessionId)?.keys() ?? [])]
+  }
+
+  hasResumeCapableHolder(sessionId: string): boolean {
+    return [...(this.bySession.get(sessionId)?.values() ?? [])].some(
+      (holder) => holder.resumeCapable
+    )
   }
 
   /** Drops every holder of one session without evaluating the edge, for a session that is gone. */

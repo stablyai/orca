@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -35,7 +37,7 @@ describe('profile index store', () => {
   })
 
   afterEach(() => {
-    rmSync(testState.dir, { recursive: true, force: true })
+    removeTreeSync(testState.dir)
   })
 
   it('creates the default local profile and copies legacy state without deleting it', async () => {
@@ -64,6 +66,9 @@ describe('profile index store', () => {
     expect(activeProfile.profile.name).toBe(DEFAULT_LOCAL_ORCA_PROFILE_NAME)
     expect(activeProfile.dataFile).toBe(
       join(testState.dir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
+    )
+    expect(activeProfile.stateDatabaseFile).toBe(
+      join(testState.dir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'profile-state.db')
     )
     expect(readJson(activeProfile.dataFile)).toEqual(legacyState)
     expect(readJson(`${activeProfile.dataFile}.bak.0`)).toEqual(legacyBackup)
@@ -114,7 +119,57 @@ describe('profile index store', () => {
 
     expect(activeProfile.profile.id).toBe(profileId)
     expect(activeProfile.dataFile).toBe(join(profileDirectory, 'orca-data.json'))
+    expect(activeProfile.stateDatabaseFile).toBe(join(profileDirectory, 'profile-state.db'))
     expect(readJson(activeProfile.dataFile)).toEqual(profileData)
+  })
+
+  it('does not copy legacy JSON into a database-only default profile', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({ settings: { theme: 'legacy' } }),
+      'utf-8'
+    )
+    const profileDirectory = join(testState.dir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
+    mkdirSync(profileDirectory, { recursive: true })
+    const database = openProfileStateDatabase(
+      join(profileDirectory, 'profile-state.db'),
+      DEFAULT_LOCAL_ORCA_PROFILE_ID
+    )
+    database.db.close()
+
+    const { ensureActiveOrcaProfile } = await loadProfileIndexStore()
+    const activeProfile = ensureActiveOrcaProfile()
+
+    expect(activeProfile.stateDatabaseFile).toBe(join(profileDirectory, 'profile-state.db'))
+    expect(existsSync(activeProfile.dataFile)).toBe(false)
+    expect(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8')).toContain('legacy')
+  })
+
+  it.each([
+    'orca-data.json.sqlite-export.1.json',
+    'profile-state.db.backup.1789999999999-00000000-0000-4000-8000-000000000000.db',
+    'profile-state.db-wal',
+    'profile-state.db-shm',
+    'profile-state.db-journal'
+  ])('does not seed a stale mirror when %s exists without the database', async (artifact) => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({ settings: { theme: 'legacy' } }),
+      'utf-8'
+    )
+    const profileDirectory = join(testState.dir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
+    mkdirSync(profileDirectory, { recursive: true })
+    writeFileSync(
+      join(profileDirectory, artifact),
+      JSON.stringify({ settings: { theme: 'migrated' } }),
+      'utf-8'
+    )
+
+    const { ensureActiveOrcaProfile } = await loadProfileIndexStore()
+    const activeProfile = ensureActiveOrcaProfile()
+
+    expect(existsSync(activeProfile.dataFile)).toBe(false)
+    expect(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8')).toContain('legacy')
   })
 
   it('creates an empty local profile without copying legacy state into it', async () => {

@@ -104,7 +104,8 @@ export function CommitMessageAiPane({
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const config = readSettings(settings)
   const ownership = getSettingOwnershipSummary('sourceControlAiDefaults')
-  const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const settingsWriteQueueRef = useRef<Promise<void>>(undefined!)
+  settingsWriteQueueRef.current ??= Promise.resolve()
 
   const localWriteConfig = (patch: SourceControlAiSettingsPatch): Promise<void> => {
     const next = settingsWriteQueueRef.current

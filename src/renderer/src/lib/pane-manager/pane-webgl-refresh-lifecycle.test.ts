@@ -17,6 +17,7 @@ function createPane(
     leafId,
     stablePaneId: leafId,
     terminal: {
+      options: { cursorBlink: true },
       element: null,
       cols: 80,
       rows: 24,
@@ -52,6 +53,7 @@ function createPane(
     webLinksAddon: { dispose: vi.fn() } as never,
     webglAddon: { dispose: vi.fn() } as never,
     ligaturesAddon: null,
+    imageAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
     pendingSplitScrollBufferDisposable: null,

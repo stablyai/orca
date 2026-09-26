@@ -504,6 +504,7 @@ describe('parseWorkspaceSession', () => {
         url: `https://example.com/${index}`,
         normalizedUrl: `https://example.com/${index}`,
         title: `Example ${index}`,
+        faviconUrl: index === 0 ? 'https://example.com/favicon.ico' : null,
         lastVisitedAt: 1_700_000_000_000 - index,
         visitCount: 1
       }))
@@ -512,6 +513,9 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+      expect(result.value.browserUrlHistory?.[0]?.faviconUrl).toBe(
+        'https://example.com/favicon.ico'
+      )
       expect(result.value.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
     }
   })
@@ -547,7 +551,7 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('preserves a structured agent session tab and its active projection', () => {
+  it('preserves a structured agent session tab and drops the retired adoption key', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: 'wt',
@@ -563,11 +567,25 @@ describe('parseWorkspaceSession', () => {
             worktreeId: 'wt',
             contentType: 'agent-session',
             agentSessionAgent: 'codex',
-            structuredSessionId: 'codex-session-1',
             label: 'Codex Chat',
             customLabel: null,
             color: null,
             sortOrder: 0,
+            createdAt: 0
+          },
+          {
+            id: 'terminal-1',
+            entityId: 'terminal-1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'terminal',
+            viewMode: 'chat',
+            // Why: older builds could save this key on a chat-mode terminal; it must keep loading.
+            structuredSessionId: 'codex-session-1',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
             createdAt: 0
           }
         ]
@@ -579,9 +597,13 @@ describe('parseWorkspaceSession', () => {
     if (result.ok) {
       expect(result.value.unifiedTabs?.wt[0]).toMatchObject({
         contentType: 'agent-session',
-        agentSessionAgent: 'codex',
-        structuredSessionId: 'codex-session-1'
+        agentSessionAgent: 'codex'
       })
+      expect(result.value.unifiedTabs?.wt[1]).toMatchObject({
+        contentType: 'terminal',
+        viewMode: 'chat'
+      })
+      expect(result.value.unifiedTabs?.wt[1]).not.toHaveProperty('structuredSessionId')
       expect(result.value.activeTabTypeByWorktree?.wt).toBe('agent-session')
     }
   })

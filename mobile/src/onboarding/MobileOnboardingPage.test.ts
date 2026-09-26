@@ -5,8 +5,29 @@ import { MobileOnboardingPage } from './MobileOnboardingPage'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+  class AnimatedValue {
+    interpolate() {
+      return 0
+    }
+    setValue() {}
+  }
   return {
+    AccessibilityInfo: {
+      addEventListener: vi.fn(() => ({ remove: vi.fn() })),
+      isReduceMotionEnabled: vi.fn(() => Promise.resolve(true))
+    },
     ActivityIndicator: 'ActivityIndicator',
+    Animated: {
+      Value: AnimatedValue,
+      View: 'AnimatedView',
+      delay: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+      loop: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+      parallel: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+      sequence: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+      timing: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() }))
+    },
+    Easing: { cubic: (t: number) => t, in: (e: unknown) => e, out: (e: unknown) => e },
+    Image: 'Image',
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),
@@ -17,9 +38,10 @@ vi.mock('react-native', async () => {
 })
 
 vi.mock('lucide-react-native', () => ({
-  BellRing: 'BellRing',
   MessageSquare: 'MessageSquare'
 }))
+
+vi.mock('../components/OrcaLogo', () => ({ OrcaLogo: 'OrcaLogo' }))
 
 describe('MobileOnboardingPage', () => {
   let renderer: ReactTestRenderer | null = null
@@ -64,6 +86,13 @@ describe('MobileOnboardingPage', () => {
     )
   }
 
+  function collectText(): string {
+    return renderer!.root
+      .findAllByType('Text')
+      .flatMap((node) => node.props.children)
+      .join(' ')
+  }
+
   it('renders the session choices and sends exactly one selected view', async () => {
     const callbacks = await renderPage('session-view')
 
@@ -78,6 +107,19 @@ describe('MobileOnboardingPage', () => {
 
     expect(callbacks.onNotificationChoice).toHaveBeenCalledWith('skip')
     expect(callbacks.onSessionChoice).not.toHaveBeenCalled()
+  })
+
+  it('explains that alerts cover finished work and waiting agents, even if the app is closed', async () => {
+    await renderPage('notifications')
+    const copy = collectText()
+
+    expect(copy).toContain('Don’t miss when an agent needs you')
+    expect(copy).toContain('finishes or is waiting')
+    expect(copy).toContain('using the app')
+    expect(copy).toContain('Enable notifications')
+    expect(copy).toContain('Codex finished')
+    expect(copy).toContain('Claude needs input')
+    expect(renderer!.root.findByProps({ testID: 'notification-onboarding-preview' })).toBeTruthy()
   })
 
   it('disables both notification choices while permission is pending', async () => {

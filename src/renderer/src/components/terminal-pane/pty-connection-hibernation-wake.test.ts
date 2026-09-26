@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import { sendTerminalInputThroughPane } from './pty-connection-test-dom'
 import {
+  LEAF_2,
   leafIdForPane,
   createMockTransport,
   createPane,
@@ -11,7 +12,7 @@ import {
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
-import type { MockTransport } from './pty-connection-test-pane-fixtures'
+import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -269,6 +270,120 @@ describe('connectPanePty', () => {
     binding.wakeHibernatedAgentIfArmed()
     await flushAsyncTicks()
     expect(transport.connect.mock.calls.length).toBe(connectCallsAfterWake)
+  })
+
+  it('names the replaced PTY on the restart spawn only, never on a later wake of the same pane', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-restarted')
+    transportFactoryQueue.push(transport)
+    const deps = createDeps({
+      tabId: 'tab-restart-wake',
+      startup: { command: 'claude', launchAgent: 'claude' },
+      replacesPtyId: 'pty-replaced',
+      consumeSuppressedPtyExit: vi.fn(() => true),
+      isVisibleRef: { current: false }
+    })
+    const pane = createPane(2)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
+    const args = [pane, createManager(1), deps] as unknown as Parameters<typeof connectPanePty>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pane binding exposes the wake hook this test drives.
+    const binding = connectPanePty(...args) as unknown as {
+      wakeHibernatedAgentIfArmed: (claimedProviderSessions?: Set<string>) => string | null
+      dispose: () => void
+    }
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    const restartConnect: { claimReplacedPtyId?: () => string | null } | undefined =
+      transport.connect.mock.calls[0]?.[0]
+    // The IPC transport takes the id as it sends the spawn; this mock transport does it here.
+    expect(restartConnect?.claimReplacedPtyId?.()).toBe('pty-replaced')
+    // Why: transport options outlive the first spawn, so the field must not ride them.
+    expect(createdTransportOptions[0]).not.toHaveProperty('replacesPtyId')
+
+    const paneKey = `tab-restart-wake:${leafIdForPane(2)}`
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      tabId: 'tab-restart-wake',
+      worktreeId: 'wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'sess-restart-wake' },
+      prompt: 'test prompt',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'worktree-sleep'
+    }
+    mockStoreState.suppressedPtyExitIds['pty-restarted'] = true
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    onPtyExit?.('pty-restarted')
+    await flushAsyncTicks()
+    expect(binding.wakeHibernatedAgentIfArmed(new Set())).not.toBeNull()
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalledTimes(2)
+    expect(transport.connect.mock.calls[1]?.[0]).not.toHaveProperty('claimReplacedPtyId')
+    binding.dispose()
+    await flushAsyncTicks()
+    expect(window.api.pty.kill).not.toHaveBeenCalledWith('pty-replaced')
+  })
+
+  it('keeps an established split pane mounted when main labels its exit as a restart replacement', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { deliverPtyExitToHandlers } = await import('./pty-exit-delivery')
+    let onData: ((data: string) => void) | undefined
+    const transport = createMockTransport('pty-pane-2')
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      onData = callbacks.onData
+      return 'pty-pane-2'
+    })
+    transportFactoryQueue.push(transport)
+    const manager = createManager(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
+    const args = [createPane(2), manager, deps] as unknown as Parameters<typeof connectPanePty>
+    connectPanePty(...args)
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit
+    expect(onPtyExit).toBeTypeOf('function')
+    await flushAsyncTicks()
+    onData?.('codex prompt')
+
+    deliverPtyExitToHandlers({
+      ptyId: 'pty-pane-2',
+      code: 0,
+      replacedByRestart: true,
+      primary: (code) => {
+        if (typeof onPtyExit === 'function') {
+          onPtyExit('pty-pane-2', code)
+        }
+      },
+      sidecars: []
+    })
+
+    expect(manager.closePane).not.toHaveBeenCalled()
+    expect(deps.clearExitedPanePtyLayoutBinding).not.toHaveBeenCalled()
+  })
+
+  it('stops the replaced PTY itself when the pane is disposed before a spawn carried the stop', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    transportFactoryQueue.push(createMockTransport('pty-restarted'))
+    const deps = createDeps({
+      tabId: 'tab-restart-closed',
+      startup: { command: 'codex', launchAgent: 'codex' },
+      replacesPtyId: 'pty-replaced'
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixtures implement the pane, manager and deps members connectPanePty reads.
+    const args = [createPane(2), createManager(1), deps] as unknown as Parameters<
+      typeof connectPanePty
+    >
+    // Closing the tab (or parking it) disposes the pane before its deferred connect runs.
+    connectPanePty(...args).dispose()
+    await flushAsyncTicks()
+
+    expect(window.api.pty.kill).toHaveBeenCalledWith('pty-replaced')
   })
 
   it('latches a navigation-free wake that lands before the hibernation kill arms the pane', async () => {
@@ -556,13 +671,12 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
     const pane = createPane(2)
-    let userInputListener: (() => void) | null = null
-    const userInputDispose = vi.fn()
+    const userInputListeners = new Set<() => void>()
     ;(pane.terminal as unknown as { _core: unknown })._core = {
       coreService: {
         onUserInput: vi.fn((listener: () => void) => {
-          userInputListener = listener
-          return { dispose: userInputDispose }
+          userInputListeners.add(listener)
+          return { dispose: () => userInputListeners.delete(listener) }
         })
       }
     }
@@ -571,7 +685,7 @@ describe('connectPanePty', () => {
       dispose: () => void
     }
     await flushAsyncTicks()
-    expect(userInputListener).toBeTypeOf('function')
+    expect(userInputListeners.size).toBeGreaterThan(0)
     ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
 
     // A focus-out report forwarded to the PTY must not count as activity.
@@ -581,11 +695,13 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O')
 
     // Real user input fires the core signal and records activity.
-    ;(userInputListener as unknown as () => void)()
+    for (const listener of userInputListeners) {
+      listener()
+    }
     expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
 
     binding.dispose()
-    expect(userInputDispose).toHaveBeenCalled()
+    expect(userInputListeners.size).toBe(0)
   })
 
   it('falls back to onData hibernation recording when the core user-input signal is unavailable', async () => {

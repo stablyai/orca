@@ -1,0 +1,753 @@
+{
+  "operation": "browser.page-commands",
+  "family": "browser.pointer-click",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "55971752f963202d30160851197a301089b0f3ebd0c46725af1a461d8310d658",
+  "scenarioSha256": "91a1ef5e07178585f583dd1609543c3bfb0c71d13eb4ce1eedab3acc2635f0da",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "002a5bcbde42": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseClick\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80,\"button\":\"left\",\"modifiers\":[],\"radius\":14}}"
+    },
+    "08224c934905": {
+      "name": "browser.mouseDown#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseDown\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"button\":\"left\"}}"
+    },
+    "125a546c8a77": {
+      "name": "browser.mouseMove#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseMove\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"x\":40,\"y\":80}}"
+    },
+    "179b53baef17": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "2a612b1e53c0": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "71b83de9e4d3": {
+      "name": "browser.mouseUp#1",
+      "ordinal": 8,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"browser.mouseUp\",\"params\":{\"worktree\":\"id:worktree-1\",\"page\":\"page-1\",\"button\":\"left\"}}"
+    },
+    "79ca46469b2a": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "82ccdef1369f": {
+      "name": "browser.mouseUp#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseUp"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "up": true
+          }
+        }
+      }
+    },
+    "883bcadfc05c": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "8847275131e0": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "9855d4ec3415": {
+      "busy": false,
+      "dialog": {
+        "$rpc": "null"
+      },
+      "error": {
+        "$rpc": "null"
+      },
+      "keyboardValue": "hello",
+      "pointerModifiers": []
+    },
+    "c3c6fbf3ec35": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "d3b478ed68de": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "dbfbacf8be29": {
+      "name": "browser.mouseMove#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseMove"
+        },
+        {
+          "name": "params",
+          "value": {
+            "page": "page-1",
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "moved": true
+          }
+        }
+      }
+    },
+    "e3ae5f4e0dc4": {
+      "name": "browser.mouseDown#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseDown"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "page": "page-1",
+            "worktree": "id:worktree-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "down": true
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f14b569391f9": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "clicked": true
+          }
+        }
+      }
+    },
+    "f28277b155ae": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "f739e8aa94de": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "fdb830a9011a": {
+      "name": "browser.mouseClick#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "browser.mouseClick"
+        },
+        {
+          "name": "params",
+          "value": {
+            "button": "left",
+            "modifiers": [],
+            "page": "page-1",
+            "radius": 14,
+            "worktree": "id:worktree-1",
+            "x": 40,
+            "y": 80
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 5000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-browser.pointer-click-browser.mouseclick-1",
+    "checkpoints": [
+      {
+        "id": "browser-pointer-click-fallback.normal:tap-settled",
+        "observation": {
+          "sender": ["f14b569391f9"],
+          "payloads": ["002a5bcbde42"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.result-absent:tap-settled",
+        "observation": {
+          "sender": ["8847275131e0"],
+          "payloads": ["002a5bcbde42"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.result-null:tap-settled",
+        "observation": {
+          "sender": ["c3c6fbf3ec35"],
+          "payloads": ["002a5bcbde42"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.inner-ok-missing:tap-settled",
+        "observation": {
+          "sender": ["f739e8aa94de"],
+          "payloads": ["002a5bcbde42"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.inner-false-string-error:tap-settled",
+        "observation": {
+          "sender": ["f28277b155ae"],
+          "payloads": ["002a5bcbde42"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.inner-false-object-error:tap-settled",
+        "observation": {
+          "sender": ["883bcadfc05c"],
+          "payloads": ["002a5bcbde42"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.outer-refused:tap-settled",
+        "observation": {
+          "sender": ["d3b478ed68de", "dbfbacf8be29", "e3ae5f4e0dc4", "82ccdef1369f"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.outer-refused-no-message:tap-settled",
+        "observation": {
+          "sender": ["79ca46469b2a", "dbfbacf8be29", "e3ae5f4e0dc4", "82ccdef1369f"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.method-not-found:tap-settled",
+        "observation": {
+          "sender": ["2a612b1e53c0", "dbfbacf8be29", "e3ae5f4e0dc4", "82ccdef1369f"],
+          "payloads": ["002a5bcbde42", "125a546c8a77", "08224c934905", "71b83de9e4d3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.transport-rejection:tap-settled",
+        "observation": {
+          "sender": ["179b53baef17"],
+          "payloads": ["002a5bcbde42"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      },
+      {
+        "id": "browser-pointer-click-fallback.transport-rejection-no-message:tap-settled",
+        "observation": {
+          "sender": ["fdb830a9011a"],
+          "payloads": ["002a5bcbde42"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "click": "eb79a9b3682a"
+          },
+          "state": "9855d4ec3415",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

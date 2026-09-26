@@ -6,6 +6,7 @@ import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
 import type * as GitRunner from '../git/runner'
+import type * as BundledRipgrepPath from '../ripgrep/bundled-ripgrep-path'
 
 // Mock signatures stay loose on payloads: suites assert call arguments and stub
 // resolved values, so real fs/git result types would only fight the fixtures.
@@ -30,13 +31,10 @@ export const watchInWatcherProcessMock: Mock<
 > = vi.fn()
 export const closeWatcherInWatcherProcessMock: Mock<(rootPath: string) => Promise<unknown>> =
   vi.fn()
-export const checkRgAvailableMock: Mock<
-  (searchPath?: string, wslDistro?: string) => Promise<unknown>
-> = vi.fn()
 export const getLocalGitOptionsForRegisteredWorktreeMock: Mock<
   (store: unknown, worktreePath: string, repoPath?: string) => unknown
 > = vi.fn()
-export const searchWithGitGrepMock: Mock<(...args: unknown[]) => Promise<unknown>> = vi.fn()
+export const bundledRipgrepCommandMock: Mock<(options?: { wsl?: boolean }) => string> = vi.fn()
 export const wslAwareSpawnMock: Mock<
   (command: string, args: string[], options: unknown) => unknown
 > = vi.fn()
@@ -93,23 +91,32 @@ export async function gitRunnerModuleMock() {
   }
 }
 
-export const rgAvailabilityMock = {
-  checkRgAvailable: checkRgAvailableMock
+export async function bundledRipgrepPathModuleMock() {
+  const actual = await vi.importActual<typeof BundledRipgrepPath>('../ripgrep/bundled-ripgrep-path')
+  return {
+    ...actual,
+    bundledRipgrepCommand: bundledRipgrepCommandMock
+  }
 }
 
 export const localWorktreeRuntimeOptionsMock = {
   getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
 }
 
-export const filesystemSearchGitMock = {
-  searchWithGitGrep: searchWithGitGrepMock
-}
+const SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE =
+  'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
 
 export const sshFilesystemDispatchMock = {
   getSshFilesystemProvider: getSshFilesystemProviderMock,
+  requireSshFilesystemProvider: (connectionId: string) => {
+    const provider = getSshFilesystemProviderMock(connectionId)
+    if (!provider) {
+      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
+    }
+    return provider
+  },
   onSshFilesystemProviderRegistered: () => () => undefined,
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE:
-    'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
 }
 
 export function resetRuntimeFileMocks(): void {
@@ -122,12 +129,14 @@ export function resetRuntimeFileMocks(): void {
   watchInWatcherProcessMock.mockReset()
   closeWatcherInWatcherProcessMock.mockReset()
   watchMock.mockReset()
-  checkRgAvailableMock.mockReset()
-  searchWithGitGrepMock.mockReset()
+  bundledRipgrepCommandMock.mockReset()
   getSshFilesystemProviderMock.mockReset()
   getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
   wslAwareSpawnMock.mockReset()
   getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
+  bundledRipgrepCommandMock.mockImplementation((options) =>
+    options?.wsl ? '/bundled/linux/rg' : '/bundled/rg'
+  )
   readdirMock.mockResolvedValue([])
   lstatMock.mockRejectedValue(enoent())
   renameMock.mockResolvedValue(undefined)

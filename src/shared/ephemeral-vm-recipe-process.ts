@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
+import { admitProcessTreeKill } from './child-process/process-tree-kill-gate'
 
 const DEFAULT_MAX_CAPTURE_BYTES = 1024 * 1024
 const CANCEL_FORCE_KILL_DELAY_MS = 5_000
@@ -132,13 +133,26 @@ export async function runRecipeCommand(args: {
   })
 }
 
-function killRecipeProcess(child: ChildProcessWithoutNullStreams, force = false): void {
+/** Exported for the refusal-fallback test; the abort path is otherwise unreachable. */
+export function killRecipeProcess(child: ChildProcessWithoutNullStreams, force = false): void {
   const signal = force ? 'SIGKILL' : 'SIGTERM'
   if (process.platform === 'win32') {
     // Recipes run through `cmd.exe /c` (shell: true), so child.kill() would only
     // terminate the wrapper and orphan the actual recipe subprocess (e.g. a cloud
     // CLI mid-provision). taskkill /T walks and kills the whole tree.
     if (child.pid) {
+      if (
+        !admitProcessTreeKill({
+          pid: child.pid,
+          site: 'ephemeral-vm-recipe',
+          scope: 'win-taskkill-tree'
+        })
+      ) {
+        // Refusal blocks the tree walk, not the termination: the root kill is
+        // handle-addressed, so it cannot reach the recycled pid we refused.
+        child.kill(signal)
+        return
+      }
       const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
         windowsHide: true,
         stdio: 'ignore'

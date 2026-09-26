@@ -1,0 +1,131 @@
+{
+  "operation": "session.diff-notes",
+  "family": "session.diff-notes",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
+  "scenarioSha256": "795286ff495a243059a3eb55ccbbc9b4adfdd2034258f91f9182e83c7492fa60",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "270b4ca66aa7": {
+      "name": "worktree.show#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "542d7b8c3e3f": {
+      "name": "worktree.show#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "diffComments": [
+                {
+                  "body": "needs a test",
+                  "createdAt": 0,
+                  "filePath": "src/app.ts",
+                  "id": "note-1",
+                  "lineNumber": 4,
+                  "worktreeId": "workspace-1"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "e28b1ad79121": {
+      "busy": false,
+      "diffComments": [
+        {
+          "body": "needs a test",
+          "createdAt": 0,
+          "diffIdentity": {
+            "$rpc": "undefined"
+          },
+          "filePath": "src/app.ts",
+          "id": "note-1",
+          "lineNumber": 4,
+          "oldPath": {
+            "$rpc": "undefined"
+          },
+          "scope": {
+            "$rpc": "undefined"
+          },
+          "selectedText": {
+            "$rpc": "undefined"
+          },
+          "sentAt": {
+            "$rpc": "undefined"
+          },
+          "side": "modified",
+          "source": "diff",
+          "startLine": {
+            "$rpc": "undefined"
+          },
+          "updatedAt": {
+            "$rpc": "undefined"
+          },
+          "worktreeId": "workspace-1"
+        }
+      ],
+      "pendingDelivery": {
+        "$rpc": "null"
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-diff-notes-loaded",
+    "checkpoints": [
+      {
+        "id": "loaded",
+        "observation": {
+          "sender": ["542d7b8c3e3f"],
+          "payloads": ["270b4ca66aa7"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "e28b1ad79121",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store/types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   resolveNativeChatFileLink,
   resolveNativeChatFileLinkContext,
@@ -108,6 +109,27 @@ describe('resolveNativeChatFileLinkContext', () => {
     ).toEqual({
       worktreeId: 'wt-1',
       worktreePath: '/repo/fallback',
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it('resolves a folder workspace tab from its folder path when no projected worktree path exists', () => {
+    const folderId = 'folder-1'
+    const folderKey = folderWorkspaceKey(folderId)
+    const folderTab = terminalTab({ worktreeId: folderKey })
+    expect(
+      resolveNativeChatFileLinkContext(
+        state({
+          tabsByWorktree: { [folderKey]: [folderTab] },
+          getKnownWorktreeById: () => undefined,
+          folderWorkspaces: [{ id: folderId, folderPath: '/workspace/platform' } as never],
+          worktreesByRepo: {}
+        }),
+        folderTab.id
+      )
+    ).toEqual({
+      worktreeId: folderKey,
+      worktreePath: '/workspace/platform',
       runtimeEnvironmentId: null
     })
   })

@@ -10,6 +10,7 @@ import {
   CODEX_FILE_CHANGE_APPROVAL_METHOD,
   encodeCodexQuestionOptionId
 } from './codex-structured-prompt-replies'
+import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../native-chat/agent-session-journal/journal-row-schema'
 
 const THREAD_ID = 'thread-abc'
 const CODEX_ITEM_ID = 'item-4'
@@ -91,6 +92,17 @@ describe('codex approval items', () => {
       }).detail
     ).toBe('"/outside"')
   })
+
+  it('bounds large approval details before they can enter lifecycle settlement', () => {
+    const item = codexApprovalItem({
+      method: CODEX_COMMAND_APPROVAL_METHOD,
+      params: { command: 'x'.repeat(2_000_000) },
+      detail: null
+    })
+
+    expect(item.detail).toContain('output truncated')
+    expect(Buffer.byteLength(JSON.stringify(item), 'utf8')).toBeLessThan(32 * 1024)
+  })
 })
 
 describe('codex question items', () => {
@@ -169,6 +181,36 @@ describe('codex question items', () => {
       options: [{ id: 'q2:Known', label: 'Known' }],
       freeTextQuestionId: 'q2'
     })
+  })
+
+  it('bounds question text, options, labels, and prompt identity components', () => {
+    const longQuestionId = 'question-id-'.repeat(500)
+    const longLabel = 'option '.repeat(5_000)
+    const items = codexQuestionItems({
+      threadId: 'thread-'.repeat(500),
+      promptKey: 'prompt-'.repeat(500),
+      params: {
+        questions: [
+          {
+            id: longQuestionId,
+            question: 'question '.repeat(500_000),
+            options: Array.from({ length: 80 }, () => ({ label: longLabel }))
+          }
+        ]
+      }
+    })
+    const item = items[0]
+
+    if (!item) {
+      throw new Error('expected a bounded question item')
+    }
+    expect(item.body.question).toContain('output truncated')
+    expect(item.body.options).toHaveLength(64)
+    expect(item.body.options[0]?.label).toContain('output truncated')
+    expect(Buffer.byteLength(item.body.options[0]?.id ?? '', 'utf8')).toBeLessThan(1024)
+    expect(
+      Buffer.byteLength(JSON.stringify({ identity: item.identity, body: item.body }), 'utf8')
+    ).toBeLessThan(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
   })
 
   it('keys an approval without a question id', () => {

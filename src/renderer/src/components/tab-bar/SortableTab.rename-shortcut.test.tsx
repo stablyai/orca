@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { requestTerminalTabRename } from './terminal-tab-rename-request'
+
+const windowListeners = new Map<string, Set<(event: Event) => void>>()
 
 const reactHookRuntime = vi.hoisted(() => ({
   states: [] as unknown[],
@@ -11,10 +14,8 @@ const storeState = vi.hoisted(
     clearTabLaunchAgent: ReturnType<typeof vi.fn>
     ptyIdsByTabId: Record<string, string[]>
     retainedAgentsByPaneKey: Record<string, unknown>
-    renamingTabId: string | null
     keybindings: Record<string, unknown>
     repos: unknown[]
-    setRenamingTabId: ReturnType<typeof vi.fn>
     terminalLayoutsByTabId: Record<string, unknown>
     worktreesByRepo: Record<string, unknown>
     unreadTerminalTabs: Record<string, boolean>
@@ -23,12 +24,8 @@ const storeState = vi.hoisted(
     clearTabLaunchAgent: vi.fn(),
     ptyIdsByTabId: {} as Record<string, string[]>,
     retainedAgentsByPaneKey: {},
-    renamingTabId: null as string | null,
     keybindings: {},
     repos: [],
-    setRenamingTabId: vi.fn((tabId: string | null) => {
-      storeState.renamingTabId = tabId
-    }),
     terminalLayoutsByTabId: {},
     worktreesByRepo: {},
     unreadTerminalTabs: {} as Record<string, boolean>
@@ -340,13 +337,24 @@ describe('SortableTab rename shortcut signal', () => {
   beforeEach(() => {
     reactHookRuntime.states = []
     reactHookRuntime.index = 0
-    storeState.renamingTabId = 'terminal-tab-1'
     storeState.unreadTerminalTabs = {}
     storeState.clearTabLaunchAgent.mockClear()
-    storeState.setRenamingTabId.mockClear()
+    windowListeners.clear()
     vi.stubGlobal('window', {
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
+      addEventListener: vi.fn((type: string, listener: (event: Event) => void) => {
+        const listeners = windowListeners.get(type) ?? new Set<(event: Event) => void>()
+        listeners.add(listener)
+        windowListeners.set(type, listeners)
+      }),
+      removeEventListener: vi.fn((type: string, listener: (event: Event) => void) => {
+        windowListeners.get(type)?.delete(listener)
+      }),
+      dispatchEvent: vi.fn((event: Event) => {
+        for (const listener of windowListeners.get(event.type) ?? []) {
+          listener(event)
+        }
+        return true
+      })
     })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
@@ -355,22 +363,30 @@ describe('SortableTab rename shortcut signal', () => {
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
-  it('opens the inline rename input and consumes the matching store signal', async () => {
+  it('opens the inline rename input for a request that targets this tab', async () => {
     await renderSortableTab()
+    requestTerminalTabRename('terminal-tab-1')
     const rerender = expandNode(await renderSortableTab())
     const inputs = findElementsByType(rerender, 'input')
 
-    expect(storeState.setRenamingTabId).toHaveBeenCalledWith(null)
-    expect(storeState.renamingTabId).toBeNull()
     expect(inputs).toHaveLength(1)
     expect(inputs[0].props.value).toBe('Runtime terminal title')
     expect(inputs[0].props['data-tab-rename-input']).toBe('true')
+  })
+
+  it('ignores a rename request aimed at a different tab', async () => {
+    await renderSortableTab()
+    requestTerminalTabRename('terminal-tab-2')
+    const rerender = expandNode(await renderSortableTab())
+
+    expect(findElementsByType(rerender, 'input')).toHaveLength(0)
   })
 
   it('ignores IME composition Enter before committing the custom tab title', async () => {
     const onSetCustomTitle = vi.fn()
 
     await renderSortableTab({ onSetCustomTitle })
+    requestTerminalTabRename('terminal-tab-1')
     let rerender = expandNode(await renderSortableTab({ onSetCustomTitle }))
     let input = findElementsByType(rerender, 'input')[0]
     ;(input.props.onChange as (event: { target: { value: string } }) => void)({

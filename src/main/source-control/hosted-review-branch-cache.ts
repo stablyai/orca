@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type { HostedReviewInfo } from '../../shared/hosted-review'
 import {
   __resetHostedReviewActiveClaimsForTests,
@@ -58,9 +59,14 @@ type CacheEntry = {
   startedAt: number
 }
 
+declare const inflightTokenBrand: unique symbol
+
+/** Identity token for one lookup; only ever compared by reference. */
+type InflightToken = { readonly [inflightTokenBrand]?: never }
+
 type InflightRecord = {
   /** Identity, so a detached lookup can only ever clear its own entry. */
-  token: object
+  token: InflightToken
   startedAt: number
   promise: Promise<HostedReviewInfo | null>
   /** Releases the callers and unpins the branch; idempotent. */
@@ -76,7 +82,7 @@ const KEY_SEPARATOR = '\0'
 
 export type HostedReviewBranchCacheIdentity = {
   repoPath: string
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
   branch: string
   linkedGitHubPR?: number | null
   fallbackGitHubPR?: number | null
@@ -94,14 +100,16 @@ export type HostedReviewBranchCacheOptions = {
   active?: boolean
 }
 
-/** Repo-scoped prefix so a single repo's entries can be dropped without a full flush. */
-function repoScope(repoPath: string, connectionId?: string | null): string {
-  return `${connectionId ?? ''}${KEY_SEPARATOR}${repoPath}`
+/** Repo-scoped prefix so a single repo's entries can be dropped without a full flush.
+ *  Keyed on the resolved host, not a raw connection id: two rows at one path on different hosts
+ *  are different repositories, and collapsing them serves one host's answer for the other. */
+function repoScope(repoPath: string, executionHostId: ExecutionHostId): string {
+  return `${executionHostId}${KEY_SEPARATOR}${repoPath}`
 }
 
 export function hostedReviewBranchCacheKey(identity: HostedReviewBranchCacheIdentity): string {
   return [
-    repoScope(identity.repoPath, identity.connectionId),
+    repoScope(identity.repoPath, identity.executionHostId),
     identity.branch,
     // Each linked id selects a different lookup, so it belongs in the identity.
     identity.linkedGitHubPR ?? '',
@@ -151,7 +159,7 @@ function storeEntry(key: string, entry: CacheEntry): void {
 }
 
 /** Clears the key's in-flight record only if it is still this lookup's. */
-function releaseInflight(key: string, token: object): boolean {
+function releaseInflight(key: string, token: InflightToken): boolean {
   if (inflight.get(key)?.token !== token) {
     return false
   }
@@ -203,9 +211,9 @@ function trackInflight(key: string, record: InflightRecord): void {
  */
 export function invalidateHostedReviewBranchCache(
   repoPath: string,
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
 ): void {
-  const scope = repoScope(repoPath, connectionId)
+  const scope = repoScope(repoPath, executionHostId)
   bumpScopeGeneration(scope)
   const prefix = `${scope}${KEY_SEPARATOR}`
   for (const key of entries.keys()) {
@@ -268,7 +276,7 @@ function startLookup(
 ): Promise<HostedReviewInfo | null> {
   const startedAt = Date.now()
   const generation = scopeGeneration(scope)
-  const token = {}
+  const token: InflightToken = {}
   /** The deadline released the callers; the lookup itself runs on, detached. */
   let timedOut = false
   let completed = false
@@ -424,5 +432,5 @@ export async function withHostedReviewBranchCache(
     throw new Error(unavailable)
   }
 
-  return startLookup(key, repoScope(identity.repoPath, identity.connectionId), headOid, lookup)
+  return startLookup(key, repoScope(identity.repoPath, identity.executionHostId), headOid, lookup)
 }

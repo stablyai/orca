@@ -207,6 +207,15 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     ).toBe(false)
   })
 
+  it('lets an idle Linux Process keydown reach xterm when Chromium marks it composing', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'Comma', keyCode: 229, isComposing: true }),
+        { ...idle, isMac: false, isLinux: true }
+      )
+    ).toBe(false)
+  })
+
   it('suppresses standalone Process keyups so kitty release reporting cannot leak', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(

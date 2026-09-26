@@ -11,9 +11,14 @@ import {
   dataFile,
   writeDataFile,
   readDataFile,
-  makeRepo
+  makeRepo,
+  makeTerminalTab
 } from './persistence-test-harness'
-import { TEST_LEAF_1 } from './persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
+import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../shared/constants'
+import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
+import { _resetTracerForTests, setActiveSink } from './observability/tracer'
+import { _resetPtyBindingSpanSamplingForTests } from './persistence/loading-store/pty-binding-span'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -64,6 +69,8 @@ describe('Store', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
+    _resetPtyBindingSpanSamplingForTests()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 10. flush writes synchronously ─────────────────────────────────
@@ -76,6 +83,26 @@ describe('Store', () => {
     const persisted = readDataFile() as { repos: Repo[] }
     expect(persisted.repos).toHaveLength(1)
     expect(persisted.repos[0].id).toBe('r1')
+  })
+
+  it('durably commits an exact JSON operation before a following microtask changes generation', async () => {
+    const store = await createStore()
+    const originalTabId = store.getWorkspaceSession().activeTabId
+    await store.runDurableMutation(() => {
+      store.updateSettings({ theme: 'dark' })
+      queueMicrotask(() => {
+        store.setWorkspaceSession({ ...store.getWorkspaceSession(), activeTabId: 'newer-tab' })
+      })
+      return { value: undefined }
+    })
+    expect(readDataFile()).toMatchObject({
+      settings: { theme: 'dark' },
+      workspaceSession: { activeTabId: originalTabId }
+    })
+    expect(store.getWorkspaceSession().activeTabId).toBe('newer-tab')
+    await store.flushPendingOrThrowAsync()
+    expect(readDataFile()).toHaveProperty(['workspaceSession', 'activeTabId'], 'newer-tab')
+    store.freezeWrites()
   })
 
   it('flush remains safe when a debounced save is also pending', async () => {
@@ -213,11 +240,11 @@ describe('Store', () => {
       leafId: TEST_LEAF_1,
       ptyId: 'daemon-pty'
     }
-    store.persistPtyBinding(binding)
+    await store.persistPtyBinding(binding)
     const inoBefore = statSync(dataFile()).ino
 
     // Warm-restart re-bind storm: an identical binding re-asserted with a sync flush must not rewrite.
-    store.persistPtyBinding(binding)
+    await store.persistPtyBinding(binding)
 
     expect(statSync(dataFile()).ino).toBe(inoBefore)
   })
@@ -378,5 +405,387 @@ describe('Store', () => {
     // The legacy key marks the state dirty at load; the next write drops it.
     store.flush()
     expect((readDataFile() as { githubCache?: unknown }).githubCache).toBeUndefined()
+  })
+
+  // ── persistPtyBinding fast lane ────────────────────────────────────
+
+  describe('persistPtyBinding fast lane', () => {
+    const WORKTREE = 'repo1::/worktree'
+    const binding = { worktreeId: WORKTREE, tabId: 'tab1', leafId: TEST_LEAF_1, ptyId: 'pty-1' }
+    const paneKey = `tab1:${TEST_LEAF_1}`
+
+    const boundSession = (
+      overrides: Partial<WorkspaceSessionState> = {}
+    ): WorkspaceSessionState => ({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'repo1',
+      activeWorktreeId: WORKTREE,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [WORKTREE]: [makeTerminalTab({ id: 'tab1', worktreeId: WORKTREE, ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      ...overrides
+    })
+
+    const runtimeCounters = (store: ReturnType<typeof createStore>) => {
+      const runtime = store['runtime']
+      return {
+        writeGeneration: runtime.writeGeneration,
+        lastDurableWriteGeneration: runtime.lastDurableWriteGeneration
+      }
+    }
+
+    afterEach(() => {
+      _resetTracerForTests()
+    })
+
+    it.each([undefined, 'ssh:ssh-1', 'runtime:runtime-1'])(
+      'skips the clone and the flush when the binding is already durable on %s',
+      async (hostId) => {
+        const store = await createStore()
+        store.setWorkspaceSession(boundSession(), hostId)
+        expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
+        const inoBefore = statSync(dataFile()).ino
+        const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+        const cloneSpy = vi.spyOn(globalThis, 'structuredClone')
+
+        expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
+
+        expect(runtimeCounters(store).lastDurableWriteGeneration).toBe(durableGenerationBefore)
+        expect(cloneSpy).not.toHaveBeenCalled()
+        expect(statSync(dataFile()).ino).toBe(inoBefore)
+      }
+    )
+
+    it('flushes while a save is pending, and the sync hash match makes the next call durable', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+      await store.persistPtyBinding(binding)
+      const inoBefore = statSync(dataFile()).ino
+      // Bumps the write generation without changing any binding.
+      store.setWorkspaceSession({ ...store.getWorkspaceSession() })
+      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+      expect(await store.persistPtyBinding(binding)).toBe(true)
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
+        durableGenerationBefore
+      )
+      expect(statSync(dataFile()).ino).toBe(inoBefore)
+
+      // Without the writeToDiskSync counter fix the hash-match flush leaves the durable
+      // generation one behind and this third bind would flush again.
+      expect(await store.persistPtyBinding(binding)).toBe(true)
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
+        durableGenerationBefore
+      )
+    })
+
+    it('falls through on an incarnation change and persists the new incarnation', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+      await store.persistPtyBinding({ ...binding, incarnationId: 'a' })
+      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+      expect(await store.persistPtyBinding({ ...binding, incarnationId: 'b' })).toBe(true)
+
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
+        durableGenerationBefore
+      )
+      expect(readDataFile()).toHaveProperty(
+        ['workspaceSession', 'terminalPtyIncarnationsByPaneKey', paneKey],
+        'b'
+      )
+    })
+
+    it('does not acknowledge an unpersisted binding published after the final flush', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+      await store.persistPtyBinding(binding)
+      await store.flushAsync()
+
+      const next = boundSession()
+      next.tabsByWorktree[WORKTREE][0].ptyId = 'pty-after-quit'
+      next.terminalLayoutsByTabId.tab1.ptyIdsByLeafId = { [TEST_LEAF_1]: 'pty-after-quit' }
+      expect(() => store.setWorkspaceSession(next)).toThrow('finalization')
+      Object.assign(store.getWorkspaceSession(), next)
+      expect(store.getWorkspaceSession().tabsByWorktree[WORKTREE][0].ptyId).toBe('pty-after-quit')
+
+      await expect(
+        store.persistPtyBinding({ ...binding, ptyId: 'pty-after-quit' })
+      ).rejects.toThrow('Cannot mutate finalized profile persistence')
+      expect(readDataFile()).toHaveProperty(
+        ['workspaceSession', 'tabsByWorktree', WORKTREE, '0', 'ptyId'],
+        'pty-1'
+      )
+    })
+
+    it('treats an undefined incarnation against a recorded one as a miss', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+      await store.persistPtyBinding({ ...binding, incarnationId: 'a' })
+      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+      expect(await store.persistPtyBinding(binding)).toBe(true)
+
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
+        durableGenerationBefore
+      )
+    })
+
+    it('falls through on a tombstone and lets the write path clear it', async () => {
+      const persisted = getDefaultPersistedState(testState.dir)
+      persisted.repos = [makeRepo({ id: 'repo1', path: '/repo1' })]
+      persisted.workspaceSession = boundSession({
+        terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-1' },
+        terminalSurfaceTombstonesByPaneKey: {
+          [paneKey]: {
+            worktreeId: WORKTREE,
+            parentTabId: 'tab1',
+            leafId: TEST_LEAF_1,
+            ptyId: 'pty-1',
+            incarnationId: 'inc-1',
+            retiredAt: 1
+          }
+        }
+      })
+      writeDataFile(persisted)
+      const store = await createStore()
+      expect(
+        store.getWorkspaceSession().terminalSurfaceTombstonesByPaneKey?.[paneKey]
+      ).toBeDefined()
+      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+      expect(await store.persistPtyBinding({ ...binding, incarnationId: 'inc-1' })).toBe(true)
+
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
+        durableGenerationBefore
+      )
+      expect(
+        store.getWorkspaceSession().terminalSurfaceTombstonesByPaneKey?.[paneKey]
+      ).toBeUndefined()
+    })
+
+    it('still bumps the topology fence for a reconciled incarnation', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(
+        boundSession({ terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' } })
+      )
+      await store.persistPtyBinding({ ...binding, incarnationId: 'inc-stale' })
+      const revisionBefore =
+        store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo1 ?? 0
+      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+      expect(
+        await store.persistPtyBinding({
+          ...binding,
+          incarnationId: 'inc-live',
+          expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+        })
+      ).toBe(true)
+
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
+        durableGenerationBefore
+      )
+      expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo1).toBe(
+        revisionBefore + 1
+      )
+    })
+
+    it('keeps every refusal ahead of the fast lane', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(
+        boundSession({ terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-1' } })
+      )
+      await store.persistPtyBinding({ ...binding, incarnationId: 'inc-1' })
+      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+      const refusals = [
+        {
+          ...binding,
+          expectedSourceBinding: { tabId: 'other-tab', leafId: TEST_LEAF_1, ptyId: 'pty-1' }
+        },
+        { ...binding, incarnationId: 'inc-1', expectedBinding: { ptyId: 'pty-other' } },
+        { ...binding, tabId: 'missing-tab', mayCreate: false }
+      ]
+      for (const refusal of refusals) {
+        expect(await store.persistPtyBinding(refusal)).toBe(false)
+      }
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBe(durableGenerationBefore)
+    })
+
+    it.each([undefined, 'ssh:ssh-1', 'runtime:runtime-1'])(
+      'flushes unrelated dirty state once, then skips unchanged reattachments on %s',
+      async (hostId) => {
+        const store = await createStore()
+        store.setWorkspaceSession(boundSession(), hostId)
+        expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
+        store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
+        const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+        expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
+        expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
+
+        expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
+          durableGenerationBefore
+        )
+        expect(readDataFile()).toMatchObject({
+          repos: expect.arrayContaining([expect.objectContaining({ id: 'r-dirty' })])
+        })
+      }
+    )
+
+    it('flushes again once the session object is replaced', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+      await store.persistPtyBinding(binding)
+      // A renderer publish schedules another save, so global durability must be re-established.
+      store.setWorkspaceSession({ ...store.getWorkspaceSession() })
+      store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
+      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+      expect(await store.persistPtyBinding(binding)).toBe(true)
+
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
+        durableGenerationBefore
+      )
+    })
+
+    it('flushes a changed pty for a pane whose old binding was durable', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+      await store.persistPtyBinding(binding)
+      store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
+      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+      expect(await store.persistPtyBinding({ ...binding, ptyId: 'pty-next' })).toBe(true)
+
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
+        durableGenerationBefore
+      )
+      expect(readDataFile()).toHaveProperty(
+        ['workspaceSession', 'terminalLayoutsByTabId', 'tab1', 'ptyIdsByLeafId', TEST_LEAF_1],
+        'pty-next'
+      )
+    })
+
+    it('lets every pane of a split tab hit the fast lane', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(
+        boundSession({
+          terminalLayoutsByTabId: {
+            tab1: {
+              root: {
+                type: 'split',
+                direction: 'vertical',
+                first: { type: 'leaf', leafId: TEST_LEAF_1 },
+                second: { type: 'leaf', leafId: TEST_LEAF_2 }
+              },
+              activeLeafId: TEST_LEAF_2,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1', [TEST_LEAF_2]: 'pty-2' }
+            }
+          }
+        })
+      )
+      const sibling = { ...binding, leafId: TEST_LEAF_2, ptyId: 'pty-2' }
+      // First remount after a cold park: both panes reattach back to back.
+      expect(await store.persistPtyBinding(binding)).toBe(true)
+      expect(await store.persistPtyBinding(sibling)).toBe(true)
+      expect(store.getWorkspaceSession().tabsByWorktree?.[WORKTREE]?.[0]?.ptyId).toBe('pty-1')
+      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+      // Second remount: neither pane may rewrite the tab row, so neither flushes.
+      expect(await store.persistPtyBinding(sibling)).toBe(true)
+      expect(await store.persistPtyBinding(binding)).toBe(true)
+
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBe(durableGenerationBefore)
+      expect(store.getWorkspaceSession().tabsByWorktree?.[WORKTREE]?.[0]?.ptyId).toBe('pty-1')
+    })
+
+    it('resolves the SSH partition without re-pointing it', async () => {
+      const store = await createStore()
+      const hostId = 'ssh:ssh-1'
+      store.setWorkspaceSession(boundSession(), hostId)
+      expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
+      const partitionBefore = store.getWorkspaceSession(hostId)
+      const partitionsBefore = store['runtime'].state.workspaceSessionsByHostId
+      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
+
+      expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
+
+      expect(runtimeCounters(store).lastDurableWriteGeneration).toBe(durableGenerationBefore)
+      expect(store.getWorkspaceSession(hostId)).toBe(partitionBefore)
+      expect(store['runtime'].state.workspaceSessionsByHostId).toBe(partitionsBefore)
+      expect(store.getWorkspaceSession().tabsByWorktree?.[WORKTREE]).toBeUndefined()
+    })
+
+    it('records a sync hash match as durable', async () => {
+      const store = await createStore()
+      store.addRepo(makeRepo())
+      store.flushOrThrow()
+      const inoBefore = statSync(dataFile()).ino
+      const after = runtimeCounters(store)
+      expect(after.lastDurableWriteGeneration).toBe(after.writeGeneration)
+
+      store.flushOrThrow()
+
+      expect(statSync(dataFile()).ino).toBe(inoBefore)
+      const counters = runtimeCounters(store)
+      expect(counters.writeGeneration).toBe(after.writeGeneration + 1)
+      expect(counters.lastDurableWriteGeneration).toBe(counters.writeGeneration)
+    })
+
+    it('emits one persistence.pty-binding span per call with its outcome', async () => {
+      const records: unknown[] = []
+      setActiveSink({
+        push: (record) => {
+          records.push(record)
+        },
+        flush: () => {},
+        close: () => {}
+      })
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+
+      await store.persistPtyBinding(binding)
+      await store.persistPtyBinding(binding)
+      await store.persistPtyBinding({ ...binding, tabId: 'missing-tab', mayCreate: false })
+
+      const spans = records.filter(
+        (record) =>
+          typeof record === 'object' &&
+          record !== null &&
+          'name' in record &&
+          record.name === 'persistence.pty-binding'
+      )
+      expect(spans).toMatchObject([
+        {
+          attributes: {
+            'binding.outcome': 'flushed',
+            'binding.eligible': false,
+            'binding.misses': 'not_durable'
+          }
+        },
+        {
+          attributes: {
+            'binding.outcome': 'fast_lane',
+            'binding.eligible': true,
+            'binding.generation_gap': 0,
+            'binding.host': 'local'
+          }
+        },
+        { attributes: { 'binding.outcome': 'refused' } }
+      ])
+      expect(JSON.stringify(spans)).not.toContain(TEST_LEAF_1)
+      expect(JSON.stringify(spans)).not.toContain('pty-1')
+    })
   })
 })

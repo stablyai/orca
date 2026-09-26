@@ -2,24 +2,55 @@
 // way the terminal wire harness is: current code against a real published release.
 //
 // Three skews matter here, and none can be checked from one build alone — an old
-// client must not be shown a session it cannot render, a new client must find an
-// old host's missing surface cleanly, and a client's cursor must survive the host
-// process that minted it.
+// client must not receive a journal-backed RPC surface it cannot read, a new client
+// must find an old host's missing surface cleanly, and a client's cursor must survive
+// the host process that minted it.
+//
+// The session-tabs projection may keep a metadata-only row for an incapable mobile client so the
+// chat is not simply absent on the phone. Every `agentSession.*` method and destructive close stays
+// refused, which is what the tests below pin; the row-level behaviour is pinned in
+// src/main/runtime/rpc/methods/session-tab-agent-status-projection.test.ts.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
-import { attachFingerprintFields } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
-import type { AgentSessionAttachParams } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-attach'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
-import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
+import { RuntimeSubscriptionRegistry } from '../../../src/main/runtime/runtime-subscription-registry'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import { resolveBaselineReleaseRef } from './release-checkout'
+import {
+  installableHost,
+  structuredHostStub,
+  turnItemSkew
+} from './structured-agent-session-host-fixture'
+import {
+  attachParams,
+  createIntentParams,
+  NOW,
+  paramsFor,
+  resetOperationIds,
+  REWIND_METHOD,
+  CONVERSATION_OUTLINE_METHOD,
+  envelope,
+  STATUS_FEED_METHOD,
+  sendParams,
+  SESSION,
+  STRUCTURED_CALLS,
+  THREAD,
+  WORKSPACE
+} from './structured-agent-session-surface-manifest'
 import {
   loadAgentSessionWireBuild,
   WORKING_TREE,
@@ -31,80 +62,11 @@ import {
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
 const SUITE_TIMEOUT_MS = 180_000
 
-const SESSION = 'session-alpha'
-const WORKSPACE = 'workspace-1'
-const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
-const NOW = 1_800_000_000_000
-
-/** Every method the structured surface publishes: the host method it must reach,
- *  and the result it must hand back. A gate that hides one method and leaks
- *  another is the bug; so is a method that is registered and answers with an
- *  error, which is why `result` is declared per method rather than inferred from
- *  "did not say method_not_found". `result` is omitted only where the method
- *  legitimately answers with no reply at all. */
-const STRUCTURED_CALLS: {
-  method: string
-  hostMethod: string | null
-  result?: Record<string, unknown>
-}[] = [
-  { method: 'agentSession.createSupport', hostMethod: null, result: { supported: true } },
-  {
-    method: 'agentSession.create',
-    hostMethod: 'attach',
-    result: { ok: true, replayed: false, value: { sessionId: SESSION } }
-  },
-  {
-    method: 'agentSession.ensure',
-    hostMethod: 'attach',
-    result: { ok: true, replayed: false, value: { sessionId: SESSION } }
-  },
-  { method: 'agentSession.send', hostMethod: 'send', result: { ok: true, replayed: false } },
-  { method: 'agentSession.cancel', hostMethod: 'cancel', result: { ok: true, replayed: false } },
-  { method: 'agentSession.close', hostMethod: 'close', result: { ok: true } },
-  {
-    method: 'agentSession.respondToApproval',
-    hostMethod: 'respondToPrompt',
-    result: { ok: true, replayed: false }
-  },
-  {
-    method: 'agentSession.respondToQuestion',
-    hostMethod: 'respondToPrompt',
-    result: { ok: true, replayed: false }
-  },
-  {
-    method: 'agentSession.setOption',
-    hostMethod: 'setOption',
-    result: { ok: true, replayed: false }
-  },
-  {
-    method: 'agentSession.handoffStatus',
-    hostMethod: 'handoffStatus',
-    result: { owner: 'native' }
-  },
-  {
-    method: 'agentSession.options',
-    hostMethod: 'readOptions',
-    result: { current: { model: 'gpt-live' } }
-  },
-  { method: 'agentSession.hold', hostMethod: 'hold', result: { held: true } },
-  { method: 'agentSession.release', hostMethod: 'release', result: { released: true } },
-  {
-    method: 'agentSession.history',
-    hostMethod: 'history',
-    result: { ok: true, page: { items: [] } }
-  },
-  // A subscription that opens with nothing to say answers with no reply at all,
-  // so reaching the host is the only signal that the gate opened.
-  { method: 'agentSession.subscribe', hostMethod: 'subscribe' },
-  // Teardown runs through the runtime's subscription registry rather than the
-  // host, so its reply is the only signal that the gate opened.
-  { method: 'agentSession.unsubscribe', hostMethod: null, result: { unsubscribed: true } }
-]
+const CLIENT_CAPABILITY_UPDATE_METHOD = 'runtime.clientCapabilities.update'
 
 let baselineRef: string
 let current: AgentSessionWireBuild
 let baseline: AgentSessionWireBuild
-let operations = 0
 
 beforeAll(async () => {
   baselineRef = resolveBaselineReleaseRef()
@@ -112,108 +74,11 @@ beforeAll(async () => {
   baseline = await loadAgentSessionWireBuild(baselineRef)
 }, SUITE_TIMEOUT_MS)
 
-/** `<13-digit ms>-<32 hex>`, the only shape the durable ledger accepts. */
-function operationId(): string {
-  operations += 1
-  return `${NOW}-${operations.toString(16).padStart(32, '0')}`
-}
-
-function envelope(args: {
-  method: string
-  fields: Record<string, unknown>
-  fence: number | null
-}): Record<string, unknown> {
-  return {
-    sessionId: SESSION,
-    clientOperationId: operationId(),
-    expectedRuntimeFence: args.fence,
-    payloadFingerprint: computeAgentSessionPayloadFingerprint({
-      method: args.method,
-      sessionId: SESSION,
-      fields: args.fields
-    })
-  }
-}
-
-function attachParams(fence: number | null): Record<string, unknown> {
-  const params = {
-    envelope: { sessionId: SESSION, clientOperationId: operationId(), expectedRuntimeFence: fence },
-    location: {
-      executionHostId: 'local',
-      wslDistro: null,
-      workspaceId: WORKSPACE,
-      workspaceKind: 'git-worktree'
-    },
-    provider: 'codex',
-    agent: 'codex',
-    accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-    runtimeKind: 'native',
-    providerHandle: { kind: 'codex', threadId: THREAD }
-  }
-  return {
-    ...params,
-    envelope: {
-      ...params.envelope,
-      payloadFingerprint: computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.attach',
-        sessionId: SESSION,
-        fields: attachFingerprintFields(params as unknown as AgentSessionAttachParams)
-      })
-    }
-  }
-}
-
-function createIntentParams(): Record<string, unknown> {
-  const worktree = `id:${WORKSPACE}`
-  const fields = { worktree, agent: 'codex' }
-  return { envelope: envelope({ method: 'agentSession.create', fields, fence: null }), ...fields }
-}
-
-function sendParams(text: string, fence: number): Record<string, unknown> {
-  const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
-  return { envelope: envelope({ method: 'agentSession.send', fields: { body }, fence }), body }
-}
-
-/** Schema-valid params per method; values only need to survive validation. */
-function paramsFor(method: string): unknown {
-  const fence = 1
-  switch (method) {
-    case 'agentSession.createSupport':
-      return { worktree: `id:${WORKSPACE}`, agent: 'codex' }
-    case 'agentSession.create':
-      return createIntentParams()
-    case 'agentSession.ensure':
-      return attachParams(fence)
-    case 'agentSession.send':
-      return sendParams('hi', fence)
-    case 'agentSession.cancel':
-      return {
-        envelope: envelope({ method: 'agentSession.cancel', fields: { turnId: 'turn-1' }, fence }),
-        turnId: 'turn-1'
-      }
-    case 'agentSession.respondToApproval':
-    case 'agentSession.respondToQuestion': {
-      const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
-      return { envelope: envelope({ method, fields, fence }), ...fields }
-    }
-    case 'agentSession.setOption': {
-      const fields = { key: 'model', value: 'gpt-5' }
-      return { envelope: envelope({ method, fields, fence }), ...fields }
-    }
-    case 'agentSession.history':
-      return { sessionId: SESSION, direction: 'tail' }
-    case 'agentSession.hold':
-    case 'agentSession.release':
-      return { sessionId: SESSION, holderId: 'surface-1' }
-    default:
-      return { sessionId: SESSION }
-  }
-}
-
 function runtimeStub(): unknown {
-  const cleanups = new Map<string, () => void>()
+  const subscriptions = new RuntimeSubscriptionRegistry()
   return {
     getRuntimeId: () => 'runtime-1',
+    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     ensureStructuredAgentSessionHost: async () => undefined,
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async () => {
@@ -225,19 +90,10 @@ function runtimeStub(): unknown {
       return resolved
     },
     publishStructuredAgentSessionTab: () => {},
-    registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup),
-    cleanupSubscription: (id: string) => {
-      cleanups.get(id)?.()
-      cleanups.delete(id)
-    },
-    cleanupSubscriptionsByPrefix: (prefix: string) => {
-      for (const [id, cleanup] of cleanups) {
-        if (id.startsWith(prefix)) {
-          cleanup()
-          cleanups.delete(id)
-        }
-      }
-    }
+    registerSubscriptionCleanup: subscriptions.register.bind(subscriptions),
+    registerOwnedSubscriptionCleanup: subscriptions.registerOwned.bind(subscriptions),
+    cleanupSubscription: subscriptions.cleanup.bind(subscriptions),
+    cleanupSubscriptionsByPrefix: subscriptions.cleanupByPrefix.bind(subscriptions)
   }
 }
 
@@ -277,28 +133,6 @@ async function callBuild(
       client
     )
   return replies
-}
-
-/** The host every skew installs to drive the surface: enough of the real host's
- *  shape for each handler to run, and a spy per method so "which call reached the
- *  host" is answerable per call rather than per suite. */
-function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
-  return {
-    attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId: SESSION } })),
-    send: vi.fn(async () => ({ ok: true, replayed: false })),
-    cancel: vi.fn(async () => ({ ok: true, replayed: false })),
-    close: vi.fn(async () => undefined),
-    hold: vi.fn(async () => undefined),
-    release: vi.fn(() => undefined),
-    respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
-    setOption: vi.fn(async () => ({ ok: true, replayed: false })),
-    requestHandoff: vi.fn(async () => ({ status: { owner: 'native' } })),
-    handoffStatus: vi.fn(async () => ({ owner: 'native' })),
-    readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
-    history: vi.fn(() => ({ ok: true, page: { items: [] } })),
-    subscribe: vi.fn(() => () => undefined),
-    unsubscribe: vi.fn()
-  }
 }
 
 /**
@@ -367,9 +201,9 @@ describe('cross-version structured agent sessions', () => {
     let hostCalls: Record<string, ReturnType<typeof vi.fn>>
 
     beforeEach(() => {
-      operations = 0
-      hostCalls = structuredHostStub()
-      setStructuredAgentSessionHost(hostCalls as unknown as StructuredAgentSessionHost)
+      resetOperationIds()
+      hostCalls = structuredHostStub(SESSION, WORKSPACE)
+      setStructuredAgentSessionHost(installableHost(hostCalls))
     })
 
     afterEach(() => {
@@ -404,9 +238,24 @@ describe('cross-version structured agent sessions', () => {
     })
   })
 
+  describe('a client that predates the turn item', () => {
+    beforeEach(() => turnItemSkew.install(SESSION, WORKSPACE))
+    afterEach(() => setStructuredAgentSessionHost(null))
+
+    it('is published the status carrier where a capable client gets the turn item', async () => {
+      const params = paramsFor('agentSession.history')
+      for (const [clientCapabilities, item] of turnItemSkew.clients(baseline, current)) {
+        const client = { clientKind: 'runtime' as const, clientCapabilities }
+        const replies = await callBuild(current, 'agentSession.history', params, client)
+        expect(replies[0]).toMatchObject({ ok: true, result: { page: { items: [item] } } })
+      }
+    })
+  })
+
   describe('a new client against an old host', () => {
     it('registers the whole surface on the new build', () => {
       expect(current.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+      expect(current.capabilities).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
       expect(current.methodNames.filter((name) => name.startsWith('agentSession.'))).toHaveLength(
         STRUCTURED_CALLS.length
       )
@@ -420,6 +269,22 @@ describe('cross-version structured agent sessions', () => {
       expect(baseline.capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)).toBe(
         baselineStructuredMethods().length > 0
       )
+      // The status feed is additive to a surface that already shipped, so it carries its own
+      // capability or a client cannot tell "host too old" from "the call failed" — and it
+      // would relay-retry a method_not_found forever instead of degrading once.
+      for (const build of [current, baseline]) {
+        expect(build.capabilities.includes(AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY)).toBe(
+          build.methodNames.includes(STATUS_FEED_METHOD)
+        )
+        expect(build.capabilities.includes(AGENT_SESSION_REWIND_RUNTIME_CAPABILITY)).toBe(
+          build.methodNames.includes(REWIND_METHOD)
+        )
+        // The message rail probes this before asking, so an older host leaves it on loaded
+        // messages instead of answering method_not_found.
+        expect(
+          build.capabilities.includes(AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY)
+        ).toBe(build.methodNames.includes(CONVERSATION_OUTLINE_METHOD))
+      }
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
       expect(current.protocolVersion).toBe(baseline.protocolVersion)
@@ -450,6 +315,41 @@ describe('cross-version structured agent sessions', () => {
       }
     })
 
+    it('takes structured question answers exactly where the host advertises them', async () => {
+      // A client sends `answers` only on this capability, so the two must never disagree:
+      // a strict older schema refuses the field and the answer is lost rather than degraded.
+      const method = 'agentSession.respondToQuestion'
+      const fields = {
+        itemId: 'item-1',
+        expectedRevision: 1,
+        answers: [{ questionId: 'q1', optionIds: [], other: 'Wait for the capture. '.repeat(80) }]
+      }
+      const params = { envelope: envelope({ method, fields, fence: 1 }), ...fields }
+      expect(current.capabilities).toContain(AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY)
+      for (const build of [current, baseline]) {
+        const advertised = build.capabilities.includes(
+          AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY
+        )
+        if (!build.methodNames.includes(method)) {
+          expect(advertised, `${build.label} advertises answers without the method`).toBe(false)
+          continue
+        }
+        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
+        await build.installStructuredHost(installableHost(hostCalls))
+        try {
+          const replies = await callBuild(build, method, params, {
+            clientKind: 'runtime',
+            clientCapabilities: current.capabilities
+          })
+          expect(replies, `${build.label}: ${method} must answer exactly once`).toHaveLength(1)
+          expect(replies[0]?.ok, `${build.label}: ${JSON.stringify(replies[0])}`).toBe(advertised)
+          expect(hostCalls.respondToPrompt).toHaveBeenCalledTimes(advertised ? 1 : 0)
+        } finally {
+          await build.installStructuredHost(null)
+        }
+      }
+    })
+
     it(
       'executes every method a release-shaped checkout registers',
       async () => {
@@ -468,8 +368,8 @@ describe('cross-version structured agent sessions', () => {
         // anti-vacuous guard: without it every host-backed method answers
         // `structured_agent_session_unsupported`, the same words the capability
         // gate uses, and the run would read as a refusal rather than a miss.
-        const hostCalls = structuredHostStub()
-        await releasedCurrent.installStructuredHost(hostCalls)
+        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
+        await releasedCurrent.installStructuredHost(installableHost(hostCalls))
         try {
           await expectDeclaredSurfaceExecutes(
             releasedCurrent,
@@ -482,6 +382,49 @@ describe('cross-version structured agent sessions', () => {
       },
       SUITE_TIMEOUT_MS
     )
+  })
+
+  describe('post-auth mobile capability negotiation', () => {
+    it('is an additive method that lets the current host record mobile capabilities', async () => {
+      const updates: string[][] = []
+
+      const replies = await callBuild(
+        current,
+        CLIENT_CAPABILITY_UPDATE_METHOD,
+        { clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] },
+        {
+          clientKind: 'mobile',
+          clientCapabilities: [],
+          updateClientCapabilities: (capabilities) => updates.push([...capabilities])
+        }
+      )
+
+      expect(current.methodNames).toContain(CLIENT_CAPABILITY_UPDATE_METHOD)
+      expect(current.protocolVersion).toBe(baseline.protocolVersion)
+      expect(replies).toHaveLength(1)
+      expect(replies[0]).toMatchObject({
+        ok: true,
+        result: { clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] }
+      })
+      expect(updates).toEqual([[STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]])
+    })
+
+    it('gets a normal answer from an old host instead of changing the auth shape', async () => {
+      const replies = await callBuild(
+        baseline,
+        CLIENT_CAPABILITY_UPDATE_METHOD,
+        { clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] },
+        { clientKind: 'mobile', clientCapabilities: [] }
+      )
+
+      expect(replies).toHaveLength(1)
+      if (!baseline.methodNames.includes(CLIENT_CAPABILITY_UPDATE_METHOD)) {
+        expect(replies[0]).toMatchObject({
+          ok: false,
+          error: { code: 'method_not_found' }
+        })
+      }
+    })
   })
 
   describe('an old client against a structured-owned AI Vault row', () => {
@@ -679,6 +622,10 @@ describe('cross-version structured agent sessions', () => {
     /** Phase 2 owns provider processes; the adapter is the only stub here. */
     function adapter(): StructuredAgentSessionAdapter {
       return {
+        // Every real adapter answers this; without it adapterSupportsCreate falls through to
+        // `supportsLocation`, which this fake also lacks, so the client-supplied-location gate
+        // refused for the fake's silence rather than for the location.
+        supportsCreate: () => true,
         acquire: async ({ fence }) => ({
           process: {
             hostId: 'local',
@@ -775,7 +722,7 @@ describe('cross-version structured agent sessions', () => {
     }
 
     beforeEach(async () => {
-      operations = 0
+      resetOperationIds()
       root = await mkdtemp(join(tmpdir(), 'orca-cross-version-agent-session-'))
       runtime = runtimeStub()
       await bootHost('a')
@@ -816,15 +763,17 @@ describe('cross-version structured agent sessions', () => {
       expect(batch?.cursor.sequence).toBeGreaterThan(held.sequence)
     })
 
-    it('refuses a write still fenced to the host generation that died', async () => {
+    // Every released client still sends the fence it last saw; this host names a write by its
+    // target and ignores that fence. Only the attach keeps comparing one, which `reattach` pins.
+    it('delivers a write still fenced to the host generation that died', async () => {
       const created = await answer('agentSession.create', createIntentParams())
       await bootHost('b')
       const reattached = await reattach(created.fence)
       expect(reattached.fence).toBeGreaterThan(created.fence)
 
       expect(await answer('agentSession.send', sendParams('stale', created.fence))).toMatchObject({
-        ok: false,
-        refusal: { code: 'agent_session_checkpoint_stale' }
+        ok: true,
+        fence: reattached.fence
       })
     })
   })

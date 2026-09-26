@@ -3,7 +3,10 @@
 // Passing the host itself would let this quietly grow new dependencies; an explicit context makes
 // each one a deliberate addition and keeps the orchestration testable without constructing a host.
 
-import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionTurnActivity,
+  AgentSessionWireRefusal
+} from '../../../shared/agent-session-wire'
 import type { AgentJournalResetReason } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
@@ -25,10 +28,18 @@ export type StructuredAgentSessionAttachContext = {
       fence: number
     ) => void
     snapshot: (sessionId: string, journal: AgentSessionJournal, fence: number) => void
-    publish: (sessionId: string, journal: AgentSessionJournal) => void
+    publish: (
+      sessionId: string,
+      journal: AgentSessionJournal,
+      activity?: AgentSessionTurnActivity | null
+    ) => void
   }
   tasks: StructuredAgentSessionTaskQueue
   reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
+  /** Paired with `sessions.delete` by `forgetStructuredAgentSession`; a failed attach that only
+   *  deleted would leave the store's row behind. */
+  forgetStatus: (sessionId: string) => void
+  publishStatus?: (sessionId: string) => void
 }

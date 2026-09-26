@@ -6,7 +6,6 @@ import {
 } from '../../../../shared/agent-status-identity'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { track } from '@/lib/telemetry'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
@@ -18,11 +17,10 @@ import {
   hasRuntimeBackedWorktreeAttribution,
   isAgentStatusForRecentlyClosedTab,
   resolveHookPayloadAgentType,
-  resolvePaneKey,
-  resolveWorktreeConnection,
   shouldApplyResolvedAgentTerminalTitleToTab
 } from './agent-status-routing'
 import {
+  createAgentStatusPaneRoutingIndex,
   resolvePaneKeyFromRoutingIndex,
   resolveWorktreeConnectionFromRoutingIndex
 } from './agent-status-pane-routing-index'
@@ -31,7 +29,10 @@ import type {
   AgentStatusApplyResult,
   PendingAgentStatusEvent
 } from './agent-status-bridge-types'
-import { normalizeAgentStatusEvent } from './normalize-agent-status-event'
+import {
+  normalizeAgentStatusEvent,
+  normalizeAgentStatusMetadata
+} from './normalize-agent-status-event'
 
 export function createAgentStatusEventApplicator(args: {
   pendingAgentStatusEvents: PendingAgentStatusEvent[]
@@ -51,7 +52,9 @@ export function createAgentStatusEventApplicator(args: {
     if (!store.workspaceSessionReady) {
       return 'dropped'
     }
-    if (isAgentStatusForRecentlyClosedTab(store, data.paneKey)) {
+    const authorityRestartId =
+      options?.replay !== true && data.agentType === 'omp' ? data.authorityRestartId : undefined
+    if (isAgentStatusForRecentlyClosedTab(store, data.paneKey, authorityRestartId)) {
       return 'dropped'
     }
     const paneKey = resolveAgentPaneAuthorityKey(data.paneKey)
@@ -60,6 +63,8 @@ export function createAgentStatusEventApplicator(args: {
     if (!payload) {
       return 'dropped'
     }
+    // Reuse first-match pane ownership without rescanning every worktree per event.
+    const routingIndex = options?.batch?.routingIndex ?? createAgentStatusPaneRoutingIndex(store)
     let {
       exists,
       title,
@@ -67,10 +72,9 @@ export function createAgentStatusEventApplicator(args: {
       repoConnectionId,
       repoConnectionResolved,
       owningWorktreeId,
-      titleUsesTabTitle
-    } = options?.batch
-      ? resolvePaneKeyFromRoutingIndex(options.batch.routingIndex, paneKey)
-      : resolvePaneKey(store, paneKey)
+      titleUsesTabTitle,
+      tabTitle
+    } = resolvePaneKeyFromRoutingIndex(routingIndex, paneKey)
     const projectedTitles =
       titleUsesTabTitle && ownerTabId
         ? options?.batch?.projectedTitlesByTabId.get(ownerTabId)
@@ -79,10 +83,17 @@ export function createAgentStatusEventApplicator(args: {
       title = projectedTitles.title
       identityTitle = projectedTitles.identityTitle
     }
-    if (!exists && data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
-      const fallbackOwnership = options?.batch
-        ? resolveWorktreeConnectionFromRoutingIndex(options.batch.routingIndex, data.worktreeId)
-        : resolveWorktreeConnection(store, data.worktreeId)
+    tabTitle = options?.batch?.tabTitlesByTabId.get(ownerTabId ?? '') ?? tabTitle
+    if (
+      !exists &&
+      !authorityRestartId &&
+      data.worktreeId &&
+      hasRuntimeBackedWorktreeAttribution(data)
+    ) {
+      const fallbackOwnership = resolveWorktreeConnectionFromRoutingIndex(
+        routingIndex,
+        data.worktreeId
+      )
       if (fallbackOwnership.worktreeExists) {
         owningWorktreeId = data.worktreeId
         repoConnectionId = fallbackOwnership.repoConnectionId
@@ -205,18 +216,6 @@ export function createAgentStatusEventApplicator(args: {
     ) {
       return 'dropped'
     }
-    if (
-      shouldSuppressCodexAutoApprovalStatus(statusPayload, {
-        paneKey,
-        tabId: ownerTabId,
-        terminalHandle: data.terminalHandle,
-        launchToken: data.launchToken,
-        providerSession: data.providerSession,
-        existingProviderSession: existingStatus?.providerSession
-      })
-    ) {
-      return 'dropped'
-    }
     const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
     const statusWorktreeId = data.worktreeId ?? owningWorktreeId
     const update: AgentStatusUpdate = {
@@ -225,6 +224,9 @@ export function createAgentStatusEventApplicator(args: {
       terminalTitle,
       timing: {
         updatedAt: data.receivedAt,
+        ...(data.evidenceObservedAt !== undefined
+          ? { evidenceObservedAt: data.evidenceObservedAt }
+          : {}),
         stateStartedAt: data.stateStartedAt
       },
       routing: {
@@ -233,13 +235,7 @@ export function createAgentStatusEventApplicator(args: {
         terminalHandle: data.terminalHandle,
         ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
       },
-      metadata:
-        data.providerSession || data.launchToken
-          ? {
-              ...(data.providerSession ? { providerSession: data.providerSession } : {}),
-              ...(data.launchToken ? { launchToken: data.launchToken } : {})
-            }
-          : undefined
+      metadata: normalizeAgentStatusMetadata(data, authorityRestartId)
     }
     const applyPostCommitNotification = (): void => {
       if (statusWorktreeId && (options?.replay !== true || resolvedPayload.state === 'working')) {
@@ -262,14 +258,13 @@ export function createAgentStatusEventApplicator(args: {
       options.batch.notificationEffects.push(applyPostCommitNotification)
       if (
         terminalTitle &&
-        shouldApplyResolvedAgentTerminalTitleToTab(store, paneKey, title, terminalTitle)
+        shouldApplyResolvedAgentTerminalTitleToTab(store, paneKey, tabTitle, terminalTitle)
       ) {
-        const tabId = parsePaneKey(paneKey)?.tabId
-        if (tabId) {
-          options.batch.tabTitlesByTabId.set(tabId, terminalTitle)
+        if (ownerTabId) {
+          options.batch.tabTitlesByTabId.set(ownerTabId, terminalTitle)
           if (titleUsesTabTitle) {
             const titleChanges = !title || !isDecorativeAgentTitleFrameChange(title, terminalTitle)
-            options.batch.projectedTitlesByTabId.set(tabId, {
+            options.batch.projectedTitlesByTabId.set(ownerTabId, {
               title: titleChanges ? terminalTitle : title,
               identityTitle: titleChanges ? terminalTitle : identityTitle
             })
@@ -285,7 +280,7 @@ export function createAgentStatusEventApplicator(args: {
         update.routing,
         update.metadata
       )
-      applyResolvedAgentTerminalTitleToTab(useAppStore.getState(), paneKey, title, terminalTitle)
+      applyResolvedAgentTerminalTitleToTab(useAppStore.getState(), paneKey, tabTitle, terminalTitle)
       applyPostCommitNotification()
     }
     return 'applied'

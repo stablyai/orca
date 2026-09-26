@@ -29,6 +29,7 @@ export function reinstallRemoteWatchersForConnectionCore(
     install: InstallRemoteWatcher
     requestResync: RequestRemoteWatcherResync
     scheduleRetry: ScheduleRemoteWatcherRetry
+    scheduleDormant: (connectionId: string, worktreePath: string) => void
   }
 ): void {
   if (watcherLifecycleState.remoteWatchersClosed) {
@@ -90,6 +91,10 @@ export function reinstallRemoteWatchersForConnectionCore(
           desired.worktreePath,
           listeners.filter((_, index) => results[index] === 'installed')
         )
+        if (results.some((result) => result === 'capacity')) {
+          dependencies.scheduleDormant(desired.connectionId, desired.worktreePath)
+          return
+        }
         if (results.some((result) => result === 'unavailable')) {
           for (const listener of listeners) {
             dependencies.scheduleRetry(

@@ -12,10 +12,10 @@ import {
 import { projectIpcPtyConnectResult } from './ipc-pty-connect-result'
 import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2e-barrier'
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
+import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 
-const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
@@ -24,6 +24,10 @@ type IpcPtyConnectContext = {
   transportOptions: IpcPtyTransportOptions
   handlers: IpcPtySessionHandlers
   isDestroyed: () => boolean
+  /** True only for the one buffered exit consumed by this connect attempt. */
+  isExpectedExitCurrent: () => boolean
+  ownsPtyId: (id: string) => boolean
+  handleExplicitlyClosedConnect?: (id: string) => boolean
   bind: (id: string) => void
   isCurrent: (id: string) => boolean
   setCallbacks: (callbacks: PtyConnectOptions['callbacks']) => void
@@ -35,7 +39,7 @@ export async function connectIpcPty(
   context: IpcPtyConnectContext
 ): Promise<void | string | PtyConnectResult> {
   const { transportOptions, handlers } = context
-  const { onPtySpawn } = transportOptions
+  const { onPtySpawn, retainDisposedSpawn } = transportOptions
   context.setCallbacks(options.callbacks)
   ensurePtyDispatcher()
 
@@ -44,11 +48,20 @@ export async function connectIpcPty(
   }
   if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
     if (options.admitPtyId && !options.admitPtyId(options.sessionId)) {
-      return { id: options.sessionId }
+      return context.isDestroyed() ? undefined : { id: options.sessionId }
+    }
+    if (context.isDestroyed()) {
+      return
     }
     context.bind(options.sessionId)
     handlers.registerData(options.sessionId)
+    if (context.isDestroyed()) {
+      return
+    }
     handlers.registerExit(options.sessionId)
+    if (!context.isExpectedExitCurrent()) {
+      return
+    }
     return { id: options.sessionId, exitedBeforeAttach: true }
   }
 
@@ -76,22 +89,39 @@ export async function connectIpcPty(
     // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
-    const retireFreshSpawn = async (): Promise<void> => {
-      if (!spawnResult.isReattach && !spawnResult.coldRestore) {
+    const retireFreshSpawn = async (path: 'disposed' | 'refused'): Promise<void> => {
+      if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
+        return
+      }
+      // A newer generation may already own a recycled id; an id-only kill would retire its PTY.
+      if (spawnResult.isReattach || spawnResult.coldRestore || context.ownsPtyId(spawnResult.id)) {
+        return
+      }
+      // Only disposed transports can have a successor; live refusal must still retire the PTY (#11003).
+      const retained = path === 'disposed' && retainDisposedSpawn?.() === true
+      if (!retained) {
         await window.api.pty.kill(spawnResult.id)
       }
     }
 
     if (context.isDestroyed()) {
-      await retireFreshSpawn()
+      await retireFreshSpawn('disposed')
       return
     }
     if (options.admitPtyId && !options.admitPtyId(spawnResult.id)) {
-      await retireFreshSpawn()
-      return spawnResult
+      await retireFreshSpawn('refused')
+      return context.isDestroyed() ? undefined : spawnResult
+    }
+    if (context.isDestroyed()) {
+      await retireFreshSpawn('disposed')
+      return
     }
     if (spawnResult.isReattach && !admittedSessionId) {
       context.getCallbacks().onReattachDetermined?.()
+      if (context.isDestroyed()) {
+        await retireFreshSpawn('disposed')
+        return
+      }
     }
 
     // Why unconditional: this runs on identity, not timing. Whatever we attached to — fresh,
@@ -106,20 +136,41 @@ export async function connectIpcPty(
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)
+      if (context.isDestroyed()) {
+        return
+      }
     }
     handlers.registerData(spawnResult.id)
+    if (context.isDestroyed()) {
+      return
+    }
     const exitedBeforeAttach = handlers.registerExit(spawnResult.id, spawnResult.incarnationId)
     if (exitedBeforeAttach) {
+      if (!context.isExpectedExitCurrent()) {
+        return
+      }
       return { id: spawnResult.id, exitedBeforeAttach: true }
+    }
+    if (context.isDestroyed()) {
+      return
     }
     if (!context.isCurrent(spawnResult.id)) {
       return
     }
 
     context.getCallbacks().onConnect?.()
+    if (context.isDestroyed() || !context.isCurrent(spawnResult.id)) {
+      return
+    }
     context.getCallbacks().onStatus?.('shell')
+    if (context.isDestroyed() || !context.isCurrent(spawnResult.id)) {
+      return
+    }
     return projectIpcPtyConnectResult(spawnResult)
   } catch (error) {
+    if (context.isDestroyed()) {
+      return
+    }
     return handleConnectError(error, options, context)
   }
 }
@@ -134,15 +185,21 @@ function handleConnectError(
     error,
     error instanceof Error ? error.message : String(error)
   )
-  if (
-    connectionId &&
-    options.sessionId &&
-    (message.includes(SSH_SESSION_EXPIRED_ERROR) ||
-      message.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER))
-  ) {
+  if (connectionId && options.sessionId && isSshSessionGoneError(message)) {
     return { id: options.sessionId, sessionExpired: true }
   }
   if (message.includes('was explicitly killed')) {
+    return undefined
+  }
+  if (connectionId && options.sessionId && message.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER)) {
+    // Why not `sessionExpired`: this string is minted by `toRelaySshPtyId`/`toAppSshPtyId` from a
+    // pure client-side id comparison, before any relay is contacted — it reports that the id is not
+    // addressable through THIS connection, never that its process died. Respawning here cold-restores
+    // the agent, and after an SSH target re-adoption the "other" connection is the same machine, so
+    // that puts a second `claude --resume` on the transcript the surviving PTY still owns
+    // (docs/reference/ssh-execution-boundary.md — an unaddressable id is `unverifiable`, not `exited`).
+    // Returning undefined without an error keeps #7661's no-red-toast outcome while routing the pane
+    // to the remount-and-reattach recovery instead of a fresh shell.
     return undefined
   }
   if (connectionId && message.includes('No PTY provider for connection')) {

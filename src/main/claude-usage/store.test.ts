@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from './types'
-import type * as Scanner from './scanner'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
@@ -15,13 +14,12 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./scanner', async (importOriginal) => ({
-  ...(await importOriginal<typeof Scanner>()),
-  scanClaudeUsageFiles: vi.fn()
+vi.mock('../usage/usage-scan-worker-spawn', () => ({
+  scanClaudeUsageFilesViaWorker: vi.fn()
 }))
 
 import { ClaudeUsageStore, initClaudeUsagePath } from './store'
-import { scanClaudeUsageFiles } from './scanner'
+import { scanClaudeUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
 
 function createBackingStore(): ConstructorParameters<typeof ClaudeUsageStore>[0] {
   return {
@@ -51,6 +49,42 @@ function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): Claude
   return store
 }
 
+function createWorktreeUsageSession(worktreeId: string) {
+  const tokens = {
+    turnCount: 1,
+    inputTokens: 1000,
+    outputTokens: 500,
+    cacheReadTokens: 200,
+    cacheWriteTokens: 100,
+    cacheWrite1hTokens: 0
+  }
+  return {
+    sessionId: 'session-1',
+    firstTimestamp: '2026-04-09T15:00:00.000Z',
+    lastTimestamp: '2026-04-09T15:05:00.000Z',
+    model: 'claude-sonnet-4-6',
+    lastCwd: '/workspace/repo-a',
+    lastGitBranch: 'feature/a',
+    primaryWorktreeId: worktreeId,
+    primaryRepoId: 'repo-1',
+    totalInputTokens: 1000,
+    totalOutputTokens: 500,
+    totalCacheReadTokens: 200,
+    totalCacheWriteTokens: 100,
+    totalCacheWrite1hTokens: 0,
+    ...tokens,
+    locationBreakdown: [
+      {
+        locationKey: `worktree:${worktreeId}`,
+        projectLabel: 'Repo A',
+        repoId: 'repo-1',
+        worktreeId,
+        ...tokens
+      }
+    ]
+  }
+}
+
 describe('ClaudeUsageStore', () => {
   let tempUserData: string
 
@@ -58,8 +92,8 @@ describe('ClaudeUsageStore', () => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-claude-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initClaudeUsagePath()
-    vi.mocked(scanClaudeUsageFiles).mockReset()
-    vi.mocked(scanClaudeUsageFiles).mockResolvedValue({
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
       processedFiles: [],
       sessions: [],
       dailyAggregates: []
@@ -546,7 +580,7 @@ describe('ClaudeUsageStore', () => {
     expect(summary.estimatedCostUsd).toBeCloseTo(220.5)
   })
 
-  it('prices Sonnet long-context usage with threshold rates', async () => {
+  it('prices Sonnet 4.6 long-context usage at its flat 1M-window rates', async () => {
     const store = createStoreWithState({
       dailyAggregates: [
         {
@@ -569,7 +603,7 @@ describe('ClaudeUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(8.07)
+    expect(summary.estimatedCostUsd).toBeCloseTo(6.615)
   })
 
   it('returns automation usage for a single matching worktree session', async () => {
@@ -582,38 +616,7 @@ describe('ClaudeUsageStore', () => {
         lastScanCompletedAt: 2,
         lastScanError: null
       },
-      sessions: [
-        {
-          sessionId: 'session-1',
-          firstTimestamp: '2026-04-09T15:00:00.000Z',
-          lastTimestamp: '2026-04-09T15:05:00.000Z',
-          model: 'claude-sonnet-4-6',
-          lastCwd: '/workspace/repo-a',
-          lastGitBranch: 'feature/a',
-          primaryWorktreeId: worktreeId,
-          primaryRepoId: 'repo-1',
-          turnCount: 1,
-          totalInputTokens: 1000,
-          totalOutputTokens: 500,
-          totalCacheReadTokens: 200,
-          totalCacheWriteTokens: 100,
-          totalCacheWrite1hTokens: 0,
-          locationBreakdown: [
-            {
-              locationKey: `worktree:${worktreeId}`,
-              projectLabel: 'Repo A',
-              repoId: 'repo-1',
-              worktreeId,
-              turnCount: 1,
-              inputTokens: 1000,
-              outputTokens: 500,
-              cacheReadTokens: 200,
-              cacheWriteTokens: 100,
-              cacheWrite1hTokens: 0
-            }
-          ]
-        }
-      ]
+      sessions: [createWorktreeUsageSession(worktreeId)]
     })
     const refreshMock = vi.fn().mockResolvedValue({
       enabled: true,
@@ -648,6 +651,48 @@ describe('ClaudeUsageStore', () => {
     expect(refreshMock).toHaveBeenCalledWith(false)
   })
 
+  it('forces one scan per run and stops re-forcing after a failed attempt', async () => {
+    const completedAt = Date.parse('2026-04-09T15:06:00.000Z')
+    const scanError = 'EMFILE: too many open files'
+    const failedScanState = (lastScanStartedAt: number) => ({
+      enabled: true,
+      lastScanStartedAt,
+      lastScanCompletedAt: completedAt - 60_000,
+      lastScanError: scanError
+    })
+    const scanStateResult = {
+      enabled: true,
+      isScanning: false,
+      lastScanStartedAt: completedAt - 60_000,
+      lastScanCompletedAt: completedAt - 60_000,
+      lastScanError: scanError,
+      hasAnyClaudeData: false
+    }
+    const request = {
+      worktreeId: 'repo-1::/workspace/repo-a',
+      terminalSessionId: 'tab-1',
+      startedAt: completedAt - 120_000,
+      completedAt
+    }
+
+    const beforeAttempt = createStoreWithState({
+      scanState: failedScanState(completedAt - 60_000)
+    })
+    const beforeRefresh = vi.spyOn(beforeAttempt, 'refresh').mockResolvedValue(scanStateResult)
+    await beforeAttempt.getAutomationRunUsage(request)
+
+    expect(beforeRefresh).toHaveBeenCalledWith(true)
+
+    // That forced scan failed: it recorded an attempt but no completion. Later
+    // lookups must not keep forcing a full rescan of all Claude history.
+    const afterAttempt = createStoreWithState({ scanState: failedScanState(completedAt + 1000) })
+    const afterRefresh = vi.spyOn(afterAttempt, 'refresh').mockResolvedValue(scanStateResult)
+    const usage = await afterAttempt.getAutomationRunUsage(request)
+
+    expect(afterRefresh).toHaveBeenCalledWith(false)
+    expect(usage.unavailableReason).toBe('scan_failed')
+  })
+
   it('adapts Claude scans to pretty-printed cache persistence', async () => {
     const store = createStoreWithState({
       schemaVersion: 5,
@@ -661,7 +706,64 @@ describe('ClaudeUsageStore', () => {
 
     await store.refresh(true)
 
-    expect(scanClaudeUsageFiles).toHaveBeenCalledWith([], [])
+    expect(scanClaudeUsageFilesViaWorker).toHaveBeenCalledWith([], [])
     expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
+  })
+
+  it('joins a scan that is already in flight when the run finished before it started', async () => {
+    const worktreeId = 'repo-1::/workspace/repo-a'
+    const store = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+    // Prime the worktree fingerprint so an unforced refresh can return early.
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockResolvedValue({
+      processedFiles: [],
+      sessions: [],
+      dailyAggregates: []
+    })
+    await store.refresh(true)
+
+    const completedAt = Date.now() + 10_000
+    vi.setSystemTime(new Date(completedAt + 1_000))
+
+    let startScan = () => {}
+    let finishScan = () => {}
+    const scanStarted = new Promise<void>((resolve) => {
+      startScan = resolve
+    })
+    const scanFinished = new Promise<void>((resolve) => {
+      finishScan = resolve
+    })
+    vi.mocked(scanClaudeUsageFilesViaWorker).mockImplementationOnce(async () => {
+      startScan()
+      await scanFinished
+      return {
+        processedFiles: [],
+        sessions: [createWorktreeUsageSession(worktreeId)],
+        dailyAggregates: []
+      }
+    })
+
+    const inFlight = store.refresh(true)
+    await scanStarted
+
+    const usage = store.getAutomationRunUsage({
+      worktreeId,
+      terminalSessionId: 'session-1',
+      startedAt: completedAt - 60_000,
+      completedAt
+    })
+    finishScan()
+    await inFlight
+
+    // The in-flight scan's start time is not a finished attempt, so the lookup
+    // forces and rides that scan instead of reading a pre-run cache.
+    expect((await usage).status).toBe('known')
+    expect((await usage).providerSessionId).toBe('session-1')
   })
 })

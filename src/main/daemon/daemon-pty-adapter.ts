@@ -1,8 +1,15 @@
+import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
+import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { IPtyProvider } from '../providers/types'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+  /** Identity of the daemon behind this adapter; null until hello completes or after a disconnect. */
+  getDaemonIdentity(): DaemonEndpointIdentity | null {
+    return this.client.getDaemonIdentity()
+  }
+
   protected setupEventRouting(): void {
     if (this.removeEventListener) {
       return
@@ -16,8 +23,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
 
       if (event.event === 'data') {
         this.markSessionDirty(event.sessionId)
-        // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-        for (const listener of [...this.dataListeners]) {
+        emitPtyListeners(this.dataListeners, (listener) =>
           listener({
             id: event.sessionId,
             data: event.payload.data,
@@ -27,7 +33,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
             ...(event.payload.transformed ? { transformed: true } : {}),
             ...(event.payload.seq === undefined ? {} : { seq: event.payload.seq })
           })
-        }
+        )
       } else if (event.event === 'sessionBackgroundMarker') {
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
@@ -64,6 +70,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           fact: event.payload
         })
       } else if (event.event === 'exit') {
+        const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
         const pendingOperations = new Set([
           ...(this.pendingSpawnOperationsBySessionId.get(event.sessionId) ?? []),
           ...this.pendingClaimSpawnOperations
@@ -75,52 +82,30 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           }
           const exits = operation.exitsBySessionId.get(event.sessionId) ?? []
           exits.push(
-            event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}
+            event.payload.incarnationId
+              ? { code: event.payload.code, incarnationId: event.payload.incarnationId }
+              : { code: event.payload.code }
           )
           operation.exitsBySessionId.set(event.sessionId, exits)
         }
-        const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)
+        // Keep a raced exit available to the in-flight spawn even when the
+        // adapter still remembers the predecessor's generation. Only the
+        // generation currently published by this adapter may clear state or
+        // notify listeners.
         if (
-          event.payload.incarnationId &&
-          currentIncarnationId &&
+          currentIncarnationId !== undefined &&
           event.payload.incarnationId !== currentIncarnationId
         ) {
           return
         }
-        this.activeSessionIds.delete(event.sessionId)
-        this.clearSessionAwaitingDaemonRecovery(event.sessionId)
-        this.dirtySessionVersions.delete(event.sessionId)
-        this.pausedProducerSessionIds.delete(event.sessionId)
-        this.producerResumesOwedOnReconnect.delete(event.sessionId)
-        this.backgroundedSessionIds.delete(event.sessionId)
-        if (!this.sleepRestoreSessionIds.has(event.sessionId)) {
-          this.coldRestoreCache.delete(event.sessionId)
-        }
-        this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
-        this.sessionsNeedingLiveCheckpoint.delete(event.sessionId)
-        this.sessionsNeedingContinuityCheckpoint.delete(event.sessionId)
-        this.overlayDeadlineWarnedSessionIds.delete(event.sessionId)
-        this.periodicDeadlineWarnedSessionIds.delete(event.sessionId)
-        this.nonFinalAdmissionDeniedSessionIds.delete(event.sessionId)
-        this.lastFullCheckpointAt.delete(event.sessionId)
-        this.stopCheckpointTimerIfIdle()
-        if (this.historyManager) {
-          void this.historyManager
-            .closeSession(event.sessionId, event.payload.code)
-            .catch((err) => console.warn('[history] closeSession failed:', event.sessionId, err))
-        }
-        this.initialCwds.delete(event.sessionId)
-        this.wslDistrosBySessionId.delete(event.sessionId)
-        this.sessionIncarnations.delete(event.sessionId)
-        // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
-        for (const listener of [...this.exitListeners]) {
-          listener({
-            id: event.sessionId,
-            code: event.payload.code,
-            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}),
-            ...(event.payload.cause ? { cause: event.payload.cause } : {})
-          })
-        }
+        this.clearExitedSessionState(
+          event.sessionId,
+          event.payload.code,
+          event.payload.incarnationId
+        )
+        emitPtyListeners(this.exitListeners, (listener) =>
+          listener(createPtyExitPayload(event.sessionId, event.payload))
+        )
       }
     })
   }

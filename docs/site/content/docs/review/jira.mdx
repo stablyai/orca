@@ -3,7 +3,7 @@ title: Jira items drawer
 description: Browse, edit, and link Jira Cloud or self-hosted Server/Data Center issues to worktrees the same way you link Linear or GitHub items.
 ---
 
-import { Callout } from '@/components/docs/prose';
+import { Callout } from '@/components/docs/prose'
 
 Jira sits next to GitHub and Linear in the task drawer. Browse Jira issues, update them, and create a worktree from any issue without leaving Orca.
 
@@ -27,7 +27,9 @@ Jira sits next to GitHub and Linear in the task drawer. Browse Jira issues, upda
   - **Username and password** — Basic auth for older instances without PATs.
 
 <Callout title="Use HTTPS">
-Use an `https://` URL for Cloud and self-hosted Jira whenever possible. Orca sends credentials in the `Authorization` header; plain HTTP can expose them on the network. If a server only offers HTTP, put it behind a trusted HTTPS tunnel or VPN before connecting.
+  Use an `https://` URL for Cloud and self-hosted Jira whenever possible. Orca sends credentials in
+  the `Authorization` header; plain HTTP can expose them on the network. If a server only offers
+  HTTP, put it behind a trusted HTTPS tunnel or VPN before connecting.
 </Callout>
 
 4. Click **Connect**. Orca verifies the credentials and loads your sites.
@@ -47,7 +49,9 @@ If you don't use Jira at all, hide it from the source picker via [Settings → T
 - Orca remembers your last-used task source per repo, so a Jira-driven repo defaults to Jira on next open.
 
 <Callout title="Where credentials live">
-Your Atlassian API token or self-hosted credentials are encrypted via the OS keychain and stored locally — they're only used to call your configured Jira site. Revoke tokens from Atlassian account settings if you stop using Orca.
+  Your Atlassian API token or self-hosted credentials are encrypted via the OS keychain and stored
+  locally — they're only used to call your configured Jira site. Revoke tokens from Atlassian
+  account settings if you stop using Orca.
 </Callout>
 
 ## Next steps

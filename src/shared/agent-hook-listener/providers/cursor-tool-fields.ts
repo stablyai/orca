@@ -35,6 +35,7 @@ export function extractCursorToolFields(
       const responseText = extractToolResponseText(hookPayload.tool_output)
       if (responseText) {
         update.lastAssistantMessage = responseText
+        update.lastAssistantMessageIsToolOutput = true
       }
     }
     if (eventName === 'postToolUseFailure') {
@@ -44,6 +45,7 @@ export function extractCursorToolFields(
         readString(hookPayload, 'error')
       if (errorText) {
         update.lastAssistantMessage = errorText
+        update.lastAssistantMessageIsToolOutput = true
       }
     }
     return update

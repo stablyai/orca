@@ -3,9 +3,30 @@ import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { extractString, normalizeTitleText, parseJsonObject } from './session-scanner-values'
 import { remoteSessionContentLines } from './remote-session-content-lines'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
-import type { RemoteSessionFilesystemProvider } from './remote-session-scanner-types'
+import type {
+  RemoteScannerContext,
+  RemoteSessionFilesystemProvider
+} from './remote-session-scanner-types'
 
 const CODEX_SESSION_INDEX_FILE = 'session_index.jsonl'
+
+// One index read per CODEX_HOME per scan (`context.titleCaches` is scan-scoped);
+// used both by the transcript parse and by the parse cache's reuse path.
+export function remoteCodexIndexedTitleReader(
+  codexHome: string,
+  context: RemoteScannerContext
+): (sessionId: string) => Promise<string | null> {
+  return async (sessionId) =>
+    (
+      await remoteCodexIndexTitles({
+        provider: context.provider,
+        codexHome,
+        hostPlatform: context.hostPlatform,
+        titleCaches: context.titleCaches,
+        signal: context.signal
+      })
+    ).get(sessionId) ?? null
+}
 
 export async function remoteCodexIndexTitles(args: {
   provider: RemoteSessionFilesystemProvider

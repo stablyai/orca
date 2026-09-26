@@ -23,3 +23,9 @@ main/ipc/preflight-command-exec.ts
 main/ipc/preflight-test-harness.ts
 main/ipc/preflight-wsl-agent-detection.ts
 main/wsl.ts
+# Scanned only because the filename starts with `wsl`; it answers nothing about a
+# distro. The swallow is a `statSync` on a LOCAL WINDOWS directory, and only the
+# positive answer is memoized -- and re-validated on every call, which is the
+# point of the module (#16463). A failed stat drops to the next candidate for
+# that one call and is re-asked on the next, so there is no value to pin.
+main/wsl-interop-spawn-directory.ts

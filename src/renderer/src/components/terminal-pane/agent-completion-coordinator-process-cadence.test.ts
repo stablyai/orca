@@ -232,6 +232,11 @@ describe('agent completion coordinator', () => {
     vi.advanceTimersByTime(750)
     await flushAsyncTicks()
 
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1_500)
+    await flushAsyncTicks()
+
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
     expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
       source: 'process-exit',
@@ -248,8 +253,9 @@ describe('agent completion coordinator', () => {
       getSettings: () => null,
       inspectProcess: vi.fn(async () => ({
         foregroundProcess: null,
-        hasChildProcesses: true,
-        unavailable: true as const
+        hasChildProcesses: false as const,
+        verdict: 'unverifiable' as const,
+        reason: 'transport_loss' as const
       })),
       dispatchCompletion,
       isLive: () => true
@@ -273,8 +279,9 @@ describe('agent completion coordinator', () => {
       getSettings: () => null,
       inspectProcess: vi.fn(async () => ({
         foregroundProcess: null,
-        hasChildProcesses: true,
-        unavailable: true as const
+        hasChildProcesses: false as const,
+        verdict: 'unverifiable' as const,
+        reason: 'transport_loss' as const
       })),
       dispatchCompletion,
       isLive: () => true
@@ -288,7 +295,25 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledExactlyOnceWith('done')
   })
 
-  it('resets exit confirmation across an unavailable inspection', async () => {
+  it.each([
+    {
+      label: 'client-only uncertainty',
+      result: {
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        verdict: 'unverifiable',
+        reason: 'transport_loss'
+      } satisfies RuntimeTerminalProcessInspection
+    },
+    {
+      label: 'host child-process uncertainty',
+      result: {
+        foregroundProcess: '/bin/zsh',
+        hasChildProcesses: false,
+        childProcessEvidence: 'unverifiable'
+      } satisfies RuntimeTerminalProcessInspection
+    }
+  ])('resets exit confirmation across $label', async ({ result: unavailableResult }) => {
     let result: RuntimeTerminalProcessInspection = processResult('codex')
     const dispatchCompletion = vi.fn()
     const coordinator = createAgentCompletionCoordinator({
@@ -304,13 +329,16 @@ describe('agent completion coordinator', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     result = processResult(null, false)
     await vi.advanceTimersByTimeAsync(750)
-    result = { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
+    result = unavailableResult
     await vi.advanceTimersByTimeAsync(750)
     result = processResult(null, false)
+
+    // Unavailable evidence resets the exit candidate, so the next idle sample
+    // begins a fresh settle interval instead of completing the earlier one.
     await vi.advanceTimersByTimeAsync(1_500)
     expect(dispatchCompletion).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(750)
+    await vi.advanceTimersByTimeAsync(2_250)
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
   })
 
@@ -384,7 +412,7 @@ describe('agent completion coordinator', () => {
     await vi.advanceTimersByTimeAsync(2_000)
 
     foregroundProcess = null
-    await vi.advanceTimersByTimeAsync(1_500)
+    await vi.advanceTimersByTimeAsync(3_000)
 
     expect(shouldSuppressConfirmedProcessExitCompletion).toHaveBeenCalledWith({
       agent: 'codex',

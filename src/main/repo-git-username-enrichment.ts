@@ -32,7 +32,16 @@ async function enrichRepoGitUsernamesInBackground(
   store: RepoUsernameStore,
   options: EnrichmentOptions
 ): Promise<void> {
-  const candidates = store.getRepos().filter(
+  const repos = store.getRepos()
+  const liveLocations = new Set(
+    repos.filter((repo) => repo.kind !== 'folder' && !repo.connectionId).map(getRepoLocationKey)
+  )
+  for (const location of attemptedLocations) {
+    if (!liveLocations.has(location)) {
+      attemptedLocations.delete(location)
+    }
+  }
+  const candidates = repos.filter(
     (repo) =>
       repo.kind !== 'folder' &&
       // Why: SSH repo paths are remote; local git cannot inspect them. The

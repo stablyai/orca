@@ -83,6 +83,39 @@ function expectedManagedCommand(scriptPath: string): string {
 }
 
 describe('Codex WSL runtime hook install', () => {
+  it('coalesces launch installs for one home without blocking independent homes', async () => {
+    const service = new CodexHookService()
+    const releases: (() => void)[] = []
+    const started: string[] = []
+    vi.spyOn(service, 'installForRuntimeHome').mockImplementation(async (runtimeHomePath) => {
+      if (!runtimeHomePath) {
+        throw new Error('expected a runtime home')
+      }
+      started.push(runtimeHomePath)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      return {
+        agent: 'codex',
+        state: 'installed',
+        configPath: `${runtimeHomePath}\\hooks.json`,
+        managedHooksPresent: true,
+        detail: null
+      }
+    })
+    const firstHome = '\\\\wsl$\\Ubuntu\\home\\Alice\\.codex'
+    const alias = firstHome.replace('\\\\wsl$', '\\\\wsl.localhost')
+    const independent = firstHome.replace('\\Alice\\', '\\Bob\\')
+    const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
+
+    const first = service.prepareRuntimeHomeForLaunch(firstHome, target, true)
+    const second = service.prepareRuntimeHomeForLaunch(alias, target, true)
+    const third = service.prepareRuntimeHomeForLaunch(independent, target, true)
+    await vi.waitFor(() => expect(started).toEqual([firstHome, independent]))
+
+    releases.splice(0).forEach((release) => release())
+    await Promise.all([first, second, third])
+    expect(started).toEqual([firstHome, independent])
+  })
+
   it('coalesces aliases of one runtime home without blocking independent homes', async () => {
     const service = new CodexHookService()
     const releases: (() => void)[] = []

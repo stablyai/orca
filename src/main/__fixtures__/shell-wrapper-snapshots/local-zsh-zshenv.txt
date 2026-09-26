@@ -60,6 +60,13 @@ __orca_deferred_init() {
   else
     precmd_functions=(${precmd_functions:#__orca_deferred_init})
   fi
+  if [ -n "${ORCA_WSL_CLI_DIR:-}" ]; then
+    if [ -x "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" ]; then
+      export PATH="$ORCA_WSL_CLI_DIR${PATH:+:$PATH}"
+    else
+      printf 'Orca CLI unavailable: cannot run %s. Check WSL Windows-drive mount options.\n' "$ORCA_WSL_CLI_DIR/${ORCA_CLI_COMMAND:-}" >&2
+    fi
+  fi
   if __orca_has_feature overlay; then
     # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
     __orca_restore_agent_teams_path() {
@@ -77,8 +84,8 @@ __orca_deferred_init() {
     # their normal argv shape.
     __orca_omp_should_skip_extension() {
       case "${1:-}" in
-        help|--help|-h|--version|-v) return 0 ;;
-        __complete|acp|agents|auth-broker|auth-gateway|bench|commit|completions|config|dry-balance|gallery|grep|grievances|install|join|models|plugin|read|say|search|setup|shell|ssh|stats|tiny-models|token|ttsr|update|usage|worktree|q|wt) return 0 ;;
+        'help'|'--help'|'-h'|'--version'|'-v') return 0 ;;
+        '__complete'|'acp'|'agents'|'auth-broker'|'auth-gateway'|'bench'|'commit'|'completions'|'config'|'dry-balance'|'gallery'|'grep'|'grievances'|'install'|'join'|'models'|'plugin'|'read'|'say'|'search'|'setup'|'shell'|'ssh'|'stats'|'tiny-models'|'token'|'ttsr'|'update'|'usage'|'worktree'|'q'|'wt') return 0 ;;
       esac
       return 1
     }

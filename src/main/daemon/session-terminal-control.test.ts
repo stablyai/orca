@@ -175,6 +175,48 @@ describe('Session terminal control', () => {
   })
 
   describe('producer flow control', () => {
+    it('client resume and its failsafe cannot release daemon stream backpressure', () => {
+      createSession()
+      session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.pauseProducer('stream')
+      session.pauseProducer()
+      session.resumeProducer()
+      expect(subprocess.resumeCalls).toBe(0)
+      session.pauseProducer()
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS * 2)
+      expect(subprocess.resumeCalls).toBe(0)
+      session.resumeProducer('stream')
+      expect(subprocess.resumeCalls).toBe(1)
+    })
+
+    it('draining the stream cannot release an outstanding client pause', () => {
+      createSession()
+      session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.pauseProducer()
+      session.pauseProducer('stream')
+      session.resumeProducer('stream')
+      expect(subprocess.resumeCalls).toBe(0)
+      session.resumeProducer()
+      expect(subprocess.resumeCalls).toBe(1)
+    })
+
+    it('detach and termination release daemon stream backpressure', () => {
+      createSession()
+      const client = { onData: () => {}, onExit: () => {} }
+      const token = session.attachClient(client)
+      session.pauseProducer('stream')
+      session.detachClient(token)
+      expect(subprocess.resumeCalls).toBe(1)
+      session.pauseProducer('stream')
+      expect(subprocess.pauseCalls).toBe(1)
+      session.attachClient(client)
+      session.pauseProducer('stream')
+      session.kill()
+      expect(subprocess.resumeCalls).toBe(2)
+      session.pauseProducer('stream')
+      expect(subprocess.pauseCalls).toBe(2)
+    })
+
     it('auto-resumes when the owner loses the resume signal', () => {
       createSession()
       session.pauseProducer()

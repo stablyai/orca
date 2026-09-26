@@ -3,7 +3,7 @@ import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { listRepoWorktrees } from '../../../repo-worktrees'
+import { listRepoWorktreesForDetectedScan } from '../../../repo-worktrees'
 import {
   getRegisteredWorktreeRootsRevision,
   registerWorktreeRootsForRepo
@@ -16,6 +16,13 @@ import {
   resetLocalWorktreeScanGenerationsForTests
 } from '../../../local-worktree-scan-generation'
 import { pruneLineageForMissingRepoWorktrees } from '../../../worktree-lineage-pruning'
+import {
+  __resetLocalWorktreeMetadataPruneGateForTests,
+  isLocalWorktreeMetadataPruneDue,
+  markLocalWorktreeMetadataPruneStarted,
+  recordLocalWorktreeListingForPruneGate,
+  requireLocalWorktreeMetadataPrune
+} from '../../../local-worktree-metadata-prune-gate'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
 
 // Why: absorb renderer polling bursts while bounding external worktree-change lag to one short refresh window.
@@ -24,12 +31,15 @@ export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
 export type DetectedWorktreeScanCacheEntry = {
   expiresAt: number
   worktrees: GitWorktreeInfo[]
+  /** The generation the cached scan began at: the catalog its rows describe. */
+  generation: number
 }
 
 export type DetectedWorktreeScan = {
   invalidated: boolean
   promise: Promise<GitWorktreeInfo[]>
   sideEffectToken: DetectedWorktreeSideEffectToken
+  hygieneDue: boolean
   metadataPrune?: DetectedWorktreeMetadataPrune
 }
 
@@ -45,7 +55,17 @@ export type DetectedWorktreeMetadataPrune = Readonly<{
 export type DetectedWorktreeScanResult = {
   gitWorktrees: GitWorktreeInfo[]
   fresh: boolean
+  /**
+   * The scan ran, but a worktree mutation invalidated it before it settled (or it joined such a
+   * scan). Its rows describe a catalog that no longer exists: they must not be published as
+   * authoritative, because a worktree added during the scan reads as absent, i.e. deleted.
+   */
+  superseded: boolean
+  /** The repo's scan generation when this scan began; the catalog version its rows describe. */
+  generation: number
   sideEffectToken?: DetectedWorktreeSideEffectToken
+  /** Whether this scan owns the repo's next store-hygiene pass; absent means "not from a local scan". */
+  hygieneDue?: boolean
   metadataPrune?: DetectedWorktreeMetadataPrune
 }
 
@@ -54,6 +74,7 @@ export const detectedWorktreeScanInFlight = new Map<string, DetectedWorktreeScan
 
 export function invalidateDetectedWorktreeScanCache(repoId: string): void {
   bumpLocalWorktreeScanGeneration(repoId)
+  requireLocalWorktreeMetadataPrune(repoId)
   const keyPrefix = `${repoId}\0`
   for (const key of new Set([
     ...detectedWorktreeScanCache.keys(),
@@ -80,6 +101,7 @@ export function __resetDetectedWorktreeScanCacheForTests(): void {
   detectedWorktreeScanCache.clear()
   detectedWorktreeScanInFlight.clear()
   resetLocalWorktreeScanGenerationsForTests()
+  __resetLocalWorktreeMetadataPruneGateForTests()
 }
 
 export function __getDetectedWorktreeScanCacheStatsForTests(): {
@@ -98,21 +120,38 @@ export async function listDetectedGitWorktrees(
 ): Promise<DetectedWorktreeScanResult> {
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   if (repo.connectionId || isFolderRepo(repo)) {
+    const generation = getLocalWorktreeScanGeneration(repo.id)
     return {
-      gitWorktrees: await listRepoWorktrees(repo, localWorktreeGitOptions),
-      fresh: true
+      gitWorktrees: await listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
+      fresh: true,
+      superseded: false,
+      generation
     }
   }
 
   const cacheKey = getDetectedWorktreeScanCacheKey(repo.id, localWorktreeGitOptions)
   const cached = detectedWorktreeScanCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) {
-    return { gitWorktrees: cached.worktrees, fresh: false }
+    return {
+      gitWorktrees: cached.worktrees,
+      fresh: false,
+      superseded: false,
+      generation: cached.generation
+    }
   }
 
   const inFlight = detectedWorktreeScanInFlight.get(cacheKey)
   if (inFlight) {
-    return { gitWorktrees: await inFlight.promise, fresh: false }
+    const gitWorktrees = await inFlight.promise
+    // Why: a joiner inherits the scan's staleness, not just its rows.
+    return {
+      gitWorktrees,
+      fresh: false,
+      superseded:
+        inFlight.invalidated ||
+        !isLocalWorktreeScanGenerationCurrent(repo.id, inFlight.sideEffectToken.generation),
+      generation: inFlight.sideEffectToken.generation
+    }
   }
 
   // Why: capture before invoking Git because listing can mutate synchronously before its first await.
@@ -120,13 +159,21 @@ export async function listDetectedGitWorktrees(
   // those aliases equivalent, so only native-host scans carry destructive expectations.
   const generation = getLocalWorktreeScanGeneration(repo.id)
   const authorizedRootsRevision = getRegisteredWorktreeRootsRevision(repo.id)
-  const metadataPruneExpectation = localWorktreeGitOptions.wslDistro
-    ? undefined
-    : store.captureNativeLocalWorktreeMetadataScanExpectation(repo)
+  // Why: capturing the expectation walks the repo's whole metadata table and the prune that follows
+  // stats every path-missing row, so both run only against evidence that the answer changed (#17775).
+  const hygieneDue = isLocalWorktreeMetadataPruneDue(repo.id)
+  if (hygieneDue) {
+    markLocalWorktreeMetadataPruneStarted(repo.id)
+  }
+  const metadataPruneExpectation =
+    hygieneDue && !localWorktreeGitOptions.wslDistro
+      ? store.captureNativeLocalWorktreeMetadataScanExpectation(repo)
+      : undefined
   const scan: DetectedWorktreeScan = {
     invalidated: false,
-    promise: listRepoWorktrees(repo, localWorktreeGitOptions),
+    promise: listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
     sideEffectToken: { generation, authorizedRootsRevision },
+    hygieneDue,
     ...(metadataPruneExpectation
       ? {
           metadataPrune: {
@@ -138,6 +185,12 @@ export async function listDetectedGitWorktrees(
   detectedWorktreeScanInFlight.set(cacheKey, scan)
   try {
     const gitWorktrees = await scan.promise
+    // Why: the backstop signal. A listing that no longer matches the one the last pass ran against
+    // invalidates its conclusions even when no event reported the change.
+    recordLocalWorktreeListingForPruneGate(
+      repo.id,
+      gitWorktrees.map((worktree) => worktree.path)
+    )
     const routingUnchanged =
       getDetectedWorktreeScanCacheKey(repo.id, getLocalProjectWorktreeGitOptions(store, repo)) ===
       cacheKey
@@ -146,14 +199,17 @@ export async function listDetectedGitWorktrees(
     if (!scan.invalidated && routingUnchanged && generationCurrent) {
       detectedWorktreeScanCache.set(cacheKey, {
         worktrees: gitWorktrees,
-        expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS
+        expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
+        generation
       })
     }
     const fresh = !scan.invalidated && routingUnchanged && generationCurrent
     return {
       gitWorktrees,
       fresh,
-      ...(fresh ? { sideEffectToken: scan.sideEffectToken } : {}),
+      superseded: !fresh,
+      generation,
+      ...(fresh ? { sideEffectToken: scan.sideEffectToken, hygieneDue: scan.hygieneDue } : {}),
       ...(fresh && scan.metadataPrune ? { metadataPrune: scan.metadataPrune } : {})
     }
   } finally {
@@ -172,9 +228,11 @@ export async function applyFreshDetectedWorktreeScanSideEffects(
     isCurrent?: () => boolean
     sideEffectToken?: DetectedWorktreeSideEffectToken
     signal?: AbortSignal
+    /** Undefined means the caller owns no cadence (non-local providers); it keeps the eager behavior. */
+    hygieneDue?: boolean
   } = {}
 ): Promise<boolean> {
-  const { isCurrent = () => true, sideEffectToken, signal } = options
+  const { isCurrent = () => true, sideEffectToken, signal, hygieneDue = true } = options
   const generationCurrent = () =>
     sideEffectToken === undefined ||
     isLocalWorktreeScanGenerationCurrent(repo.id, sideEffectToken.generation)
@@ -211,12 +269,17 @@ export async function applyFreshDetectedWorktreeScanSideEffects(
     return false
   }
   rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-  pruneLineageForMissingRepoWorktrees(
-    store,
-    repo,
-    gitWorktrees,
-    preservedMetadataCandidateIds ? { preservedMetadataCandidateIds } : undefined
-  )
+  // Why: lineage retention is decided against the metadata rows the prune preserved, so running it
+  // without that pass would drop lineage for rows the pass would have kept. Both halves share the
+  // hygiene cadence instead.
+  if (hygieneDue) {
+    pruneLineageForMissingRepoWorktrees(
+      store,
+      repo,
+      gitWorktrees,
+      preservedMetadataCandidateIds ? { preservedMetadataCandidateIds } : undefined
+    )
+  }
   return true
 }
 

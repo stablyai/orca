@@ -1,19 +1,26 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { join } from 'node:path'
-import { copyFileDurable } from '../../durable-file-write'
+// Republishing a live item set into a fresh epoch.
+//
+// One transaction: discard every row, insert the epoch row plus the replacement
+// items, move the session projection, and retire any repair marker — this
+// republished history is exactly what the marker was holding out for.
+
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { compactJournal, type JournalCompactionPolicy } from './journal-compaction'
-import { JOURNAL_LOG_FILE, JOURNAL_SNAPSHOT_FILE, appendJournalRows } from './journal-log-file'
+import type Database from '../../sqlite/sync-database'
+import type { JournalLoad } from './journal-open'
+import { clearJournalRepairMarker } from './journal-repair-marker'
 import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import { buildJournalItemRow, journalRowBase } from './journal-row-builders'
+import {
+  deleteAllJournalRows,
+  insertJournalRow,
+  upsertJournalSessionRow
+} from './journal-row-table'
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
-import { journalRowByteLength } from './journal-row-schema'
-import { assertJournalFence, type JournalAppendBudget } from './journal-write-guards'
-import type { JournalLoad } from './journal-open'
+import { assertJournalFence } from './journal-write-guards'
 
 export type JournalReplacementItem = {
   identity: AgentJournalItemIdentity
@@ -21,83 +28,58 @@ export type JournalReplacementItem = {
   observedAt?: number
 }
 
-export async function replaceJournalEpoch(input: {
-  journalDir: string
+export function replaceJournalEpoch(input: {
+  db: Database.Database
   identity: AgentSessionJournalIdentity
   reason: AgentJournalEpochReason
   fence: number
   items: readonly JournalReplacementItem[]
-  budget: JournalAppendBudget
-  compaction: JournalCompactionPolicy
   now: () => number
   mintEpoch: () => string
-  onSnapshotPublished: (loaded: JournalLoad) => void
-}): Promise<void> {
-  const stagingDir = await mkdtemp(join(input.journalDir, '.epoch-replacement-'))
+  /** Called the instant the transaction commits, before any fallible follow-up. */
+  onPublished: (loaded: JournalLoad) => void
+}): void {
+  const epoch = input.mintEpoch()
+  const state = createJournalReducerState(input.identity.sessionId, epoch)
+  const epochRow: JournalRow = {
+    kind: 'epoch',
+    reason: input.reason,
+    providerHandle: input.identity.providerHandle,
+    ...journalRowBase(epoch, 1, input.fence, input.now())
+  }
+  const rows: JournalRow[] = [epochRow]
+  applyJournalRow(state, epochRow)
+  for (const item of input.items) {
+    const row = buildJournalItemRow({
+      state,
+      identity: item.identity,
+      body: item.body,
+      seq: state.lastSequence + 1,
+      fence: input.fence,
+      ts: item.observedAt ?? input.now()
+    })
+    assertJournalFence(row.fence, state.highestFence)
+    applyJournalRow(state, row)
+    rows.push(row)
+  }
+
+  input.db.exec('BEGIN IMMEDIATE')
   try {
-    const epoch = input.mintEpoch()
-    const state = createJournalReducerState(input.identity.sessionId, epoch)
-    const epochRow: JournalRow = {
-      kind: 'epoch',
-      reason: input.reason,
-      providerHandle: input.identity.providerHandle,
-      ...journalRowBase(epoch, 1, input.fence, input.now())
+    deleteAllJournalRows(input.db)
+    clearJournalRepairMarker(input.db, input.identity.sessionId)
+    for (const row of rows) {
+      insertJournalRow(input.db, input.identity.sessionId, row)
     }
-    const rows: JournalRow[] = [epochRow]
-    applyJournalRow(state, epochRow)
-    let sizeBytes = journalRowByteLength(epochRow)
-    await appendJournalRows(stagingDir, [epochRow])
-
-    for (const item of input.items) {
-      const appendTime = input.now()
-      const row = buildJournalItemRow({
-        state,
-        identity: item.identity,
-        body: item.body,
-        seq: state.lastSequence + 1,
-        fence: input.fence,
-        ts: item.observedAt ?? appendTime
-      })
-      assertJournalFence(row.fence, state.highestFence)
-      input.budget.assert(row, appendTime, sizeBytes)
-      await appendJournalRows(stagingDir, [row])
-      applyJournalRow(state, row)
-      rows.push(row)
-      sizeBytes += journalRowByteLength(row)
-    }
-
-    const compacted = await compactJournal({
-      journalDir: stagingDir,
-      state,
-      tailRows: rows,
-      policy: input.compaction,
-      now: input.now(),
-      maxSessionBytes: input.budget.maxSessionBytes
-    })
-    await publishPreparedFile(stagingDir, input.journalDir, JOURNAL_SNAPSHOT_FILE)
-    state.oldestSequence = compacted.oldestSequence
-    input.onSnapshotPublished({
-      state,
-      tailRows: compacted.tailRows,
-      compactedThrough: compacted.compactedThrough,
-      readOnly: false,
-      corrupt: false,
-      malformedRows: 0,
-      sizeBytes: compacted.tailRows.reduce((total, row) => total + journalRowByteLength(row), 0)
-    })
-    await publishPreparedFile(stagingDir, input.journalDir, JOURNAL_LOG_FILE)
-  } finally {
-    await rm(stagingDir, { recursive: true, force: true })
+    upsertJournalSessionRow(input.db, input.identity.sessionId, epoch, epochRow.ts)
+    input.db.exec('COMMIT')
+  } catch (error) {
+    input.db.exec('ROLLBACK')
+    throw error
   }
-}
 
-async function publishPreparedFile(
-  stagingDir: string,
-  journalDir: string,
-  fileName: string
-): Promise<void> {
-  const copied = await copyFileDurable(join(stagingDir, fileName), join(journalDir, fileName))
-  if (!copied) {
-    throw new Error(`prepared journal file disappeared before publish: ${fileName}`)
-  }
+  // COMMIT landed: on disk the superseded rows are gone and this epoch is the
+  // live one. The caller adopts that immediately, or a later failure leaves the
+  // live store writing into an epoch whose rows were just deleted.
+  state.oldestSequence = 1
+  input.onPublished({ state, readOnly: false, corrupt: false, malformedRows: 0 })
 }

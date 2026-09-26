@@ -29,22 +29,24 @@ export function assertPairedClientWindowRevealed(report: PairedClientWindowRevea
 export type PairedClientWindowFocusReport = PairedClientWindowRevealReport & { isFocused: boolean }
 
 /**
- * Brings a paired client to the front, which a launched-but-background window never is. Main-side
- * policies that ask whether the reader is looking at a WebContents read the OS focus state, so a
- * spec driving real presses through such a policy has to put the window there first.
+ * Native-focus coverage must run on an isolated display or CI, never in background mode.
  */
 export async function focusPairedClientWindow(
   client: RevealablePairedClient,
   { timeoutMs = 15_000 }: { timeoutMs?: number } = {}
 ): Promise<PairedClientWindowFocusReport> {
+  await client.app.evaluate(() => {
+    if (process.env.ORCA_BACKGROUND_LAUNCH === '1') {
+      throw new Error('Native focus is forbidden by ORCA_BACKGROUND_LAUNCH')
+    }
+  })
   const revealed = await revealPairedClientWindow(client)
   const deadline = Date.now() + timeoutMs
   let isFocused = false
   while (!isFocused) {
     isFocused = await client.app.evaluate(({ app, BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0]
-      // Why steal: nothing else in the run is asking for the front, and the window manager keeps
-      // the launching terminal there otherwise.
+      // Native-focus coverage requires a dedicated foreground session.
       app.focus({ steal: true })
       window?.focus()
       return window?.isFocused() ?? false
@@ -61,6 +63,9 @@ export async function revealPairedClientWindow(
   client: RevealablePairedClient
 ): Promise<PairedClientWindowRevealReport> {
   const report = await client.app.evaluate(({ BrowserWindow }) => {
+    if (process.env.ORCA_BACKGROUND_LAUNCH === '1') {
+      throw new Error('Window reveal is forbidden by ORCA_BACKGROUND_LAUNCH')
+    }
     const windows = BrowserWindow.getAllWindows()
     const window = windows[0]
     const wasVisible = window?.isVisible() ?? false

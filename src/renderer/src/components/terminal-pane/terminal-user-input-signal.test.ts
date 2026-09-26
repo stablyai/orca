@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/xterm'
-import { subscribeToTerminalUserInput } from './terminal-user-input-signal'
+import {
+  subscribeToTerminalInputData,
+  subscribeToTerminalUserInput
+} from './terminal-user-input-signal'
 
 type CoreServiceAccess = {
   _core: {
@@ -76,5 +79,28 @@ describe('subscribeToTerminalUserInput', () => {
       )
     ).toBeNull()
     expect(listener).not.toHaveBeenCalled()
+  })
+})
+
+describe('subscribeToTerminalInputData', () => {
+  it('classifies real xterm events independently and disposes both subscriptions', () => {
+    const terminal = new Terminal({ allowProposedApi: true })
+    const core = (terminal as unknown as CoreServiceAccess)._core.coreService
+    const listener = vi.fn()
+    const subscription = subscribeToTerminalInputData(terminal, listener)
+    core.triggerDataEvent('keyboard', true)
+    core.triggerDataEvent('\x1b[?1;2c')
+    core.triggerDataEvent('\x1b[200~paste\x1b[201~', true)
+    core.triggerDataEvent('\x1b[O', false)
+    expect(listener.mock.calls).toEqual([
+      ['keyboard', true],
+      ['\x1b[?1;2c', false],
+      ['\x1b[200~paste\x1b[201~', true],
+      ['\x1b[O', false]
+    ])
+    subscription.dispose()
+    core.triggerDataEvent('after-dispose', true)
+    expect(listener).toHaveBeenCalledTimes(4)
+    terminal.dispose()
   })
 })

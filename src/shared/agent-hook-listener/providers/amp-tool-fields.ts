@@ -36,6 +36,7 @@ export function extractAmpToolFields(
         extractToolResponseText(hookPayload.result)
       if (responseText) {
         update.lastAssistantMessage = responseText
+        update.lastAssistantMessageIsToolOutput = true
       }
     }
     return update

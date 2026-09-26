@@ -10,7 +10,28 @@ function stepNamed(job, name) {
 }
 
 describe('skill-sharing release workflow', () => {
-  it('blocks publication on native Windows, macOS, and the Linux floor', () => {
+  it('keeps artifact builds behind every blocking release gate', () => {
+    const preflight = workflow.jobs['release-preflight']
+    const build = workflow.jobs.build
+    const macBuild = workflow.jobs['build-mac']
+
+    expect(preflight.needs).toEqual([
+      'cut',
+      'terminal-rendering-golden',
+      'skill-sharing-release-gate',
+      'skill-sharing-linux-floor-release-gate'
+    ])
+    expect(preflight.if).toContain('always()')
+    expect(preflight.if).toContain("needs.terminal-rendering-golden.result == 'success'")
+    expect(preflight.if).toContain("needs.skill-sharing-release-gate.result == 'success'")
+    expect(preflight.if).toContain(
+      "needs.skill-sharing-linux-floor-release-gate.result == 'success'"
+    )
+    expect(build.needs).toContain('release-preflight')
+    expect(macBuild.needs).toContain('release-preflight')
+  })
+
+  it('blocks on macOS and the Linux floor while keeping Windows diagnostic', () => {
     const platform = workflow.jobs['skill-sharing-release-gate']
     const linux = workflow.jobs['skill-sharing-linux-floor-release-gate']
     const publishNeeds = workflow.jobs['publish-release'].needs
@@ -19,6 +40,7 @@ describe('skill-sharing release workflow', () => {
       { os: 'macos-15', platform: 'mac' },
       { os: 'windows-2022', platform: 'windows' }
     ])
+    expect(platform['continue-on-error']).toBe("${{ matrix.platform == 'windows' }}")
     expect(linux.container).toBe('ubuntu:20.04')
     expect(publishNeeds).toContain('skill-sharing-release-gate')
     expect(publishNeeds).toContain('skill-sharing-linux-floor-release-gate')
@@ -81,7 +103,9 @@ describe('skill-sharing release workflow', () => {
 
       expect(restore.env.WORKFLOW_SHA).toBe('${{ github.workflow_sha }}')
       expect(restore.run).toContain('git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"')
-      expect(restore.run).toContain('skill-freshness-inventory.test.ts')
+      expect(restore.run.split('git checkout')[1]).not.toContain(
+        'skill-freshness-inventory.test.ts'
+      )
       expect(restore.run).toContain('skill-provider-runtime-roots.test.ts')
     }
   })

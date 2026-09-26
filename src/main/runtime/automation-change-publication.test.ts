@@ -132,9 +132,36 @@ afterEach(() => {
 })
 
 describe('scoped automationsChanged publication', () => {
+  it.each(['update', 'delete'] as const)(
+    'waits for durable %s before publishing success',
+    async (operation) => {
+      const { store, runtime, published } = await makeRuntime()
+      const gate = Promise.withResolvers<void>()
+      vi.spyOn(store, 'flushPendingOrThrowAsync').mockReturnValue(gate.promise)
+      const pending =
+        operation === 'update'
+          ? runtime.updateAutomation('local-1', { name: 'Changed' })
+          : runtime.deleteAutomation('local-1')
+      await vi.waitFor(() => expect(store.flushPendingOrThrowAsync).toHaveBeenCalledOnce())
+      expect(published).toEqual([])
+      gate.resolve()
+      await pending
+      expect(published).toHaveLength(1)
+    }
+  )
+
+  it('rejects a failed durable definition write without publishing success', async () => {
+    const { store, runtime, published } = await makeRuntime()
+    vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValue(new Error('disk full'))
+    await expect(runtime.updateAutomation('local-1', { name: 'Changed' })).rejects.toThrow(
+      'disk full'
+    )
+    expect(published).toEqual([])
+  })
+
   it('names the host a delete removed a row from', async () => {
     const { runtime, published } = await makeRuntime()
-    runtime.deleteAutomation('ssh-1-a', {
+    await runtime.deleteAutomation('ssh-1-a', {
       selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 }
     })
     expect(published).toEqual([
@@ -144,7 +171,7 @@ describe('scoped automationsChanged publication', () => {
 
   it('names the orphan bucket when an unowned row is deleted', async () => {
     const { runtime, published } = await makeRuntime()
-    runtime.deleteAutomation('orphan-1', { selector: { kind: 'orphan' } })
+    await runtime.deleteAutomation('orphan-1', { selector: { kind: 'orphan' } })
     expect(published).toEqual([{ reason: 'definition', selector: { kind: 'orphan' } }])
   })
 
@@ -176,5 +203,26 @@ describe('scoped automationsChanged publication', () => {
       { expectedOwner: { selector: { kind: 'self' } } }
     )
     expect(published).toEqual([{ reason: 'definition', selector: { kind: 'self' } }])
+  })
+
+  // Why: an unnameable destination is exactly when scoping is unsafe — a subscriber scoped
+  // elsewhere would never hear about the row it is still rendering. The publication has to
+  // degrade to one unscoped authority event rather than name only the stale source.
+  it('degrades to an unscoped event when the store cannot name the destination', async () => {
+    const { store, runtime, published } = await makeRuntime()
+    const selector = store.automationChangeSelector.bind(store)
+    let updated = false
+    vi.spyOn(store, 'automationChangeSelector').mockImplementation((id: string) =>
+      updated ? null : selector(id)
+    )
+    const update = runtime.updateAutomation(
+      'local-1',
+      { enabled: false },
+      { expectedOwner: { selector: { kind: 'self' } } }
+    )
+    updated = true
+    await update
+
+    expect(published).toEqual([{ reason: 'definition' }])
   })
 })

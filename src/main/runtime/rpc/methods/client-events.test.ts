@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { isStreamingMethod, type RpcContext, type RpcStreamingMethod } from '../core'
+import {
+  eraseRpcMethods,
+  isStreamingMethod,
+  type RpcContext,
+  type RpcStreamingMethod
+} from '../core'
 // Why: importing client-events directly trips its module-init cycle through ipc/ssh; the index resolves it.
 import { ALL_RPC_METHODS } from './index'
 
-const subscribeMethod = ALL_RPC_METHODS.find(
+const subscribeMethod = eraseRpcMethods(ALL_RPC_METHODS).find(
   (method) => method.name === 'runtime.clientEvents.subscribe' && isStreamingMethod(method)
 ) as RpcStreamingMethod
 

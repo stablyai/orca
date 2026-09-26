@@ -3,8 +3,12 @@ import {
   releaseAutomationWorkspaceProvenanceRequest,
   resolveAutomationWorkspaceProvenance
 } from '../../../automations/workspace-provenance'
+import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
+import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
-import { defineMethod, type RpcMethod } from '../core'
+import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
+import { defineMethod } from '../core'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
@@ -23,7 +27,7 @@ import {
 } from './worktree-schemas'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 
-export const WORKTREE_METHODS: RpcMethod[] = [
+export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
   defineMethod({
     name: 'worktree.teardownMissingTerminals',
@@ -105,11 +109,14 @@ export const WORKTREE_METHODS: RpcMethod[] = [
             )
           )
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
+          // Why stamped here: the create's change notification has bumped the generation, so this
+          // names the catalog that contains the new worktree.
+          const stamped = { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
           // Why: agent callers need a stable dispatch target without traversing
           // terminal-list layout duplicates after creating the worktree.
           return params.startupAgent && result.startupTerminal?.handle
-            ? { ...result, agentTerminalHandle: result.startupTerminal.handle }
-            : result
+            ? { ...stamped, agentTerminalHandle: result.startupTerminal.handle }
+            : stamped
         } catch (error) {
           releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
           throw error
@@ -133,6 +140,9 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => ({
       worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
         displayName: params.displayName,
+        ...(params.displayName !== undefined
+          ? { displayNameIsPinned: displayNameUpdatePinsLabel(params.displayName) }
+          : {}),
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
         suppressedGitHubPR: params.suppressedGitHubPR,
@@ -231,14 +241,22 @@ export const WORKTREE_METHODS: RpcMethod[] = [
           }
         }
       }
-      const removalArgs = [
-        params.worktree,
-        params.force === true,
-        params.runHooks === true,
-        params.allowUnverifiedPtyStop === true
-      ] as const
-      const result = await runtime.removeManagedWorktree(...removalArgs, resolvedHostId)
-      return { removed: true, ...result }
+      // Why parsed, not resolved: an `id:` selector (what clients send) names its repo, and a second
+      // resolution costs a scan and throws for an id two hosts share. Other selectors stay unstamped.
+      const explicitWorktreeId = getExplicitWorktreeIdSelector(params.worktree)
+      const repoId = explicitWorktreeId ? splitWorktreeId(explicitWorktreeId)?.repoId : undefined
+      const result = await runtime.removeManagedWorktree(params.worktree, {
+        force: params.force === true,
+        runHooks: params.runHooks === true,
+        allowUnverifiedPtyStop: params.allowUnverifiedPtyStop === true,
+        allowFailedArchiveHook: params.allowFailedArchiveHook === true,
+        ...(resolvedHostId ? { hostId: resolvedHostId } : {})
+      })
+      return {
+        removed: true,
+        ...result,
+        ...(repoId ? { catalogVersion: getLocalWorktreeCatalogVersion(repoId) } : {})
+      }
     }
   }),
   defineMethod({

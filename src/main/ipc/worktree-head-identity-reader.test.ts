@@ -4,6 +4,11 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { readGitCommonHeadIdentities } from './worktree-head-identity-reader'
 
+const readIdentities = async (
+  ...args: Parameters<typeof readGitCommonHeadIdentities>
+): Promise<Awaited<ReturnType<typeof readGitCommonHeadIdentities>>['identities']> =>
+  (await readGitCommonHeadIdentities(...args)).identities
+
 const OID_A = 'a'.repeat(40)
 const OID_B = 'b'.repeat(40)
 const OID_C = 'c'.repeat(40)
@@ -49,7 +54,7 @@ describe('readGitCommonHeadIdentities', () => {
     const linkedPath = join(dirname(commonDir), '..', 'linked-wt')
     await addLinkedWorktree(commonDir, 'linked-wt', linkedPath, 'ref: refs/heads/feature')
 
-    const identities = await readGitCommonHeadIdentities(commonDir)
+    const identities = await readIdentities(commonDir)
 
     expect(identities).toContainEqual({
       worktreePath: dirname(commonDir),
@@ -71,7 +76,7 @@ describe('readGitCommonHeadIdentities', () => {
       `# pack-refs with: peeled fully-peeled sorted\n${OID_C} refs/heads/main\n^${OID_A}\n`
     )
 
-    const identities = await readGitCommonHeadIdentities(commonDir)
+    const identities = await readIdentities(commonDir)
 
     expect(identities).toEqual([
       { worktreePath: dirname(commonDir), head: OID_C, branch: 'refs/heads/main' }
@@ -82,7 +87,7 @@ describe('readGitCommonHeadIdentities', () => {
     const commonDir = await makeCommonDir()
     await writeFile(join(commonDir, 'HEAD'), `${OID_B}\n`)
 
-    const identities = await readGitCommonHeadIdentities(commonDir)
+    const identities = await readIdentities(commonDir)
 
     expect(identities).toEqual([{ worktreePath: dirname(commonDir), head: OID_B, branch: null }])
   })
@@ -91,7 +96,7 @@ describe('readGitCommonHeadIdentities', () => {
     const commonDir = await makeCommonDir()
     await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/unborn\n')
 
-    expect(await readGitCommonHeadIdentities(commonDir)).toEqual([])
+    expect(await readIdentities(commonDir)).toEqual([])
   })
 
   it('resolves relative gitdir entries against the metadata dir', async () => {
@@ -102,7 +107,7 @@ describe('readGitCommonHeadIdentities', () => {
     await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/feature\n')
     await writeFile(join(entry, 'gitdir'), `${join('..', '..', '..', '..', 'rel-wt', '.git')}\n`)
 
-    const identities = await readGitCommonHeadIdentities(commonDir)
+    const identities = await readIdentities(commonDir)
 
     expect(identities).toEqual([
       {
@@ -125,7 +130,7 @@ describe('readGitCommonHeadIdentities', () => {
       'refs//heads'
     ]) {
       await writeFile(join(commonDir, 'HEAD'), `ref: ${ref}\n`)
-      expect(await readGitCommonHeadIdentities(commonDir)).toEqual([])
+      expect(await readIdentities(commonDir)).toEqual([])
     }
   })
 
@@ -133,10 +138,10 @@ describe('readGitCommonHeadIdentities', () => {
     const commonDir = await makeCommonDir()
     await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/main\n')
     await writeLooseRef(commonDir, 'refs/heads/main', 'not-an-object-id')
-    expect(await readGitCommonHeadIdentities(commonDir)).toEqual([])
+    expect(await readIdentities(commonDir)).toEqual([])
 
     await writeFile(join(commonDir, 'HEAD'), 'this is not a detached oid\n')
-    expect(await readGitCommonHeadIdentities(commonDir)).toEqual([])
+    expect(await readIdentities(commonDir)).toEqual([])
   })
 
   it('omits the primary row for non-standard common dir layouts', async () => {
@@ -147,6 +152,6 @@ describe('readGitCommonHeadIdentities', () => {
     await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/main\n')
     await writeLooseRef(commonDir, 'refs/heads/main', OID_A)
 
-    expect(await readGitCommonHeadIdentities(commonDir)).toEqual([])
+    expect(await readIdentities(commonDir)).toEqual([])
   })
 })

@@ -23,7 +23,12 @@ import {
   isCurrentSshProviderAuthority
 } from './ssh/ssh-provider-authority'
 import { attachEphemeralVmRuntimeToWorkspace } from './ephemeral-vm-runtime-attachment'
-import { getWorktreeCreationLayout, mergeWorktree } from './ipc/worktree-logic'
+import {
+  getWorktreeCreationLayout,
+  mergeWorktree,
+  resolveWorktreeCreateDisplayNameMeta,
+  resolveWorktreeCreateDisplayNameRequest
+} from './ipc/worktree-logic'
 
 type AdoptionArgs = AdoptProvisionedRootArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -110,7 +115,13 @@ export async function adoptProvisionedRootSshCheckout(args: {
   const now = Date.now()
   const meta = store.setWorktreeMeta(
     worktreeId,
-    buildProvisionedRootMeta(store, repo, request, now)
+    buildProvisionedRootMeta(
+      store,
+      repo,
+      request,
+      gitWorktree.branch.replace(/^refs\/heads\//, ''),
+      now
+    )
   )
   return { worktree: mergeWorktree(repo.id, gitWorktree, meta) }
 }
@@ -155,8 +166,22 @@ function buildProvisionedRootMeta(
   store: Store,
   repo: Repo,
   args: AdoptionArgs,
+  branchName: string,
   now: number
 ): Partial<WorktreeMeta> {
+  const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
+    args.displayName,
+    args.displayNameKind,
+    args.name,
+    false,
+    args.nameWasGenerated === true
+  )
+  const displayNameMeta = resolveWorktreeCreateDisplayNameMeta(
+    displayNameRequest.value,
+    branchName,
+    displayNameRequest.kind,
+    { requestedName: args.name, sanitizedName: args.name }
+  )
   return {
     instanceId: randomUUID(),
     ...(store.getProjectHostSetups
@@ -164,7 +189,8 @@ function buildProvisionedRootMeta(
       : {}),
     hostId: args.executionHostId,
     ephemeralVmCheckoutMode: 'provisioned-root',
-    displayName: args.displayName || args.name,
+    displayName: displayNameMeta.displayName ?? args.name,
+    ...displayNameMeta,
     lastActivityAt: now,
     createdAt: now,
     orcaCreatedAt: now,

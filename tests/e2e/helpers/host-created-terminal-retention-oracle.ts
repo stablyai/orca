@@ -48,7 +48,7 @@ const HOST_TERMINAL_SURFACE_SEPARATOR = '::'
 /** Daemon session id form. Deliberately excluded from id-shape classification,
  *  which is why a host-created tab needs its own binding to be preserved —
  *  a `serve-`/`ssh-` shaped id would take an already-correct path instead. */
-function isDaemonShapedPtyId(ptyId: string, worktreeId: string): boolean {
+function isDaemonPtyIdForm(ptyId: string, worktreeId: string): boolean {
   return (
     ptyId.startsWith(`${worktreeId}@@`) &&
     !ptyId.startsWith('serve-') &&
@@ -97,7 +97,8 @@ function shellQuote(value: string): string {
 export function retentionFixtureCommand(fixturePath: string, sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
   return process.platform === 'win32'
-    ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
+    ? // PowerShell needs the call operator when the executable is quoted; cmd.exe also accepts it.
+      `& ${command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')}`
     : command.map(shellQuote).join(' ')
 }
 
@@ -155,7 +156,7 @@ export async function createHostCliTerminal(
     throw new Error('Host did not report a leaf id for the CLI-created terminal')
   }
   expect(
-    isDaemonShapedPtyId(ptyId, worktreeId),
+    isDaemonPtyIdForm(ptyId, worktreeId),
     `CLI terminal ${ptyId} must carry the daemon id shape this seam excludes from classification`
   ).toBe(true)
   await expect
@@ -231,7 +232,7 @@ export async function createHostRendererTerminalTab(
     store.getState().setActiveWorktree(id)
     const tab = store.getState().createTab(id)
     store.getState().setActiveTab(tab.id)
-    store.getState().setActiveTabType('terminal')
+    store.getState().setActiveTabType('terminal', store.getState().activeWorktreeId)
     return tab.id
   }, worktreeId)
   await expect

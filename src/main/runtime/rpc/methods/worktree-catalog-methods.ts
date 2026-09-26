@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { resolveWorktreeCatalogSnapshot } from '../worktree-catalog-snapshot'
 import { supportsWorktreeVisibilitySourceDefaults } from '../worktree-visibility-client-capability'
 import {
@@ -7,7 +7,7 @@ import {
   WorktreePsParams
 } from './worktree-schemas'
 
-export const WORKTREE_CATALOG_METHODS: RpcMethod[] = [
+export const WORKTREE_CATALOG_METHODS = [
   defineMethod({
     name: 'worktree.ps',
     params: WorktreePsParams,

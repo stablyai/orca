@@ -31,6 +31,20 @@ it('fails option hydration before ownership can be proved', async () => {
   ).rejects.toThrow('model list unavailable')
 })
 
+it('drops provider-rejected persisted options before the next owner proof', async () => {
+  await expect(
+    readNativeSessionOptions({
+      adapter: {
+        readOptions: async () => ({ models: [], current: { model: 'provider-model' } }),
+        readOptionRestoreFailures: () => ['permissionMode']
+      },
+      sessionId: SESSION,
+      fence: 2,
+      priorOptions: { permissionMode: 'retired-mode', other: 'keep' }
+    })
+  ).resolves.toEqual({ model: 'provider-model', other: 'keep' })
+})
+
 it('persists resumed provider options atomically with owner proof', async () => {
   const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
   const reserved = await store.reserveOwner({
@@ -43,7 +57,6 @@ it('persists resumed provider options atomically with owner proof', async () => 
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/accounts/codex' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-options',
     claimKeyId: 'key-1',

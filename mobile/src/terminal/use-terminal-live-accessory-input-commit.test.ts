@@ -199,6 +199,46 @@ describe('terminal live accessory input commit hook', () => {
     expect(harness.sent).toEqual([])
   })
 
+  /**
+   * The device trace's variant (a), and not a web-only case: the field holds a mirror of text the
+   * PTY already echoed, so a control that ends the line ends the field's editing session too. The
+   * held-text branch has always done this through the flush; with nothing held the control took
+   * the branch above and the sent text stayed in the field, where the next keystrokes appended to
+   * it. Nothing here is composing, which is the state ASCII leaves on every platform.
+   */
+  it('Given an accessory Enter with mirrored sent text and no held text When committed Then ends the field session before the raw send', async () => {
+    // Given
+    const harness = createAccessoryInputCommitHarness({
+      pendingHandle: 'terminal-a',
+      sentText: 'ls'
+    })
+
+    // When
+    const result = await harness.commit({ bytes: '\r' })
+
+    // Then
+    expect(harness.flushPendingLiveInputText).toHaveBeenCalledWith('terminal-a')
+    // Still the caller's send: the hook deferring and sending would put two returns on the wire.
+    expect(result).toEqual({ kind: 'allow-raw' })
+    expect(harness.sent).toEqual([])
+  })
+
+  it('Given an accessory Enter whose field session cannot be ended When committed Then suppresses the raw send', async () => {
+    // Given
+    const harness = createAccessoryInputCommitHarness({
+      pendingHandle: 'terminal-a',
+      sentText: 'ls',
+      flushResult: false
+    })
+
+    // When
+    const result = await harness.commit({ bytes: '\r' })
+
+    // Then
+    expect(result).toEqual({ kind: 'suppress-raw' })
+    expect(harness.sent).toEqual([])
+  })
+
   it('Given accessory backspace with reported composition When committed Then keeps the edited preedit held', async () => {
     // Given
     const harness = createAccessoryInputCommitHarness({

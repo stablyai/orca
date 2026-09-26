@@ -6,7 +6,9 @@ app_root=${ORCA_TEST_APP_ROOT:-/artifacts/root}
 signal_target_kind=${ORCA_SIGNAL_TARGET:-app}
 entrypoint_kind=${ORCA_TEST_ENTRYPOINT:-app}
 int_delivery=${ORCA_INT_DELIVERY:-foreground-process-group}
-startup_timeout_seconds=${ORCA_STARTUP_TIMEOUT_SECONDS:-90}
+# Packaged Electron startup can approach 90s on a cold CI runner; leave room
+# for the readiness line to reach the log before the observer deadline.
+startup_timeout_seconds=${ORCA_STARTUP_TIMEOUT_SECONDS:-180}
 
 if ((EUID == 0)); then
   exec runuser --user orca --preserve-environment -- "$0" "$@"
@@ -41,8 +43,8 @@ chmod 700 "$XDG_RUNTIME_DIR"
 
 case "$entrypoint_kind" in
   app) entrypoint=("$app_root/AppRun" --no-sandbox) ;;
+  appimage) entrypoint=(/input/orca.AppImage --appimage-extract-and-run --no-sandbox) ;;
   launcher)
-    export ELECTRON_DISABLE_SANDBOX=1
     entrypoint=("$app_root/resources/bin/orca-ide")
     ;;
   *) echo "unsupported entrypoint: $entrypoint_kind" >&2; exit 64 ;;
@@ -53,16 +55,48 @@ setsid env -u DISPLAY "${entrypoint[@]}" serve --port 0 --pairing-address 127.0.
 app_pid=$!
 app_start_ticks=$(awk '{print $22}' "/proc/$app_pid/stat")
 
-# The inner shell expands its positional parameters.
-# shellcheck disable=SC2016
-ready_line=$(timeout "$startup_timeout_seconds" bash -c '
-  tail --pid="$1" -n +1 -F "$2" 2>/dev/null \
-    | jq --unbuffered -nc '\''first(inputs | select(.type == "orca_server_ready" and .schemaVersion == 1))'\''
-' bash "$app_pid" "$stdout_log" || true)
+# jq's `inputs` waits for EOF even when wrapped in `first`, so a tail -F
+# observer can outlive the timeout and leak into the next signal case. Poll
+# finite snapshots instead; each parser invocation has a definite EOF.
+read_ready_line() {
+  sed -u -n 's/^[^{]*//p' "$stdout_log" \
+    | jq --unbuffered -Rnc 'first(inputs | fromjson? | select(.type == "orca_server_ready" and .schemaVersion == 1))'
+}
+
+ready_line=''
+startup_deadline=$((SECONDS + startup_timeout_seconds))
+while (( SECONDS < startup_deadline )); do
+  ready_line=$(read_ready_line)
+  [[ -n "$ready_line" ]] && break
+  kill -0 "$app_pid" 2>/dev/null || break
+  sleep 1
+done
+# A readiness event can land as the final poll races the write.
+if [[ -z "$ready_line" ]]; then
+  ready_line=$(read_ready_line)
+fi
 if [[ -z "$ready_line" ]]; then
   cat "$stdout_log" "$stderr_log" >&2
-  echo "FAIL: AppRun exited or timed out before orca_server_ready" >&2
+  echo "FAIL: entrypoint exited or timed out before orca_server_ready" >&2
   exit 1
+fi
+
+registered_cli_verified=false
+if [[ "$entrypoint_kind" == appimage ]]; then
+  registered_cli="$HOME/.local/bin/orca-ide"
+  expected_target="$XDG_CACHE_HOME/orca/appimage/launcher/orca-ide"
+  actual_target=$(readlink "$registered_cli" 2>/dev/null || true)
+  if [[ "$actual_target" != "$expected_target" ]]; then
+    echo "FAIL: registered CLI target is ${actual_target:-missing}; expected $expected_target" >&2
+    exit 1
+  fi
+  if ! registered_help=$("$registered_cli" --help 2>&1) \
+    || [[ "$registered_help" != *'Usage: orca <command>'* ]]; then
+    echo "FAIL: registered CLI did not execute the packaged help command" >&2
+    printf '%s\n' "$registered_help" >&2
+    exit 1
+  fi
+  registered_cli_verified=true
 fi
 
 bound_endpoint=$(jq -r '.boundEndpoint' <<<"$ready_line")
@@ -72,6 +106,7 @@ if [[ -z "$listener_before" ]]; then
   echo "FAIL: ready listener has no socket owner at $bound_endpoint" >&2
   exit 1
 fi
+listener_before_pids=$(grep -oE 'pid=[0-9]+' <<<"$listener_before" | cut -d= -f2 || true)
 
 tree_pids=()
 declare -A tree_start_ticks
@@ -104,8 +139,15 @@ fi
 
 signal_target_pid=$app_pid
 if [[ "$signal_target_kind" == serving-electron ]]; then
-  signal_target_pid=$(awk '/\/orca-ide .* --serve / {print $1; exit}' <<<"$tree_snapshot")
+  # The ready socket identifies the serving Electron even when AppImage's
+  # extraction wrapper rewrites the command line before it reaches Chromium.
+  signal_target_pid=$(head -n1 <<<"$listener_before_pids")
   [[ -n "$signal_target_pid" ]] || { echo "FAIL: serving Electron process not found" >&2; exit 1; }
+  if [[ -z "${tree_start_ticks[$signal_target_pid]+present}" ]]; then
+    echo "FAIL: ready listener PID $signal_target_pid is outside the entrypoint process tree" >&2
+    echo "listener: $listener_before" >&2
+    exit 1
+  fi
 elif [[ "$signal_target_kind" != app ]]; then
   echo "unsupported signal target: $signal_target_kind" >&2
   exit 64
@@ -138,17 +180,25 @@ fi
 kill "$watchdog_pid" 2>/dev/null || true
 wait "$watchdog_pid" 2>/dev/null || true
 
-listener_after=$(ss -H -ltnp "sport = :$bound_port" || true)
-survivors=()
-for pid in "${tree_pids[@]}"; do
-  if [[ -r "/proc/$pid/stat" ]] \
-    && [[ $(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true) == "${tree_start_ticks[$pid]}" ]] \
-    && ps -o stat= -p "$pid" 2>/dev/null | grep -qv '^Z'; then
-    survivors+=("$pid")
+# Crashpad can exit just after Electron; poll all owned shutdown state for up to 5s.
+for shutdown_poll in {0..50}; do
+  listener_after=$(ss -H -ltnp "sport = :$bound_port" || true)
+  survivors=()
+  for pid in "${tree_pids[@]}"; do
+    if [[ -r "/proc/$pid/stat" ]] \
+      && [[ $(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null || true) == "${tree_start_ticks[$pid]}" ]] \
+      && ps -o stat= -p "$pid" 2>/dev/null | grep -qv '^Z'; then
+      survivors+=("$pid")
+    fi
+  done
+  owned_residue=$(ps -eo pid=,ppid=,stat=,args= | awk -v state="$state_dir" \
+    '($0 ~ state || $0 ~ /\/artifacts\/root\/orca-ide/ || $0 ~ /[X]vfb :99 /) && $0 !~ /awk -v state=/ {print}' || true)
+  if [[ -z "$listener_after" && -z "$owned_residue" ]] \
+    && ((${#survivors[@]} == 0)); then
+    break
   fi
+  ((shutdown_poll < 50)) && sleep 0.1
 done
-owned_residue=$(ps -eo pid=,ppid=,stat=,args= | awk -v state="$state_dir" \
-  '($0 ~ state || $0 ~ /\/artifacts\/root\/orca-ide/ || $0 ~ /[X]vfb :99 /) && $0 !~ /awk -v state=/ {print}' || true)
 
 canary_alive=false
 if kill -0 "$canary_pid" 2>/dev/null \
@@ -170,16 +220,18 @@ jq -nc \
   --argjson signalTargetPid "$signal_target_pid" \
   --arg endpoint "$bound_endpoint" \
   --arg listenerBefore "$listener_before" \
+  --arg listenerBeforePids "$listener_before_pids" \
   --arg listenerAfter "$listener_after" \
   --arg xvfbPids "$xvfb_pids" \
   --arg treeBefore "$tree_snapshot" \
   --argjson waitStatus "$wait_status" \
   --argjson fatalEvidence "$fatal_evidence" \
   --argjson canaryAlive "$canary_alive" \
+  --argjson registeredCliVerified "$registered_cli_verified" \
   --arg survivors "${survivors[*]:-}" \
   --arg residue "$owned_residue" \
   --arg corePattern "$(cat /proc/sys/kernel/core_pattern)" \
-  '{signal:$signal,signalDelivery:$signalDelivery,entrypointKind:$entrypointKind,signalTargetKind:$signalTargetKind,appPid:$appPid,signalTargetPid:$signalTargetPid,boundEndpoint:$endpoint,listenerBefore:$listenerBefore,listenerAfter:$listenerAfter,xvfbPids:$xvfbPids,treeBefore:$treeBefore,waitStatus:$waitStatus,fatalEvidence:$fatalEvidence,canaryAlive:$canaryAlive,survivingTreePids:$survivors,ownedResidue:$residue,corePattern:$corePattern}'
+  '{signal:$signal,signalDelivery:$signalDelivery,entrypointKind:$entrypointKind,signalTargetKind:$signalTargetKind,appPid:$appPid,signalTargetPid:$signalTargetPid,boundEndpoint:$endpoint,listenerBefore:$listenerBefore,listenerBeforePids:$listenerBeforePids,listenerAfter:$listenerAfter,xvfbPids:$xvfbPids,treeBefore:$treeBefore,waitStatus:$waitStatus,fatalEvidence:$fatalEvidence,canaryAlive:$canaryAlive,registeredCliVerified:$registeredCliVerified,survivingTreePids:$survivors,ownedResidue:$residue,corePattern:$corePattern}'
 
 if ((wait_status != 0)) || [[ -n "$listener_after" ]] || [[ "$fatal_evidence" != false ]] \
   || [[ "$canary_alive" != true ]] || ((${#survivors[@]})) || [[ -n "$owned_residue" ]]; then

@@ -9,8 +9,10 @@ export type OpenedMobileSessionTabActivationState = {
   activated: boolean
   activationSeq: number
   latestActivationSeq: number
-  sourceTerminalHandle: string
+  sourceTerminalHandle: string | null
   activeTerminalHandle: string | null
+  sourceSessionTabId?: string | null
+  activeSessionTabId?: string | null
   activeTabType: string | null
 }
 
@@ -114,12 +116,15 @@ export async function activateOpenedSourceControlDiffTab<T extends OpenedMobileS
 export function shouldActivateOpenedMobileSessionTab(
   state: OpenedMobileSessionTabActivationState
 ): boolean {
-  return (
-    !state.activated &&
-    state.activationSeq === state.latestActivationSeq &&
-    state.activeTabType === 'terminal' &&
-    state.activeTerminalHandle === state.sourceTerminalHandle
-  )
+  const sourceStillActive =
+    state.activeTabType === 'agent-session'
+      ? state.sourceSessionTabId !== null &&
+        state.sourceSessionTabId !== undefined &&
+        state.activeSessionTabId === state.sourceSessionTabId
+      : state.activeTabType === 'terminal' &&
+        state.sourceTerminalHandle !== null &&
+        state.activeTerminalHandle === state.sourceTerminalHandle
+  return !state.activated && state.activationSeq === state.latestActivationSeq && sourceStillActive
 }
 
 export async function activateOpenedMobileSessionTab<T extends OpenedMobileSessionTabCandidate>(

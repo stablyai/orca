@@ -221,6 +221,44 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 
+  // The disposed-spawn kill in ipc-pty-connect asks this callback before retiring a PTY; it must
+  // answer from the live store, or a remounted pane's shell dies under it.
+  it('lets a disposed spawn survive while the pane surface still exists in the store', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const deps = createDeps({ tabId: 'tab-retain-disposed-spawn' })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-retain-disposed-spawn', ptyId: null }] }
+    }
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    const retain = createdTransportOptions[0]?.retainDisposedSpawn
+    if (typeof retain !== 'function') {
+      throw new Error('pane transport was built without retainDisposedSpawn')
+    }
+    expect(retain()).toBe(true)
+    mockStoreState = {
+      ...mockStoreState,
+      deleteStateByWorktreeId: { 'wt-1': { isDeleting: true, phase: 'deleting' } }
+    }
+    expect(retain()).toBe(false)
+    mockStoreState = {
+      ...mockStoreState,
+      deleteStateByWorktreeId: { 'local|wt-1': { isDeleting: true, phase: 'deleting' } }
+    }
+    expect(retain()).toBe(false)
+    mockStoreState = {
+      ...mockStoreState,
+      deleteStateByWorktreeId: {},
+      tabsByWorktree: { 'wt-1': [] }
+    }
+    expect(retain()).toBe(false)
+  })
+
   it('fresh-spawns normally when the pane worktree is not being deleted', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -453,6 +491,83 @@ describe('connectPanePty', () => {
     deps.replayingPanesRef.current.delete(pane.id)
     sendTerminalInputThroughPane(pane, 'echo hi\r')
     expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r')
+  })
+
+  it('preserves classified user input during replay while suppressing synthetic replies', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const userInputListeners = new Set<() => void>()
+    Object.assign(pane.terminal, {
+      _core: {
+        coreService: {
+          onUserInput: (listener: () => void) => {
+            userInputListeners.add(listener)
+            return { dispose: () => userInputListeners.delete(listener) }
+          }
+        }
+      }
+    })
+    const transport = createMockTransport('ssh:ssh-1@@pty-1')
+    transportFactoryQueue.push(transport)
+    const deps = createDeps()
+    const deferred: (() => void)[] = []
+    Object.assign(deps, {
+      deferPtyInput: (_paneId: number, data: string, forward: (data: string) => void) => {
+        deferred.push(() => forward(data))
+      }
+    })
+    connectPanePty(pane as never, createManager(1, 1) as never, deps as never)
+    await flushAsyncTicks()
+    transport.sendInput.mockClear()
+    deps.replayingPanesRef.current.set(pane.id, 1)
+    for (const listener of userInputListeners) {
+      listener()
+    }
+    sendTerminalInputThroughPane(pane, 'input_under_flood\r')
+    sendTerminalInputThroughPane(pane, '\x1b[?1;2c')
+    // A click on replayed scrollback that still has mouse tracking armed is user input to xterm, but must not reach the shell.
+    for (const listener of userInputListeners) {
+      listener()
+    }
+    sendTerminalInputThroughPane(pane, '\x1b[<0;12;4M')
+    for (const forward of deferred.splice(0)) {
+      forward()
+    }
+    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
+
+    // A wheel over a replayed alt-screen frame becomes cursor keys; the fresh shell must not recall history from them.
+    pane.terminal.buffer.active.type = 'alternate'
+    for (const listener of userInputListeners) {
+      listener()
+    }
+    sendTerminalInputThroughPane(pane, '\x1b[B')
+    for (const forward of deferred.splice(0)) {
+      forward()
+    }
+    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
+
+    // The same bytes on the normal buffer can only be a keyboard arrow, which survives replay.
+    pane.terminal.buffer.active.type = 'normal'
+    for (const listener of userInputListeners) {
+      listener()
+    }
+    sendTerminalInputThroughPane(pane, '\x1b[B')
+    for (const forward of deferred.splice(0)) {
+      forward()
+    }
+    expect(transport.sendInput).toHaveBeenCalledTimes(2)
+    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B')
+
+    // Once the guard releases, the same mouse report is ordinary input again.
+    deps.replayingPanesRef.current.delete(pane.id)
+    for (const listener of userInputListeners) {
+      listener()
+    }
+    sendTerminalInputThroughPane(pane, '\x1b[<0;12;4M')
+    for (const forward of deferred.splice(0)) {
+      forward()
+    }
+    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M')
   })
 
   it('settles a queued startup only after the pane binds its spawned PTY', async () => {

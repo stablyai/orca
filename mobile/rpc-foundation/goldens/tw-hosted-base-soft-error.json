@@ -1,0 +1,153 @@
+{
+  "operation": "tasks.composer-hosted-base",
+  "family": "worktree.hosted-base",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "52a76b7a830b32287bce14abbe1b9d9ac70e71eafe5b4c6801c2eb14a4150125",
+  "scenarioSha256": "451e74a430d2549976fa360a0e43e76a8d855b1470b8e313797019770ceca4cb",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "92df85b51d0c": {
+      "name": "worktree.resolveMrBase#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolveMrBase\",\"params\":{\"repo\":\"id:repo-1\",\"mrIid\":7,\"sourceBranch\":\"feature\"}}"
+    },
+    "aafcb4cd89c9": {
+      "name": "worktree.resolvePrBase#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.resolvePrBase\",\"params\":{\"repo\":\"id:repo-1\",\"prNumber\":12,\"headRefName\":\"feature\"}}"
+    },
+    "ae0c82b12f2a": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "pull request not found",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "bdd030fee656": {
+      "name": "worktree.resolvePrBase#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.resolvePrBase"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headRefName": "feature",
+            "prNumber": 12,
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "pull request not found"
+          }
+        }
+      }
+    },
+    "c57e06c96492": {
+      "mrBase": "unresolved",
+      "prBase": "unresolved"
+    },
+    "d4632615f5ae": {
+      "name": "worktree.resolveMrBase#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.resolveMrBase"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mrIid": 7,
+            "repo": "id:repo-1",
+            "sourceBranch": "feature"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": ""
+          }
+        }
+      }
+    },
+    "f3b516f62081": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "tw-hosted-base-soft-error",
+    "checkpoints": [
+      {
+        "id": "in-band-error",
+        "observation": {
+          "sender": ["bdd030fee656"],
+          "payloads": ["aafcb4cd89c9"],
+          "settlements": {
+            "pr": "ae0c82b12f2a"
+          },
+          "state": "c57e06c96492",
+          "effects": []
+        }
+      },
+      {
+        "id": "in-band-empty-error",
+        "observation": {
+          "sender": ["bdd030fee656", "d4632615f5ae"],
+          "payloads": ["aafcb4cd89c9", "92df85b51d0c"],
+          "settlements": {
+            "pr": "ae0c82b12f2a",
+            "mr": "f3b516f62081"
+          },
+          "state": "c57e06c96492",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

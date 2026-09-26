@@ -1,9 +1,10 @@
+import { mergeCommandEnvironment } from '../../shared/command-environment'
 import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import { getAgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
-import { isSshMuxRequestTimeoutError } from '../ssh/ssh-channel-multiplexer'
+import { isSshRequestOutcomeUnverifiable } from '../ssh/ssh-channel-multiplexer'
 import { WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR } from '../win32-utils'
 import {
   finalizeModelDiscoveryOutput,
@@ -46,6 +47,16 @@ export async function discoverModelsLocal(input: {
     return staticModelDiscoveryResult(spec)
   }
 
+  const planned = planModelDiscovery(spec, input.agentCommandOverride, input.backslash)
+  if (!planned.ok) {
+    return { success: false, error: planned.error }
+  }
+  const env = mergeCommandEnvironment(
+    input.env,
+    planned.plan.env,
+    input.options.wslDistro ? 'linux' : process.platform
+  )
+
   const startDiscovery = (): LocalProcessExecution<DiscoverCommitMessageModelsResult> => {
     let markProcessClosed!: () => void
     const processClosed = new Promise<void>((resolve) => {
@@ -53,18 +64,13 @@ export async function discoverModelsLocal(input: {
     })
     const result = new Promise<DiscoverCommitMessageModelsResult>((resolve) => {
       let child: SpawnedSourceControlAgentProcess
-      const planned = planModelDiscovery(spec, input.agentCommandOverride, input.backslash)
-      if (!planned.ok) {
-        markProcessClosed()
-        resolve({ success: false, error: planned.error })
-        return
-      }
       try {
         child = input.spawnAgent({
           binary: planned.plan.binary,
           args: planned.plan.args,
           cwd: input.options.cwd,
-          env: input.env,
+          env: input.options.wslDistro ? input.env : env,
+          commandEnv: planned.plan.env,
           wslDistro: input.options.wslDistro,
           stdinMode: planned.plan.stdinPayload === null ? 'ignore' : 'pipe',
           useCwdForNative: false
@@ -172,7 +178,7 @@ export async function discoverModelsLocal(input: {
   }
   return input.agentId === 'codex'
     ? runCodexProcessWithHomeLock(
-        resolveCodexHomeProcessLockKeyForSpawnEnv(input.env, input.options.wslDistro),
+        resolveCodexHomeProcessLockKeyForSpawnEnv(env, input.options.wslDistro, planned.plan.env),
         startDiscovery
       )
     : startDiscovery().result
@@ -206,7 +212,7 @@ export async function discoverModelsRemote(input: {
     console.error('[commit-message] Remote model discovery request failed:', error)
     return {
       success: false,
-      error: isSshMuxRequestTimeoutError(error)
+      error: isSshRequestOutcomeUnverifiable(error)
         ? `${spec.label} model discovery took longer than ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s and may still be running on the remote host.`
         : `${spec.label} model discovery could not be reached on the remote PATH. Try again after the SSH connection recovers.`
     }

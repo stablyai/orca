@@ -1,4 +1,5 @@
 import type { RuntimeHydrationModel } from './use-mobile-tasks-runtime-hydration'
+import type { RpcSendParams } from '../transport/rpc-params-contract'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   type GitHubIssueSourceError,
@@ -14,17 +15,22 @@ import {
   GITHUB_REPO_CONCURRENCY,
   type GitHubRepoSources,
   type GitHubWorkItem,
-  type LinearStatusResponse,
   type LinearTeam,
   type RepoSummary,
   type TaskItem,
   createGitHubTask,
-  isSuccess,
   mapWithConcurrency,
   reconcileTeamSelection,
   scopeGitHubTaskSearch,
   taskTime
 } from './mobile-tasks-legacy-foundation'
+import {
+  githubWorkItemCountRead,
+  linearAccountStatusRead,
+  linearWorkspaceTeamListRead
+} from './mobile-task-list-operations'
+import { githubWorkItemSearchRead } from './mobile-task-source-search-operations'
+import { taskSettingsWrite } from './mobile-task-runtime-operations'
 
 export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) {
   const {
@@ -45,11 +51,8 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
     }
-    const statusResponse = await client.sendRequest('linear.status')
-    if (!isSuccess(statusResponse)) {
-      throw new Error(statusResponse.error.message)
-    }
-    const status = statusResponse.result as LinearStatusResponse
+    const statusReply = await linearAccountStatusRead.request(client)
+    const status = linearAccountStatusRead.interpret(statusReply)
     setLinearConnected(status.connected === true)
     if (status.connected !== true) {
       setLinearWorkspaces([])
@@ -64,13 +67,10 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     setLinearWorkspaces(workspaces)
     setSelectedLinearWorkspaceId(workspaceId)
 
-    const teamsResponse = await client.sendRequest('linear.listTeams', {
+    const teamsReply = await linearWorkspaceTeamListRead.request(client, {
       workspaceId: workspaceId ?? undefined
     })
-    if (!isSuccess(teamsResponse)) {
-      throw new Error(teamsResponse.error.message)
-    }
-    const teams = teamsResponse.result as LinearTeam[]
+    const teams = linearWorkspaceTeamListRead.interpret(teamsReply)
     setLinearTeams(teams)
     setSelectedLinearTeamIds(reconcileTeamSelection(teams, defaultLinearTeamSelectionRef.current))
   }, [client, connState, tasksSupported])
@@ -82,8 +82,9 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
       }
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
-      void client
-        .sendRequest('settings.update', { defaultLinearTeamSelection: selection })
+      // Fire-and-forget: the reply is never interpreted, so no acceptance policy applies here.
+      void taskSettingsWrite
+        .request(client, { defaultLinearTeamSelection: selection })
         .catch(() => {
           // Best-effort preference persistence; the local picker state already changed.
         })
@@ -108,16 +109,23 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            const response = await requestClient.sendRequest('github.listWorkItems', {
+            // `before` is the list's pagination cursor, and github.listWorkItems' params schema
+            // does not declare it, so the host has always dropped it. Sent verbatim anyway:
+            // removing it would change the bytes, and making the host honour the cursor is a
+            // product fix with its own recording, not part of this migration.
+            const pageParams = {
               repo: `id:${repo.id}`,
               limit: PER_REPO_FETCH_LIMIT,
               query: scopeGitHubTaskSearch(appliedQuery, githubKind),
               before
-            })
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
             }
-            const envelope = response.result as {
+            const reply = await githubWorkItemSearchRead.request(
+              requestClient,
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `before` is the undeclared key described above; every other field matches the schema.
+              pageParams as RpcSendParams<'github.listWorkItems'>
+            )
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and each row's `labels`, and types the other eight (`id`, `type`, `number`, `title`, `state`, `url`, `updatedAt`, `author`). Two gaps keep the cast: the salvaged members type as `T | undefined` where GitHubWorkItem declares them required, and `sources`/`errors`/`issueSourceFellBack` are deliberately `z.unknown()` because the two banner extractors below read them member by member with their own guards.
+            const envelope = githubWorkItemSearchRead.interpret(reply) as {
               items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
               sources?: GitHubRepoSources
               errors?: { issues?: { message: string } }
@@ -183,18 +191,18 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            const response = await requestClient.sendRequest(
-              'github.countWorkItems',
+            const reply = await githubWorkItemCountRead.request(
+              requestClient,
               {
                 repo: `id:${repo.id}`,
                 query: scopeGitHubTaskSearch(appliedQuery, githubKind)
               },
               { timeoutMs: 30_000 }
             )
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
-            return typeof response.result === 'number' ? response.result : 0
+            // The reader answers the number, so the `typeof` fallback this call site kept is gone:
+            // a reply that is not one reaches the catch below, which already counts a failed repo
+            // as zero and now says which repo and why.
+            return githubWorkItemCountRead.interpret(reply)
           } catch (err) {
             const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)
             const logWorkItemCountFailure = isExpectedSshSkip ? console.log : console.warn

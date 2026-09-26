@@ -56,7 +56,6 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
   protected abstract setupEventRouting(): void
   protected abstract scheduleCheckpointTimer(): void
   protected abstract stopCheckpointTimer(): void
-  protected abstract stopCheckpointTimerIfIdle(): void
   protected abstract recordAuthenticatedIdentity(): void
   protected abstract runExclusiveCheckpoint(
     operation: () => Promise<void>,
@@ -68,7 +67,6 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
     sessionId: string,
     operation: () => Promise<T>
   ): Promise<T>
-  protected abstract clearSessionAwaitingDaemonRecovery(sessionId: string): void
   protected abstract reconnectAfterWriteFailure(): void
   protected abstract checkpointSessions(
     sessionIds: Iterable<string>,
@@ -120,6 +118,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         launchAgent: context.attachOnly ? undefined : opts.launchAgent,
         ...(context.attachOnly && !context.emulateLegacyAttachOnly ? { attachOnly: true } : {}),
         shellOverride: context.attachOnly ? undefined : opts.shellOverride,
+        terminalShellArgs: context.attachOnly ? undefined : opts.terminalShellArgs,
         terminalWindowsWslDistro: context.attachOnly ? undefined : opts.terminalWindowsWslDistro,
         terminalWindowsPowerShellImplementation: context.attachOnly
           ? undefined

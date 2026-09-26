@@ -8,16 +8,11 @@ import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-st
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 
-// Fully stub the picker so the real expo/react-native chain never loads under
-// the vitest transform (react-native ships Flow syntax rolldown can't parse).
-vi.mock('./mobile-image-source-picker', () => ({
-  pickMobileImages: vi.fn(),
-  ImageLibraryPermissionError: class ImageLibraryPermissionError extends Error {}
-}))
-
-import { pickMobileImages } from './mobile-image-source-picker'
-
-const pick = vi.mocked(pickMobileImages)
+// Stubbed at the seam the hook now holds, which keeps the real expo/react-native chain out of the
+// vitest transform (react-native ships Flow syntax rolldown cannot parse) and pins the call site:
+// a hook that went back to importing the picker module directly would load that chain and fail.
+const pick = vi.hoisted(() => vi.fn())
+vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => ({ pickImages: pick }) }))
 
 function ok(id: string, result: unknown): RpcSuccess {
   return { id, ok: true, result, _meta: { runtimeId: 'r' } }
@@ -62,6 +57,7 @@ const SCOPE_B = 'h\0w\0tab-b'
 
 function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>): HookArgs {
   return {
+    agent: 'claude',
     activeHandleRef: { current: 'term-1' },
     deviceTokenRef: { current: null },
     getActiveWorktreeConnectionId: async () => null,
@@ -127,12 +123,17 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
 
     expect(hook!.attachments).toEqual([
-      { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
+      {
+        id: 'img-1',
+        path: '/tmp/a.png',
+        previewUri: 'file:///a.jpg',
+        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      }
     ])
     expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
   })
 
-  it('rides pending images along on send: pastes the path, settles, then delegates the text', async () => {
+  it.each(['claude', 'omp'])('rides %s images along before the text', async (agent) => {
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
@@ -161,6 +162,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     mount(
       baseArgs({
         client: trackedClient as RpcClient,
+        agent,
         deviceTokenRef: { current: 'device-1' },
         baseSend,
         sleep
@@ -182,9 +184,12 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(sendCalls).toHaveLength(2)
     expect(sendCalls[0]?.params).toMatchObject({ text: '\x15', enter: false })
     expect(sendCalls[1]?.params).toMatchObject({
-      text: '\x1b[200~/tmp/a.png\x1b[201~',
+      text: `\x1b[200~${agent === 'omp' ? '@' : ''}/tmp/a.png\x1b[201~ `,
       enter: false
     })
+    const combined = String(sendCalls[1]?.params.text ?? '') + 'look at this'
+    expect(combined).toContain('.png\x1b[201~ look')
+    expect(combined).not.toContain('.png\x1b[201~look')
     // Clear, then paste, then settle, then the text send — in that order.
     expect(order).toEqual(['clear', 'paste', 'settle', 'text:look at this'])
     // The local preview URI rides along so the sent bubble shows the photo.
@@ -267,7 +272,10 @@ describe('useMobileNativeChatImageAttachments', () => {
     }
   })
 
-  it('routes an attachments-only send through baseSend with empty text so the echo still shows the photo', async () => {
+  it.each([
+    ['empty', ''],
+    ['whitespace-only', '   ']
+  ])('routes an attachments-only send through baseSend with %s text', async (_label, text) => {
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const client = makeClient([
       methodNotFound('start'),
@@ -283,16 +291,17 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
     let accepted = false
     await act(async () => {
-      accepted = await hook!.sendNativeChat('')
+      accepted = await hook!.sendNativeChat(text)
     })
 
     expect(accepted).toBe(true)
-    // Empty text still goes through baseSend (which submits the bare Enter) so the
+    // Attachment-only text still goes through baseSend (which submits Enter) so the
     // optimistic echo carries the preview URI.
-    expect(baseSend).toHaveBeenCalledWith('', ['file:///a.jpg'], expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith(text, ['file:///a.jpg'], expect.any(Number))
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     // Only the clear + image paste hit the wire here; baseSend owns the submit.
     expect(sendCalls).toHaveLength(2)
+    expect(sendCalls[1]?.params.text).toBe('\x1b[200~/tmp/a.png\x1b[201~')
     expect(hook!.attachments).toEqual([])
   })
 

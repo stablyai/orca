@@ -6,7 +6,9 @@ import {
   isWslUncPath,
   parseWslUncPath,
   resolveWslRepoWorktreeBasePath,
-  toWindowsWslPath
+  toWindowsWslDrivePath,
+  toWindowsWslPath,
+  toWindowsWslUncPath
 } from './wsl-paths'
 
 describe('wsl path helpers', () => {
@@ -34,6 +36,37 @@ describe('wsl path helpers', () => {
     ['/mnt/C/Repo', '\\\\wsl.localhost\\Ubuntu\\mnt\\C\\Repo']
   ])('converts %s without folding case-sensitive Linux paths', (linuxPath, expected) => {
     expect(toWindowsWslPath(linuxPath, 'Ubuntu')).toBe(expected)
+  })
+
+  it.each([
+    ['/mnt/c/Users/jin', 'C:\\Users\\jin'],
+    ['/mnt/d', 'D:\\'],
+    ['/mnt/d/', 'D:\\'],
+    ['/MNT/c/Users/jin', null],
+    ['/mnt/C/Repo', null],
+    ['/home/jin', null],
+    // A drvfs prefix on a line that still carries a terminator is not a drive path.
+    ['/mnt/c/Users/jin\r', null],
+    ['/mnt/c/Users/jin\n', null],
+    ['/mnt/c/Users/jin\u2028', null],
+    ['/mnt/c/Users/jin\u2029', null]
+  ] as const)('converts the DrvFs path %j without a distro lookup', (linuxPath, expected) => {
+    expect(toWindowsWslDrivePath(linuxPath)).toBe(expected)
+  })
+
+  it.each(['\r', '\n', '\u2028', '\u2029'])(
+    'leaves a DrvFs line ending in %j on the distro UNC view',
+    (terminator) => {
+      expect(toWindowsWslPath(`/mnt/c/Users/jin${terminator}`, 'Ubuntu')).toBe(
+        `\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\jin${terminator}`
+      )
+    }
+  )
+
+  it('keeps mounted-drive paths on the distro UNC view when requested', () => {
+    expect(toWindowsWslUncPath('/mnt/c/Users/jin', 'Ubuntu')).toBe(
+      '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\jin'
+    )
   })
 })
 

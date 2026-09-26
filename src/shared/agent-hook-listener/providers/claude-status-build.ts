@@ -8,6 +8,8 @@ import { claudeRosterToSnapshots } from '../../claude-subagent-roster'
 import { resolvePrompt, resolveToolState } from '../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../provider-event-routing'
 import type { HookListenerState } from '../listener-state'
+import { mainAgentTurnInterrupted } from '../../agent-lead-status-fold'
+import { claudeMainAgentStatusForPayload } from './claude-roster-state'
 
 export function buildClaudeStatusPayload(
   state: HookListenerState,
@@ -19,9 +21,7 @@ export function buildClaudeStatusPayload(
     stateName: AgentStatusState
     workingMode?: AgentWorkingMode
     updateToolSnapshot: boolean
-    interrupted?: boolean
     sessionBoundary?: boolean
-    turnCompletedAt?: number
   }
 ): ParsedAgentStatusPayload | null {
   // Why: child-driven refreshes are roster bookkeeping, not lead tool activity; read the cached snapshot without merging so they can't clear a live AskUserQuestion card or clobber the tool preview.
@@ -31,8 +31,12 @@ export function buildClaudeStatusPayload(
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
 
+  // Why: every path writes the main agent record before building, so the row's `mainAgent`, its
+  // `interrupted` flag and its turn stamp are all read off that one record rather than restated by
+  // each caller. The normalizer clamps `interrupted` to done payloads, so a row held open by child
+  // work drops it; the record keeps the verdict for the eventual done.
+  const mainAgentRecord = state.claudeLeadStateByPaneKey.get(paneKey)
   // Why: validate directly — the JSON stringify/parse round trip other normalizers use is pure overhead on this hot per-hook path.
-  // The normalizer clamps `interrupted` to done payloads, so a gated 'working' emit drops it; claudeLeadStateByPaneKey preserves it for the eventual done.
   return normalizeAgentStatusPayload({
     state: options.stateName,
     workingMode: options.workingMode,
@@ -45,9 +49,11 @@ export function buildClaudeStatusPayload(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    interrupted: options.interrupted,
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    interrupted: mainAgentTurnInterrupted(mainAgentRecord),
     sessionBoundary: options.sessionBoundary,
-    turnCompletedAt: options.turnCompletedAt,
-    subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
+    turnCompletedAt: mainAgentRecord?.turnCompletedAt,
+    subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey)),
+    mainAgent: mainAgentRecord ? claudeMainAgentStatusForPayload(mainAgentRecord) : undefined
   })
 }

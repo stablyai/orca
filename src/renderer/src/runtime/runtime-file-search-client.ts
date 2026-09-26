@@ -48,6 +48,12 @@ export async function listRuntimeFiles(
     rootPath: string
     excludePaths?: string[]
     requestToken?: string
+    // Why: naming the cap is what makes a full page readable as "there is more". The host returns
+    // the whole listing when no limit is named, so a caller that never states one cannot tell a
+    // bound from a total.
+    maxResults?: number
+    /** Local hosts only; SSH and runtime hosts list unfiltered. */
+    nameFilter?: string
     signal?: AbortSignal
   }
 ): Promise<string[]> {
@@ -57,7 +63,9 @@ export async function listRuntimeFiles(
       rootPath: args.rootPath,
       connectionId: context.connectionId,
       excludePaths: args.excludePaths,
-      requestToken: args.requestToken
+      requestToken: args.requestToken,
+      ...(args.maxResults === undefined ? {} : { maxResults: args.maxResults }),
+      ...(args.nameFilter && !context.connectionId ? { nameFilter: args.nameFilter } : {})
     })
   }
   return callRuntimeRpc<string[]>(
@@ -65,7 +73,9 @@ export async function listRuntimeFiles(
     'files.listAll',
     {
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
-      excludePaths: args.excludePaths
+      excludePaths: args.excludePaths,
+      // Optional on the host schema since #17954; an older host strips it and keeps its own default.
+      ...(args.maxResults === undefined ? {} : { maxResults: args.maxResults })
     },
     { timeoutMs: 15_000, ...(args.signal === undefined ? {} : { signal: args.signal }) }
   )

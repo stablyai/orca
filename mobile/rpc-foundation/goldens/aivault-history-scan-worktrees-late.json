@@ -1,0 +1,213 @@
+{
+  "operation": "aiVault.history-scan",
+  "family": "aiVault.history",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "02a55944347346065453e179e071e64d9ae861dc",
+  "lockfileSha256": "9317f3a98ab047f9f96fe26fd8531b8a632ac5954064b322f41a904148cbf6bb",
+  "recorderSha256": "f67c2f5b753d2a4f572599f6861fae8e6e917fe89ac75b58288f8e84be609d86",
+  "adapterSha256": "ec16931c5431d3dbb05729d4670c381a434bff71648d334b7b5224db188fdccb",
+  "scenarioSha256": "10011c7c75e74d9c2e880c5458c9156264ae07e91956a80946ede1d4e684952a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "05215ca2ea35": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "issues": [],
+            "sessions": [
+              {
+                "agent": "claude",
+                "cwd": "/repo/feature",
+                "id": "s1"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "33d053404f10": {
+      "activeWorktreePath": {
+        "$rpc": "null"
+      },
+      "hostStatusResult": {
+        "capabilities": ["aiVault.v1"]
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "kind": "loading"
+      }
+    },
+    "4a76a58cbdac": {
+      "name": "status.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["aiVault.v1"]
+          }
+        }
+      }
+    },
+    "4e35efd1ee45": {
+      "name": "status.get#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": ["aiVault.v1"]
+          }
+        }
+      }
+    },
+    "72d9a278aca3": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
+    },
+    "cd739a80b7a8": {
+      "activeWorktreePath": "/repo/feature",
+      "hostStatusResult": {
+        "capabilities": ["aiVault.v1"]
+      },
+      "refreshing": false,
+      "scope": "workspace",
+      "screenState": {
+        "issues": [],
+        "kind": "ready",
+        "sessions": [
+          {
+            "agent": "claude",
+            "cwd": "/repo/feature",
+            "id": "s1"
+          }
+        ]
+      }
+    },
+    "d08f74d65ee6": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f1834177e593": {
+      "name": "status.get#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    }
+  },
+  "recording": {
+    "scenario": "aivault-history-scan-worktrees-late",
+    "checkpoints": [
+      {
+        "id": "held",
+        "observation": {
+          "sender": ["4a76a58cbdac"],
+          "payloads": ["d08f74d65ee6"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "33d053404f10",
+          "effects": []
+        }
+      },
+      {
+        "id": "ready",
+        "observation": {
+          "sender": ["4a76a58cbdac", "4e35efd1ee45", "05215ca2ea35"],
+          "payloads": ["d08f74d65ee6", "f1834177e593", "72d9a278aca3"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "worktrees-loaded": "eb79a9b3682a"
+          },
+          "state": "cd739a80b7a8",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -32,6 +32,9 @@
  * because that part `CommandLineToArgvW` does interpret.
  */
 function quoteWindows(value: string, escapePercent: boolean): string {
+  if (!(escapePercent ? /[\\"%]/ : /[\\"]/).test(value)) {
+    return `"${value}"`
+  }
   let quoted = '"'
   let backslashes = 0
   for (const char of value) {
@@ -80,6 +83,15 @@ export function quoteWindowsCmdArgument(value: string): string {
   return quoteWindows(value, true)
 }
 
+export function validateWindowsCmdArguments(values: readonly string[]): void {
+  for (const value of values) {
+    // cmd ends a command at CR/LF regardless of quoting.
+    if (/[\r\n]/.test(value)) {
+      throw new Error('cmd.exe cannot receive an argument containing a line break')
+    }
+  }
+}
+
 /**
  * Build the argv Node should spawn to run `program` with `args` through
  * `cmd.exe`, for targets cmd must interpret (`.cmd`, `.bat`).
@@ -96,17 +108,7 @@ export function quoteWindowsCmdArgument(value: string): string {
  * outer quote pair and treat the rest verbatim.
  */
 export function buildWindowsCmdShimCommandLine(program: string, args: readonly string[]): string {
-  // Why reject rather than encode: cmd's line parser ends the command at a raw
-  // CR or LF whatever the quote state, so there is no escape for it -- quoting
-  // does not survive a line break. Encoding one anyway truncates the argument
-  // and can leave the remainder to be interpreted as a further command. Agent
-  // prompts are the motivating input here and can contain newlines, so this
-  // has to fail loudly rather than silently mangle.
-  for (const value of [program, ...args]) {
-    if (/[\r\n]/.test(value)) {
-      throw new Error('cmd.exe cannot receive an argument containing a line break')
-    }
-  }
+  validateWindowsCmdArguments([program, ...args])
   // The program path needs the same treatment as the arguments: it is just as
   // likely to contain `%USERNAME%`, and cmd expands it just the same.
   const inner = [program, ...args].map(quoteWindowsCmdArgument).join(' ')

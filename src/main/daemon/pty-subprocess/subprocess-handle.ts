@@ -9,8 +9,13 @@ import { isValidPtySize } from '../daemon-pty-size'
 import type { SubprocessHandle } from '../session-subprocess-handle'
 import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
+import { ptyProcessNameIsSpawnFile } from './spawn-file-foreground-process'
+import { inspectSpawnFileWindowsChildProcesses } from './spawn-file-child-processes'
 
-type DisposableNativePty = pty.IPty & { destroy?: () => void }
+type DisposableNativePty = pty.IPty & {
+  destroy?: () => void
+  signalProcess?: (signal: string) => void
+}
 
 export function createDaemonPtySubprocessHandle(args: {
   process: pty.IPty
@@ -23,11 +28,14 @@ export function createDaemonPtySubprocessHandle(args: {
   sessionId: string
   startupAgentRecognition: RecognizedAgentProcess | null
 }): SubprocessHandle {
+  const reportsChildExitStatus = args.reportsChildExitStatus
   const proc = args.process
   // node-pty exposes destroy at runtime but omits it from IPty.
-  const nativeProc = proc as DisposableNativePty
+  const nativeProc: DisposableNativePty = proc
   const events = new PtyPreListenerEvents()
   let dead = false
+  // I/O failure is not exit evidence; keep termination and producer flow control available.
+  let ioFailed = false
   let disposed = false
   let nodePtyKillIssued = false
   const foreground = createPtyForegroundProcessTracker({
@@ -44,24 +52,27 @@ export function createDaemonPtySubprocessHandle(args: {
     events.acceptData(data)
   })
   proc.onExit(({ exitCode, signal }) => {
-    events.acceptExit({
-      exitCode,
-      signal,
-      hostReportsChildExitStatus: args.reportsChildExitStatus
-    })
-  })
-  proc.onExit(() => {
+    // Exit listeners may re-enter cleanup; retire signal authority before notifying them.
     dead = true
     foreground.markDead()
     // Why: neutralize kill synchronously so a later async socket-close SIGHUP cannot hit a recycled pid.
     if (process.platform !== 'win32') {
       nativeProc.kill = () => {}
     }
+    events.acceptExit({
+      exitCode,
+      signal,
+      hostReportsChildExitStatus: reportsChildExitStatus
+    })
   })
 
   const slavePath = readPtySlavePath(proc)
   return {
     pid: proc.pid,
+    processNameIsSpawnFile: ptyProcessNameIsSpawnFile(proc),
+    ...(process.platform === 'win32'
+      ? { inspectChildProcesses: () => inspectSpawnFileWindowsChildProcesses(proc) }
+      : {}),
     shellPath: args.shellPath,
     shellCwd: args.spawnCwd,
     shellPathEnv: args.env.PATH,
@@ -73,23 +84,23 @@ export function createDaemonPtySubprocessHandle(args: {
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,
     write: (data) => {
-      if (dead) {
+      if (dead || ioFailed) {
         return
       }
       try {
         proc.write(data)
       } catch {
-        dead = true
+        ioFailed = true
       }
     },
     resize: (cols, rows) => {
-      if (dead || !isValidPtySize(cols, rows)) {
+      if (dead || ioFailed || !isValidPtySize(cols, rows)) {
         return
       }
       try {
         proc.resize(cols, rows)
       } catch {
-        dead = true
+        ioFailed = true
       }
     },
     // WindowsTerminal also wires _socket to the ConPTY conout pipe, so pausing backpressures the child.
@@ -114,7 +125,7 @@ export function createDaemonPtySubprocessHandle(args: {
       }
     },
     clear: () => {
-      if (dead) {
+      if (dead || ioFailed) {
         return
       }
       try {
@@ -162,6 +173,14 @@ export function createDaemonPtySubprocessHandle(args: {
     },
     signal: (sig) => {
       if (dead) {
+        return
+      }
+      if (nativeProc.signalProcess) {
+        try {
+          nativeProc.signalProcess(sig)
+        } catch {
+          /* The process may have exited. */
+        }
         return
       }
       const signalRootPid = (): void => {

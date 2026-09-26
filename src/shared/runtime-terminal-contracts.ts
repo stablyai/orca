@@ -1,4 +1,3 @@
-import type { AgentSessionPtyWriteRefusal } from './agent-session-pty-write-admission'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -6,6 +5,7 @@ import type {
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
+import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
@@ -83,10 +83,8 @@ export type RuntimeTerminalVisualLayout = {
   root: RuntimeTerminalVisualLayoutNode
 }
 
-export type RuntimeTerminalListHostScope = {
-  hostIds: ExecutionHostId[]
-  omittedHostIds: ExecutionHostId[]
-}
+/** The shared listing-scope shape, kept under its incumbent name for existing consumers. */
+export type RuntimeTerminalListHostScope = RuntimeListingHostScope
 
 export type RuntimeTerminalListResult = {
   terminals: RuntimeTerminalSummary[]
@@ -159,6 +157,14 @@ export type RuntimeWorktreeTerminalSleepResult = {
     }
 )
 
+export type RuntimeWorktreeTerminalCloseResult = {
+  closed: number
+  stopped: number
+  retiredSurfaces: true
+  ptyStopVerdict?: 'live' | 'unverifiable'
+  ptyStopReason?: string
+}
+
 export type RuntimeTerminalInteractiveWaitSource = 'hook' | 'prompt-text' | 'title'
 
 export type RuntimeTerminalInteractiveWait = {
@@ -203,11 +209,23 @@ export type RuntimeTerminalSend = {
   accepted: boolean
   bytesWritten: number
   refusedReason?: 'no-agent' | 'permission'
-  /**
-   * Present only when a durable agent-session lease refused the write. Additive and optional: an
-   * old client sees the `accepted: false` it already handles and ignores this field.
-   */
-  agentSessionRefusal?: AgentSessionPtyWriteRefusal
+  prompt?: RuntimeTerminalPromptDelivery
+}
+
+export type RuntimeTerminalPromptStage = 'input_accepted' | 'turn_started'
+
+export type RuntimeTerminalPromptDelivery = {
+  requestId: string
+  stages: RuntimeTerminalPromptStage[]
+  provider: 'claude' | 'codex' | 'unsupported' | 'old-host'
+  observation: 'supported' | 'unsupported' | 'incarnation_replaced' | 'permission'
+  processIncarnation: string
+  generation: number
+  baselineWorkingSequence: number
+  /** Hook turn-start timestamp before this prompt was accepted. */
+  baselineExplicitWorkingStartedAt?: number | null
+  /** Permission observations seen before this prompt was accepted. */
+  baselinePermissionSequence?: number
 }
 
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
@@ -239,6 +257,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   activate?: boolean
   presentation?: RuntimeTerminalPresentation
   surfaceOwner?: false
+  /** Windows shell the created tab spawns AS, instead of the host default. */
+  shellOverride?: string
 }
 
 export type RuntimeTerminalCreateRequestPayload =
@@ -250,6 +270,8 @@ export type RuntimeTerminalCreateRequestPayload =
 
 export type RuntimeTerminalCreate = {
   handle: string
+  /** Host-owned PTY incarnation used to fence remote identity observations. */
+  incarnationId?: string | null
   tabId?: string
   paneKey?: string | null
   ptyId?: string | null
@@ -275,6 +297,8 @@ export type RuntimeTerminalSplit = {
 
 export type RuntimeTerminalResolvePane = {
   handle: string
+  /** Host-owned PTY incarnation used to fence remote identity observations. */
+  incarnationId?: string | null
   tabId: string
   leafId: string
   ptyId: string | null
@@ -302,6 +326,10 @@ export type RuntimeTerminalClose = {
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
 
+// Why both spellings: the codex-* members were published by every host before the agent-neutral
+// rename, so they are permanent — a client still has to read them off an older host. This build
+// keeps a codex-* reason only where the matched wording is plausibly Codex's own; every matcher
+// that inspects no agent publishes the agent-* spelling.
 export type RuntimeTerminalWaitBlockedReason =
   | 'codex-update-prompt'
   | 'codex-trust-workspace'
@@ -309,6 +337,11 @@ export type RuntimeTerminalWaitBlockedReason =
   | 'codex-model-migration-prompt'
   | 'codex-hooks-review-prompt'
   | 'codex-interactive-prompt'
+  | 'agent-update-prompt'
+  | 'agent-trust-workspace'
+  | 'agent-cwd-prompt'
+  | 'agent-hooks-review-prompt'
+  | 'agent-interactive-prompt'
   | 'agent-approval-prompt'
 
 export type RuntimeTerminalWait = {

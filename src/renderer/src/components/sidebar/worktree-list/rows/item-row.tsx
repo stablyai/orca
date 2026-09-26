@@ -23,7 +23,7 @@ import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler
 import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { getWorktreeOptionId } from './option-dom'
-import type { WorktreePointerDrag, WorktreeRowDragState } from '../drag/row-state'
+import type { WorktreeRowDragState } from '../drag/row-state'
 
 export type WorktreeItemRowContext = {
   settings: AppState['settings']
@@ -33,7 +33,6 @@ export type WorktreeItemRowContext = {
   groupIndexByRowKey: ReadonlyMap<string, number>
   agentSendTargetWorktreeId: string | null
   worktreeDragState: WorktreeRowDragState
-  worktreePointerDragRef: React.MutableRefObject<WorktreePointerDrag | null>
   nativeLineageDropTargetId: string | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
@@ -44,6 +43,7 @@ export type WorktreeItemRowContext = {
   getActiveSurfaceVariant: (row: WorktreeItemRow) => ActiveSurfaceVariant
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
+  onWorktreeCardClick?: () => void
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
@@ -139,8 +139,7 @@ export function renderWorktreeItemRow(
   const worktreeIdentity = getWorktreeHostIdentity(itemRow.worktree)
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
-    (ctx.worktreePointerDragRef.current?.latestStatusDropTarget?.target.lineageParentId ===
-      itemRow.worktree.id ||
+    (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
       ctx.nativeLineageDropTargetId === itemRow.worktree.id)
   const isActiveWorktree =
     ctx.activeWorktreeId === itemRow.worktree.id &&
@@ -209,6 +208,7 @@ export function renderWorktreeItemRow(
         activationRowKey={itemRow.rowKey}
         onImmediateActivate={ctx.onImmediateActivate}
         onSelectionGesture={ctx.onSelectionGesture}
+        onWorktreeCardClick={ctx.onWorktreeCardClick}
         onContextMenuSelect={ctx.onContextMenuSelect}
         onCardDragStart={ctx.onCardDragStart}
         onCardDragEnd={ctx.onCardDragEnd}

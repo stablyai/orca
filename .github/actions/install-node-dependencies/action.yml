@@ -10,6 +10,10 @@ inputs:
     description: Node.js version override; defaults to the version declared in package.json.
     required: false
     default: ''
+  cache-dependency-path:
+    description: Lockfiles for the pnpm download store; include mobile/pnpm-lock.yaml only when the job installs mobile dependencies.
+    required: false
+    default: pnpm-lock.yaml
   persist-native-cache:
     description: Save restored native modules at job end. Set false when a later step overwrites the same path with a different ABI.
     required: false
@@ -39,13 +43,16 @@ runs:
       with:
         install: false
 
+    # Desktop-only jobs should not miss their download cache when mobile dependencies change.
     - name: Setup Node.js
       id: default-node
       if: inputs.node-version == ''
       uses: actions/setup-node@v6
       with:
         node-version-file: package.json
-        cache: pnpm
+        cache: ${{ github.event_name != 'pull_request' && 'pnpm' || '' }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+        package-manager-cache: false
 
     - name: Setup requested Node.js
       id: requested-node
@@ -53,7 +60,31 @@ runs:
       uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
-        cache: pnpm
+        cache: ${{ github.event_name != 'pull_request' && 'pnpm' || '' }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+        package-manager-cache: false
+
+    # PR-local stores compete with reusable build caches for the repository quota.
+    - name: Resolve pnpm download store
+      id: pnpm-store
+      if: github.event_name == 'pull_request'
+      shell: bash
+      env:
+        LOCKFILE_HASH: ${{ hashFiles(inputs.cache-dependency-path) }}
+      run: |
+        test -n "$LOCKFILE_HASH"
+        cache_path="$(pnpm store path --silent)"
+        test -n "$cache_path"
+        printf 'path=%s\n' "$cache_path" >> "$GITHUB_OUTPUT"
+        printf 'arch=%s\n' "$(node -p 'require("node:os").arch()')" >> "$GITHUB_OUTPUT"
+
+    # Match setup-node's key and path so existing default-branch stores remain reusable.
+    - name: Restore pnpm download store without saving
+      if: github.event_name == 'pull_request'
+      uses: actions/cache/restore@v5
+      with:
+        path: ${{ steps.pnpm-store.outputs.path }}
+        key: node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}
 
     - name: Validate native runtime
       shell: bash
@@ -67,14 +98,6 @@ runs:
             exit 2
             ;;
         esac
-
-    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
-    - name: Use external node-gyp
-      if: runner.os == 'Linux' && inputs.native-runtime != 'none'
-      shell: bash
-      run: |
-        npm install -g node-gyp@11.5.0
-        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
     - name: Prepare dependency install
       shell: bash
@@ -151,9 +174,9 @@ runs:
       with:
         path: |
           node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
-          node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
-          node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+          native/windows-registry/build
+          node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
+        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
 
     - name: Restore compiled native modules without saving
       id: native-cache-restore-only
@@ -162,9 +185,25 @@ runs:
       with:
         path: |
           node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
-          node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
-          node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+          native/windows-registry/build
+          node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
+        key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
+
+    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
+    - name: Use external node-gyp
+      if: runner.os == 'Linux' && inputs.native-runtime != 'none'
+      shell: bash
+      env:
+        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
+        NATIVE_CACHE_HIT: ${{ steps.native-cache-restore.outputs.cache-hit || steps.native-cache-restore-only.outputs.cache-hit }}
+      run: |
+        # A cache hit can contain unusable addons; probe before skipping the rebuild toolchain.
+        if [ "$NATIVE_RUNTIME" = node ] && [ "$NATIVE_CACHE_HIT" = true ] &&
+          node config/scripts/ensure-native-runtime.mjs --check-only; then
+          exit 0
+        fi
+        npm install -g node-gyp@11.5.0
+        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
     - name: Prepare native runtime
       if: inputs.native-runtime != 'none'

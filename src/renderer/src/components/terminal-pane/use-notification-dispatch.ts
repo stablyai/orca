@@ -1,9 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
-import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
-import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
 import {
@@ -15,17 +12,17 @@ import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
+import { getNotificationWorkspaceLabels } from './terminal-notification-state'
+import { createTerminalAttentionSurface } from './terminal-attention-surface'
 import {
-  countReposNeedingNotificationDisambiguation,
-  getPaneKeyTabId,
-  hasLivePtyForNotification,
-  isCurrentKnownPaneKey,
-  isCurrentLivePaneKey
-} from './terminal-notification-state'
+  applyAgentAttention,
+  resolveAgentAttention,
+  type AgentAttentionDeliveryRequest
+} from '@/attention/agent-attention-policy'
 import {
-  isOrcaWindowForegroundFocused,
-  isVisibleForegroundPaneKey
-} from './terminal-notification-pane-visibility'
+  deliverAgentAttentionNotification,
+  readAgentAttentionNotificationSound
+} from '@/attention/agent-attention-notification-delivery'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
 
@@ -56,7 +53,6 @@ export type TerminalNotificationEvent = {
   paneKey?: string
   agentStatusSnapshot?: AgentCompletionStatusSnapshot
   agentCompletionSource?: AgentCompletionDispatchMeta['source']
-  suppressOsNotification?: boolean
 }
 
 /**
@@ -120,73 +116,26 @@ export function dispatchTerminalNotification(
   }
   const agentNotificationStateStartedAt =
     eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
-  // Why: main-process hook IPC can update inactive/unmounted worktrees before
-  // the renderer's live-PTY map catches up. A fresh accepted hook snapshot is
-  // authoritative for agent completion; title/BEL-only paths still need PTY liveness.
-  const hasFreshAgentStatus = Boolean(agentStatus)
-
-  // Why: shutdownWorktreeTerminals clears ptyIdsByTabId synchronously
-  // before killing PTYs asynchronously. Any notification arriving after
-  // that point is stale — e.g. a staleTitleTimer that fires 3 s after
-  // shutdown, or an agent tracker transition from accumulated closure
-  // state. Checking for live PTYs at dispatch time catches ALL phantom
-  // notification sources regardless of which timer or callback produced
-  // them, rather than trying to cancel each one individually.
-  const hasLivePty = hasLivePtyForNotification(state, worktreeId, event.paneKey)
-  if (!hasLivePty && !hasFreshAgentStatus) {
+  const attentionDecision = resolveAgentAttention(
+    {
+      subject: { workspaceId: worktreeId, surfaceKey: event.paneKey },
+      reason: event.source === 'agent-task-complete' ? 'agent-completion' : 'terminal-bell',
+      settlesTurn: event.source === 'agent-task-complete',
+      // Why: main-process hook IPC can update inactive worktrees before the renderer's live-PTY
+      // map catches up. An accepted fresh hook snapshot is authority that the turn ended;
+      // title/BEL-only paths still need surface liveness.
+      hasFreshActivityEvidence: Boolean(agentStatus),
+      groupAttentionEnabled: state.settings?.experimentalTerminalAttention === true
+    },
+    createTerminalAttentionSurface(state)
+  )
+  if (!attentionDecision.admitted) {
     return
   }
 
-  if (event.source === 'agent-task-complete') {
-    const terminalAttentionEnabled = state.settings?.experimentalTerminalAttention === true
-    let tabId: string | null = null
-    if (event.paneKey) {
-      tabId = getPaneKeyTabId(event.paneKey)
-      // Why: delayed completion hooks from a closed split pane can arrive while
-      // another pane in the tab is still live; stale leaf completions must not
-      // create unread state or OS notifications.
-      const isCurrentPane = hasLivePty
-        ? isCurrentLivePaneKey(state, worktreeId, event.paneKey)
-        : isCurrentKnownPaneKey(state, worktreeId, event.paneKey)
-      if (!tabId || !isCurrentPane) {
-        return
-      }
-    }
+  // Desktop settings are applied in main after independent mobile delivery.
 
-    // Why: a focused worktree can still hide other terminal tabs/split panes;
-    // only the exact active pane counts as already viewed.
-    const shouldMarkUnread = event.paneKey
-      ? !isVisibleForegroundPaneKey(state, worktreeId, event.paneKey)
-      : state.activeWorktreeId !== worktreeId || !isOrcaWindowForegroundFocused()
-    if (shouldMarkUnread) {
-      // Why: activeWorktreeId is only in-app selection. If Orca is backgrounded,
-      // a selected chat finishing still needs unread/Dock attention.
-      state.markWorktreeUnread(worktreeId)
-      if (event.paneKey) {
-        // Why: focus-return auto-ack needs an agent-specific source marker;
-        // generic pane unread also covers BEL and must still show until interact.
-        state.markAgentCompletionPaneUnread(event.paneKey)
-      }
-      if (terminalAttentionEnabled && tabId && event.paneKey) {
-        state.markTerminalTabUnread(tabId)
-        state.markTerminalPaneUnread(event.paneKey)
-      }
-    }
-  }
-
-  if (event.suppressOsNotification) {
-    return
-  }
-
-  // Why: prefer worktree.repoId over string-parsing the worktreeId. The
-  // `${repoId}::${path}` format is an implementation detail of id
-  // construction; coupling the notification dispatcher to it would silently
-  // drop the repo label if that format ever changes. The worktree object
-  // itself is the source of truth for its owning repo.
-  const worktree = getWorktreeMapFromState(state).get(worktreeId)
-  const repo = worktree ? getRepoMapFromState(state).get(worktree.repoId) : null
-  const customSoundId = state.settings?.notifications?.customSoundId ?? 'system'
-  const customSoundVolume = state.settings?.notifications?.customSoundVolume ?? null
+  const sound = readAgentAttentionNotificationSound(state.settings ?? {})
   // Why: pane keys are reused across turns. A rich OS notification must not
   // expose the previous turn's prompt if the current turn has no fresh hook snapshot yet.
   const agentSnapshot = agentStatus
@@ -212,34 +161,31 @@ export function dispatchTerminalNotification(
         })
       : null
 
-  void window.api.notifications
-    .dispatch({
-      source: event.source,
-      ...(notificationId ? { notificationId } : {}),
-      worktreeId,
-      paneKey: event.paneKey,
-      repoLabel: repo?.displayName,
-      worktreeLabel: worktree?.displayName || worktree?.branch || worktreeId,
-      hasMultipleActiveRepos: countReposNeedingNotificationDisambiguation(state) > 1,
-      terminalTitle: event.terminalTitle,
-      isActiveWorktree: state.activeWorktreeId === worktreeId,
-      ...agentSnapshot
-    })
-    .then((result) => {
-      if (result.delivered) {
-        void playDesktopNotificationSound(customSoundId, customSoundVolume)
-        return
-      }
-      // Why: macOS is silently swallowing notifications (permission off or
-      // prompt unanswered) — surface an in-app pointer at the fix instead of
-      // letting the alert vanish without a trace.
-      if (result.reason === 'blocked-by-system') {
-        showBlockedNotificationFallbackToast()
-      }
-    })
-    .catch((err) => {
-      console.warn('Failed to dispatch notification:', err)
-    })
+  const requestDelivery = (request: AgentAttentionDeliveryRequest): void => {
+    deliverAgentAttentionNotification(
+      {
+        source: event.source,
+        ...(notificationId ? { notificationId } : {}),
+        worktreeId: request.workspaceId,
+        paneKey: request.subjectKey ?? undefined,
+        ...getNotificationWorkspaceLabels(state, request.workspaceId, event.terminalTitle),
+        terminalTitle: event.terminalTitle,
+        isActiveWorktree: request.workspaceIsActive,
+        ...agentSnapshot
+      },
+      sound
+    )
+  }
+
+  applyAgentAttention(attentionDecision, {
+    unread: {
+      markWorkspaceUnread: state.markWorktreeUnread,
+      markSubjectUnread: state.markAgentCompletionPaneUnread,
+      markGroupUnread: state.markTerminalTabUnread,
+      markSurfaceUnread: state.markTerminalPaneUnread
+    },
+    requestDelivery
+  })
 }
 
 export function useNotificationDispatch(

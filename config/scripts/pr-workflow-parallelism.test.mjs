@@ -1,8 +1,13 @@
-import { globSync, readFileSync } from 'node:fs'
+import { existsSync, globSync, readFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
+import { MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV } from './mobile-web-app-bundle-dependencies.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
+const prTestLocWorkflow = parse(readFileSync('.github/workflows/pr-test-loc.yml', 'utf8'))
+const trackingWorkflow = parse(readFileSync('.github/workflows/track-community-prs.yaml', 'utf8'))
+const releasePolicyWorkflow = parse(readFileSync('.github/workflows/release-policy.yml', 'utf8'))
+const issueLabelWorkflow = parse(readFileSync('.github/workflows/issue-os-labeler.yaml', 'utf8'))
 const unitTestWorkflow = parse(readFileSync('.github/workflows/unit-tests.yml', 'utf8'))
 const nodeNextWorkflow = parse(readFileSync('.github/workflows/node-next-compat.yml', 'utf8'))
 const dependencyAction = parse(
@@ -15,6 +20,7 @@ const shellContractFiles = [
   'src/main/daemon/shell-ready.test.ts',
   'src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
+  'src/main/pty/omp-shell-wrapper-alias-safety.test.ts',
   'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
@@ -41,9 +47,22 @@ const realZshUsage =
   /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath|from '[^']*zsh-startup-hook-pty-harness'/
 
 describe('PR workflow parallelism', () => {
+  it('keeps lightweight orchestration jobs on the free slim runner', () => {
+    expect(workflow.jobs.code_paths['runs-on']).toBe('ubuntu-slim')
+    expect(workflow.jobs.typecheck['runs-on']).toBe('ubuntu-24.04-arm')
+    expect(workflow.jobs.verify['runs-on']).toBe('ubuntu-slim')
+    expect(prTestLocWorkflow.jobs.loc['runs-on']).toBe('ubuntu-slim')
+    expect(trackingWorkflow.jobs['track-community-pr']['runs-on']).toBe('ubuntu-slim')
+    expect(releasePolicyWorkflow.jobs.enforce['runs-on']).toBe('ubuntu-slim')
+    expect(issueLabelWorkflow.jobs['apply-os-label']['runs-on']).toBe('ubuntu-slim')
+  })
+
   it('cancels superseded runs for the same pull request', () => {
     expect(workflow.concurrency.group).toBe('pr-checks-${{ github.event.pull_request.number }}')
     expect(workflow.concurrency['cancel-in-progress']).toBe(true)
+    expect(workflow.jobs.test.if).toContain('!cancelled()')
+    expect(workflow.jobs.test.if).not.toContain('always()')
+    expect(workflow.jobs.verify.if).toBe('${{ !cancelled() }}')
   })
 
   it('grants the PR workflow read-only repository access', () => {
@@ -57,6 +76,9 @@ describe('PR workflow parallelism', () => {
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
     const primerInstall = workflow.jobs.test_native_cache.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const nodeNextPrimerInstall = nodeNextWorkflow.jobs.test_native_cache.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
 
@@ -80,6 +102,9 @@ describe('PR workflow parallelism', () => {
     expect(primerInstall.with['native-runtime']).toBe('node')
     expect(primerInstall.with['node-version']).toBe('24')
     expect(workflow.jobs.test.needs).toContain('test_native_cache')
+    expect(nodeNextPrimerInstall.with['native-runtime']).toBe('node')
+    expect(nodeNextPrimerInstall.with['node-version']).toBe('26')
+    expect(nodeNextWorkflow.jobs.test.needs).toEqual(['test_native_cache'])
   })
 
   it('runs real-shell coverage once outside the general shards', () => {
@@ -96,8 +121,13 @@ describe('PR workflow parallelism', () => {
         .split(/\s+/)
         .filter((token) => !['apt-get', 'install', 'sudo', ''].includes(token))
         .filter((token) => !token.startsWith('-'))
-    const jobsInstallingPackages = Object.entries(workflow.jobs)
-      .filter(([, job]) => (job.steps ?? []).some((step) => aptPackages(step).length > 0))
+    const requiredShells = ['zsh', 'fish']
+    const jobsInstallingShells = Object.entries(workflow.jobs)
+      .filter(([, job]) =>
+        (job.steps ?? []).some((step) =>
+          aptPackages(step).some((packageName) => requiredShells.includes(packageName))
+        )
+      )
       .map(([name]) => name)
 
     expect(shellStep).toBeDefined()
@@ -105,11 +135,11 @@ describe('PR workflow parallelism', () => {
     expect(shellStep.run.split(/\s+/)).toContain('--maxWorkers=1')
     // Why the whole workflow, not just the general shards: any other lane installing
     // these shells would silently start running the real-shell tests twice.
-    expect(jobsInstallingPackages).toEqual(['shell_contracts'])
+    expect(jobsInstallingShells).toEqual(['shell_contracts'])
     // Why each shell is asserted: the live tests skip themselves when the binary is
     // missing, so a dropped package silently empties this lane instead of failing it.
     const shellPackages = workflow.jobs.shell_contracts.steps.flatMap(aptPackages)
-    for (const shell of ['zsh', 'fish']) {
+    for (const shell of requiredShells) {
       expect(shellPackages).toContain(shell)
     }
     expect(shellInstall.with['native-runtime']).toBe('node')
@@ -177,6 +207,15 @@ describe('PR workflow parallelism', () => {
       // Why this file is excluded: it carries the detector pattern as a literal
       // and would otherwise match itself.
       .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.mjs')
+      // TypeScript builds can leave an ignored JavaScript companion beside a source
+      // test. Inspect the source file once so generated output cannot duplicate it.
+      .filter(
+        (testFile) =>
+          !testFile.endsWith('.js') ||
+          !['.ts', '.tsx', '.mjs', '.cjs'].some((extension) =>
+            existsSync(testFile.replace(/\.js$/, extension))
+          )
+      )
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))
       .sort()
 
@@ -230,11 +269,20 @@ describe('PR workflow parallelism', () => {
     expect(steps[pnpmIndex].uses).toBe('pnpm/setup@v2')
     expect(steps[pnpmIndex].with.version).toBeUndefined()
     expect(steps[pnpmIndex].with.install).toBe(false)
-    expect(steps[nodeIndex].with.cache).toBe('pnpm')
+    const saveOutsidePrs = "${{ github.event_name != 'pull_request' && 'pnpm' || '' }}"
+    expect(steps[nodeIndex].with.cache).toBe(saveOutsidePrs)
     expect(steps[nodeIndex].if).toBe("inputs.node-version == ''")
     expect(steps[requestedNodeIndex].if).toBe("inputs.node-version != ''")
     expect(steps[requestedNodeIndex].with['node-version']).toBe('${{ inputs.node-version }}')
-    expect(steps[requestedNodeIndex].with.cache).toBe('pnpm')
+    expect(steps[requestedNodeIndex].with.cache).toBe(saveOutsidePrs)
+    const restoreIndex = steps.findIndex(
+      (step) => step.name === 'Restore pnpm download store without saving'
+    )
+    expect(restoreIndex).toBeGreaterThan(requestedNodeIndex)
+    expect(restoreIndex).toBeLessThan(
+      steps.findIndex((step) => step.name === 'Install dependencies')
+    )
+    expect(steps[restoreIndex].uses).toBe('actions/cache/restore@v5')
   })
 
   it('uses the repository package-manager version for every direct pnpm setup', () => {
@@ -308,10 +356,8 @@ describe('PR workflow parallelism', () => {
     expect(dependencyInstall.run).toContain('--ignore-scripts')
     expect(dependencyInstall.run).not.toContain('--os=')
     expect(dependencyInstall.run).not.toContain('--cpu=')
-    expect(pnpmWorkspace.supportedArchitectures.os).toEqual(
-      expect.arrayContaining(['current', 'win32'])
-    )
-    expect(pnpmWorkspace.supportedArchitectures.cpu).toContain('current')
+    expect(pnpmWorkspace.supportedArchitectures.os).toEqual(['current'])
+    expect(pnpmWorkspace.supportedArchitectures.cpu).toEqual(['current'])
     const prepareRuntime = dependencyAction.runs.steps.find(
       (step) => step.name === 'Prepare native runtime'
     )
@@ -369,8 +415,8 @@ describe('PR workflow parallelism', () => {
       expect(cacheStep.with.key).toContain('config/scripts/ensure-native-runtime.mjs')
       expect(cacheStep.with.key).toContain('config/scripts/rebuild-native-deps.mjs')
       expect(cacheStep.with.path).toContain('node-pty@*/node_modules/node-pty/build')
-      expect(cacheStep.with.path).toContain('windows-native-registry@')
-      expect(cacheStep.with.path).toContain('@vscode+windows-process-tree@')
+      expect(cacheStep.with.path).toContain('native/windows-registry/build')
+      expect(cacheStep.with.path).toContain('@vscode+windows-process-tre*')
       expect(cacheStep.with['restore-keys']).toBeUndefined()
     }
     expect(steps[cacheIndex].id).toBe('native-cache-restore')
@@ -436,7 +482,6 @@ describe('PR workflow parallelism', () => {
     expect(workflow.jobs.verify.needs).toEqual([
       'code_paths',
       'static_analysis',
-      'root_directory_guard',
       'typecheck',
       'git_compatibility',
       'codex_index_heal_contract',
@@ -444,6 +489,7 @@ describe('PR workflow parallelism', () => {
       'shell_contracts',
       'test',
       'orcad_browser',
+      'mobile_web_app',
       'cross-version-wire',
       'managed_hook_node18',
       'package',
@@ -460,5 +506,19 @@ describe('PR workflow parallelism', () => {
     expect(verifyStep.run).toContain('"$ORCAD_BROWSER"')
     expect(verifyStep.env.CROSS_VERSION_WIRE).toBe('${{ needs.cross-version-wire.result }}')
     expect(verifyStep.run).toContain('"$CROSS_VERSION_WIRE"')
+    // Same reason as the browser provider: the render check fails loudly on a runner with no
+    // Chrome, which only guards the page if verify reads the job's result.
+    expect(verifyStep.env.MOBILE_WEB_APP).toBe('${{ needs.mobile_web_app.result }}')
+    expect(verifyStep.run).toContain('"$MOBILE_WEB_APP"')
+  })
+
+  it('makes the mobile_web_app job refuse to skip the tests it exists to run', () => {
+    // The bundling tests skip themselves without mobile/node_modules, which is what keeps the
+    // sharded `test` job green. Only this env var stops that skip from spreading to the one job
+    // that installs them, so a typo here would leave the whole job passing vacuously.
+    const step = workflow.jobs.mobile_web_app.steps.find((entry) =>
+      entry.run?.includes('build-mobile-web-app-bundle.test.mjs')
+    )
+    expect(step.env[MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV]).toBe('1')
   })
 })

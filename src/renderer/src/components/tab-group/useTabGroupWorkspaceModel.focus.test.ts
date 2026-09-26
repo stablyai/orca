@@ -210,11 +210,11 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mocks.activateTab).toHaveBeenCalledWith('unified-terminal-1')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
   })
 
-  it('closes the durable native owner from the real structured tab close action', async () => {
+  it('routes durable native owner close through the unified tab action', async () => {
     const agentTab = {
       id: 'structured-agent-session-codex-session-1',
       entityId: 'codex-session-1',
@@ -249,18 +249,8 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     model.commands.closeItem(agentTab.id)
 
     await vi.waitFor(() => expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(agentTab.id))
-    expect(mocks.callRuntimeRpc.mock.calls).toEqual([
-      [{ kind: 'local' }, 'agentSession.close', { sessionId: 'codex-session-1' }],
-      [
-        { kind: 'local' },
-        'session.tabs.close',
-        {
-          worktree: 'id:wt-1',
-          tabId: 'agent-session:codex-session-1',
-          reason: 'user'
-        }
-      ]
-    ])
+    // Why: the unified store action owns cancellation and host retirement for every close path.
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
   it('falls back to a local shell when the typed remote-create outcome is unavailable', async () => {
@@ -312,7 +302,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mocks.activateTab).toHaveBeenCalledWith('unified-terminal-1')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
     const event = mocks.dispatchEvent.mock.calls[0]?.[0] as CustomEvent<{ tabId: string }>
     expect(event.type).toBe(TOGGLE_TERMINAL_PANE_EXPAND_EVENT)
     expect(event.detail).toEqual({ tabId: 'terminal-1' })
@@ -398,7 +388,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.dropUnifiedTab).not.toHaveBeenCalled()
     expect(mocks.recordFeatureInteraction).toHaveBeenCalledWith('terminal-pane-split')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-2')
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
   })
 
   it('seeds a new terminal instead of moving the active tab when the group has multiple tabs', async () => {

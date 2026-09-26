@@ -164,6 +164,79 @@ function findMissingProviderDeps(importedSymbols, neededLibraries) {
   return missing
 }
 
+// ELF e_machine values for the Linux slices we package. Names match electron-builder's Arch enum.
+const ELF_MACHINE_BY_ARCH = Object.freeze({ x64: 0x3e, arm64: 0xb7 })
+const ARCH_BY_ELF_MACHINE = Object.freeze({ 0x3e: 'x64', 0xb7: 'arm64' })
+
+/**
+ * ELF `e_machine`, or null when the file is not a readable little-endian ELF.
+ *
+ * Why this is checked at all: cross-building an arm64 package on an x64 host can silently pack an
+ * x86-64 `pty.node` into the arm64 slice — the rebuild logs a forced arm64 rebuild and still ships
+ * the host's binary. Every other gate here inspects symbol versions, which are perfectly valid on
+ * the wrong architecture, so nothing noticed. Observed on a Raspberry Pi 5: the app loaded, then
+ * failed with "Failed to load native module: pty.node".
+ */
+function readElfMachine(filePath) {
+  let fd
+  try {
+    fd = openSync(filePath, 'r')
+    const header = Buffer.alloc(20)
+    if (readSync(fd, header, 0, 20, 0) !== 20) {
+      return null
+    }
+    // EI_DATA (offset 5) must be ELFDATA2LSB for a little-endian e_machine read.
+    if (header[5] !== 1) {
+      return null
+    }
+    return header.readUInt16LE(18)
+  } catch {
+    return null
+  } finally {
+    if (fd !== undefined) {
+      closeSync(fd)
+    }
+  }
+}
+
+// Arch tokens that appear in vendored per-architecture package/directory names.
+const ARCH_TOKEN_PATTERN = /(?:^|[^a-z0-9])(arm64|aarch64|x64|x86_64)(?:[^a-z0-9]|$)/i
+const ARCH_BY_TOKEN = Object.freeze({ arm64: 'arm64', aarch64: 'arm64', x64: 'x64', x86_64: 'x64' })
+
+/**
+ * The architecture a path advertises, or null when it advertises none.
+ *
+ * Why this matters: some dependencies ship every architecture and let their loader pick
+ * (`@parcel/watcher-linux-arm64-glibc/watcher.node` is arm64 on purpose inside an x64 build). Those
+ * must be judged against the arch their own path declares, not against the slice.
+ */
+function declaredArchFromPath(filePath) {
+  const match = ARCH_TOKEN_PATTERN.exec(filePath)
+  return match ? ARCH_BY_TOKEN[match[1].toLowerCase()] : null
+}
+
+function findArchViolation(filePath, targetArch, rootDir) {
+  // A path that names an architecture is judged against that name, so a per-arch vendored package
+  // is fine while `bin/linux-arm64-.../node-pty.node` holding an x86-64 binary is still caught.
+  // Why relative: the arm64 slice's own dir (`linux-arm64-unpacked`) must not declare every file arm64.
+  const declared = declaredArchFromPath(rootDir ? relative(rootDir, filePath) : filePath)
+  const expectedArch = declared ?? targetArch
+  const expected = ELF_MACHINE_BY_ARCH[expectedArch]
+  if (expected === undefined) {
+    return null
+  }
+  const machine = readElfMachine(filePath)
+  if (machine === null || machine === expected) {
+    return null
+  }
+  return {
+    machine,
+    actual: ARCH_BY_ELF_MACHINE[machine] ?? `0x${machine.toString(16)}`,
+    expectedArch,
+    declared: declared !== null
+  }
+}
+
 function isElfFile(filePath) {
   let fd
   try {
@@ -293,10 +366,33 @@ function parseImportedSymbols(objdumpOutput) {
 /** Version needs + DT_NEEDED from a single `objdump -p` (fail-closed). */
 function readDynamicInfo(filePath, objdumpPath) {
   const output = runObjdump(objdumpPath, '-p', filePath)
+  const versionNeeds = parseVersionNeeds(output)
+  const neededLibraries = parseNeededLibraries(output)
   return {
-    versionNeeds: parseVersionNeeds(output),
-    neededLibraries: parseNeededLibraries(output)
+    versionNeeds,
+    neededLibraries,
+    // LLVM prints an empty Dynamic Section even for static executables.
+    isStatic:
+      /^Program Header:/m.test(output) &&
+      /^\s+LOAD\s+off\s+0x[0-9a-f]+/m.test(output) &&
+      !/^\s+(?:DYNAMIC|INTERP)\s+off\s+/m.test(output) &&
+      versionNeeds.length === 0 &&
+      neededLibraries.size === 0
   }
+}
+
+function isMuslTemplatePayload(filePath, neededLibraries, versionNeeds) {
+  return (
+    /(?:^|[/\\])orcad-template[/\\]targets[/\\]linux-(?:x64|arm64)-musl[/\\]/.test(filePath) &&
+    [...neededLibraries].some(
+      (name) => name === 'libc.so' || /^libc\.musl-[\w-]+\.so\.1$/.test(name)
+    ) &&
+    ![...neededLibraries, ...versionNeeds.map((need) => need.library)].some((name) =>
+      /^(?:libc\.so\.6|libm\.so\.6|libpthread\.so\.0|libdl\.so\.2|librt\.so\.1|ld-linux.*)$/.test(
+        name
+      )
+    )
+  )
 }
 
 /** Imported (undefined) dynamic symbols from `objdump -T` (fail-closed). */
@@ -312,6 +408,7 @@ function readImportedSymbols(filePath, objdumpPath) {
  */
 function verifyLinuxGlibcFloor(rootDir, options = {}) {
   const binaries = collectNativeBinaries(rootDir)
+  const targetArch = options.targetArch
   if (binaries.length === 0) {
     console.log(`[verify-linux-glibc-floor] OK — no bundled native binaries under ${rootDir}`)
     return
@@ -327,17 +424,44 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
     )
   }
 
+  // Why before the glibc pass: a wrong-architecture binary's symbol versions are valid but
+  // meaningless, so reporting a floor violation for it would send the reader down the wrong path.
+  const archOffenders = binaries
+    .map((filePath) => ({ filePath, violation: findArchViolation(filePath, targetArch, rootDir) }))
+    .filter(({ violation }) => violation !== null)
+  if (archOffenders.length > 0) {
+    const detail = archOffenders
+      .map(
+        ({ filePath, violation }) =>
+          `  ${relative(rootDir, filePath) || filePath} is ${violation.actual}, expected ` +
+          `${violation.expectedArch}${violation.declared ? ' (from its own path)' : ''}`
+      )
+      .join('\n')
+    throw new Error(
+      `[verify-linux-glibc-floor] ${archOffenders.length} bundled native binar` +
+        `${archOffenders.length === 1 ? 'y is' : 'ies are'} built for the wrong architecture ` +
+        `(target ${targetArch}), so the app will fail to load them at runtime:\n${detail}\n` +
+        'Cross-building a Linux slice can pack the host architecture despite a forced rebuild; ' +
+        'build this slice on a native runner.'
+    )
+  }
+
   const offenders = []
   for (const filePath of binaries) {
-    const { versionNeeds, neededLibraries } = readDynamicInfo(filePath, objdumpPath)
-    const floorViolations = findFloorViolations(versionNeeds, filePath)
+    const { versionNeeds, neededLibraries, isStatic } = readDynamicInfo(filePath, objdumpPath)
+    const isMuslTarget = isMuslTemplatePayload(filePath, neededLibraries, versionNeeds)
+    // Remote musl payloads use their host's C++ runtime, not Ubuntu's libstdc++ or libutil.
+    const floorViolations = findFloorViolations(versionNeeds, filePath).filter(
+      (need) => !isMuslTarget || !isLibstdcxxNode(need.name)
+    )
     // Only pay for `objdump -T` when a relocated-symbol provider is not already
     // in DT_NEEDED (the common, healthy case short-circuits without it).
-    const providerViolations = Object.values(RELOCATED_SYMBOL_PROVIDERS).some(
-      (library) => !neededLibraries.has(library)
-    )
-      ? findMissingProviderDeps(readImportedSymbols(filePath, objdumpPath), neededLibraries)
-      : []
+    const providerViolations =
+      !isStatic &&
+      !isMuslTarget &&
+      Object.values(RELOCATED_SYMBOL_PROVIDERS).some((library) => !neededLibraries.has(library))
+        ? findMissingProviderDeps(readImportedSymbols(filePath, objdumpPath), neededLibraries)
+        : []
     if (floorViolations.length > 0 || providerViolations.length > 0) {
       offenders.push({ filePath, floorViolations, providerViolations })
     }
@@ -369,12 +493,16 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
   }
 
   console.log(
-    `[verify-linux-glibc-floor] OK — ${binaries.length} bundled native binaries all load on ${FLOOR_LABEL}`
+    `[verify-linux-glibc-floor] OK — ${binaries.length} bundled native binaries meet applicable ${FLOOR_LABEL} requirements`
   )
 }
 
 module.exports = {
   MIN_GLIBC,
+  ELF_MACHINE_BY_ARCH,
+  readElfMachine,
+  declaredArchFromPath,
+  findArchViolation,
   VERSION_FLOORS,
   FLOOR_LABEL,
   RELOCATED_SYMBOL_PROVIDERS,

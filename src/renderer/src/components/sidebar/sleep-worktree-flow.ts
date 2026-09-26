@@ -1,6 +1,10 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import {
+  clearWorktreeSleepIntent,
+  markWorktreeSleepIntent,
+  withWorktreeSleepTeardown
+} from '@/lib/worktree-sleep-intent'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { translate } from '@/i18n/i18n'
 
@@ -141,15 +145,15 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     shutdownWorktreeBrowsers,
     shutdownWorktreeTerminals
   } = useAppStore.getState()
-  let activeSleepIntentWorktreeId: string | null = null
-  if (activeWorktreeId && worktreeIds.includes(activeWorktreeId)) {
-    const restoreSidebarPosition = preserveSidebarWorktreePosition(activeWorktreeId)
+  const sleptActiveWorktreeId =
+    activeWorktreeId && worktreeIds.includes(activeWorktreeId) ? activeWorktreeId : null
+  if (sleptActiveWorktreeId) {
+    const restoreSidebarPosition = preserveSidebarWorktreePosition(sleptActiveWorktreeId)
     // Why: clearing the active workspace can unmount TerminalPanes before
-    // shutdownWorktreeTerminals writes PTY suppressions. Use a non-rendering
-    // intent marker so those exits do not stamp activity, without inserting an
-    // extra Zustand update that can disturb the sidebar's scroll restoration.
-    markWorktreeSleepIntent(activeWorktreeId)
-    activeSleepIntentWorktreeId = activeWorktreeId
+    // shutdownWorktreeTerminals writes PTY suppressions; mark first so those
+    // exits do not stamp activity. Kept off the store so it cannot disturb the
+    // sidebar's scroll restoration.
+    markWorktreeSleepIntent(sleptActiveWorktreeId)
     setActiveWorktree(null)
     restoreSidebarPosition()
   }
@@ -157,13 +161,17 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
   const failedWorktreeIds = new Set<string>()
   try {
     for (const worktreeId of worktreeIds) {
+      // Why: the marker outlives teardown so the panes left mounted stay cold
+      // until an explicit wake (#10205); mark per workspace so an earlier
+      // slow teardown never leaves a later, still-awake one marked.
+      markWorktreeSleepIntent(worktreeId)
       try {
         // Why: sleep mirrors removeWorktree's shutdown sequence — browsers first
         // so destroyPersistentWebview unregisters the Chromium guests before any
         // other teardown runs, terminals second so the PTY kill uses the same
         // ordering on both paths. Without the browser thunk here, sleep leaks
         // browserPagesByWorkspace entries and live webviews for the slept worktree.
-        await shutdownWorktreeBrowsers(worktreeId)
+        await withWorktreeSleepTeardown(worktreeId, () => shutdownWorktreeBrowsers(worktreeId))
       } catch (err) {
         console.error('[sleep-worktree] browser shutdown failed', { worktreeId, error: err })
         failedWorktreeIds.add(worktreeId)
@@ -178,9 +186,15 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         // history dir (local) or relay session id (SSH); it also captures
         // serializer buffers into buffersByLeafId for SSH wake to reseed
         // scrollback. See DESIGN_DOC_TERMINAL_HISTORY_FIX_V2.md §3.3.c.
-        await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
-        if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
-          await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
+        await withWorktreeSleepTeardown(worktreeId, async () => {
+          await shutdownWorktreeTerminals(worktreeId, { keepIdentifiers: true })
+          if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
+            await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
+          }
+        })
+        // Why: a workspace the user activated during the batch is awake by their choice.
+        if (useAppStore.getState().activeWorktreeId === worktreeId) {
+          clearWorktreeSleepIntent(worktreeId)
         }
       } catch (err) {
         console.error('[sleep-worktree] terminal or host suspension failed', {
@@ -192,12 +206,12 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
       }
     }
   } finally {
-    if (activeSleepIntentWorktreeId) {
-      clearWorktreeSleepIntent(activeSleepIntentWorktreeId)
-      if (failedWorktreeIds.has(activeSleepIntentWorktreeId)) {
-        // Why: any failed sleep step must leave the workspace visible and retryable.
-        setActiveWorktree(activeSleepIntentWorktreeId)
-      }
+    // Why: a failed sleep leaves the workspace awake and retryable.
+    for (const worktreeId of failedWorktreeIds) {
+      clearWorktreeSleepIntent(worktreeId)
+    }
+    if (sleptActiveWorktreeId && failedWorktreeIds.has(sleptActiveWorktreeId)) {
+      setActiveWorktree(sleptActiveWorktreeId)
     }
   }
   if (errors.length > 0) {

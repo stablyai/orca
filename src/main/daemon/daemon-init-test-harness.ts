@@ -156,6 +156,7 @@ function createDaemonInitMockState(): DaemonInitMockState {
   const rebindLocalProviderListenersMock = vi.fn()
   const trackDaemonReplacedMock = vi.fn()
   const trackDaemonRetiredMock = vi.fn()
+  const trackDaemonAdoptedMock = vi.fn()
 
   return {
     getPathMock,
@@ -197,7 +198,8 @@ function createDaemonInitMockState(): DaemonInitMockState {
     unbindLocalProviderListenersMock,
     rebindLocalProviderListenersMock,
     trackDaemonReplacedMock,
-    trackDaemonRetiredMock
+    trackDaemonRetiredMock,
+    trackDaemonAdoptedMock
   }
 }
 

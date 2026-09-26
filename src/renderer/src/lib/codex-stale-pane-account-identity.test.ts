@@ -80,7 +80,7 @@ describe('stale Codex panes are decided by account id, not label', () => {
     }
   })
 
-  it('keeps the prompt when the two accounts resolve to the same label', async () => {
+  it('distinguishes same-email accounts even without workspace names', async () => {
     vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
       { ptyId: 'pty-1', launchAccountId: 'account-a', activeAccountId: 'account-b' }
     ])
@@ -88,6 +88,8 @@ describe('stale Codex panes are decided by account id, not label', () => {
     const scans = await markRestoredStaleCodexSessionsForRestart()
 
     expect(noticeFor('pty-1')).toMatchObject({
+      previousAccountLabel: `${SHARED_EMAIL} (account-a)`,
+      nextAccountLabel: `${SHARED_EMAIL} (account-b)`,
       previousAccountId: 'account-a',
       nextAccountId: 'account-b'
     })

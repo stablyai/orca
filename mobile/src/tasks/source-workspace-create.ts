@@ -1,3 +1,4 @@
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import { resolveComposerMrBase, resolveComposerPrBase } from './composer-source-base-resolve'
 import type {
@@ -7,12 +8,14 @@ import type {
 import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
 import {
-  agentLaunchCreateFields,
+  startupAgentCreateFields,
   buildTaskWorkspaceCreateParams,
+  type WorkspaceCreateParams,
   type WorkspaceCreateSetupDecision,
   type WorkspaceCreateTaskItem
 } from './workspace-create-params'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
+import type { WorktreeCreateAgentLaunch } from './agent-launch-worktree-create'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
 
 // The agent bundle the modal resolved: `choice` drives launch resolution — the
@@ -28,9 +31,11 @@ export type CreateWorkspaceFromComposerArgs = {
   setupDecision: WorkspaceCreateSetupDecision
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
-  note: string | undefined
   nameIsAutoManaged?: boolean
+  note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
+  /** Whether the host can settle the surface itself; false keeps the agent-first create. */
+  agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
 }
 
 export async function createWorkspaceFromComposerSource(
@@ -43,6 +48,13 @@ export async function createWorkspaceFromComposerSource(
     return createNewBranchWorkspace({ ...args, selection: args.selection })
   }
   return createWorkItemWorkspace({ ...args, selection: args.selection })
+}
+
+function resolveComposerAgentLaunch(
+  agentId: TuiAgent | undefined,
+  supported: WorktreeCreateAgentLaunch['supported']
+): WorktreeCreateAgentLaunch | undefined {
+  return agentId ? { agent: agentId, supported } : undefined
 }
 
 function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): WorkspaceCreateTaskItem {
@@ -91,8 +103,8 @@ async function createWorkItemWorkspace(args: {
   setupDecision: WorkspaceCreateSetupDecision
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
-  note: string | undefined
   nameIsAutoManaged?: boolean
+  note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
 }): Promise<WorktreeCreateResult> {
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
@@ -135,6 +147,9 @@ async function createWorkItemWorkspace(args: {
   // buildTaskWorkspaceCreateParams computes the name; reuse it as the retry base
   // so collisions still append -2, -3, ... like the blank path does.
   const baseName = String(params.name)
+  // Deliberately NOT routed through `agent.launch`: an agent-carrying work-item create pre-fills
+  // the issue/PR URL as an unsent `startupDraft`, and a structured session has nowhere to put one
+  // — routing it would submit the URL as the first turn. Keep the terminal until drafts land.
   return createWorktreeWithNameRetry({
     client,
     baseName,
@@ -150,14 +165,27 @@ async function createBranchWorkspace(args: {
   setupDecision: WorkspaceCreateSetupDecision
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
+  nameIsAutoManaged?: boolean
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
+  agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
 }): Promise<WorktreeCreateResult> {
-  const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
+  const {
+    client,
+    selection,
+    targetRepoId,
+    setupDecision,
+    agent,
+    workspaceName,
+    nameIsAutoManaged,
+    note
+  } = args
   const createdWithAgentId = agent.choice === 'blank' ? undefined : agent.choice
+  const agentLaunch = resolveComposerAgentLaunch(createdWithAgentId, args.agentLaunchSupported)
   const comment = note?.trim()
-  const applyCommon = (params: Record<string, unknown>): Record<string, unknown> => {
-    Object.assign(params, agentLaunchCreateFields(createdWithAgentId))
+  const manualDisplayName = nameIsAutoManaged === true ? undefined : workspaceName?.trim()
+  const applyCommon = (params: WorkspaceCreateParams): WorkspaceCreateParams => {
+    Object.assign(params, startupAgentCreateFields(createdWithAgentId))
     if (comment) {
       params.comment = comment
     }
@@ -176,11 +204,15 @@ async function createBranchWorkspace(args: {
       client,
       baseName,
       worktreeCreateIdempotency: args.worktreeCreateIdempotency,
+      ...(agentLaunch ? { agentLaunch } : {}),
       maxAttempts: 1,
       buildParams: (name) =>
         applyCommon({
           repo: `id:${targetRepoId}`,
           name,
+          ...(manualDisplayName
+            ? { displayName: manualDisplayName, displayNameKind: 'user' as const }
+            : {}),
           setupDecision,
           baseBranch: selection.refName,
           branchNameOverride: selection.localBranchName
@@ -198,12 +230,16 @@ async function createBranchWorkspace(args: {
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
+    ...(agentLaunch ? { agentLaunch } : {}),
     buildParams: (candidate) => {
-      const params: Record<string, unknown> = {
+      const params: WorkspaceCreateParams = {
         repo: `id:${targetRepoId}`,
         name: candidate,
         setupDecision,
-        baseBranch: selection.baseBranch
+        baseBranch: selection.baseBranch,
+        ...(manualDisplayName
+          ? { displayName: manualDisplayName, displayNameKind: 'user' as const }
+          : {})
       }
       if (selection.branchNameOverride) {
         params.branchNameOverride = candidate
@@ -220,11 +256,24 @@ async function createNewBranchWorkspace(args: {
   setupDecision: WorkspaceCreateSetupDecision
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
+  nameIsAutoManaged?: boolean
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
+  agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
 }): Promise<WorktreeCreateResult> {
-  const { client, selection, targetRepoId, setupDecision, agent, note } = args
+  const {
+    client,
+    selection,
+    targetRepoId,
+    setupDecision,
+    agent,
+    workspaceName,
+    nameIsAutoManaged,
+    note
+  } = args
   const createdWithAgentId = agent.choice === 'blank' ? undefined : agent.choice
+  const agentLaunch = resolveComposerAgentLaunch(createdWithAgentId, args.agentLaunchSupported)
+  const manualDisplayName = nameIsAutoManaged === true ? undefined : workspaceName?.trim()
   const comment = note?.trim()
   // A brand-new branch off the repo's default base. The typed name is kept as the
   // git branch (via branchNameOverride) so a slash like `feature/login` survives;
@@ -234,13 +283,17 @@ async function createNewBranchWorkspace(args: {
     client,
     baseName: selection.branchName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
+    ...(agentLaunch ? { agentLaunch } : {}),
     buildParams: (candidate) => {
-      const params: Record<string, unknown> = {
+      const params: WorkspaceCreateParams = {
         repo: `id:${targetRepoId}`,
         name: candidate,
         setupDecision,
         branchNameOverride: candidate,
-        ...agentLaunchCreateFields(createdWithAgentId)
+        ...(manualDisplayName
+          ? { displayName: manualDisplayName, displayNameKind: 'user' as const }
+          : {}),
+        ...startupAgentCreateFields(createdWithAgentId)
       }
       if (comment) {
         params.comment = comment

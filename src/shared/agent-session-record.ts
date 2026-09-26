@@ -1,3 +1,12 @@
+import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
+import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
+import { isAgentSessionConversationName } from './agent-session-conversation-name'
+import {
+  isPersistedAgentSessionHandoffStage,
+  isPersistedAgentSessionRuntimeKind,
+  type PersistedAgentSessionLease,
+  type PersistedAgentSessionRecord
+} from './agent-session-legacy-handoff-lease'
 /**
  * Durable agent-session record and its single-writer lease.
  *
@@ -7,6 +16,10 @@
  */
 
 import type { ExecutionHostId } from './execution-host'
+import {
+  isAgentSessionConversationCommandRecord,
+  type AgentSessionConversationCommandRecord
+} from './agent-session-conversation-command'
 import {
   isAgentSessionProviderHandleChain,
   type AgentSessionHandleProvider,
@@ -43,19 +56,16 @@ export type AgentSessionLaunchEnv = Record<string, string>
 /** Provider CLI arguments captured by the host when the session is created. */
 export type AgentSessionLaunchArgs = string[]
 
-export type AgentSessionOwnerRuntimeKind = 'native' | 'tui'
+/** Still persisted because older builds read it. The removed terminal handoff's `tui` is mapped
+ *  away at decode (agent-session-legacy-handoff-lease). */
+export type AgentSessionOwnerRuntimeKind = 'native'
 
-export type AgentSessionHandoffStage =
-  | 'preparing'
-  | 'old-owner-stopped'
-  | 'new-owner-proving'
-  | 'recovering'
-  | 'manual-recovery'
+/** The acquisition stage. Stages only older builds wrote are mapped away at decode. */
+export type AgentSessionHandoffStage = 'new-owner-proving' | 'recovering'
 
 /**
  * PID-reuse-safe process identity. `spawnToken` is the only element available on every platform:
- * process start time costs a CIM query on Windows and is absent in some containers. An exact
- * identity stays in `recovering`; an ownerless, unattributable reservation uses `manual-recovery`.
+ * process start time costs a CIM query on Windows and is absent in some containers.
  */
 export type AgentSessionProcessIdentity = {
   hostId: string
@@ -67,9 +77,9 @@ export type AgentSessionProcessIdentity = {
 export type AgentSessionJournalCheckpoint = { epoch: number; sequence: number }
 
 /**
- * Mirrors the in-memory claim registry's reserved / live / conflicted states so a conflict
- * survives a restart. `released` has no registry equivalent: the registry expresses "no owner" by
- * deleting the entry, and a durable record that outlives its owner needs a name for that.
+ * `released` means no owner: a durable record that outlives its owner needs a name for that.
+ * `conflicted` is how a terminal owner an older build recorded loads: recovery waits it out and
+ * never stops it, because it is the user's own agent.
  */
 export type AgentSessionClaimStatus = 'reserved' | 'live' | 'conflicted' | 'released'
 
@@ -91,8 +101,6 @@ export type AgentSessionLease = {
   ownerProcess: AgentSessionProcessIdentity | null
   /** Reserved before any process exists, then matched against the child's environment. */
   reservedSpawnToken: string | null
-  /** Set only when acquisition failed before any spawn attempt. */
-  processlessAt?: number | null
   leaseDeadlineAt: number
   lastRenewedAt: number
   handoffOperationId: string | null
@@ -109,6 +117,7 @@ export type AgentSessionLease = {
    * so rewriting it would invalidate the record it is trying to save.
    */
   minimumNextFence?: number
+  /** Null on a released lease when nothing proved its owner gone. */
   deathEvidence: AgentSessionDeathEvidence | null
 }
 
@@ -119,8 +128,12 @@ export type AgentSessionRecord = {
   provider: AgentSessionHandleProvider
   providerHandleChain: AgentSessionProviderHandleLink[]
   accountHome: AgentSessionAccountHome
-  /** Provider options acknowledged for the next turn, restored across owner replacement. */
+  /** Provider options the user chose, replayed whenever a new owner starts the session. */
   options?: Record<string, string>
+  rewind?: AgentSessionRewindRecord
+  conversationCommand?: AgentSessionConversationCommandRecord
+  /** The name Orca gave this conversation, so a later acquisition need not name it again. */
+  conversationName?: string
   launchArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number
@@ -138,8 +151,6 @@ const MAX_ID_LENGTH = 512
 const MAX_PATH_LENGTH = 4096
 const MAX_LAUNCH_ENV_ENTRIES = 256
 const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
-const MAX_LAUNCH_ARGS = 256
-const MAX_LAUNCH_ARGS_BYTES = 16 * 1024
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 
 function isBoundedString(value: unknown, max: number): value is string {
@@ -217,7 +228,7 @@ function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccount
   )
 }
 
-function isAgentSessionOptions(value: unknown): value is Record<string, string> {
+export function isAgentSessionOptions(value: unknown): value is Record<string, string> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }
@@ -275,29 +286,21 @@ function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeath
   )
 }
 
-function isAgentSessionLease(value: unknown): value is AgentSessionLease {
+function isPersistedAgentSessionLease(value: unknown): value is PersistedAgentSessionLease {
   if (typeof value !== 'object' || value === null) {
     return false
   }
   const lease = value as Partial<AgentSessionLease>
   return (
     isAgentSessionId(lease.sessionId) &&
-    (lease.runtimeKind === 'native' || lease.runtimeKind === 'tui') &&
+    isPersistedAgentSessionRuntimeKind(lease.runtimeKind) &&
     Number.isSafeInteger(lease.runtimeFence) &&
     (lease.runtimeFence as number) >= 0 &&
-    (lease.handoffStage === null ||
-      lease.handoffStage === 'preparing' ||
-      lease.handoffStage === 'old-owner-stopped' ||
-      lease.handoffStage === 'new-owner-proving' ||
-      lease.handoffStage === 'recovering' ||
-      lease.handoffStage === 'manual-recovery') &&
+    (lease.handoffStage === null || isPersistedAgentSessionHandoffStage(lease.handoffStage)) &&
     (lease.provenHandleLinkId === null || isBoundedString(lease.provenHandleLinkId, 128)) &&
     (lease.ownerProcess === null || isAgentSessionProcessIdentity(lease.ownerProcess)) &&
     (lease.reservedSpawnToken === null ||
       isBoundedString(lease.reservedSpawnToken, MAX_ID_LENGTH)) &&
-    (lease.processlessAt === undefined ||
-      lease.processlessAt === null ||
-      (Number.isSafeInteger(lease.processlessAt) && (lease.processlessAt as number) >= 0)) &&
     Number.isSafeInteger(lease.leaseDeadlineAt) &&
     Number.isSafeInteger(lease.lastRenewedAt) &&
     (lease.handoffOperationId === null ||
@@ -314,12 +317,16 @@ function isAgentSessionLease(value: unknown): value is AgentSessionLease {
   )
 }
 
-export function isAgentSessionRecord(value: unknown): value is AgentSessionRecord {
+/** The on-disk shape, which still admits the removed terminal handoff's lease values. Decode
+ *  through `normalizeLegacyHandoffRecord` before anything reads the lease. */
+export function isPersistedAgentSessionRecord(
+  value: unknown
+): value is PersistedAgentSessionRecord {
   if (typeof value !== 'object' || value === null) {
     return false
   }
   const record = value as Partial<AgentSessionRecord>
-  const shapeValid =
+  const fieldsValid =
     record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
     isAgentSessionId(record.sessionId) &&
     isAgentSessionExecutionLocation(record.location) &&
@@ -327,13 +334,18 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     isAgentSessionProviderHandleChain(record.providerHandleChain) &&
     isAgentSessionAccountHome(record.accountHome) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
+    (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
+    (record.conversationCommand === undefined ||
+      isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
+    (record.conversationName === undefined ||
+      isAgentSessionConversationName(record.conversationName)) &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
     !Object.hasOwn(record, 'launchEnv') &&
-    isAgentSessionLease(record.lease) &&
+    isPersistedAgentSessionLease(record.lease) &&
     record.lease.sessionId === record.sessionId &&
     Number.isSafeInteger(record.createdAt) &&
     Number.isSafeInteger(record.updatedAt)
-  if (!shapeValid) {
+  if (!fieldsValid) {
     return false
   }
   const validated = record as AgentSessionRecord
@@ -344,14 +356,5 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
       (validated.lease.ownerProcess !== null &&
         head?.linkId === validated.lease.provenHandleLinkId &&
         head.mintedAtFence === validated.lease.runtimeFence))
-  )
-}
-
-export function isAgentSessionLaunchArgs(value: unknown): value is AgentSessionLaunchArgs {
-  return (
-    Array.isArray(value) &&
-    value.length <= MAX_LAUNCH_ARGS &&
-    value.every((arg) => typeof arg === 'string' && !arg.includes('\0')) &&
-    Buffer.byteLength(JSON.stringify(value), 'utf8') <= MAX_LAUNCH_ARGS_BYTES
   )
 }

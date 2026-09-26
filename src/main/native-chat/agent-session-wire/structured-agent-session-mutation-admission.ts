@@ -2,17 +2,25 @@
 // fingerprint, admit through the durable operation ledger, check the lease, then
 // run the plan. It lives outside the host so that no method can quietly grow its
 // own admission rules by sitting next to the call site.
+//
+// Admission is two-phase for a call that brings a `prepareSession`. The ledger's
+// answer comes first and places nothing; a call it will admit may then give the
+// session an owner, and only after that are the row placed and the lease
+// checked — against the lease as it stands once the owner is there.
 
 import {
   admitAgentSessionMutation,
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
 } from '../../../shared/agent-session-mutation-envelope'
+import type { AgentSessionOperationDecision } from '../../../shared/agent-session-operation-ledger'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
+import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -21,8 +29,10 @@ import { runSettledAgentSessionMutation } from './structured-agent-session-opera
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
+// The code is shared with the client so a read that refuses this way can be told apart from a
+// transcript that failed to load; the two must never drift apart.
 export const AGENT_SESSION_NOT_ATTACHED: AgentSessionWireRefusal = {
-  code: 'agent_session_ownership_unknown',
+  code: AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
   message: 'This host holds no attached session by that id.'
 }
 
@@ -33,26 +43,34 @@ export function refuseAgentSessionMutation(refusal: AgentSessionWireRefusal): {
   return { ok: false, refusal }
 }
 
+export type AgentSessionMutationSessionPreparation =
+  | { ok: true }
+  | { ok: false; refusal: AgentSessionWireRefusal }
+
 export type AgentSessionMutationRequest<TValue> = {
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
   callerKey: string
   envelope: AgentSessionMutationEnvelope
   plan: MutationPlan<TValue>
-  /** Journal of the attached session; absent when this host holds none. */
-  journal: AgentSessionJournal | undefined
+  /** Journal of the attached session, read after `prepareSession`; absent when this host holds none. */
+  journal: () => AgentSessionJournal | undefined
+  /** Between the ledger's answer and the lease check, for a call that may first have to make the
+   *  session ready for itself. Answers with the refusal that ends the call, if any. */
+  prepareSession?: (
+    ledger: Exclude<AgentSessionOperationDecision['decision'], 'refused'>,
+    record: AgentSessionRecord
+  ) => Promise<AgentSessionMutationSessionPreparation>
   publish: (journal: AgentSessionJournal) => void
+  flushStreamedEvents: (sessionId: string) => Promise<void>
+  providerChildPhase?: AgentSessionTurnContext['providerChildPhase']
   now: () => number
 }
 
 export async function admitAndRunAgentSessionMutation<TValue>(
   request: AgentSessionMutationRequest<TValue>
 ): Promise<AgentSessionMutationResult<TValue>> {
-  const { envelope, plan, journal } = request
-  const record = request.store.getRecord(envelope.sessionId)
-  if (!journal || !record) {
-    return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
-  }
+  const { plan, envelope } = request
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: plan.method,
     sessionId: envelope.sessionId,
@@ -62,17 +80,39 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   if (conflict) {
     return refuseAgentSessionMutation(conflict)
   }
-  const admission = admitAgentSessionMutation({
+  if (request.prepareSession) {
+    const ledger = request.store.evaluateMutationOperation({
+      callerKey: request.callerKey,
+      envelope,
+      hostFingerprint,
+      now: request.now(),
+      ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
+    })
+    if (!ledger) {
+      return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
+    }
+    if (ledger.decision.decision !== 'refused') {
+      const prepared = await request.prepareSession(ledger.decision.decision, ledger.record)
+      if (!prepared.ok) {
+        return prepared
+      }
+    }
+  }
+  const journal = request.journal()
+  if (!journal) {
+    return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
+  }
+  const admitted = await request.store.admitMutationOperation({
+    callerKey: request.callerKey,
     envelope,
     hostFingerprint,
-    ledger: await request.store.admitOperation({
-      callerKey: request.callerKey,
-      operationId: envelope.clientOperationId,
-      fingerprint: hostFingerprint,
-      now: request.now()
-    }),
-    lease: record.lease
+    now: request.now(),
+    ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
+  if (!admitted) {
+    return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
+  }
+  const { admission, record } = admitted
   if (admission.decision === 'refused') {
     return refuseAgentSessionMutation(admission.refusal)
   }
@@ -84,7 +124,8 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       operationId: envelope.clientOperationId,
       outcome: admission.row.outcome,
       reconstruct: () => plan.replay(context, admission.row.outcome),
-      rerunWhenReplayMissing: plan.rerunWhenReplayMissing?.(context)
+      rerunWhenReplayMissing: plan.rerunWhenReplayMissing?.(context),
+      recoverUnknownFromDurableState: plan.recoverUnknownFromDurableState
     })
     if (replay.decision === 'refuse') {
       return refuseAgentSessionMutation(replay.refusal)
@@ -93,9 +134,9 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       return { ok: true, replayed: true, fence, cursor: journal.cursor(), value: replay.value }
     }
     // Nothing durable landed, so this id is about to run for the first time. A
-    // refused call leaves its ledger row behind, and replaying past the lease and
-    // the fence would let a resend act under an owner that has since changed — so
-    // a first run pays the full admission price either way.
+    // refused call leaves its ledger row behind, and replaying past the lease
+    // would let a resend act with no live owner — so a first run pays the full
+    // admission price either way.
     const rerun = admitAgentSessionMutation({
       envelope,
       hostFingerprint,
@@ -107,10 +148,11 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     }
   }
 
-  plan.beforeRun?.()
   const outcome = await runSettledAgentSessionMutation({
     store: request.store,
-    callerKey: request.callerKey,
+    // A global send replay can cross caller identities. Settlement still owns
+    // the durable row admitted by the original caller.
+    operationCallerKey: admission.row.callerKey,
     envelope,
     plan,
     context
@@ -143,6 +185,8 @@ function turnContext<TValue>(
         .then(() => undefined),
     resolvedBy: request.callerKey,
     publish: () => request.publish(journal),
+    flushStreamedEvents: () => request.flushStreamedEvents(request.envelope.sessionId),
+    ...(request.providerChildPhase ? { providerChildPhase: request.providerChildPhase } : {}),
     now: () => request.now()
   }
 }

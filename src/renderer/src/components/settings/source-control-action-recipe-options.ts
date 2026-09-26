@@ -59,10 +59,12 @@ export const getActionDescriptions = createLocalizedCatalog(
 const FALLBACK_AGENT_ARGS_PLACEHOLDER = '--model sonnet'
 
 const AGENT_ARGS_PLACEHOLDER_OVERRIDES: Partial<Record<TuiAgent, string>> = {
+  antigravity: '--effort low',
   // Why: Source Control AI action prompts are short, reviewable tasks; the
   // mini Codex model is a better default hint than the frontier model.
   codex: '--model gpt-5.4-mini',
-  copilot: '--model gpt-5.4-mini'
+  copilot: '--model gpt-5.4-mini',
+  omp: '--model <provider/model>'
 }
 
 const MODEL_FLAG_BY_AGENT: Partial<Record<TuiAgent, string>> = {

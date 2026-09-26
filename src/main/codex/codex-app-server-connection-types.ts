@@ -9,6 +9,8 @@ export type CodexAppServerConnectionHandlers = {
   onServerRequest?: (request: CodexAppServerServerRequest) => void
   onUnhandledFrame?: (kind: string, payload: unknown) => void
   onExit?: (error: Error) => void
+  /** Awaited once the child has a pid and before the handshake; a rejection reaps the child. */
+  onSpawned?: (pid: number) => Promise<void>
 }
 
 export type CodexAppServerConnection = {
@@ -22,6 +24,10 @@ export type CodexAppServerConnection = {
   notify: (method: string, params?: Record<string, unknown>) => void
   respond: (id: number | string, result: unknown) => void
   respondWithError: (id: number | string, code: number, message: string) => void
+  /** Stops provider stdout at a record boundary while a durable sink drains. */
+  pauseReading?: () => void
+  /** Continues with any records retained from the chunk that triggered the pause. */
+  resumeReading?: () => void
   /** Resolves true only after the child emitted `exit` or `close`; false is unproven. */
   close: () => Promise<boolean>
 }

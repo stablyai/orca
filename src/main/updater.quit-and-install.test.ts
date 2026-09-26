@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PRE_COMMIT_INSTALL_FAILURE } from './updater-test-harness'
+import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const {
   nativeUpdaterMock,
@@ -41,6 +42,8 @@ vi.mock('./startup/hydrate-shell-path', () => ({
   }
 }))
 
+warmUpdaterModule()
+
 describe('updater', () => {
   beforeEach(() => {
     resetUpdaterMocks()
@@ -64,7 +67,7 @@ describe('updater', () => {
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
@@ -102,7 +105,7 @@ describe('updater', () => {
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
@@ -143,7 +146,7 @@ describe('updater', () => {
     })
 
     const mainWindow = { webContents: { send: vi.fn() } }
-    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never)
     quitAndInstall()
@@ -166,7 +169,7 @@ describe('updater', () => {
 
     const onBeforeQuit = vi.fn()
     const mainWindow = { webContents: { send: vi.fn() } }
-    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { onBeforeQuit })
     quitAndInstall()
@@ -180,11 +183,103 @@ describe('updater', () => {
     )
   })
 
+  it('aborts native install when required pre-quit cleanup fails', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn().mockRejectedValue(new Error('profile state export failed'))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindow as never, {
+      onBeforeQuit,
+      onBeforeQuitFailure: 'abort'
+    })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+    expect(isQuittingForUpdate()).toBe(false)
+    expect(sendMock).toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({
+        state: 'error',
+        message: expect.stringContaining('Could not restart to install the update')
+      })
+    )
+  })
+
+  it('keeps optional pre-quit cleanup fail-and-continue behavior by default', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn().mockRejectedValue(new Error('optional cleanup failed'))
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    expect(killAllPtyMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows a required profile export to finish beyond the optional cleanup budget', async () => {
+    vi.useFakeTimers()
+    const onBeforeQuit = vi.fn(() => new Promise<void>((resolve) => setTimeout(resolve, 5_000)))
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: updater only reads the mocked webContents.send in this lifecycle test.
+    setupAutoUpdater(mainWindow as never, { onBeforeQuit, onBeforeQuitFailure: 'abort' })
+    quitAndInstall()
+    await vi.advanceTimersByTimeAsync(2_600)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(2_500)
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
+  })
+
+  it('aborts native install when required pre-quit cleanup times out', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn(() => new Promise<void>(() => {}))
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindow as never, {
+      onBeforeQuit,
+      onBeforeQuitFailure: 'abort'
+    })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(90_000)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+    expect(killAllPtyMock).not.toHaveBeenCalled()
+    expect(isQuittingForUpdate()).toBe(false)
+    expect(sendMock).toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({
+        state: 'error',
+        message: expect.stringContaining('Could not restart to install the update')
+      })
+    )
+  })
+
   it('ignores duplicate quitAndInstall requests while the shared delay is pending', async () => {
     vi.useFakeTimers()
 
     const mainWindow = { webContents: { send: vi.fn() } }
-    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never)
     quitAndInstall()
@@ -206,7 +301,7 @@ describe('updater', () => {
         })
     )
     const mainWindow = { webContents: { send: vi.fn() } }
-    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+    const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { onBeforeQuit })
     quitAndInstall()
@@ -237,7 +332,7 @@ describe('updater', () => {
 
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
-    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await import('./updater')
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never)
     quitAndInstall()
@@ -273,7 +368,7 @@ describe('updater', () => {
     })
 
     const { setupAutoUpdater, checkForUpdatesFromMenu, quitAndInstall, isQuittingForUpdate } =
-      await import('./updater')
+      await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
@@ -287,6 +382,7 @@ describe('updater', () => {
       })
     })
 
+    autoUpdaterMock.emit('download-progress', { percent: 100 })
     autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
 
     // Why: on macOS install commits only once Squirrel is ready; mark it ready so this test covers the post-commit path on all platforms.
@@ -332,7 +428,7 @@ describe('updater', () => {
       return Promise.resolve(undefined)
     })
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu, quitAndInstall } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdatesFromMenu, quitAndInstall } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     checkForUpdatesFromMenu()
@@ -377,7 +473,7 @@ describe('updater', () => {
     })
 
     const mainWindow = { webContents: { send: vi.fn() } }
-    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await import('./updater')
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never)
     quitAndInstall()
@@ -402,7 +498,7 @@ describe('updater', () => {
     )
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
-    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await import('./updater')
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, {
       onBeforeQuit,
