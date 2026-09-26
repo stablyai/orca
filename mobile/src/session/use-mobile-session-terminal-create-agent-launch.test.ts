@@ -176,6 +176,28 @@ describe('the + menu', () => {
     expect(methods(sendRequest)).toEqual(['agent.launchReplay', 'session.tabs.createTerminal'])
   })
 
+  it("shows the host's refusal even when the session already has tabs", async () => {
+    const { client, sendRequest } = scriptedClient({
+      id: 'x',
+      ok: false,
+      error: {
+        code: 'agent_launch_failed',
+        message: 'Agent claude is disabled. Choose an enabled agent.'
+      },
+      _meta: { runtimeId: 'r' }
+    })
+    const state = scope(client)
+
+    await create_(state, 'claude')
+
+    expect(methods(sendRequest)).toEqual(['agent.launchReplay'])
+    expect(state.showToast).toHaveBeenCalledWith(
+      'Agent claude is disabled. Choose an enabled agent.',
+      1800
+    )
+    expect(state.pendingSelectionRef.current).toBeNull()
+  })
+
   it('never starts a second agent when the outcome is unknown', async () => {
     const { client, sendRequest } = scriptedClient({
       id: 'x',

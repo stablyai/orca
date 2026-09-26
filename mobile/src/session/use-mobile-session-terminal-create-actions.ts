@@ -79,12 +79,11 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     // Why: the host names the real cause (pty exhaustion, disabled agent, unresolved worktree);
     // collapsing every failure to 'Failed to create terminal' left the phone undiagnosable.
     function reportCreateFailure(hostReason: string): void {
-      const reason = hostReason.trim()
-      setCreateError(reason || options?.errorToast || 'Failed to create terminal')
-      if (options?.errorToast) {
-        triggerError()
-        showToast(options.errorToast, 1800)
-      }
+      const reason = hostReason.trim() || options?.errorToast || 'Failed to create terminal'
+      setCreateError(reason)
+      // Why: the inline error renders only in an empty session; beside open tabs only a toast is seen.
+      triggerError()
+      showToast(options?.errorToast ?? reason, 1800)
     }
 
     try {

@@ -134,8 +134,9 @@ const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fe
 // `handleCreateTerminal`, whose send became `sessionTabCreateTerminal` and whose `response.ok`
 // branch became that operation's own throw-the-host-message acceptance. Refreshed for negotiated
 // optimistic placement, which defers to legacy host snapshots when ownership paths disagree.
+// Refreshed for `reportCreateFailure`, which now always shows a toast.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '15cb0ad2c3cbcffd8f1bedf2c868c53bdbb5ceb78c3d4ce782734ad0d6640e59'
+  '2634872b50fff6b143c61befab7c810ee68cb5d36186b74cdafb9a96e73448f6'
 // -1 registration and -1 removal: the Markdown actions' `BackHandler` pair is `useBackClaim`'s.
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   '87d4599f475575131d4d5daa20f0dac579ca6c829353cbb654206ea6965dadae'
