@@ -11,7 +11,7 @@ import {
   type ComponentType,
   type ReactNode
 } from 'react'
-import { Pressable, ScrollView, Text as NativeText, View, type TextProps } from 'react-native'
+import { Pressable, Text as NativeText, View, type TextProps } from 'react-native'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { styles } from './mobile-markdown-styles'
 import {
@@ -25,6 +25,7 @@ import {
   trimAutolinkTrailingPunctuation
 } from './markdown-inline-token-rules'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
+import { MobileMarkdownTable } from './MobileMarkdownTable'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 
@@ -43,8 +44,6 @@ type Props = {
   onOpenFile?: (pathText: string) => void
 }
 
-const MAX_TABLE_ROWS = 40
-const MAX_TABLE_COLUMNS = 8
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
 const MarkdownTextContext = createContext<ComponentType<TextProps>>(NativeText)
@@ -297,42 +296,14 @@ function MobileMarkdownContent({
           )
         }
         if (block.type === 'table') {
-          const visibleHeaders = block.headers.slice(0, MAX_TABLE_COLUMNS)
-          const visibleRows = block.rows.slice(0, MAX_TABLE_ROWS)
-          const hiddenRows = Math.max(0, block.rows.length - visibleRows.length)
-          const hiddenColumns = Math.max(0, block.headers.length - visibleHeaders.length)
           return (
-            <ScrollView key={index} horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.table}>
-                <View style={styles.tableRow}>
-                  {visibleHeaders.map((header, cellIndex) => (
-                    <MarkdownText
-                      key={cellIndex}
-                      selectable
-                      style={[styles.tableCell, styles.tableHeader]}
-                    >
-                      {renderInline(header, onOpenFile)}
-                    </MarkdownText>
-                  ))}
-                </View>
-                {visibleRows.map((row, rowIndex) => (
-                  <View key={rowIndex} style={styles.tableRow}>
-                    {visibleHeaders.map((_, cellIndex) => (
-                      <MarkdownText key={cellIndex} selectable style={styles.tableCell}>
-                        {renderInline(row[cellIndex] ?? '', onOpenFile)}
-                      </MarkdownText>
-                    ))}
-                  </View>
-                ))}
-                {hiddenRows > 0 || hiddenColumns > 0 ? (
-                  <NativeText style={styles.tableTruncated}>
-                    {hiddenRows > 0 ? `${hiddenRows} more rows` : ''}
-                    {hiddenRows > 0 && hiddenColumns > 0 ? ' · ' : ''}
-                    {hiddenColumns > 0 ? `${hiddenColumns} more columns` : ''}
-                  </NativeText>
-                ) : null}
-              </View>
-            </ScrollView>
+            <MobileMarkdownTable
+              key={index}
+              headers={block.headers}
+              rows={block.rows}
+              renderCell={(cell) => renderInline(cell, onOpenFile)}
+              TextComponent={MarkdownText}
+            />
           )
         }
         if (block.type === 'list') {
