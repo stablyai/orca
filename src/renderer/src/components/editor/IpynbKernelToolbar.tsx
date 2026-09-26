@@ -109,6 +109,10 @@ export function IpynbKernelToolbar({
     kernel.status === 'starting' || (kernel.setup !== null && kernel.setup.phase !== 'idle')
   // A PATH interpreter, not the selected one: that may be the very .venv being (re)created.
   const venvBase = environments?.path[0]
+  const untrustedHint = translate(
+    'auto.components.editor.IpynbViewer.trustFirst',
+    'Run a cell to trust this notebook first'
+  )
 
   useEffect(() => {
     if (!pickerOpen) {
@@ -150,6 +154,7 @@ export function IpynbKernelToolbar({
         label={translate('auto.components.editor.IpynbViewer.restart', 'Restart kernel')}
         // No kernel can start before trust, so a restart there would silently do nothing.
         disabled={!kernel.environment || !kernel.trusted || settling}
+        disabledReason={kernel.environment && !kernel.trusted ? untrustedHint : undefined}
         onClick={() => restartKernel(filePath)}
       >
         <RotateCcw />
@@ -233,10 +238,17 @@ export function IpynbKernelToolbar({
             }}
           >
             <Plus />
-            {translate(
-              'auto.components.editor.IpynbViewer.createVenvItem',
-              'Create virtual environment…'
-            )}
+            <span className="flex min-w-0 flex-col">
+              <span>
+                {translate(
+                  'auto.components.editor.IpynbViewer.createVenvItem',
+                  'Create virtual environment…'
+                )}
+              </span>
+              {venvBase && !kernel.trusted ? (
+                <span className="text-xs text-muted-foreground">{untrustedHint}</span>
+              ) : null}
+            </span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

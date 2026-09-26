@@ -14917,6 +14917,7 @@
           "notPython": "해당 파일은 Python 인터프리터가 아닙니다.",
           "interrupt": "중단",
           "restart": "커널 다시 시작",
+          "trustFirst": "먼저 셀을 실행하여 이 노트북을 신뢰하세요",
           "runAll": "모두 실행",
           "clearAll": "모든 출력 지우기",
           "notResponding": "응답 없음. 커널을 다시 시작하세요",

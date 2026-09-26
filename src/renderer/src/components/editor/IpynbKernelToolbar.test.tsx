@@ -20,6 +20,8 @@ import { trustNotebook } from './ipynb-kernel-session'
 import { getSession, setEnvironment, updateSession } from './ipynb-kernel-store'
 
 const FILE = '/repo/nb.ipynb'
+const CREATE_VENV = /^Create virtual environment…/
+const TRUST_FIRST = 'Run a cell to trust this notebook first'
 
 afterEach(cleanup)
 
@@ -63,10 +65,9 @@ describe('kernel picker trust', () => {
     })
     // A version read from nowhere shows the bare env name.
     expect(screen.getByText('.venv')).toBeTruthy()
-    // Creating a .venv would reuse, and so run, one the repo shipped.
-    expect(
-      screen.getByRole('menuitem', { name: 'Create virtual environment…' }).dataset.disabled
-    ).toBe('')
+    // Creating a .venv would reuse, and so run, one the repo shipped; the item says why it is off.
+    expect(screen.getByRole('menuitem', { name: CREATE_VENV }).dataset.disabled).toBe('')
+    expect(screen.getByText(TRUST_FIRST)).toBeTruthy()
 
     act(() => trustNotebook(file))
     await waitFor(() =>
@@ -76,20 +77,21 @@ describe('kernel picker trust', () => {
         runWorkspaceInterpreters: true
       })
     )
-    expect(
-      screen.getByRole('menuitem', { name: 'Create virtual environment…' }).dataset.disabled
-    ).toBeUndefined()
+    expect(screen.getByRole('menuitem', { name: CREATE_VENV }).dataset.disabled).toBeUndefined()
+    expect(screen.queryByText(TRUST_FIRST)).toBeNull()
   })
 
-  it('keeps Restart kernel disabled until the notebook is trusted', () => {
+  it('keeps Restart kernel disabled, and says why, until the notebook is trusted', () => {
     const file = '/repo/saved-env.ipynb'
     setEnvironment(file, { path: '/repo/.venv/bin/python', name: '.venv', version: '3.12.1' })
     renderToolbar(file)
-    const restart = screen.getByRole('button', { name: 'Restart kernel' })
-    expect(restart).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Restart kernel' })).toHaveProperty('disabled', true)
+    // The focusable wrapper is what lets the disabled button's tooltip open.
+    expect(screen.getByLabelText(TRUST_FIRST).getAttribute('tabindex')).toBe('0')
 
     act(() => trustNotebook(file))
-    expect(restart).toHaveProperty('disabled', false)
+    expect(screen.getByRole('button', { name: 'Restart kernel' })).toHaveProperty('disabled', false)
+    expect(screen.queryByLabelText(TRUST_FIRST)).toBeNull()
   })
 })
 
