@@ -273,6 +273,51 @@ describe('an agent exit', () => {
     await rig.host.send(CALLER, restTestSend('again', fence))
     await vi.waitFor(() => expect(rig.adapter.acquire).toHaveBeenCalledTimes(2))
   })
+
+  it('whose settlement write failed is settled by the next send, which is delivered', async () => {
+    await foundRestTestChat(rig)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host's private map, read for the child and its journal.
+    const sessions = Reflect.get(rig.host, 'sessions') as Map<
+      string,
+      {
+        child: { fence: number; generation: string } | null
+        journal: { appendLifecycleBatch: (...args: never[]) => Promise<unknown> }
+      }
+    >
+    const open = sessions.get(SESSION)!
+    const running = open.child!
+    // A turn in flight, so the exit has something to settle.
+    rig.adapter.acquire.mock.calls
+      .at(-1)![0]
+      .events.appendItem(
+        { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'working', ordinal: 50 },
+        { kind: 'turn', turnId: 'working', state: 'running' }
+      )
+    await rig.host.flushStreamedEvents(SESSION)
+    vi.spyOn(open.journal, 'appendLifecycleBatch').mockRejectedValueOnce(new Error('disk full'))
+    await rig.host.handleAdapterEvent({
+      type: 'ended',
+      sessionId: SESSION,
+      reason: 'killed',
+      cause: 'unexpected-exit',
+      fence: running.fence,
+      acquisitionGeneration: running.generation
+    })
+    await vi.waitFor(() =>
+      expect(rig.store.getRecord(SESSION)?.lease.settlementRetryRequired).toBe(true)
+    )
+
+    const sent = await rig.host.send(
+      CALLER,
+      restTestSend('again', rig.store.getRecord(SESSION)!.lease.runtimeFence)
+    )
+
+    expect(sent.ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2), {
+      timeout: 5_000
+    })
+    expect(rig.store.getRecord(SESSION)?.lease.settlementRetryRequired).toBeUndefined()
+  })
 })
 
 describe('every close withdraws what is queued (P2-29)', () => {
