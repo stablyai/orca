@@ -226,41 +226,40 @@ describe('main-process fatal error guards (issue #9441)', () => {
     expect(record).not.toHaveBeenCalled()
   })
 
-  it('rethrows non-pipe errors outside the uncaughtException handler', async () => {
+  it('exits once through the injected exit and keeps its listener installed', async () => {
     vi.resetModules()
+    const order: string[] = []
+    const record = vi.fn(() => order.push('record'))
+    const showErrorBox = vi.fn()
     vi.doMock('../crash-reporting/durable-crash-breadcrumb', () => ({
-      recordDurableCrashBreadcrumb: vi.fn()
+      recordDurableCrashBreadcrumb: record
     }))
+    vi.doMock('electron', () => ({ app: { exit: vi.fn() }, dialog: { showErrorBox } }))
     const { installUncaughtPipeErrorGuard } = await import('./main-process-error-guards')
-    const originalOn = process.on.bind(process)
-    const originalOff = process.off.bind(process)
-    let handler: ((error: unknown) => void) | null = null
-    let scheduled: (() => void) | null = null
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(process, 'on').mockImplementation(((event, listener) => {
-      if (event === 'uncaughtException') {
-        handler = listener as (error: unknown) => void
-        return process
-      }
-      return originalOn(event, listener)
-    }) as typeof process.on)
-    const offSpy = vi.spyOn(process, 'off').mockImplementation(((event, listener) => {
-      if (event === 'uncaughtException') {
-        return process
-      }
-      return originalOff(event, listener)
-    }) as typeof process.off)
-    vi.spyOn(globalThis, 'setImmediate').mockImplementation(((callback) => {
-      scheduled = callback as () => void
-      return {} as NodeJS.Immediate
-    }) as typeof setImmediate)
-
-    installUncaughtPipeErrorGuard()
-
-    const error = new Error('boom')
-    expect(() => handler?.(error)).not.toThrow()
-    expect(offSpy).toHaveBeenCalledWith('uncaughtException', handler)
-    expect(scheduled).not.toBeNull()
-    expect(() => scheduled?.()).toThrow(error)
+    const setImmediateSpy = vi.spyOn(globalThis, 'setImmediate')
+    const exit = vi.fn(() => order.push('exit'))
+    const before = process.listeners('uncaughtException').length
+    installUncaughtPipeErrorGuard(exit)
+    const listener = process.listeners('uncaughtException').at(-1)
+    if (!listener) {
+      throw new Error('guard listener missing')
+    }
+    try {
+      expect(() => listener(new Error('boom'), 'uncaughtException')).not.toThrow()
+      expect(() => listener(new Error('second boom'), 'uncaughtException')).not.toThrow()
+      listener(Object.assign(new Error('read EIO'), { code: 'EIO' }), 'uncaughtException')
+      // Why: removing it hands the error to Electron's listener, which shows a modal box and never exits.
+      expect(process.listeners('uncaughtException')).toContain(listener)
+      expect(process.listeners('uncaughtException').length).toBe(before + 1)
+    } finally {
+      process.removeListener('uncaughtException', listener)
+    }
+    expect(exit).toHaveBeenCalledTimes(1)
+    expect(exit).toHaveBeenCalledWith(1)
+    expect(record).toHaveBeenCalledTimes(1)
+    expect(order).toEqual(['record', 'exit'])
+    expect(setImmediateSpy).not.toHaveBeenCalled()
+    expect(showErrorBox).not.toHaveBeenCalled()
   })
 })
