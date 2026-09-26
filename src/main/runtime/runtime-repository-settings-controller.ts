@@ -28,7 +28,6 @@ type RepositoryUpdates = Partial<
     | 'kind'
     | 'symlinkPaths'
     | 'issueSourcePreference'
-    | 'externalWorktreeVisibility'
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'externalWorktreeInboxBaselinePaths'
     | 'importedExternalWorktreePaths'
@@ -37,6 +36,7 @@ type RepositoryUpdates = Partial<
     | 'projectGroupOrder'
   >
 > & {
+  externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
@@ -71,6 +71,7 @@ export class RuntimeRepositorySettingsController {
     return updated
   }
 
+  /** Preserves the selected host when saving settings for repositories with overlapping IDs. */
   async update(repoSelector: string, updates: RepositoryUpdates): Promise<Repo> {
     const store = this.requireStore()
     const repo = await this.deps.resolveRepo(repoSelector)
@@ -87,7 +88,7 @@ export class RuntimeRepositorySettingsController {
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null
     }
-    const updated = store.updateRepo(repo.id, sanitizedUpdates)
+    const updated = store.updateRepo(repo.id, sanitizedUpdates, getRepoExecutionHostId(repo))
     if (!updated) {
       throw new Error('repo_not_found')
     }

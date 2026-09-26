@@ -61,7 +61,14 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'repo',
-    keys: ['repo list', 'repo add', 'repo show', 'repo set-base-ref', 'repo search-refs'],
+    keys: [
+      'repo list',
+      'repo add',
+      'repo show',
+      'repo set-base-ref',
+      'repo set-worktree-visibility',
+      'repo search-refs'
+    ],
     load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
   },
   {

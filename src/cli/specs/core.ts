@@ -58,6 +58,19 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'repo', 'ref']
   },
   {
+    path: ['repo', 'set-worktree-visibility'],
+    summary: 'Set whether non-Orca worktrees are shown for a repo',
+    usage:
+      'orca repo set-worktree-visibility --repo <selector> --external show|hide|inherit [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'external'],
+    notes: [
+      'Updates the running runtime, including a selected remote environment. Do not edit orca-data.json.',
+      'show and hide override the global external-worktree default for this repo; inherit removes the override.',
+      'Visibility does not import, archive, stop, or delete worktrees. Per-worktree and other visibility rules still apply.'
+    ],
+    examples: ['orca repo set-worktree-visibility --repo path:/path/to/repo --external show --json']
+  },
+  {
     path: ['repo', 'search-refs'],
     summary: 'Search branch/tag refs within a repo',
     usage: 'orca repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]',
