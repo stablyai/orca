@@ -6,6 +6,7 @@ import {
 } from './git/local-repo-ref-maintenance'
 import { hasWorktreeRemovalsInFlight } from './ipc/worktrees/worktree-ipc-context'
 import { hasPendingWorktreeCreatePreparations } from './worktree-create-preparation'
+import { isOnBatteryPower } from './electron-battery-power'
 
 /**
  * The app-wide "not now" answer for idle repo maintenance.
@@ -54,14 +55,5 @@ export function installRepoMaintenanceIdleGate(
     const stopped = disposeLocalRepoRefMaintenance()
     setRepoMaintenanceActivityProbe(null)
     return stopped
-  }
-}
-
-function isOnBatteryPower(): boolean {
-  try {
-    return powerMonitor.isOnBatteryPower()
-  } catch {
-    // Absence of the API is not evidence of battery; desktops answer false anyway.
-    return false
   }
 }
