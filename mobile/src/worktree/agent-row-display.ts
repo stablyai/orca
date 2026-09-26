@@ -63,10 +63,22 @@ export function agentStateLabel(state: AgentDotState): string {
   }
 }
 
-// Primary row text: prefer the agent's last message, then the user prompt, then
-// a human-readable state label so a row is never blank. Matches the desktop
-// DashboardAgentRow displayLabel fallback chain.
+// Primary row text: a stable conversation or task name, then the last message,
+// then the user prompt, then a state label so a row is never blank. The last
+// message stays the fallback so a nameless row still previews the reply.
 export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): string {
+  const conversationName = row.conversationName?.trim()
+  if (conversationName) {
+    return conversationName
+  }
+  const taskTitle = row.taskTitle?.trim()
+  if (taskTitle) {
+    return taskTitle
+  }
+  const displayName = row.displayName?.trim()
+  if (displayName) {
+    return displayName
+  }
   const message = row.lastAssistantMessage?.trim()
   if (message) {
     return message

@@ -9,6 +9,7 @@ import {
   applyRuntimeWorktreePsSessionActivity,
   applyRuntimeWorktreePsTerminalActivity
 } from './runtime-worktree-ps-activity'
+import { resolveWorktreeAgentConversationNames } from './runtime-worktree-agent-conversation-name'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { Repo } from '../../shared/repo-types'
@@ -92,18 +93,28 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStartTuiIdleVis
         getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
           this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
       })
+    const rowSources = collectRuntimeWorktreeAgentSources({
+      mirroredWorktreeIdByTabId,
+      connectedPtyEvidence,
+      // Structured sessions are in here too: the host publishes them into the same store.
+      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
+    })
+    const orchestrationByPaneKey = this.agentOrchestrationProjection.buildByPaneKey()
     attachRuntimeWorktreeAgentRows({
       summaries,
       pathIndex: runtimeWorktreeSummaryPathIndex,
       missingWorktreeIds: missingRuntimeWorktreeIds,
       workingTerminalEvidenceByWorktreeId,
-      rowSources: collectRuntimeWorktreeAgentSources({
-        mirroredWorktreeIdByTabId,
-        connectedPtyEvidence,
-        // Structured sessions are in here too: the host publishes them into the same store.
-        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
+      rowSources,
+      orchestrationByPaneKey,
+      conversationNameByPaneKey: resolveWorktreeAgentConversationNames({
+        sources: rowSources.values(),
+        tabsByWorktree: session?.tabsByWorktree,
+        unifiedTabs: session?.unifiedTabs,
+        terminalLayoutsByTabId: session?.terminalLayoutsByTabId,
+        generatedTitlesEnabled: visibilitySettings?.tabAutoGenerateTitle === true,
+        orchestrationByPaneKey
       }),
-      orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
         this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
     })

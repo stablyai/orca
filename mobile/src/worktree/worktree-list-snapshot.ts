@@ -106,6 +106,9 @@ function areAgentRowsEqual(
       a.workingMode !== b.workingMode ||
       a.agentType !== b.agentType ||
       a.prompt !== b.prompt ||
+      a.taskTitle !== b.taskTitle ||
+      a.displayName !== b.displayName ||
+      a.conversationName !== b.conversationName ||
       a.lastAssistantMessage !== b.lastAssistantMessage ||
       a.toolName !== b.toolName ||
       a.toolInput !== b.toolInput ||

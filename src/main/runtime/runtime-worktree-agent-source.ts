@@ -19,4 +19,6 @@ export type RuntimeWorktreeAgentSource = {
   updatedAt: number
   /** Projected by the structured session host; `owned` rows stay fresh past the staleness window. */
   structuredHost?: StructuredHostStatus
+  /** Provider session id the shared name resolver matches against `aiVaultTitle`. */
+  providerSessionId?: string
 }

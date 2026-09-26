@@ -51,7 +51,8 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       stateStartedAt: entry.stateStartedAt,
       // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
       updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,
-      ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {})
+      ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
+      ...(entry.providerSession?.id ? { providerSessionId: entry.providerSession.id } : {})
     })
   }
   const sources: RuntimeWorktreeAgentSource[] = []
