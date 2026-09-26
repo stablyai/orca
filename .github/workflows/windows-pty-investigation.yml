@@ -1,0 +1,161 @@
+name: Windows PTY investigation
+
+on:
+  push:
+    branches: [ci/windows-pty-investigation]
+
+permissions:
+  contents: read
+
+jobs:
+  investigate:
+    name: Native table and MSYS evidence (${{ matrix.variant }})
+    runs-on: windows-2022
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: baseline
+            source_ref: 21741ca353ced7d901347ed883fe60de012af307
+            conpty_source_sha256: 9f94d62c9dc2562d956eec8e13e5289eb768635f7e45235359df4d2741205e28
+          - variant: fixed
+            source_ref: 8ab235f95a200d45051c2c53ef455a30d7a6095b
+            conpty_source_sha256: 26b16ab880cc6ff1253ac39c9345efa26730d0d64bc01c4b6852af987d4ed363
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      ORCA_INVESTIGATION_VARIANT: ${{ matrix.variant }}
+      ORCA_INVESTIGATION_SOURCE_REF: ${{ matrix.source_ref }}
+      ORCA_INVESTIGATION_SOURCE_SHA256: ${{ matrix.conpty_source_sha256 }}
+      ORCA_INVESTIGATION_RESULTS: ${{ runner.temp }}/orca-pty-evidence-${{ matrix.variant }}
+      ORCA_INVESTIGATION_TOOL_REF: ${{ github.sha }}
+
+    steps:
+      - name: Checkout immutable product source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ matrix.source_ref }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Checkout the same diagnostic sources for both variants
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          path: investigation-source
+          persist-credentials: false
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /config/scripts/windows-msys-marker-investigation.ts
+            /config/scripts/windows-pty-investigation-runner.ts
+            /config/scripts/windows-pty-table-stress.cjs
+
+      # This is the PR Windows install without native cache restoration or saving.
+      - name: Install the PR Node toolchain and dependencies
+        uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: none
+          persist-native-cache: 'false'
+
+      - name: Verify source and remove every node-pty binary candidate
+        shell: pwsh
+        run: |
+          @'
+          const assert = require('node:assert/strict');
+          const { createHash } = require('node:crypto');
+          const { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } = require('node:fs');
+          const { dirname, join } = require('node:path');
+          const result = process.env.ORCA_INVESTIGATION_RESULTS;
+          mkdirSync(result, { recursive: true });
+          const root = dirname(require.resolve('node-pty/package.json'));
+          const source = readFileSync(join(root, 'src', 'win', 'conpty.cc'), 'utf8');
+          const digest = (text) => createHash('sha256').update(text).digest('hex');
+          assert.equal(digest(source.replace(/\r\n/g, '\n')), process.env.ORCA_INVESTIGATION_SOURCE_SHA256);
+          const evidence = {
+            variant: process.env.ORCA_INVESTIGATION_VARIANT,
+            productRef: process.env.ORCA_INVESTIGATION_SOURCE_REF,
+            diagnosticRef: process.env.ORCA_INVESTIGATION_TOOL_REF,
+            node: process.version,
+            osRelease: require('node:os').release(),
+            architecture: process.arch,
+            runnerImageVersion: process.env.ImageVersion,
+            sourceRawSha256: digest(source),
+            sourceLfSha256: digest(source.replace(/\r\n/g, '\n')),
+            patchSha256: digest(readFileSync('config/patches/node-pty@1.1.0.patch')),
+            nativeCache: 'disabled; all binary candidate directories removed before rebuild'
+          };
+          writeFileSync(join(result, 'source.json'), JSON.stringify(evidence, null, 2) + '\n');
+          copyFileSync(join(root, 'src', 'win', 'conpty.cc'), join(result, 'conpty.cc'));
+          copyFileSync('config/patches/node-pty@1.1.0.patch', join(result, 'node-pty.patch'));
+          for (const directory of [['build'], ['prebuilds'], ['lib', 'build'], ['lib', 'prebuilds']]) {
+            rmSync(join(root, ...directory), { recursive: true, force: true });
+          }
+          console.log(JSON.stringify(evidence));
+          '@ | node
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Compile fresh Node native modules with the PR rebuild command
+        shell: pwsh
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=node 2>&1 | Tee-Object -FilePath (Join-Path $env:ORCA_INVESTIGATION_RESULTS 'native-build.log')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node config/scripts/ensure-native-runtime.mjs --check-only 2>&1 | Tee-Object -FilePath (Join-Path $env:ORCA_INVESTIGATION_RESULTS 'native-check.log')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Bundle the diagnostic with existing product boundary code
+        shell: pwsh
+        run: |
+          @'
+          const assert = require('node:assert/strict');
+          const { createHash } = require('node:crypto');
+          const { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+          const { dirname, join, resolve } = require('node:path');
+          const output = resolve('node_modules/.cache/orca-pty-investigation');
+          const result = process.env.ORCA_INVESTIGATION_RESULTS;
+          mkdirSync(output, { recursive: true });
+          const stress = readFileSync('investigation-source/config/scripts/windows-pty-table-stress.cjs', 'utf8').replace(/\r\n/g, '\n');
+          const stressSha256 = createHash('sha256').update(stress).digest('hex');
+          assert.equal(stressSha256, 'e79742c211a24331aa16ad66d1b675e4f62eae2a39532e865533920fca4efc98');
+          writeFileSync(join(output, 'windows-pty-table-stress.cjs'), stress);
+          copyFileSync(join(output, 'windows-pty-table-stress.cjs'), join(result, 'windows-pty-table-stress.cjs'));
+          for (const name of ['windows-msys-marker-investigation.ts', 'windows-pty-investigation-runner.ts']) {
+            assert.equal(existsSync(join('config/scripts', name)), false, 'Diagnostics must not overwrite product code');
+            copyFileSync(join('investigation-source/config/scripts', name), join('config/scripts', name));
+            copyFileSync(join('config/scripts', name), join(result, name));
+          }
+          require('esbuild').buildSync({
+            entryPoints: ['config/scripts/windows-pty-investigation-runner.ts'],
+            bundle: true, platform: 'node', target: 'node24', format: 'cjs', packages: 'external',
+            outfile: join(output, 'windows-pty-investigation-runner.cjs')
+          });
+          const addon = join(dirname(require.resolve('node-pty/package.json')), 'build', 'Release', 'conpty.node');
+          copyFileSync(addon, join(result, 'conpty.node'));
+          writeFileSync(join(result, 'harness.json'), JSON.stringify({ stressSha256, tableRounds: 16, tableSamples: 2, msysSamplesPerMode: 2, childMarkerDeadlineMs: 15000 }, null, 2) + '\n');
+          '@ | node
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run every scheduled sample and retain failures
+        id: probes
+        timeout-minutes: 7
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          node node_modules/.cache/orca-pty-investigation/windows-pty-investigation-runner.cjs 2>&1 | Tee-Object -FilePath (Join-Path $env:ORCA_INVESTIGATION_RESULTS 'driver.log')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload all evidence even when a sample failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-pty-${{ matrix.variant }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.ORCA_INVESTIGATION_RESULTS }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Preserve the diagnostic failure status
+        if: always() && steps.probes.outcome != 'success'
+        shell: pwsh
+        run: |
+          Write-Error 'Diagnostic setup or at least one scheduled sample failed. Inspect the complete artifact; later passes do not erase failures.'
+          exit 1
