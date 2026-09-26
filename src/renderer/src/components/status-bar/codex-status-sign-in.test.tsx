@@ -7,7 +7,7 @@
  * click the real button so the wiring (intent flag, runtime target, restart
  * workflow, toasts) cannot pass while the handler is mis-wired.
  */
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -178,11 +178,14 @@ const codexProvider: ProviderRateLimits = {
   updatedAt: 1
 } as unknown as ProviderRateLimits
 
-async function renderSwitcherAndOpenAccounts(summaryLabel: string): Promise<void> {
+async function renderSwitcherAndOpenAccounts(
+  summaryLabel: string,
+  codex = codexProvider
+): Promise<void> {
   const { CodexSwitcherMenu } = await import('./StatusBar')
   render(
     React.createElement(CodexSwitcherMenu, {
-      codex: codexProvider,
+      codex,
       compact: false,
       iconOnly: false
     })
@@ -206,6 +209,30 @@ describe('status bar Codex sign-in action', () => {
   afterEach(() => {
     cleanup()
   })
+
+  it.each([null, 'account-1'])(
+    'shows live usage in the active account row, including system default: %s',
+    async (activeAccountId) => {
+      storeSettings = settingsWithActive(activeAccountId)
+      await renderSwitcherAndOpenAccounts(
+        activeAccountId ? 'account-1@example.com' : 'System default',
+        {
+          ...codexProvider,
+          status: 'ok',
+          error: null,
+          weekly: {
+            usedPercent: 11,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          }
+        }
+      )
+
+      const activeRow = screen.getByRole('menuitem', { name: /Active/ })
+      expect(within(activeRow).getByText('11% used wk')).toBeTruthy()
+    }
+  )
 
   it.each([null, 'Enterprise'])(
     'selects the exact same-email account when workspace labels collide: %s',
