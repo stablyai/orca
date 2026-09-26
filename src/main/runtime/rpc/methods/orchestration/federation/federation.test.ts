@@ -152,7 +152,11 @@ describe('orchestration federation', () => {
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_windows_worker',
       expect.stringContaining(`Your task ID is: ${task.id}`),
-      expect.objectContaining(dispatchPreambleSendOptions(expect.any(String)))
+      expect.objectContaining({
+        ...dispatchPreambleSendOptions(expect.any(String)),
+        // The worker server launched this agent in a terminal it created.
+        promptTarget: 'just-launched-agent'
+      })
     )
   })
 
