@@ -7,6 +7,7 @@ import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { hasCompatibleAgentTitleIdentity } from '../../shared/agent-title-owner'
 import type { PtyForegroundProcessRead } from './runtime-terminal-contracts'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
+import { isShellProcess } from '../../shared/shell-process-detection'
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
@@ -84,9 +85,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     const titleObservedAt = pty?.lastOscTitleAt ?? null
     const foregroundRead = this.readPtyForegroundProcessFromController(ptyId, titleObservedAt ?? 0)
     if (!pty?.connected || !foregroundRead) {
-      if (!recoverCompletedHook) {
-        this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
-      }
+      this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
       return
     }
     void foregroundRead.then((result) => {
@@ -149,8 +148,17 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
         }
         return
       }
-      if (!recoverCompletedHook) {
+      if (
+        !recoverCompletedHook &&
+        result.controller === this.ptyController &&
+        result.available &&
+        result.process?.trim() &&
+        isShellProcess(result.process)
+      ) {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+      } else {
+        // Unverifiable foreground evidence must not close chat or consume the next exit candidate.
+        this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
       }
     })
   }
