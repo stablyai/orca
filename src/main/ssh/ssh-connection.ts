@@ -224,6 +224,9 @@ export class SshConnection {
   getState(): SshConnectionState {
     return { ...this.state }
   }
+  getConnectGeneration(): number {
+    return this.connectGeneration
+  }
   getClient(): SshClient | null {
     return this.client
   }

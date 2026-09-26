@@ -39,7 +39,7 @@ export type RemoteOpenCodeRuntimeOutcome =
   | 'teardown-unconfirmed'
 const installations = new WeakMap<
   SshConnection,
-  Map<string, Promise<RemoteOpenCodeRuntimeOutcome>>
+  { generation: number; byDirectory: Map<string, Promise<RemoteOpenCodeRuntimeOutcome>> }
 >()
 const downloads = new Map<string, Promise<string>>()
 
@@ -58,11 +58,13 @@ export function ensureRemoteOpenCodeRuntime(
   remoteHome: string,
   options: SetupOptions
 ): Promise<RemoteOpenCodeRuntimeOutcome> {
-  let byDirectory = installations.get(conn)
-  if (!byDirectory) {
-    byDirectory = new Map()
-    installations.set(conn, byDirectory)
+  const generation = conn.getConnectGeneration()
+  let current = installations.get(conn)
+  if (current?.generation !== generation) {
+    current = { generation, byDirectory: new Map() }
+    installations.set(conn, current)
   }
+  const { byDirectory } = current
   const active = byDirectory.get(options.relayDir)
   if (active) {
     return waitForPromiseWithSignal(active, options.signal).catch(() => 'teardown-unconfirmed')
@@ -78,6 +80,9 @@ export function ensureRemoteOpenCodeRuntime(
   let remoteUnconfirmed = false
   const remote: RemoteOperation = async (operation) => {
     signal.throwIfAborted()
+    if (conn.getConnectGeneration() !== generation) {
+      throw new Error('SSH connection changed during SQLite runtime setup.')
+    }
     remotePending = true
     try {
       return await operation()

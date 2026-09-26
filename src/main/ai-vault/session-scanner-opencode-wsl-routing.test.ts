@@ -133,7 +133,7 @@ describe('OpenCode SQLite execution-host routes', () => {
       expect(await parse({ ...args, fullFirstUserPrompt: true })).toMatchObject({
         id: `local:opencode:same-session:${ubuntu}`,
         filePath: ubuntu,
-        cwd: String.raw`\\wsl.localhost\Ubuntu\home\ada\repo`,
+        cwd: '/home/ada/repo',
         executionHostPlatform: 'linux'
       })
       expect(reader.parse).toHaveBeenCalledWith({

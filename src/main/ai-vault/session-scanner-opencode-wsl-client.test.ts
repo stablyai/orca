@@ -118,14 +118,14 @@ describe('WSL SQLite reader clients', () => {
     accumulator.cwd = '/home/ada/project $literal'
     accumulator.title = 'A session'
     const native = finalizeSession(accumulator, 'linux')
-    const mapped = mapOpenCodeWslSession(native, path, 'Ubuntu')
+    const mapped = mapOpenCodeWslSession(native, path)
     expect(mapped).toMatchObject({
       id: `local:opencode:session:${path}`,
       filePath: path,
-      cwd: String.raw`\\wsl.localhost\Ubuntu\home\ada\project $literal`,
+      cwd: '/home/ada/project $literal',
       executionHostPlatform: 'linux',
       resumeCommand: "cd '/home/ada/project $literal' && opencode --session 'session'"
     })
-    expect(mapOpenCodeWslSession(null, path, 'Ubuntu')).toBeNull()
+    expect(mapOpenCodeWslSession(null, path)).toBeNull()
   })
 })

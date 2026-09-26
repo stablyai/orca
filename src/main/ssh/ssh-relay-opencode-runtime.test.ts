@@ -77,8 +77,11 @@ function hostCommandResult(command: string): string {
 }
 
 function connection(system = false): SshConnection {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exec and transfers are mocked; setup only reads this transport flag.
-  return { usesSystemSshTransport: () => system } as unknown as SshConnection
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Setup reads only the mocked transport flag and connection generation; remote I/O is mocked.
+  return {
+    usesSystemSshTransport: () => system,
+    getConnectGeneration: () => 1
+  } as unknown as SshConnection
 }
 
 beforeEach(async () => {
@@ -227,6 +230,39 @@ describe('SSH OpenCode runtime setup', () => {
       'teardown-unconfirmed'
     )
     expect(mocks.exec).toHaveBeenCalledOnce()
+  })
+
+  it('admits setup on a new connection generation after an unconfirmed teardown', async () => {
+    const conn = connection()
+    const generation = vi.spyOn(conn, 'getConnectGeneration')
+    mocks.exec.mockRejectedValueOnce(
+      Object.assign(new Error('Channel teardown is unconfirmed'), {
+        sshChannelCloseConfirmed: false
+      })
+    )
+    expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe(
+      'teardown-unconfirmed'
+    )
+    expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe(
+      'teardown-unconfirmed'
+    )
+    expect(mocks.exec).toHaveBeenCalledOnce()
+    generation.mockReturnValue(2)
+    mocks.exec.mockResolvedValueOnce(frame('ready', '/usr/bin/node'))
+    expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe('ready')
+    expect(mocks.write).toHaveBeenCalledOnce()
+  })
+
+  it('does not issue more host commands from a superseded setup', async () => {
+    const conn = connection()
+    const generation = vi.spyOn(conn, 'getConnectGeneration')
+    mocks.exec.mockImplementationOnce(async () => {
+      generation.mockReturnValue(2)
+      return frame('ready', '/usr/bin/node')
+    })
+    expect(await ensureRemoteOpenCodeRuntime(conn, host, remoteHome, options())).toBe('failed')
+    expect(mocks.exec).toHaveBeenCalledOnce()
+    expect(mocks.write).not.toHaveBeenCalled()
   })
 
   it.each(['deadline', 'caller'] as const)(

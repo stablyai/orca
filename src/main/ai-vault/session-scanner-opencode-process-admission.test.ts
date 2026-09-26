@@ -43,6 +43,19 @@ function reader(beforeSpawn: (signal: AbortSignal) => Promise<void>, idleTeardow
 }
 
 describe('SQLite process launch admission', () => {
+  it('does not probe a reader cancelled before admission starts', async () => {
+    const admit = vi.fn(async () => {})
+    const client = reader(admit)
+    const cancellation = new AbortController()
+    const pending = client.parse({ ...args, signal: cancellation.signal })
+    const rejected = expect(pending).rejects.toThrow('cancelled')
+    cancellation.abort(new Error('cancelled'))
+    await rejected
+    await Promise.resolve()
+    expect(admit).not.toHaveBeenCalled()
+    expect(mocked.spawn).not.toHaveBeenCalled()
+  })
+
   it('probes once per process, reuses it for every read, and reprobes after idle expiry', async () => {
     const admit = vi.fn(async () => {})
     const client = reader(admit, 15)

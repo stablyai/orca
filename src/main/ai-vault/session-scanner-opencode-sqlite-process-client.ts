@@ -121,6 +121,7 @@ function createAdmittedProcessTransport(
   const controller = new AbortController()
   let transport: WorkerRequestTransport | undefined
   const ready = Promise.resolve().then(async () => {
+    controller.signal.throwIfAborted()
     await waitForPromiseWithSignal(admit(controller.signal), controller.signal)
     controller.signal.throwIfAborted()
     transport = createProcessTransport(options)

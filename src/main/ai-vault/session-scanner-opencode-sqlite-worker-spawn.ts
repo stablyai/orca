@@ -203,7 +203,7 @@ async function parseForHost(
   }
   const client = await openCodeWslClient(wsl.distro, args.dbPath, args.signal)
   const session = await client.parse({ ...args, dbPath: wsl.linuxPath, platform: 'linux' })
-  return mapOpenCodeWslSession(session, args.dbPath, wsl.distro)
+  return mapOpenCodeWslSession(session, args.dbPath)
 }
 
 async function captureForHost(
@@ -215,5 +215,5 @@ async function captureForHost(
   }
   const client = await openCodeWslClient(wsl.distro, args.dbPath, args.signal)
   const capture = await client.capture({ ...args, dbPath: wsl.linuxPath, platform: 'linux' })
-  return { ...capture, session: mapOpenCodeWslSession(capture.session, args.dbPath, wsl.distro) }
+  return { ...capture, session: mapOpenCodeWslSession(capture.session, args.dbPath) }
 }

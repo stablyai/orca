@@ -1,7 +1,7 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { waitForPromiseWithSignal, throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
-import { parseWslUncPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveWslExecutablePath } from '../wsl/wsl-executable-path'
 import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
@@ -76,11 +76,10 @@ export async function openCodeWslClient(
   return client
 }
 
-/** Preserve distro identity and Windows-addressable paths for later reads and resume. */
+/** Keep database reads Windows-addressable and the working directory native to its host. */
 export function mapOpenCodeWslSession(
   session: AiVaultSession | null,
-  dbPath: string,
-  distro: string
+  dbPath: string
 ): AiVaultSession | null {
   if (!session) {
     return null
@@ -89,7 +88,6 @@ export function mapOpenCodeWslSession(
     ...session,
     id: `${session.executionHostId}:${session.agent}:${session.sessionId}:${dbPath}`,
     filePath: dbPath,
-    cwd: session.cwd?.startsWith('/') ? toWindowsWslUncPath(session.cwd, distro) : session.cwd,
     executionHostPlatform: 'linux'
   }
 }
