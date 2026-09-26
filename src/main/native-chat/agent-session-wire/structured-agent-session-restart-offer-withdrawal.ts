@@ -1,15 +1,15 @@
 // When a restart offer ends without being acted on: the chat moved on.
 //
 // One derived fact decides it, for the offer list and for the continuation's own acceptance alike:
-// since the restart, another message was accepted in the chat, or its agent proved a start. Both
-// are read off what the conversation's open handle holds, which the restart closed — a restored
-// row, a replayed row or a view carries neither, so opening a chat withdraws nothing. The rest of
-// a resume action does not count: its own continuation, and the start that continuation waits on.
-//
-// The handle is only a cache, so its answer does not outlive a close: each time the fact may have
-// changed — a message accepted, a start proven — the offer is retired durably too.
+// since the offer was taken, another message was accepted in the chat, or its agent proved a start.
+// A message is read against the journal position the offer recorded, so the answer survives any
+// number of handle closes. A start is known only to the host that saw it, so it is also written
+// to the recovery file when it happens. A restored row, a replayed row or a view carries neither,
+// so opening a chat withdraws nothing. The rest of a resume action does not count: its own
+// continuation, and the start that continuation waits on.
 
 import type { AgentSessionRecoveryCapsule } from '../../runtime/agent-session-recovery-capsule'
+import type { AgentSessionResumeMarker } from '../../../shared/agent-session-resume-marker'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 
 export type StructuredAgentSessionRestartOfferWithdrawal = ReturnType<
@@ -33,35 +33,38 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
   /** The continuation each running resume action sends, by chat. */
   const actions = new Map<string, string>()
 
-  const movedOn = (sessionId: string): boolean => {
-    const session = deps.sessions.get(sessionId)
+  /** The action's own start is the one its continuation is still waiting on. */
+  const ownStart = (session: StructuredAgentSessionRestartOfferSession, own: string | undefined) =>
+    own !== undefined &&
+    session.journal.submissions().find((submission) => submission.dispatchState === 'pending')
+      ?.clientMessageId === own
+
+  const movedOn = (marker: AgentSessionResumeMarker): boolean => {
+    const session = deps.sessions.get(marker.sessionId)
     if (!session) {
       return false
     }
-    const own = actions.get(sessionId)
-    const submissions = session.journal.submissions()
-    const accepted = submissions.some(
-      (submission) =>
-        submission.clientMessageId !== own &&
-        !session.journal.wroteBeforeOpen(submission.acceptedSequence) &&
-        // A continuation that was rejected never reached the agent: a retry sends a new one.
-        !(
-          submission.dispatchState === 'rejected' && deps.isContinuation(submission.clientMessageId)
-        )
-    )
-    if (accepted) {
-      return true
-    }
+    const own = actions.get(marker.sessionId)
+    const taken = marker.journalCursor
+    // An older build's offer recorded no position: only a start withdraws it.
+    const accepted =
+      taken !== undefined &&
+      (session.journal.cursor().epoch !== taken.epoch ||
+        session.journal.submissions().some(
+          (submission) =>
+            submission.clientMessageId !== own &&
+            (submission.acceptedSequence ?? 0) > taken.sequence &&
+            // A continuation that was rejected never reached the agent: a retry sends a new one.
+            !(
+              submission.dispatchState === 'rejected' &&
+              deps.isContinuation(submission.clientMessageId)
+            )
+        ))
     // Proven, not merely spawned: a start that failed during startup never ran the agent.
     const started =
       session.child?.phase === 'ready' ||
       (session.lastEndedChild !== undefined && !session.lastEndedChild.duringStartup)
-    // The action's own start is the one its continuation is still waiting on.
-    const ownStart =
-      own !== undefined &&
-      submissions.find((submission) => submission.dispatchState === 'pending')?.clientMessageId ===
-        own
-    return started && !ownStart
+    return accepted || (started && !ownStart(session, own))
   }
 
   return {
@@ -75,11 +78,12 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
         }
       }
     },
-    /** The fact may have changed: retire the offer and any failure record durably if it holds.
-     *  Advisory: a failed write is logged, never raised. */
-    recheck: (sessionId: string): void => {
+    /** The chat's agent proved a start: unless it is a resume action's own, the offer and any
+     *  failure record go from the recovery file. Advisory: a failed write is logged, never raised. */
+    onAgentStarted: (sessionId: string): void => {
+      const session = deps.sessions.get(sessionId)
       const capsule = deps.capsule
-      if (!capsule || !movedOn(sessionId)) {
+      if (!capsule || !session || ownStart(session, actions.get(sessionId))) {
         return
       }
       void deps

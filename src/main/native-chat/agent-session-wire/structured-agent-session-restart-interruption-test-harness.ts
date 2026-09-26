@@ -110,6 +110,8 @@ export async function interruptedRestart(
     hostId: 'local'
   })
   const closeSession = vi.fn(async () => true)
+  // The relaunch comes after the quit that recorded the offer.
+  const clock = { now: NOW + 1 }
   const host = new StructuredAgentSessionHost({
     store,
     adapter: {
@@ -130,8 +132,7 @@ export async function interruptedRestart(
     mintSpawnToken: () => 'spawn-next',
     probeOwner: async () => ({ outcome: 'pid-absent' }),
     recoveryCapsule: new AgentSessionRecoveryCapsule(previous.root),
-    // The relaunch comes after the quit that recorded the offer.
-    now: () => NOW + 1
+    now: () => clock.now
   })
   replaceHostTestState({ store, host })
   previous.acquire.mockClear()
@@ -141,7 +142,7 @@ export async function interruptedRestart(
     await readFile(join(previous.root, AGENT_SESSION_RECOVERY_CAPSULE_FILE), 'utf8')
   )
   const marker = parseAgentSessionResumeMarker(capsule.entries[0]?.marker)
-  return { ...hostTestState(), host, store, closeSession, marker }
+  return { ...hostTestState(), host, store, closeSession, marker, clock }
 }
 
 export async function statusNotes(host: StructuredAgentSessionHost) {

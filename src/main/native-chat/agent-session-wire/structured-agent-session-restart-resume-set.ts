@@ -74,8 +74,8 @@ export type StructuredAgentSessionResumeSetInput = {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   supportsRecord: (record: AgentSessionRecord) => boolean
   latestPrompt: (sessionId: string) => string
-  /** Whether the chat moved on since the restart; false when its journal is not open here. */
-  movedOn: (sessionId: string) => boolean
+  /** Whether the chat moved on since the offer was taken; false when its journal is not open here. */
+  movedOn: (marker: AgentSessionResumeMarker) => boolean
   /**
    * Whether the lease must be free.
    *
@@ -112,7 +112,7 @@ export function structuredAgentSessionResumableSet(
       superseded.push(marker)
       continue
     }
-    if (input.movedOn(marker.sessionId)) {
+    if (input.movedOn(marker)) {
       superseded.push(marker)
       continue
     }

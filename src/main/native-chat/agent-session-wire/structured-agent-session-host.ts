@@ -75,7 +75,7 @@ export class StructuredAgentSessionHost {
     () => this.now(),
     () => this.deps,
     (sessionId) => this.sessions.touch(sessionId),
-    (sessionId) => this.restartResume.recheck(sessionId)
+    (sessionId) => this.restartResume.onAgentStarted(sessionId)
   )
   private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
@@ -266,10 +266,7 @@ export class StructuredAgentSessionHost {
       openConversation: this.conversationDelivery.open,
       ensureAgent: (sessionId) =>
         ensureStructuredAgentSessionAgentForOperation(this.attachContext(), sessionId),
-      wakeDelivery: (sessionId) => {
-        this.conversationDelivery.loop.wake(sessionId)
-        this.restartResume.recheck(sessionId)
-      },
+      wakeDelivery: (sessionId) => this.conversationDelivery.loop.wake(sessionId),
       stopAgent: this.lifetime.stopAgent,
       now: () => this.now()
     }

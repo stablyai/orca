@@ -67,8 +67,8 @@ export type StructuredAgentSessionRestartResume = {
   }>
   /** Named sessions forget their offer or failure; unnamed, every durable record goes. */
   dismiss: (sessionIds?: readonly string[]) => Promise<number>
-  /** A message was accepted, or the agent proved a start: the chat may have moved on. */
-  recheck: (sessionId: string) => void
+  /** The chat's agent proved a start: its offer ends unless the start is a resume's own. */
+  onAgentStarted: (sessionId: string) => void
 }
 
 export function createStructuredAgentSessionRestartResume(
@@ -308,6 +308,6 @@ export function createStructuredAgentSessionRestartResume(
     // dismissal. A later capture is a new interruption and may create a fresh offer normally.
     dismiss: (sessionIds) => failures.dismiss(sessionIds, witnesses.clear),
     continueAfterRestart,
-    recheck: withdrawal.recheck
+    onAgentStarted: withdrawal.onAgentStarted
   }
 }

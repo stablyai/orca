@@ -17,6 +17,7 @@ import { structuredAgentSessionWorkingAtStop } from './structured-agent-session-
 import {
   CLAUDE_ROOT,
   claudeRecord,
+  EPOCH,
   HANDLE_ROOT,
   journal,
   TEARDOWN_CURRENT,
@@ -64,6 +65,7 @@ describe('deriving what was working at teardown', () => {
         recordedAt: NOW,
         trigger: 'quit',
         teardownId: TEARDOWN_CURRENT,
+        journalCursor: { epoch: EPOCH, sequence: 1 },
         providerHandleRoot: HANDLE_ROOT,
         latestUserItemId: null,
         activity: { state: 'working', prompts: [], tasks: [] }

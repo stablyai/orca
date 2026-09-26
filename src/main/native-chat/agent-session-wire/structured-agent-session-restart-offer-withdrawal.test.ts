@@ -4,7 +4,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AgentSessionRecoveryCapsule,
   AGENT_SESSION_RECOVERY_CAPSULE_FILE
@@ -17,6 +17,9 @@ import {
   statusNotes
 } from './structured-agent-session-restart-interruption-test-harness'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
+import { STRUCTURED_AGENT_SESSION_IDLE_MS } from './structured-agent-session-idle-sweep'
+import { createStructuredAgentSessionRestartOfferWithdrawal } from './structured-agent-session-restart-offer-withdrawal'
+import { sweepOnce } from './structured-agent-session-rest-test-rig'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
@@ -185,14 +188,16 @@ it('withdraws the offer when the user sends a message whose start then fails (R-
   expect(dispatch).not.toHaveBeenCalled()
 })
 
-// The open handle is only a cache: closing it and reading the chat again must not bring back an
-// offer the user's message withdrew.
-it('keeps the offer withdrawn after the chat is closed and read again', async () => {
+// The idle sweep closes a chat's open handle, and the next read opens a new one: the user's message
+// still counts, because it is read against where the journal stood when the offer was taken.
+it('keeps the offer withdrawn after the idle sweep closes the chat and it is read again', async () => {
   const state = await offered()
-  const { host, root } = state
+  const { host, root, clock } = state
   await sendWhoseStartFails(state)
+  clock.now += STRUCTURED_AGENT_SESSION_IDLE_MS + 1
 
-  await host.close(SESSION)
+  await sweepOnce(host)
+  expect(host.hasSession(SESSION)).toBe(false)
   await host.revealSession(SESSION)
 
   expect(await host.restartResume.list()).toEqual([])
@@ -262,4 +267,68 @@ it('delivers a clicked continuation and a message sent right after it, in the or
   expect(first).not.toBe('And then this')
   expect(second).toBe('And then this')
   expect(await offersIn(root)).toEqual([])
+})
+
+describe('reading the chat against where the offer was taken', () => {
+  const TAKEN = { epoch: 'epoch-1', sequence: 5 }
+
+  function movedOn(
+    input: {
+      epoch?: string
+      submissions?: { clientMessageId: string; acceptedSequence: number; dispatchState: string }[]
+      continuations?: string[]
+    },
+    journalCursor: { epoch: string; sequence: number } | null = TAKEN
+  ): boolean {
+    const session = {
+      child: null,
+      journal: {
+        cursor: () => ({ epoch: input.epoch ?? TAKEN.epoch, sequence: 9 }),
+        submissions: () => input.submissions ?? []
+      }
+    }
+    const withdrawal = createStructuredAgentSessionRestartOfferWithdrawal({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fact reads only the journal's cursor and submissions and the child fields given here.
+      sessions: new Map([[SESSION, session as never]]),
+      isContinuation: (id) => input.continuations?.includes(id) === true,
+      now: () => NOW,
+      enqueue: (operation) => operation()
+    })
+    return withdrawal.movedOn({
+      sessionId: SESSION,
+      work: { kind: 'turn', id: 'turn-1' },
+      recordedAt: NOW,
+      trigger: 'quit',
+      providerHandleRoot: 'codex:"thread"',
+      teardownId: 'teardown-1',
+      ...(journalCursor ? { journalCursor } : {})
+    })
+  }
+
+  it('counts a message accepted after that position, and nothing before it', () => {
+    const at = (acceptedSequence: number) => ({
+      clientMessageId: `m-${acceptedSequence}`,
+      acceptedSequence,
+      dispatchState: 'rejected'
+    })
+    expect(movedOn({ submissions: [at(4), at(5)] })).toBe(false)
+    expect(movedOn({ submissions: [at(4), at(6)] })).toBe(true)
+  })
+
+  it('counts a journal on another epoch as moved on', () => {
+    expect(movedOn({ epoch: 'epoch-2' })).toBe(true)
+  })
+
+  it('does not count a rejected continuation, so a retry still runs', () => {
+    const rejected = { clientMessageId: 'c-1', acceptedSequence: 7, dispatchState: 'rejected' }
+    expect(movedOn({ submissions: [rejected], continuations: ['c-1'] })).toBe(false)
+    expect(
+      movedOn({ submissions: [{ ...rejected, dispatchState: 'accepted' }], continuations: ['c-1'] })
+    ).toBe(true)
+  })
+
+  it('leaves an older build’s offer, which recorded no position, to a start', () => {
+    const after = { clientMessageId: 'm-7', acceptedSequence: 7, dispatchState: 'accepted' }
+    expect(movedOn({ submissions: [after], epoch: 'epoch-2' }, null)).toBe(false)
+  })
 })

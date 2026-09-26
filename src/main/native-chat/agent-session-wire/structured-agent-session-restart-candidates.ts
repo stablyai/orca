@@ -28,8 +28,8 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartJournalSource>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   adapter: StructuredAgentSessionAdapter
-  /** Whether the chat moved on since the restart; see the offer withdrawal. */
-  movedOn: (sessionId: string) => boolean
+  /** Whether the chat moved on since the offer was taken; see the offer withdrawal. */
+  movedOn: (marker: AgentSessionResumeMarker) => boolean
 }): StructuredAgentSessionRestartCandidateReader {
   return (markers, leaseState) =>
     structuredAgentSessionResumableSet({
