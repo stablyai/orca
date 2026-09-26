@@ -4,6 +4,7 @@ import {
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 const OUTBOX_PREFIX = 'orca:desktopStructuredAgentSessionOutbox:v1:'
 
@@ -103,7 +104,7 @@ export function enqueueStructuredAgentSessionLaunchPrompt(
 ): StructuredAgentSessionOutboxEntry | null {
   const entry = {
     ...createStructuredAgentSessionOutboxEntry({
-      clientMessageId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
+      clientMessageId: createStructuredAgentSessionOperationId(createBrowserUuid),
       sessionId,
       text,
       attachments: [],
