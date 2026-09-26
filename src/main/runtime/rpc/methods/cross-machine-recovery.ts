@@ -14,7 +14,6 @@ import {
   CrossMachineRecoveryResumeParams
 } from '../../../../shared/rpc-contract/cross-machine-recovery-params'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { mainProcessState } from '../../../startup/main-process-state'
 import { readOrMintCrossMachineRecoveryClientInstanceId } from '../../cross-machine-recovery/client-instance-id'
 import { getCrossMachineRecoveryPresentationStore } from '../../cross-machine-recovery/presentation-store-instance'
 import { readRecoveryActivity } from '../../cross-machine-recovery/recovery-activity'
@@ -22,6 +21,7 @@ import { exportRecoveryWorkspace } from '../../cross-machine-recovery/recovery-e
 import { importRecoveryWorkspace } from '../../cross-machine-recovery/recovery-import'
 import { listRecoveryBindings } from '../../cross-machine-recovery/recovery-list'
 import { resumeRecoveryBinding } from '../../cross-machine-recovery/recovery-resume'
+import { getRuntimeDesktopSurface } from '../../runtime-desktop-surface'
 import { defineMethod, type RpcContext } from '../core'
 
 // Why: recovery reads and writes this machine's own workspaces; a paired device or runtime
@@ -38,7 +38,7 @@ export const CROSS_MACHINE_RECOVERY_METHODS = [
     params: CrossMachineRecoveryDescribeParams,
     handler: async (_params, ctx): Promise<RecoveryDescribeResult> => {
       assertLocalRecoveryCaller(ctx)
-      const hostKind = mainProcessState.isServeMode ? 'headless' : 'desktop'
+      const hostKind = getRuntimeDesktopSurface().servesDesktopRenderer?.() ? 'desktop' : 'headless'
       return {
         protocol: CROSS_MACHINE_RECOVERY_DESCRIBE_PROTOCOL,
         runtimeId: ctx.runtime.getRuntimeId(),

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AppEnvironment from '../../../../shared/app-environment'
 import type { RecoveryPresentationPublishParams } from '../../../../shared/cross-machine-recovery-presentation-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { setRuntimeDesktopSurface } from '../../runtime-desktop-surface'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext, type RpcMethod } from '../core'
 // Why: importing the methods module directly trips module-init cycles; the index resolves them.
 import { ALL_RPC_METHODS } from './index'
@@ -20,9 +21,17 @@ vi.mock('../../../../shared/app-environment', async (importOriginal) => ({
   getAppEnvironment: () => ({ getVersion: () => '9.9.9' })
 }))
 
-vi.mock('../../../startup/main-process-state', () => ({
-  mainProcessState: { isServeMode: false }
-}))
+beforeEach(() => {
+  setRuntimeDesktopSurface({
+    servesDesktopRenderer: () => true,
+    showNotification: () => false,
+    findWindowById: () => null,
+    onIpc: () => {},
+    removeIpcListener: () => {}
+  })
+})
+
+afterEach(() => setRuntimeDesktopSurface(null))
 
 function method(name: string): RpcMethod {
   const found = eraseRpcMethods(ALL_RPC_METHODS).find((candidate) => candidate.name === name)
@@ -38,6 +47,7 @@ async function call(name: string, params: unknown, ctx: Omit<RpcContext, 'runtim
   return await target.handler(parsed, { ...ctx, runtime })
 }
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements every runtime method the recovery describe/publish handlers reach.
 const runtime = {
   getRuntimeId: () => 'runtime-1',
   readMachineName: () => 'studio',
