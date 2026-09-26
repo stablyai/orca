@@ -39,7 +39,13 @@ export type AgentLaunchPrompt = {
  */
 export type AgentLaunchTarget =
   /** A workspace that already exists, addressed by any selector the runtime resolves. */
-  | { kind: 'existing'; worktree: string }
+  | {
+      kind: 'existing'
+      worktree: string
+      /** The workspace root the host resolved for that selector. Host-set, never accepted from a
+       *  caller: it decides whether a requested `cwd` names the root or somewhere else. */
+      workspacePath?: string
+    }
   /** A worktree this launch creates. `create` is the `worktree.create` request minus its agent
    *  fields — the launch owns those, so a caller cannot set a startup agent behind the router. */
   | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
@@ -94,7 +100,15 @@ export type AgentLaunchIntent = {
 
 /** The surface the host actually created. */
 export type AgentLaunchOutcome =
-  | { kind: 'structured'; sessionId: string; handle: string }
+  | {
+      kind: 'structured'
+      sessionId: string
+      handle: string
+      /** The host-owned id of the tab that shows this chat: the tab half of the reserved `paneKey`
+       *  when one was sent, else the one the host gave its tab. Identity, not placement, like the
+       *  terminal arm's `paneKey`. Absent from hosts that predate it. */
+      tabId?: string
+    }
   | {
       kind: 'terminal'
       handle: string
@@ -241,6 +255,7 @@ function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
     handle?: unknown
     sessionId?: unknown
     paneKey?: unknown
+    tabId?: unknown
   }
   if (typeof outcome.handle !== 'string' || outcome.handle.length === 0) {
     return false
@@ -252,7 +267,9 @@ function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
       outcome.paneKey === undefined || typeof outcome.paneKey === 'string'
     : outcome.kind === 'structured' &&
         typeof outcome.sessionId === 'string' &&
-        outcome.sessionId.length > 0
+        outcome.sessionId.length > 0 &&
+        // Optional on the same terms as the terminal arm's `paneKey`.
+        (outcome.tabId === undefined || typeof outcome.tabId === 'string')
 }
 
 function isAgentLaunchModeReceipt(value: unknown): value is AgentLaunchModeReceipt {

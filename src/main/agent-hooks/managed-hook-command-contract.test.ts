@@ -22,6 +22,7 @@ import {
 import { getDevinManagedCommand, getDevinRemoteManagedCommand } from '../devin/hook-settings'
 import { getGrokManagedCommand } from '../grok/grok-hook-script'
 import { getMuseManagedCommand, getMuseRemoteManagedCommand } from '../muse/hook-settings'
+import { getZCodeManagedCommand, getZCodeRemoteManagedCommand } from '../zcode/hook-settings'
 import {
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -148,6 +149,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [getMuseManagedCommand(path)],
       remote: (path) => [getMuseRemoteManagedCommand(path)]
+    }
+  ],
+  [
+    'zcode',
+    {
+      local: (path) => [getZCodeManagedCommand(path)],
+      remote: (path) => [getZCodeRemoteManagedCommand(path)]
     }
   ]
 ])

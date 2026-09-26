@@ -223,7 +223,10 @@ export async function handleAutomationDispatchRequest({
       if (focusBeforeDispatch.activeTabId) {
         currentState.setActiveTab(focusBeforeDispatch.activeTabId)
       }
-      currentState.setActiveTabType(focusBeforeDispatch.activeTabType)
+      currentState.setActiveTabType(
+        focusBeforeDispatch.activeTabType,
+        focusBeforeDispatch.activeWorktreeId
+      )
     }
   } catch (error) {
     releaseTerminalOwnership()

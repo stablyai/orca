@@ -266,3 +266,47 @@ describe('a taken session id under a named operation', () => {
     })
   })
 })
+
+describe('the chat tab a launch reserves', () => {
+  const PANE_KEY = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d:3f2504e0-4f89-41d3-9a0c-0305e82c3301'
+
+  it('hands the tab half of the reserved pane to the structured create', async () => {
+    // One reservation serves either route: the pane a terminal would have used names the chat's
+    // tab when the host settles the launch as a chat instead.
+    const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
+
+    await launch({ ...EXISTING_LAUNCH, paneKey: PANE_KEY }, runtime)
+
+    expect(createStructured.mock.calls[0]?.[0]).toMatchObject({
+      tabId: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
+    })
+  })
+
+  it('reserves no tab when the launch carried no pane', async () => {
+    const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
+
+    await launch(EXISTING_LAUNCH, runtime)
+
+    expect(createStructured.mock.calls[0]?.[0]).not.toHaveProperty('tabId')
+  })
+
+  it('reports the tab the host recorded for the chat', async () => {
+    createStructured.mockImplementationOnce(async (args) => ({
+      ok: true,
+      value: { sessionId: args.envelope.sessionId, tabId: 'tab-from-host' }
+    }))
+    const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
+
+    const result = await launch({ ...EXISTING_LAUNCH, paneKey: PANE_KEY }, runtime)
+
+    expect(result.outcome).toMatchObject({ kind: 'structured', tabId: 'tab-from-host' })
+  })
+
+  it('reports no tab when the host is older than the field', async () => {
+    const runtime = runtimeStub({ settings: STRUCTURED_PREFERENCE })
+
+    const result = await launch(EXISTING_LAUNCH, runtime)
+
+    expect(result.outcome).not.toHaveProperty('tabId')
+  })
+})

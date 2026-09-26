@@ -12,7 +12,6 @@ import { notifyRuntimeListeners } from './runtime-async-boundaries'
 import type { RuntimeTerminalBufferSnapshot } from './runtime-terminal-state-records'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './orca-runtime-postlude'
 import { assertTerminalInputWithinLimitWithYield } from './terminal-send-payload'
-import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 
 export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends OrcaRuntimeWithRecordAgentPromptLifecycleState {
   attachRemoteTerminalSourceRangeConsumer(
@@ -182,20 +181,14 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
     }
     try {
       await assertTerminalInputWithinLimitWithYield(data)
-      const admitted = agentSessionPtyWriteGate.assertAdmitted(ptyId)
-      await this.writeTerminalInputChunks(
-        ptyId,
-        data,
-        {
-          // Why: a phone can claim the floor while a paste yields between chunks.
-          beforeWrite: () => {
-            if (this.getDriver(ptyId).kind === 'mobile') {
-              throw new Error('terminal_mobile_driver_active')
-            }
+      await this.writeTerminalInputChunks(ptyId, data, {
+        // Why: a phone can claim the floor while a paste yields between chunks.
+        beforeWrite: () => {
+          if (this.getDriver(ptyId).kind === 'mobile') {
+            throw new Error('terminal_mobile_driver_active')
           }
-        },
-        admitted
-      )
+        }
+      })
       return true
     } catch {
       return false

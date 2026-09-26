@@ -75,25 +75,13 @@ it('delivers catalog changes through existing frames without resending them on o
     })
     expect(state.commands).toEqual(commands)
     for (let i = 0; i < 25; i++) {
-      subscribers.handoff(sessionId, 7, {
-        owner: 'none',
-        direction: null,
-        phase: 'idle',
-        stage: null,
-        operationId: null
-      })
+      subscribers.backgroundTasks(sessionId, null, 7)
     }
     coalescer.flush()
     expect(events.filter((event) => 'commands' in event)).toHaveLength(1)
     commands = []
     subscribers.publish(sessionId, journal)
-    subscribers.handoff(sessionId, 7, {
-      owner: 'none',
-      direction: null,
-      phase: 'idle',
-      stage: null,
-      operationId: null
-    })
+    subscribers.backgroundTasks(sessionId, null, 7)
     coalescer.flush()
     expect(state.commands).toEqual([])
     expect(events.filter((event) => 'commands' in event)).toHaveLength(2)

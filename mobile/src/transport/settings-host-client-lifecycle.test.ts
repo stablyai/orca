@@ -23,6 +23,12 @@ const routeFocus = vi.hoisted(() => ({
   effect: null as null | (() => void | (() => void))
 }))
 
+// Why: the opener starts a descriptor status probe per connection; these fakes have no RPC surface.
+const descriptorProbe = vi.hoisted(() => ({ start: vi.fn(() => vi.fn()) }))
+vi.mock('./runtime-status-probe', () => ({
+  startRuntimeStatusProbe: (...args: unknown[]) => descriptorProbe.start(...args)
+}))
+
 vi.mock('expo-router', () => ({
   useFocusEffect: (effect: () => void | (() => void)) => {
     routeFocus.effect = effect

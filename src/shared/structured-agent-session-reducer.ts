@@ -6,13 +6,13 @@ import type {
 import type {
   AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
-  AgentSessionHandoffStatus,
   AgentSessionHistoryPage,
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from './agent-session-wire'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import { readAgentJournalTurn } from './agent-session-turn-record'
 
 /** The last host clock sample: `hostNow - receivedAt` is the client's skew from the host,
  *  which is what lets a client attaching mid-turn anchor its live counter on the real start. */
@@ -32,18 +32,19 @@ export type StructuredAgentSessionState = {
   hasOlder: boolean
   status: 'idle' | 'loading' | 'ready' | 'error'
   error?: string
-  handoff: AgentSessionHandoffStatus | null
   backgroundTasks?: AgentSessionBackgroundTaskState | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
   hostClock?: StructuredAgentHostClock
+  /** Bumped per live batch that leaves a turn row's newest revision outside the window
+   *  (dropped or trimmed), so a whole-journal answer derived from turn rows is asked for again. */
+  unloadedTurnRevisions?: number
 }
 
 export type StructuredAgentSessionAction =
   | { type: 'loading' }
   | { type: 'error'; message: string }
-  | { type: 'handoff'; handoff: AgentSessionHandoffStatus }
   | { type: 'event'; event: AgentSessionSubscribeEvent }
   | { type: 'history-page'; page: AgentSessionHistoryPage }
   | { type: 'older-page'; requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }
@@ -61,8 +62,7 @@ export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   submissions: [],
   retainedItemLimit: MAX_RETAINED_ITEMS,
   hasOlder: false,
-  status: 'idle',
-  handoff: null
+  status: 'idle'
 }
 
 /** A frame without `hostNow` (older host) leaves the previous sample in place. */
@@ -78,7 +78,6 @@ function hostClockField(
 function replacePage(
   page: AgentSessionHistoryPage,
   fence: number | null,
-  handoff?: AgentSessionHandoffStatus,
   backgroundTasks?: AgentSessionBackgroundTaskState | null,
   activity?: AgentSessionTurnActivity | null
 ): StructuredAgentSessionState {
@@ -91,7 +90,6 @@ function replacePage(
     retainedItemLimit: Math.max(MAX_RETAINED_ITEMS, page.items.length),
     hasOlder: page.hasOlder,
     status: 'ready',
-    handoff: handoff ?? null,
     activity: activity ?? null,
     ...(backgroundTasks !== undefined
       ? { backgroundTasks }
@@ -182,18 +180,9 @@ export function reduceStructuredAgentSession(
   if (action.type === 'error') {
     return { ...state, status: 'error', error: action.message }
   }
-  if (action.type === 'handoff') {
-    return { ...state, handoff: action.handoff }
-  }
   if (action.type === 'history-page') {
     return {
-      ...replacePage(
-        action.page,
-        action.page.fence ?? null,
-        state.handoff ?? undefined,
-        state.backgroundTasks,
-        state.activity
-      ),
+      ...replacePage(action.page, action.page.fence ?? null, state.backgroundTasks, state.activity),
       commands: state.commands,
       ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
@@ -226,7 +215,7 @@ export function reduceStructuredAgentSession(
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
     return {
-      ...replacePage(event.page, event.fence, event.handoff, event.backgroundTasks, event.activity),
+      ...replacePage(event.page, event.fence, event.backgroundTasks, event.activity),
       commands: event.commands,
       ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
@@ -249,7 +238,6 @@ export function reduceStructuredAgentSession(
     event.batch.cursor.sequence === state.cursor?.sequence &&
     journalUnchanged &&
     (event.fence === undefined || event.fence === state.fence) &&
-    (event.handoff === undefined || event.handoff === state.handoff) &&
     (event.commands === undefined || event.commands === state.commands) &&
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
     activity?.turnId === state.activity?.turnId &&
@@ -263,6 +251,13 @@ export function reduceStructuredAgentSession(
     ? state.items
     : mergeItems(state.items, liveItems, event.batch.removedItemIds)
   const items = trimRetainedItems(merged, state.retainedItemLimit)
+  const outsideWindow = [
+    ...(liveItems.length < event.batch.items.length
+      ? event.batch.items.filter((item) => !liveItems.includes(item))
+      : []),
+    ...merged.slice(0, merged.length - items.length)
+  ]
+  const lostTurnRow = outsideWindow.some((item) => readAgentJournalTurn(item.body) !== null)
   return {
     ...state,
     cursor: event.batch.cursor,
@@ -276,10 +271,10 @@ export function reduceStructuredAgentSession(
         : mergeSubmissions(state.submissions, event.batch.submissions, items),
     status: 'ready',
     error: undefined,
-    handoff: event.handoff ?? state.handoff,
     commands: event.commands !== undefined ? event.commands : state.commands,
     ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
     ...(activity !== undefined ? { activity } : {}),
+    ...(lostTurnRow ? { unloadedTurnRevisions: (state.unloadedTurnRevisions ?? 0) + 1 } : {}),
     ...hostClockField(event.hostNow, receivedAt, state.hostClock)
   }
 }

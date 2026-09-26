@@ -14,6 +14,8 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { currentAgentSessionThreadGoalBySequence } from '../../../shared/agent-session-thread-goal'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
+import { latestStructuredAgentContextFacts } from '../../../shared/structured-agent-session-context-usage'
 import {
   activeStructuredAgentSessionTurnIdBySequence,
   newestStructuredAgentSessionTurnBySequence
@@ -24,7 +26,10 @@ import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { readJournalSince } from './journal-cursor'
 import { readJournalRowsAfterCursor, type JournalLoad } from './journal-open'
 import { journalDatabaseFile } from './journal-paths'
-import { markJournalPendingSubmissionsUnknown } from './journal-pending-submission-recovery'
+import {
+  markJournalPendingSubmissionsUnknown,
+  rejectJournalPendingSubmissions
+} from './journal-pending-submission-recovery'
 import {
   applyJournalRow,
   createJournalReducerState,
@@ -71,6 +76,7 @@ export class AgentSessionJournal {
   private readOnly = false
   private malformedRows = 0
   private database: OpenJournalDatabase | null = null
+  private onCommitted: (() => void) | null = null
   private readonly queue: JournalWriteQueue
   private readonly closer: JournalConnectionCloser
   private readonly rowWriter: JournalRowWriter
@@ -106,8 +112,14 @@ export class AgentSessionJournal {
         this.readOnly = readOnly
       },
       cursor: this.cursor,
-      adopt: (loaded) => this.adoptLoadedJournal(loaded),
-      commit: (row) => applyJournalRow(this.state, row),
+      adopt: (loaded) => {
+        this.adoptLoadedJournal(loaded)
+        this.onCommitted?.()
+      },
+      commit: (row) => {
+        applyJournalRow(this.state, row)
+        this.onCommitted?.()
+      },
       loaded: () => this.loaded,
       malformedRows: () => this.malformedRows,
       setMalformedRows: (count) => {
@@ -162,6 +174,12 @@ export class AgentSessionJournal {
     return this.closer.close()
   }
 
+  /** Told of every durable change, epoch replacements included, so a reader learns of a write
+   *  without its writer saying so. One listener: a later call replaces it. It must not throw. */
+  observeCommits(listener: () => void): void {
+    this.onCommitted = listener
+  }
+
   cursor = (): AgentJournalCursor => ({
     epoch: this.state.epoch,
     sequence: this.state.lastSequence
@@ -178,6 +196,10 @@ export class AgentSessionJournal {
     }
   }
 
+  /** One reduced item's body by its journal key, for a writer revising a row it can name. */
+  itemBody = (itemId: string): AgentJournalItemBody | null =>
+    this.state.items.get(itemId)?.body ?? null
+
   /** The turn this journal has published as running — the same read a client's snapshot gives,
    *  without materialising one. */
   activeTurnId = (): string | null =>
@@ -190,6 +212,10 @@ export class AgentSessionJournal {
   /** The latest goal the whole journal records, not only a client's loaded page. */
   threadGoal = (): AgentJournalThreadGoal | null =>
     currentAgentSessionThreadGoalBySequence(this.state.items.values()) ?? null
+
+  /** The newest context facts the whole journal records, not only a client's loaded page. */
+  contextUsage = (): AgentSessionContextUsage =>
+    latestStructuredAgentContextFacts(this.state.items.values())
 
   /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
   lastActivityAt = (): number => this.state.lastActivityAt
@@ -277,6 +303,11 @@ export class AgentSessionJournal {
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
   async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
     return markJournalPendingSubmissionsUnknown(this, fence, reason)
+  }
+
+  /** Reject unanswered sends after an owner that never proved its start ended: none was written. */
+  async rejectPendingSubmissions(fence: number, reason: string): Promise<string[]> {
+    return rejectJournalPendingSubmissions(this, fence, reason)
   }
 
   /** The escape hatch for corruption, an unreconcilable prefix, a forked handle,

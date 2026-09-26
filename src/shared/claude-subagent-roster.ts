@@ -52,6 +52,16 @@ export type TrackedClaudeSubagent = {
   listedAsSubagentTask?: true
 }
 
+/** Whether a hook ends one child's turn. An API error (e.g. a 429) skips the
+ *  child's SubagentStop and TeammateIdle; Claude sends only a StopFailure
+ *  carrying the child's `agent_id` (captured live on 2.1.280). */
+export function isClaudeChildTurnEndEvent(
+  eventName: unknown,
+  agentId: string | undefined
+): eventName is 'SubagentStop' | 'StopFailure' {
+  return eventName === 'SubagentStop' || (eventName === 'StopFailure' && agentId !== undefined)
+}
+
 /** Agent-team/named-agent lifecycle ids are `a<name>-<hex>` while one-shot
  *  ids are hyphen-free (`a<hex>`). Such ids are never listed as task ids in
  *  `background_tasks`, so omission from the list proves nothing for them. */

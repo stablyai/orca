@@ -111,6 +111,61 @@ describe.each(['opencode', 'opencode2'] as const)('%s plugin on OpenCode 2', (ag
     await cleanup?.()
   })
 
+  it('fails open when setup is probed without a usable context', async () => {
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
+    // Why: OpenCode probes setup() during startup, and the setup API shape can
+    // drift between releases. A throw surfaces as a plugin failed error in the
+    // TUI, so every shape must resolve to a callable cleanup instead.
+    const contexts: unknown[] = [
+      undefined,
+      {},
+      { session: {} },
+      { session: { hook: vi.fn() }, event: {} }
+    ]
+    for (const ctx of contexts) {
+      const cleanup = await module.default?.setup?.(ctx)
+      expect(cleanup).toBeTypeOf('function')
+      await cleanup?.()
+    }
+  })
+
+  it('disposes cleanly when the prompt hook returns nothing to dispose', async () => {
+    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
+    const cleanup = await module.default?.setup?.({
+      session: {
+        get: async ({ sessionID }: { sessionID: string }) => ({ data: { id: sessionID } }),
+        hook: async () => undefined
+      },
+      event: {
+        subscribe: async function* () {}
+      }
+    })
+    expect(cleanup).toBeTypeOf('function')
+    await cleanup?.()
+  })
+
+  it('exposes a distinct plugin id per agent variant', async () => {
+    const module = await loadPluginModule(
+      agent === 'opencode2'
+        ? _internals.getOpenCode2PluginSource()
+        : _internals.getOpenCodePluginSource()
+    )
+    // Why: both plugin files share one config dir, so distinct ids keep the
+    // loader from reporting a duplicate-id collision as a plugin failure.
+    expect(module.default?.id).toBe(
+      agent === 'opencode2' ? 'orca-opencode2-status' : 'orca-opencode-status'
+    )
+  })
+
   it('subscribes through the OpenCode 2 setup API and disposes its registrations', async () => {
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     const posts: unknown[] = []

@@ -1,5 +1,6 @@
 import type { EffortLevel, PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
+import { ClaudeControlRequestTimeoutError } from './claude-agent-sdk-control-requests'
 import {
   AgentSessionOptionRejectedError,
   isAgentSessionOptionRejectedError
@@ -26,6 +27,9 @@ const OPTION_ORDER = ['model', 'effort', 'fastMode', 'permissionMode'] as const
  */
 const UNREPORTED_EFFORTS: ReadonlySet<string> = new Set(['max'])
 
+/** Writes that can move the main thread to another model or window: `opusplan` runs plan mode on Opus. */
+const CONTEXT_WINDOW_KEYS: ReadonlySet<string> = new Set(['model', 'permissionMode'])
+
 export function restoredClaudeStructuredSessionOptions(
   options: Readonly<Record<string, string>> | undefined
 ): Map<string, string> {
@@ -37,10 +41,29 @@ export function restoredClaudeStructuredSessionOptions(
   )
 }
 
-export async function setClaudeStructuredOption(
+/** A client's write; the startup restore writes through `setClaudeStructuredOption` directly. */
+export function setClaudeStructuredSessionOption(
   session: ClaudeSession,
   input: { key: string; value: string },
   timeoutMs: number | undefined
+): Promise<Readonly<Record<string, string>>> {
+  // Each write is a control request the CLI answers only after initialize.
+  if (session.startup.state !== 'proven') {
+    return Promise.reject(
+      new AgentSessionOptionRejectedError(
+        'Claude is still starting; options can be changed once it is ready.'
+      )
+    )
+  }
+  return setClaudeStructuredOption(session, input, timeoutMs)
+}
+
+export async function setClaudeStructuredOption(
+  session: ClaudeSession,
+  input: { key: string; value: string },
+  timeoutMs: number | undefined,
+  /** What the key held before a restore cleared the map; a live write reads the map. */
+  heldBeforeRestore?: string
 ): Promise<Readonly<Record<string, string>>> {
   const fastMode =
     input.key === 'fastMode'
@@ -124,6 +147,8 @@ export async function setClaudeStructuredOption(
       : null
   const modelWasConfirmed = readClaudeCurrentModel(session).confirmed
   const mutationSequence = ++session.optionMutationSequence
+  // Read with the fence bump, so a write that lands after an earlier one's bookkeeping compares against it.
+  const held = heldBeforeRestore ?? session.options.get(input.key)
   // Only a model write can stale the model report — an effort or permission-mode
   // write does not change what the child is running. Leaving the stamp behind
   // would drop the session back to the written model and refuse, on the next
@@ -133,6 +158,15 @@ export async function setClaudeStructuredOption(
   }
   try {
     await apply()
+    // Ahead of the fence checks: the child applied this write even if a newer one supersedes its bookkeeping.
+    if (CONTEXT_WINDOW_KEYS.has(input.key) && input.value !== held) {
+      session.translator?.modelMayHaveChanged()
+    }
+    if (input.key === 'model') {
+      session.translator?.modelWritten(input.value)
+      // It described the model this write replaced; the next readback re-reads it.
+      delete session.appliedOptions
+    }
     if (
       input.key === 'model' &&
       session.options.get('fastMode') === 'true' &&
@@ -221,14 +255,28 @@ export async function restoreClaudeStructuredSessionOptions(
   session.options.clear()
   for (const [key, value] of options) {
     try {
-      await setClaudeStructuredOption(session, { key, value }, timeoutMs)
+      await setClaudeStructuredOption(session, { key, value }, timeoutMs, value)
     } catch (error) {
+      // A write the CLI never answered must not fault a start that is otherwise fine. Silence is
+      // not a refusal, so the choice stays wanted, unconfirmed, and the next start retries it.
+      if (error instanceof ClaudeControlRequestTimeoutError) {
+        console.warn(
+          `[claude-structured] restore of ${key} for ${session.providerSessionId} was not answered in time; keeping it unconfirmed`
+        )
+        session.options.set(key, value)
+        session.confirmedOptions.delete(key)
+        continue
+      }
       if (!isAgentSessionOptionRejectedError(error)) {
         throw error
       }
       // A stale or unavailable preference must not poison every future acquire;
       // the provider's current value remains authoritative and is re-persisted.
       session.restoreSkippedOptions.add(key)
+      // The journal's window was measured under the value this child did not take.
+      if (CONTEXT_WINDOW_KEYS.has(key)) {
+        session.translator?.modelMayHaveChanged()
+      }
     }
   }
 }

@@ -210,6 +210,7 @@ export function buildDefaultSettings(args: {
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
+    opencodeGoApiKey: '',
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
     minimaxEndpoint: 'overseas',
@@ -237,6 +238,7 @@ export function buildDefaultSettings(args: {
     mobilePairingConnectionMode: 'automatic',
     mobilePairingCustomAddress: null,
     mobilePairingCustomAddresses: [],
+    machineName: '',
     // Why: off keeps the cosmetic overlay unmounted for users who never opt in.
     experimentalPet: false,
     experimentalActivity: false,

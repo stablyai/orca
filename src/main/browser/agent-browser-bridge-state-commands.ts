@@ -257,16 +257,10 @@ export abstract class AgentBrowserBridgeStateCommands extends AgentBrowserBridge
   // ── Generic passthrough ──
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(
-      worktreeId,
-      browserPageId,
-      async (sessionName) => {
-        // Why: strip target/session flags from passthrough so a caller can't override Orca's selected page or CDP proxy.
-        const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
-        return await this.execAgentBrowser(sessionName, args)
-      },
-      // Why: passthrough can run screenshot/record.
-      { needsPaint: true }
-    )
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+      // Why: strip target/session flags from passthrough so a caller can't override Orca's selected page or CDP proxy.
+      const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
+      return await this.execAgentBrowser(sessionName, args)
+    })
   }
 }

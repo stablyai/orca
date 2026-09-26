@@ -66,3 +66,13 @@ describe('structured chat shell environment settings', () => {
     ).toEqual(['HTTPS_PROXY'])
   })
 })
+
+describe('machine name setting', () => {
+  it('trims persisted names and defaults missing legacy values to automatic detection', () => {
+    expect(normalizeLegacyProfile({ machineName: '  Build server  ' }).machineName).toBe(
+      'Build server'
+    )
+    expect(normalizeLegacyProfile({ machineName: undefined }).machineName).toBe('')
+    expect(normalizeLegacyProfile({ machineName: 'x'.repeat(300) }).machineName).toHaveLength(255)
+  })
+})

@@ -206,6 +206,16 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 
+  // A failed older page belongs to one paging generation; a reconnect snapshot must start another.
+  it('starts a new older-history generation on each snapshot', async () => {
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: [], hasMore: false }))
+    const before = latest?.olderHistoryGeneration ?? 0
+    await act(async () => transport.emit({ type: 'snapshot', messages: [], hasMore: false }))
+    expect(latest?.olderHistoryGeneration).toBeGreaterThan(before)
+  })
+
   it('discards a load-earlier resolve from the previous owner after a flip', async () => {
     // Fill the initial window so hasMore is true and load-earlier can fire.
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
@@ -229,7 +239,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     )
     // Kick off load-earlier against env-1, then flip the owner before it resolves.
     await act(async () => {
-      latest?.loadEarlier()
+      void latest?.loadEarlier()
     })
     await rerender(root, {
       paneKey: PANE,
@@ -264,7 +274,9 @@ describe('useNativeChatLiveSession — transport routing', () => {
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     )
-    await act(async () => latest?.loadEarlier())
+    await act(async () => {
+      void latest?.loadEarlier()
+    })
 
     await act(async () =>
       transport.emit({
@@ -279,6 +291,43 @@ describe('useNativeChatLiveSession — transport routing', () => {
     })
 
     expect(latest?.messages.map((message) => message.id)).toEqual(['replacement'])
+  })
+
+  it('shares one in-flight older page, and its result, with every caller', async () => {
+    const transport = getMockTransport('env-1')
+    const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
+      assistant(`old-${n}`, 'old')
+    )
+    await render({
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      runtimeEnvironmentId: 'env-1'
+    })
+    await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
+    let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveEarlier = resolve))
+    )
+    const readsBefore = transport.readSession.mock.calls.length
+
+    let first: Promise<string> | undefined
+    let second: Promise<string> | undefined
+    await act(async () => {
+      first = latest?.loadEarlier()
+    })
+    await act(async () => {
+      second = latest?.loadEarlier()
+    })
+    expect(second).toBe(first)
+    await act(async () => {
+      resolveEarlier({ messages: [assistant('older', 'older'), ...many] })
+      await first
+    })
+
+    await expect(second).resolves.toBe('applied')
+    expect(transport.readSession.mock.calls.length).toBe(readsBefore + 1)
+    expect(latest?.loadingEarlier).toBe(false)
   })
 
   it('discards a load-earlier resolve from before a reconnect snapshot', async () => {
@@ -298,7 +347,9 @@ describe('useNativeChatLiveSession — transport routing', () => {
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     )
-    await act(async () => latest?.loadEarlier())
+    await act(async () => {
+      void latest?.loadEarlier()
+    })
 
     await act(async () =>
       transport.emit({
@@ -333,7 +384,9 @@ describe('useNativeChatLiveSession — transport routing', () => {
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     )
-    await act(async () => latest?.loadEarlier())
+    await act(async () => {
+      void latest?.loadEarlier()
+    })
 
     await rerender(root, {
       paneKey: PANE,
@@ -521,7 +574,9 @@ describe('useNativeChatLiveSession — transport routing', () => {
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     )
-    await act(async () => latest?.loadEarlier())
+    await act(async () => {
+      void latest?.loadEarlier()
+    })
     await act(async () =>
       transport.emit({
         type: 'appended',

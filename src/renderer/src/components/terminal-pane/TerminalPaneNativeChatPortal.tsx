@@ -26,12 +26,8 @@ export function TerminalPaneNativeChatPortal({
     managedPanes,
     readNativeChatTerminalScreen,
     resolveAgentForLeaf,
-    structuredChatAgent,
-    structuredChatTarget,
-    structuredSessionId,
     switchNativeChatToTerminal,
-    tabId,
-    unifiedTabId
+    tabId
   } = controller
   const chatPaneSessionId = useAppStore((state) =>
     effectiveChatViewMode && chatPane
@@ -69,32 +65,19 @@ export function TerminalPaneNativeChatPortal({
 
   return createPortal(
     <div className="native-chat-pane-shell absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
-      {structuredSessionId && structuredChatAgent ? (
-        <NativeChatView
-          mode="structured"
-          tabId={unifiedTabId ?? tabId}
-          sessionId={structuredSessionId}
-          agent={structuredChatAgent}
-          isVisible={isRendererVisible}
-          isFocusedGroup={isActive && activePaneIsChatLeaf}
-          target={structuredChatTarget}
-          contextMenuActions={contextMenuActions}
-        />
-      ) : (
-        <NativeChatView
-          terminalTabId={tabId}
-          isVisible={isRendererVisible}
-          isFocusedGroup={isActive && activePaneIsChatLeaf}
-          paneKey={makePaneKey(tabId, chatPane.leafId)}
-          targetPtyId={chatPanePtyId}
-          launchAgent={chatPaneLaunchAgent}
-          resolvedAgent={chatPaneResolvedAgent}
-          ownsTabWideLaunchDraft={chatPaneOwnsTabWideLaunchDraft}
-          onSwitchToTerminal={switchNativeChatToTerminal}
-          readTerminalScreen={readNativeChatTerminalScreen}
-          contextMenuActions={contextMenuActions}
-        />
-      )}
+      <NativeChatView
+        terminalTabId={tabId}
+        isVisible={isRendererVisible}
+        isFocusedGroup={isActive && activePaneIsChatLeaf}
+        paneKey={makePaneKey(tabId, chatPane.leafId)}
+        targetPtyId={chatPanePtyId}
+        launchAgent={chatPaneLaunchAgent}
+        resolvedAgent={chatPaneResolvedAgent}
+        ownsTabWideLaunchDraft={chatPaneOwnsTabWideLaunchDraft}
+        onSwitchToTerminal={switchNativeChatToTerminal}
+        readTerminalScreen={readNativeChatTerminalScreen}
+        contextMenuActions={contextMenuActions}
+      />
     </div>,
     chatPane.container,
     `native-chat-${tabId}-${chatPane.leafId}`

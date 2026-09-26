@@ -17,6 +17,7 @@ export const WORKSPACE = 'workspace-1'
 export const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 export const NOW = 1_800_000_000_000
 export const REWIND_METHOD = 'agentSession.rewind'
+export const CONVERSATION_OUTLINE_METHOD = 'agentSession.conversationOutline'
 export const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
 export const TURN_COMPLETION_FEED_METHOD = 'agentSession.subscribeTurnCompletions'
 
@@ -90,11 +91,6 @@ export const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false }
   },
   {
-    method: 'agentSession.requestHandoff',
-    hostMethod: 'requestHandoff',
-    result: { status: { owner: 'native' } }
-  },
-  {
     method: 'agentSession.handoffStatus',
     hostMethod: 'handoffStatus',
     result: { owner: 'native' }
@@ -103,6 +99,11 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.options',
     hostMethod: 'readOptions',
     result: { current: { model: 'gpt-live' } }
+  },
+  {
+    method: 'agentSession.modelCatalog',
+    hostMethod: 'modelCatalog',
+    result: { origin: 'unknown' }
   },
   {
     method: 'agentSession.commands',
@@ -143,6 +144,11 @@ export const STRUCTURED_CALLS: {
     method: 'agentSession.history',
     hostMethod: 'history',
     result: { ok: true, page: { items: [] } }
+  },
+  {
+    method: CONVERSATION_OUTLINE_METHOD,
+    hostMethod: 'journalSnapshot',
+    result: { sessionId: SESSION, entries: [], omittedEntries: 0 }
   },
   // A subscription that opens with nothing to say answers with no reply at all,
   // so reaching the host is the only signal that the gate opened.
@@ -251,14 +257,6 @@ export function paramsFor(method: string): unknown {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
-    case 'agentSession.requestHandoff': {
-      const fields = {
-        direction: 'to-tui' as const,
-        mode: 'now' as const,
-        action: 'start' as const
-      }
-      return { envelope: envelope({ method, fields, fence }), ...fields }
-    }
     case 'agentSession.setOption': {
       const fields = { key: 'model', value: 'gpt-5' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
@@ -269,6 +267,8 @@ export function paramsFor(method: string): unknown {
     }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
+    case 'agentSession.modelCatalog':
+      return { agent: 'codex', sessionId: SESSION }
     case 'agentSession.hold':
     case 'agentSession.release':
       return { sessionId: SESSION, holderId: 'surface-1' }

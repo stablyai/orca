@@ -54,6 +54,7 @@ vi.mock('@/lib/feedback-image-attachments', async (importOriginal) => {
 })
 
 import { SidebarFeedbackDialog } from './SidebarFeedbackDialog'
+import { useAppStore } from '@/store'
 
 beforeEach(() => {
   mocks.readFeedbackImageFiles.mockReset()
@@ -87,6 +88,9 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  // Why: the draft outlives the dialog on purpose now, so it also outlives a
+  // test unless each one starts from an empty store.
+  useAppStore.getState().clearFeedbackDraft()
 })
 
 describe('SidebarFeedbackDialog environment prefill', () => {
@@ -282,6 +286,87 @@ describe('SidebarFeedbackDialog image submission', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
+  it('says the screenshots were dropped when the host rejected them', async () => {
+    mocks.readFeedbackImageFiles.mockResolvedValue({
+      images: [
+        {
+          id: 'shot',
+          name: 'shot.png',
+          contentType: 'image/png',
+          bytes: 1,
+          data: new Uint8Array([1]),
+          previewUrl: 'blob:shot'
+        }
+      ],
+      errors: []
+    })
+    mocks.submit.mockResolvedValue({
+      ok: true,
+      imagesDelivered: false,
+      imagesFailure: { status: 413, error: 'status 413' }
+    })
+    const onOpenChange = vi.fn()
+    const { container } = render(<SidebarFeedbackDialog open onOpenChange={onOpenChange} />)
+    fireEvent.change(screen.getByPlaceholderText('What could we improve?'), {
+      target: { value: 'Screenshot attached' }
+    })
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')
+    fireEvent.change(input!, {
+      target: { files: [new File(['x'], 'shot.png', { type: 'image/png' })] }
+    })
+    await screen.findByRole('button', { name: 'Remove shot.png' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() =>
+      expect(mocks.toastWarning).toHaveBeenCalledWith(
+        'Feedback sent. Your screenshots were too large to upload and were not included.'
+      )
+    )
+    expect(mocks.toastWarning).toHaveBeenCalledTimes(1)
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  // Why: 413 is the only shed-the-attachment status that means "too big". A
+  // corporate filter's 403 sheds the same attachment for a different reason.
+  it('does not blame the size when the host rejected the images for another reason', async () => {
+    mocks.readFeedbackImageFiles.mockResolvedValue({
+      images: [
+        {
+          id: 'shot',
+          name: 'shot.png',
+          contentType: 'image/png',
+          bytes: 1,
+          data: new Uint8Array([1]),
+          previewUrl: 'blob:shot'
+        }
+      ],
+      errors: []
+    })
+    mocks.submit.mockResolvedValue({
+      ok: true,
+      imagesDelivered: false,
+      imagesFailure: { status: 403, error: 'status 403' }
+    })
+    const { container } = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    fireEvent.change(screen.getByPlaceholderText('What could we improve?'), {
+      target: { value: 'Screenshot attached' }
+    })
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')
+    fireEvent.change(input!, {
+      target: { files: [new File(['x'], 'shot.png', { type: 'image/png' })] }
+    })
+    await screen.findByRole('button', { name: 'Remove shot.png' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() =>
+      expect(mocks.toastWarning).toHaveBeenCalledWith(
+        'Feedback sent. Your screenshots could not be uploaded and were not included.'
+      )
+    )
+  })
+
   it('releases image previews when the sidebar unmounts the dialog', async () => {
     mocks.readFeedbackImageFiles.mockResolvedValue({
       images: [
@@ -311,12 +396,12 @@ describe('SidebarFeedbackDialog image submission', () => {
   it('does not consume text when the pasted image cannot be attached', () => {
     mocks.readFeedbackImageFiles.mockResolvedValue({
       images: [],
-      errors: ['huge.png is larger than 8.0 MB.']
+      errors: ['huge.png is larger than 4.0 MB.']
     })
     render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
     const textarea = screen.getByPlaceholderText('What could we improve?')
     const file = new File(['image'], 'huge.png', { type: 'image/png' })
-    Object.defineProperty(file, 'size', { value: 8 * 1024 * 1024 + 1 })
+    Object.defineProperty(file, 'size', { value: 4 * 1024 * 1024 + 1 })
     const paste = new Event('paste', { bubbles: true, cancelable: true })
     Object.defineProperty(paste, 'clipboardData', {
       value: { files: [file] }
@@ -325,7 +410,99 @@ describe('SidebarFeedbackDialog image submission', () => {
     fireEvent(textarea, paste)
 
     expect(paste.defaultPrevented).toBe(false)
-    expect(mocks.readFeedbackImageFiles).toHaveBeenCalledWith([file], 0)
+    expect(mocks.readFeedbackImageFiles).toHaveBeenCalledWith([file], 0, 0)
+  })
+
+  // Why: the byte budget, not the count, is what binds after one full-screen
+  // screenshot. A gate that only knows the count prevents default on a paste
+  // readFeedbackImageFiles is about to reject, eating the co-pasted text.
+  it('does not consume text when the attachment budget is already spent', async () => {
+    mocks.readFeedbackImageFiles.mockResolvedValue({
+      images: [
+        {
+          id: 'full',
+          name: 'full.png',
+          contentType: 'image/png',
+          bytes: 4 * 1024 * 1024,
+          data: new Uint8Array([1]),
+          previewUrl: 'blob:full'
+        }
+      ],
+      errors: []
+    })
+    const { container } = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')
+    fireEvent.change(input!, {
+      target: { files: [new File(['x'], 'full.png', { type: 'image/png' })] }
+    })
+    await screen.findByRole('button', { name: 'Remove full.png' })
+
+    const small = new File(['x'], 'small.png', { type: 'image/png' })
+    Object.defineProperty(small, 'size', { value: 1024 })
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(paste, 'clipboardData', { value: { files: [small] } })
+    fireEvent(screen.getByPlaceholderText('What could we improve?'), paste)
+
+    expect(paste.defaultPrevented).toBe(false)
+  })
+
+  it('stops offering Attach once the byte budget is spent, below the count limit', async () => {
+    mocks.readFeedbackImageFiles.mockResolvedValue({
+      images: [
+        {
+          id: 'full',
+          name: 'full.png',
+          contentType: 'image/png',
+          bytes: 4 * 1024 * 1024,
+          data: new Uint8Array([1]),
+          previewUrl: 'blob:full'
+        }
+      ],
+      errors: []
+    })
+    const { container } = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'Attach' }).hasAttribute('disabled')).toBe(false)
+    expect(screen.getByText('Attach up to 4 screenshots, 4.0 MB total')).toBeTruthy()
+
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')
+    fireEvent.change(input!, {
+      target: { files: [new File(['x'], 'full.png', { type: 'image/png' })] }
+    })
+    await screen.findByRole('button', { name: 'Remove full.png' })
+
+    expect(screen.getByRole('button', { name: 'Attach' }).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('counts committed and in-flight image bytes against the total budget', async () => {
+    mocks.readFeedbackImageFiles.mockResolvedValueOnce({
+      images: [
+        {
+          id: 'first',
+          name: 'first.png',
+          contentType: 'image/png',
+          bytes: 1000,
+          data: new Uint8Array([1]),
+          previewUrl: 'blob:first'
+        }
+      ],
+      errors: []
+    })
+    mocks.readFeedbackImageFiles.mockReturnValue(new Promise(() => {}))
+    const { container } = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')
+    fireEvent.change(input!, {
+      target: { files: [new File(['x'], 'first.png', { type: 'image/png' })] }
+    })
+    await screen.findByRole('button', { name: 'Remove first.png' })
+    const second = new File(['x'], 'second.png', { type: 'image/png' })
+    Object.defineProperty(second, 'size', { value: 200 })
+    const third = new File(['x'], 'third.png', { type: 'image/png' })
+
+    fireEvent.change(input!, { target: { files: [second] } })
+    fireEvent.change(input!, { target: { files: [third] } })
+
+    expect(mocks.readFeedbackImageFiles).toHaveBeenNthCalledWith(2, [second], 1, 1000)
+    expect(mocks.readFeedbackImageFiles).toHaveBeenNthCalledWith(3, [third], 2, 1200)
   })
 
   it('rejects images added after submission starts instead of clearing them unsent', async () => {
@@ -345,5 +522,97 @@ describe('SidebarFeedbackDialog image submission', () => {
     expect(mocks.toastWarning).toHaveBeenCalledWith(
       'Wait for the current feedback to finish sending before attaching more images.'
     )
+  })
+})
+
+describe('SidebarFeedbackDialog draft survival', () => {
+  const REPORT = 'The terminal froze right after a rebase'
+
+  function textarea(): HTMLTextAreaElement {
+    return screen.getByPlaceholderText<HTMLTextAreaElement>('What could we improve?')
+  }
+
+  // Why: orca#22466's third complaint. The dialog renders inside the sidebar
+  // subtree, so collapsing the sidebar unmounts it; with the draft in component
+  // state that silently discarded a report the user had not managed to send.
+  it('keeps the typed report when the sidebar unmounts and remounts the dialog', () => {
+    const first = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    fireEvent.change(textarea(), { target: { value: REPORT } })
+
+    first.unmount()
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+
+    expect(textarea().value).toContain(REPORT)
+  })
+
+  it('keeps the report after a submit the server refused outright', async () => {
+    mocks.submit.mockResolvedValue({ ok: false, status: 500, error: 'status 500' })
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    fireEvent.change(textarea(), { target: { value: REPORT } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(mocks.submit).toHaveBeenCalled())
+
+    expect(textarea().value).toContain(REPORT)
+    expect(useAppStore.getState().feedbackDraft.feedback).toContain(REPORT)
+  })
+
+  it('clears the draft once delivery is confirmed', async () => {
+    mocks.submit.mockResolvedValue({ ok: true })
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    fireEvent.change(textarea(), { target: { value: REPORT } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => expect(useAppStore.getState().feedbackDraft.feedback).toBe(''))
+  })
+
+  // Why: collapsing the sidebar while the request is in flight unmounts the
+  // dialog. The delivery still lands, so the draft has to go with it or the
+  // sent report comes back on the next open and invites a duplicate send.
+  it('clears the draft when the sidebar unmounts before the submit resolves', async () => {
+    let resolveSubmit: ((result: { ok: true }) => void) | undefined
+    mocks.submit.mockReturnValue(
+      new Promise<{ ok: true }>((resolve) => {
+        resolveSubmit = resolve
+      })
+    )
+    const { unmount } = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    fireEvent.change(textarea(), { target: { value: REPORT } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(mocks.submit).toHaveBeenCalled())
+    unmount()
+    await act(async () => {
+      resolveSubmit?.({ ok: true })
+    })
+
+    expect(useAppStore.getState().feedbackDraft.feedback).toBe('')
+  })
+
+  // Why: the unmounted handler's mountedRef stays false forever, so an
+  // unconditional clear would wipe whatever the user typed after reopening.
+  it('keeps a report typed after remount while the previous submit is still in flight', async () => {
+    const SECOND_REPORT = 'Different bug, typed after reopening the dialog'
+    let resolveSubmit: ((result: { ok: true }) => void) | undefined
+    mocks.submit.mockReturnValue(
+      new Promise<{ ok: true }>((resolve) => {
+        resolveSubmit = resolve
+      })
+    )
+    const first = render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    fireEvent.change(textarea(), { target: { value: REPORT } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    await waitFor(() => expect(mocks.submit).toHaveBeenCalled())
+    first.unmount()
+
+    render(<SidebarFeedbackDialog open onOpenChange={vi.fn()} />)
+    fireEvent.change(textarea(), { target: { value: SECOND_REPORT } })
+    await act(async () => {
+      resolveSubmit?.({ ok: true })
+    })
+
+    expect(useAppStore.getState().feedbackDraft.feedback).toContain(SECOND_REPORT)
+    expect(textarea().value).toContain(SECOND_REPORT)
   })
 })

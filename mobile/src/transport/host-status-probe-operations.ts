@@ -42,20 +42,29 @@ export function readHostStatusGates(reply: RpcResponse): HostStatusReply | null 
 }
 
 /**
- * The capabilities the retrying probe publishes, or `null` for a refusal it should back off from.
+ * The status the retrying probe delivers, or `null` for a refusal it should back off from.
  *
- * An unreadable status publishes the empty set rather than backing off, because that is exactly
- * what main did: `Array.isArray(result?.capabilities)` was false for a null, absent or foreign
- * result and the probe published `[]` and stopped. Swallowing the error here rather than at the
- * call site keeps that decision beside the operation whose reader produces it.
+ * An unreadable status lands as `{ status: null }` rather than backing off, because that is
+ * exactly what main did for the capability read: `Array.isArray(result?.capabilities)` was false
+ * for a null, absent or foreign result and the probe published `[]` and stopped. Swallowing the
+ * error here rather than at the call site keeps that decision beside the operation whose reader
+ * produces it. The wrapper object separates "landed but unreadable" from "refused".
  */
-export function readProbedHostCapabilities(reply: RpcResponse): readonly string[] | null {
+export function readProbedHostStatus(
+  reply: RpcResponse
+): { status: HostStatusReply | null } | null {
   try {
     const accepted = hostStatusProbe.interpret(reply)
-    return accepted.accepted ? (accepted.value.capabilities ?? []) : null
+    return accepted.accepted ? { status: accepted.value } : null
   } catch {
-    return []
+    return { status: null }
   }
+}
+
+/** The capability projection of `readProbedHostStatus`, kept for callers that only ask that much. */
+export function readProbedHostCapabilities(reply: RpcResponse): readonly string[] | null {
+  const landed = readProbedHostStatus(reply)
+  return landed ? (landed.status?.capabilities ?? []) : null
 }
 
 /**
@@ -70,4 +79,13 @@ export function hostAnsweredStatusProbe(reply: RpcResponse): boolean {
   } catch {
     return true
   }
+}
+
+/**
+ * The status the pairing race attaches to its winner, or `null` when the host's answer is
+ * unreadable. Never throws: it runs in the race's fulfilment handler, where a throw would strand
+ * the candidate exactly as `hostAnsweredStatusProbe` describes.
+ */
+export function readPairingCandidateStatus(reply: RpcResponse): HostStatusReply | null {
+  return readProbedHostStatus(reply)?.status ?? null
 }

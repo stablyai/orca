@@ -10,6 +10,7 @@ import {
   cleanupUnusedWorktreePushTargetRemoteSsh,
   notifyWorktreesChanged
 } from '../../worktree-remote'
+import { runWorktreeChangeInvalidators } from '../../worktree-change-invalidators'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import {
@@ -63,6 +64,8 @@ export async function removeRegisteredRemoteWorktree(
         ? provider!.removeWorktree(canonicalWorktreePath, args.force, remoteRemoveOptions)
         : provider!.removeWorktree(canonicalWorktreePath, args.force)
     )
+    // Why: the worktree is unlisted from here on; a scan that began before the removal is overtaken.
+    runWorktreeChangeInvalidators(repoId)
     removalCompleted = true
   } finally {
     await removalGate.finish(removalCompleted)

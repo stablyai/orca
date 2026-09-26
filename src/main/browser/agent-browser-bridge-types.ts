@@ -55,8 +55,6 @@ export type AgentBrowserExecOptions = {
 
 export type EnqueueTargetedCommandOptions = {
   ensureSession?: boolean
-  // Why: only pixel capture needs a drawn page; input, JS, layout and snapshots work on a display:none page. Screenshots lease inside the screenshot lock instead.
-  needsPaint?: boolean
   // Why: text-mutating commands must never fall back to the global tab (may be a worktree the user is viewing).
   requireScopedTarget?: boolean
 }

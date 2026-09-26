@@ -515,10 +515,12 @@ describe('Claude stream-json connection', () => {
       }
     })
     const connection = await open(launchFor(scenario))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture supplies every session member the option paths under test read.
     const session = {
       connection,
       options: new Map<string, string>(),
-      reportedOptions: {}
+      reportedOptions: {},
+      startup: { state: 'proven' }
     } as unknown as ClaudeSession
 
     const options = await readClaudeStructuredSessionOptions(session, 5_000)
@@ -567,17 +569,15 @@ describe('Claude stream-json connection', () => {
     expect(JSON.stringify(diagnostic)).not.toContain('secret')
   })
 
-  it('reports an unauthenticated start through the init deadline instead of hanging', async () => {
-    // The scripted CLI never answers, which is the shape of a silently unauthenticated CLI.
-    const scenario = scriptScenario([HOLD_OPEN])
+  it('settles an unanswered initialize when the child exits, with no timer of its own', async () => {
+    // The scripted CLI never answers, then leaves: only its exit can settle the request.
+    const scenario = scriptScenario([{ stderr: 'claude: not signed in\n' }, { exit: 1 }])
     const connection = await open({
       ...launchFor(scenario),
       env: { ...launchFor(scenario).env, ORCA_SDK_CONTRACT_IGNORE_CONTROL_REQUESTS: '1' }
     })
 
-    await expect(connection.initializationResult({ timeoutMs: 200 })).rejects.toThrow(
-      'claude initialize request timed out'
-    )
+    await expect(connection.initializationResult()).rejects.toThrow()
   })
 
   it('reports a self-exit with its status, stderr, and observed tree verdict', async () => {

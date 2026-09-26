@@ -33,8 +33,7 @@ export function clampPan(scope: TerminalDocumentScope) {
   const ts = getTotalScale(scope)
   const cw = scope.term.element.scrollWidth * ts
   const ch = scope.term.element.scrollHeight * ts
-  const vpW = window.innerWidth
-  const vpH = window.innerHeight
+  const { width: vpW, height: vpH } = scope.viewportRect()
   if (cw > vpW) {
     scope.panX = Math.min(0, Math.max(vpW - cw, scope.panX))
   } else {
@@ -65,10 +64,24 @@ export function adjustRowsForViewport() {}
 // scrollWidth (xterm rendered something). Cap at 60 frames (~1s @60Hz)
 // so a backgrounded WebView never spins forever.
 const FIT_RETRY_MAX_FRAMES = 60
+
+function isFittedBox(scope: TerminalDocumentScope) {
+  const { width, height } = scope.viewportRect()
+  const fitted = scope.fittedBox
+  return fitted !== null && fitted.width === width && fitted.height === height
+}
+
+function hasViewportWidth(scope: TerminalDocumentScope) {
+  const width = scope.viewportRect().width
+  return Number.isFinite(width) && width > 0
+}
+
 export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
   if (!scope.term || !scope.term.element) {
     return
   }
+  // Why: a fit asked for while hidden is dropped until a box arrives, and that box may be the old one.
+  scope.fittedBox = null
   const token = ++scope.fitRetryToken
   let attempts = 0
   let lastScrollWidth = -1
@@ -77,6 +90,10 @@ export function applyFitScale(scope: TerminalDocumentScope, reason: string) {
       return
     }
     if (!scope.term || !scope.term.element) {
+      return
+    }
+    // Why: a display:none host measures 0 wide; the fit stays pending until observeViewport reports a box.
+    if (!hasViewportWidth(scope)) {
       return
     }
     attempts++
@@ -117,6 +134,8 @@ export function commitFitScale(
     return
   }
   const preSnapScale = computeFitScale(scope)
+  const { width, height } = scope.viewportRect()
+  scope.fittedBox = { width, height }
   scope.currentScale = preSnapScale
   // Why: when scale is very close to 1 (e.g. 0.97 from xterm scrollbar
   // sub-pixels) snap to 1 to avoid imperceptible shrinkage that prevents
@@ -133,7 +152,7 @@ export function commitFitScale(
 
   const cellW = getCellWidth(scope)
   const sw = scope.term.element.scrollWidth
-  const vpW = window.innerWidth
+  const vpW = scope.viewportRect().width
   const expectedW = cellW * scope.term.cols
   const suspect = scope.currentScale === 1 && scope.term.cols > 0 && expectedW > vpW + 1 // expected wider than viewport but no zoom
   if (suspect) {
@@ -163,16 +182,18 @@ export function commitFitScale(
  */
 export function startFitScale(scope: TerminalDocumentScope) {
   const refit = () => {
+    // Why: a hidden screen reports 0x0 and then its old box again; native never refits on that, so
+    // only a box other than the one last fitted refits, and the user's pan and zoom survive.
+    if (!hasViewportWidth(scope) || isFittedBox(scope)) {
+      return
+    }
     applyFitScale(scope, 'window-resize')
     adjustRowsForViewport()
     repositionOverlay(scope)
     clampPan(scope)
     updateTransform(scope)
   }
-  window.addEventListener('resize', refit)
-  scope.removeViewportRefit = () => {
-    window.removeEventListener('resize', refit)
-  }
+  scope.removeViewportRefit = scope.observeViewport(refit)
 }
 
 /**

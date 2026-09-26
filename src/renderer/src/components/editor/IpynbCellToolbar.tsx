@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpToLine,
+  Clock,
   Ellipsis,
   Loader2,
   MoveDown,
@@ -40,33 +41,47 @@ function cellKindLabel(kind: IpynbCellKind): string {
 export function IpynbToolbarButton({
   label,
   disabled = false,
+  disabledReason,
   shortcut,
   onClick,
   children
 }: {
   label: string
   disabled?: boolean
+  /** Shown instead of the label while disabled, so the user learns why. */
+  disabledReason?: string
   shortcut?: ShortcutKeyComboDetails
   onClick: () => void
   children: ReactNode
 }): React.JSX.Element {
+  const reason = disabled ? disabledReason : undefined
+  const button = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  )
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={label}
-          disabled={disabled}
-          onClick={onClick}
-        >
-          {children}
-        </Button>
+        {/* Why the span: a disabled button gets no pointer or focus events, so its tooltip never opens. */}
+        {reason ? (
+          <span tabIndex={0} aria-label={reason} className="inline-flex">
+            {button}
+          </span>
+        ) : (
+          button
+        )}
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         <span className="flex items-center gap-2">
-          <span>{label}</span>
+          <span>{reason ?? label}</span>
           {shortcut && shortcut.keys.length > 0 ? (
             <ShortcutKeyCombo keys={shortcut.keys} doubleTap={shortcut.doubleTap} />
           ) : null}
@@ -76,32 +91,50 @@ export function IpynbToolbarButton({
   )
 }
 
+export type IpynbRunState = 'idle' | 'queued' | 'running'
+
 /** VS Code-style gutter: a fixed `[n]` count with a run button slot below it, shown on hover or focus. */
 export function IpynbRunPrompt({
   executionCount,
-  running,
+  state,
+  duration,
   onRun
 }: {
   executionCount: number | null
-  running: boolean
+  state: IpynbRunState
+  /** How long the last run took, once it has finished. */
+  duration: string | null
   onRun: () => void
 }): React.JSX.Element {
   return (
     <div className="flex flex-col items-center">
       {/* h-5 matches one code line, so the count sits on the first line's centre. */}
       <span className="flex h-5 items-center font-mono text-[11px] text-muted-foreground">
-        [{running ? '*' : (executionCount ?? ' ')}]
+        [{state === 'idle' ? (executionCount ?? ' ') : '*'}]
       </span>
       {/* Why: `invisible` keeps the slot's box, so revealing the button never moves anything. */}
-      <div className={cn(!running && 'invisible group-focus-within:visible group-hover:visible')}>
+      <div
+        className={cn(
+          state === 'idle' && 'invisible group-focus-within:visible group-hover:visible'
+        )}
+      >
         <IpynbToolbarButton
           label={translate('auto.components.editor.IpynbViewer.859bf9fc21', 'Run cell')}
-          disabled={running}
+          disabled={state !== 'idle'}
           onClick={onRun}
         >
-          {running ? <Loader2 className="animate-spin" /> : <Play />}
+          {state === 'running' ? (
+            <Loader2 className="animate-spin" />
+          ) : state === 'queued' ? (
+            <Clock />
+          ) : (
+            <Play />
+          )}
         </IpynbToolbarButton>
       </div>
+      {duration ? (
+        <span className="font-mono text-[10px] text-muted-foreground">{duration}</span>
+      ) : null}
     </div>
   )
 }

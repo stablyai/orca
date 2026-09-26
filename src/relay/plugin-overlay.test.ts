@@ -95,6 +95,28 @@ describe('PluginOverlayManager', () => {
     )
   })
 
+  // Why: the remote/guest config root keeps whichever Orca plugin files earlier
+  // launches installed. Mirroring the other major's file into this overlay would
+  // hand the agent a plugin whose variant gate registers nothing.
+  it.each([
+    { agent: 'opencode', stale: 'orca-opencode2-status.js', own: 'orca-opencode-status.js' },
+    { agent: 'opencode2', stale: 'orca-opencode-status.js', own: 'orca-opencode2-status.js' }
+  ] as const)(
+    "keeps the other major's stale plugin out of the $agent overlay",
+    ({ agent, stale, own }) => {
+      const userConfigDir = join(homeDir, '.config', 'opencode')
+      mkdirSync(join(userConfigDir, 'plugins'), { recursive: true })
+      writeFileSync(join(userConfigDir, 'plugins', stale), 'stale other-major plugin')
+      writeFileSync(join(userConfigDir, 'plugins', 'user-plugin.js'), 'user plugin')
+
+      manager.setSources({ opencodePluginSource: 'v1', opencode2PluginSource: 'v2' })
+      const dir = manager.materializeOpenCode('tab-1:0', userConfigDir, agent)
+
+      expect(dir).not.toBeNull()
+      expect(readdirSync(join(dir!, 'plugins')).sort()).toEqual([own, 'user-plugin.js'].sort())
+    }
+  )
+
   it('does not override a missing preexisting OpenCode config dir', () => {
     manager.setSources({ opencodePluginSource: 'orca plugin' })
 

@@ -193,6 +193,8 @@ export function MobileSessionActiveContent({
     </View>
   ) : (
     <View
+      // Why: react-native-web observes onLayout only on a View that mounts with it; unkeyed, this reuses the loading View and never reports.
+      key="terminal-frame"
       style={styles.terminalFrame}
       onLayout={(e) => {
         terminalFrameHeightRef.current = e.nativeEvent.layout.height

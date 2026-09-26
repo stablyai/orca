@@ -93,9 +93,10 @@ export const AgentLaunchFields = z.object({
    *
    * Identity, never placement: the host still reveals the tab, and the caller finds its placement
    * by this key. Refused here unless the runtime would adopt it verbatim (it trims, and mints its
-   * own for an invalid one), so the caller's reservation always matches. Ignored by a structured
-   * launch and a reused terminal, which create no pane; the outcome's `paneKey` says which pane
-   * really exists. Tab ids are global across workspaces, so the caller mints a fresh UUID for each.
+   * own for an invalid one), so the caller's reservation always matches. A structured launch
+   * records its tab half as the chat's tab id (the outcome's `tabId`); a reused terminal ignores
+   * it. The outcome's `paneKey` says which pane really exists. Tab ids are global across
+   * workspaces, so the caller mints a fresh UUID for each.
    */
   paneKey: z
     .string()

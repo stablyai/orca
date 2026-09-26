@@ -105,7 +105,7 @@ export function createActivityThreadActions({
       // no pane to focus and focusing a sibling would be worse than focusing nothing.
       return
     }
-    activated.setActiveTabType('terminal')
+    activated.setActiveTabType('terminal', thread.worktree.id)
     const parsed = parsePaneKey(thread.paneKey)
     activateTabAndFocusPane(
       thread.tab.id,
