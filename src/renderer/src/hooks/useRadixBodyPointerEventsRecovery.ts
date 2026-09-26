@@ -23,7 +23,7 @@ export function useRadixBodyPointerEventsRecovery(): void {
     let frameId: number | null = null
 
     const scheduleRecovery = (): void => {
-      if (frameId !== null) {
+      if (frameId !== null || document.body.style.pointerEvents !== 'none') {
         return
       }
       frameId = requestAnimationFrame(() => {
