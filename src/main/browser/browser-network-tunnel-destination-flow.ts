@@ -112,27 +112,36 @@ export function flushBrowserNetworkDestination(
   stream: BrowserNetworkTunnelStream,
   actions: BrowserNetworkTunnelDestinationFlowActions
 ): void {
-  while (stream.sendCredit > 0 && stream.pendingToClient.length > 0 && actions.isCurrent()) {
-    const next = stream.pendingToClient[0]!
-    const length = Math.min(
-      next.byteLength,
-      stream.sendCredit,
-      BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES
-    )
-    if (!actions.sendData(next.subarray(0, length))) {
-      return
+  if (stream.flushingToClient) {
+    return
+  }
+  // Keep queued bytes owned by this drain until transport acceptance or retirement.
+  stream.flushingToClient = true
+  try {
+    while (stream.sendCredit > 0 && stream.pendingToClient.length > 0 && actions.isCurrent()) {
+      const next = stream.pendingToClient[0]!
+      const length = Math.min(
+        next.byteLength,
+        stream.sendCredit,
+        BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES
+      )
+      stream.sendCredit -= length
+      if (!actions.sendData(next.subarray(0, length))) {
+        return
+      }
+      if (!actions.isCurrent()) {
+        return
+      }
+      stream.pendingToClientBytes -= length
+      actions.releaseRetainedBytes(length)
+      if (length === next.byteLength) {
+        stream.pendingToClient.shift()
+      } else {
+        stream.pendingToClient[0] = next.slice(length)
+      }
     }
-    if (!actions.isCurrent()) {
-      return
-    }
-    stream.sendCredit -= length
-    stream.pendingToClientBytes -= length
-    actions.releaseRetainedBytes(length)
-    if (length === next.byteLength) {
-      stream.pendingToClient.shift()
-    } else {
-      stream.pendingToClient[0] = next.slice(length)
-    }
+  } finally {
+    stream.flushingToClient = false
   }
   if (!actions.isCurrent()) {
     return
