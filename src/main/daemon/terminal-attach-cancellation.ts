@@ -11,6 +11,7 @@ export function waitForTerminalAttachOperation<T>(
   }
   return new PromiseSettlementWaiters(operation).wait({
     signal,
+    abortInMicrotask: true,
     createAbortError: () => new TerminalAttachCanceledError(sessionId)
   })
 }
