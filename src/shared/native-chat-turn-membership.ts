@@ -19,6 +19,12 @@ import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { NativeChatRole } from './native-chat-types'
 import { liveStructuredAgentSessionTurnScope } from './structured-agent-session-live-turn'
 
+/** Whether the host writing this journal states each row's turn. Only a host that runs `/compact`
+ *  as a turn of the send path does, so this is also how a client tells that host from an older one. */
+export function hostStatesTurnScopes(items: readonly AgentJournalRenderItem[]): boolean {
+  return items.some((item) => item.turnScope !== undefined)
+}
+
 export type NativeChatTurnJournal = {
   items: readonly AgentJournalRenderItem[]
   submissions: readonly AgentJournalSubmission[]
@@ -97,8 +103,7 @@ export function nativeChatTurnMembership(
   messages: readonly { id: string; role: NativeChatRole }[],
   journal?: NativeChatTurnJournal | null
 ): NativeChatTurnMembership {
-  const scoped = journal?.items.some((item) => item.turnScope !== undefined)
-  if (!journal || !scoped) {
+  if (!journal || !hostStatesTurnScopes(journal.items)) {
     const turnKeys = positionalTurnKeys(messages)
     return { turnKeys, liveTurnKey: newestUserTurnKey(messages, turnKeys) }
   }
