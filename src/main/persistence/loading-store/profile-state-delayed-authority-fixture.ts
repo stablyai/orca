@@ -77,9 +77,6 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
   async writeLatestJsonExport(path: string) {
     return writeVersionedProfileStateExport(path, this.inner.writeJsonExport.bind(this.inner))
   }
-  async writeJsonCompatibilityExport(path: string) {
-    return this.inner.writeJsonCompatibilityExportAsync(path)
-  }
   async quarantineDatabase(root?: string, reason?: string) {
     return this.inner.quarantineDatabase(root, reason)
   }

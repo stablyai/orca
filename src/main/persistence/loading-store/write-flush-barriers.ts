@@ -72,15 +72,15 @@ export class WriteFlushBarrierOperations {
     writeGithubCacheSnapshotSync(this)
   }
 
-  flushAsync(options: { exportJsonCompatibility?: boolean } = {}): Promise<void> {
+  flushAsync(): Promise<void> {
     const context = this[writeFlushBarrierOperationsContext]
-    context.bestEffortFinalFlush ??= this.flushFinalOrThrowAsync(options).catch((error) =>
+    context.bestEffortFinalFlush ??= this.flushFinalOrThrowAsync().catch((error) =>
       console.error('[persistence] Failed to flush final state:', error)
     )
     return context.bestEffortFinalFlush
   }
 
-  flushFinalOrThrowAsync(options: { exportJsonCompatibility?: boolean } = {}): Promise<void> {
+  flushFinalOrThrowAsync(): Promise<void> {
     const { runtime } = this[writeFlushBarrierOperationsContext]
     if (runtime.quitFlushPromise) {
       return runtime.quitFlushPromise
@@ -103,9 +103,6 @@ export class WriteFlushBarrierOperations {
           runtime.profileStateAuthority?.drainBackups?.(true)
         ])
         await flushCurrentStateAsync(this, { final: true })
-        if (options.exportJsonCompatibility) {
-          await runtime.profileStateAuthority?.writeJsonCompatibilityExportAsync?.(runtime.dataFile)
-        }
       })
       .finally(async () => {
         if (runtime.profileStateAuthority?.asynchronous) {

@@ -208,35 +208,12 @@ export class Store {
     return writeVersionedProfileStateExport(this.runtime.dataFile, writeExport)
   }
 
-  /** Publish recovery and canonical JSON checkpoints for older builds. */
-  writeLatestProfileStateJsonCompatibilityExport(): number | undefined {
-    const authority = this.runtime.profileStateAuthority
-    if (authority?.asynchronous) {
-      throw new Error('Live profile exports require an awaited export')
-    }
-    if (!authority?.writeJsonCompatibilityExport) {
-      return undefined
-    }
-    this.runtime.dirtyProfileStateDomains = null
-    this.flushOrThrow()
-    return authority.writeJsonCompatibilityExport(this.runtime.dataFile)
-  }
-
   writeLatestProfileStateJsonExportAsync(): Promise<number | undefined> {
     if (!this.runtime.profileStateAuthority?.asynchronous) {
       return Promise.resolve(this.writeLatestProfileStateJsonExport())
     }
     return this.enqueueProfileExport((authority) =>
       authority.writeLatestJsonExport(this.runtime.dataFile)
-    )
-  }
-
-  writeLatestProfileStateJsonCompatibilityExportAsync(): Promise<number | undefined> {
-    if (!this.runtime.profileStateAuthority?.asynchronous) {
-      return Promise.resolve(this.writeLatestProfileStateJsonCompatibilityExport())
-    }
-    return this.enqueueProfileExport((authority) =>
-      authority.writeJsonCompatibilityExport(this.runtime.dataFile)
     )
   }
 

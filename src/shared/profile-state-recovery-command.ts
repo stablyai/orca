@@ -7,6 +7,7 @@ const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 const selectorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('json'), revision: positiveInteger }).strict(),
   z.object({ kind: z.literal('current-json') }).strict(),
+  z.object({ kind: z.literal('latest-json') }).strict(),
   z.object({ kind: z.literal('sqlite'), backupId: z.string().min(1) }).strict()
 ])
 

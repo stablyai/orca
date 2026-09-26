@@ -7,7 +7,7 @@ import { getMainE2EConfig } from '../e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import {
-  hasMissingProfileStateDatabaseWithRetainedExport,
+  hasMissingProfileStateDatabaseWithRetainedAuthority,
   readActiveProfileId,
   readPersistedHttp1CompatibilityMode
 } from './http1-compatibility-profile-state'
@@ -52,7 +52,7 @@ export function shouldDisableHttp2ForElectronNetworking(
   if (
     activeProfileId !== undefined &&
     activeProfileId !== null &&
-    hasMissingProfileStateDatabaseWithRetainedExport(userDataPath, activeProfileId)
+    hasMissingProfileStateDatabaseWithRetainedAuthority(userDataPath, activeProfileId)
   ) {
     return false
   }

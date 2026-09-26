@@ -9,6 +9,10 @@ import {
 import * as exportPaths from './legacy-json/profile-state-export-path'
 import { ProfileStateRecoveryRequiredError } from './profile-state-recovery-required'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
+import {
+  hasProfileStateAuthorityMarker,
+  profileStateAuthorityMarkerPath
+} from './profile-state-authority-marker'
 
 const directories: string[] = []
 afterEach(() => {
@@ -45,6 +49,7 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
       if (backend === 'sqlite') {
         authority.writeSerializedState(Buffer.from(JSON.stringify(original)))
         authority.close()
+        rmSync(profileStateAuthorityMarkerPath(location.databaseFile), { force: true })
       } else {
         writeFileSync(location.dataFile, JSON.stringify(original))
       }
@@ -57,6 +62,7 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
         }
       })
       const persisted = authority.readSerializedState()
+      expect(hasProfileStateAuthorityMarker(location.databaseFile)).toBe(true)
       if (backend === 'json') {
         expect(readFileSync(location.dataFile, 'utf8')).toBe(JSON.stringify(original))
       }
@@ -76,6 +82,21 @@ describe.each(['read', 'update'] as const)('offline settings %s recovery', (oper
       ? readAgentHookSettingsFromProfileState(location)
       : updateAgentHookSettingsFromProfileState(location, false)
   }
+
+  it.each([true, false])('rejects marker-only evidence with JSON present=%s', (hasJson) => {
+    const location = createLocation()
+    const source = JSON.stringify({ settings: { agentStatusHooksEnabled: true } })
+    if (hasJson) {
+      writeFileSync(location.dataFile, source)
+    }
+    writeFileSync(profileStateAuthorityMarkerPath(location.databaseFile), 'sqlite\n')
+    expect(() => run(location)).toThrow(ProfileStateRecoveryRequiredError)
+    expect(existsSync(location.databaseFile)).toBe(false)
+    expect(existsSync(location.dataFile)).toBe(hasJson)
+    if (hasJson) {
+      expect(readFileSync(location.dataFile, 'utf8')).toBe(source)
+    }
+  })
 
   it.each([true, false])('rejects retained exports with JSON present=%s', (hasJson) => {
     const location = createLocation()

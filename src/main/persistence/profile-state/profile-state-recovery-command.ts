@@ -13,7 +13,10 @@ import {
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
 import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
 import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
-import type { ProfileStateMaintenance } from './profile-state-access'
+import { assertProfileStateMaintenance, type ProfileStateMaintenance } from './profile-state-access'
+import { openProfileStateDatabaseReadOnly } from './profile-state-database'
+import { writeProfileStateAuthorityJsonExport } from './legacy-json/profile-state-authority-exports'
+import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
 import { readProfileStateDomain } from './profile-state-domain-reader'
 import { isRecord } from './profile-state-document-validation'
 import { profileHasPendingProjectMove } from '../../orca-profiles/profile-project-move-record'
@@ -44,7 +47,7 @@ export function rollbackProfileState(
   selector: ProfileStateRecoverySelector,
   maintenance: ProfileStateMaintenance
 ): ProfileStateRollbackResult {
-  const result = getProfileStateExports(userDataPath)
+  let result = getProfileStateExports(userDataPath)
   if (profileHasPendingProjectMove(result.profileId, userDataPath)) {
     throw new ProfileStateRecoveryCommandError(
       'runtime_error',
@@ -54,7 +57,15 @@ export function rollbackProfileState(
   if (selector.kind === 'sqlite') {
     return restoreDatabaseBackup(userDataPath, result, selector.backupId, maintenance)
   }
-  const revision = selector.kind === 'json' ? selector.revision : null
+  const revision =
+    selector.kind === 'latest-json'
+      ? exportLatestProfileStateJson(result, maintenance)
+      : selector.kind === 'json'
+        ? selector.revision
+        : null
+  if (selector.kind === 'latest-json') {
+    result = getProfileStateExports(userDataPath)
+  }
   const exportPath =
     revision === null ? result.dataFile : profileStateJsonExportPath(result.dataFile, revision)
   if (revision !== null && !result.exportPaths.includes(exportPath)) {
@@ -80,6 +91,34 @@ export function rollbackProfileState(
     revision,
     quarantineDirectory: recovered.quarantine.directory,
     removedDatabaseFiles: recovered.removedDatabaseFiles
+  }
+}
+
+function exportLatestProfileStateJson(
+  profile: ProfileStateExportsResult,
+  maintenance: ProfileStateMaintenance
+): number {
+  assertProfileStateMaintenance(maintenance, {
+    profileId: profile.profileId,
+    dataFile: profile.dataFile,
+    databasePath: profile.databaseFile
+  })
+  const opened = openProfileStateDatabaseReadOnly(profile.databaseFile, profile.profileId)
+  try {
+    const revision = writeVersionedProfileStateExport(
+      profile.dataFile,
+      (targetPath) => writeProfileStateAuthorityJsonExport(opened.db, targetPath),
+      { retainAllExports: true }
+    )
+    if (revision === undefined) {
+      throw new ProfileStateRecoveryCommandError(
+        'runtime_error',
+        'The SQLite profile has no persisted state to export.'
+      )
+    }
+    return revision
+  } finally {
+    opened.db.close()
   }
 }
 
