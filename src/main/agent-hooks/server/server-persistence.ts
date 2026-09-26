@@ -34,6 +34,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       }
       const {
         promptInteractionKey: _promptInteractionKey,
+        // Why: a restored row cannot prove a live acceptance, and the verifier compares live clocks.
+        promptAcceptance: _promptAcceptance,
         // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
         restoredUnconfirmed: _restoredUnconfirmed,
         // Why: same — the sequencer that issued it dies with the process (see PersistedAgentHookEventPayload).

@@ -9,10 +9,7 @@ import {
 import { parseHookEnvelope } from './agent-hook-listener/hook-envelope'
 import { readFirstString } from './agent-hook-listener/interactive-tool'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
-import {
-  normalizeClaudePromptId,
-  normalizeGrokPromptId
-} from './agent-hook-listener/listener-limits'
+import { normalizeProviderPromptId } from './agent-hook-listener/listener-limits'
 import type { HookListenerState } from './agent-hook-listener/listener-state'
 import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
@@ -74,12 +71,14 @@ export function normalizeHookPayload(
   // shared-server stamp overwrite the pane's live token; the resolved envelope
   // carries the stored token (or nothing) for bound sessions instead.
   trackOpenCodePaneLaunchToken(state, paneKey, launchToken)
-  const providerPromptId =
-    source === 'claude'
-      ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)
-      : source === 'grok'
-        ? normalizeGrokPromptId(hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
-        : undefined
+  const providerPromptId = normalizeProviderPromptId(
+    source,
+    source === 'grok'
+      ? (hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
+      : source === 'codex'
+        ? hookPayloadRecord.turn_id
+        : hookPayloadRecord.prompt_id
+  )
   const compactTrigger =
     source === 'claude' &&
     (eventName === 'PreCompact' || eventName === 'PostCompact') &&

@@ -224,6 +224,8 @@ export type RuntimeTerminalPromptDelivery = {
   baselineWorkingSequence: number
   /** Hook turn-start timestamp before this prompt was accepted. */
   baselineExplicitWorkingStartedAt?: number | null
+  /** The agent's last recorded prompt acceptance before this prompt; absent from old hosts. */
+  baselinePromptAcceptedAt?: number | null
   /** Permission observations seen before this prompt was accepted. */
   baselinePermissionSequence?: number
 }

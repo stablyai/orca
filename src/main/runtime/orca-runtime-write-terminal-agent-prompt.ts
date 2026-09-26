@@ -14,6 +14,7 @@ import {
   getTerminalPasteIngestMs,
   resolveAgentPromptSubmitDelayForAgent
 } from '../../shared/agent-prompt-injection'
+import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { AgentPromptWaitTextCache } from './agent-prompt-submission-verification'
 import {
   isTerminalSendSettlementAgent,
@@ -108,14 +109,16 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       }
     }
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))
+    const resubmit = this.createAgentPromptResubmit(ptyId, generation, options.signal)
     if (!options.acceptQueued || !options.requestId) {
-      await verifyAgentPromptSubmission({
+      const verified = await verifyAgentPromptSubmission({
         baseline,
         readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+        resubmit,
         timeoutMs: effectTimeoutMs,
         signal: options.signal
       })
-      return { submits: 1 }
+      return { submits: verified.resubmitted ? 2 : 1 }
     }
     const binding = this.getTerminalPromptRequestBinding(handle)
     const foregroundAgent = this.ptysById.get(ptyId)?.foregroundAgent
@@ -134,6 +137,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       generation,
       baselineWorkingSequence: baseline.workingSequence,
       baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
+      baselinePromptAcceptedAt: baseline.promptAcceptedAt,
       baselinePermissionSequence: baseline.permissionSequence
     }
     const checkpoint: RuntimeTerminalSend = {
@@ -149,15 +153,15 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     if (!settlementAgent) {
       return { submits: 1, prompt: inputAccepted }
     }
-    this.registerAgentPromptRequest(
-      ptyId,
-      generation,
-      options.requestId,
-      baseline.workingSequence,
-      baseline.explicitWorkingStartedAt
-    )
+    const turnBaseline = {
+      baselineWorkingSequence: baseline.workingSequence,
+      baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
+      baselinePromptAcceptedAt: baseline.promptAcceptedAt
+    }
+    this.registerAgentPromptRequest(ptyId, generation, options.requestId, turnBaseline)
+    let resubmitted = false
     try {
-      await verifyAgentPromptSubmission({
+      const verified = await verifyAgentPromptSubmission({
         baseline,
         readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
         acceptTurnStart: (evidence) =>
@@ -165,17 +169,20 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
             ptyId,
             generation,
             options.requestId!,
-            baseline.workingSequence,
-            baseline.explicitWorkingStartedAt,
+            turnBaseline,
             evidence
           ),
         allowOutputEvidence: false,
+        resubmit: resubmit && {
+          ...resubmit,
+          write: () => (resubmitted = resubmit.write())
+        },
         signal: options.signal,
         timeoutMs: options.observationTimeoutMs ?? effectTimeoutMs
       })
       this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
       return {
-        submits: 1,
+        submits: verified.resubmitted ? 2 : 1,
         prompt: {
           ...inputAccepted,
           stages: ['input_accepted', 'turn_started']
@@ -183,16 +190,39 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       }
     } catch (error) {
       if (error instanceof Error && error.message === 'agent_prompt_stalled') {
-        return { submits: 1, prompt: inputAccepted }
+        return { submits: resubmitted ? 2 : 1, prompt: inputAccepted }
       }
       if (error instanceof Error && error.message === 'agent_prompt_blocked') {
         this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
         return {
-          submits: 1,
+          submits: resubmitted ? 2 : 1,
           prompt: { ...inputAccepted, observation: 'permission' }
         }
       }
       throw error
+    }
+  }
+
+  /** The renderer's per-agent second Enter, sent only while no turn start has been accepted. */
+  private createAgentPromptResubmit(
+    ptyId: string,
+    generation: number,
+    signal: AbortSignal | undefined
+  ): { afterMs: number; write: () => boolean } | undefined {
+    const pty = this.ptysById.get(ptyId)
+    const agent = pty?.foregroundAgent ?? pty?.launchAgent
+    const afterMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
+    if (afterMs === undefined) {
+      return undefined
+    }
+    return {
+      afterMs,
+      write: () => {
+        if (signal?.aborted || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+          return false
+        }
+        return this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT) === true
+      }
     }
   }
 }

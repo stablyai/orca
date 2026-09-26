@@ -11,17 +11,23 @@ import type { AgentPromptTurnStartEvidence } from './agent-prompt-submission-ver
 // A stalled request is only dropped when its PTY or generation goes away, so cap the backlog.
 const REQUESTS_PER_PTY_LIMIT = 1_024
 
-export type AgentPromptRequestBaseline = {
-  generation: number
-  requestId: string
+/** A request's view of the pane before its Enter; every turn-start kind is judged against it. */
+export type AgentPromptTurnBaseline = {
   baselineWorkingSequence: number
   baselineExplicitWorkingStartedAt: number | null
+  baselinePromptAcceptedAt: number | null
+}
+
+export type AgentPromptRequestBaseline = AgentPromptTurnBaseline & {
+  generation: number
+  requestId: string
 }
 
 type TurnStartClaim = {
   generation: number
-  kind: 'hook' | 'lifecycle'
-  /** Hook turn-start timestamp, or the lifecycle working sequence the turn was attributed to. */
+  kind: AgentPromptTurnStartEvidence['kind']
+  /** Hook turn-start or prompt-acceptance timestamp, or the lifecycle working sequence the turn
+   *  was attributed to. */
   value: number
   requestId: string
 }
@@ -65,16 +71,10 @@ export class AgentPromptRequestCorrelation {
     ptyId: string,
     generation: number,
     requestId: string,
-    baselineWorkingSequence: number,
-    baselineExplicitWorkingStartedAt: number | null,
+    baseline: AgentPromptTurnBaseline,
     evidence: AgentPromptTurnStartEvidence
   ): boolean {
-    if (
-      !isTurnStartAfterBaseline(evidence, {
-        baselineWorkingSequence,
-        baselineExplicitWorkingStartedAt
-      })
-    ) {
+    if (!isTurnStartAfterBaseline(evidence, baseline)) {
       return false
     }
     const requests = this.requestsByPty.get(ptyId) ?? []
@@ -85,8 +85,9 @@ export class AgentPromptRequestCorrelation {
     // leave it queued rather than attributing an unrelated turn to it.
     if (
       !request ||
-      request.baselineWorkingSequence !== baselineWorkingSequence ||
-      request.baselineExplicitWorkingStartedAt !== baselineExplicitWorkingStartedAt
+      request.baselineWorkingSequence !== baseline.baselineWorkingSequence ||
+      request.baselineExplicitWorkingStartedAt !== baseline.baselineExplicitWorkingStartedAt ||
+      request.baselinePromptAcceptedAt !== baseline.baselinePromptAcceptedAt
     ) {
       return false
     }
@@ -102,7 +103,13 @@ export class AgentPromptRequestCorrelation {
       if (first && first.requestId !== requestId) {
         return false
       }
-      claim = this.nextFreeClaim(ptyId, generation, baselineWorkingSequence, evidence, requestId)
+      claim = this.nextFreeClaim(
+        ptyId,
+        generation,
+        baseline.baselineWorkingSequence,
+        evidence,
+        requestId
+      )
     }
     if (!claim) {
       return false
@@ -194,6 +201,9 @@ export class AgentPromptRequestCorrelation {
     if (evidence.kind === 'hook') {
       return { generation, kind: 'hook', value: evidence.workingStartedAt, requestId }
     }
+    if (evidence.kind === 'accepted') {
+      return { generation, kind: 'accepted', value: evidence.acceptedAt, requestId }
+    }
     const claimed = new Set(
       (this.claimsByPty.get(ptyId) ?? [])
         .filter((claim) => claim.generation === generation && claim.kind === 'lifecycle')
@@ -211,9 +221,14 @@ export class AgentPromptRequestCorrelation {
 
 function isTurnStartAfterBaseline(
   evidence: AgentPromptTurnStartEvidence,
-  baseline: { baselineWorkingSequence: number; baselineExplicitWorkingStartedAt: number | null }
+  baseline: AgentPromptTurnBaseline
 ): boolean {
-  return evidence.kind === 'lifecycle'
-    ? evidence.workingSequence > baseline.baselineWorkingSequence
-    : evidence.workingStartedAt > (baseline.baselineExplicitWorkingStartedAt ?? 0)
+  switch (evidence.kind) {
+    case 'lifecycle':
+      return evidence.workingSequence > baseline.baselineWorkingSequence
+    case 'hook':
+      return evidence.workingStartedAt > (baseline.baselineExplicitWorkingStartedAt ?? 0)
+    case 'accepted':
+      return evidence.acceptedAt > (baseline.baselinePromptAcceptedAt ?? 0)
+  }
 }

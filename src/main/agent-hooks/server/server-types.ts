@@ -5,6 +5,7 @@ import type {
   AgentStatusState
 } from '../../../shared/agent-status-types'
 import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
+import type { AgentPromptAcceptance } from '../../../shared/agent-status-ipc-payload'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 
@@ -19,6 +20,8 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
    *  main restart; absent means "never separately observed" and consumers use `receivedAt`. */
   evidenceObservedAt?: number
   stateStartedAt: number
+  /** The main agent's latest accepted prompt; see AgentPromptAcceptance. Never persisted. */
+  promptAcceptance?: AgentPromptAcceptance
   /** Provenance/ordering stamped by this server as the pane authority (STA-4293). Read by nothing yet. */
   observation?: AgentStatusObservation
   /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
@@ -35,6 +38,7 @@ export type PersistedAgentHookEventPayload = Omit<
   | 'authorityRestartId'
   | 'launchToken'
   | 'promptInteractionKey'
+  | 'promptAcceptance'
   | 'restoredUnconfirmed'
   // Why: revision counters are in-memory and the authority id is regenerated per process, so
   // a stored observation could only rehydrate as a stale ordering claim from a dead authority.

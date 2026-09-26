@@ -1,8 +1,5 @@
 import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
-import {
-  normalizeClaudePromptId,
-  normalizeGrokPromptId
-} from '../../../shared/agent-hook-listener/listener-limits'
+import { normalizeProviderPromptId } from '../../../shared/agent-hook-listener/listener-limits'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 
 export type RemoteEnvelopeFields = {
@@ -41,12 +38,7 @@ export function normalizeRemoteEnvelopeFields(envelope: {
         ? envelope.hookEventName.trim()
         : undefined,
     source,
-    providerPromptId:
-      source === 'claude'
-        ? normalizeClaudePromptId(envelope.providerPromptId)
-        : source === 'grok'
-          ? normalizeGrokPromptId(envelope.providerPromptId)
-          : undefined,
+    providerPromptId: normalizeProviderPromptId(source, envelope.providerPromptId),
     grokPromptBoundary:
       source === 'grok' && envelope.grokPromptBoundary === true ? true : undefined,
     compactTrigger:

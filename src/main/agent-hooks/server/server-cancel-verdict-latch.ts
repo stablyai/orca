@@ -2,6 +2,7 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import type { AgentMainAgentStatus } from '../../../shared/agent-status-types'
 import { INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS } from './server-constants'
 import { foldMainAgentWithRowChildWork } from './server-row-child-work-fold'
+import { isMainAgentPromptSubmission } from './server-prompt-acceptance'
 import { isToolProgressWorkingAfterInterrupt } from './server-status-identity'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
@@ -60,12 +61,7 @@ function refoldUnderLatchedMainAgent(
 /** A main agent's own prompt submission always opens a turn, including a harness-injected one that
  *  keeps the cached prompt (the task notification Claude starts when background work ends). */
 function opensNewTurn(event: AgentHookEventPayload): boolean {
-  return (
-    event.hookEventName === 'SessionStart' ||
-    (event.hookEventName === 'UserPromptSubmit' &&
-      event.toolAgentId === undefined &&
-      event.isReplay !== true)
-  )
+  return event.hookEventName === 'SessionStart' || isMainAgentPromptSubmission(event)
 }
 
 /** A child's own event: one naming its agent id, or a teammate's idle, which names it by `teammate_name` only. */

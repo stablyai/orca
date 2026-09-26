@@ -37,18 +37,21 @@ export function selectFreshExplicitAgentStatus(args: {
   status: NonNullable<RuntimeTerminalAgentStatus['status']>
   updatedAt: number
   stateStartedAt: number
+  promptAcceptedAt: number | null
 } | null {
   const now = Date.now()
   let bestStatus: NonNullable<RuntimeTerminalAgentStatus['status']> | null = null
   let bestUpdatedAt = -1
   let bestStateStartedAt = -1
+  let bestPromptAcceptedAt: number | null = null
   const consider = (
     state: AgentStatusEntry['state'] | undefined,
     updatedAt: number | null | undefined,
     evidenceObservedAt: number | null | undefined,
     restoredUnconfirmed = false,
     providerSessionOnly = false,
-    stateStartedAt?: number | null
+    stateStartedAt?: number | null,
+    promptAcceptedAt?: number
   ): void => {
     if (!state || restoredUnconfirmed || providerSessionOnly || typeof updatedAt !== 'number') {
       return
@@ -61,6 +64,7 @@ export function selectFreshExplicitAgentStatus(args: {
       bestStatus = status
       bestUpdatedAt = updatedAt
       bestStateStartedAt = typeof stateStartedAt === 'number' ? stateStartedAt : updatedAt
+      bestPromptAcceptedAt = promptAcceptedAt ?? null
     }
   }
   for (const row of args.hookRows) {
@@ -73,14 +77,16 @@ export function selectFreshExplicitAgentStatus(args: {
       row.evidenceObservedAt,
       row.restoredUnconfirmed,
       row.providerSessionOnly,
-      row.stateStartedAt
+      row.stateStartedAt,
+      row.promptAcceptance?.acceptedAt
     )
   }
   return bestStatus
     ? {
         status: bestStatus,
         updatedAt: bestUpdatedAt,
-        stateStartedAt: bestStateStartedAt
+        stateStartedAt: bestStateStartedAt,
+        promptAcceptedAt: bestPromptAcceptedAt
       }
     : null
 }

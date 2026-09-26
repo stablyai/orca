@@ -29,6 +29,13 @@ export type MigrationUnsupportedPtyEntry = {
   updatedAt: number
 }
 
+/** The provider's own report that it accepted a prompt: when the store recorded it, and the
+ *  provider's turn id when its hook names one. Live-only, never persisted. */
+export type AgentPromptAcceptance = {
+  acceptedAt: number
+  providerTurnId?: string
+}
+
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Optional run-aware identity; absent on legacy hosts and compatibility projections. */
   runId?: AgentStatusRunId
@@ -61,6 +68,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
+  /** The main agent's latest accepted prompt on this pane; live-only. */
+  promptAcceptance?: AgentPromptAcceptance
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
   /** Present on rows the structured session host projects; `owned` keeps them fresh past the

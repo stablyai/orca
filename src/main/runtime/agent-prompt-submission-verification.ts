@@ -20,6 +20,11 @@ export type AgentPromptActivity = Readonly<{
   /** PTY bytes seen on this pane; delivery evidence when a turn-start edge cannot be observed. */
   outputSequence: number
   status: 'working' | 'permission' | 'idle' | null
+  /** When the hook store last recorded this agent accepting a prompt (its own prompt-submit event). */
+  promptAcceptedAt: number | null
+  /** Orca launched this process with its hooks, so only the agent's own prompt acceptance proves a
+   *  turn: a startup spinner title or a session-start hook also reads as working. */
+  requiresPromptAcceptance: boolean
 }>
 
 export type AgentPromptWaitTextCache = {
@@ -30,6 +35,7 @@ export type AgentPromptWaitTextCache = {
 export type AgentPromptTurnStartEvidence =
   | { kind: 'lifecycle'; workingSequence: number }
   | { kind: 'hook'; workingStartedAt: number }
+  | { kind: 'accepted'; acceptedAt: number }
 
 type AgentPromptVerificationOptions = {
   baseline: AgentPromptActivity
@@ -40,6 +46,9 @@ type AgentPromptVerificationOptions = {
   allowHookEvidence?: boolean
   /** Existing-turn output proves legacy delivery, but not a durable new-turn receipt. */
   allowOutputEvidence?: boolean
+  /** One more Enter for agents that can eat the first, sent only if no turn start was accepted by
+   *  `afterMs`. Returns false when the write was refused. */
+  resubmit?: { afterMs: number; write: () => boolean }
   signal?: AbortSignal
   timeoutMs?: number
 }
@@ -48,6 +57,28 @@ export function resolveAgentPromptEffectTimeoutMs(agent: TuiAgent | null | undef
   return agent && HOOK_OBSERVED_TURN_START_AGENTS.has(agent)
     ? AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS
     : AGENT_PROMPT_EFFECT_TIMEOUT_MS
+}
+
+/** Orca's hooks report Codex's own prompt acceptance, but only for a process Orca launched with
+ *  them in this PTY incarnation; anything else keeps the working-edge rules. */
+export function requiresAgentPromptAcceptance(
+  pty:
+    | {
+        launchAgent: TuiAgent | null
+        foregroundAgent: TuiAgent | null
+        launchToken: string | null
+        launchIncarnationId: string | null
+        incarnationId: string | null
+      }
+    | undefined
+): boolean {
+  return (
+    pty !== undefined &&
+    pty.launchAgent === 'codex' &&
+    (pty.foregroundAgent ?? pty.launchAgent) === 'codex' &&
+    pty.launchToken !== null &&
+    pty.launchIncarnationId === pty.incarnationId
+  )
 }
 
 /** Only these providers expose a turn-start signal Orca can settle a prompt receipt against. */
@@ -85,44 +116,41 @@ export function readAgentPromptWaitText(
 
 export async function verifyAgentPromptSubmission(
   options: AgentPromptVerificationOptions
-): Promise<void> {
+): Promise<{ resubmitted: boolean }> {
   throwIfAgentPromptAborted(options.signal)
   assertPromptNotBlocked(options.baseline, options.baseline)
 
-  const deadline = Date.now() + (options.timeoutMs ?? AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+  const startedAt = Date.now()
+  const deadline = startedAt + (options.timeoutMs ?? AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+  let resubmitted = false
   while (Date.now() < deadline) {
-    const current = options.readActivity()
-    assertSamePromptGeneration(options.baseline, current)
-    assertPromptNotBlocked(options.baseline, current)
-    if (
-      agentPromptEffectAccepted(
-        options.baseline,
-        current,
-        options.acceptTurnStart,
-        options.allowHookEvidence,
-        options.allowOutputEvidence
-      )
-    ) {
-      return
+    if (checkAgentPromptEffect(options)) {
+      return { resubmitted }
+    }
+    if (options.resubmit && !resubmitted && Date.now() - startedAt >= options.resubmit.afterMs) {
+      // Why: a refused retry leaves the first Enter's verdict to the rest of the window.
+      resubmitted = options.resubmit.write()
     }
     await waitForAgentPromptPoll(options.signal)
   }
 
+  if (checkAgentPromptEffect(options)) {
+    return { resubmitted }
+  }
+  throw new Error(AGENT_PROMPT_STALLED_ERROR)
+}
+
+function checkAgentPromptEffect(options: AgentPromptVerificationOptions): boolean {
   const current = options.readActivity()
   assertSamePromptGeneration(options.baseline, current)
   assertPromptNotBlocked(options.baseline, current)
-  if (
-    agentPromptEffectAccepted(
-      options.baseline,
-      current,
-      options.acceptTurnStart,
-      options.allowHookEvidence,
-      options.allowOutputEvidence
-    )
-  ) {
-    return
-  }
-  throw new Error(AGENT_PROMPT_STALLED_ERROR)
+  return agentPromptEffectAccepted(
+    options.baseline,
+    current,
+    options.acceptTurnStart,
+    options.allowHookEvidence,
+    options.allowOutputEvidence
+  )
 }
 
 function agentPromptEffectAccepted(
@@ -132,6 +160,13 @@ function agentPromptEffectAccepted(
   allowHookEvidence = true,
   allowOutputEvidence = true
 ): boolean {
+  if (baseline.requiresPromptAcceptance) {
+    return (
+      current.promptAcceptedAt !== null &&
+      current.promptAcceptedAt > (baseline.promptAcceptedAt ?? 0) &&
+      (acceptTurnStart?.({ kind: 'accepted', acceptedAt: current.promptAcceptedAt }) ?? true)
+    )
+  }
   if (current.workingSequence > baseline.workingSequence) {
     return (
       acceptTurnStart?.({

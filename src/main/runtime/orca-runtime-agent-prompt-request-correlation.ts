@@ -7,7 +7,10 @@ import type {
   AgentPromptWaitTextCache
 } from './agent-prompt-submission-verification'
 import { verifyAgentPromptSubmission } from './agent-prompt-submission-verification'
-import { AgentPromptRequestCorrelation } from './agent-prompt-request-correlation'
+import {
+  AgentPromptRequestCorrelation,
+  type AgentPromptTurnBaseline
+} from './agent-prompt-request-correlation'
 
 export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWithSerializeAgentPromptSubmission {
   private readonly agentPromptCorrelation = new AgentPromptRequestCorrelation()
@@ -54,6 +57,11 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
     }
     const waitTextCache: AgentPromptWaitTextCache = {}
     const baseline = this.getAgentPromptActivity(handle, binding.ptyId, waitTextCache)
+    const turnBaseline: AgentPromptTurnBaseline = {
+      baselineWorkingSequence: prompt.baselineWorkingSequence,
+      baselineExplicitWorkingStartedAt: prompt.baselineExplicitWorkingStartedAt ?? null,
+      baselinePromptAcceptedAt: prompt.baselinePromptAcceptedAt ?? null
+    }
     try {
       await verifyAgentPromptSubmission({
         baseline: {
@@ -64,7 +72,11 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
             : {}),
           ...(prompt.baselineExplicitWorkingStartedAt !== undefined
             ? { explicitWorkingStartedAt: prompt.baselineExplicitWorkingStartedAt }
-            : {})
+            : {}),
+          promptAcceptedAt: turnBaseline.baselinePromptAcceptedAt,
+          // Old hosts omit the acceptance baseline, so their receipts keep the working-edge rules.
+          requiresPromptAcceptance:
+            baseline.requiresPromptAcceptance && prompt.baselinePromptAcceptedAt !== undefined
         },
         readActivity: () => this.getAgentPromptActivity(handle, binding.ptyId, waitTextCache),
         acceptTurnStart: (evidence) =>
@@ -72,8 +84,7 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
             binding.ptyId,
             binding.generation,
             prompt.requestId,
-            prompt.baselineWorkingSequence,
-            prompt.baselineExplicitWorkingStartedAt ?? null,
+            turnBaseline,
             evidence
           ),
         // Old hosts omit the hook baseline, so their receipts retain title-only observation.
@@ -100,15 +111,9 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
     ptyId: string,
     generation: number,
     requestId: string,
-    baselineWorkingSequence: number,
-    baselineExplicitWorkingStartedAt: number | null
+    baseline: AgentPromptTurnBaseline
   ): void {
-    this.agentPromptCorrelation.register(ptyId, {
-      generation,
-      requestId,
-      baselineWorkingSequence,
-      baselineExplicitWorkingStartedAt
-    })
+    this.agentPromptCorrelation.register(ptyId, { generation, requestId, ...baseline })
   }
 
   protected forgetAgentPromptRequest(ptyId: string, generation: number, requestId: string): void {
@@ -119,16 +124,14 @@ export class OrcaRuntimeWithAgentPromptRequestCorrelation extends OrcaRuntimeWit
     ptyId: string,
     generation: number,
     requestId: string,
-    baselineWorkingSequence: number,
-    baselineExplicitWorkingStartedAt: number | null,
+    baseline: AgentPromptTurnBaseline,
     evidence: AgentPromptTurnStartEvidence
   ): boolean {
     return this.agentPromptCorrelation.acceptTurnStart(
       ptyId,
       generation,
       requestId,
-      baselineWorkingSequence,
-      baselineExplicitWorkingStartedAt,
+      baseline,
       evidence
     )
   }

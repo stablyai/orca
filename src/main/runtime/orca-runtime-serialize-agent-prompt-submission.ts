@@ -11,7 +11,10 @@ import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
 } from './agent-prompt-submission-verification'
-import { readAgentPromptWaitText } from './agent-prompt-submission-verification'
+import {
+  readAgentPromptWaitText,
+  requiresAgentPromptAcceptance
+} from './agent-prompt-submission-verification'
 import type { AgentStatus } from '../../shared/agent-detection'
 
 export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithControllerKnowsPtyIsLive {
@@ -185,6 +188,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     status: NonNullable<RuntimeTerminalAgentStatus['status']>
     updatedAt: number
     stateStartedAt: number
+    promptAcceptedAt: number | null
   } | null {
     return selectFreshExplicitAgentStatus({
       handle,
@@ -231,7 +235,9 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
       workingSequence: lifecycle?.workingSequence ?? 0,
       explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
       outputSequence,
-      status
+      status,
+      promptAcceptedAt: explicit?.promptAcceptedAt ?? null,
+      requiresPromptAcceptance: requiresAgentPromptAcceptance(this.ptysById.get(ptyId))
     }
   }
 

@@ -14,6 +14,7 @@ import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/list
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
 import { AgentHookServerStatusDisposition } from './server-status-disposition'
+import { resolvePromptAcceptance } from './server-prompt-acceptance'
 
 /** Bounds the retained observation clock; eviction only degrades a replay to `now`. */
 const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
@@ -113,12 +114,14 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
         : (observedAt ?? now)
+    const promptAcceptance = resolvePromptAcceptance(previous?.promptAcceptance, payload, now)
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
       ...payload,
       receivedAt: now,
       evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
-      stateStartedAt
+      stateStartedAt,
+      ...(promptAcceptance ? { promptAcceptance } : {})
     }
   }
 
