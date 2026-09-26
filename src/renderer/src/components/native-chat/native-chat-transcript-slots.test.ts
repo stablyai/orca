@@ -331,12 +331,21 @@ describe('the live turn', () => {
     ).toEqual(['u1'])
   })
 
-  it("draws the live turn's own status at its first row, not the user row before it", () => {
-    const slots = buildLive(messages, wakeJournal('running'), {
+  it('draws a running turn the provider opened on no row, and its settled duration at its first', () => {
+    const running = buildLive(messages, wakeJournal('running'), {
       turnStatuses: { active: settled(9), completedByTurn: { u1: settled(4) } }
     })
-    expect(slotOf(slots, 'u1')?.status?.workedSeconds).toBe(4)
-    expect(slotOf(slots, 'wake-tool')?.status?.workedSeconds).toBe(9)
+    expect(running.map((slot) => [slot.message.id, slot.status?.workedSeconds])).toEqual([
+      ['u1', 4],
+      ['a1', undefined],
+      ['wake-tool', undefined],
+      ['wake-note', undefined]
+    ])
+    const ended = buildLive(messages, wakeJournal('completed'), {
+      turnStatuses: { active: settled(4), completedByTurn: { u1: settled(4), wake: settled(9) } }
+    })
+    expect(slotOf(ended, 'u1')?.status?.workedSeconds).toBe(4)
+    expect(slotOf(ended, 'wake-tool')?.status?.workedSeconds).toBe(9)
   })
 
   it('keeps the running turn live, and the settled turn before it settled', () => {

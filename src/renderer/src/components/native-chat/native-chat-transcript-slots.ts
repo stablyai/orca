@@ -128,8 +128,8 @@ export function buildNativeChatTranscriptSlots(
     settledTurnKeys,
     expandedTurnKeys
   })
-  // A turn's status draws at its first row: the message that opened it, or — for a turn the
-  // provider opened on its own — the first thing it produced, so none draws before that exists.
+  // A settled turn's status draws at its first row: the message that opened it, or — for a turn
+  // the provider opened on its own — the first thing it produced.
   const firstRowOfTurn = new Map<string, number>()
   for (const [index, turnKey] of turnKeys.entries()) {
     if (turnKey !== undefined && !firstRowOfTurn.has(turnKey)) {
@@ -140,12 +140,16 @@ export function buildNativeChatTranscriptSlots(
   for (const [index, message] of messages.entries()) {
     const turnKey = turnKeys[index]
     const receipt = receipts.get(message.id)
+    // The live turn's status draws only on the message that opened it; one the provider opened on
+    // its own has none, so the transcript-tail indicator alone carries it until it settles.
     const candidateStatus =
       turnKey === undefined || firstRowOfTurn.get(turnKey) !== index
         ? undefined
-        : turnKey === currentTurnKey
-          ? turnStatuses.active
-          : turnStatuses.completedByTurn[turnKey]
+        : turnKey !== currentTurnKey
+          ? turnStatuses.completedByTurn[turnKey]
+          : message.role === 'user'
+            ? turnStatuses.active
+            : undefined
     const status =
       showTurnStatus && candidateStatus?.workedSeconds != null ? candidateStatus : undefined
     const turnDiff = turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined
