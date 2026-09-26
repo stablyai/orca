@@ -142,6 +142,36 @@ beforeEach(() => {
 })
 
 describe('runtime prepared-worktree replenishment', () => {
+  it('keeps a failed claim reserved through the normal-add fallback', async () => {
+    mocks.consume.mockResolvedValue({
+      status: 'miss',
+      reason: 'finalize_failed',
+      rearm: mocks.rearm
+    })
+    const rearm: PreparationRearmHolder = { fire: () => {} }
+    await createWorktree({}, rearm)
+
+    expect(mocks.add).toHaveBeenCalledOnce()
+    expect(mocks.rearm).not.toHaveBeenCalled()
+    rearm.fire()
+    expect(mocks.rearm).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the failed claim release available when the fallback also fails', async () => {
+    mocks.consume.mockResolvedValue({
+      status: 'miss',
+      reason: 'prepare_failed',
+      rearm: mocks.rearm
+    })
+    mocks.add.mockRejectedValue(new Error('normal add failed'))
+    const rearm: PreparationRearmHolder = { fire: () => {} }
+    await expect(createWorktree({}, rearm)).rejects.toThrow('normal add failed')
+
+    expect(mocks.rearm).not.toHaveBeenCalled()
+    rearm.fire()
+    expect(mocks.rearm).toHaveBeenCalledOnce()
+  })
+
   it('leaves the re-arm holder armed but unfired once probes and include copies finish', async () => {
     const rearm: PreparationRearmHolder = { fire: () => {} }
     let finishProbe!: (paths: string[]) => void

@@ -37,7 +37,10 @@ it('reuses the current base-resolution oid and preserves WSL routing', async () 
     ['rev-parse', '--verify', '--quiet', 'refs/heads/main^{commit}'],
     ['rev-parse', '--verify', 'HEAD']
   ])
-  expect(gitExec.mock.calls.find(([args]) => args.includes('checkout'))?.[0]).toContain(originalOid)
+  expect(gitExec).toHaveBeenCalledWith(
+    ['switch', '--no-track', '-c', 'feature'],
+    expect.objectContaining({ cwd: '/final' })
+  )
   expect(gitExec.mock.calls.some(([args]) => args.includes('reset'))).toBe(false)
   for (const [, options] of gitExec.mock.calls) {
     expect(options).toMatchObject({ wslDistro: 'Ubuntu', timeout: 8000 })
@@ -63,8 +66,9 @@ it.each([
     expect.objectContaining({ cwd: '/repo' })
   )
   expect(gitExec.mock.calls.find(([args]) => args.includes('reset'))?.[0]).toContain(refreshedOid)
-  expect(gitExec.mock.calls.find(([args]) => args.includes('checkout'))?.[0]).toContain(
-    refreshedOid
+  expect(gitExec).toHaveBeenCalledWith(
+    ['switch', '--no-track', '-c', 'feature'],
+    expect.objectContaining({ cwd: '/final' })
   )
 })
 

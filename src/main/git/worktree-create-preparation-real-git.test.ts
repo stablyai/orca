@@ -55,6 +55,79 @@ afterEach(async () => {
 })
 
 describe('prepared worktree creation with real Git', () => {
+  it.each([false, true])(
+    'attaches the prepared HEAD without scanning its index and runs the hook (base advanced: %s)',
+    async (advanceBase) => {
+      const { repoPath, root } = await createRepo()
+      const preparedPath = join(root, 'prepared checkout')
+      const finalPath = join(root, 'final checkout')
+      const hooksPath = join(root, 'hooks')
+      const tracePath = join(root, 'attach-trace.jsonl')
+      await mkdir(hooksPath)
+      await writeFile(
+        join(hooksPath, 'post-checkout'),
+        '#!/bin/sh\nprintf \'%s\\n\' "$@" >> checkout-hook.txt\ngit symbolic-ref --short HEAD >> checkout-hook.txt\n',
+        { mode: 0o755 }
+      )
+      git(repoPath, ['config', 'core.hooksPath', hooksPath])
+      git(repoPath, ['config', 'branch.autoSetupMerge', 'always'])
+      await prepareWorktreeCreateCheckout(
+        repoPath,
+        preparedPath,
+        'main',
+        createWorktreePreparationLockReason('attach-without-index-scan')
+      )
+      expect(existsSync(join(preparedPath, 'checkout-hook.txt'))).toBe(false)
+      if (advanceBase) {
+        await writeFile(join(repoPath, 'version.txt'), 'advanced\n')
+        git(repoPath, ['commit', '--quiet', '-am', 'advance base'])
+      }
+      const targetHead = git(repoPath, ['rev-parse', 'HEAD'])
+      const original = gitRunner.gitExecFileAsync
+      const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) =>
+        original(args, {
+          ...options,
+          ...(args.includes('checkout') || args.includes('switch')
+            ? { env: { ...process.env, GIT_TRACE2_EVENT: tracePath } }
+            : {})
+        })
+      )
+      try {
+        await finalizePreparedWorktree(
+          repoPath,
+          preparedPath,
+          finalPath,
+          'feature/attached',
+          'main'
+        )
+      } finally {
+        spy.mockRestore()
+      }
+
+      const events: unknown[] = (await readFile(tracePath, 'utf8'))
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+      expect(events).toContainEqual(expect.objectContaining({ event: 'exit', code: 0 }))
+      expect(events).not.toContainEqual(
+        expect.objectContaining({ event: 'region_enter', category: 'index' })
+      )
+      expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(targetHead)
+      expect(git(finalPath, ['symbolic-ref', '--short', 'HEAD'])).toBe('feature/attached')
+      expect(
+        git(finalPath, ['for-each-ref', '--format=%(upstream)', 'refs/heads/feature/attached'])
+      ).toBe('')
+      expect(await readFile(join(finalPath, 'checkout-hook.txt'), 'utf8')).toBe(
+        `${targetHead}\n${targetHead}\n1\nfeature/attached\n`
+      )
+      await rm(join(finalPath, 'checkout-hook.txt'))
+      expect(await readFile(join(finalPath, 'version.txt'), 'utf8')).toBe(
+        advanceBase ? 'advanced\n' : 'one\n'
+      )
+      expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+    }
+  )
+
   it('retains preparation ownership when the removal command cannot start', async () => {
     const fixture = await createRepo()
     const repoPath = await realpath(fixture.repoPath)

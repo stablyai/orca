@@ -245,15 +245,9 @@ export async function finalizePreparedWorktree(
           invalidateWslLinkedWorktreeGitRouting(preparedPath)
           invalidateWslLinkedWorktreeGitRouting(worktreePath)
         }
+        // HEAD already matches targetHead; omitting the start point avoids another index scan.
         await gitExecFileAsync(
-          [
-            ...windowsLongPathGitArgs(worktreePath),
-            'checkout',
-            '--no-track',
-            '-b',
-            branch,
-            targetHead
-          ],
+          [...windowsLongPathGitArgs(worktreePath), 'switch', '--no-track', '-c', branch],
           gitExecOptions(worktreePath, finalizeGitOptions)
         )
         await persistWorktreeCreationBase(
