@@ -18007,6 +18007,82 @@
           }
         }
       }
+    },
+    "cross-machine-recovery": {
+      "quickAction": {
+        "title": "恢复会话",
+        "description": "从另一台电脑接续工作区和智能体会话。",
+        "verbs": {
+          "recover": "恢复会话",
+          "pickUp": "接续工作",
+          "otherMachine": "另一台电脑"
+        }
+      },
+      "dialog": {
+        "title": "从另一台电脑恢复工作",
+        "destinationNamed": "恢复到这台电脑（{{machineName}}）",
+        "destination": "恢复到这台电脑",
+        "filter": "筛选工作区和会话",
+        "loading": "正在查找可恢复的工作…",
+        "empty": "暂无来自其他电脑的工作。",
+        "unreachable": "{{hostName}}（无法访问）",
+        "cancel": "取消",
+        "recover": "恢复",
+        "refused": "{{count}} 个会话留在了另一台电脑上：{{reasons}}"
+      },
+      "row": {
+        "ageUnknown": "时间未知",
+        "notReadyMissing": "未就绪：缺少 {{missing}}",
+        "notReady": "尚未准备好恢复",
+        "sessions": "{{count}} 个会话",
+        "partial": "部分对话记录",
+        "collision": "已在这台电脑上运行",
+        "resumeAge": "继续 · 上次使用 {{age}}",
+        "dormantAge": "恢复但不启动 · 上次使用 {{age}}",
+        "collisionTooltip": "此会话正在这里运行；再次继续会使对话分叉。",
+        "codeDeferred": "代码捕获已推迟 · 代码来自 {{codeAge}}"
+      },
+      "status": {
+        "countOne": "1 个可恢复的工作区",
+        "count": "{{count}} 个可恢复的工作区",
+        "stopped": "同步助手未运行",
+        "tooltip": "从你的其他电脑恢复工作。点击选择。"
+      },
+      "copy": {
+        "pause": {
+          "cellular": "使用蜂窝网络时已暂停",
+          "expensive": "使用高费用网络时已暂停",
+          "constrained": "低数据模式下已暂停",
+          "unknownNetwork": "使用未知网络时已暂停",
+          "disconnected": "离线时已暂停",
+          "manualMetered": "使用按流量计费的网络时已暂停",
+          "peerOffline": "已暂停，直到另一台电脑恢复在线",
+          "unknown": "同步已暂停"
+        },
+        "error": {
+          "notInstalled": "未安装恢复提供程序（cc-sync）。",
+          "timeout": "恢复提供程序未及时响应。",
+          "outputTooLarge": "恢复提供程序的响应过大。",
+          "invalidOutput": "恢复提供程序以未知格式响应。"
+        },
+        "phase": {
+          "select": "正在选择检查点…",
+          "restoreCode": "正在恢复代码…",
+          "restoreSessions": "正在恢复会话…",
+          "orcaImport": "正在恢复工作区布局…",
+          "orcaResume": "正在继续会话…",
+          "unknown": "正在恢复…"
+        }
+      },
+      "web": {
+        "unsupported": "跨电脑恢复仅在桌面应用中可用。"
+      },
+      "divergence": {
+        "message": "这台电脑上有会话 {{sessionId}} 的更新的本地副本。请选择恢复方式。",
+        "keepLocal": "保留本地版本",
+        "replace": "替换本地版本",
+        "fork": "分叉为新会话"
+      }
     }
   },
   "dashboardPopout": {

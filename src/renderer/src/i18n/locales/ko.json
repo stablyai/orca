@@ -18007,6 +18007,82 @@
           }
         }
       }
+    },
+    "cross-machine-recovery": {
+      "quickAction": {
+        "title": "세션 복구",
+        "description": "다른 컴퓨터의 워크스페이스와 Agent 세션을 이어받습니다.",
+        "verbs": {
+          "recover": "세션 복구",
+          "pickUp": "작업 이어받기",
+          "otherMachine": "다른 컴퓨터"
+        }
+      },
+      "dialog": {
+        "title": "다른 컴퓨터에서 작업 복구",
+        "destinationNamed": "이 컴퓨터({{machineName}})로 복구합니다",
+        "destination": "이 컴퓨터로 복구합니다",
+        "filter": "워크스페이스 및 세션 필터링",
+        "loading": "복구할 수 있는 작업을 찾는 중…",
+        "empty": "아직 다른 컴퓨터의 작업이 없습니다.",
+        "unreachable": "{{hostName}} (연결할 수 없음)",
+        "cancel": "취소",
+        "recover": "복구",
+        "refused": "세션 {{count}}개가 다른 컴퓨터에 남았습니다: {{reasons}}"
+      },
+      "row": {
+        "ageUnknown": "알 수 없는 시간",
+        "notReadyMissing": "준비되지 않음: {{missing}} 없음",
+        "notReady": "아직 복구할 준비가 되지 않았습니다",
+        "sessions": "세션 {{count}}개",
+        "partial": "일부 대화 기록",
+        "collision": "이 컴퓨터에서 이미 실행 중",
+        "resumeAge": "재개 · 마지막 사용 {{age}}",
+        "dormantAge": "시작하지 않고 복원 · 마지막 사용 {{age}}",
+        "collisionTooltip": "이 세션은 여기에서 실행 중입니다. 다시 재개하면 대화가 분기됩니다.",
+        "codeDeferred": "코드 캡처 연기됨 · {{codeAge}} 시점 코드"
+      },
+      "status": {
+        "countOne": "복구 가능한 워크스페이스 1개",
+        "count": "복구 가능한 워크스페이스 {{count}}개",
+        "stopped": "동기화 도우미가 실행 중이 아닙니다",
+        "tooltip": "다른 컴퓨터의 작업을 복구합니다. 클릭하여 선택하세요."
+      },
+      "copy": {
+        "pause": {
+          "cellular": "셀룰러 네트워크에서 일시 중지됨",
+          "expensive": "비용이 높은 네트워크에서 일시 중지됨",
+          "constrained": "저데이터 모드에서 일시 중지됨",
+          "unknownNetwork": "알 수 없는 네트워크에서 일시 중지됨",
+          "disconnected": "오프라인 상태에서 일시 중지됨",
+          "manualMetered": "데이터 통신 네트워크에서 일시 중지됨",
+          "peerOffline": "다른 컴퓨터가 돌아올 때까지 일시 중지됨",
+          "unknown": "동기화 일시 중지됨"
+        },
+        "error": {
+          "notInstalled": "복구 공급자(cc-sync)가 설치되어 있지 않습니다.",
+          "timeout": "복구 공급자가 제시간에 응답하지 않았습니다.",
+          "outputTooLarge": "복구 공급자의 응답이 너무 큽니다.",
+          "invalidOutput": "복구 공급자가 알 수 없는 형식으로 응답했습니다."
+        },
+        "phase": {
+          "select": "체크포인트 선택 중…",
+          "restoreCode": "코드 복원 중…",
+          "restoreSessions": "세션 복원 중…",
+          "orcaImport": "워크스페이스 레이아웃 복원 중…",
+          "orcaResume": "세션 재개 중…",
+          "unknown": "복구 중…"
+        }
+      },
+      "web": {
+        "unsupported": "컴퓨터 간 복구는 데스크톱 앱에서만 실행됩니다."
+      },
+      "divergence": {
+        "message": "이 컴퓨터에 세션 {{sessionId}}의 더 최신 로컬 사본이 있습니다. 복구 방법을 선택하세요.",
+        "keepLocal": "로컬 유지",
+        "replace": "로컬 교체",
+        "fork": "새 세션으로 분기"
+      }
     }
   },
   "dashboardPopout": {

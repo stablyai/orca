@@ -18007,6 +18007,82 @@
           }
         }
       }
+    },
+    "cross-machine-recovery": {
+      "quickAction": {
+        "title": "セッションを復元",
+        "description": "別のコンピュータからワークスペースとAgent セッションを引き継ぎます。",
+        "verbs": {
+          "recover": "セッションを復元",
+          "pickUp": "作業を引き継ぐ",
+          "otherMachine": "別のコンピュータ"
+        }
+      },
+      "dialog": {
+        "title": "別のコンピュータから作業を復元",
+        "destinationNamed": "このコンピュータ（{{machineName}}）に復元します",
+        "destination": "このコンピュータに復元します",
+        "filter": "ワークスペースとセッションを絞り込む",
+        "loading": "復元できる作業を探しています…",
+        "empty": "他のコンピュータからの作業はまだありません。",
+        "unreachable": "{{hostName}}（接続できません）",
+        "cancel": "キャンセル",
+        "recover": "復元",
+        "refused": "{{count}} 件のセッションは別のコンピュータに残されました: {{reasons}}"
+      },
+      "row": {
+        "ageUnknown": "不明な時刻",
+        "notReadyMissing": "準備ができていません: {{missing}} がありません",
+        "notReady": "まだ復元できません",
+        "sessions": "{{count}} 件のセッション",
+        "partial": "トランスクリプトの一部のみ",
+        "collision": "このコンピュータですでに実行中です",
+        "resumeAge": "再開 · 最終使用 {{age}}",
+        "dormantAge": "起動せずに復元 · 最終使用 {{age}}",
+        "collisionTooltip": "このセッションはここで稼働中です。もう一度再開すると会話が分岐します。",
+        "codeDeferred": "コードの取得は延期 · コードは {{codeAge}} 時点"
+      },
+      "status": {
+        "countOne": "復元できるワークスペース 1 件",
+        "count": "復元できるワークスペース {{count}} 件",
+        "stopped": "同期ヘルパーが実行されていません",
+        "tooltip": "他のコンピュータから作業を復元します。クリックして選択します。"
+      },
+      "copy": {
+        "pause": {
+          "cellular": "モバイル通信のため一時停止中",
+          "expensive": "高コストなネットワークのため一時停止中",
+          "constrained": "省データモードのため一時停止中",
+          "unknownNetwork": "不明なネットワークのため一時停止中",
+          "disconnected": "オフラインのため一時停止中",
+          "manualMetered": "従量制ネットワークのため一時停止中",
+          "peerOffline": "別のコンピュータが戻るまで一時停止中",
+          "unknown": "同期は一時停止中"
+        },
+        "error": {
+          "notInstalled": "復元プロバイダー（cc-sync）がインストールされていません。",
+          "timeout": "復元プロバイダーが時間内に応答しませんでした。",
+          "outputTooLarge": "復元プロバイダーの応答が大きすぎます。",
+          "invalidOutput": "復元プロバイダーが不明な形式で応答しました。"
+        },
+        "phase": {
+          "select": "チェックポイントを選択中…",
+          "restoreCode": "コードを復元中…",
+          "restoreSessions": "セッションを復元中…",
+          "orcaImport": "ワークスペースのレイアウトを復元中…",
+          "orcaResume": "セッションを再開中…",
+          "unknown": "復元中…"
+        }
+      },
+      "web": {
+        "unsupported": "コンピュータ間の復元はデスクトップアプリでのみ動作します。"
+      },
+      "divergence": {
+        "message": "このコンピュータにはセッション {{sessionId}} のより新しいローカルコピーがあります。復元方法を選択してください。",
+        "keepLocal": "ローカルを保持",
+        "replace": "ローカルを置き換え",
+        "fork": "新しいセッションとして分岐"
+      }
     }
   },
   "dashboardPopout": {

@@ -15106,6 +15106,82 @@
         "copySessionIdSuccess": "ID de sesión copiado",
         "copySessionIdError": "No se pudo copiar el ID de sesión"
       }
+    },
+    "cross-machine-recovery": {
+      "quickAction": {
+        "title": "Recuperar sesiones",
+        "description": "Retoma espacios de trabajo y sesiones de agentes desde otro ordenador.",
+        "verbs": {
+          "recover": "recuperar sesiones",
+          "pickUp": "retomar trabajo",
+          "otherMachine": "otro ordenador"
+        }
+      },
+      "dialog": {
+        "title": "Recuperar trabajo de otro ordenador",
+        "destinationNamed": "Se recupera en este ordenador ({{machineName}})",
+        "destination": "Se recupera en este ordenador",
+        "filter": "Filtrar espacios de trabajo y sesiones",
+        "loading": "Buscando trabajo recuperable…",
+        "empty": "Todavía no hay trabajo de otros ordenadores.",
+        "unreachable": "{{hostName}} (inaccesible)",
+        "cancel": "Cancelar",
+        "recover": "Recuperar",
+        "refused": "{{count}} sesiones se quedaron en el otro ordenador: {{reasons}}"
+      },
+      "row": {
+        "ageUnknown": "hora desconocida",
+        "notReadyMissing": "No está listo: falta {{missing}}",
+        "notReady": "Todavía no está listo para recuperar",
+        "sessions": "{{count}} sesiones",
+        "partial": "Transcripción parcial",
+        "collision": "Ya se está ejecutando en este ordenador",
+        "resumeAge": "Reanudar · último uso {{age}}",
+        "dormantAge": "Restaurar sin iniciar · último uso {{age}}",
+        "collisionTooltip": "Esta sesión está activa aquí; reanudarla de nuevo bifurcaría la conversación.",
+        "codeDeferred": "Captura de código aplazada · código de {{codeAge}}"
+      },
+      "status": {
+        "countOne": "1 espacio de trabajo recuperable",
+        "count": "{{count}} espacios de trabajo recuperables",
+        "stopped": "El asistente de sincronización no se está ejecutando",
+        "tooltip": "Recupera trabajo de tus otros ordenadores. Haz clic para elegir."
+      },
+      "copy": {
+        "pause": {
+          "cellular": "En pausa en la red móvil",
+          "expensive": "En pausa en una red costosa",
+          "constrained": "En pausa en el modo de datos reducidos",
+          "unknownNetwork": "En pausa en una red desconocida",
+          "disconnected": "En pausa sin conexión",
+          "manualMetered": "En pausa en una red de uso medido",
+          "peerOffline": "En pausa hasta que vuelva el otro ordenador",
+          "unknown": "Sincronización en pausa"
+        },
+        "error": {
+          "notInstalled": "El proveedor de recuperación (cc-sync) no está instalado.",
+          "timeout": "El proveedor de recuperación no respondió a tiempo.",
+          "outputTooLarge": "La respuesta del proveedor de recuperación era demasiado grande.",
+          "invalidOutput": "El proveedor de recuperación respondió en un formato desconocido."
+        },
+        "phase": {
+          "select": "Eligiendo punto de control…",
+          "restoreCode": "Restaurando código…",
+          "restoreSessions": "Restaurando sesiones…",
+          "orcaImport": "Restaurando la disposición del espacio de trabajo…",
+          "orcaResume": "Reanudando sesiones…",
+          "unknown": "Recuperando…"
+        }
+      },
+      "web": {
+        "unsupported": "La recuperación entre ordenadores solo funciona en la aplicación de escritorio."
+      },
+      "divergence": {
+        "message": "Este ordenador tiene una copia local más reciente de la sesión {{sessionId}}. Elige cómo recuperarla.",
+        "keepLocal": "Conservar la local",
+        "replace": "Reemplazar la local",
+        "fork": "Bifurcar como sesión nueva"
+      }
     }
   },
   "dashboardPopout": {
