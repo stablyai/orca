@@ -29,7 +29,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     const relay = {
       v: 1 as const,
@@ -87,7 +88,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     let relayHostId = 'AbCdEf0123_-xyZ9'
     let ownerIdentityKey = 'user-a\0profile-a\0org'
@@ -154,7 +156,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     server.setMobileRelayPairingProvider({
       createPairingRelay: vi.fn().mockRejectedValue(new Error('relay offline')),
@@ -188,7 +191,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
 
     await server.start()
@@ -215,7 +219,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     const createPairingRelay = vi
       .fn()
@@ -266,7 +271,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     let resolveFirst: (() => void) | undefined
     const firstMint = new Promise<void>((resolve) => {
@@ -325,7 +331,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     let resolveFirst: (() => void) | undefined
     const firstMint = new Promise<void>((resolve) => {
@@ -396,7 +403,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     let resolveFirst: (() => void) | undefined
     const firstMint = new Promise<void>((resolve) => {
@@ -460,7 +468,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     let resolveRelay: (() => void) | undefined
     const relayGate = new Promise<void>((resolve) => {
@@ -526,7 +535,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     const onDeviceRevokeQueued = vi.fn()
     server.setMobileRelayPairingProvider({
@@ -576,7 +586,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     let resolveRelay: (() => void) | undefined
     const relayGate = new Promise<void>((resolve) => {
@@ -636,7 +647,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     let resolveRelay: (() => void) | undefined
     const relayGate = new Promise<void>((resolve) => {
@@ -704,7 +716,8 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
     const onDeviceRevokeQueued = vi.fn()
     server.setMobileRelayPairingProvider({
