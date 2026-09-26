@@ -18079,7 +18079,7 @@
       "MouseReportingCopyHint": {
         "title": "Nothing selected to copy",
         "description": "This app is capturing the mouse, so dragging did not select text in the terminal. Hold Option while dragging, or turn on \u201cSelect Text in Mouse-Aware Apps\u201d.",
-        "descriptionNonMac": "This app is capturing the mouse, so dragging did not select text in the terminal. Hold Alt while dragging, or turn on \u201cSelect Text in Mouse-Aware Apps\u201d.",
+        "descriptionNonMac": "This app is capturing the mouse, so dragging did not select text in the terminal. Hold Shift while dragging, or turn on \u201cSelect Text in Mouse-Aware Apps\u201d.",
         "openSetting": "Open Setting"
       }
     },

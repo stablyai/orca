@@ -8,7 +8,10 @@ import { TERMINAL_SELECTION_OVER_MOUSE_REPORTING_SETTING_ID } from './terminal-s
 // a row should not see two toasts, but one who finds the hint later should.
 export const MOUSE_REPORTING_COPY_HINT_COOLDOWN_MS = 10_000
 
-type HintTerminal = { modes: Pick<Terminal['modes'], 'mouseTrackingMode'> }
+type HintTerminal = {
+  modes: Pick<Terminal['modes'], 'mouseTrackingMode'>
+  options: Pick<Terminal['options'], 'mouseEventsRequireAlt'>
+}
 
 export type MouseReportingCopyHintDeps = {
   now: () => number
@@ -57,14 +60,19 @@ const defaultDeps: MouseReportingCopyHintDeps = {
  * The copy shortcut found no xterm selection. When the app in the pane reports
  * the mouse, that is the expected outcome of a plain drag — the app, not xterm,
  * owns the selection — so say so instead of failing silently (#9727).
- * Returns whether a hint was shown.
+ * Silent once `mouseEventsRequireAlt` is on: a plain drag then selects in xterm,
+ * so an empty selection means nothing was dragged (or Alt sent it to the app),
+ * and the hint's advice would no longer apply. Returns whether a hint was shown.
  */
 export function maybeShowMouseReportingCopyHint(
   terminal: HintTerminal,
   isMac: boolean,
   deps: MouseReportingCopyHintDeps = defaultDeps
 ): boolean {
-  if (terminal.modes.mouseTrackingMode === 'none') {
+  if (
+    terminal.modes.mouseTrackingMode === 'none' ||
+    terminal.options.mouseEventsRequireAlt === true
+  ) {
     return false
   }
   const now = deps.now()
@@ -84,7 +92,7 @@ export function maybeShowMouseReportingCopyHint(
         )
       : translate(
           'components.terminalPane.MouseReportingCopyHint.descriptionNonMac',
-          'This app is capturing the mouse, so dragging did not select text in the terminal. Hold Alt while dragging, or turn on “Select Text in Mouse-Aware Apps”.'
+          'This app is capturing the mouse, so dragging did not select text in the terminal. Hold Shift while dragging, or turn on “Select Text in Mouse-Aware Apps”.'
         ),
     actionLabel: translate(
       'components.terminalPane.MouseReportingCopyHint.openSetting',

@@ -8,10 +8,14 @@ import {
 
 type MouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
-function terminal(mouseTrackingMode: MouseTrackingMode): {
+function terminal(
+  mouseTrackingMode: MouseTrackingMode,
+  mouseEventsRequireAlt = false
+): {
   modes: { mouseTrackingMode: MouseTrackingMode }
+  options: { mouseEventsRequireAlt: boolean }
 } {
-  return { modes: { mouseTrackingMode } }
+  return { modes: { mouseTrackingMode }, options: { mouseEventsRequireAlt } }
 }
 
 function deps(now: () => number): {
@@ -47,12 +51,18 @@ describe('maybeShowMouseReportingCopyHint', () => {
     expect(d.openSetting).toHaveBeenCalledTimes(1)
   })
 
-  it('names Alt instead of Option off macOS', () => {
+  it('names Shift, the xterm force-selection modifier, off macOS', () => {
     const d = deps(() => 1_000)
     maybeShowMouseReportingCopyHint(terminal('vt200'), false, d)
     const description = d.showToast.mock.calls[0]?.[0]?.description ?? ''
-    expect(description).toContain('Hold Alt')
+    expect(description).toContain('Hold Shift')
     expect(description).not.toContain('Option')
+  })
+
+  it('stays silent once the setting already hands drags to xterm', () => {
+    const d = deps(() => 1_000)
+    expect(maybeShowMouseReportingCopyHint(terminal('any', true), true, d)).toBe(false)
+    expect(d.showToast).not.toHaveBeenCalled()
   })
 
   it('rate-limits repeated presses, then shows again after the cooldown', () => {
