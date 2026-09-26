@@ -29,7 +29,17 @@ const SEEDS = Math.max(1, Number(process.env.SERIALIZE_TRANSCRIPT_SEEDS) || 2)
 // Checkpoints (default seeds) whose new replay diverges exactly as the previous
 // build's did — pre-existing upstream limitations, not regressions (verified
 // with ORCA_OLD_SERIALIZE_ADDON). Shrink when one is fixed.
-const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = { less: 6, nano: 2, opencode: 5 }
+const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
+  less: 6,
+  nano: 2,
+  opencode: 5,
+  // DSH-TUI's whale intro paints whole rows of 24-bit background, and every one of this
+  // transcript's divergences is the same shape: `visible-grid row=0`, a true-colour
+  // background that the round trip does not restore to default. Verified as upstream, not a
+  // regression, by replaying it against the previous build
+  // (`build-serialize-addon-at-ref.mjs --ref origin/main`): I1 and I3 both hold.
+  'dsh-tui-ready-no-key': 10
+}
 
 type Transcript = { name: string; data: string; cols: number; rows: number }
 type Schedule = 'none' | 'shrink' | 'shrink-grow' | 'jitter'
