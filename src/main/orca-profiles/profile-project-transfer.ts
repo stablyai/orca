@@ -3,12 +3,14 @@ import type {
   TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
 import { getOrcaProfileListState } from './profile-index-store'
-import { writeSerializedProfileState } from './profile-project-state-file'
 import {
   readProfileProjectTransferState,
   writeProfileProjectDomainChanges
 } from './profile-project-domain-state'
-import { prepareProfileProjectDomainChanges } from './profile-project-domain-changes'
+import {
+  prepareProfileProjectDomainChanges,
+  type ProfileProjectDomainChanges
+} from './profile-project-domain-changes'
 import { createProfileProjectDomainMoveIntent } from './profile-project-domain-move-intent'
 import { removeSourceRepo } from './profile-project-source-removal'
 import {
@@ -65,17 +67,14 @@ export function transferOrcaProfileProject(
   }
 
   let moveIntent: ProfileProjectMoveIntent | undefined
-  if (sourceSnapshot.revision !== undefined && targetSnapshot.revision === undefined) {
+  if (targetSnapshot.revision === undefined) {
     targetSnapshot = migrateProfileProjectTransferParticipant(
       args.targetProfileId,
       userDataPath,
       targetSnapshot
     )
-  } else if (
-    args.mode === 'move' &&
-    sourceSnapshot.revision === undefined &&
-    targetSnapshot.revision !== undefined
-  ) {
+  }
+  if (args.mode === 'move' && sourceSnapshot.revision === undefined) {
     sourceSnapshot = migrateProfileProjectTransferParticipant(
       args.sourceProfileId,
       userDataPath,
@@ -95,28 +94,26 @@ export function transferOrcaProfileProject(
   const targetAfterState = applyPayloadToTarget(targetState, payload)
   const sourceAfterState =
     args.mode === 'move' ? removeSourceRepo(sourceState, sourceRepo.id) : undefined
-  const targetChanges =
-    targetSnapshot.documents !== undefined && targetSnapshot.revision !== undefined
-      ? prepareProfileProjectDomainChanges(
-          targetSnapshot.revision,
-          targetSnapshot.documents,
-          targetAfterState
-        )
-      : undefined
-  const sourceChanges =
-    sourceAfterState !== undefined &&
-    sourceSnapshot.documents !== undefined &&
-    sourceSnapshot.revision !== undefined
-      ? prepareProfileProjectDomainChanges(
-          sourceSnapshot.revision,
-          sourceSnapshot.documents,
-          sourceAfterState
-        )
-      : undefined
-  if (sourceChanges !== undefined) {
-    if (targetChanges === undefined) {
-      throw new Error('SQLite profile move requires two SQLite participants')
+  if (targetSnapshot.documents === undefined || targetSnapshot.revision === undefined) {
+    throw new Error('Profile transfer requires an established SQLite target')
+  }
+  const targetChanges = prepareProfileProjectDomainChanges(
+    targetSnapshot.revision,
+    targetSnapshot.documents,
+    targetAfterState
+  )
+  let sourceChanges: ProfileProjectDomainChanges | undefined
+  if (sourceAfterState !== undefined) {
+    if (sourceSnapshot.documents === undefined || sourceSnapshot.revision === undefined) {
+      throw new Error('Profile move requires an established SQLite source')
     }
+    sourceChanges = prepareProfileProjectDomainChanges(
+      sourceSnapshot.revision,
+      sourceSnapshot.documents,
+      sourceAfterState
+    )
+  }
+  if (sourceChanges !== undefined) {
     moveIntent = createProfileProjectDomainMoveIntent({
       sourceProfileId: args.sourceProfileId,
       targetProfileId: args.targetProfileId,
@@ -125,25 +122,9 @@ export function transferOrcaProfileProject(
     })
     persistProfileProjectMoveIntent(userDataPath, moveIntent)
   }
-  if (targetChanges !== undefined) {
-    writeProfileProjectDomainChanges(args.targetProfileId, userDataPath, targetChanges)
-  } else {
-    writeSerializedProfileState(
-      args.targetProfileId,
-      userDataPath,
-      JSON.stringify(targetAfterState)
-    )
-  }
-  if (sourceAfterState !== undefined) {
-    if (sourceChanges !== undefined) {
-      writeProfileProjectDomainChanges(args.sourceProfileId, userDataPath, sourceChanges)
-    } else {
-      writeSerializedProfileState(
-        args.sourceProfileId,
-        userDataPath,
-        JSON.stringify(sourceAfterState)
-      )
-    }
+  writeProfileProjectDomainChanges(args.targetProfileId, userDataPath, targetChanges)
+  if (sourceChanges !== undefined) {
+    writeProfileProjectDomainChanges(args.sourceProfileId, userDataPath, sourceChanges)
     if (moveIntent) {
       removeProfileProjectMoveIntent(userDataPath, moveIntent.id)
     }

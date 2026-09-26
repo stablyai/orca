@@ -1,11 +1,13 @@
 import { readFileSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, matchesGlob, resolve } from 'node:path'
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 import { electronViteConfig } from '../../electron.vite.config'
 import { GUARDED_ENTRY_NAMES } from '../build-plugins/plain-node-entry-guard'
 
 const REPO_ROOT = resolve(__dirname, '..', '..')
 const CLI_ROOT = join(REPO_ROOT, 'src', 'cli')
+const packaging = createRequire(import.meta.url)('../electron-builder.config.cjs')
 
 function listCliSourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -21,13 +23,17 @@ function listCliSourceFiles(dir: string): string[] {
 
 // Why: `import type` is erased by tsc, so it needs no emitted module at runtime.
 const VALUE_IMPORT_FROM_MAIN = /(?<!\btype\s)from '(?:\.\.\/)+main\/([^']+)'/g
+const DYNAMIC_IMPORT_FROM_MAIN = /import\(\s*['"](?:\.\.\/)+main\/([^'"]+)['"]\s*\)/g
 
 function findMainImports(): { file: string; module: string }[] {
   return listCliSourceFiles(CLI_ROOT).flatMap((file) => {
     const source = readFileSync(file, 'utf-8')
-    return [...source.matchAll(VALUE_IMPORT_FROM_MAIN)].map((match) => ({
+    return [
+      ...source.matchAll(VALUE_IMPORT_FROM_MAIN),
+      ...source.matchAll(DYNAMIC_IMPORT_FROM_MAIN)
+    ].map((match) => ({
       file: file.slice(REPO_ROOT.length + 1),
-      module: match[1]
+      module: match[1].replace(/\.js$/, '')
     }))
   })
 }
@@ -59,11 +65,25 @@ describe('CLI imports of main-process modules', () => {
     expect(findMainImports().filter(({ module }) => !guarded.has(module))).toEqual([])
   })
 
+  it('unpacks every CLI main entry for plain Node outside Electron', () => {
+    const missing = findMainImports().filter(
+      ({ module }) =>
+        !packaging.asarUnpack.some((pattern: string) =>
+          matchesGlob(`out/main/${module}.js`, pattern)
+        )
+    )
+    expect(missing).toEqual([])
+  })
+
   it('finds the imports it is meant to guard', () => {
     // Why: a broken matcher would make the guard above vacuously pass.
     expect(findMainImports()).toContainEqual({
       file: join('src', 'cli', 'profile-state-location.ts'),
       module: 'persistence/profile-state/profile-state-active-location'
+    })
+    expect(findMainImports()).toContainEqual({
+      file: join('src', 'cli', 'handlers', 'agent-hooks.ts'),
+      module: 'orca-profiles/profile-index-store'
     })
     expect(findMainImports().length).toBeGreaterThanOrEqual(2)
     expect(Object.keys(findElectronViteMainEntries()).length).toBeGreaterThanOrEqual(2)

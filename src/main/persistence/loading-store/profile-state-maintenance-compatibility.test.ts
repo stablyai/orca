@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { createWorkerMaintenanceFixture } from './profile-state-maintenance-fixture'
-import { profileStateJsonExportPaths } from '../profile-state/profile-state-export-path'
+import { profileStateJsonExportPaths } from '../profile-state/legacy-json/profile-state-export-path'
 import { openProfileStateDatabase } from '../profile-state/profile-state-database'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
