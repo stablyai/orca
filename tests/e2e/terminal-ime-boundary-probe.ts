@@ -4,6 +4,12 @@ import type { Page, TestInfo } from '@stablyai/playwright-test'
 
 export type TerminalImeDomEvent = {
   type: string
+  receivedAt: number
+  eventTimeStamp: number
+  performanceTimeOrigin: number
+  documentHasFocus: boolean
+  textareaIsActive: boolean
+  target: string
   data: string | null
   inputType: string | null
   key: string | null
@@ -52,6 +58,12 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
       const keyboard = event instanceof KeyboardEvent ? event : null
       dom.push({
         type: event.type,
+        receivedAt: Date.now(),
+        eventTimeStamp: event.timeStamp,
+        performanceTimeOrigin: performance.timeOrigin,
+        documentHasFocus: document.hasFocus(),
+        textareaIsActive: document.activeElement === textarea,
+        target: event.target instanceof Element ? event.target.tagName : 'window',
         data: input?.data ?? composition?.data ?? null,
         inputType: input?.inputType ?? null,
         key: keyboard?.key ?? null,
@@ -71,11 +83,15 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
       'input',
       'keydown',
       'keypress',
-      'keyup'
+      'keyup',
+      'focus',
+      'blur'
     ]
     for (const eventType of eventTypes) {
       textarea.addEventListener(eventType, record, true)
     }
+    window.addEventListener('focus', record)
+    window.addEventListener('blur', record)
     const onDataDisposable = pane.terminal.onData((data) => onData.push(data))
     targetWindow.__terminalImeBoundaryProbe = {
       dom,
@@ -84,6 +100,8 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
         for (const eventType of eventTypes) {
           textarea.removeEventListener(eventType, record, true)
         }
+        window.removeEventListener('focus', record)
+        window.removeEventListener('blur', record)
         onDataDisposable.dispose()
       }
     }
@@ -126,5 +144,11 @@ export async function attachTerminalImeBoundaryEvidence(
     .replaceAll(/^-|-$/g, '')
     .toLowerCase()
   mkdirSync(evidenceDir, { recursive: true })
-  writeFileSync(path.join(evidenceDir, `${name}-${title}.json`), body)
+  writeFileSync(
+    path.join(
+      evidenceDir,
+      `${name}-${title}-repeat${testInfo.repeatEachIndex}-retry${testInfo.retry}.json`
+    ),
+    body
+  )
 }

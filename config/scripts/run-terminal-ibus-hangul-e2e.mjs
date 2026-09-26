@@ -9,6 +9,7 @@ import {
   readFileSync,
   writeFileSync
 } from 'node:fs'
+import { startTerminalImeBusMonitor } from './terminal-ime-bus-monitor.mjs'
 import { verifyPlaywrightParticipation } from './verify-playwright-participation.mjs'
 import os from 'node:os'
 import path from 'node:path'
@@ -23,6 +24,7 @@ const scriptPath = import.meta.filename
 const insideSessionFlag = '--inside-session'
 const nestedWaylandFlag = '--nested-wayland'
 const nestedWayland = process.argv.includes(nestedWaylandFlag)
+const diagnostic = nestedWayland && process.env.ORCA_E2E_IME_DIAGNOSTIC === '1'
 const waylandTitle = 'a digit typed right after a Hangul syllable reaches the pty'
 const processStopTimeoutMs = 5_000
 const processKillTimeoutMs = 1_000
@@ -158,6 +160,7 @@ async function runInsideSession(evidenceDir) {
     windowManagerGroupAfterCleanup: []
   }
   let ibusProcess
+  let busMonitor
   let windowManagerProcess
   let testExitCode = 1
 
@@ -234,6 +237,11 @@ async function runInsideSession(evidenceDir) {
     evidence.ibusGroupBeforeCleanup = ibusProcess?.pid ? processGroupMembers(ibusProcess.pid) : []
     console.error(`[terminal-ime] owned IBus group: ${evidence.ibusGroupBeforeCleanup.join('; ')}`)
 
+    if (diagnostic) {
+      busMonitor = await startTerminalImeBusMonitor(evidenceDir)
+      evidence.ibusMonitor = busMonitor.evidence
+    }
+
     const testProcess = spawn(
       process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
       nestedWayland
@@ -291,6 +299,17 @@ async function runInsideSession(evidenceDir) {
     console.error(`[terminal-ime] started Playwright PID ${testProcess.pid}`)
     testExitCode = await waitForExit(testProcess)
   } finally {
+    if (busMonitor) {
+      if (busMonitor.process?.pid) {
+        evidence.ibusMonitorGroupAfterCleanup = await stopOwnedProcessGroup(busMonitor.process.pid)
+      }
+      await busMonitor.save()
+      mkdirSync(path.join(projectDir, 'test-results'), { recursive: true })
+      copyFileSync(
+        busMonitor.logPath,
+        path.join(projectDir, 'test-results', 'terminal-wayland-ibus-monitor.log')
+      )
+    }
     if (ibusProcess?.pid) {
       evidence.ibusGroupBeforeCleanup = processGroupMembers(ibusProcess.pid)
       evidence.ibusGroupAfterCleanup = await stopOwnedProcessGroup(ibusProcess.pid)
@@ -332,6 +351,12 @@ async function runInsideSession(evidenceDir) {
         path.join(projectDir, 'test-results', 'terminal-ibus-hangul-native-engagement.jsonl')
       )
     }
+  }
+
+  if (evidence.ibusMonitorGroupAfterCleanup?.length > 0) {
+    throw new Error(
+      `Owned IBus monitor processes survived cleanup: ${evidence.ibusMonitorGroupAfterCleanup.join('; ')}`
+    )
   }
 
   if (evidence.ibusGroupAfterCleanup.length > 0) {

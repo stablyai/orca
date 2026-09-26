@@ -80,6 +80,9 @@ test.use({
     IBUS_ENABLE_SYNC_MODE: '1',
     QT_IM_MODULE: 'ibus',
     XMODIFIERS: '@im=ibus',
+    ...(INJECTOR === 'nested' && process.env.ORCA_E2E_IME_DIAGNOSTIC === '1'
+      ? { WAYLAND_DEBUG: 'client' }
+      : {}),
     ...(process.env.ORCA_E2E_EXTRA_APP_ENV
       ? (JSON.parse(process.env.ORCA_E2E_EXTRA_APP_ENV) as Record<string, string>)
       : {})
@@ -87,7 +90,9 @@ test.use({
   orcaAppExtraArgs: (process.env.ORCA_E2E_EXTRA_APP_ARGS ?? '').split(' ').filter(Boolean)
 })
 
-function injectKeys(tokens: string[]): void {
+type KeyInjection = { token: string; startedAt: number; finishedAt: number; repetition: number }
+
+function injectKeys(tokens: string[], repetition: number, injections: KeyInjection[]): void {
   if (INJECTOR === 'wayland') {
     execFileSync('python3', [WAYLAND_INJECT, ...tokens], {
       stdio: 'pipe',
@@ -96,10 +101,15 @@ function injectKeys(tokens: string[]): void {
     return
   }
   for (const token of tokens) {
-    execFileSync('xdotool', ['key', '--clearmodifiers', token], {
-      stdio: 'pipe',
-      timeout: NATIVE_COMMAND_TIMEOUT_MS
-    })
+    const startedAt = Date.now()
+    try {
+      execFileSync('xdotool', ['key', '--clearmodifiers', token], {
+        stdio: 'pipe',
+        timeout: NATIVE_COMMAND_TIMEOUT_MS
+      })
+    } finally {
+      injections.push({ token, repetition, startedAt, finishedAt: Date.now() })
+    }
   }
 }
 
@@ -115,13 +125,21 @@ function leaveNestedOverview(): void {
   }
 }
 
-function captureNestedScreen(name: string): void {
+function captureNestedScreen(name: string, testInfo: TestInfo): void {
   const dir = path.join(process.cwd(), 'test-results', 'terminal-ime-evidence')
   mkdirSync(dir, { recursive: true })
-  execFileSync('import', ['-window', 'root', path.join(dir, `${name}.png`)], {
-    stdio: 'pipe',
-    timeout: NATIVE_COMMAND_TIMEOUT_MS
-  })
+  execFileSync(
+    'import',
+    [
+      '-window',
+      'root',
+      path.join(dir, `${name}-repeat${testInfo.repeatEachIndex}-retry${testInfo.retry}.png`)
+    ],
+    {
+      stdio: 'pipe',
+      timeout: NATIVE_COMMAND_TIMEOUT_MS
+    }
+  )
 }
 
 async function focusNativeTerminalWindow(page: Page): Promise<void> {
@@ -160,12 +178,22 @@ async function writeEvidence(
   extra: Record<string, unknown>
 ): Promise<void> {
   const trace = await readTerminalImeBoundaryTrace(page)
-  const payload = { ...extra, injector: INJECTOR, keyTokens: KEY_TOKENS, trace }
+  const payload = {
+    ...extra,
+    repeatEachIndex: testInfo.repeatEachIndex,
+    retry: testInfo.retry,
+    injector: INJECTOR,
+    keyTokens: KEY_TOKENS,
+    trace
+  }
   const body = `${JSON.stringify(payload, null, 2)}\n`
   await testInfo.attach(`${name}.json`, { body, contentType: 'application/json' })
   const dir = path.join(process.cwd(), 'test-results', 'terminal-ime-evidence')
   mkdirSync(dir, { recursive: true })
-  writeFileSync(path.join(dir, `${name}.json`), body)
+  writeFileSync(
+    path.join(dir, `${name}-repeat${testInfo.repeatEachIndex}-retry${testInfo.retry}.json`),
+    body
+  )
 }
 
 test.describe('Hangul terminating digit @headful', () => {
@@ -210,26 +238,27 @@ test.describe('Hangul terminating digit @headful', () => {
     const ptyId = await waitForActivePanePtyId(page)
     const reader = createTerminalImeByteReader(testRepoPath, REPETITIONS)
     let receivedBytes: string[] = []
+    const injections: KeyInjection[] = []
     const expectedHex = Buffer.from(`${EXPECTED_LINE}\n`).toString('hex')
     try {
       if (INJECTOR === 'nested') {
         leaveNestedOverview()
         await page.waitForTimeout(1_500)
-        captureNestedScreen('nested-before-reader')
+        captureNestedScreen('nested-before-reader', testInfo)
       }
       await startTerminalImeByteReader(page, ptyId, reader)
       await focusNativeTerminalWindow(page)
       if (INJECTOR === 'nested') {
-        captureNestedScreen('nested-before-typing')
+        captureNestedScreen('nested-before-typing', testInfo)
       }
       await installTerminalImeBoundaryProbe(page)
 
       for (let index = 0; index < REPETITIONS; index += 1) {
-        injectKeys(KEY_TOKENS)
+        injectKeys(KEY_TOKENS, index, injections)
         await page.waitForTimeout(500)
       }
       if (INJECTOR === 'nested') {
-        captureNestedScreen('nested-after-typing')
+        captureNestedScreen('nested-after-typing', testInfo)
       }
 
       receivedBytes = await waitForTerminalImeBytes(page, reader, 20_000)
@@ -240,6 +269,7 @@ test.describe('Hangul terminating digit @headful', () => {
       appendImeEngagementReceipt(testInfo.title, trace)
     } finally {
       await writeEvidence(page, testInfo, 'hangul-terminating-digit', {
+        injections,
         expectedHex,
         expectedLine: EXPECTED_LINE,
         receivedBytes,

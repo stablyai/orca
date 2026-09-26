@@ -37,7 +37,7 @@ jobs:
       - name: Observe native Wayland and IBus boundaries
         env:
           SKIP_BUILD: '1'
-          ORCA_E2E_IME_DIAGNOSTICS: '1'
+          ORCA_E2E_IME_DIAGNOSTIC: '1'
         run: |
           node config/scripts/run-terminal-ibus-hangul-e2e.mjs --nested-wayland > "$RUNNER_TEMP/orca-wayland-protocol.log" 2>&1
       - name: Upload every repetition and native protocol trace
