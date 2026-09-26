@@ -197,6 +197,19 @@ describe('agentSessionRefusalNotice', () => {
     )
   })
 
+  it('says a Stop refused over a moved-on prompt did not stop the agent', () => {
+    const refusal = {
+      code: 'agent_session_already_resolved' as const,
+      message: 'Item q1 moved on.'
+    }
+    expect(agentSessionRefusalNotice(refusal, 'stop')).toBe(
+      "This question was already answered or has changed. The agent wasn't stopped."
+    )
+    expect(agentSessionRefusalNotice(refusal, 'answer')).toBe(
+      'This question was already answered or has changed.'
+    )
+  })
+
   it('says only what did not happen for a code from a newer host', () => {
     const refusal = JSON.parse('{"code":"agent_session_from_the_future","message":"internal"}')
     expect(agentSessionRefusalNotice(refusal, 'stop')).toBe("The agent wasn't stopped.")

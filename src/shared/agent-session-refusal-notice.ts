@@ -179,9 +179,10 @@ export function agentSessionWriteNoticeParts(
       return [notDone]
     case 'agent_session_operation_unknown':
       return ['outcomeUnknown']
+    // A Stop names the prompt it was pressed under, so it can be refused this way too.
     case 'agent_session_item_revision_stale':
     case 'agent_session_already_resolved':
-      return ['questionChanged']
+      return write === 'answer' ? ['questionChanged'] : ['questionChanged', notDone]
     case 'agent_session_journal_unreadable':
       return ['historyUnreadable', notDone]
     case 'structured_agent_session_unsupported':
