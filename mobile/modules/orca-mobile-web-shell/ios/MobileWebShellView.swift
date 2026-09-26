@@ -203,7 +203,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
     // WebKit's text interaction assistant wins the hold and raises its selection loupe, so the page
     // never sees a long press and every long-press action in it is dead (lane C1.7, measured).
-    // Unguarded: the API is iOS 14.5+ and this target's floor is 15.1, so `#available` would be
+    // Unguarded: the API is iOS 14.5+ and this target's floor is 16.0, so `#available` would be
     // dead code the compiler warns on.
     configuration.preferences.isTextInteractionEnabled = false
     configuration.setURLSchemeHandler(schemeHandler, forURLScheme: MobileWebShellOrigin.scheme)
