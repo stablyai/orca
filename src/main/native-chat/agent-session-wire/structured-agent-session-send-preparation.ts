@@ -55,10 +55,11 @@ export function structuredAgentSessionSendBlock(
     return rewindRefusal('outcome-unknown')
   }
   const command = record?.conversationCommand
+  // Only a clear's record gates sends; an older build's compaction record belongs to a child this
+  // host no longer runs.
   if (
-    command &&
-    ((command.state === 'unknown' && command.phase === 'prepared') ||
-      (command.command === 'clear' && command.replacementSessionId))
+    command?.command === 'clear' &&
+    ((command.state === 'unknown' && command.phase === 'prepared') || command.replacementSessionId)
   ) {
     return {
       ok: false,

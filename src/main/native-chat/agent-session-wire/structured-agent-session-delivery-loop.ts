@@ -9,6 +9,7 @@
 // would have written them. Stop and the conversation's close are the only other writers of a
 // queued message: a child's exit only ends the child, and this loop reads why.
 
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -27,6 +28,11 @@ import {
   recordStructuredAgentSessionStartFailure
 } from './structured-agent-session-start-failure-row'
 import { handOverSubmission } from './structured-agent-session-turns'
+import {
+  settleStructuredAgentSessionCommand,
+  type StructuredAgentSessionCommandEnd,
+  type StructuredAgentSessionCommandHandover
+} from './structured-agent-session-command-turn'
 
 export type StructuredAgentSessionDeliveryLoopDeps = {
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
@@ -41,9 +47,17 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   /** What the chat says when the session could not be made ready. */
   startFailureText: (sessionId: string, cause: AgentSessionWireRefusal) => string
   onError: (sessionId: string, error: unknown) => void
+  record: (sessionId: string) => AgentSessionRecord | null
+  flushStreamedEvents: (sessionId: string) => Promise<void>
+  now: () => number
 }
 
 type Step = 'continue' | 'stop'
+
+/** A command handed to this child, whose end the loop waits for before handing over anything. */
+type CommandRun = StructuredAgentSessionCommandHandover & {
+  child: StructuredAgentSessionProviderChildIdentity
+}
 
 type Prepared =
   | 'stop'
@@ -100,6 +114,11 @@ export class StructuredAgentSessionDeliveryLoop {
         if (handed === 'stop') {
           return
         }
+        if (handed !== 'continue') {
+          // Off the queue, so a Stop reaches the command meanwhile.
+          const end = await handed.completion
+          await this.deps.serialize(sessionId, () => this.settleCommand(sessionId, handed, end))
+        }
       }
     } catch (error) {
       this.deps.onError(sessionId, error)
@@ -153,7 +172,7 @@ export class StructuredAgentSessionDeliveryLoop {
     sessionId: string,
     awaited: StructuredAgentSessionProviderChildIdentity | null,
     startFailure: string | null
-  ): Promise<Step> {
+  ): Promise<Step | CommandRun> {
     const session = this.deps.sessions.get(sessionId)
     if (!session || this.disposed) {
       return this.stop(sessionId)
@@ -184,17 +203,41 @@ export class StructuredAgentSessionDeliveryLoop {
     if (!next) {
       return this.stop(sessionId)
     }
-    await handOverSubmission(
+    const command = await handOverSubmission(
       {
         sessionId,
         journal: session.journal,
         fence: awaitedChild.fence,
         adapter: this.deps.adapter,
-        providerChildPhase: () => this.deps.sessions.get(sessionId)?.child?.phase
+        providerChildPhase: () => this.deps.sessions.get(sessionId)?.child?.phase,
+        record: () => this.deps.record(sessionId),
+        flushStreamedEvents: () => this.deps.flushStreamedEvents(sessionId),
+        now: this.deps.now
       },
       next
     )
-    return 'continue'
+    return command
+      ? { ...command, child: { generation: awaitedChild.generation, fence: awaitedChild.fence } }
+      : 'continue'
+  }
+
+  /** Writes the command's end only while the child it was handed to is still the session's: one
+   *  that ended meanwhile settled the command with its own verdict. */
+  private async settleCommand(
+    sessionId: string,
+    run: CommandRun,
+    end: StructuredAgentSessionCommandEnd
+  ): Promise<void> {
+    const session = this.deps.sessions.get(sessionId)
+    const child = session?.child
+    if (!session || child?.generation !== run.child.generation || child.fence !== run.child.fence) {
+      return
+    }
+    await settleStructuredAgentSessionCommand(
+      { journal: session.journal, fence: child.fence, now: this.deps.now },
+      run.clientMessageId,
+      end
+    )
   }
 
   private async fail(sessionId: string, failure: StartFailure): Promise<'stop'> {

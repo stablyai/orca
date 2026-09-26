@@ -35,6 +35,8 @@ import type { ProviderHistoryWindow } from '../agent-session-journal/journal-sub
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentSessionCreatePhaseRecorder } from '../../observability/agent-session-instrumentation'
 
+import type { StructuredSessionCompactionResult } from './structured-session-compaction'
+
 export class AgentSessionAcquisitionRefusal extends Error {
   constructor(
     message: string,
@@ -221,12 +223,17 @@ export type StructuredAgentSessionAdapter = {
     | { ok: true; items?: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
     | { ok: false; reason: AgentSessionRewindReason }
   >
+  /** Runs a conversation compaction, settling when the provider reports its end. `turnId` and
+   *  `turnItemId` name the host's command turn, which a Stop names and a provider turn is claimed
+   *  into. */
   compact?(input: {
     turnId: string
+    turnItemId: string
     sessionId: string
     fence: number
-    onLateResult?: (result: { error?: string }) => Promise<void>
-  }): Promise<{ error?: string }>
+  }): Promise<StructuredSessionCompactionResult>
+  /** Stop on a running command: it ends as cancelled at once, before any interrupt lands. */
+  abandonCommand?(sessionId: string): void
   /** Cancels one turn, not the session: a session-wide interrupt would also kill
    *  a turn the client never asked to stop. */
   cancelTurn(input: {

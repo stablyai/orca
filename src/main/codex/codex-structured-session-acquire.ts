@@ -65,6 +65,8 @@ export async function acquireCodexStructuredSession(input: {
     acquisitionGeneration: string,
     reason: Error
   ) => Promise<boolean>
+  /** The command turn a provider turn starting now carries out, while a command is pending. */
+  claimCommandTurn: (sessionId: string, threadId: string, turnId: string) => string | null
 }): Promise<AgentSessionAcquisition> {
   const {
     input: acquireInput,
@@ -93,6 +95,7 @@ export async function acquireCodexStructuredSession(input: {
         onPrimaryThreadStoppedRunning: () => deps.onPrimaryThreadStoppedRunning?.({ sessionId }),
         dispatchRequestOrigin: (clientMessageId) => dispatchEchoes.requestOrigin(clientMessageId),
         subagentExecutions,
+        claimCommandTurn: (threadId, turnId) => input.claimCommandTurn(sessionId, threadId, turnId),
         bindPromptItemId: (journalItemId, threadId, promptKey, turnId) =>
           acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey, turnId),
         clearPromptTurn: (threadId, turnId) => acquisition.prompts.clearTurn(threadId, turnId),

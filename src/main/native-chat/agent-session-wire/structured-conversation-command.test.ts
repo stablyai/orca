@@ -43,7 +43,7 @@ function commandParams(command: AgentSessionConversationCommand) {
 beforeEach(async () => {
   resetHostTestOperationIds()
   acquisitions = 0
-  compact.mockReset().mockResolvedValue({})
+  compact.mockReset().mockResolvedValue({ outcome: 'success' })
   directory = await mkdtemp(join(tmpdir(), 'orca-conversation-command-'))
   store = await AgentSessionRecordStore.open({
     directory: join(directory, 'store'),
@@ -105,49 +105,6 @@ afterEach(async () => {
 })
 
 describe('host conversation commands', () => {
-  it('compacts once without an ordinary message submission and replays its receipt', async () => {
-    const params = commandParams('compact')
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: true,
-      value: { state: 'completed' }
-    })
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: true,
-      replayed: true
-    })
-    expect(compact).toHaveBeenCalledTimes(1)
-    expect(adapter.dispatch).not.toHaveBeenCalled()
-    const history = await host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
-    expect(history.page.submissions).toEqual([])
-    expect(
-      history.page.items.some(
-        (item) => item.body.kind === 'status' && item.body.turnLifecycle?.state === 'running'
-      )
-    ).toBe(false)
-  })
-
-  it('reports provider compaction failure without a stuck lifecycle', async () => {
-    compact.mockResolvedValue({ error: 'Not enough messages to compact.' })
-    expect(await host.conversationCommand(caller, commandParams('compact'))).toMatchObject({
-      ok: true,
-      value: { state: 'completed', error: 'Not enough messages to compact.' }
-    })
-    expect(store.getRecord(HOST_TEST_SESSION)?.conversationCommand?.state).toBe('completed')
-  })
-
-  it('keeps an unknown compaction from being executed again', async () => {
-    compact.mockRejectedValue(new Error('connection lost'))
-    const params = commandParams('compact')
-    await expect(host.conversationCommand(caller, params)).rejects.toThrow('connection lost')
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
-    expect(compact).toHaveBeenCalledTimes(1)
-  })
-
-  /** The replacement seeds from what the provider reports now, not from what the
-   *  retired record happened to store — the same rule acquire and handoff apply. */
   it('adopts the reported Fast preference into the replacement record', async () => {
     adapter.readOptions = async () => ({
       models: [],
@@ -249,41 +206,8 @@ describe('host conversation commands', () => {
     const params = commandParams('compact')
     params.envelope.expectedRuntimeFence++
     expect(await host.conversationCommand(caller, params)).toMatchObject({ ok: true })
-    expect(compact).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(compact).toHaveBeenCalledTimes(1))
   })
-  it('allows cancellation while compaction is awaiting completion and refuses a second client', async () => {
-    let finish!: (value: {}) => void
-    compact.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve
-        })
-    )
-    const params = commandParams('compact')
-    const running = host.conversationCommand(caller, params)
-    await vi.waitFor(() => expect(compact).toHaveBeenCalled())
-    expect(
-      await host.conversationCommand({ callerKey: 'mobile' }, commandParams('clear'))
-    ).toMatchObject({ ok: false })
-    const turnId = `compact:${params.envelope.clientOperationId}`
-    const cancel = await host.cancel(caller, {
-      turnId,
-      envelope: {
-        ...params.envelope,
-        clientOperationId: hostTestOperationId(),
-        payloadFingerprint: computeAgentSessionPayloadFingerprint({
-          method: 'agentSession.cancel',
-          sessionId: HOST_TEST_SESSION,
-          fields: { turnId }
-        })
-      }
-    })
-    expect(cancel).toMatchObject({ ok: true, value: { cancelled: true } })
-    expect(adapter.cancelTurn).toHaveBeenCalled()
-    finish({})
-    await running
-  })
-
   it('reconstructs a committed replacement after the ledger settlement is lost', async () => {
     const persist = store.recordOperationOutcome.bind(store)
     vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async (input) => {
@@ -302,19 +226,6 @@ describe('host conversation commands', () => {
     expect(acquisitions).toBe(2)
   })
 
-  it('repairs an unknown receipt when the provider completes late', async () => {
-    compact.mockRejectedValue(new Error('connection lost'))
-    const params = commandParams('compact')
-    await expect(host.conversationCommand(caller, params)).rejects.toThrow()
-    await compact.mock.calls[0]![0].onLateResult?.({})
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { state: 'completed' }
-    })
-    expect(compact).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps explicitly revealed history and closed replacement tabs out of automatic restoration', async () => {
     const result = await host.conversationCommand(caller, commandParams('clear'))
     if (!result.ok) {
@@ -326,27 +237,5 @@ describe('host conversation commands', () => {
     await host.setSessionTabVisibility(HOST_TEST_SESSION, false)
     await host.setSessionTabVisibility(result.value.replacementSessionId!, false)
     expect(host.conversationReplacements()).toEqual([])
-  })
-  it('keeps the old compact outcome unknown but restores usability after verified reacquisition', async () => {
-    compact.mockRejectedValue(new Error('lost response'))
-    const params = commandParams('compact')
-    await expect(host.conversationCommand(caller, params)).rejects.toThrow()
-    await host.close(HOST_TEST_SESSION)
-    const fence = store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
-    expect(await host.attach(caller, hostTestAttachParams(fence))).toMatchObject({ ok: true })
-    expect(store.getRecord(HOST_TEST_SESSION)?.conversationCommand).toMatchObject({
-      phase: 'committed',
-      state: 'unknown'
-    })
-    expect(await host.conversationCommand(caller, params)).toMatchObject({
-      ok: true,
-      replayed: true,
-      value: { state: 'unknown' }
-    })
-    compact.mockResolvedValue({})
-    expect(await host.conversationCommand(caller, commandParams('compact'))).toMatchObject({
-      ok: true,
-      value: { state: 'completed' }
-    })
   })
 })

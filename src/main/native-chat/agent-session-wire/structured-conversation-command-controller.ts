@@ -1,5 +1,6 @@
 import { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
 import {
+  runStructuredCompaction,
   runStructuredConversationCommand,
   type ConversationCommandParams
 } from './structured-conversation-command'
@@ -8,10 +9,15 @@ import type { StructuredAgentSessionCaller } from './structured-agent-session-ho
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 
 export class StructuredConversationCommandController {
+  /** Held only by a clear, which replaces the conversation a send would land in. A compaction is
+   *  a queued message, and sends accepted behind it wait for it in the queue. */
   readonly pending = new Map<string, { key: string; count: number }>()
   constructor(
     private readonly context: () => StructuredAgentSessionMutationContext,
-    private readonly host: Pick<StructuredAgentSessionHost, 'attach' | 'flushStreamedEvents'>
+    private readonly host: Pick<
+      StructuredAgentSessionHost,
+      'attach' | 'flushStreamedEvents' | 'waitForSendSettlement'
+    >
   ) {}
   send = (
     caller: StructuredAgentSessionCaller,
@@ -28,6 +34,9 @@ export class StructuredConversationCommandController {
       : sendStructuredAgentSessionTurn(this.context(), caller, params)
 
   run = (caller: StructuredAgentSessionCaller, params: ConversationCommandParams) => {
+    if (params.command === 'compact') {
+      return runStructuredCompaction(this.context(), this.host, caller, params)
+    }
     const key = JSON.stringify([caller.callerKey, params.envelope.clientOperationId])
     const pending = this.pending.get(params.envelope.sessionId)
     if (pending && pending.key !== key) {

@@ -1,5 +1,4 @@
 import { recoverStructuredRewind } from './structured-rewind-recovery'
-import { recoverInterruptedCompaction } from './structured-compaction-recovery'
 // The host's attach, lifted out of the host class.
 //
 // Attach is the one operation that touches every collaborator the host owns — the lease
@@ -211,7 +210,6 @@ async function runAttach(
           context.deps.adapter,
           context.now
         )
-        await recoverInterruptedCompaction(context.deps.store, sessionId, attached.journal, fence)
         if (fenceBefore !== null && fence !== fenceBefore) {
           context.subscribers.snapshot(sessionId, attached.journal, fence)
         } else {

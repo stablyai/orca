@@ -149,8 +149,8 @@ export function useStructuredAgentSession(args: {
     prompts,
     outbox,
     blockedClientMessageId: outboxController.blockedClientMessageId,
-    send: (...input: Parameters<typeof outboxController.send>) =>
-      !commandPending.current && outboxController.send(...input),
+    // A message typed during a command queues behind it on the host.
+    send: outboxController.send,
     retry: outboxController.retry,
     isWorking: transportState.isWorking,
     workingStartedAt: transportState.turnTiming.workingStartedAt,

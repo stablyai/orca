@@ -83,6 +83,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return compact(input)
   }
 
+  abandonCommand: NonNullable<StructuredAgentSessionAdapter['abandonCommand']> = (sessionId) =>
+    this.owner(sessionId).abandonCommand?.(sessionId)
+
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) =>
     this.owner(input.sessionId).cancelTurn(input)
 

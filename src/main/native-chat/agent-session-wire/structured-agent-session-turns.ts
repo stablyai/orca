@@ -27,6 +27,12 @@ import type {
 import { providerStartupFailureRejection } from './structured-agent-session-dead-generation-settlement'
 import { validatePendingPrompt } from './structured-agent-session-prompt-state'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  handOverStructuredAgentSessionCommand,
+  isStructuredAgentSessionCommandTurnId,
+  type StructuredAgentSessionCommandHandover,
+  type StructuredAgentSessionCommandHandoverContext
+} from './structured-agent-session-command-turn'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 
@@ -140,19 +146,17 @@ export async function performSend(
   }
 }
 
-export type AgentSessionHandoverContext = Pick<
-  AgentSessionTurnContext,
-  'sessionId' | 'journal' | 'fence' | 'adapter' | 'providerChildPhase'
->
+export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverContext
 
 /**
  * Hands one queued submission to the provider. The `dispatch{pending}` row goes first: a crash
  * after it leaves a message in doubt, never one that reads as queued and so provably unwritten.
+ * A conversation command answers with the run the caller waits on before handing over more.
  */
 export async function handOverSubmission(
   ctx: AgentSessionHandoverContext,
   submission: AgentJournalSubmission
-): Promise<void> {
+): Promise<StructuredAgentSessionCommandHandover | null> {
   const { clientMessageId } = submission
   const body = ctx.journal.itemBody(agentJournalSubmissionKey(clientMessageId))
   if (body?.kind !== 'message') {
@@ -162,7 +166,10 @@ export async function handOverSubmission(
       reason: 'The message could not be read back and was not sent.',
       fence: ctx.fence
     })
-    return
+    return null
+  }
+  if (body.command) {
+    return handOverStructuredAgentSessionCommand(ctx, submission, body)
   }
   // The message joins the turn running at handover, a steer, or opens its own.
   await ctx.journal.resolveDispatch({
@@ -176,7 +183,7 @@ export async function handOverSubmission(
   const outcome = await dispatchSafely(ctx, clientMessageId, body, submission.submittedAt)
   // An admission needs no dispatch row: the submission is already pending.
   if (outcome.state === 'admitted') {
-    return
+    return null
   }
   try {
     await ctx.journal.resolveDispatch(
@@ -204,6 +211,7 @@ export async function handOverSubmission(
     }
     throw error
   }
+  return null
 }
 
 function requireSubmission(
@@ -239,6 +247,12 @@ export async function performCancel(
   let note = 'Cancellation requested.'
   // The turn the Stop named, read before the cancel settles it: the note reports on that turn.
   const turnScope = ctx.journal.liveTurnScope()
+  // A conversation command ends at Stop whether or not the provider opened a turn for it yet;
+  // the interrupt below reaches a provider turn it did open.
+  const abandoned = !input.scope && isStructuredAgentSessionCommandTurnId(input.turnId)
+  if (abandoned) {
+    ctx.adapter.abandonCommand?.(ctx.sessionId)
+  }
   try {
     const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
     cancelled = input.scope
@@ -260,6 +274,7 @@ export async function performCancel(
             ...(input.prompt ? { prompt: { itemId: input.prompt.itemId } } : {})
           })
         ).cancelled
+    cancelled ||= abandoned
     if (!cancelled) {
       note = 'The provider had already finished this turn.'
     }
