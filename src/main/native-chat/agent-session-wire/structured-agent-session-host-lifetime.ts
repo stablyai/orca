@@ -5,6 +5,7 @@
 // bookkeeping that decides when to run it than buried among the twenty other things a session can
 // do.
 
+import { agentChildWorkLiveness } from '../../../shared/agent-status-child-work-liveness'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import {
   evictStructuredAgentSession,
@@ -198,12 +199,16 @@ export function createStructuredAgentSessionHolds(
     hasProviderChild: (sessionId) => hasProviderChild(context, sessionId),
     // A send pending while the child is still starting is held for that start; evicting would
     // refuse it. Any other pending send may wait on an echo that never comes, so eviction retires it.
+    // Subagents, commands and monitors outlive the lead's turn inside the child, so the live roster
+    // the sidebar shows as working is owed too; stopping the child would end them silently.
     hasOwedWork: (sessionId) => {
       const session = context.sessions.get(sessionId)
       return session
         ? activeStructuredAgentSessionTurnId(session.journal.snapshot().items) !== null ||
             (session.providerChildPhase === 'starting' &&
-              session.journal.pendingSubmissions().length > 0)
+              session.journal.pendingSubmissions().length > 0) ||
+            agentChildWorkLiveness(context.deps.adapter.backgroundTaskState?.(sessionId)?.tasks) !==
+              null
         : false
     },
     onError: (error) => context.deps.onEventSinkError?.(error),

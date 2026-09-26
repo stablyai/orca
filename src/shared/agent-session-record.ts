@@ -1,6 +1,5 @@
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
-import { isAgentSessionSurfaceTabId } from './agent-session-surface-tab-id'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
 import {
   isPersistedAgentSessionHandoffStage,
@@ -136,9 +135,6 @@ export type AgentSessionRecord = {
   /** The name Orca gave this conversation, so a later acquisition need not name it again. */
   conversationName?: string
   launchArgs?: AgentSessionLaunchArgs
-  /** The id of the tab that shows this conversation on every client: host-owned and pinned once;
-   *  readers copy it, never derive it. Older records are backfilled at load with the derived id. */
-  surfaceTabId?: string
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -344,7 +340,6 @@ export function isPersistedAgentSessionRecord(
     (record.conversationName === undefined ||
       isAgentSessionConversationName(record.conversationName)) &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
-    (record.surfaceTabId === undefined || isAgentSessionSurfaceTabId(record.surfaceTabId)) &&
     !Object.hasOwn(record, 'launchEnv') &&
     isPersistedAgentSessionLease(record.lease) &&
     record.lease.sessionId === record.sessionId &&
