@@ -19,6 +19,34 @@ export const HISTORY_TREE_REMOVAL_RETRY_DELAYS_MS = [30_000, 120_000]
 const historyTreeRemovalAttempts = new Map<string, number>()
 const historyTreeRemovalRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const wslDistroByTombstone = new Map<string, string>()
+const pendingHistoryRemovalRescanRoots = new Set<string>()
+const deferredHistoryRemovalRescanRoots = new Set<string>()
+let pendingHistoryRemovalRescan: ReturnType<typeof setImmediate> | null = null
+
+function drainHistoryRemovalRescans(): void {
+  if (pendingHistoryRemovalRescan) {
+    clearImmediate(pendingHistoryRemovalRescan)
+    pendingHistoryRemovalRescan = null
+  }
+  const roots = new Set([...deferredHistoryRemovalRescanRoots, ...pendingHistoryRemovalRescanRoots])
+  deferredHistoryRemovalRescanRoots.clear()
+  pendingHistoryRemovalRescanRoots.clear()
+  for (const root of roots) {
+    if (scanPendingHistoryTreeRemovals(root)) {
+      // Another root can consume the freed slots before this root is scanned.
+      deferredHistoryRemovalRescanRoots.add(root)
+    }
+  }
+}
+
+function scheduleHistoryRemovalRescan(historyRoot: string): void {
+  pendingHistoryRemovalRescanRoots.add(historyRoot)
+  if (!pendingHistoryRemovalRescan) {
+    // Coalesce I/O completions before enumerating the remaining disk queue again.
+    pendingHistoryRemovalRescan = setImmediate(drainHistoryRemovalRescans)
+    pendingHistoryRemovalRescan.unref?.()
+  }
+}
 
 function wslDistroForHistoryRoot(historyRoot: string): string | undefined {
   return basename(dirname(historyRoot)) === 'terminal-history-wsl'
@@ -67,6 +95,7 @@ function scheduleHistoryTreeRemovalRetry(dir: string): void {
     // Out of in-process attempts: the tombstone stays on disk and the next startup drain re-queues it.
     historyTreeRemovalAttempts.delete(dir)
     wslDistroByTombstone.delete(dir)
+    deferredHistoryRemovalRescanRoots.delete(historyRootForTombstone(dir))
     return
   }
   historyTreeRemovalAttempts.set(dir, attempt + 1)
@@ -130,7 +159,13 @@ function scheduleHistoryTreeRemoval(dir: string, wslDistro?: string): void {
         pendingHistoryTreeRemovals.delete(dir)
       }
       if (removalSucceeded) {
-        schedulePendingHistoryTreeRemovals(historyRootForTombstone(dir))
+        scheduleHistoryRemovalRescan(historyRootForTombstone(dir))
+      } else if (
+        pendingHistoryTreeRemovals.size === 0 &&
+        historyTreeRemovalRetryTimers.size === 0 &&
+        !pendingHistoryRemovalRescan
+      ) {
+        deferredHistoryRemovalRescanRoots.clear()
       }
     })
   pendingHistoryTreeRemovals.set(dir, removal)
@@ -161,17 +196,32 @@ export function scheduleWorktreeHistoryTreeDeletion(dir: string, historyRoot: st
 
 /** Schedule tombstoned trees under one history root for async removal — the retry after a quit mid-rm. */
 export function schedulePendingHistoryTreeRemovals(historyRoot: string): void {
+  scanPendingHistoryTreeRemovals(historyRoot)
+}
+
+function scanPendingHistoryTreeRemovals(historyRoot: string): boolean {
   const pendingRoot = getPendingDeleteRoot(historyRoot)
   if (!existsSync(pendingRoot)) {
-    return
+    return false
   }
   try {
     for (const entry of readdirSync(pendingRoot)) {
-      scheduleHistoryTreeRemoval(join(pendingRoot, entry), wslDistroForHistoryRoot(historyRoot))
+      const dir = join(pendingRoot, entry)
+      if (pendingHistoryTreeRemovals.has(dir) || historyTreeRemovalRetryTimers.has(dir)) {
+        continue
+      }
+      if (
+        pendingHistoryTreeRemovals.size + historyTreeRemovalRetryTimers.size >=
+        MAX_PENDING_HISTORY_TREE_REMOVALS
+      ) {
+        return true
+      }
+      scheduleHistoryTreeRemoval(dir, wslDistroForHistoryRoot(historyRoot))
     }
   } catch {
     // Non-fatal.
   }
+  return false
 }
 
 /** Schedule tombstoned trees under every history root, native and WSL. */
@@ -182,8 +232,14 @@ export function scheduleAllPendingHistoryTreeRemovals(): void {
   }
 }
 
-/** Drop every armed retry timer so a fixture teardown cannot resurrect a removal. Tests only. */
+/** Drop queued rescans and retries so fixture teardown cannot resurrect a removal. Tests only. */
 export function cancelPendingHistoryTreeRemovalRetries(): void {
+  if (pendingHistoryRemovalRescan) {
+    clearImmediate(pendingHistoryRemovalRescan)
+    pendingHistoryRemovalRescan = null
+  }
+  pendingHistoryRemovalRescanRoots.clear()
+  deferredHistoryRemovalRescanRoots.clear()
   for (const timer of historyTreeRemovalRetryTimers.values()) {
     clearTimeout(timer)
   }
@@ -198,7 +254,8 @@ export async function flushPendingWorktreeHistoryDeletions(): Promise<void> {
   scheduleAllPendingHistoryTreeRemovals()
   // Why loop: awaiting one snapshot of the map would return with a removal scheduled mid-batch still
   // in flight. Each pass settles its batch and drains whatever was added while it ran.
-  while (pendingHistoryTreeRemovals.size > 0) {
+  while (pendingHistoryTreeRemovals.size > 0 || pendingHistoryRemovalRescan) {
+    drainHistoryRemovalRescans()
     await Promise.all(pendingHistoryTreeRemovals.values())
   }
 }
