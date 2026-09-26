@@ -1,4 +1,5 @@
 import { ArchiveRestore, LoaderCircle } from 'lucide-react'
+import type { AiVaultScope } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 
 export function SessionLoadingState(): React.JSX.Element {
@@ -35,5 +36,40 @@ export function EmptyState({ title }: { title: string }): React.JSX.Element {
       <ArchiveRestore className="mb-3 size-7 opacity-50" />
       <p className="text-sm font-medium">{title}</p>
     </div>
+  )
+}
+
+/**
+ * What to say when the scan found sessions but this view lists none.
+ *
+ * "No sessions match the current filters" is wrong when the scope itself is
+ * empty — there is nothing to unfilter — so an empty scope names the scope
+ * instead. Named and exported so the three answers are testable without a
+ * virtual list around them.
+ */
+export function aiVaultEmptyListTitle({
+  noAgentsSelected,
+  scopedSessionsCount,
+  vaultScope
+}: {
+  noAgentsSelected: boolean
+  scopedSessionsCount: number
+  vaultScope: AiVaultScope
+}): string {
+  if (noAgentsSelected) {
+    return translate(
+      'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',
+      'No agents selected'
+    )
+  }
+  if (scopedSessionsCount === 0 && vaultScope === 'workspace') {
+    return translate('sessionSearch.panel.noWorkspaceSessions', 'No sessions in this workspace')
+  }
+  if (scopedSessionsCount === 0 && vaultScope === 'project') {
+    return translate('sessionSearch.panel.noProjectSessions', 'No sessions in this project')
+  }
+  return translate(
+    'auto.components.right.sidebar.AiVaultPanel.noSessionsMatchFilters',
+    'No sessions match the current filters'
   )
 }

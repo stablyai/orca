@@ -70,14 +70,12 @@ export function isAiVaultSessionFilterQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-export function filterAiVaultSessions(
-  sessions: readonly AiVaultSession[],
-  filters: AiVaultSessionFilterState
-): AiVaultSession[] {
-  if (isAiVaultSessionFilterQueryTooLarge(filters.query)) {
-    return []
-  }
+/** Everything that decides whether a session is kept; sort only orders what survives. */
+export type AiVaultSessionMatchFilters = Omit<AiVaultSessionFilterState, 'sort'>
 
+function createAiVaultSessionMatcher(
+  filters: AiVaultSessionMatchFilters
+): (session: AiVaultSession) => boolean {
   const agentSet = new Set(filters.agents)
   const parsedQuery = parseVaultQuery(filters.query)
   const workspaceMatchers =
@@ -85,7 +83,7 @@ export function filterAiVaultSessions(
       ? filters.activeWorktreePaths.map(createAiVaultWorkspaceMatcher)
       : []
 
-  const filtered = sessions.filter((session) => {
+  return (session) => {
     if (!agentSet.has(session.agent)) {
       return false
     }
@@ -116,7 +114,17 @@ export function filterAiVaultSessions(
       }
     }
     return matchesQuery(session, parsedQuery, filters)
-  })
+  }
+}
+
+export function filterAiVaultSessions(
+  sessions: readonly AiVaultSession[],
+  filters: AiVaultSessionFilterState
+): AiVaultSession[] {
+  if (isAiVaultSessionFilterQueryTooLarge(filters.query)) {
+    return []
+  }
+  const filtered = sessions.filter(createAiVaultSessionMatcher(filters))
   if (filtered.length < 2) {
     return filtered
   }
@@ -124,6 +132,24 @@ export function filterAiVaultSessions(
     .map((session) => ({ session, time: sessionSortTime(session, filters.sort) }))
     .sort((left, right) => right.time - left.time)
     .map(({ session }) => session)
+}
+
+/** How many sessions the same filters keep — no sort, no intermediate array. */
+export function countAiVaultSessions(
+  sessions: readonly AiVaultSession[],
+  filters: AiVaultSessionMatchFilters
+): number {
+  if (isAiVaultSessionFilterQueryTooLarge(filters.query)) {
+    return 0
+  }
+  const matches = createAiVaultSessionMatcher(filters)
+  let count = 0
+  for (const session of sessions) {
+    if (matches(session)) {
+      count += 1
+    }
+  }
+  return count
 }
 
 export function groupAiVaultSessions(

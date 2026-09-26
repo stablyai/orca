@@ -21,6 +21,7 @@ import { FirstPromptCard } from './ai-vault-first-prompt-card'
 import { sessionDetailConversationTurns, sessionPromptPreview } from './ai-vault-session-display'
 import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
+import { SessionReadNotice } from './AiVaultSessionReadNotice'
 import {
   aiVaultWorktreeCompactPath,
   aiVaultWorktreeStatusLabel,
@@ -221,6 +222,8 @@ export function SessionInlineDetails({
         )}
 
         <SessionSubagentsSection session={session} resume={subagentResume} />
+
+        <SessionReadNotice session={session} />
 
         {shouldShowAiVaultSessionWorktreeLine(worktreeDisplay, {
           vaultScope

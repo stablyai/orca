@@ -109,6 +109,25 @@ describe('reuseAiVaultListResult', () => {
     expect(reused.scannedAt).toBe('2026-07-01T00:00:15.000Z')
   })
 
+  // Why: the Show more row and the "+" on the count both read this flag. Holding
+  // the previous result because the rows matched would keep showing yesterday's
+  // answer after a deeper scan vouched for the scope.
+  it('publishes a changed scope vouch even when rows and issues are identical', () => {
+    const current: AiVaultListResult = {
+      sessions: [makeProductionSession(1)],
+      issues: [],
+      scannedAt: '2026-07-01T00:00:00.000Z',
+      scopeFullyScanned: false
+    }
+    const incoming = cloneResult(current, '2026-07-01T00:00:15.000Z')
+    incoming.scopeFullyScanned = true
+
+    const reused = reuseAiVaultListResult(current, incoming)
+    expect(reused).not.toBe(current)
+    expect(reused.scopeFullyScanned).toBe(true)
+    expect(reused.sessions[0]).toBe(current.sessions[0])
+  })
+
   it('replaces issues when sessions are unchanged', () => {
     const hostIssue = {
       executionHostId: 'ssh:dev-box' as const,

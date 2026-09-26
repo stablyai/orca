@@ -95,3 +95,9 @@ it('hands the picked browse order back to the caller', async () => {
 
   expect(onChange).toHaveBeenCalledExactlyOnceWith('created')
 })
+
+it('marks a total that is only the scan cap', () => {
+  expect(aiVaultSessionCountLabel(500, 500, true)).toBe('500+ sessions')
+  expect(aiVaultSessionCountLabel(12, 500, true)).toBe('12 of 500+ sessions')
+  expect(aiVaultSessionCountLabel(500, 500)).toBe('500 sessions')
+})

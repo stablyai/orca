@@ -50,6 +50,18 @@ describe('mergeAiVaultListResults', () => {
     vi.useRealTimers()
   })
 
+  // Why: a scoped view spans every host, so one leg that cannot vouch for its
+  // own scope — an older paired host, or one whose scan failed — sinks the merge.
+  it('only vouches for a scope when every leg did', () => {
+    const vouched = { ...listResult([]), scopeFullyScanned: true }
+
+    expect(mergeAiVaultListResults([vouched, vouched], undefined).scopeFullyScanned).toBe(true)
+    expect(mergeAiVaultListResults([vouched, listResult([])], undefined).scopeFullyScanned).toBe(
+      false
+    )
+    expect(mergeAiVaultListResults([], undefined).scopeFullyScanned).toBe(false)
+  })
+
   it('keeps the latest input scannedAt instead of restamping the merge', () => {
     const merged = mergeAiVaultListResults(
       [

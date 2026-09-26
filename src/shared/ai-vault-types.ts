@@ -205,6 +205,17 @@ export type AiVaultScanIssue = {
   message: string
 }
 
+/**
+ * A row with no `kind` is a transcript the scan could not finish reading. Every
+ * other kind is commentary about the scan itself — an unreachable host, a
+ * bounded scope, a note about one session — and counting those as skipped
+ * transcripts is how both clients ended up reporting a permanent "1 transcript
+ * skipped" for a file they had listed successfully.
+ */
+export function isSkippedAiVaultTranscriptIssue(issue: AiVaultScanIssue): boolean {
+  return !issue.kind
+}
+
 export type AiVaultListArgs = {
   limit?: number
   unlimited?: boolean
@@ -220,6 +231,13 @@ export type AiVaultListResult = {
   sessions: AiVaultSession[]
   issues: AiVaultScanIssue[]
   scannedAt: string
+  /**
+   * True when every session inside the request's `scopePaths` is listed, cap or
+   * no cap — only agents whose on-disk layout buckets by cwd can be scanned that
+   * way, so a machine holding any other agent's transcripts reports false.
+   * Absent from hosts that do not report it, which a reader must treat as false.
+   */
+  scopeFullyScanned?: boolean
   /** Set only by the desktop IPC boundary: this scan was superseded, so its empty body means "nothing to apply". */
   cancelled?: true
 }

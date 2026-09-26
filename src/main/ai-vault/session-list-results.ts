@@ -52,6 +52,7 @@ export function restampAiVaultListResult(
           }
     ),
     issues: result.issues.map((issue) => ({ ...issue, executionHostId })),
+    ...(result.scopeFullyScanned === true ? { scopeFullyScanned: true } : {}),
     scannedAt: result.scannedAt
   }
 }
@@ -75,6 +76,10 @@ export function mergeAiVaultListResults(
       .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
       .slice(0, limit),
     issues,
+    // Every leg must vouch for its own scope: a host that does not report (an
+    // older paired host, a leg that failed) leaves the merged answer at false.
+    scopeFullyScanned:
+      results.length > 0 && results.every((result) => result.scopeFullyScanned === true),
     // Why: a merge is not a new scan. Reminting here made every all-host cache
     // hit look fresh to the renderer, which only skipped apply when scannedAt
     // matched. Keep the latest input stamp so identical legs stay a no-op.

@@ -132,7 +132,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           kind: 'ready',
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader checks both containers; the rows stay the host's own records because `agent` is a vocabulary this client echoes back on resume. aivault-history-screen-listed `normal` records a full row: every member the cards and the resume path read unguarded.
           sessions: result.sessions as AiVaultSession[],
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue and are only counted, never read member-wise (MobileAgentSessionHistoryPanel.tsx:335).
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue. The banner reads one member, `kind`, to count only the rows that really are skipped transcripts; a host old enough never to write it reports every row as one, which is what this client did before.
           issues: result.issues as AiVaultScanIssue[]
         })
       } catch (err) {

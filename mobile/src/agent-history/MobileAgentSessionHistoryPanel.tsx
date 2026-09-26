@@ -37,6 +37,7 @@ import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
+import { MobileAgentHistorySkippedBanner } from './MobileAgentHistorySkippedBanner'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
 import {
   resolveMobileAiVaultSessionResumeTarget,
@@ -338,13 +339,7 @@ export function MobileAgentSessionHistoryPanel({
               autoCorrect={false}
             />
           </View>
-          {issues.length > 0 ? (
-            <View style={styles.noticeBanner}>
-              <Text style={styles.noticeText}>
-                {issues.length} {issues.length === 1 ? 'transcript' : 'transcripts'} skipped
-              </Text>
-            </View>
-          ) : null}
+          <MobileAgentHistorySkippedBanner issues={issues} />
           {resumeMessage ? (
             <View style={styles.resumeBanner}>
               <Text style={styles.resumeBannerText}>{resumeMessage}</Text>

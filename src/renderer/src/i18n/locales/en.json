@@ -18365,8 +18365,13 @@
       "sessionsOne": "{{count}} session",
       "sessionsOther": "{{count}} sessions",
       "sessionsOfLoaded": "{{value0}} of {{value1}} sessions",
+      "sessionsOfLoadedAtLimit": "{{value0}} of {{value1}}+ sessions",
+      "sessionsAtLimit": "{{count}}+ sessions",
       "showMoreSessions": "Show more sessions",
-      "loadingMoreSessions": "Loading more sessions…"
+      "loadingMoreSessions": "Loading more sessions…",
+      "partiallyRead": "Partially read",
+      "noWorkspaceSessions": "No sessions in this workspace",
+      "noProjectSessions": "No sessions in this project"
     }
   },
   "sessionHistory": {

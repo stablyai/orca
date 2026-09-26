@@ -2,6 +2,7 @@ import type React from 'react'
 import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
 import {
   aiVaultScanNoticeIssues,
+  type AiVaultSessionReadNotices,
   blockingAiVaultScanIssue,
   skippedAiVaultTranscriptCount,
   skippedAiVaultTranscriptReasons
@@ -11,9 +12,12 @@ import { translate } from '@/i18n/i18n'
 // Messages are scanner-authored (host name, remote path, cap), so they render raw
 // rather than through a catalog key.
 export function AiVaultScanIssueBanners({
-  scanResult
+  scanResult,
+  sessionReadNotices
 }: {
   scanResult: AiVaultListResult | null
+  /** Notices already shown on their own session's row; repeating them panel-wide is what #22480 reported. */
+  sessionReadNotices: AiVaultSessionReadNotices
 }): React.JSX.Element {
   const blocking = blockingAiVaultScanIssue(scanResult)
   const skippedTranscriptCount = skippedAiVaultTranscriptCount(scanResult)
@@ -25,7 +29,7 @@ export function AiVaultScanIssueBanners({
           {blocking.message}
         </div>
       ) : null}
-      {aiVaultScanNoticeIssues(scanResult).map((issue) => (
+      {aiVaultScanNoticeIssues(scanResult, sessionReadNotices).map((issue) => (
         <div
           // Message is part of the key: one host can report several distinct
           // messages for the same path, and a colliding key drops those rows.

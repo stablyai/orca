@@ -18,8 +18,25 @@ export function aiVaultResultCountLabel(count: number): string {
     : translate('sessionSearch.panel.resultsOther', '{{count}} results', { count })
 }
 
-/** Left-hand label while browsing: the count, and how much of the scan filters hid. */
-export function aiVaultSessionCountLabel(shown: number, loaded: number): string {
+/**
+ * Left-hand label while browsing: the count, and how much of the scan filters hid.
+ * `atLimit` marks a total that is only the scan's cap, not every session on disk.
+ */
+export function aiVaultSessionCountLabel(shown: number, loaded: number, atLimit = false): string {
+  if (atLimit) {
+    return shown !== loaded
+      ? translate(
+          'sessionSearch.panel.sessionsOfLoadedAtLimit',
+          '{{value0}} of {{value1}}+ sessions',
+          {
+            value0: shown,
+            value1: loaded
+          }
+        )
+      : // No singular form on purpose: "+" makes the number a lower bound, so
+        // "1+ sessions" is the reading even when exactly one row is shown.
+        translate('sessionSearch.panel.sessionsAtLimit', '{{count}}+ sessions', { count: shown })
+  }
   if (shown !== loaded) {
     return translate('sessionSearch.panel.sessionsOfLoaded', '{{value0}} of {{value1}} sessions', {
       value0: shown,
