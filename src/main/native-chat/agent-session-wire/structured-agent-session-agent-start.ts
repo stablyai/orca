@@ -15,6 +15,7 @@ import type { StructuredAgentSessionAttachContext } from './structured-agent-ses
 import { attachStructuredAgentSessionUnderSerialize } from './structured-agent-session-attach-orchestration'
 import { failedCreateRefusal } from './structured-agent-session-failed-create-refusal'
 import { adapterSupportsRecord } from './structured-agent-session-provider-support'
+import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import {
   structuredAgentSessionResumeOperationId,
   structuredAgentSessionResumeParams
@@ -81,6 +82,15 @@ async function startStructuredAgentSessionAgent(
     return { ok: false, refusal: unreconciled }
   }
   await context.runtimeState.resolveRecovery(sessionId)
+  // An exit whose journal settlement failed latches the lease until a retry lands, and the recovery
+  // resolver never clears that latch. The start is that retry, so the send that needs the agent
+  // settles it.
+  await retryPendingStructuredAgentSessionSettlement({
+    deps: context.deps,
+    sessionId,
+    openJournal: async () => (await context.openConversation(sessionId))?.journal ?? null,
+    now: () => context.now()
+  })
   const record = context.deps.store.getRecord(sessionId)
   if (!record) {
     return refuse('agent_session_identity_required', 'No structured session exists by that id.')

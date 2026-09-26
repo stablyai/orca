@@ -205,6 +205,23 @@ it('keeps the offer withdrawn after the idle sweep closes the chat and it is rea
   await vi.waitFor(async () => expect(await offersIn(root)).toEqual([]))
 })
 
+// A failure the chat moved on from is read from its journal like an offer is, open or not.
+it('keeps a failure not retryable after the user moved on and the sweep closed the chat', async () => {
+  const state = await offered()
+  const { host, clock } = state
+  state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
+  const resumed = await host.restartResume.continueAfterRestart([SESSION], 'modal')
+  expect(resumed.failed).toMatchObject([{ sessionId: SESSION, retryable: true }])
+  await sendWhoseStartFails(state)
+  expect(await host.restartResume.listFailures()).toMatchObject([{ retryable: false }])
+  clock.now += STRUCTURED_AGENT_SESSION_IDLE_MS + 1
+
+  await sweepOnce(host)
+  expect(host.hasSession(SESSION)).toBe(false)
+
+  expect(await host.restartResume.listFailures()).toMatchObject([{ retryable: false }])
+})
+
 // Resume that runs by itself at launch goes through the same call a click does, and the same rule
 // decides: whichever of the two was accepted first since the restart wins.
 it("refuses an automatic continuation when the user's message was accepted first, and writes nothing", async () => {

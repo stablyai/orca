@@ -104,7 +104,7 @@ export function NativeChatStructuredSession(
     }),
     [controller, props.agent, props.sessionId]
   )
-  const viewState = selectNativeChatViewState(session)
+  const viewState = selectNativeChatViewState(session, { readRetries: true })
   const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(

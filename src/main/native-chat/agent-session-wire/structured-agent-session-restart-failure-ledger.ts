@@ -77,6 +77,8 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
   adapter: StructuredAgentSessionAdapter
   /** The predicate a retry applies to the failure's marker. */
   retryable: (marker: AgentSessionResumeMarker) => boolean
+  /** Makes the failed chats readable here, so `retryable` reads each one's journal. */
+  reveal: (markers: readonly AgentSessionResumeMarker[]) => Promise<void>
   now: () => number
   /** The capsule's single mutation lane, shared with the offer's own operations. */
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
@@ -119,8 +121,11 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     ]
   }
 
-  const list = async (): Promise<StructuredAgentSessionResumeFailure[]> =>
-    (await read()).flatMap(toRow)
+  const list = async (): Promise<StructuredAgentSessionResumeFailure[]> => {
+    const failures = await read()
+    await deps.reveal(failures.map((failure) => failure.marker))
+    return failures.flatMap(toRow)
+  }
 
   const settle: StructuredAgentSessionRestartFailureLedger['settle'] = async (
     operationId,
