@@ -207,6 +207,21 @@
         "restartRequired": "Restart required",
         "unavailable": "Browser identity is unavailable."
       }
+    },
+    "general": {
+      "openInMenu": {
+        "keyword": {
+          "windsurf": "windsurf",
+          "devin": "devin",
+          "devinDesktop": "devin desktop"
+        }
+      }
+    },
+    "openInApp": {
+      "preset": {
+        "windsurf": "Windsurf",
+        "devinDesktop": "Devin Desktop"
+      }
     }
   },
   "menu": {
