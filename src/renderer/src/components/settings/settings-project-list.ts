@@ -6,6 +6,10 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import {
+  buildProjectGroupingIndex,
+  getProjectGroupingForRepo
+} from '../sidebar/worktree-list/grouping/project-grouping'
 
 export type SettingsProject = {
   projectId: string
@@ -40,25 +44,42 @@ export function getSettingsProjectRepresentativeRepoId(
 }
 
 /**
- * Collapses repo rows into one entry per project so Settings renders per
- * project, matching the rest of the app. Derived from repos alone (not the
- * persisted projects/setups) so the nav and pane lists agree exactly.
+ * One Settings entry per checkout group: a project on multiple hosts collapses to
+ * one entry, but a project with 2+ distinct checkouts sharing a host splits into one
+ * entry per checkout — mirroring the sidebar's per-checkout rows so both stay in sync
+ * and each clone gets its own nav row + editable pane (#18493). Grouping reuses the
+ * sidebar's `getProjectGroupingForRepo`; `projectId` stays the merged project id (split
+ * siblings self-scope via their singleton `setups`, so shared selection state is benign).
+ * Derived from repos alone so the nav and pane lists agree exactly.
  */
 export function buildSettingsProjectList(repos: readonly Repo[]): SettingsProject[] {
   const projection = projectHostSetupProjectionFromRepos(repos)
-  const setupsByProjectId = new Map<string, ProjectHostSetup[]>()
+  const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
+  const projectById = new Map(projection.projects.map((project) => [project.id, project]))
+  const groupingIndex = buildProjectGroupingIndex({
+    projects: projection.projects,
+    projectHostSetups: projection.setups
+  })
+  const groups = new Map<string, { project: Project; setups: ProjectHostSetup[] }>()
+  const order: string[] = []
   for (const setup of projection.setups) {
-    const projectSetups = setupsByProjectId.get(setup.projectId)
-    if (projectSetups) {
-      projectSetups.push(setup)
+    const project = projectById.get(setup.projectId)
+    if (!project) {
+      continue
+    }
+    // Same grouping decision the sidebar makes, so a checkout that gets its own
+    // sidebar row also gets its own Settings entry (and vice versa).
+    const groupKey = getProjectGroupingForRepo(setup.repoId, repoMap, groupingIndex).key
+    const existing = groups.get(groupKey)
+    if (existing) {
+      existing.setups.push(setup)
     } else {
-      setupsByProjectId.set(setup.projectId, [setup])
+      groups.set(groupKey, { project, setups: [setup] })
+      order.push(groupKey)
     }
   }
-  return projection.projects.map((project) => {
-    // Why: Settings metadata is rebuilt as repos refresh across hosts; index
-    // setups once so many projects do not turn each refresh into an O(n²) scan.
-    const setups = setupsByProjectId.get(project.id) ?? []
+  return order.map((groupKey) => {
+    const { project, setups } = groups.get(groupKey)!
     return {
       projectId: project.id,
       project,
@@ -108,16 +129,21 @@ export function buildRepoIdToRepresentative(
   return map
 }
 
-/** Maps each host's repoId to its owning project + host, so a deep link can
- *  select that host in the pane's "Available Hosts" switcher. */
+/** Maps each host's repoId to its owning project + host + setup, so a deep link
+ *  selects that exact checkout — critical when 2+ checkouts share one host, where
+ *  hostId alone would collapse to the first setup and target the wrong repo (#18493). */
 export function buildRepoIdToHostSelection(
   projects: readonly SettingsProject[]
-): Map<string, { projectId: string; hostId: ExecutionHostId }> {
-  const map = new Map<string, { projectId: string; hostId: ExecutionHostId }>()
+): Map<string, { projectId: string; hostId: ExecutionHostId; setupId: string }> {
+  const map = new Map<string, { projectId: string; hostId: ExecutionHostId; setupId: string }>()
   for (const settingsProject of projects) {
     for (const setup of settingsProject.setups) {
       if (setup.repoId.trim().length > 0 && !map.has(setup.repoId)) {
-        map.set(setup.repoId, { projectId: settingsProject.projectId, hostId: setup.hostId })
+        map.set(setup.repoId, {
+          projectId: settingsProject.projectId,
+          hostId: setup.hostId,
+          setupId: setup.id
+        })
       }
     }
   }
