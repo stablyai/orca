@@ -16,6 +16,7 @@ import {
   resolveCycledWorktreeId
 } from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
+import { markActiveWorkspaceDone } from './mark-done'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -142,6 +143,23 @@ export function useWorktreeListKeyboardNavigation(args: {
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if (
+        e.target === e.currentTarget &&
+        !e.repeat &&
+        activeModal === 'none' &&
+        keybindingMatchesAction('workspace.markDone', e, getShortcutPlatform(), keybindings)
+      ) {
+        if (
+          markActiveWorkspaceDone(
+            useAppStore.getState(),
+            activeWorktreeId,
+            activeWorkspaceExecutionHostId
+          )
+        ) {
+          e.preventDefault()
+          return
+        }
+      }
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         if (e.target !== e.currentTarget) {
           return
@@ -161,7 +179,14 @@ export function useWorktreeListKeyboardNavigation(args: {
         markDirectScrollInput()
       }
     },
-    [markDirectScrollInput, navigateWorktree]
+    [
+      activeModal,
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId,
+      keybindings,
+      markDirectScrollInput,
+      navigateWorktree
+    ]
   )
 
   return { handleContainerKeyDown }

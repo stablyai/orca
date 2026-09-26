@@ -43,6 +43,9 @@ describe('keybindings', () => {
     expect(normalizeKeybindingListForAction('fileExplorer.delete', 'x')).toMatchObject({
       ok: false
     })
+    expect(normalizeKeybindingListForAction('workspace.markDone', 'Backspace')).toEqual([
+      'Backspace'
+    ])
   })
 
   it('allows Shift-only chords only for native input-source switching', () => {

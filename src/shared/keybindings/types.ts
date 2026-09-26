@@ -7,6 +7,7 @@ export type KeybindingScope =
   | 'browser'
   | 'editor'
   | 'fileExplorer'
+  | 'worktreeList'
   | 'composer'
   | 'settings'
 
@@ -34,6 +35,7 @@ export type KeybindingActionId =
   | 'workspace.create'
   | 'workspace.rename'
   | 'workspace.delete'
+  | 'workspace.markDone'
   | 'workspace.openBoard'
   | 'workspace.selectByIndex'
   | 'voice.dictation'
