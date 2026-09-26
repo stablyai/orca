@@ -1,5 +1,6 @@
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { OrchestrationDeepLink } from '../../shared/orchestration-deep-link'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -54,6 +55,8 @@ export type UiCommandEventApi = {
   consumePendingOpenSettings: () => Promise<boolean>
   onOpenSkillShare: (callback: (shareId: string) => void) => () => void
   consumePendingSkillShare: () => Promise<string | null>
+  onOpenOrchestrationDeepLink?: (callback: (link: OrchestrationDeepLink) => void) => () => void
+  consumePendingOrchestrationDeepLink?: () => Promise<OrchestrationDeepLink | null>
   /** OS "Open With" markdown paths pushed while a renderer is already listening. */
   onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void) => () => void
   /** Drains the "Open With" paths queued before this renderer's listener attached. */

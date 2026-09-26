@@ -736,4 +736,24 @@ describe('createUISlice space navigation', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'artifacts' }), 'startup')
     expect(store.getState().activeView).toBe('artifacts')
   })
+
+  it('opens activity view and stores intent when handling orchestration-new deep link', () => {
+    const store = createUIStore()
+
+    store.getState().openOrchestrationDeepLink({
+      type: 'orchestration-new',
+      title: 'Fix issue',
+      repo: 'my-project'
+    })
+
+    expect(store.getState().activeView).toBe('activity')
+    expect(store.getState().pendingOrchestrationDeepLink).toEqual({
+      type: 'orchestration-new',
+      title: 'Fix issue',
+      repo: 'my-project'
+    })
+
+    store.getState().clearPendingOrchestrationDeepLink()
+    expect(store.getState().pendingOrchestrationDeepLink).toBeNull()
+  })
 })

@@ -60,6 +60,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'ui.onOpenFileFromMobile',
   'ui.onOpenMarkdownFiles',
   'ui.onOpenNewWorkspace',
+  'ui.onOpenOrchestrationDeepLink',
   'ui.onOpenQuickOpen',
   'ui.onOpenSettings',
   'ui.onOpenSetupGuide',
@@ -117,6 +118,7 @@ const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
   'gh.onPRRefreshEvent',
   'ui.onOpenSettings',
   'ui.onOpenSkillShare',
+  'ui.onOpenOrchestrationDeepLink',
   'ui.onOpenSetupGuide',
   'mobile.onUnpairedDeviceAuthFailure',
   'ui.onOpenFeatureTour',
@@ -394,14 +396,18 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
       groupOrder([
         'ui.onOpenSettings',
         'ui.onOpenSkillShare',
+        'ui.onOpenOrchestrationDeepLink',
         'ui.consumePendingOpenSettings',
-        'ui.consumePendingSkillShare'
+        'ui.consumePendingSkillShare',
+        'ui.consumePendingOrchestrationDeepLink'
       ])
     ).toEqual([
       'ui.onOpenSettings',
       'ui.onOpenSkillShare',
+      'ui.onOpenOrchestrationDeepLink',
       'ui.consumePendingOpenSettings',
-      'ui.consumePendingSkillShare'
+      'ui.consumePendingSkillShare',
+      'ui.consumePendingOrchestrationDeepLink'
     ])
     expect(
       groupOrder([

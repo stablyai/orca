@@ -270,7 +270,7 @@ describe('electron-builder config', () => {
   })
 
   it('matches the Linux desktop entry to Electron window class', () => {
-    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
+    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca-ide')
   })
 
   it('uses the release artifact set as local Linux targets without changing existing names', () => {

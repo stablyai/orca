@@ -69,6 +69,13 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
       }))
     },
     clearPendingSkillShare: () => set({ pendingSkillShareId: null }),
+    openOrchestrationDeepLink: (link) => {
+      set({ pendingOrchestrationDeepLink: link })
+      if (link.type === 'orchestration-new') {
+        get().openActivityPage()
+      }
+    },
+    clearPendingOrchestrationDeepLink: () => set({ pendingOrchestrationDeepLink: null }),
     openSkillsSharedLinks: () => {
       get().recordViewVisit('skills')
       set((state) => ({
