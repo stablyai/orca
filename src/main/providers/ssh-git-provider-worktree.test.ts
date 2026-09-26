@@ -43,18 +43,40 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(worktrees)
   })
 
-  it('addWorktree sends git.addWorktree request', async () => {
+  it('addWorktree sends git.addWorktree request with worktree add timeout', async () => {
     await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat', {
       base: 'main',
       noCheckout: true
     })
-    expect(mux.request).toHaveBeenCalledWith('git.addWorktree', {
-      repoPath: '/home/user/repo',
-      branchName: 'feature',
-      targetDir: '/home/user/feat',
-      base: 'main',
-      noCheckout: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'git.addWorktree',
+      {
+        repoPath: '/home/user/repo',
+        branchName: 'feature',
+        targetDir: '/home/user/feat',
+        base: 'main',
+        noCheckout: true
+      },
+      { timeoutMs: 180_000 }
+    )
+  })
+
+  it('addWorktree honors ORCA_WORKTREE_ADD_TIMEOUT_MS env override', async () => {
+    vi.stubEnv('ORCA_WORKTREE_ADD_TIMEOUT_MS', '300000')
+    try {
+      await provider.addWorktree('/home/user/repo', 'feature', '/home/user/feat')
+      expect(mux.request).toHaveBeenCalledWith(
+        'git.addWorktree',
+        {
+          repoPath: '/home/user/repo',
+          branchName: 'feature',
+          targetDir: '/home/user/feat'
+        },
+        { timeoutMs: 300_000 }
+      )
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('removeWorktree sends git.removeWorktree request', async () => {

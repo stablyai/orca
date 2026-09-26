@@ -4,6 +4,7 @@ import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { CapabilityProbeCache } from '../../shared/capability-probe-cache'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { assertAuthoritativeWorktreeCatalog } from '../../shared/worktree/worktree-catalog-availability'
+import { resolveWorktreeAddTimeoutMs } from '../git/worktree-operation-options'
 import { isJsonRpcMethodNotFoundError } from './ssh-git-relay-errors'
 import { SshGitReviewHeadProvider } from './ssh-git-review-head-provider'
 
@@ -71,12 +72,17 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
     options?: { base?: string; checkoutExistingBranch?: boolean; noCheckout?: boolean }
   ): Promise<void> {
     await this.runWithGitReadInvalidation(async () => {
-      await this.mux.request('git.addWorktree', {
-        repoPath,
-        branchName,
-        targetDir,
-        ...options
-      })
+      // Why: large remote checkouts easily exceed 30s; reuse local addWorktree timeout (default 180s, #21793).
+      await this.mux.request(
+        'git.addWorktree',
+        {
+          repoPath,
+          branchName,
+          targetDir,
+          ...options
+        },
+        { timeoutMs: resolveWorktreeAddTimeoutMs() }
+      )
     })
   }
 
