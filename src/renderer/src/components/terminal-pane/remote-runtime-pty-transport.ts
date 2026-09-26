@@ -131,6 +131,7 @@ function isRemoteTerminalGoneMessage(message: string): boolean {
   return (
     message.includes('terminal_exited') ||
     message.includes('terminal_gone') ||
+    message.includes('terminal_not_found') ||
     message.includes('no_connected_pty') ||
     message.toLocaleLowerCase('en-US').includes('explicitly killed')
   )
@@ -2506,6 +2507,9 @@ export function createRemoteRuntimePtyTransport(
           return
         }
         if (!resolved) {
+          connecting = false
+          terminalEnded = true
+          emitRecoveryState()
           surfaceErrorMessage('Remote terminal was closed.')
           return
         }
