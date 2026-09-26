@@ -323,6 +323,9 @@ export const CROSS_MACHINE_RECOVERY_WORKSPACE_RUNTIME_CAPABILITY =
 // Why separate: without it a host keeps no client views, so exports report freshness 'host-only'.
 export const CROSS_MACHINE_RECOVERY_PRESENTATION_RUNTIME_CAPABILITY =
   'cross-machine-recovery.presentation.v1' as const
+// Why: tells cc-sync that import accepts recoveryLaunch; resume still gates on the host claude's --help.
+export const CROSS_MACHINE_RECOVERY_LAUNCH_RUNTIME_CAPABILITY =
+  'cross-machine-recovery.recovery-launch.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
@@ -420,7 +423,8 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_LAUNCH_REPLAY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   CROSS_MACHINE_RECOVERY_WORKSPACE_RUNTIME_CAPABILITY,
-  CROSS_MACHINE_RECOVERY_PRESENTATION_RUNTIME_CAPABILITY
+  CROSS_MACHINE_RECOVERY_PRESENTATION_RUNTIME_CAPABILITY,
+  CROSS_MACHINE_RECOVERY_LAUNCH_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

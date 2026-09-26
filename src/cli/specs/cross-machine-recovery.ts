@@ -28,7 +28,7 @@ export const CROSS_MACHINE_RECOVERY_COMMAND_SPECS: CommandSpec[] = [
     path: ['recovery', 'import'],
     summary: 'Import a recovery descriptor into a restored checkout',
     usage:
-      'orca recovery import --descriptor <path|-> --checkout <path> --checkpoint <id> [--path-map <from>=<to>]... [--session-map <from>=<to>]... [--resume <providerSessionId>]... [--resume-key <bindingKeyJson>]... [--prefer-client <clientInstanceId>] [--activate] [--register-repo] [--dry-run] --json',
+      'orca recovery import --descriptor <path|-> --checkout <path> --checkpoint <id> [--path-map <from>=<to>]... [--session-map <from>=<to>]... [--recovery-launch-file <path>] [--resume <providerSessionId>]... [--resume-key <bindingKeyJson>]... [--prefer-client <clientInstanceId>] [--activate] [--register-repo] [--dry-run] --json',
     allowedFlags: [
       ...RECOVERY_GLOBAL_FLAGS,
       'descriptor',
@@ -36,6 +36,7 @@ export const CROSS_MACHINE_RECOVERY_COMMAND_SPECS: CommandSpec[] = [
       'checkpoint',
       'path-map',
       'session-map',
+      'recovery-launch-file',
       'resume',
       'resume-key',
       'prefer-client',

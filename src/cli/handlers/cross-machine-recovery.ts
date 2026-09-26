@@ -61,6 +61,22 @@ async function readDescriptorText(source: string, cwd: string): Promise<string> 
   }
 }
 
+async function readRecoveryLaunch(source: string, cwd: string): Promise<unknown> {
+  const { buffer } = await readNodeFileWithinLimit(
+    resolve(cwd, source),
+    MAX_RECOVERY_DESCRIPTOR_BYTES
+  ).catch((error: unknown) => {
+    throw error instanceof NodeFileReadTooLargeError
+      ? new RuntimeClientError('invalid_argument', 'Recovery launch file is too large.')
+      : error
+  })
+  try {
+    return JSON.parse(buffer.toString('utf8'))
+  } catch {
+    throw new RuntimeClientError('invalid_argument', 'Recovery launch file is not valid JSON.')
+  }
+}
+
 async function readDescriptor(source: string, cwd: string): Promise<unknown> {
   const text = await readDescriptorText(source, cwd)
   try {
@@ -113,12 +129,16 @@ export const CROSS_MACHINE_RECOVERY_HANDLERS: Record<string, CommandHandler> = {
       ...getRepeatedStringFlag(flags, 'resume-key').map(parseBindingKey)
     ]
     const preferClientInstanceId = getOptionalStringFlag(flags, 'prefer-client')
+    const recoveryLaunchFile = getOptionalStringFlag(flags, 'recovery-launch-file')
     const result = await client.call<RecoveryImportResult>('crossMachineRecovery.import', {
       descriptor: await readDescriptor(getRequiredStringFlag(flags, 'descriptor'), cwd),
       checkoutPath: resolve(cwd, getRequiredStringFlag(flags, 'checkout')),
       checkpointId: getRequiredStringFlag(flags, 'checkpoint'),
       ...(pathMap.length > 0 ? { pathMap } : {}),
       ...(sessionIdMap.length > 0 ? { sessionIdMap } : {}),
+      ...(recoveryLaunchFile
+        ? { recoveryLaunch: await readRecoveryLaunch(recoveryLaunchFile, cwd) }
+        : {}),
       ...(resume.length > 0 ? { resume } : {}),
       ...(preferClientInstanceId ? { preferClientInstanceId } : {}),
       ...(flags.get('activate') === true ? { activate: true } : {}),

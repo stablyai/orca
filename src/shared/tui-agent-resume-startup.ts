@@ -22,6 +22,7 @@ export function buildAgentResumeStartupPlan(args: {
   agentEnv?: Record<string, string> | null
   agentCommand?: string | null
   ompResumeFilePath?: string | null
+  extraResumeArgv?: readonly string[]
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
@@ -56,7 +57,12 @@ export function buildAgentResumeStartupPlan(args: {
     ...args,
     agentCommand: baseCommand.commandWithoutSessionOptions
   })
-  const launchCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
+  const launchCommand = buildAgentResumeLaunchCommand(
+    args.agent,
+    baseCommand.command,
+    [...argv, ...(args.extraResumeArgv ?? [])],
+    shell
+  )
   const applied = baseCommand.appliedSessionOptions
   return {
     agent: args.agent,

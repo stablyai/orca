@@ -35,6 +35,19 @@ async function claimRecoveryRecord(
   return outcome.claimed
 }
 
+export const CLAUDE_APPEND_SYSTEM_PROMPT_FLAG = '--append-system-prompt'
+
+async function recoveryResumeExtraArgv(
+  host: CrossMachineRecoveryHost,
+  record: SleepingAgentSessionRecord
+): Promise<string[]> {
+  const text = record.recovery?.appendSystemPrompt
+  if (record.agent !== 'claude' || !text || !(await host.supportsClaudeAppendSystemPrompt())) {
+    return []
+  }
+  return [CLAUDE_APPEND_SYSTEM_PROMPT_FLAG, text]
+}
+
 /** Durable so a replay racing the launch, or after a restart, never re-adds a consumed binding. */
 export async function recordConsumedRecoveryBinding(
   host: CrossMachineRecoveryHost,
@@ -72,6 +85,7 @@ export async function resumeClaimedRecoveryBinding(
       throw new Error('recovery_session_live_locally')
     }
     const pane = parsePaneKey(record.paneKey)
+    const extraResumeArgv = await recoveryResumeExtraArgv(host, record)
     let result: Awaited<ReturnType<CrossMachineRecoveryHost['ensureAgentSession']>>
     try {
       // Why: terminal.ensureAgentSession semantics; omitting agentArgs keeps launch args host-owned.
@@ -82,6 +96,7 @@ export async function resumeClaimedRecoveryBinding(
         providerSession: record.providerSession,
         ...(options.launchPreferences ? { launchPreferences: options.launchPreferences } : {}),
         presentation: options.presentation ?? 'background',
+        ...(extraResumeArgv.length > 0 ? { extraResumeArgv } : {}),
         placement: { tabId: pane?.tabId ?? record.tabId, ...(pane ? { leafId: pane.leafId } : {}) }
       })
     } catch (error) {

@@ -79,6 +79,8 @@ export type SleepingAgentSessionRecord = {
 export type SleepingAgentRecoveryBinding = {
   importKey: string
   sourcePaneKey: string
+  /** Claude-only; appended at resume when the host's claude advertises --append-system-prompt. */
+  appendSystemPrompt?: string
 }
 
 // Why: imported bindings resume only when the user selects them, so every automatic sweep skips them.

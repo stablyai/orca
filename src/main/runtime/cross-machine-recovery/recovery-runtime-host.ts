@@ -50,6 +50,8 @@ export type CrossMachineRecoveryHost = {
   isProviderSessionLive(binding: RecoveryBindingKey): boolean
   /** Runtime-owned so resume and replay hosts built for separate calls share one view. */
   resumeHolds: RecoveryResumeHolds
+  /** Probed once per runtime from the host's `claude --help`. */
+  supportsClaudeAppendSystemPrompt(): Promise<boolean>
   activateWorktree(worktreeId: string): Promise<void>
 }
 
@@ -146,6 +148,7 @@ export function createCrossMachineRecoveryHost(
     resolveWorktree: deps.resolveWorktree,
     ensureAgentSession: deps.ensureAgentSession,
     resumeHolds: deps.resumeHolds,
+    supportsClaudeAppendSystemPrompt: deps.supportsClaudeAppendSystemPrompt,
     activateWorktree: deps.activateWorktree,
     getLocalSession: () => {
       const session = requireStore().getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)

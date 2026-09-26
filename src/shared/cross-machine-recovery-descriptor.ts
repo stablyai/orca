@@ -1,3 +1,4 @@
+import type { RecoveryLaunchOverride } from './cross-machine-recovery-launch'
 import type { AgentStatusState } from './agent-status-types'
 import type { ResumableTuiAgent } from './agent-session-resume'
 import type {
@@ -232,6 +233,7 @@ export type RecoveryImportRequest = {
   checkoutPath: string
   checkpointId: string
   pathMap?: RecoveryPathMapping[]
+  recoveryLaunch?: Record<string, RecoveryLaunchOverride>
   /** Rewrites binding ids, transcript basenames and structured cursors; resume[] names local ids. */
   sessionIdMap?: RecoverySessionIdMapping[]
   /** Bindings to resume after import; the rest import dormant. A bare provider session id must

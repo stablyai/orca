@@ -142,7 +142,11 @@ export function descriptor(): OrcaRecoveryDescriptorV1 {
 }
 
 export function fixture(
-  options: { live?: boolean; ensure?: CrossMachineRecoveryHost['ensureAgentSession'] } = {}
+  options: {
+    live?: boolean
+    ensure?: CrossMachineRecoveryHost['ensureAgentSession']
+    appendSystemPrompt?: boolean
+  } = {}
 ) {
   const checkout = realpathSync(mkdtempSync(path.join(tmpdir(), 'xmr-import-')))
   mkdirSync(path.join(checkout, '.git'))
@@ -176,6 +180,7 @@ export function fixture(
     ensureAgentSession,
     isProviderSessionLive: () => options.live === true,
     resumeHolds: createRecoveryResumeHolds(),
+    supportsClaudeAppendSystemPrompt: async () => options.appendSystemPrompt === true,
     activateWorktree: vi.fn()
   }
   const readCommonDir = async () => '.git'

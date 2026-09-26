@@ -20,6 +20,7 @@ import {
   type RecoveryPresentationPublishParams,
   type RecoveryPresentationWorkspaceRef
 } from '../cross-machine-recovery-presentation-types'
+import { MAX_RECOVERY_APPEND_SYSTEM_PROMPT_BYTES } from '../cross-machine-recovery-launch'
 import { WorkspaceLinkedItemSchema } from '../workspace-linked-item-schema'
 import {
   AgentArgs,
@@ -229,6 +230,15 @@ export const CrossMachineRecoveryImportParams = z
     sessionIdMap: z
       .array(z.object({ from: ProviderSession.shape.id, to: ProviderSession.shape.id }).strict())
       .max(MAX_RECOVERY_BINDINGS)
+      .optional(),
+    recoveryLaunch: z
+      .record(
+        ProviderSession.shape.id,
+        z.object({ appendSystemPrompt: utf8Text(MAX_RECOVERY_APPEND_SYSTEM_PROMPT_BYTES) }).strict()
+      )
+      .refine((launch) => Object.keys(launch).length <= MAX_RECOVERY_BINDINGS, {
+        message: 'Too many recovery launch entries'
+      })
       .optional(),
     resume: z.array(RecoveryBindingSelectorSchema).max(MAX_RECOVERY_BINDINGS).optional(),
     preferClientInstanceId: Id.optional(),

@@ -1,3 +1,4 @@
+import { MAX_RECOVERY_APPEND_SYSTEM_PROMPT_BYTES } from './cross-machine-recovery-launch'
 import { z } from 'zod'
 import {
   getAgentResumeArgv,
@@ -101,7 +102,15 @@ const sleepingAgentSessionRecordSchema = z
     origin: z.enum(['worktree-sleep', 'quit', 'live', 'recovery']).optional(),
     restoreOnTabOpenOnly: z.boolean().optional(),
     recovery: z
-      .object({ importKey: z.string().min(1).max(128), sourcePaneKey: z.string().min(1).max(512) })
+      .object({
+        importKey: z.string().min(1).max(128),
+        sourcePaneKey: z.string().min(1).max(512),
+        appendSystemPrompt: z
+          .string()
+          .min(1)
+          .max(MAX_RECOVERY_APPEND_SYSTEM_PROMPT_BYTES)
+          .optional()
+      })
       .optional()
   })
   .refine((record) => (record.origin === 'recovery') === (record.recovery !== undefined), {

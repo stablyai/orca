@@ -117,6 +117,8 @@ export type RuntimeEnsureAgentSessionRequest =
       launchPreferences?: AgentLaunchPreferences
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
+      /** Cross-machine recovery only: extra resume argv entries, each quoted, never shell-parsed. */
+      extraResumeArgv?: readonly string[]
     }
 
 export type RuntimeEnsureAgentSessionResult = {

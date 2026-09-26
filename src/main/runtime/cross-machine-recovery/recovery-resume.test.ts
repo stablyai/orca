@@ -55,6 +55,7 @@ describe('headless runtime writer', () => {
       resolveWorktree: vi.fn(),
       ensureAgentSession: vi.fn(),
       resumeHolds: createRecoveryResumeHolds(),
+      supportsClaudeAppendSystemPrompt: async () => false,
       activateWorktree: vi.fn()
     })
     const record = {

@@ -107,7 +107,8 @@ export async function importRecoveryWorkspaceWithHost(
     mintId: host.mintId,
     importKey,
     pathMap: params.pathMap ?? [],
-    sourceProviderSessionIds: rekeyed.sourceIds
+    sourceProviderSessionIds: rekeyed.sourceIds,
+    recoveryLaunch: params.recoveryLaunch ?? {}
   }
   const session = host.getLocalSession()
   const prior = meta?.recoveryProvenance

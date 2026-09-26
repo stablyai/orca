@@ -111,6 +111,7 @@ function setup(snapshot: readonly AgentStatusIpcPayload[] = []) {
       throw new Error('unused')
     },
     resumeHolds: createRecoveryResumeHolds(),
+    supportsClaudeAppendSystemPrompt: async () => false,
     activateWorktree: async () => {}
   })
   return { store, host }

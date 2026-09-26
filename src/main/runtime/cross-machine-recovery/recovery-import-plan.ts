@@ -1,3 +1,4 @@
+import type { RecoveryLaunchOverride } from '../../../shared/cross-machine-recovery-launch'
 import { createHash } from 'node:crypto'
 import {
   getAgentResumeArgv,
@@ -44,6 +45,7 @@ export type RecoveryPlanContext = RecoveryRemapContext & {
   pathMap: readonly RecoveryPathMapping[]
   /** Local provider session id → the source id it had before sessionIdMap. */
   sourceProviderSessionIds: ReadonlyMap<string, string>
+  recoveryLaunch?: Readonly<Record<string, RecoveryLaunchOverride>>
 }
 
 const SLEEPING_STATES = new Set(['working', 'blocked', 'waiting', 'done'])
@@ -214,6 +216,7 @@ export function planRecoveryBindings(
         result: { ...base, status: 'refused', reason: 'recovery_session_not_resumable' }
       }
     }
+    const launch = ctx.recoveryLaunch?.[sourceProviderSessionId(binding, ctx)]
     const record: SleepingAgentSessionRecord = {
       paneKey: localPaneKey,
       tabId,
@@ -232,7 +235,11 @@ export function planRecoveryBindings(
       launchConfig: { agentArgs: '', agentEnv: {} },
       origin: 'recovery',
       restoreOnTabOpenOnly: false,
-      recovery: { importKey: ctx.importKey, sourcePaneKey: binding.sourcePaneKey }
+      recovery: {
+        importKey: ctx.importKey,
+        sourcePaneKey: binding.sourcePaneKey,
+        ...(launch ? { appendSystemPrompt: launch.appendSystemPrompt } : {})
+      }
     }
     return { binding, record, result: { ...base, status: 'dormant' } }
   })
