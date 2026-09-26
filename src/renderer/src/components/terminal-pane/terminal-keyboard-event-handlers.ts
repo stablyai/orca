@@ -1,4 +1,4 @@
-import type { KeybindingPlatform } from '../../../../shared/keybindings'
+import { keybindingMatchesInput, type KeybindingPlatform } from '../../../../shared/keybindings'
 import type { KeyboardHandlersDeps } from './terminal-keyboard-dependencies'
 import type { createTerminalKeyboardRuntime } from './terminal-keyboard-runtime'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
@@ -88,10 +88,7 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
     getKeyboardSplitTelemetrySource
   } = context
 
-  const onKeyDown = (e: KeyboardEvent): void => {
-    // Why: replace stale state only for this physical key so rollover cannot
-    // disarm a still-held native-only chord before its Kitty keyup arrives.
-    nativeOnlyShortcutTracker.prepareKeyDown(e)
+  const dispatchKeyDown = (e: KeyboardEvent): void => {
     // Record before early returns so every observed Enter disqualifies keyup synthesis.
     if (
       isWindows &&
@@ -300,6 +297,25 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       getKeyboardSplitTelemetrySource,
       armNativeOnlyShortcut: (event) => nativeOnlyShortcutTracker.armKeyDown(event)
     })
+  }
+
+  const onKeyDown = (e: KeyboardEvent): void => {
+    // Why: replace stale state only for this physical key so rollover cannot
+    // disarm a still-held native-only chord before its Kitty keyup arrives.
+    nativeOnlyShortcutTracker.prepareKeyDown(e)
+    const scopedCmdC =
+      isMac &&
+      keybindingMatchesInput('Mod+C', e, 'darwin') &&
+      (!keyboardScopeRef.current || keyboardEventBelongsToScope(e, keyboardScopeRef.current))
+    if (scopedCmdC && nativeOnlyShortcutTracker.consumeCompanion(e)) {
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      return
+    }
+    dispatchKeyDown(e)
+    if (scopedCmdC && e.defaultPrevented) {
+      nativeOnlyShortcutTracker.armKeyDown(e)
+    }
   }
 
   const { onKeyUp, onNativeOnlyShortcutCompanion, onNativeOnlyBeforeInput, onNativeOnlyBlur } =
