@@ -9,6 +9,8 @@ import type {
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { supportsStructuredAgentSessionPromptCancel } from '@/runtime/structured-agent-session-client'
+import { useStructuredAgentSessionHostAcceptsSend } from '@/runtime/structured-agent-session-accepted-send-capability'
+import { hasUnsettledStructuredAgentSessionOutboxEntry } from '../../../../shared/structured-agent-session-outbox'
 import {
   pendingStructuredSessionPrompts,
   type StructuredPromptItem
@@ -111,6 +113,14 @@ export function useStructuredAgentSession(args: {
 
   const prompts = pendingStructuredSessionPrompts(transportState.journalItems)
   const { outbox } = outboxController
+  // A host that accepts a send before any agent has it also takes a Stop naming no turn, so Stop is
+  // there from the send until the work settles. An older host can stop only a turn it has opened.
+  const stopsConversation =
+    useStructuredAgentSessionHostAcceptsSend(target) && transportState.fence !== null
+  const canStop =
+    transportState.turnId !== null ||
+    (stopsConversation &&
+      (transportState.isWorking || hasUnsettledStructuredAgentSessionOutboxEntry(outbox)))
   const messages = useStructuredAgentSessionMessages(
     transportState.journalItems,
     outbox,
@@ -158,6 +168,16 @@ export function useStructuredAgentSession(args: {
     turnActivity: transportState.turnActivity,
     backgroundTasks: transportState.backgroundTasks,
     turnId: transportState.turnId,
+    canStop,
+    stop: () => {
+      if (stopsConversation) {
+        outboxController.withdrawUnsent()
+        return mutate('agentSession.cancel', 'agentSession.cancel', {})
+      }
+      return transportState.turnId
+        ? mutate('agentSession.cancel', 'agentSession.cancel', { turnId: transportState.turnId })
+        : Promise.resolve(null)
+    },
     cancel: async (turnId: string, prompt?: StructuredPromptCancelTarget) => {
       // Capability negotiation must complete before mutate constructs the payload
       // fingerprint and operation id: older hosts reject the strict prompt field.

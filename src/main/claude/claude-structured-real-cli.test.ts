@@ -317,7 +317,10 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', ()
         frames(from).some(
           (frame) =>
             frame.type === 'stream_event' &&
-            (frame.event as { type?: unknown } | undefined)?.type === 'message_start'
+            typeof frame.event === 'object' &&
+            frame.event !== null &&
+            'type' in frame.event &&
+            frame.event.type === 'message_start'
         )
       const result = async (from: number) => {
         const deadline = Date.now() + 60_000
