@@ -5,8 +5,9 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import type { TerminalExitRecord } from '../../shared/terminal-surface-exit'
-import { toAppSshPtyId } from '../../shared/ssh-pty-id'
 import { dropRetirementProofsForLiveSurfaces } from '../../shared/terminal-retirement-proof-ledger'
+import { makePaneKey } from '../../shared/stable-pane-id'
+import { resolveStablePaneOwner } from '../ipc/pty/pane/stable-owner'
 import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventory'
 
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
@@ -65,7 +66,7 @@ function rendererSnapshot(
 }
 
 /** A persisted session holding `host-tab`, its one leaf bound to `ptyId` when given. */
-function sessionStoreWithHostTab(ptyId?: string) {
+function sessionStoreWithHostTab(ptyId?: string, shellOverride?: string) {
   return makeRuntimeStoreWithWorkspaceSession(
     makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
@@ -78,7 +79,8 @@ function sessionStoreWithHostTab(ptyId?: string) {
             customTitle: null,
             color: null,
             sortOrder: 0,
-            createdAt: 1
+            createdAt: 1,
+            ...(shellOverride ? { shellOverride } : {})
           }
         ]
       },
@@ -115,7 +117,10 @@ function makeRendererRuntime(
     sleepWorktree: vi.fn(),
     terminalFitOverrideChanged: vi.fn(),
     terminalDriverChanged: vi.fn(),
-    restartExitedTerminal: vi.fn(),
+    revealTerminalSession: vi.fn(async (_worktreeId: string, opts: { tabId?: string }) => ({
+      tabId: opts.tabId ?? 'revealed-tab',
+      title: null
+    })),
     terminalExitRecordsChanged: vi.fn()
   }
   runtime.setNotifier(notifier)
@@ -290,14 +295,23 @@ describe('terminal exit records', () => {
     ).toEqual([])
   })
 
-  it('does not show a stale exit on a closed tab reopened with the same leaf id', async () => {
+  it('ends the record when its leaf leaves the session, so a reopened tab spawns fresh', async () => {
     const { runtimeStore, getSession, setSession } = sessionStoreWithHostTab()
     const beforeClose = getSession()
     const snapshot = rendererSnapshot([{ tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }])
-    const { runtime } = makeRendererRuntime(snapshot, runtimeStore)
+    const { runtime, notifier } = makeRendererRuntime(snapshot, runtimeStore)
     runtime.terminalExitRecords.record(exitRecord())
 
     runtime.closeTerminalSurfaceFromRenderer(TEST_WORKTREE_ID, { kind: 'tab', tabId: 'host-tab' })
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [{ ...snapshot, snapshotVersion: 2, activeTabId: null, tabs: [] }]
+    })
+    expect(runtime.terminalExitRecords.get(HEADLESS_LEAF_ID)).toBeUndefined()
+    // Why: the desktop mount check reads this mirror; a stale entry would show the reopened pane exited.
+    expect(notifier.terminalExitRecordsChanged).toHaveBeenLastCalledWith([])
+
     // Reopening a recently closed tab restores it with its original ids.
     setSession(beforeClose)
     runtime.syncWindowGraph(0, {
@@ -313,25 +327,63 @@ describe('terminal exit records', () => {
     expect(reopened.tabs[0]).not.toHaveProperty('exited')
   })
 
-  it('publishes nothing of its own when a close clears a record, leaving that to the removal', () => {
+  it('keeps showing a closing leaf as exited until the session removes it', async () => {
     const { runtimeStore } = sessionStoreWithHostTab()
-    const { runtime, notifier } = makeRendererRuntime(
+    const { runtime } = makeRendererRuntime(
       rendererSnapshot([{ tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }]),
       runtimeStore
     )
     runtime.terminalExitRecords.record(exitRecord())
-    const frames: unknown[] = []
-    runtime.onMobileSessionTabsChanged((frame) => frames.push(frame))
 
+    // The close intent lands before the renderer's graph sync removes the leaf.
     runtime.closeTerminalSurfaceFromRenderer(TEST_WORKTREE_ID, { kind: 'tab', tabId: 'host-tab' })
+    const between = await listForClient(runtime, [
+      SESSION_TABS_TERMINAL_EXIT_STATE_RUNTIME_CAPABILITY
+    ])
 
-    // Why: a frame here would show the closed leaf, still listed, without its exit.
-    expect(frames).toEqual([])
-    expect(runtime.terminalExitRecords.get(HEADLESS_LEAF_ID)).toBeUndefined()
-    expect(notifier.terminalExitRecordsChanged).toHaveBeenLastCalledWith([])
+    // Why: a frame here without the exit would show a still-listed leaf as starting.
+    expect(between.tabs).toEqual([
+      expect.objectContaining({ leafId: HEADLESS_LEAF_ID, exited: expect.any(Object) })
+    ])
   })
 
-  it("ends every record of a removed worktree, and only that worktree's", () => {
+  it('keeps the record of a leaf the session has not listed yet', () => {
+    const { runtime } = makeRendererRuntime(
+      rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }])
+    )
+    // An instant-exit split: kept before the renderer first publishes its leaf.
+    const unpublished = exitRecord({ leafId: SIBLING_LEAF_ID })
+    runtime.terminalExitRecords.record(unpublished)
+
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        { ...rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }]), snapshotVersion: 4 }
+      ]
+    })
+
+    expect(runtime.terminalExitRecords.list()).toEqual([unpublished])
+  })
+
+  it("ends a headless close's record in the frame that removes its leaf", async () => {
+    const { runtime } = makePendingAgentTabActivationRuntime()
+    await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    runtime.terminalExitRecords.record(exitRecord({ ptyId: 'serve-dead-pty' }))
+    const recordAtFrame: (TerminalExitRecord | undefined)[] = []
+    runtime.onMobileSessionTabsChanged((frame) => {
+      if (!frame.tabs.some((tab) => tab.type === 'terminal' && tab.leafId === HEADLESS_LEAF_ID)) {
+        recordAtFrame.push(runtime.terminalExitRecords.get(HEADLESS_LEAF_ID))
+      }
+    })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+
+    expect(recordAtFrame.length).toBeGreaterThan(0)
+    expect(recordAtFrame).toEqual(recordAtFrame.map(() => undefined))
+  })
+
+  it("ends every record of a removed worktree's session, and only that worktree's", () => {
     const { runtime, notifier } = makeRendererRuntime(
       rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }])
     )
@@ -419,80 +471,104 @@ describe('terminal exit records', () => {
     expect(keptView).toEqual(retiredView)
   })
 
-  it('routes a user activation of a desktop-held exited leaf to the desktop pane', async () => {
+  it.each(['mounted', 'unmounted', 'reloading'] as const)(
+    'restarts a %s desktop leaf as one plain-shell runtime spawn with its shell, surfacing nothing',
+    async (desktop) => {
+      const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        const snapshot = rendererSnapshot([{ tabId: 'host-tab', leafId: HEADLESS_LEAF_ID }])
+        const { runtime, spawn, notifier } = makeRendererRuntime(
+          snapshot,
+          sessionStoreWithHostTab(undefined, 'cmd.exe').runtimeStore
+        )
+        if (desktop !== 'unmounted') {
+          publishDesktopGraph(runtime, snapshot)
+        }
+        if (desktop === 'reloading') {
+          runtime.markRendererReloading(1)
+        }
+        runtime.terminalExitRecords.record(exitRecord())
+
+        await runtime.activateMobileSessionTab(
+          `id:${TEST_WORKTREE_ID}`,
+          'host-tab',
+          HEADLESS_LEAF_ID,
+          { notifyClients: false, intent: 'user' }
+        )
+
+        expect(spawn).toHaveBeenCalledTimes(1)
+        const request = spawn.mock.calls[0]![0]
+        expect(request).toMatchObject({ tabId: 'host-tab', leafId: HEADLESS_LEAF_ID })
+        expect(request.command).toBeUndefined()
+        // Why: the shell is what this terminal is, never a command typed into the default shell.
+        expect(request.shellOverride).toBe('cmd.exe')
+        // Why: a `serve-` id would reclassify a desktop tab as runtime-owned.
+        expect(request.sessionId).toBeUndefined()
+        expect(notifier.revealTerminalSession).toHaveBeenCalledWith(
+          TEST_WORKTREE_ID,
+          expect.objectContaining({
+            tabId: 'host-tab',
+            leafId: HEADLESS_LEAF_ID,
+            activate: false,
+            surfaceOwner: false
+          })
+        )
+        // Why: a phone-local restart must not move the desktop's focus.
+        expect(notifier.focusTerminal).not.toHaveBeenCalled()
+        expect(runtime.terminalExitRecords.get(HEADLESS_LEAF_ID)).toBeUndefined()
+      } finally {
+        Object.defineProperty(process, 'platform', hostPlatform)
+      }
+    }
+  )
+
+  it('focuses the desktop pane after a restart only when the navigation targets the host', async () => {
     const snapshot = rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }])
-    const { runtime, spawn, notifier } = makeRendererRuntime(snapshot)
+    const { runtime, notifier } = makeRendererRuntime(snapshot)
     publishDesktopGraph(runtime, snapshot)
     runtime.terminalExitRecords.record(exitRecord())
 
     await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, TAB_ID, HEADLESS_LEAF_ID, {
-      notifyClients: false,
       intent: 'user'
     })
 
-    expect(notifier.restartExitedTerminal).toHaveBeenCalledWith(
+    expect(notifier.revealTerminalSession).toHaveBeenCalledWith(
+      TEST_WORKTREE_ID,
+      expect.objectContaining({ surfaceOwner: false })
+    )
+    expect(notifier.focusTerminal).toHaveBeenCalledExactlyOnceWith(
       TAB_ID,
       TEST_WORKTREE_ID,
       HEADLESS_LEAF_ID
     )
-    expect(notifier.focusTerminal).not.toHaveBeenCalled()
-    expect(spawn).not.toHaveBeenCalled()
   })
 
-  it('routes the restart of an SSH split pane the desktop holds to that desktop pane', async () => {
-    const siblingSshPtyId = toAppSshPtyId('ssh-target', 'relay-pty-sibling')
-    const parentLayout = {
-      root: {
-        type: 'split' as const,
-        direction: 'vertical' as const,
-        first: { type: 'leaf' as const, leafId: HEADLESS_LEAF_ID },
-        second: { type: 'leaf' as const, leafId: SIBLING_LEAF_ID }
-      },
-      activeLeafId: SIBLING_LEAF_ID,
-      expandedLeafId: null,
-      ptyIdsByLeafId: { [SIBLING_LEAF_ID]: siblingSshPtyId }
-    }
-    const base = rendererSnapshot([
-      { tabId: TAB_ID, leafId: HEADLESS_LEAF_ID },
-      { tabId: TAB_ID, leafId: SIBLING_LEAF_ID, ptyId: siblingSshPtyId }
-    ])
-    const snapshot = {
-      ...base,
-      tabs: base.tabs.map((tab) => (tab.type === 'terminal' ? { ...tab, parentLayout } : tab))
-    }
-    const { runtime, spawn, notifier } = makeRendererRuntime(snapshot)
+  it("starts one process for a repeated restart, and the desktop pane's spawn attaches to it", async () => {
+    const snapshot = rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }])
+    const { runtime, spawn } = makeRendererRuntime(snapshot)
     publishDesktopGraph(runtime, snapshot)
     runtime.terminalExitRecords.record(exitRecord())
+    const activate = () =>
+      runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, TAB_ID, HEADLESS_LEAF_ID, {
+        notifyClients: false,
+        intent: 'user'
+      })
 
-    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, TAB_ID, HEADLESS_LEAF_ID, {
-      notifyClients: false,
-      intent: 'user'
-    })
+    // A second tap lands while the first restart is still spawning.
+    await Promise.all([activate(), activate()])
 
-    // Why: a runtime spawn would bind a second process the mounted SSH pane never attaches to.
-    expect(notifier.restartExitedTerminal).toHaveBeenCalledWith(
-      TAB_ID,
-      TEST_WORKTREE_ID,
-      HEADLESS_LEAF_ID
-    )
-    expect(spawn).not.toHaveBeenCalled()
-  })
-
-  it('restarts a runtime-owned leaf in a desktop-published snapshot through the runtime', async () => {
-    // The desktop publishes the worktree, but its renderer graph does not hold this tab.
-    const { runtime, spawn, notifier } = makeRendererRuntime(
-      rendererSnapshot([{ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID }])
-    )
-    runtime.terminalExitRecords.record(exitRecord())
-
-    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, TAB_ID, HEADLESS_LEAF_ID, {
-      notifyClients: false,
-      intent: 'user'
-    })
-
-    expect(notifier.restartExitedTerminal).not.toHaveBeenCalled()
     expect(spawn).toHaveBeenCalledTimes(1)
-    expect(spawn.mock.calls[0]![0]).toMatchObject({ tabId: TAB_ID, leafId: HEADLESS_LEAF_ID })
+    // The owner a desktop `pty:spawn` for this pane key resolves, and attaches to instead of spawning.
+    expect(
+      resolveStablePaneOwner(
+        runtime,
+        store,
+        makePaneKey(TAB_ID, HEADLESS_LEAF_ID),
+        TEST_WORKTREE_ID,
+        null
+      )
+    ).toMatchObject({ ptyId: 'pty-runtime-spawn' })
   })
 
   it('never restarts or focuses an exited leaf for an automatic probe', async () => {
@@ -505,7 +581,6 @@ describe('terminal exit records', () => {
       intent: 'automatic'
     })
 
-    expect(notifier.restartExitedTerminal).not.toHaveBeenCalled()
     expect(notifier.focusTerminal).not.toHaveBeenCalled()
     expect(spawn).not.toHaveBeenCalled()
   })
@@ -527,6 +602,8 @@ describe('terminal exit records', () => {
     expect(request.command).toBeUndefined()
     // Why: materialize reattaches the tab's recorded session and relaunches its agent.
     expect(request.sessionId).not.toBe('serve-dead-pty')
+    // Why: the dead process was runtime-owned, and its restart stays so.
+    expect(request.sessionId).toMatch(/^serve-/)
     expect(runtime.terminalExitRecords.get(HEADLESS_LEAF_ID)).toBeUndefined()
   })
 })

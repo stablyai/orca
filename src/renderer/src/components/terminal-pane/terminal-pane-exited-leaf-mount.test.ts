@@ -92,17 +92,4 @@ describe('mounting a leaf main kept after its exit', () => {
     expect(panePtyBindings.size).toBe(1)
     expect(onPaneProcessDied).not.toHaveBeenCalled()
   })
-
-  it('drops a routed restart once its record is gone', () => {
-    const store = useAppStore.getState()
-    store.replaceTerminalExitRecords([record])
-    store.requestExitedTerminalRestart(LEAF_ID)
-    store.requestExitedTerminalRestart('leaf-without-record')
-
-    expect(useAppStore.getState().pendingExitedTerminalRestartLeafIds).toEqual({ [LEAF_ID]: true })
-
-    useAppStore.getState().replaceTerminalExitRecords([])
-
-    expect(useAppStore.getState().consumeExitedTerminalRestart(LEAF_ID)).toBe(false)
-  })
 })

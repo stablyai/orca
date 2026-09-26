@@ -15,19 +15,6 @@ function exitRecord(leafId: string, ptyId: string): TerminalExitRecord {
 }
 
 describe('terminal exit record mirror', () => {
-  it('keeps the pending restart map every pane subscribes to when an unrelated leaf exits', () => {
-    const store = createTestStore()
-    store.getState().replaceTerminalExitRecords([exitRecord('leaf-a', 'pty-a')])
-    store.getState().requestExitedTerminalRestart('leaf-a')
-    const pending = store.getState().pendingExitedTerminalRestartLeafIds
-
-    store
-      .getState()
-      .replaceTerminalExitRecords([exitRecord('leaf-a', 'pty-a'), exitRecord('leaf-b', 'pty-b')])
-
-    expect(store.getState().pendingExitedTerminalRestartLeafIds).toBe(pending)
-  })
-
   it('publishes nothing for a push equal to what the mirror holds', () => {
     const store = createTestStore()
     store.getState().replaceTerminalExitRecords([exitRecord('leaf-a', 'pty-a')])
@@ -36,12 +23,8 @@ describe('terminal exit record mirror', () => {
     // Why a fresh object: each IPC push arrives as a new structured clone.
     store.getState().replaceTerminalExitRecords([exitRecord('leaf-a', 'pty-a')])
     store.getState().replaceTerminalExitRecords([exitRecord('leaf-a', 'pty-a')])
-    store.getState().requestExitedTerminalRestart('leaf-a')
-    const requested = store.getState()
-    store.getState().requestExitedTerminalRestart('leaf-a')
 
-    expect(requested.terminalExitRecordsByLeafId).toBe(before.terminalExitRecordsByLeafId)
-    expect(store.getState()).toBe(requested)
+    expect(store.getState()).toBe(before)
   })
 
   it('replaces a leaf whose record names a later exit', () => {

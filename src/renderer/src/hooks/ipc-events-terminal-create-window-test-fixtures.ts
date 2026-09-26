@@ -113,7 +113,6 @@ export function buildTerminalCreateWindow(args: {
           focusTerminalListenerRef.current = listener
           return () => {}
         },
-        onRestartExitedTerminal: () => () => {},
         onTerminalExitRecordsChanged: () => () => {},
         listTerminalExitRecords: async () => [],
         onFocusEditorTab: () => () => {},

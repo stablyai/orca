@@ -53,13 +53,18 @@ describe('restarting an exited pane', () => {
     expect(manager.setActivePane).toHaveBeenCalledWith(PANE_ID, { focus: true })
   })
 
-  it('leaves focus alone for a restart another device asked for', () => {
+  it('attaches to a process another device started without moving focus or sending a startup', () => {
     connectPanePty.mockClear()
     const { result, manager } = renderExitActions()
 
-    result.current.handleRestartExitedPane(processExit, { focus: false })
+    result.current.handleAttachExitedPane({
+      ...processExit,
+      reason: 'git-bash-console-capacity',
+      startup: { command: 'claude' }
+    })
 
     expect(connectPanePty).toHaveBeenCalledTimes(1)
+    expect(connectPanePty.mock.calls[0]![2]).toMatchObject({ tabId: 'tab-1', startup: null })
     expect(manager.setActivePane).not.toHaveBeenCalled()
   })
 })
