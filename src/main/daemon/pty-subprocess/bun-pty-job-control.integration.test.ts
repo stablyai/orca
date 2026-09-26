@@ -161,12 +161,26 @@ const waitFor = async predicate => {
     const sleeperAfter = (await rows()).find(row => row.pid === sleeper.pid)
     console.log(JSON.stringify({producerPaused,producerResumed:true,userJobStopped:sleeperAfter?.state.startsWith('T')===true,userJobSignalled:signals.some(([pgid])=>pgid===sleeper.pgid)}))
   } finally {
+    let ownedPids = []
     try {
-      const ownedPids = (await rows()).map(row => row.pid)
-      forceKillPosixPtyProcessGroups(proc.pid, () => proc.kill('SIGKILL'))
-      await waitFor(() => exited && ownedPids.every(pid => !isAlive(pid)))
+      proc.resume()
+      const ownedRows = await rows()
+      ownedPids = ownedRows.map(row => row.pid)
+      const root = ownedRows.find(row => row.pid === proc.pid)
+      if (!root) throw new Error('Cleanup could not find the owned shell')
+      // Keep Bash running until it reaps its jobs; container PID 1 may not reap orphans.
+      forceKillPosixPtyProcessGroups(proc.pid, () => {throw new Error('Cleanup lost terminal ownership')}, {
+        signalProcessGroup: pgid => {if (pgid !== root.pgid) process.kill(-pgid, 'SIGKILL')}
+      })
+      process.kill(proc.pid, 'SIGCONT')
+      await waitFor(() => ownedPids.every(pid => pid === proc.pid || !isAlive(pid)))
     } finally {
-      proc.destroy()
+      try {
+        forceKillPosixPtyProcessGroups(proc.pid, () => proc.kill('SIGKILL'))
+        await waitFor(() => exited && ownedPids.every(pid => !isAlive(pid)))
+      } finally {
+        proc.destroy()
+      }
     }
   }
 })().catch(error => {console.error(error);process.exitCode=1})
