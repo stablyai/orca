@@ -154,6 +154,28 @@ export async function getProjectViewTable(
     }
   }
 
+  // Fallback: when the search index is stale, an indexed query can return 0
+  // items while an unfiltered query would succeed. Retry once without the
+  // query so the Projects tab shows real data instead of the empty state
+  // (#12648).
+  let rows = items.rows
+  let totalCount = items.totalCount
+  let parentFieldDropped = items.parentFieldDropped
+  if (totalCount === 0 && rows.length === 0 && effectiveQuery) {
+    const unfiltered = await fetchAllItems({
+      owner: args.owner,
+      ownerType: args.ownerType,
+      projectNumber: args.projectNumber,
+      query: '',
+      host: args.host
+    })
+    if (unfiltered.ok && unfiltered.rows.length > 0) {
+      rows = unfiltered.rows
+      totalCount = unfiltered.totalCount
+      parentFieldDropped = unfiltered.parentFieldDropped
+    }
+  }
+
   const table: GitHubProjectTable = {
     project: {
       id: project.id,
@@ -165,9 +187,9 @@ export async function getProjectViewTable(
       url: project.url
     },
     selectedView,
-    rows: items.rows,
-    totalCount: items.totalCount,
-    parentFieldDropped: items.parentFieldDropped
+    rows,
+    totalCount,
+    parentFieldDropped,
   }
   return { ok: true, data: table }
 }
