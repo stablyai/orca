@@ -126,6 +126,92 @@ describe('orca cli worktree awareness', () => {
     ])
   })
 
+  it('sends terminal history as a tail-lines read and prints the joined scrollback', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_history', {
+        history: {
+          handle: 'term_worker',
+          status: 'running',
+          history: 'Traceback (most recent call last):\n  File "app.py", line 3',
+          lineCount: 2,
+          truncated: true,
+          source: 'stream'
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['terminal', 'history', '--terminal', 'term_worker', '--tail-lines', '500', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.history', {
+      terminal: 'term_worker',
+      tailLines: 500
+    })
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(printed.result.history.history).toContain('Traceback')
+    expect(printed.result.history.truncated).toBe(true)
+  })
+
+  it('passes --screen through to terminal.history', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_history_screen', {
+        history: {
+          handle: 'term_worker',
+          status: 'running',
+          history: 'rendered screen contents',
+          lineCount: 1,
+          truncated: false,
+          source: 'screen'
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'history', '--terminal', 'term_worker', '--screen', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('terminal.history', {
+      terminal: 'term_worker',
+      screen: true
+    })
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(printed.result.history.source).toBe('screen')
+  })
+
+  // Why: mirrors terminal read --screen — an older host drops the unknown `screen` param and
+  // answers with its ordinary history, which carries no source. Handing that back silently would
+  // be the read verb's original defect wearing terminal history's name.
+  it("refuses to pass an older host's history off as a screen read", async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_history_screen_old_host', {
+        history: {
+          handle: 'term_worker',
+          status: 'running',
+          history: 'cclclecleaclear',
+          lineCount: 1,
+          truncated: false
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['terminal', 'history', '--terminal', 'term_worker', '--screen', '--json'], '/tmp/repo')
+
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'does not support --screen reads'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('keeps interactive Codex startup commands backgrounded unless focus is explicit', async () => {
     queueFixtures(
       callMock,

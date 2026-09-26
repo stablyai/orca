@@ -2,6 +2,7 @@ import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
+import { TERMINAL_HISTORY_COMMAND_SPEC } from './terminal-history'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
 
@@ -228,6 +229,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal read --terminal term_abc123 --screen --json'
     ]
   },
+  TERMINAL_HISTORY_COMMAND_SPEC,
   TERMINAL_SEND_COMMAND_SPEC,
   {
     path: ['terminal', 'wait'],

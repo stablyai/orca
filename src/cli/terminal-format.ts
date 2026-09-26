@@ -5,6 +5,7 @@ import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
+  RuntimeTerminalHistory,
   RuntimeTerminalListResult,
   RuntimeTerminalVisualLayout,
   RuntimeTerminalVisualLayoutNode,
@@ -111,6 +112,10 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
   ].join('\n')
 }
 
+/** Shared by both read verbs: accumulated output is not the rendered screen a caller asked for. */
+const SCREEN_UNAVAILABLE_WARNING =
+  'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
+
 function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
   if (agentWait === undefined) {
     return 'unknown (not evaluated)'
@@ -122,6 +127,25 @@ function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
     return `interactive prompt (via ${agentWait.source})`
   }
   return `${describeTerminalWaitBlockedReason(agentWait.reason)} (via ${agentWait.source})`
+}
+
+/**
+ * The agent-facing counterpart of `formatTerminalRead`: a short provenance header, then the
+ * history as one block so a stack trace can be copied out of it unchanged.
+ */
+export function formatTerminalHistory(result: { history: RuntimeTerminalHistory }): string {
+  const history = result.history
+  const header = [
+    `handle: ${history.handle}`,
+    `status: ${history.status}`,
+    ...(history.source ? [`source: ${history.source}`] : []),
+    `lines: ${history.lineCount}`,
+    ...(history.truncated
+      ? ['warning: older output is not in this history; raise --tail-lines to ask for more']
+      : []),
+    ...(history.source === 'screen-unavailable' ? [SCREEN_UNAVAILABLE_WARNING] : [])
+  ]
+  return [...header, '', history.history].join('\n')
 }
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
@@ -143,11 +167,7 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
     ...(limitedWarning ? [limitedWarning] : []),
     // Why: the caller asked for the rendered screen; say plainly that this is not it rather
     // than let repaint fragments be read as what the terminal displayed.
-    ...(terminal.source === 'screen-unavailable'
-      ? [
-          'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
-        ]
-      : [])
+    ...(terminal.source === 'screen-unavailable' ? [SCREEN_UNAVAILABLE_WARNING] : [])
   ]
   return [...header, '', ...terminal.tail].join('\n')
 }

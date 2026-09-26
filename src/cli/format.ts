@@ -34,6 +34,7 @@ export {
   formatTerminalClose,
   formatTerminalCreate,
   formatTerminalFocus,
+  formatTerminalHistory,
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,

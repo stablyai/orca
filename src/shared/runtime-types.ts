@@ -182,6 +182,7 @@ export type {
   RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
 } from './runtime-terminal-contracts'
+export type { RuntimeTerminalHistory } from './runtime-terminal-history-contract'
 export type {
   RuntimeGitCheckoutResult,
   RuntimeGitLocalBranches,

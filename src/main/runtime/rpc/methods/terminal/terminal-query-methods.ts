@@ -1,6 +1,8 @@
 import { defineMethod } from '../../core'
+import { buildTerminalHistory, terminalHistoryTailLines } from '../../../terminal-history-text'
 import {
   TerminalHandle,
+  TerminalHistory,
   TerminalInspectProcess,
   TerminalListParams,
   TerminalRead,
@@ -74,6 +76,20 @@ export const TERMINAL_QUERY_METHODS = [
         limit: params.limit,
         screen: params.screen
       })
+    })
+  }),
+  defineMethod({
+    // Composes `terminal.read` rather than reaching into the tail buffer: the read path is what
+    // knows about structured workers, remote hosts, and the rendered-screen fallback.
+    name: 'terminal.history',
+    params: TerminalHistory,
+    handler: async (params, { runtime }) => ({
+      history: buildTerminalHistory(
+        await runtime.readTerminal(params.terminal, {
+          limit: terminalHistoryTailLines(params.tailLines),
+          ...(params.screen ? { screen: true } : {})
+        })
+      )
     })
   }),
   defineMethod({
