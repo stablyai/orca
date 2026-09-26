@@ -163,7 +163,7 @@ export function fixture(
     resolveWorktree: async () => ({ id: worktreeId, repoId: 'repo-1', instanceId: 'inst-local' }),
     getLocalSession: () => session,
     getWorktreeMeta: (id) => meta[id],
-    setRecoveryProvenance: (id, recoveryProvenance) => {
+    setRecoveryProvenance: async (id, recoveryProvenance) => {
       meta[id] = { ...meta[id], recoveryProvenance }
     },
     applyOp: async (op) => {

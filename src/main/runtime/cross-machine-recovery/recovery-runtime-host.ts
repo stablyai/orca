@@ -39,7 +39,7 @@ export type CrossMachineRecoveryHost = {
   resolveWorktree(selector: string): Promise<{ id: string; repoId: string; instanceId?: string }>
   getLocalSession(): WorkspaceSessionState
   getWorktreeMeta(worktreeId: string): WorktreeMeta | undefined
-  setRecoveryProvenance(worktreeId: string, provenance: RecoveryProvenance): void
+  setRecoveryProvenance(worktreeId: string, provenance: RecoveryProvenance): Promise<void>
   /** Applies through the renderer when one is attached, else through the runtime's durable writer. */
   applyOp(op: CrossMachineRecoveryApplyOp): Promise<CrossMachineRecoveryApplyOutcome>
   ensureAgentSession(
@@ -151,8 +151,23 @@ export function createCrossMachineRecoveryHost(
       return session
     },
     getWorktreeMeta: (worktreeId) => requireStore().getWorktreeMeta(worktreeId),
-    setRecoveryProvenance: (worktreeId, recoveryProvenance) => {
-      requireStore().setWorktreeMeta(worktreeId, { recoveryProvenance })
+    setRecoveryProvenance: async (worktreeId, recoveryProvenance) => {
+      const store = requireStore()
+      const runDurableMutation = store.runDurableMutation?.bind(store)
+      if (!runDurableMutation) {
+        throw new Error('workspace_session_unavailable')
+      }
+      // Why durable before replying: a retried import finds its importKey only through this row.
+      await runDurableMutation(() => {
+        const previous = store.getWorktreeMeta(worktreeId)?.recoveryProvenance
+        store.setWorktreeMeta(worktreeId, { recoveryProvenance })
+        return {
+          value: undefined,
+          rollback: () => {
+            store.setWorktreeMeta(worktreeId, { recoveryProvenance: previous })
+          }
+        }
+      })
     },
     applyOp: async (op) => {
       const win = deps.getAuthoritativeWindow()

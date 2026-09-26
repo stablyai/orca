@@ -253,7 +253,7 @@ export async function importRecoveryWorkspaceWithHost(
   if (!outcome.ok) {
     throw new Error(outcome.code)
   }
-  host.setRecoveryProvenance(worktree.id, provenance)
+  await host.setRecoveryProvenance(worktree.id, provenance)
   const bindings = await resumeSelected(host, worktree.id, plan.bindings, resumeKeys)
   if (params.activate) {
     await host.activateWorktree(worktree.id)
