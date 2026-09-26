@@ -3,7 +3,7 @@
 // can never describe the same pending question differently.
 
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
-import { parseAskFromToolInput } from './native-chat-ask'
+import { isAsyncQuestionAcknowledgement, parseAskFromToolInput } from './native-chat-ask'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
 import { pairToolBlocks } from './native-chat-tool-fold'
 
@@ -43,7 +43,12 @@ export function nativeChatAskRunBlocks(blocks: NativeChatBlock[]): {
       continue
     }
     asks.push(call)
-    if (!result) {
+    const prompt = parseAskFromToolInput(call.name, call.input)
+    const awaitingAsyncAnswer =
+      result != null &&
+      prompt?.delivery === 'async' &&
+      isAsyncQuestionAcknowledgement(result.output)
+    if (!result || awaitingAsyncAnswer) {
       unansweredAsks.push(call)
     }
     removed.add(call)

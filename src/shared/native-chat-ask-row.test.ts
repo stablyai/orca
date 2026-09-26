@@ -67,6 +67,23 @@ describe('native chat ask row', () => {
     ).toEqual({ kind: 'question', text: 'Which branch?' })
   })
 
+  it('keeps an async ask open after its display acknowledgement', () => {
+    const ask = askCall(
+      JSON.stringify({ questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }] }),
+      'request_user_input_async'
+    )
+    const acknowledgement: NativeChatBlock = {
+      type: 'tool-result',
+      output: '{"accepted":true}'
+    }
+
+    expect(nativeChatAskRunBlocks([ask, acknowledgement])).toEqual({
+      asks: [ask],
+      unansweredAsks: [ask],
+      work: []
+    })
+  })
+
   it('still reports an ask whose payload names no question', () => {
     // Decided by the tool name alone: an unreadable payload must not put the raw
     // call back on screen as the row it was meant to replace.
