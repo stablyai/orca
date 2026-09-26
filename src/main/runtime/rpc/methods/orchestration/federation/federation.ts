@@ -7,11 +7,7 @@ import {
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
-import {
-  appendFederationSetupEffect,
-  appendFederationTerminalEffects,
-  type FederationEffect
-} from './federation-effects'
+import type { FederationEffect } from './federation-effects'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
 import {
   monitorFederatedSetup,
@@ -19,6 +15,7 @@ import {
   persistFederatedSetupSpawnFailure,
   persistFederatedSetupWaitOutcome
 } from './federation-setup'
+import { createFederatedWorkerWorktree } from './federation-worktree-creation'
 import { FederationAttachStartParams } from './federation-start-schema'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
 import { prepareFederationAttachmentWorkerStart } from '../worker/worker-start-validation'
@@ -85,7 +82,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       const setupSource = createsWorktree
         ? (params.setupSource ?? (params.setup ? 'explicit_request' : 'orchestration_default'))
         : 'existing_worktree'
-      let setup: WorkerSetupReceipt = {
+      const setup: WorkerSetupReceipt = {
         requested: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         effective: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         source: setupSource,
@@ -95,59 +92,17 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       }
       try {
         if (createsWorktree) {
-          db.recordRemoteAttachmentStage({
-            dispatchId: params.dispatchId,
-            stage: 'worktree_creating'
-          })
-          const setupDecision = params.setup ?? 'run'
-          const created = await runtime.createManagedWorktree({
-            repoSelector: params.repo as string,
-            name: params.name as string,
-            baseBranch: params.baseBranch,
-            displayName: params.displayName,
-            displayNameKind: params.displayNameKind,
-            comment: params.comment,
-            // setupDecision runs setup without the legacy runHooks activation side effect.
-            runHooks: false,
-            setupDecision,
-            awaitTerminalProvisioning: true,
-            observeSetupCompletion: true,
-            createdWithAgent: agent as TuiAgent,
-            startupAgent: agent as TuiAgent,
-            ...(launch.preferences ? { startupLaunchPreferences: launch.preferences } : {}),
-            activate: false,
-            lineage: { noParent: true }
+          const created = await createFederatedWorkerWorktree({
+            runtime,
+            db,
+            params,
+            agent,
+            launchPreferences: launch.preferences,
+            setup,
+            effects
           })
           worktree = created.worktree
-          terminalHandle = created.startupTerminal?.handle
-          effects.push({
-            kind: 'worktree',
-            action: 'created_top_level',
-            id: created.worktree.id
-          })
-          setup = {
-            requested: setupDecision,
-            effective: setupDecision,
-            source: setupSource,
-            hookFound: created.setupReceipt?.hookFound ?? false,
-            startupPolicy: created.setupReceipt?.startupPolicy ?? 'start-immediately',
-            state: created.setupReceipt?.state ?? 'not_configured'
-          }
-          if (!terminalHandle) {
-            throw new Error(
-              created.warning ?? 'Agent-first worktree creation returned no terminal.'
-            )
-          }
-          const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
-            includeVisualLayouts: false
-          })
-          appendFederationTerminalEffects(
-            effects,
-            listed.terminals,
-            terminalHandle,
-            created.setupReceipt?.terminalHandle
-          )
-          appendFederationSetupEffect(effects, setup)
+          terminalHandle = created.terminalHandle
         } else {
           worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
             throw new OrchestrationError(

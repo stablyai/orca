@@ -255,6 +255,39 @@ describe('orchestration federation', () => {
     expect(workerRuntime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
 
+  it('reports the created remote worktree as residual when the attach fails after creation', async () => {
+    // Why: the worktree exists on the worker host from createManagedWorktree onward, but the
+    // attachment row only learned of it at terminal_readying. A failure in between reported no
+    // residual resources, telling the coordinator nothing was left behind while a real worktree
+    // stayed on the remote peer.
+    vi.mocked(workerRuntime.listTerminals).mockRejectedValueOnce(
+      new Error('the worker host dropped the terminal listing')
+    )
+    const task = createHomeTask()
+
+    const response = await homeDispatcher.dispatch(startRequest(task.id))
+
+    const createdWorktree = expect.objectContaining({
+      kind: 'worktree',
+      action: 'created_top_level',
+      id: 'repo::windows-worktree'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        state: 'failed',
+        failedStage: 'worktree_create',
+        residualResources: expect.arrayContaining([createdWorktree])
+      }
+    })
+    const dispatch = homeDb.getDispatchContext(task.id)!
+    const attachment = workerDb.getRemoteDispatchAttachment(dispatch.id)
+    expect(attachment?.worktree_id).toBe('repo::windows-worktree')
+    expect(JSON.parse(attachment?.residual_resources ?? '[]')).toEqual(
+      expect.arrayContaining([createdWorktree])
+    )
+  })
+
   it('starts a legacy federation worker through its negotiated protocol', async () => {
     workerCapabilities = workerCapabilities.filter(
       (capability) => capability !== ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
