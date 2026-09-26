@@ -242,7 +242,7 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     const scope = createTerminalDocumentScope({
       postToHost: (message) => notifications.push(message),
       // Half the width 80 columns of 8 px need, so the fit commits a scale of 0.5.
-      viewportRect: () => ({ width: 320, height: 700 })
+      viewportRect: () => ({ left: 0, top: 0, width: 320, height: 700 })
     })
     const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements every member the fit and the metrics read, which the assertion checks.
