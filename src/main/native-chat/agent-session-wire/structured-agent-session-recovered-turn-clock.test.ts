@@ -89,7 +89,11 @@ async function sessionWithRunningTurn() {
       }
     }
   })
-  const completions = new StructuredAgentSessionTurnCompletionFeed({ sessions, now: () => clock })
+  const completions = new StructuredAgentSessionTurnCompletionFeed({
+    sessions,
+    now: () => clock,
+    readStatusState: (sessionId, source) => feed.statusState(sessionId, source)
+  })
   const completionEvents: AgentSessionTurnCompletionEvent[] = []
   completions.subscribe({ id: 'dot-1', emit: (event) => completionEvents.push(event) })
   // Both feeds have seen the turn running, so its settlement is a transition they must judge.

@@ -1,5 +1,6 @@
 // The session's latest request and what became of it: the verdict a sidebar row reports once
-// the session is idle, and whether there is a request to list at all.
+// the session is idle, whether there is a request to list at all, and the prompt and answer its row
+// quotes.
 //
 // A request is either a turn, whose record carries the provider's verdict, or a send that never
 // became one because the agent or its start refused it. A send inside a running turn (a steer)
@@ -18,10 +19,16 @@ import { dispatchRejectionVerdict } from './structured-agent-session-dispatch-re
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
   isStructuredAgentSessionCommandEntry,
+  isStructuredAgentSessionCommandRow,
   structuredAgentSessionCommandTurnItemIds
 } from './structured-agent-session-command-entry'
+import type { NativeChatBlock } from './native-chat-types'
 
 export type StructuredAgentSessionLatestRequest = {
+  kind: 'turn' | 'refused-send'
+  /** The turn's id, or the refused send's journal item key. Unique only within its kind. */
+  id: string
+  running: boolean
   /** Null while the turn runs, and for a turn whose end carried no verdict. */
   outcome: AgentJournalTurnOutcome | null
   /** When it settled: the turn's end, or the refusal. Undefined while it runs. */
@@ -50,9 +57,13 @@ export function latestStructuredAgentSessionRequest(
     }
     const turn = readAgentJournalTurn(item.body)
     if (turn) {
+      const running = turn.state === 'running'
       return {
+        kind: 'turn',
+        id: turn.turnId,
+        running,
         outcome: readAgentJournalTurnOutcome(turn),
-        settledAt: turn.state === 'running' ? undefined : turnEndedAt(item, turn)
+        settledAt: running ? undefined : turnEndedAt(item, turn)
       }
     }
     const submission = rejected.get(item.itemId)
@@ -61,7 +72,13 @@ export function latestStructuredAgentSessionRequest(
       dispatchRejectionVerdict(submission.reason) === 'failure' &&
       !deliveredIntoRunningTurn(items, index, submission)
     ) {
-      return { outcome: 'failure', settledAt: submission.resolvedAt ?? undefined }
+      return {
+        kind: 'refused-send',
+        id: item.itemId,
+        running: false,
+        outcome: 'failure',
+        settledAt: submission.resolvedAt ?? undefined
+      }
     }
   }
   return null
@@ -139,4 +156,64 @@ function turnEndedAt(
   turn: AgentJournalTurnLifecycle
 ): number | undefined {
   return item.recoveredAt ?? turn.completedAt
+}
+
+function messageProse(blocks: readonly NativeChatBlock[]): string {
+  return blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+}
+
+/** The newest prompt the session's own user turn carries, as the sidebar quotes
+ *  it. Scoped to root rows for the same reason the assistant line is: a provider
+ *  that journals a subagent's own prompt would otherwise requote it as the
+ *  session's. */
+export function latestStructuredAgentSessionPrompt(
+  items: readonly AgentJournalRenderItem[]
+): string {
+  const body = latestStructuredAgentSessionUserItem(items)?.body
+  return body?.kind === 'message' ? messageProse(body.blocks) : ''
+}
+
+export function latestStructuredAgentSessionUserItem(
+  items: readonly AgentJournalRenderItem[]
+): AgentJournalRenderItem | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (
+      item?.body.kind === 'message' &&
+      item.body.role === 'user' &&
+      isRootAgentJournalItem(item) &&
+      !isStructuredAgentSessionCommandEntry(item.body)
+    ) {
+      return item
+    }
+  }
+  return null
+}
+
+/** The newest prose THE SESSION'S OWN AGENT wrote in the latest user turn — not a
+ *  subagent's, whose rows share this journal and are usually the newer ones while
+ *  a child runs. Tool-only assistant items are skipped; the user boundary clears
+ *  prose from the preceding turn. */
+export function latestStructuredAgentSessionAssistantMessage(
+  items: readonly AgentJournalRenderItem[]
+): string {
+  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    const body = item?.body
+    // A command and what its turn produced are not the conversation's latest answer.
+    if (!isRootAgentJournalItem(item) || isStructuredAgentSessionCommandRow(item, commandTurns)) {
+      continue
+    }
+    if (body?.kind === 'message' && body.role === 'user') {
+      return ''
+    }
+    if (body?.kind === 'message' && body.role === 'assistant') {
+      const prose = messageProse(body.blocks)
+      if (prose.trim()) {
+        return prose
+      }
+    }
+  }
+  return ''
 }

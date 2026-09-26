@@ -16,7 +16,7 @@ import {
   agentSessionProviderHandleChainHead,
   agentSessionProviderHandleRoot
 } from '../../../shared/agent-session-provider-handle'
-import { latestStructuredAgentSessionUserItem } from '../../../shared/structured-agent-session-projection'
+import { latestStructuredAgentSessionUserItem } from '../../../shared/structured-agent-session-latest-request'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type {

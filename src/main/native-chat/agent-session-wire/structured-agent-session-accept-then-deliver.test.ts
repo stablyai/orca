@@ -9,7 +9,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
+import type {
+  AgentSessionSubscribeEvent,
+  AgentSessionTurnCompletionEvent
+} from '../../../shared/agent-session-wire'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_HOST_RESTARTED,
@@ -323,6 +327,28 @@ describe('a start the chat needed and did not get', () => {
     const next = await accept('after the fix')
     await eventually(async () => expect((await submission(next))?.dispatchState).toBe('accepted'))
     expect(await errorRows()).toHaveLength(1)
+  })
+
+  it('notifies failed once for the queued messages one start failure refused', async () => {
+    await host.close(SESSION)
+    acquire.mockRejectedValueOnce(new Error('spawn codex ENOENT'))
+    const completions: AgentSessionTurnCompletionEvent[] = []
+    host.subscribeTurnCompletions({ id: 'dot-1', emit: (event) => completions.push(event) })
+    await accept('first')
+    const second = await accept('second')
+
+    await eventually(async () => expect((await submission(second))?.dispatchState).toBe('rejected'))
+    await host.flushAllStreamedEvents()
+    expect(completions).toEqual([
+      {
+        type: 'completion',
+        completion: expect.objectContaining({
+          sessionId: SESSION,
+          turnId: agentJournalSubmissionKey(second),
+          outcome: 'failure'
+        })
+      }
+    ])
   })
 
   it.each([

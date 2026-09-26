@@ -21,7 +21,7 @@ import {
   type AgentSessionStatusEvent,
   type AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
-import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
+import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../../shared/structured-agent-session-agent-status'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionProviderChildPhase } from './structured-agent-session-adapter'
@@ -32,6 +32,10 @@ import {
 } from './structured-agent-session-status-ownership'
 
 export type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-ownership'
+
+export type StructuredAgentSessionStatusState = ReturnType<
+  typeof projectStructuredAgentSessionStatusState
+>
 
 export type StructuredAgentSessionStatusSubscriber = {
   id: string
@@ -145,7 +149,7 @@ export class StructuredAgentSessionStatusFeed {
       sequence: number
       readOnly: boolean
       fence: number | undefined
-      summary: ReturnType<typeof projectStructuredAgentSessionStatusSummary>
+      state: StructuredAgentSessionStatusState
     }
   >()
 
@@ -207,6 +211,17 @@ export class StructuredAgentSessionStatusFeed {
     })
   }
 
+  /** The projection behind the session's row and the latest request it read, cached per commit,
+   *  so the completion feed follows the same request without snapshotting the journal again. */
+  statusState(
+    sessionId: string,
+    journal?: AgentSessionJournal
+  ): StructuredAgentSessionStatusState | null {
+    const session = this.deps.sessions.get(sessionId)
+    const source = journal ?? session?.journal
+    return source ? this.projectionFor(source, this.deps.getRecord(sessionId)) : null
+  }
+
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */
   publish(sessionId: string, journal?: AgentSessionJournal, options?: { replay?: boolean }): void {
     const session = this.deps.sessions.get(sessionId)
@@ -240,35 +255,8 @@ export class StructuredAgentSessionStatusFeed {
     session: StatusFeedSession,
     journal: AgentSessionJournal
   ): AgentSessionStatusSummary {
-    // An unreadable journal projects as "no turn": the chat itself shows the reset.
-    const cursor = journal.cursor()
-    const readOnly = journal.isReadOnly
     const record = this.deps.getRecord(sessionId)
-    // The conversation's fence, which a child's end moves: its unanswered sends stop counting.
-    const fence = record?.lease.runtimeFence
-    let projection = this.journalProjections.get(journal)
-    if (
-      !projection ||
-      projection.epoch !== cursor.epoch ||
-      projection.sequence !== cursor.sequence ||
-      projection.readOnly !== readOnly ||
-      projection.fence !== fence
-    ) {
-      // A journalled submission bumps `lastSequence`, so the send-time working
-      // signal reaches the cache; the lease fence does not, hence the extra key.
-      const snapshot = readOnly ? null : journal.snapshot()
-      projection = {
-        ...cursor,
-        readOnly,
-        fence,
-        summary: projectStructuredAgentSessionStatusSummary(
-          snapshot?.items ?? [],
-          snapshot?.submissions ?? [],
-          fence
-        )
-      }
-      this.journalProjections.set(journal, projection)
-    }
+    const { summary: projected } = this.projectionFor(journal, record)
     const providerSession = structuredAgentSessionProviderSessionMetadata(record)
     // The journal has no model: the record's acknowledged options are where a mid-session
     // switch lands, so the row follows whichever is in force.
@@ -286,7 +274,7 @@ export class StructuredAgentSessionStatusFeed {
       ...(session.child
         ? { hostExecutionOwned: true as const, hostExecutionPhase: session.child.phase }
         : {}),
-      ...projection.summary,
+      ...projected,
       ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
         ? { rewindBlockedReason: 'outcome-unknown' as const }
         : {}),
@@ -295,6 +283,41 @@ export class StructuredAgentSessionStatusFeed {
       ...(providerSession ? { providerSession } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()
     }
+  }
+
+  private projectionFor(
+    journal: AgentSessionJournal,
+    record: AgentSessionRecord | null
+  ): StructuredAgentSessionStatusState {
+    // An unreadable journal projects as "no turn": the chat itself shows the reset.
+    const cursor = journal.cursor()
+    const readOnly = journal.isReadOnly
+    // The conversation's fence, which a child's end moves: its unanswered sends stop counting.
+    const fence = record?.lease.runtimeFence
+    let projection = this.journalProjections.get(journal)
+    if (
+      !projection ||
+      projection.epoch !== cursor.epoch ||
+      projection.sequence !== cursor.sequence ||
+      projection.readOnly !== readOnly ||
+      projection.fence !== fence
+    ) {
+      // A journalled submission bumps `lastSequence`, so the send-time working
+      // signal reaches the cache; the lease fence does not, hence the extra key.
+      const snapshot = readOnly ? null : journal.snapshot()
+      projection = {
+        ...cursor,
+        readOnly,
+        fence,
+        state: projectStructuredAgentSessionStatusState(
+          snapshot?.items ?? [],
+          snapshot?.submissions ?? [],
+          fence
+        )
+      }
+      this.journalProjections.set(journal, projection)
+    }
+    return projection.state
   }
 
   /** A failing sink must never cost the subscribers their status event. */
