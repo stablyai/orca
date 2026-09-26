@@ -1,6 +1,8 @@
 import { app, type BrowserWindow } from 'electron'
 import { parseSkillShareId } from '../shared/skill-share-link'
+import { parseWorktreeDeepLink } from '../shared/worktree-deep-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
+import { registerOrcaProtocolClient } from './startup/orca-protocol-client-registration'
 import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
@@ -27,6 +29,17 @@ function focusExistingWindow(): void {
 function requestDesktopActivation(argv: readonly string[] = []): void {
   state.skillShareDeepLinks.capture(argv, (shareId) => {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
+  })
+  state.worktreeDeepLinks.capture(argv, (link) => {
+    if (
+      !state.worktreeDeepLinkListenerReady ||
+      !state.mainWindow ||
+      state.mainWindow.isDestroyed()
+    ) {
+      return false
+    }
+    state.mainWindow.webContents.send('ui:openWorktreeDeepLink', link)
+    return true
   })
   state.osOpenedMarkdownFiles.capture(argv, publishOsOpenedMarkdownFiles)
   // Why: a duplicate `orca serve` must not drag a headless server into opening a desktop window (#11935).
@@ -81,8 +94,9 @@ const preflightReady = runMainProcessPreflight({
 
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (preflightReady) {
+  registerOrcaProtocolClient()
   app.on('open-url', (event, url) => {
-    if (!parseSkillShareId(url)) {
+    if (!parseSkillShareId(url) && !parseWorktreeDeepLink(url)) {
       return
     }
     event.preventDefault()
@@ -102,6 +116,7 @@ if (preflightReady) {
     }
   })
   state.skillShareDeepLinks.capture(process.argv)
+  state.worktreeDeepLinks.capture(process.argv)
   // Why no publish: nothing is listening this early, so the first renderer pulls these on mount.
   state.osOpenedMarkdownFiles.capture(process.argv)
   registerMainProcessIpcHandlers()

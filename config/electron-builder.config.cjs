@@ -589,9 +589,9 @@ module.exports = {
     icon: 'resources/build/icon.icns',
     desktop: {
       entry: {
-        // Why: Electron reports WM_CLASS=orca for the visible Linux window;
-        // GNOME docks need an exact match to group it with orca-ide.desktop.
-        StartupWMClass: 'orca'
+        // Why: With setDesktopName('orca-ide.desktop'), Electron reports
+        // WM_CLASS=orca-ide for the visible Linux window, matching orca-ide.desktop.
+        StartupWMClass: 'orca-ide'
       }
     },
     extraResources: [

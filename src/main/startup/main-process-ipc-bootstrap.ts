@@ -44,6 +44,10 @@ export function registerMainProcessIpcHandlers(): void {
     state.pendingOpenSettings.matches(event.sender.id, { consume: true })
   )
   ipcMain.handle('ui:consumePendingSkillShare', () => state.skillShareDeepLinks.consume())
+  ipcMain.handle('ui:consumePendingWorktreeDeepLink', () => {
+    state.worktreeDeepLinkListenerReady = true
+    return state.worktreeDeepLinks.consume()
+  })
   // Why: the renderer pulls this once its ui:openMarkdownFiles listener attaches, so a
   // cold-start "Open With" queued before mount still opens. The pull doubles as the proof
   // that the listener is live, which is what lets main start pushing.

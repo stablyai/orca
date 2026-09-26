@@ -30,6 +30,13 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
     unsubs.push(unsubscribeOpenSkillShare)
   }
 
+  const unsubscribeOpenWorktreeDeepLink = window.api.ui.onOpenWorktreeDeepLink?.((link) => {
+    useAppStore.getState().openWorktreeDeepLink(link)
+  })
+  if (unsubscribeOpenWorktreeDeepLink) {
+    unsubs.push(unsubscribeOpenWorktreeDeepLink)
+  }
+
   // Why: a tray "Settings…" click can fire before this attaches; consume any queued intent (?. guards stale preload).
   void window.api.ui
     .consumePendingOpenSettings?.()
@@ -46,6 +53,17 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       .then((shareId) => {
         if (shareId) {
           useAppStore.getState().openSkillShare(shareId)
+        }
+      })
+      .catch(() => {})
+  }
+
+  const pendingWorktree = window.api.ui.consumePendingWorktreeDeepLink?.()
+  if (pendingWorktree && typeof pendingWorktree.then === 'function') {
+    void pendingWorktree
+      .then((link) => {
+        if (link) {
+          useAppStore.getState().openWorktreeDeepLink(link)
         }
       })
       .catch(() => {})

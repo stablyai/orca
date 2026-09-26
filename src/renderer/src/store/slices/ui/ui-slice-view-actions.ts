@@ -69,6 +69,18 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
       }))
     },
     clearPendingSkillShare: () => set({ pendingSkillShareId: null }),
+    openWorktreeDeepLink: (link) => {
+      set({ pendingWorktreeDeepLink: link })
+      if (link.type === 'worktree-create') {
+        get().openModal('new-workspace-composer', {
+          prefilledName: link.name,
+          initialRepoId: link.repo,
+          initialBaseBranch: link.branch,
+          telemetrySource: 'unknown'
+        })
+      }
+    },
+    clearPendingWorktreeDeepLink: () => set({ pendingWorktreeDeepLink: null }),
     openSkillsSharedLinks: () => {
       get().recordViewVisit('skills')
       set((state) => ({

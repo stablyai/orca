@@ -736,4 +736,32 @@ describe('createUISlice space navigation', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'artifacts' }), 'startup')
     expect(store.getState().activeView).toBe('artifacts')
   })
+
+  it('opens new workspace composer with prefilled parameters when handling worktree-create deep link', () => {
+    const store = createUIStore()
+
+    store.getState().openWorktreeDeepLink({
+      type: 'worktree-create',
+      repo: 'my-project',
+      name: 'feat/siri-shortcuts',
+      branch: 'main'
+    })
+
+    expect(store.getState().activeModal).toBe('new-workspace-composer')
+    expect(store.getState().modalData).toEqual({
+      prefilledName: 'feat/siri-shortcuts',
+      initialRepoId: 'my-project',
+      initialBaseBranch: 'main',
+      telemetrySource: 'unknown'
+    })
+    expect(store.getState().pendingWorktreeDeepLink).toEqual({
+      type: 'worktree-create',
+      repo: 'my-project',
+      name: 'feat/siri-shortcuts',
+      branch: 'main'
+    })
+
+    store.getState().clearPendingWorktreeDeepLink()
+    expect(store.getState().pendingWorktreeDeepLink).toBeNull()
+  })
 })
