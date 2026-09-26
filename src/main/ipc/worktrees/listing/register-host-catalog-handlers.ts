@@ -1,6 +1,7 @@
 import {
   getRepoExecutionHostId,
-  getSshTargetIdForExecutionHost
+  getSshTargetIdForExecutionHost,
+  parseExecutionHostId
 } from '../../../../shared/execution-host'
 import { ipcMain } from 'electron'
 import type {
@@ -9,7 +10,6 @@ import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult
 } from '../../../../shared/detected-worktree-provider-contract'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { DetectedWorktree } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
