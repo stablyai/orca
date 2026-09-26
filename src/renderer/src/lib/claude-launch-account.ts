@@ -2,6 +2,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { AppState } from '@/store/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { getIndexedRepoMap, getIndexedWorktreeById } from '@/store/worktree-repo-index'
 
 export function resolveLaunchClaudeAccountId(
@@ -35,4 +36,17 @@ export function findLaunchRepo(
         getRepoIdFromWorktreeId(worktreeId))
       : undefined)
   return repoId && state.repos ? getIndexedRepoMap(state.repos).get(repoId) : undefined
+}
+
+/** The launch config a GUI launch carries: Claude's gets the pick, the sentinel or the saved account. */
+export function stampClaudeLaunchAccount(
+  state: Partial<Pick<AppState, 'repos' | 'worktreesByRepo'>>,
+  launch: { agent: TuiAgent; worktreeId: string; claudeAccountId?: string },
+  config: SleepingAgentLaunchConfig
+): SleepingAgentLaunchConfig {
+  if (launch.agent !== 'claude') {
+    return config
+  }
+  const repo = findLaunchRepo(state, { worktreeId: launch.worktreeId })
+  return withClaudeLaunchAccount(config, resolveLaunchClaudeAccountId(repo, launch.claudeAccountId))
 }

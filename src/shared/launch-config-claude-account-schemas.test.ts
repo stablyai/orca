@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { parseWorkspaceSession } from './workspace-session-schema'
 import { TerminalCreateParams } from './rpc-contract/terminal-unary-params'
+import {
+  CreateAgentSessionParams,
+  EnsureAgentSessionParams
+} from './rpc-contract/agent-session-params'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { ACTIVE_CLAUDE_ACCOUNT } from './claude/project-claude-account-preference'
 
@@ -57,5 +61,36 @@ describe('launchConfig.claudeAccountId across schema boundaries', () => {
     expect(buildSleepingAgentLaunchConfig({ claudeAccountId: '' })).not.toHaveProperty(
       'claudeAccountId'
     )
+  })
+
+  it.each([
+    [
+      'terminal.createAgentSession',
+      CreateAgentSessionParams,
+      {
+        clientOperationId: `${Date.now()}-0123456789abcdef0123456789abcdef`,
+        worktree: 'path:/repo',
+        agent: 'claude'
+      }
+    ],
+    [
+      'terminal.ensureAgentSession',
+      EnsureAgentSessionParams,
+      {
+        kind: 'explicit',
+        worktree: 'path:/repo',
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'claude-session' }
+      }
+    ]
+  ] as const)('keeps a valid account and strips garbage on %s', (_method, schema, base) => {
+    const accountOf = (claudeAccountId: unknown) => {
+      const parsed = schema.parse({ ...base, claudeAccountId })
+      return 'claudeAccountId' in parsed ? parsed.claudeAccountId : undefined
+    }
+    expect(accountOf(ACTIVE_CLAUDE_ACCOUNT)).toBe(ACTIVE_CLAUDE_ACCOUNT)
+    expect(accountOf('acct-b')).toBe('acct-b')
+    expect(accountOf('bad\u0000id')).toBeUndefined()
+    expect(accountOf(42)).toBeUndefined()
   })
 })

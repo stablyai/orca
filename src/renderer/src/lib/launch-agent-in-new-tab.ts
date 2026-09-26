@@ -27,11 +27,7 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import { launchAgentInStructuredNewTab } from '@/lib/launch-agent-in-new-tab-structured'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
-import {
-  findLaunchRepo,
-  resolveLaunchClaudeAccountId,
-  withClaudeLaunchAccount
-} from '@/lib/claude-launch-account'
+import { stampClaudeLaunchAccount } from '@/lib/claude-launch-account'
 import {
   planAgentSessionLaunch,
   type AgentSessionLaunchPlan
@@ -181,6 +177,11 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     return null
   }
 
+  const launchConfig = stampClaudeLaunchAccount(
+    store,
+    { agent, worktreeId, claudeAccountId },
+    startupPlan.launchConfig
+  )
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
@@ -192,7 +193,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       environmentId: runtimeEnvironmentId,
       groupId,
       cwd: initialCwd,
-      startupPlan,
+      startupPlan: { ...startupPlan, launchConfig },
       prompt: trimmedPrompt,
       promptDelivery,
       pastePromptAfterReady: pasteDraftAfterLaunch,
@@ -201,7 +202,9 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       // Why: omission means terminal locally, but would let a paired host apply
       // its own default; send the client's resolved terminal choice explicitly.
       viewMode: initialViewModeProps.viewMode ?? 'terminal',
-      onPromptDelivered
+      onPromptDelivered,
+      relaunch: (override) =>
+        launchAgentInNewTab({ ...args, ...(override ? { claudeAccountId: override } : {}) })
     })
     return {
       surface: { kind: 'host-published' },
@@ -273,13 +276,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
-    launchConfig:
-      agent === 'claude'
-        ? withClaudeLaunchAccount(
-            startupPlan.launchConfig,
-            resolveLaunchClaudeAccountId(findLaunchRepo(store, { worktreeId }), claudeAccountId)
-          )
-        : startupPlan.launchConfig,
+    launchConfig,
     launchAgent: agent,
     ...(agentArgs !== undefined ? { agentArgsOverride: agentArgs } : {}),
     ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),

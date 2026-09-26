@@ -12,6 +12,8 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
 import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
+import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
+import { describeClaudePinnedLaunchError } from '@/components/terminal-pane/claude-pinned-launch-error-copy'
 
 function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
   const state = useAppStore.getState()
@@ -22,6 +24,42 @@ function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
       state.closeTab(tab.id, { reason: 'cleanup' })
     }
   }
+}
+
+function toastWebHostLaunchFailure(
+  agent: TuiAgent,
+  message: string | undefined,
+  relaunch: ((claudeAccountId?: string) => void) | undefined
+): void {
+  const pinned = message ? describeClaudePinnedLaunchError(message) : null
+  if (!pinned) {
+    toast.error(
+      message ||
+        translate(
+          'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+          'Could not launch {{value0}} in a new terminal.',
+          { value0: agent }
+        )
+    )
+    return
+  }
+  const action = !relaunch
+    ? undefined
+    : pinned.offerActiveAccount
+      ? {
+          label: translate(
+            'auto.components.terminal.pane.TerminalErrorToast.startOnActiveAccount',
+            'Start on active account'
+          ),
+          onClick: () => relaunch(ACTIVE_CLAUDE_ACCOUNT)
+        }
+      : pinned.offerRetry
+        ? {
+            label: translate('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry'),
+            onClick: () => relaunch()
+          }
+        : undefined
+  toast.error(pinned.message, action ? { action } : undefined)
 }
 
 /**
@@ -46,6 +84,8 @@ export function launchAgentInWebHostTab(args: {
   agentArgs?: string | null
   viewMode?: Tab['viewMode']
   onPromptDelivered?: () => void
+  /** Starts the same launch again, optionally on another Claude account, from a refusal toast. */
+  relaunch?: (claudeAccountId?: string) => void
 }): Promise<{ delivered: boolean; failureNotified: boolean }> {
   const {
     agent,
@@ -60,7 +100,8 @@ export function launchAgentInWebHostTab(args: {
     submitPastedPrompt,
     agentArgs,
     viewMode,
-    onPromptDelivered
+    onPromptDelivered,
+    relaunch
   } = args
   const hasPrompt = prompt.length > 0
   const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions)
@@ -85,7 +126,13 @@ export function launchAgentInWebHostTab(args: {
             ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
             : {})
         }
-      : { agent }),
+      : {
+          agent,
+          // Why: the host negotiates the account off the launch config, so it must ride along even with no prompt.
+          ...(startupPlan.launchConfig.claudeAccountId
+            ? { launchConfig: startupPlan.launchConfig }
+            : {})
+        }),
     ...(hasPrompt && pastePromptAfterReady === null ? { prompt } : {}),
     ...(hasPrompt && pastePromptAfterReady === null
       ? { promptDelivery: structuredPromptDelivery }
@@ -105,14 +152,7 @@ export function launchAgentInWebHostTab(args: {
     // exists; keep pruning stale local rows until the snapshot mirrors.
     removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
     if (outcome.status === 'failed') {
-      toast.error(
-        outcome.message ||
-          translate(
-            'auto.lib.launch.agent.in.new.tab.11cce5cc77',
-            'Could not launch {{value0}} in a new terminal.',
-            { value0: agent }
-          )
-      )
+      toastWebHostLaunchFailure(agent, outcome.message, relaunch)
       return { delivered: false, failureNotified: true }
     }
     useAppStore.getState().setActiveTabType('terminal')

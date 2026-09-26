@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
+import type { launchAgentInWebHostTab } from './launch-agent-web-host-tab'
 
 const mockQueueTabStartupCommand = vi.fn()
+const { mockIsWebRuntimeSessionActive, mockLaunchAgentInWebHostTab } = vi.hoisted(() => ({
+  mockIsWebRuntimeSessionActive: vi.fn(() => false),
+  mockLaunchAgentInWebHostTab: vi.fn((_args: Parameters<typeof launchAgentInWebHostTab>[0]) =>
+    Promise.resolve({ delivered: false, failureNotified: false })
+  )
+}))
 
 const store = {
   settings: {
@@ -44,7 +52,11 @@ vi.mock('@/lib/native-chat-transcript-readability', () => ({
 }))
 
 vi.mock('@/runtime/web-runtime-session', () => ({
-  isWebRuntimeSessionActive: () => false
+  isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
+}))
+
+vi.mock('@/lib/launch-agent-web-host-tab', () => ({
+  launchAgentInWebHostTab: mockLaunchAgentInWebHostTab
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
@@ -72,6 +84,7 @@ function queuedLaunchConfig(): unknown {
 describe('launchAgentInNewTab Claude account', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockIsWebRuntimeSessionActive.mockReturnValue(false)
   })
 
   it("stamps the project's saved account on a Claude launch", async () => {
@@ -100,5 +113,22 @@ describe('launchAgentInNewTab Claude account', () => {
     launchAgentInNewTab({ agent: 'codex', worktreeId: 'repo-1::/repo/wt' })
 
     expect(queuedLaunchConfig()).not.toHaveProperty('claudeAccountId')
+  })
+
+  it('stamps a paired web-host launch and relaunches it on the active account', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    const webLaunch = () => mockLaunchAgentInWebHostTab.mock.calls.at(-1)![0]
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'repo-1::/repo/wt',
+      claudeAccountId: 'acct-2'
+    })
+    expect(webLaunch().startupPlan.launchConfig.claudeAccountId).toBe('acct-2')
+
+    webLaunch().relaunch!(ACTIVE_CLAUDE_ACCOUNT)
+    expect(webLaunch().startupPlan.launchConfig.claudeAccountId).toBe(ACTIVE_CLAUDE_ACCOUNT)
+    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
   })
 })

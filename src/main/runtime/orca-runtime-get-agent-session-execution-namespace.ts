@@ -10,6 +10,7 @@ import type {
   RuntimeEnsureAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { canonicalizeAgentSessionIdentity } from './agent-session-claim-identity'
+import { ACTIVE_CLAUDE_ACCOUNT } from '../../shared/claude/project-claude-account-preference'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
@@ -157,6 +158,14 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
             : {})
       },
       ompResumeFilePath: request.ompResumeFilePath,
+      // Why: a handoff runs on the session's own CLAUDE_CONFIG_DIR, so the sentinel keeps this spawn
+      // and its later resumes from being re-pinned to the project's saved account.
+      claudeAccountId:
+        request.agent !== 'claude'
+          ? undefined
+          : handoffAuthority
+            ? ACTIVE_CLAUDE_ACCOUNT
+            : request.claudeAccountId,
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
       sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
       platform,

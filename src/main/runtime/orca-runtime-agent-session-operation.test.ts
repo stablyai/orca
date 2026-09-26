@@ -149,6 +149,34 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 
+  it('refuses a changed Claude account under the same create operation', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    const id = operationId()
+    await runtime.createAgentSession(request(id, { agent: 'claude', claudeAccountId: 'acct-1' }))
+    await expect(
+      runtime.createAgentSession(request(id, { agent: 'claude', claudeAccountId: 'acct-2' }))
+    ).rejects.toThrow('agent_session_operation_conflict')
+    expect(createTerminal).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a Claude account off a non-Claude launch config on create and resume', async () => {
+    const runtime = createRuntime()
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+    await runtime.createAgentSession(request(operationId(), { claudeAccountId: 'acct-1' }))
+    await runtime.ensureAgentSession({
+      kind: 'explicit',
+      worktree: 'id:worktree-1',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'provider-session-1' },
+      claudeAccountId: 'acct-1'
+    })
+    expect(createTerminal).toHaveBeenCalledTimes(2)
+    for (const call of createTerminal.mock.calls) {
+      expect(call[1]?.launchConfig).not.toHaveProperty('claudeAccountId')
+    }
+  })
+
   it('selects legacy before trust, spawn, or ledger state for an old daemon', async () => {
     const provider = {
       supportsAgentSessionClaims: vi.fn(() => false),
