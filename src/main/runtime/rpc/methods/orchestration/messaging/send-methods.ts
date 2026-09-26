@@ -7,6 +7,7 @@ import { resolveMessageRun } from '../routing'
 import {
   assertDispatchMailboxDeliverable,
   resolveBareOrchestrationRecipient,
+  resolveRunBoundDispatchRecipient,
   type SendRecipientWarning
 } from './recipient-routing'
 import {
@@ -163,6 +164,12 @@ export const ORCHESTRATION_SEND_METHODS = [
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
           assertDispatchMailboxDeliverable(db, addressedDispatchId)
+          const runBound = resolveRunBoundDispatchRecipient(db, addressedDispatchId)
+          if (runBound) {
+            to = runBound.to
+            messageRunId = runBound.runId
+            sendWarnings.push(runBound.warning)
+          }
         }
         const federatedControl = sendFederatedControlMail({
           params,

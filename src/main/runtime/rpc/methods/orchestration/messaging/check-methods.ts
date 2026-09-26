@@ -14,6 +14,16 @@ import {
   isSupersededDispatch
 } from './dispatch-mailbox-fence'
 
+function returnedMessages(result: unknown): boolean {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    'count' in result &&
+    typeof result.count === 'number' &&
+    result.count > 0
+  )
+}
+
 export const ORCHESTRATION_CHECK_METHODS = [
   defineMethod({
     name: 'orchestration.check',
@@ -42,21 +52,63 @@ export const ORCHESTRATION_CHECK_METHODS = [
       })
       const paneKey = caller.paneKey ?? undefined
       const boundRun = hasRunBindingKey(caller) ? db.getCurrentRunForCoordinator(caller) : undefined
+      const runMailboxArgs = {
+        params,
+        runtime,
+        db,
+        handle,
+        paneKey,
+        callerSession: orchestrationCaller,
+        typeFilter,
+        signal,
+        legacyCoordinatorRunId,
+        revalidateLegacyCoordinator,
+        orchestrationCompatibilityEvidence,
+        recordMutationReceipt
+      }
+      // Why: a pane that coordinates its own Run reads only that Run's mailbox, so mail left on
+      // the Dispatch it still holds from before it bound the Run would otherwise never surface.
+      const residualDispatch =
+        boundRun && !params.run ? db.getActiveDispatchForIdentity(handle, paneKey) : undefined
+      if (
+        boundRun &&
+        residualDispatch &&
+        residualDispatch.run_id !== boundRun.id &&
+        callerHoldsDispatchPane(residualDispatch, paneKey)
+      ) {
+        const mailbox = `dispatch:${residualDispatch.id}`
+        const ackOwner = params.ack ? db.getDeliveryRaw(params.ack)?.mailbox_handle : undefined
+        // `--types` is the wake condition for --wait, so only matching Dispatch mail may preempt it.
+        const pending =
+          db.hasOutstandingMailboxDelivery(mailbox) ||
+          db.getUnreadMessages(mailbox, params.wait ? typeFilter : undefined).length > 0
+        if (ackOwner === mailbox || (!params.ack && pending)) {
+          const dispatchResult = await checkWorkerMailbox({
+            params: { ...params, wait: false },
+            runtime,
+            db,
+            handle,
+            paneKey,
+            typeFilter,
+            signal,
+            activeDispatch: residualDispatch,
+            remoteAttachment: undefined
+          })
+          if (returnedMessages(dispatchResult)) {
+            return dispatchResult
+          }
+          // The Dispatch batch was acknowledged and nothing is left there: continue with the Run.
+          const runResult = await checkRunMailbox({
+            ...runMailboxArgs,
+            params: { ...params, ack: undefined }
+          })
+          return typeof runResult === 'object' && runResult !== null
+            ? { ...runResult, acknowledged: params.ack ?? null }
+            : runResult
+        }
+      }
       if (params.run || boundRun) {
-        return checkRunMailbox({
-          params,
-          runtime,
-          db,
-          handle,
-          paneKey,
-          callerSession: orchestrationCaller,
-          typeFilter,
-          signal,
-          legacyCoordinatorRunId,
-          revalidateLegacyCoordinator,
-          orchestrationCompatibilityEvidence,
-          recordMutationReceipt
-        })
+        return checkRunMailbox(runMailboxArgs)
       }
 
       const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey)
