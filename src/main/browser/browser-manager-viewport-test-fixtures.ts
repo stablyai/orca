@@ -14,6 +14,22 @@ export async function flushViewportOps(): Promise<void> {
   }
 }
 
+// Why: mirrors Chromium, which rejects an out-of-range maxTouchPoints even when disabling touch.
+async function rejectInvalidTouchPoints(
+  method: string,
+  params?: { maxTouchPoints?: number }
+): Promise<undefined> {
+  const points = params?.maxTouchPoints
+  if (
+    method === 'Emulation.setTouchEmulationEnabled' &&
+    points !== undefined &&
+    (points < 1 || points > 16)
+  ) {
+    throw new Error('Touch points must be between 1 and 16')
+  }
+  return undefined
+}
+
 export type ViewportGuestHandle = {
   guest: Record<string, unknown>
   debuggerSendCommand: ReturnType<typeof vi.fn>
@@ -28,7 +44,7 @@ export function createViewportGuestFactory(
   mocks: BrowserManagerMocks
 ): (id: number, url?: string) => ViewportGuestHandle {
   return function makeGuest(id: number, url = 'https://example.com/'): ViewportGuestHandle {
-    const debuggerSendCommand = vi.fn().mockResolvedValue(undefined)
+    const debuggerSendCommand = vi.fn(rejectInvalidTouchPoints)
     const debuggerIsAttached = vi.fn(() => true)
     const debuggerAttach = vi.fn()
     let currentUa = GUEST_ELECTRON_UA

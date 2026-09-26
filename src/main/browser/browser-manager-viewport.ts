@@ -9,6 +9,10 @@ import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
 import { BrowserManagerDownloadLifecycle } from './browser-manager-download-lifecycle'
 import { getBrowserProcessUserAgentIdentity } from './browser-process-user-agent'
 
+// Why no maxTouchPoints: Chromium rejects values outside 1..16 even when disabling, which left
+// touch emulation (and no-hover media features) on after leaving a mobile preset (#22749).
+const TOUCH_EMULATION_DISABLED = { enabled: false } as const
+
 export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifecycle {
   // Why: guests are isolated from Orca's preload bridge, so main owns the devtools escape hatch after a tab→guest lookup.
   async openDevTools(browserTabId: string): Promise<boolean> {
@@ -160,10 +164,10 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
             active: true
           })
         }
-        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
-          enabled: override.mobile,
-          maxTouchPoints: override.mobile ? 5 : 0
-        })
+        await dbg.sendCommand(
+          'Emulation.setTouchEmulationEnabled',
+          override.mobile ? { enabled: true, maxTouchPoints: 5 } : TOUCH_EMULATION_DISABLED
+        )
         if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
           return false
         }
@@ -178,10 +182,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
             active: false
           })
         }
-        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
-          enabled: false,
-          maxTouchPoints: 0
-        })
+        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', TOUCH_EMULATION_DISABLED)
         if (this.webContentsIdByTabId.get(browserTabId) !== webContentsId) {
           return false
         }

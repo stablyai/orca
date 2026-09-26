@@ -836,8 +836,7 @@ describe('browserManager', () => {
 
       expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.clearDeviceMetricsOverride', {})
       expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setTouchEmulationEnabled', {
-        enabled: false,
-        maxTouchPoints: 0
+        enabled: false
       })
       expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
         userAgent: ''
