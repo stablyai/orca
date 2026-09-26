@@ -145,11 +145,11 @@ An external supervisor (systemd, launchd, a process manager). orcad conforms to 
   after the listener is bound and the daemon verdict is in. There is no separate readiness
   socket; the line is the signal. Set the supervisor's start timeout generously — the daemon
   launch has its own retries and can take tens of seconds on a cold host.
-- **Shutdown.** `SIGTERM` or `SIGINT` starts a graceful stop. A **second** signal exits
-  immediately with code 1 rather than being swallowed — a supervisor's second signal means
-  its first deadline elapsed, and waiting silently is what turns a stop into a `SIGKILL`,
-  the one teardown that skips the daemon handoff. orcad also imposes its own 15s deadline
-  and exits 1, so the failure stays attributable instead of arriving as an unlogged kill.
+- **Shutdown.** `SIGTERM` or `SIGINT` starts one graceful stop. Repeated signals share
+  that stop because a supervisor may signal both the launcher and its child. A 15s deadline
+  exits with code 1 if teardown stalls. The bundled runtime also stops gracefully if its
+  launcher's IPC channel closes. On POSIX, both the launcher and runtime ignore `SIGHUP`,
+  so terminal hangups do not stop a headless host. Use `SIGTERM` or `SIGINT` to stop it.
 - **Exit codes.**
 
   | Code | Meaning                                                      | Supervisor should    |

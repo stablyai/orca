@@ -256,7 +256,10 @@ describe('registerPtyHandlers', () => {
         })
       ).rejects.toThrow(/ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED/)
 
-      expect(remoteShutdown).toHaveBeenCalledWith(appPtyId, { immediate: true })
+      expect(remoteShutdown).toHaveBeenCalledWith(appPtyId, {
+        immediate: true,
+        expectedIncarnationId: incarnationId
+      })
       expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
       expect(store.removeSshRemotePtyLease).not.toHaveBeenCalled()
       expect(openCodeClearPtyMock).toHaveBeenCalledWith(appPtyId)

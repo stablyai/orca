@@ -137,6 +137,7 @@ function installRestartHarness(
       session = next
     }),
     flushOrThrow: vi.fn(),
+    runDurableMutation: vi.fn(async <T>(mutate: () => { value: T }) => mutate().value),
     persistPtyBinding: vi.fn(),
     getFolderWorkspace: vi.fn(() => undefined),
     getFolderWorkspaces: vi.fn(() => []),

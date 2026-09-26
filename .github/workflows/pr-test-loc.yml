@@ -19,7 +19,8 @@ permissions:
 jobs:
   loc:
     name: test vs non-test LoC
-    runs-on: ubuntu-latest
+    # API calls and a small Node script fit the free single-CPU container runner.
+    runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:
       # Why no checkout: the Files API already has per-file additions/deletions.
