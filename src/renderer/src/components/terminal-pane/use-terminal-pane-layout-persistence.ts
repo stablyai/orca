@@ -16,7 +16,9 @@ import type { TerminalPaneStartupController } from './use-terminal-pane-startup-
 export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartupController) {
   const {
     clearedScrollbackLeafIdsRef,
+    chatLeafId,
     containerRef,
+    effectiveChatViewMode,
     expandedPaneIdRef,
     managerRef,
     paneCount,
@@ -49,6 +51,13 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
     const currentPanes = manager.getPanes()
     const currentLeafIds = new Set(currentPanes.map((pane) => pane.leafId))
+    if (
+      effectiveChatViewMode &&
+      chatLeafId &&
+      currentPanes.some((pane) => pane.leafId === chatLeafId)
+    ) {
+      layout.chatLeafId = chatLeafId
+    }
     const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current
     const scrollbackPreserveLeafIds = new Set(
       [...currentLeafIds].filter((leafId) => !clearedScrollbackLeafIds.has(leafId))
@@ -120,7 +129,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
       clearedScrollbackLeafIds.delete(leafId)
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId, setTabLayout, worktreeId])
+  }, [chatLeafId, effectiveChatViewMode, tabId, setTabLayout, worktreeId])
 
   const clearPaneScrollback = useCallback(
     (pane: ManagedPane): void => {

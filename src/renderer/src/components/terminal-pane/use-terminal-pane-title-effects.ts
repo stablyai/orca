@@ -29,10 +29,12 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     clearTerminalPaneUnread,
     clearTerminalTabUnread,
     clearWorktreeUnread,
+    chatLeafId,
     clearedScrollbackLeafIdsRef,
     containerRef,
     expandedPaneId,
     expandedPaneIdRef,
+    effectiveChatViewMode,
     isolatedPaneKey,
     isVisible,
     managerRef,
@@ -215,6 +217,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
         paneTransports: paneTransportsRef.current,
         paneTitlesByPaneId: paneTitlesRef.current,
         existingLayout: existing,
+        chatLeafId: effectiveChatViewMode ? chatLeafId : null,
         // Why resolved: a pane that serializes empty mid-replay must fall back to whichever home
         // holds its last good copy, not only the shared one.
         priorBuffersByLeafId: resolveLeafScrollbackBuffers({
@@ -247,7 +250,14 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
       }
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [tabId, worktreeId, setTabLayout, setTabLocalOnlyScrollback])
+  }, [
+    chatLeafId,
+    effectiveChatViewMode,
+    tabId,
+    worktreeId,
+    setTabLayout,
+    setTabLocalOnlyScrollback
+  ])
 
   useEffect(() => {
     if (renamingPaneId === null) {
