@@ -15,7 +15,12 @@ import { getManagedWslCliDir, getWslCliCommandName } from '../../../cli/wsl-mana
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/codex-shell-launch-preflight'
-import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
+import {
+  buildConfiguredProxyEnv,
+  NO_PROXY_ENV_KEYS,
+  PROXY_ENV_KEYS
+} from '../../../../shared/network-proxy'
+import { addWslEnvKeys } from '../../../../shared/wsl-env'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { BuildPtyHostEnvOptions } from './types'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'
@@ -43,7 +48,16 @@ export function buildPtyHostEnv(
   opts: BuildPtyHostEnvOptions
 ): Record<string, string> {
   mergePersistedWindowsPath(baseEnv)
-  Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
+  const proxySettings = opts.wslProxyResolution?.settings ?? opts.networkProxySettings
+  Object.assign(baseEnv, buildConfiguredProxyEnv(proxySettings))
+  if (opts.isWsl && opts.wslProxyResolution?.crossesBoundary) {
+    // Why: WSLENV is the only channel that carries host variables into a distro
+    // — without registering the proxy keys, the guest shell never sees the
+    // resolved proxy. The resolver decides whether it crosses: a non-loopback
+    // proxy always, a guest-confirmed loopback (mirrored networking / WSL1)
+    // too, but an env-inherited or unverified loopback is dropped here.
+    addWslEnvKeys(baseEnv, [...PROXY_ENV_KEYS, ...NO_PROXY_ENV_KEYS])
+  }
 
   // Why: local path's baseEnv includes process.env but the daemon path doesn't (fork inheritance, not IPC); check both sources so guards stay in lock-step across spawn paths.
   const preexistingOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv)

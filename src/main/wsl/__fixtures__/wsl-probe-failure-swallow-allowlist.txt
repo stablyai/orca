@@ -29,3 +29,9 @@ main/wsl.ts
 # point of the module (#16463). A failed stat drops to the next candidate for
 # that one call and is re-asked on the next, so there is no value to pin.
 main/wsl-interop-spawn-directory.ts
+# The single match is the URL constructor inside `buildWslProxyProbeScript`: a
+# pure string-parse failure, not a wsl.exe probe -- the URL was already
+# validated by `normalizeProxyUrl` before reaching it. No WSL answer is
+# produced, and the null propagates to "no probe script" -> "verdict
+# undefined" -> keep the user's URL, so nothing negative is cached or gates.
+main/wsl/wsl-guest-proxy-gateway.ts

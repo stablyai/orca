@@ -1,6 +1,7 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import type { NetworkProxySettings } from '../../../../shared/network-proxy'
+import type { WslGuestProxyResolution } from '../../../wsl/wsl-guest-proxy-gateway'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from '../../../claude-accounts/runtime-selection'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
@@ -31,6 +32,12 @@ export type BuildPtyHostEnvOptions = {
   disabledTuiAgents?: Iterable<unknown> | null
   codexStatusHooksEnabled?: boolean
   networkProxySettings?: NetworkProxySettings
+  /**
+   * WSL proxy resolution for a guest spawn: its `.settings` supersede
+   * `networkProxySettings`, and `.crossesBoundary` decides WSLENV forwarding.
+   * Only read when isWsl.
+   */
+  wslProxyResolution?: WslGuestProxyResolution
   /** Headless paired runtimes hand browser launches to the client-hosted Orca browser. */
   routeBrowserOpensToClient?: boolean
   /** Keep indexed Git config off the sparse daemon wire; the daemon appends guard entries after merging its inherited env. */
