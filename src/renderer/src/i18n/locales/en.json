@@ -3223,7 +3223,19 @@
             "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue.",
             "sessionUnavailable": "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue.",
             "sourceRestoring": "Reconnecting this terminal — its output is being re-established. The session is still running.",
-            "remoteTerminalClosed": "Remote terminal was closed."
+            "remoteTerminalClosed": "Remote terminal was closed.",
+            "startOnActiveAccount": "Start on active account"
+          },
+          "ClaudePinnedLaunch": {
+            "hostSessions": "This Claude account is still used by terminals started while it was the active account. Close them, or start on the active account this time.",
+            "hostMutation": "Claude accounts are being updated. Try again in a moment.",
+            "usageFetch": "Checking account usage took too long. Try again.",
+            "accountMissing": "The saved Claude account for this project is no longer signed in. Change it in Settings → Repository, or start on the active account.",
+            "becameActive": "That account just became the active account. Try again.",
+            "credentials": "This Claude account needs to sign in again. Re-authenticate it in Settings → Accounts.",
+            "provenance": "Couldn't confirm the Claude account for this session, so it wasn't started.",
+            "hostSessionsDetail_one": "{{email}} is still used by {{count}} Claude terminal started while it was the active account. Close it, or start on the active account this time.",
+            "hostSessionsDetail_other": "{{email}} is still used by {{count}} Claude terminals started while it was the active account. Close them, or start on the active account this time."
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Git Bash console limit reached",

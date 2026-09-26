@@ -142,7 +142,8 @@ export class ClaudeRuntimeAuthPinnedLaunch extends ClaudeRuntimeAuthPreparationS
         const sessions = countHostClaudePtysForAccount(accountId)
         throw claudePinnedLaunchError(
           'host-sessions',
-          `Account ${account.email} still has ${sessions === 1 ? '1 Claude terminal' : `${sessions} Claude terminals`} started while it was the active account; close ${sessions === 1 ? 'it' : 'them'} before launching it with --account.`
+          `Account ${account.email} still has ${sessions === 1 ? '1 Claude terminal' : `${sessions} Claude terminals`} started while it was the active account; close ${sessions === 1 ? 'it' : 'them'} before launching it with --account.`,
+          { email: account.email, terminalCount: sessions }
         )
       }
       if (conflict === 'host-mutation') {

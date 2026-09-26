@@ -2456,6 +2456,17 @@
       },
       "terminal": {
         "pane": {
+          "ClaudePinnedLaunch": {
+            "accountMissing": "The saved Claude account for this project is no longer signed in. Change it in Settings → Repository, or start on the active account.",
+            "becameActive": "That account just became the active account. Try again.",
+            "credentials": "This Claude account needs to sign in again. Re-authenticate it in Settings → Accounts.",
+            "hostMutation": "Claude accounts are being updated. Try again in a moment.",
+            "hostSessions": "This Claude account is still used by terminals started while it was the active account. Close them, or start on the active account this time.",
+            "hostSessionsDetail_one": "{{email}} is still used by {{count}} Claude terminal started while it was the active account. Close it, or start on the active account this time.",
+            "hostSessionsDetail_other": "{{email}} is still used by {{count}} Claude terminals started while it was the active account. Close them, or start on the active account this time.",
+            "provenance": "Couldn't confirm the Claude account for this session, so it wasn't started.",
+            "usageFetch": "Checking account usage took too long. Try again."
+          },
           "CloseTerminalDialog": {
             "6b9a6975f8": "The terminal still has a running process. If you close the terminal, the process will be killed.",
             "78b79d854d": "Close Terminal?",

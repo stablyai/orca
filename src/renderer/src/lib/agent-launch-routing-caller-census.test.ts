@@ -17,6 +17,9 @@ const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
   'src/renderer/src/components/tab-bar/QuickLaunchButton.tsx',
   'src/renderer/src/components/tab-bar/use-tab-bar-create-menu-controller.ts',
   'src/renderer/src/components/terminal-pane/terminal-agent-session-fork.ts',
+  // "Start on active account" opens an unpinned new tab when it has no refused spawn to replay
+  // in place, rather than hand-rolling the terminal arm, same rationale as the floating-window entry above.
+  'src/renderer/src/components/terminal-pane/TerminalPaneSurface.tsx',
   'src/renderer/src/components/use-terminal-create-actions.ts',
   'src/renderer/src/lib/fix-checks-agent-launch.ts',
   'src/renderer/src/lib/launch-agent-session-continuation.ts',

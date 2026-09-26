@@ -73,7 +73,10 @@ export type UseTerminalPaneLifecycleDeps = {
   isVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string, exitCode?: number) => void>
   onAgentExitedRef: React.RefObject<(leafId: string) => void>
-  onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  /** `startup` is the spawn the error belongs to, when the error came from a launch. */
+  onPtyErrorRef?: React.RefObject<
+    (paneId: number, message: string, startup?: PtyPaneStartup) => void
+  >
   onPtyErrorClearedRef?: React.RefObject<(paneId: number, message?: string) => void>
   onPaneProcessDied?: (processExit: PaneProcessExit) => void
   onPtyRecoveryStateRef?: React.RefObject<

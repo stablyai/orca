@@ -9,7 +9,7 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 /** Per-generation transport output callbacks and the hidden-output restore state they reset. */
 export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySession): void {
   session.captureTransportOutputCallbacks = (
-    onError: (message: string) => void,
+    onError: (message: string, startup: PtyPaneStartup) => void,
     startup: PtyPaneStartup
   ) => {
     // Why: a new stream generation cannot inherit an old replay's pending
@@ -75,7 +75,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
         onError: (message: string): void => {
           if (isCurrent()) {
             session.startupTiming?.finish('error')
-            onError(message)
+            onError(message, processExitState.startup)
           }
         },
         onErrorCleared: (message: string): void => {
