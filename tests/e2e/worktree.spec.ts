@@ -20,6 +20,7 @@ import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
  * crash in whatever replaces it.
  */
 
+import path from 'node:path'
 import type { ConsoleMessage } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
@@ -292,7 +293,8 @@ test.describe('Create Workspace', () => {
 
   test('reuses a resolved pasted GitHub URL when quick create submits', async ({
     electronApp,
-    orcaPage
+    orcaPage,
+    testRepoPath
   }) => {
     const title = `E2E smart URL resolution ${Date.now()}`
     const url = 'https://github.com/stablyai/orca/pull/2049'
@@ -304,6 +306,9 @@ test.describe('Create Workspace', () => {
       const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
       await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
+      await expect(dialog.locator('div[data-project-combobox-root="true"]')).toContainText(
+        path.basename(testRepoPath)
+      )
 
       await electronApp.evaluate(
         ({ ipcMain }, { title, url }) => {
@@ -409,7 +414,8 @@ test.describe('Create Workspace', () => {
 
   test('names the workspace after the PR title when the pasted URL suggestion is selected', async ({
     electronApp,
-    orcaPage
+    orcaPage,
+    testRepoPath
   }) => {
     const title = `E2E selected URL resolution ${Date.now()}`
     const url = 'https://github.com/stablyai/orca/pull/2050'
@@ -421,6 +427,9 @@ test.describe('Create Workspace', () => {
       const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
       await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
+      await expect(dialog.locator('div[data-project-combobox-root="true"]')).toContainText(
+        path.basename(testRepoPath)
+      )
 
       await electronApp.evaluate(
         ({ ipcMain }, { title, url }) => {

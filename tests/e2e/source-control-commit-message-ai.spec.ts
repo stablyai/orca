@@ -100,7 +100,8 @@ test.describe('Source Control AI commit messages', () => {
 
         const generate = orcaPage.getByRole('button', { name: 'Generate commit message with AI' })
         await expect(generate).toBeEnabled()
-        await generate.click()
+        await generate.focus()
+        await generate.press('Enter')
 
         await expect(textarea).toHaveValue(`saw-issue:${expected}`, { timeout: 15_000 })
       } finally {

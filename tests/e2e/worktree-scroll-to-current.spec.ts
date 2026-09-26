@@ -40,7 +40,7 @@ test.describe('Reveal active workspace button', () => {
   // (not a scenario real users hit). Reveal-into-view is covered robustly by
   // the "outside the virtualized window" test below.
 
-  test('clears sidebar filters before revealing a hidden current workspace', async ({
+  test('adjusts sidebar filters before revealing a hidden current workspace', async ({
     orcaPage,
     testRepoPath
   }, testInfo) => {
@@ -132,7 +132,7 @@ test.describe('Reveal active workspace button', () => {
     await revealButton.click()
     await orcaPage
       .getByRole('dialog', { name: 'Reveal hidden workspace?' })
-      .getByRole('button', { name: 'Clear filters and reveal' })
+      .getByRole('button', { name: 'Adjust filters and reveal' })
       .click()
 
     await expect(targetRow).toBeVisible()
@@ -140,19 +140,25 @@ test.describe('Reveal active workspace button', () => {
     await expect
       .poll(
         () =>
-          orcaPage.evaluate(() => {
+          orcaPage.evaluate((filterRepoId) => {
             const store = window.__store
             if (!store) {
               throw new Error('window.__store is not available')
             }
-            return store.getState().filterRepoIds
-          }),
+            const state = store.getState()
+            const repoIds = state.filterRepoIds
+            return (
+              repoIds.length === 2 &&
+              repoIds.includes(filterRepoId) &&
+              repoIds.includes(state.activeRepoId ?? '')
+            )
+          }, filterRepoId),
         {
           timeout: 10_000,
-          message: 'Reveal button should clear repo filters that hide the current workspace'
+          message: 'Reveal button should add the current repo while preserving the existing filter'
         }
       )
-      .toEqual([])
+      .toBe(true)
   })
 
   test('reveals the current workspace when it starts outside the virtualized window', async ({

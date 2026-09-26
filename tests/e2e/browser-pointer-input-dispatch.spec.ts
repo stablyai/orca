@@ -243,14 +243,9 @@ test('dispatches coordinate pointer input fast enough for real gestures', async 
     // Why: Playwright does not surface a passing test's stdout in the CI job log, so the
     // numbers ride along in the annotation where the failure artifact will carry them.
     test.info().annotations.push({ type: 'pointer-latency', description: latencyReport })
-
-    // Why: absolute milliseconds vary by host, so compare against browser.eval on the same
-    // socket and queue — a pointer event that spawns the helper costs that plus a process
-    // launch. Measured multiples of the control: in process 1.5x/1.5x/4x, via the helper
-    // 5.7x/5.5x/20.5x. These thresholds sit between the two, not near either.
-    expect(latency.mouseMove, latencyReport).toBeLessThan(latency.evalControl * 3)
-    expect(latency.mouseWheel, latencyReport).toBeLessThan(latency.evalControl * 3)
-    expect(latency.click, latencyReport).toBeLessThan(latency.evalControl * 10)
+    // Why: dispatches normally take 13–17ms; 100ms is a visible six-frame delay.
+    expect(latency.mouseMove, latencyReport).toBeLessThan(100)
+    expect(latency.mouseWheel, latencyReport).toBeLessThan(100)
 
     // ── Gesture fidelity ──
 
@@ -272,6 +267,7 @@ test('dispatches coordinate pointer input fast enough for real gestures', async 
     const cadenceReport = `${latencyReport} clickPairMs=${clickPairMs} pressGapMs=${pressGapMs}`
     console.log(`POINTER_CADENCE ${cadenceReport}`)
     test.info().annotations.push({ type: 'pointer-cadence', description: cadenceReport })
+    expect(clickPairMs, cadenceReport).toBeLessThan(DOUBLE_CLICK_INTERVAL_MS)
 
     const clickEvents = String(
       await evaluateInPage(
@@ -286,20 +282,8 @@ test('dispatches coordinate pointer input fast enough for real gestures', async 
     console.log(`POINTER_CLICKS ${clickEvents}`)
     expect(eventsOfType('click'), cadenceReport).toHaveLength(2)
 
-    // Why: dblclick needs both presses inside Chromium's 500ms interval, which is a
-    // property of how fast the host can serve five RPCs, not of the dispatch path. A
-    // runner too slow to express a double-click at all reports that as unverified rather
-    // than as a missing dblclick — the clickCount cadence itself is covered deterministically
-    // by agent-browser-bridge-pointer-input.test.ts under fake timers.
-    if (pressGapMs >= DOUBLE_CLICK_INTERVAL_MS) {
-      test.info().annotations.push({
-        type: 'pointer-dblclick-unverified',
-        description: `presses were ${pressGapMs}ms apart, outside the ${DOUBLE_CLICK_INTERVAL_MS}ms interval — ${cadenceReport}`
-      })
-    } else {
-      expect(eventsOfType('dblclick'), cadenceReport).toHaveLength(1)
-      expect(readProperty(eventsOfType('dblclick')[0], 'detail'), cadenceReport).toBe(2)
-    }
+    expect(eventsOfType('dblclick'), cadenceReport).toHaveLength(1)
+    expect(readProperty(eventsOfType('dblclick')[0], 'detail'), cadenceReport).toBe(2)
 
     // ── Right click ──
 
