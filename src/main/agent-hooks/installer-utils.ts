@@ -12,6 +12,7 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import { quotePowerShellLiteral as quotePowerShellString } from '../../shared/powershell-native-argument'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
@@ -108,9 +109,7 @@ export function getSharedManagedScriptPath(scriptFileName: string): string {
 
 export { wrapPosixHookCommand } from './posix-hook-command'
 
-export function quotePowerShellString(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
+export { quotePowerShellString }
 
 export {
   wrapWindowsPowerShellEncodedCommand,

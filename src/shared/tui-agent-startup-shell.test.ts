@@ -65,6 +65,12 @@ describe('tokenizeStartupCommand spans (windows shells)', () => {
   })
 })
 
+describe('powershell startup argument quoting', () => {
+  it('doubles typographic single quotes, which PowerShell also treats as delimiters', () => {
+    expect(quoteStartupArg('it\u2019s', 'powershell')).toBe("'it\u2019\u2019s'")
+  })
+})
+
 describe('one Unix startup dialect', () => {
   it('clears variables with a self-contained branch, not a per-shell builtin', () => {
     // Why not `unset`/`set -e` alone, and why not a wrapper-defined helper:
