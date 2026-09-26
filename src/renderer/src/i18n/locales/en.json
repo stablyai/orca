@@ -15210,6 +15210,16 @@
         "MermaidBlock": {
           "dcc132e691": "Diagram error:"
         },
+        "MermaidDiagramLightbox": {
+          "expand": "Expand diagram",
+          "title": "Diagram",
+          "hint": "Scroll or +/− to zoom · Drag or arrow keys to pan",
+          "zoomIn": "Zoom in",
+          "zoomOut": "Zoom out",
+          "fit": "Fit to screen",
+          "close": "Close",
+          "viewportLabel": "Diagram. Arrow keys pan, plus and minus zoom, 0 fits to screen."
+        },
         "MonacoEditor": {
           "68cb83f4a7": "Add note on selected text",
           "fd68ae03b3": "Search in Files",

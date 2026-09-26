@@ -15054,6 +15054,16 @@
         "MermaidBlock": {
           "dcc132e691": "다이어그램 오류:"
         },
+        "MermaidDiagramLightbox": {
+          "expand": "다이어그램 확대",
+          "title": "다이어그램",
+          "hint": "스크롤 또는 +/−로 확대/축소 · 드래그 또는 화살표 키로 이동",
+          "zoomIn": "확대",
+          "zoomOut": "축소",
+          "fit": "화면에 맞추기",
+          "close": "닫기",
+          "viewportLabel": "다이어그램. 화살표 키로 이동, 더하기와 빼기로 확대/축소, 0으로 화면에 맞춥니다."
+        },
         "MonacoEditor": {
           "68cb83f4a7": "선택한 텍스트에 메모 추가",
           "fd68ae03b3": "파일에서 검색",

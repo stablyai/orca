@@ -43,33 +43,42 @@ function DialogOverlay({
   )
 }
 
+type DialogContentVariant = 'default' | 'fullscreen'
+
+const dialogContentVariantClassNames: Record<DialogContentVariant, string> = {
+  // Why: bg-background in dark mode is the same color as the canvas, and
+  // border-border/50 is ~3.5% white over that canvas — both invisible.
+  // A translucent surface, solid 14% border, dual shadow, and 2xl backdrop
+  // blur match the dropdown-menu recipe (which already works) and read
+  // clearly in both light and dark mode.
+  // grid-cols-[minmax(0,1fr)]: default grid column sizes to min-content, so an
+  // unbreakable token (long filename in the title) widens the column past the
+  // panel and pushes justify-end footers outside the visible surface.
+  default:
+    'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-background/96 p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl duration-200 outline-none dark:border-white/14 dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg',
+  // Why: immersive viewers (e.g. diagram lightbox) cover the whole window edge to edge.
+  fullscreen:
+    'fixed inset-0 z-50 flex h-dvh w-screen flex-col overflow-hidden bg-background text-foreground outline-none duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0'
+}
+
 function DialogContent({
   className,
   children,
   overlayClassName,
   showCloseButton = true,
+  variant = 'default',
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   overlayClassName?: string
   showCloseButton?: boolean
+  variant?: DialogContentVariant
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
-        // Why: bg-background in dark mode is the same color as the canvas, and
-        // border-border/50 is ~3.5% white over that canvas — both invisible.
-        // A translucent surface, solid 14% border, dual shadow, and 2xl backdrop
-        // blur match the dropdown-menu recipe (which already works) and read
-        // clearly in both light and dark mode.
-        // grid-cols-[minmax(0,1fr)]: default grid column sizes to min-content, so an
-        // unbreakable token (long filename in the title) widens the column past the
-        // panel and pushes justify-end footers outside the visible surface.
-        className={cn(
-          'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] grid-cols-[minmax(0,1fr)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border border-black/14 bg-background/96 p-6 text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl duration-200 outline-none dark:border-white/14 dark:bg-[rgba(23,23,23,0.96)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg',
-          className
-        )}
+        className={cn(dialogContentVariantClassNames[variant], className)}
         {...props}
       >
         {children}

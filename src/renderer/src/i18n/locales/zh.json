@@ -15054,6 +15054,16 @@
         "MermaidBlock": {
           "dcc132e691": "图表错误："
         },
+        "MermaidDiagramLightbox": {
+          "expand": "展开图表",
+          "title": "图表",
+          "hint": "滚动或按 +/− 缩放 · 拖动或使用方向键平移",
+          "zoomIn": "放大",
+          "zoomOut": "缩小",
+          "fit": "适应屏幕",
+          "close": "关闭",
+          "viewportLabel": "图表。方向键平移，加号和减号缩放，0 适应屏幕。"
+        },
         "MonacoEditor": {
           "68cb83f4a7": "在选定的文本上添加注释",
           "fd68ae03b3": "在文件中搜索",

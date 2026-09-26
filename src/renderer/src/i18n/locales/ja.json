@@ -15054,6 +15054,16 @@
         "MermaidBlock": {
           "dcc132e691": "図のエラー:"
         },
+        "MermaidDiagramLightbox": {
+          "expand": "図を拡大表示",
+          "title": "図",
+          "hint": "スクロールまたは +/− でズーム · ドラッグまたは矢印キーで移動",
+          "zoomIn": "拡大",
+          "zoomOut": "縮小",
+          "fit": "画面に合わせる",
+          "close": "閉じる",
+          "viewportLabel": "図。矢印キーで移動、プラスとマイナスでズーム、0 で画面に合わせます。"
+        },
         "MonacoEditor": {
           "68cb83f4a7": "選択したテキストにメモを追加する",
           "fd68ae03b3": "ファイル内を検索",
