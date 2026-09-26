@@ -28,7 +28,9 @@ async function readExistingScript(scriptPath: string): Promise<ExistingScript> {
   }
 }
 
-async function scriptStillExists(scriptPath: string): Promise<boolean> {
+// Why: presence probe for ordering decisions — the service must know a launcher exists
+// before deciding whether the impl has to land first, without writing anything.
+export async function managedScriptExists(scriptPath: string): Promise<boolean> {
   try {
     await stat(scriptPath)
     return true
@@ -57,6 +59,19 @@ async function writeScriptWithAclRetry(scriptPath: string, content: string): Pro
   }
 }
 
+// Why (#21514): a launcher's {} fallback can outlive its payload — a refresh that only
+// rewrites existing files would leave the dead mask in place. Restore the sibling through
+// the same atomic tmp+rename path, staying off the main thread like the refresher above.
+export async function restoreManagedScript(scriptPath: string, content: string): Promise<void> {
+  const tmpPath = join(dirname(scriptPath), `.${Date.now()}-${randomUUID()}.tmp`)
+  try {
+    await writeScriptWithAclRetry(tmpPath, content)
+    await rename(tmpPath, scriptPath)
+  } finally {
+    await rm(tmpPath, { force: true }).catch(() => undefined)
+  }
+}
+
 // Why: refresh must not block Electron's main thread or create state for an absent CLI.
 export async function refreshManagedScriptIfPresent(
   scriptPath: string,
@@ -79,7 +94,7 @@ export async function refreshManagedScriptIfPresent(
     if (process.platform !== 'win32') {
       await chmod(tmpPath, 0o755)
     }
-    if (!(await scriptStillExists(scriptPath))) {
+    if (!(await managedScriptExists(scriptPath))) {
       return false
     }
     await rename(tmpPath, scriptPath)

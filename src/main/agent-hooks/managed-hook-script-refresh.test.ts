@@ -128,6 +128,11 @@ describe('managed hook script refresh', () => {
       const refreshed = readFileSync(join(hooksDir, 'claude-hook.cmd'), 'utf8')
       expect(refreshed).toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0')
       expect(refreshed).not.toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" goto')
+      // Why (#21514): the refreshed file is a launcher — its impl sibling must appear too,
+      // or the launcher keeps answering {} for every event while reaching nothing.
+      const impl = readFileSync(join(hooksDir, 'claude-hook-impl.cmd'), 'utf8')
+      expect(impl).toContain('if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0')
+      expect(impl).toContain('/hook/claude')
       // Why: refresh must not resurrect config for a CLI the user may have removed.
       expect(existsSync(join(home, '.claude'))).toBe(false)
       // Why: the statusline script was never installed here, so it must not appear.

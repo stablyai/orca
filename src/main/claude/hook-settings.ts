@@ -15,7 +15,6 @@ import {
 import { quotePowerShellLiteral } from '../../shared/powershell-native-argument'
 import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
-import { isGitBashAvailable } from '../git-bash'
 import { claudeVersionSupportsSessionEnd } from './claude-session-end-hook-capability'
 
 export type ClaudeCompatibleHookSettings = {
@@ -147,6 +146,16 @@ export function getManagedScriptPath(settings = CLAUDE_HOOK_SETTINGS): string {
   return getSharedManagedScriptPath(getManagedScriptFileName(settings))
 }
 
+// Why (#21514): the registered script is a thin launcher; the hook payload lives in
+// this sibling impl so the launcher's missing-payload `{}` stays inside the .cmd.
+export function getManagedImplScriptFileName(settings = CLAUDE_HOOK_SETTINGS): string {
+  return `${settings.scriptBaseName}-impl.cmd`
+}
+
+export function getManagedImplScriptPath(settings = CLAUDE_HOOK_SETTINGS): string {
+  return getSharedManagedScriptPath(getManagedImplScriptFileName(settings))
+}
+
 export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_SETTINGS): string {
   return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.json`
 }
@@ -165,28 +174,21 @@ export function getManagedCommand(
 
 export function getManagedLifecycleHook(
   scriptPath: string,
-  settings = CLAUDE_HOOK_SETTINGS,
-  options: WindowsManagedLifecycleHookOptions = {}
+  settings = CLAUDE_HOOK_SETTINGS
 ): HookCommandConfig {
   if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
   }
-  return getWindowsManagedLifecycleHook(scriptPath, options)
+  return getWindowsManagedLifecycleHook(scriptPath)
 }
 
-export type WindowsManagedLifecycleHookOptions = { gitBashAvailable?: boolean }
-
 // Why: some Claude-compatible consumers ignore `args`, so the invocation must be self-contained.
-export function getWindowsManagedLifecycleHook(
-  scriptPath: string,
-  options: WindowsManagedLifecycleHookOptions = {}
-): HookCommandConfig {
-  // Why (#18875): the encoded launcher cost a PowerShell start-up per hook event. Take the direct
-  // path only where the host can parse `||` — Git Bash can, Windows PowerShell 5.1 cannot.
-  const directCommand =
-    (options.gitBashAvailable ?? isGitBashAvailable())
-      ? wrapWindowsDirectCmdHookCommand(scriptPath)
-      : null
+export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandConfig {
+  // Why (#18875): the encoded launcher cost a PowerShell start-up per hook event. The direct
+  // path needs no host gate (#21514): a bare path parses under cmd.exe, bash, and PowerShell
+  // alike — only the removed `||` required bash-vs-PowerShell discrimination, and a
+  // shell-level fallback would mask a host that cannot spawn `.cmd` at all (WSL bash).
+  const directCommand = wrapWindowsDirectCmdHookCommand(scriptPath)
   if (directCommand) {
     return { type: 'command', command: directCommand, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
   }
