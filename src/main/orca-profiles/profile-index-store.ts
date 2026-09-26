@@ -22,23 +22,24 @@ import {
   type OrcaProfileSummary
 } from '../../shared/orca-profiles'
 import {
-  getOrcaProfileBrowserSessionMetaFile,
   getOrcaProfileDataFile,
   getOrcaProfileDirectory,
   getOrcaProfileIndexPath,
-  getProfileUserDataPath,
-  LEGACY_BACKUP_COUNT,
-  legacyBackupPath,
-  legacyBrowserSessionMetaPath,
-  legacyDataFilePath,
-  profileBackupPath
+  getOrcaProfileStateDatabaseFile,
+  hasOrcaProfileStateDatabase,
+  getProfileUserDataPath
 } from './profile-storage-paths'
+import { copyLegacyStateToProfile } from './profile-legacy-state-import'
+import { profileStateJsonExportPaths } from '../persistence/profile-state/profile-state-export-path'
+import { profileStateDatabaseBackups } from '../persistence/profile-state/profile-state-backup-path'
 
 export {
   getOrcaProfileBrowserSessionMetaFile,
   getOrcaProfileDataFile,
   getOrcaProfileDirectory,
   getOrcaProfileIndexPath,
+  getOrcaProfileStateDatabaseFile,
+  hasOrcaProfileStateDatabase,
   getOrcaProfilesDirectory,
   initOrcaProfilePaths
 } from './profile-storage-paths'
@@ -47,6 +48,7 @@ export type ActiveOrcaProfileState = {
   index: OrcaProfileIndex
   profile: OrcaProfileSummary
   dataFile: string
+  stateDatabaseFile: string
   profileDirectory: string
 }
 
@@ -136,30 +138,6 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   bestEffortFsyncDirectorySync(dirname(indexPath))
 }
 
-function copyIfPresent(source: string, target: string): void {
-  if (!existsSync(source) || existsSync(target)) {
-    return
-  }
-  mkdirSync(dirname(target), { recursive: true })
-  // Why: tmp+rename so a crash mid-copy cannot leave a truncated target that
-  // the exists() guard above would then treat as a completed migration.
-  const tmpTarget = `${target}.tmp`
-  copyFileSync(source, tmpTarget)
-  renameSync(tmpTarget, target)
-}
-
-function copyLegacyStateToProfile(userDataPath: string, profileId: string): void {
-  const profileDataFile = getOrcaProfileDataFile(profileId, userDataPath)
-  copyIfPresent(legacyDataFilePath(userDataPath), profileDataFile)
-  copyIfPresent(
-    legacyBrowserSessionMetaPath(userDataPath),
-    getOrcaProfileBrowserSessionMetaFile(profileId, userDataPath)
-  )
-  for (let i = 0; i < LEGACY_BACKUP_COUNT; i++) {
-    copyIfPresent(legacyBackupPath(userDataPath, i), profileBackupPath(profileDataFile, i))
-  }
-}
-
 // Why: a brand-new profile has no data file, which the telemetry cohort
 // migration reads as a fresh install and defaults to opted-in. Copying the
 // active profile's consent block keeps an opted-out user opted out (and keeps
@@ -230,7 +208,22 @@ export function ensureActiveOrcaProfile(
 
   const profileDirectory = getOrcaProfileDirectory(activeProfile.id, userDataPath)
   mkdirSync(profileDirectory, { recursive: true })
-  if (activeProfile.id === DEFAULT_LOCAL_ORCA_PROFILE_ID) {
+  const profileDatabaseFile = getOrcaProfileStateDatabaseFile(activeProfile.id, userDataPath)
+  const profileDataFile = getOrcaProfileDataFile(activeProfile.id, userDataPath)
+  let hasRetainedProfileStateExport = false
+  try {
+    hasRetainedProfileStateExport =
+      profileStateJsonExportPaths(profileDataFile).length > 0 ||
+      profileStateDatabaseBackups(profileDatabaseFile).length > 0
+  } catch {
+    // An unreadable profile directory must never trigger a fallback copy of legacy state.
+    hasRetainedProfileStateExport = true
+  }
+  if (
+    activeProfile.id === DEFAULT_LOCAL_ORCA_PROFILE_ID &&
+    !hasOrcaProfileStateDatabase(activeProfile.id, userDataPath) &&
+    !hasRetainedProfileStateExport
+  ) {
     copyLegacyStateToProfile(userDataPath, activeProfile.id)
   }
 
@@ -241,7 +234,8 @@ export function ensureActiveOrcaProfile(
   return {
     index,
     profile: activeProfile,
-    dataFile: getOrcaProfileDataFile(activeProfile.id, userDataPath),
+    dataFile: profileDataFile,
+    stateDatabaseFile: profileDatabaseFile,
     profileDirectory
   }
 }

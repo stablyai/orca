@@ -66,6 +66,18 @@ describe('closeTab close intent', () => {
     })
   })
 
+  it('removes the tab and kills it without waiting for main to write the close', async () => {
+    closeTerminalSurface.mockReturnValue(new Promise<void>(() => {}))
+    const store = storeWithSshTab()
+
+    store.getState().closeTab('ssh-tab')
+
+    expect(closeTerminalSurface).toHaveBeenCalledTimes(1)
+    expect(store.getState().tabsByWorktree[SSH_WORKTREE]).toEqual([])
+    await Promise.resolve()
+    expect(mockApi.pty.kill).toHaveBeenCalledWith(SSH_PTY)
+  })
+
   it.each([['user'], ['cleanup']] as const)('sends the intent for a %s close', (reason) => {
     storeWithSshTab().getState().closeTab('ssh-tab', { reason })
 

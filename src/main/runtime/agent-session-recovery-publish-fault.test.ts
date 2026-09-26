@@ -48,8 +48,7 @@ function state(generation: number): AgentSessionStoreState {
     operations: new Map(),
     retiredClaimKeys: [{ keyId: `generation-${generation}`, retiredAt: generation }],
     unreadableRecords: new Map(),
-    visibleSessionIds: new Set(),
-    visibleSessionIdsIndexPresent: false
+    sessionTabs: null
   }
 }
 

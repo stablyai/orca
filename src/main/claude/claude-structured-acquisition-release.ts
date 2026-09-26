@@ -35,8 +35,8 @@ export async function releaseClaudeAcquisition(input: {
   const retriedProof = firstProof || (await exit.connection.close())
   if (retriedProof) {
     await input.onExitProven?.(input.sessionId, exit)
-    // Keep the first-hand exit evidence indexed until the tree proof succeeds;
-    // a failed close must be retryable and cannot look like an absent session.
+    // Only a proven close drops the exit here. An unknown one stays indexed so it is retryable and
+    // cannot look like an absent session; an observed root exit is dropped by its own settlement.
     input.exits.delete(input.sessionId)
     return true
   }

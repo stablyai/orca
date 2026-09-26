@@ -95,10 +95,16 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     activate: boolean
     notify?: boolean
     replacesSessionId?: string
+    /** The host tab id a create reserved; a session that already has a tab keeps its own. */
+    tabId?: string
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
-      await host.setSessionTabVisibility(input.sessionId, true)
+      await host.setSessionTabVisibility(
+        input.sessionId,
+        true,
+        ...(input.tabId ? [input.tabId] : [])
+      )
     }
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`

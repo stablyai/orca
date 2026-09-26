@@ -12,13 +12,8 @@
 //
 // The ledger's answer comes first, so a send it already holds a row for restarts nothing:
 // admission replays or refuses it whoever owns the session now, and a closed session is made
-// readable for that, never given a child. Otherwise a child that dies at startup moves the fence,
-// the client resends the same message against the new fence, and each replay spawns another
-// child that dies the same way.
-//
-// Running inside the send's serialize is what makes "no child" exact and the fence bookkeeping
-// simple: the owner this send (or a hold just ahead of it) replaced is the one the client was
-// current as of, so the send is admitted at the fence the restart published.
+// readable for that, never given a child. Otherwise each resend of a message whose child died at
+// startup would spawn another child that dies the same way.
 //
 // A child that has not proven its start is still the owner: the send is admitted against it and
 // the adapter holds the message until startup lands, or rejects it with the child's own reason
@@ -114,7 +109,7 @@ export function structuredAgentSessionSendNeedsOwner(
 
 type SendPreparationContext = Pick<
   StructuredAgentSessionMutationContext,
-  'deps' | 'sessions' | 'holds' | 'restoreReadable' | 'publish'
+  'deps' | 'sessions' | 'holds' | 'restoreReadable'
 >
 
 export async function prepareStructuredAgentSessionSend(
@@ -128,7 +123,7 @@ export async function prepareStructuredAgentSessionSend(
     if (!context.sessions.has(sessionId)) {
       await context.restoreReadable(sessionId)
     }
-    return { ok: true, envelope }
+    return { ok: true }
   }
   if (structuredAgentSessionSendNeedsOwner(context.sessions.get(sessionId), record)) {
     const refusal = await restartOwnerForSend(context, envelope, record)
@@ -136,7 +131,7 @@ export async function prepareStructuredAgentSessionSend(
       return { ok: false, refusal }
     }
   }
-  return { ok: true, envelope: admitAtResumedFence(context.sessions.get(sessionId), envelope) }
+  return { ok: true }
 }
 
 /** One restart attempt. Answers with the refusal that ends the send, or null when the send goes
@@ -224,21 +219,7 @@ async function recordFailedRestart(
         }
       ]
     })
-    context.publish(sessionId, session.journal)
   } catch (error) {
     context.deps.onEventSinkError?.({ sessionId, error })
   }
-}
-
-/** A writer current as of the owner this child replaced is current now: the restart was the only
- *  thing that moved the fence, whether this send ran it or one just ahead of it did. */
-function admitAtResumedFence(
-  session: StructuredAgentSessionHostSession | undefined,
-  envelope: AgentSessionMutationEnvelope
-): AgentSessionMutationEnvelope {
-  return session?.hasProviderChild &&
-    session.resumedFromFence !== undefined &&
-    envelope.expectedRuntimeFence === session.resumedFromFence
-    ? { ...envelope, expectedRuntimeFence: session.fence }
-    : envelope
 }

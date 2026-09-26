@@ -206,8 +206,7 @@ describe('Claude structured session publishes before the CLI answers initialize'
     await adapter.drainStartup('session-1')
     await adapter.drainObservedExits()
 
-    // A failed start is released on the same evidence a failed create is; a proven-live
-    // descendant would have answered `tree: 'live'` instead.
+    // A failed start is released on the same evidence a failed create is.
     expect(events.find((event) => event.type === 'ended')).toMatchObject({
       cause: 'unexpected-exit',
       startupUnproven: true

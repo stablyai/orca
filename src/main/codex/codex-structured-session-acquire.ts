@@ -13,7 +13,10 @@ import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
-import { codexProcessIdentity, codexProviderHandleLink } from './codex-structured-owner-identity'
+import {
+  codexProviderHandleLink,
+  codexSpawnedProcessIdentity
+} from './codex-structured-owner-identity'
 import { buildCodexStructuredChildEnvironment } from './codex-structured-child-environment'
 import { openCodexThread } from './codex-structured-thread-open'
 import {
@@ -106,6 +109,7 @@ export async function acquireCodexStructuredSession(input: {
       })
     : null
   const open = deps.openConnection ?? openCodexAppServerConnection
+  const spawnIdentity = codexSpawnedProcessIdentity(acquireInput, deps.readProcessStartTime)
   try {
     await stopSupersededCodexAcquisition({
       sessionId,
@@ -165,6 +169,7 @@ export async function acquireCodexStructuredSession(input: {
             () => input.handleUnhandledFrame(sessionId, kind, payload),
             Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8')
           ),
+        onSpawned: spawnIdentity.onSpawned,
         onExit: (error) => {
           try {
             handleCodexSessionExit({
@@ -202,10 +207,7 @@ export async function acquireCodexStructuredSession(input: {
         'Codex thread history exceeds the bounded restore queue; history was not partially imported.'
       )
     }
-    const process = await codexProcessIdentity(
-      { ...acquireInput, pid: connection.pid },
-      deps.readProcessStartTime
-    )
+    const process = await spawnIdentity.read(connection.pid)
     acquisitions.assertCurrent(sessionId, attempt)
     const acquired: AgentSessionAcquisition = {
       process,

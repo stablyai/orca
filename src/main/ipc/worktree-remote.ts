@@ -2741,7 +2741,8 @@ async function performLocalWorktreeCreate(
             branch: branchName,
             baseBranch,
             refreshLocalBaseRef: settings.refreshLocalBaseRefOnWorktreeCreate,
-            options: preparedWorktreeOptions
+            options: preparedWorktreeOptions,
+            timing
           })
           timing.recordPreparedCheckout(
             prepared.status === 'hit'
@@ -2753,6 +2754,9 @@ async function performLocalWorktreeCreate(
             // general admission slot for the rest of this create's own git.
             rearm.fire = prepared.rearm
             return prepared.result
+          }
+          if (prepared.rearm) {
+            rearm.fire = prepared.rearm
           }
         } else {
           timing.recordPreparedCheckout({
