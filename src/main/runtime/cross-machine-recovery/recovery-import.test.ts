@@ -30,6 +30,7 @@ describe('importRecoveryWorkspaceWithHost', () => {
     const [terminal] = session.tabsByWorktree[f.worktreeId]
     expect(terminal.id).not.toBe(SOURCE_TAB)
     expect(terminal.ptyId).toBeNull()
+    expect(terminal).not.toHaveProperty('launchAgent')
     expect(terminal.startupCwd).toBe(path.join(f.checkout, 'pkg'))
     expect(result.idMap.tabs[SOURCE_TAB]).toBe(terminal.id)
     expect(result.idMap.leaves[SOURCE_LEAF]).not.toBe(SOURCE_LEAF)

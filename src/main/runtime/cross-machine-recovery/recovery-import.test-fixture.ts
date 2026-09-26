@@ -85,7 +85,8 @@ export function descriptor(): OrcaRecoveryDescriptorV1 {
         color: null,
         sortOrder: 0,
         createdAt: 1,
-        startupCwd: '/src/wt/pkg'
+        startupCwd: '/src/wt/pkg',
+        launchAgent: 'claude' as const
       }
     ],
     terminalLayouts: {
