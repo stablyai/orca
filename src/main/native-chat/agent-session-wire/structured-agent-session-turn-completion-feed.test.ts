@@ -85,6 +85,8 @@ function harness(): {
   observe: () => void
   events: AgentSessionTurnCompletionEvent[]
   outcomes: () => [string, string][]
+  /** Whether each completion said the user is being asked something. */
+  awaitingUser: () => boolean[]
   listen: () => () => void
 } {
   let items: AgentJournalRenderItem[] = []
@@ -121,6 +123,10 @@ function harness(): {
       events.flatMap((event): [string, string][] =>
         event.type === 'completion' ? [[event.completion.turnId, event.completion.outcome]] : []
       ),
+    awaitingUser: () =>
+      events.flatMap((event) =>
+        event.type === 'completion' ? [event.completion.awaitingUser === true] : []
+      ),
     listen: () => feed.subscribe({ id: 'sub', emit: (event) => events.push(event) })
   }
 }
@@ -135,7 +141,8 @@ describe('StructuredAgentSessionTurnCompletionFeed', () => {
     h.setTurn(turn('turn-1', 'completed', 'success'))
     h.setCursor({ epoch: 'epoch-1', sequence: 2 })
     h.observe()
-    expect(h.events).toEqual([
+    // Strict: an idle settle omits `awaitingUser` rather than sending it undefined.
+    expect(h.events).toStrictEqual([
       {
         type: 'completion',
         completion: {
@@ -551,6 +558,7 @@ describe('a request that settles while the user is asked something', () => {
     )
     h.observe()
     expect(h.outcomes()).toEqual([['t1', 'success']])
+    expect(h.awaitingUser()).toEqual([true])
 
     // Answering the prompt settles the session idle on the request already announced.
     h.setJournal(
@@ -574,6 +582,7 @@ describe('a request that settles while the user is asked something', () => {
     h.setJournal([prompt, userEntry('m1', 2)], [refused('m1')])
     h.observe()
     expect(h.outcomes()).toEqual([[M1, 'failure']])
+    expect(h.awaitingUser()).toEqual([true])
     h.setJournal([approval('a1', 1, 'resolved', 'child-1'), userEntry('m1', 2)], [refused('m1')])
     h.observe()
     expect(h.outcomes()).toEqual([[M1, 'failure']])
@@ -600,6 +609,8 @@ describe('a request that settles while the user is asked something', () => {
     )
     h.observe()
     expect(h.outcomes()).toEqual([['t1', 'success']])
+    // Idle when it settles: the prompt was already answered.
+    expect(h.awaitingUser()).toEqual([false])
   })
 
   it('still waits on a queued send the prompt hides, so the queue notifies once', () => {

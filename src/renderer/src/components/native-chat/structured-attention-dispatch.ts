@@ -24,10 +24,7 @@
  * in main's `suppressWhenFocused`; there is no second suppression path here.
  */
 import { AGENT_JOURNAL_TURN_OUTCOMES } from '../../../../shared/agent-session-journal-types'
-import type {
-  AgentSessionStatusSummary,
-  AgentSessionTurnCompletion
-} from '../../../../shared/agent-session-wire'
+import type { AgentSessionTurnCompletion } from '../../../../shared/agent-session-wire'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
@@ -42,8 +39,7 @@ import type { StructuredTab } from './structured-agent-session-tabs'
 
 export function dispatchStructuredTurnCompletionAttention(
   tab: StructuredTab,
-  completion: AgentSessionTurnCompletion,
-  hostStatus?: AgentSessionStatusSummary['status']
+  completion: AgentSessionTurnCompletion
 ): void {
   // ABSENT OUTCOME IS UNKNOWN AND LIGHTS NOTHING. The wire type makes it required and this host
   // never omits it, but a host that predates the field reaches here as `undefined`, and reading
@@ -113,8 +109,8 @@ export function dispatchStructuredTurnCompletionAttention(
           // 'done' is what the host told us, not an inference from the row — the row's own state
           // can still read 'working' when the completion outruns the status re-projection, and
           // main words a 'working' notification as "working". The outcome picks the wording from there.
-          // A host status of `attention` is the row's 'blocked': the user has a prompt to answer.
-          agentState: hostStatus === 'attention' ? 'blocked' : 'done',
+          // `awaitingUser` is the row's 'blocked': the user has a prompt to answer.
+          agentState: completion.awaitingUser ? 'blocked' : 'done',
           agentTurnOutcome: completion.outcome,
           ...(row?.prompt ? { agentPrompt: row.prompt } : {}),
           ...(row?.lastAssistantMessage

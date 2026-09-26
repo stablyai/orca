@@ -246,6 +246,8 @@ export type AgentSessionTurnCompletion = {
   outcome: AgentJournalTurnOutcome
   /** Execution host's clock at journal commit. */
   completedAt: number
+  /** The request settled while a prompt waits on the user. Absent otherwise, and from older hosts. */
+  awaitingUser?: true
 }
 
 /**

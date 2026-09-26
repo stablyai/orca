@@ -123,7 +123,7 @@ export class StructuredAgentSessionTurnCompletionFeed {
     }
     // Owed work waits, so sends refused one commit at a time announce once, when the last is
     // answered. A pending prompt does not wait (structured chat has no other attention producer):
-    // the client words it from the `attention` status, and answering it keeps the same identity.
+    // the event says so itself, and answering it keeps the same identity.
     // A withdrawn send leaves the older request latest.
     if (
       state.owesWork ||
@@ -145,7 +145,9 @@ export class StructuredAgentSessionTurnCompletionFeed {
         sessionId,
         turnId: request.id,
         outcome: request.outcome,
-        completedAt: this.deps.now()
+        completedAt: this.deps.now(),
+        // Stated here, not joined from the status stream: remote clients receive the two unordered.
+        ...(state.summary.status === 'attention' ? { awaitingUser: true } : {})
       }
     })
   }

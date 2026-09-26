@@ -318,33 +318,47 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     }
   )
 
-  // Structured chat has no other attention producer, so this is the only call back to a subagent's
-  // unanswered approval. The wording comes from the host status the mirror already holds.
-  it('asks for input when the host status reads attention as the request settles', async () => {
-    const stopStatus = getStructuredAgentSessionStatusFeed({ kind: 'local' }).activate()
-    render(<StructuredAgentSessionAttentionBridge />)
-    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-
-    act(() => {
-      mocks.statusEmitters[0]?.({
-        type: 'status',
-        session: {
-          sessionId: SESSION,
-          workspaceId: 'host-side-workspace',
-          agent: 'claude',
-          status: 'attention',
-          latestPrompt: 'Ship it',
-          updatedAt: 1
-        }
-      })
-      hostStream()(completionFrame())
+  // Remote clients receive the status and completion streams over separate sockets, unordered, so
+  // the wording must come from the completion alone. The mirror is set to disagree in each case.
+  function mirrorStatus(status: 'idle' | 'attention'): void {
+    mocks.statusEmitters[0]?.({
+      type: 'status',
+      session: {
+        sessionId: SESSION,
+        workspaceId: 'host-side-workspace',
+        agent: 'claude',
+        status,
+        latestPrompt: 'Ship it',
+        updatedAt: 1
+      }
     })
+  }
 
-    expect(indicators().paneDot).toBe('agent-completion')
-    expect(onlyDispatch()).toMatchObject({ agentState: 'blocked', agentTurnOutcome: 'success' })
-    stopStatus()
-  })
+  it.each([
+    { awaitingUser: true, mirror: 'idle', agentState: 'blocked' },
+    { awaitingUser: undefined, mirror: 'attention', agentState: 'done' }
+  ] as const)(
+    'words awaitingUser=$awaitingUser as $agentState whatever the status mirror says ($mirror)',
+    async ({ awaitingUser, mirror, agentState }) => {
+      const stopStatus = getStructuredAgentSessionStatusFeed({ kind: 'local' }).activate()
+      render(<StructuredAgentSessionAttentionBridge />)
+      await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+      await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+      const completion = turnCompletion()
+
+      act(() => {
+        mirrorStatus(mirror)
+        hostStream()({
+          type: 'completion',
+          completion: awaitingUser ? { ...completion, awaitingUser } : completion
+        })
+      })
+
+      expect(indicators().paneDot).toBe('agent-completion')
+      expect(onlyDispatch()).toMatchObject({ agentState, agentTurnOutcome: 'success' })
+      stopStatus()
+    }
+  )
 
   it('lights nothing for a turn whose outcome the host never stated', async () => {
     render(<StructuredAgentSessionAttentionBridge />)
