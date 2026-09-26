@@ -129,7 +129,9 @@ orca automations run <automationId> --json
 orca automations runs --id <automationId> --json
 ```
 
-If a run fails before it opens a workspace or reconnects to its target, open that run in Orca and click **Rerun** to queue a fresh manual run for the same automation.
+If a run fails before it opens a workspace or reconnects to its target, open that run in Orca and click **Rerun**. The new attempt retains the selected run’s original scheduled time, timezone, and identity, including when retrying an earlier retry. The agent receives that historical context along with the current automation prompt. For daily reports, this keeps the reporting period tied to the original run. Retrying any earlier attempt reuses an already-active retry of that occurrence. Older runs may lack a saved timezone; the agent must use their existing period binding or request the period instead of deriving it from a changed timezone.
+
+**Run now** and `orca automations run` still start a new manual run. Exact historical retries require an updated execution host; an older host rejects the request instead of starting a new run for today.
 
 ## Next steps
 

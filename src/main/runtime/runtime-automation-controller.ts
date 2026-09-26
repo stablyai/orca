@@ -199,13 +199,18 @@ export class RuntimeAutomationController {
     return { removed: true, id }
   }
 
-  async runNow(id: string, expectedOwner?: AutomationOwnerPrecondition): Promise<AutomationRun> {
+  async runNow(
+    id: string,
+    expectedOwner?: AutomationOwnerPrecondition,
+    sourceRunId?: string
+  ): Promise<AutomationRun> {
     if (!this.service) {
       throw new Error('runtime_unavailable')
     }
     const service = this.service
     return await runAutomationNowFenced({
       automationId: id,
+      sourceRunId,
       service,
       fence: () => {
         if (!this.store?.assertAutomationOwnerFence) {

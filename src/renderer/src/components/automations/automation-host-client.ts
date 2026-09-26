@@ -169,6 +169,21 @@ export async function deleteAutomationForTarget(
   await callRuntimeRpc(target, 'automation.delete', { id: automation.id }, { timeoutMs: 15_000 })
 }
 
+export async function rerunAutomationForTarget(
+  automation: Automation,
+  runId: string,
+  sourceTarget?: AutomationHostTarget | null
+): Promise<AutomationRun> {
+  const target = getAutomationOwnerTarget(automation, sourceTarget)
+  const result = await callRuntimeRpc<{ run: AutomationRun }>(
+    target,
+    'automation.rerun',
+    { id: automation.id, runId },
+    { timeoutMs: 15_000 }
+  )
+  return result.run
+}
+
 export async function runAutomationNowForTarget(
   automation: Automation,
   sourceTarget?: AutomationHostTarget | null
