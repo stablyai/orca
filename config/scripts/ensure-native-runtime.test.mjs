@@ -86,6 +86,8 @@ describe('ensure-native-runtime', () => {
         expect(result.status, result.stderr).toBe(0)
         const log = readFileSync(logPath, 'utf8')
         expect(log.match(/pnpm exec node-gyp rebuild\n/g)).toHaveLength(2)
+        // Why: node-gyp must build with MSBuild FileTracker off, or a deep worktree fails FTK1011.
+        expect(log.match(/trackFileAccess=false\n/g)).toHaveLength(2)
         expect(log).toContain(join('node_modules', 'node-pty'))
         expect(log).toContain(join('node_modules', '@orca', 'windows-registry'))
       } finally {
@@ -214,8 +216,12 @@ function envWithPrependedPath(binDir, extraEnv) {
     process.platform === 'win32'
       ? (Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'Path')
       : 'PATH'
+  // Why: an inherited TrackFileAccess would mask the script's win32 default under test.
+  const inherited = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key.toLowerCase() !== 'trackfileaccess')
+  )
   return {
-    ...process.env,
+    ...inherited,
     ...extraEnv,
     [pathKey]: `${binDir}${delimiter}${process.env[pathKey] ?? ''}`
   }
@@ -355,6 +361,10 @@ appendFileSync(
 appendFileSync(
   process.env.ORCA_NATIVE_TEST_LOG,
   \`cxxflags=\${process.env.CXXFLAGS || ''}\\n\`
+)
+appendFileSync(
+  process.env.ORCA_NATIVE_TEST_LOG,
+  \`trackFileAccess=\${process.env.TrackFileAccess || ''}\\n\`
 )
 writeFileSync(process.env.ORCA_NATIVE_TEST_MARKER, 'rebuilt')
 `

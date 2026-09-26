@@ -110,7 +110,8 @@ export function writeWindowsProcessTreePatchFile(projectDir) {
 export function mkTempProject() {
   const projectDir = mkdtempSync(join(tmpdir(), 'orca-rebuild-native-deps-'))
   mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
-  copyFileSync(sourceScriptPath, join(projectDir, 'config', 'scripts', 'rebuild-native-deps.mjs'))
+  // Walked, not copied alone: the script imports local modules such as msbuild-file-tracking.mjs.
+  copyScriptWithLocalModules(sourceScriptPath, join(projectDir, 'config', 'scripts'))
   copyScriptWithLocalModules(sourceInstallScriptPath, join(projectDir, 'config', 'scripts'))
   copyScriptWithLocalModules(sourceNodePtyJobOwnershipPath, join(projectDir, 'config', 'scripts'))
   copyFileSync(
@@ -132,9 +133,11 @@ export function runRebuildScript(projectDir, extraEnv = {}, args = []) {
     ORCA_ELECTRON_PACKAGE_EXTRACTOR: join(projectDir, 'fake-extractor.cjs')
   }
   for (const key of Object.keys(env)) {
+    // Why TrackFileAccess: an inherited value would mask the script's win32 default under test.
     if (
       key.toLowerCase() === 'orca_strict_electron_install' ||
-      key.toLowerCase() === 'npm_lifecycle_event'
+      key.toLowerCase() === 'npm_lifecycle_event' ||
+      key.toLowerCase() === 'trackfileaccess'
     ) {
       delete env[key]
     }
@@ -286,6 +289,7 @@ export async function rebuild(options) {${emitAddon}
       electronVersion: options.electronVersion,
       force: options.force,
       ignoreModules: options.ignoreModules,
+      trackFileAccess: process.env.TrackFileAccess ?? null,
       onlyModules: options.onlyModules,
       platform: options.platform
     }) + '\\n'

@@ -250,6 +250,40 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
   )
 
   it.skipIf(process.platform !== 'win32')(
+    'turns off MSBuild file tracking so a deep worktree path cannot fail the link',
+    () => {
+      const projectDir = mkTempProject()
+
+      try {
+        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
+        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+        writeFakeLoadableNodePty(projectDir)
+        writeFakeWindowsProcessTree(projectDir)
+        writeFakeNodePtyConptyPayload(projectDir, process.arch)
+
+        const env = {
+          ORCA_REBUILD_TEST_LOG: rebuildLogPath,
+          npm_config_platform: 'win32',
+          npm_config_arch: process.arch
+        }
+        const defaulted = runRebuildScript(projectDir, env)
+        expect(defaulted.status, defaulted.stderr).toBe(0)
+        const explicit = runRebuildScript(projectDir, { ...env, TrackFileAccess: 'true' })
+        expect(explicit.status, explicit.stderr).toBe(0)
+
+        const calls = readFileSync(rebuildLogPath, 'utf8')
+          .trim()
+          .split('\n')
+          .map((line) => JSON.parse(line))
+        expect(calls.map((call) => call.trackFileAccess)).toEqual(['false', 'true'])
+      } finally {
+        removeTreeSync(projectDir)
+      }
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
     'rebuilds a loadable ConPTY native that lacks Orca job ownership',
     () => {
       const projectDir = mkTempProject()
