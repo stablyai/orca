@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { hasControllingTerminal } from '../../shared/process-table-snapshot'
 
 const PROCESS_TABLE_LOOKUP_TIMEOUT_MS = 250
 const PROCESS_TABLE_QUERY_TIMEOUT_MS = PROCESS_TABLE_LOOKUP_TIMEOUT_MS / 2
@@ -19,10 +20,6 @@ type ProcessRow = {
 /** `ps` prints `ttys003` / `pts/3`; node-pty reports `/dev/ttys003` / `/dev/pts/3`. */
 function normalizeTty(value: string): string {
   return value.replace(/^\/dev\//, '')
-}
-
-function hasUsableTty(tty: string): boolean {
-  return tty !== '?' && tty !== '??' && tty !== '-'
 }
 
 function runPs(pid: number): string {
@@ -98,7 +95,7 @@ export function getPosixPtyForegroundGroup(
 ): number | null {
   const rows = parseProcessRows(output)
   const root = rows.find((row) => row.pid === rootPid)
-  if (!root || !hasUsableTty(root.tty)) {
+  if (!root || !hasControllingTerminal(root.tty)) {
     return null
   }
   // Why: `ps -p` answers for whatever owns the pid now. Without pinning the tty we

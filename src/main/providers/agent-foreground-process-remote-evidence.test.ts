@@ -75,6 +75,99 @@ describe('host-stamped remote foreground resolver', () => {
     expect(evidence).toMatchObject({ verdict: 'unverifiable', reason })
   })
 
+  // macOS `ps -o tty=` prints `??` for "no controlling terminal" where Linux prints
+  // `?`, so a detached child read as `??` looked like a child on another terminal.
+  describe('on a darwin process table', () => {
+    const darwinMetadata = { ...metadata, platform: 'darwin' as const }
+    const detached = (tty: string): ProcessTableRow[] => [
+      {
+        pid: 300,
+        ppid: 101,
+        pgid: 300,
+        tpgid: 300,
+        tty,
+        startTime: 'detached-start',
+        stat: 'S',
+        command: '/bin/zsh -c sleep 60'
+      }
+    ]
+
+    it.each(['??', '?', '-'])(
+      'keeps a child with no controlling terminal (%s) inside this pty',
+      (tty) => {
+        const evidence = resolveRemoteForegroundEvidence(
+          { rootPid: 100, fallbackProcess: 'zsh' },
+          darwinMetadata,
+          [...rowsFor(['node /opt/claude'], { tty: 'ttys003' }), ...detached(tty)]
+        )
+        expect(evidence).toMatchObject({ verdict: 'live', processName: 'claude' })
+      }
+    )
+
+    it('still stops at a child that owns a different terminal', () => {
+      const evidence = resolveRemoteForegroundEvidence(
+        { rootPid: 100, fallbackProcess: 'zsh' },
+        darwinMetadata,
+        [...rowsFor(['node /opt/claude'], { tty: 'ttys003' }), ...detached('ttys004')]
+      )
+      expect(evidence).toMatchObject({ verdict: 'unverifiable', reason: 'tty_boundary' })
+    })
+
+    it('cannot fence anything from a root with no controlling terminal', () => {
+      const evidence = resolveRemoteForegroundEvidence(
+        { rootPid: 100, fallbackProcess: 'zsh' },
+        darwinMetadata,
+        rowsFor(['node /opt/claude'], { tty: '??' })
+      )
+      expect(evidence).toMatchObject({ verdict: 'unverifiable', reason: 'fence_incomplete' })
+    })
+
+    it('names no foreground for a root whose own terminal is absent', () => {
+      // The root's `tty` is what the fence is stamped with, so a `??` root has to
+      // stop the read rather than fall through and name a detached descendant.
+      const detached: ProcessTableRow[] = [
+        {
+          pid: 100,
+          ppid: 1,
+          pgid: 100,
+          tpgid: 101,
+          tty: '??',
+          startTime: 'root-start',
+          stat: 'Ss',
+          command: '/bin/zsh'
+        },
+        {
+          pid: 400,
+          ppid: 100,
+          pgid: 400,
+          tpgid: 400,
+          tty: '??',
+          startTime: 'detached-start',
+          stat: 'S',
+          command: 'node /opt/claude'
+        }
+      ]
+      const evidence = resolveRemoteForegroundEvidence(
+        { rootPid: 100, fallbackProcess: 'zsh' },
+        darwinMetadata,
+        detached
+      )
+      expect(evidence).toMatchObject({ verdict: 'unverifiable', reason: 'fence_incomplete' })
+    })
+
+    it('treats a foreground child that lost its terminal as incomplete evidence', () => {
+      const rows = rowsFor(['node /opt/claude'], { tty: 'ttys003' }).map((row) =>
+        row.pid === 101 ? { ...row, tty: '??' as const } : row
+      )
+      const evidence = resolveRemoteForegroundEvidence(
+        { rootPid: 100, fallbackProcess: 'zsh' },
+        darwinMetadata,
+        rows
+      )
+      expect(evidence).toMatchObject({ verdict: 'unverifiable', reason: 'fence_incomplete' })
+    })
+  })
+
   it('always degrades SSH-to-Windows without a job/console foreground primitive', () => {
     expect(
       resolveRemoteForegroundEvidence(
