@@ -162,7 +162,8 @@ describe.skipIf(!existsSync(runtimePath) || process.platform === 'win32')(
       const heartbeat = setInterval(() => beats++, 5)
       proc.onData(data => {
         bytes += data.length
-        if (!paused) {
+        // Drain both initial writes before measuring whether stopped producers emit more.
+        if (!paused && bytes === 2 * 65536) {
           paused = true
           proc.pause()
         }
