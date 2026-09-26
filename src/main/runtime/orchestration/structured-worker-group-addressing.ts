@@ -16,7 +16,11 @@
  */
 
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { structuredWorkerAgent, structuredWorkerOwned } from '../structured-worker-authority'
+import {
+  structuredWorkerAgent,
+  structuredWorkerOwned,
+  structuredWorkerResourceReleased
+} from '../structured-worker-authority'
 import {
   STRUCTURED_WORKER_INCARNATION_PREFIX,
   structuredWorkerIdentityFromRow
@@ -36,14 +40,17 @@ export type OrchestrationAddressableAgent = {
  * Structured workers this runtime owns, as group-address candidates.
  *
  * Read from the durable worker-terminal rows, which outlive a settled dispatch and a restart, and
- * gated on ownership — the same answer direct mail routes on — never on liveness: a worker at rest
- * is a recipient, and the mail starts it. A retired one is not.
+ * gated on ownership and on the orchestration not having released it — the same answer direct mail
+ * routes on — never on liveness: a worker at rest is a recipient, and the mail starts it. A retired
+ * or released one is not.
  */
 export function listAddressableStructuredWorkers(
   db: OrchestrationDb | null
 ): OrchestrationAddressableAgent[] {
   const seen = new Set<string>()
-  return (db?.listWorkerTerminalResourcesByIncarnationPrefix(STRUCTURED_WORKER_INCARNATION_PREFIX) ?? [])
+  return (
+    db?.listWorkerTerminalResourcesByIncarnationPrefix(STRUCTURED_WORKER_INCARNATION_PREFIX) ?? []
+  )
     .flatMap((row) => {
       const identity = structuredWorkerIdentityFromRow(row)
       // Newest row first: a session is one recipient, under its latest handle.
@@ -51,7 +58,10 @@ export function listAddressableStructuredWorkers(
         return []
       }
       seen.add(identity.sessionId)
-      return structuredWorkerOwned(identity.sessionId) === true ? [identity] : []
+      return structuredWorkerOwned(identity.sessionId) === true &&
+        !structuredWorkerResourceReleased(row)
+        ? [identity]
+        : []
     })
     .map((identity) => ({
       handle: identity.handle,

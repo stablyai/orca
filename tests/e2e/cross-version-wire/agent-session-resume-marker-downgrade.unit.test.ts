@@ -17,7 +17,7 @@ import { importReleaseCheckoutModule, materializeReleaseCheckout } from './relea
 // A release whose marker parser still requires the chat's newest message id.
 const BASELINE_REF = 'v1.4.211'
 
-test('an older build reads the restart offer this build records at quit', async () => {
+test('an older build reads the restart offer this build records, continuations and all', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-resume-marker-downgrade-'))
   try {
     // This build: the offer teardown takes for a chat whose turn was running.
@@ -33,7 +33,12 @@ test('an older build reads the restart offer this build records at quit', async 
     if (!marker) {
       throw new Error('this build recorded no offer for a running turn')
     }
-    await new AgentSessionRecoveryCapsule(directory).record([marker], NOW)
+    const capsule = new AgentSessionRecoveryCapsule(directory)
+    await capsule.record([marker], NOW)
+    // A resume action that did not finish leaves its continuation recorded on the offer.
+    await capsule.beginResume([SESSION], 'operation-1', NOW, () => 'continuation-1')
+    await capsule.rollbackResume('operation-1', NOW)
+    expect(await capsule.list(NOW)).toMatchObject([{ continuations: ['continuation-1'] }])
 
     // The older build, after a downgrade, still lists it.
     const checkout = await materializeReleaseCheckout(BASELINE_REF)

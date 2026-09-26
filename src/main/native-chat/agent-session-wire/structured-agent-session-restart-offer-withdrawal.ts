@@ -24,8 +24,6 @@ export type StructuredAgentSessionRestartOfferSession = Pick<
 export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartOfferSession>
   capsule?: Pick<AgentSessionRecoveryCapsule, 'dismiss'>
-  /** Whether this message was a restart continuation, by who sent it. */
-  isContinuation: (clientMessageId: string) => boolean
   now: () => number
   /** The capsule's single mutation lane, shared with the offer's own operations. */
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
@@ -54,10 +52,11 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
           (submission) =>
             submission.clientMessageId !== own &&
             (submission.acceptedSequence ?? 0) > taken.sequence &&
-            // A continuation that was rejected never reached the agent: a retry sends a new one.
+            // A continuation the offer sent that was rejected never reached the agent: a retry
+            // sends a new one.
             !(
               submission.dispatchState === 'rejected' &&
-              deps.isContinuation(submission.clientMessageId)
+              marker.continuations?.includes(submission.clientMessageId)
             )
         ))
     // Proven, not merely spawned: a start that failed during startup never ran the agent.

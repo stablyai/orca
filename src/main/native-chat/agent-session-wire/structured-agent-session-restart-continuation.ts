@@ -186,11 +186,12 @@ export async function startStructuredAgentSessionContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
   marker: AgentSessionResumeMarker,
-  operationId: string
+  /** This action's continuation, as its offer recorded it. */
+  continuationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
   let started: StartedStructuredAgentSessionContinuation
   try {
-    started = await sendContinuation(deps, sessionId, marker, operationId)
+    started = await sendContinuation(deps, sessionId, marker, continuationId)
   } catch (error) {
     // The user's own message came first: nothing failed, so the chat says nothing.
     if (!(error instanceof RestartContinuationSupersededError)) {
@@ -264,13 +265,13 @@ async function sendContinuation(
   deps: StructuredAgentSessionContinuationDeps,
   sessionId: string,
   marker: AgentSessionResumeMarker,
-  operationId: string
+  continuationId: string
 ): Promise<StartedStructuredAgentSessionContinuation> {
   const fence = deps.currentFence(sessionId)
   if (fence === null) {
     return { done: { sessionId, outcome: 'refused', reason: 'agent_session_not_attached' } }
   }
-  const { envelope, body } = restartContinuationEnvelope(sessionId, fence, marker, operationId)
+  const { envelope, body } = restartContinuationEnvelope(sessionId, fence, marker, continuationId)
   const sent = await deps.send({ envelope, body }).catch((error: unknown) => {
     if (error instanceof AgentSessionPreDispatchError) {
       throw error
