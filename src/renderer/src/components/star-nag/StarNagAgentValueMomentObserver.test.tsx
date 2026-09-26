@@ -195,6 +195,25 @@ describe('StarNagAgentValueMomentObserver', () => {
     expect(showAgentValueMoment).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['an inferred interrupt', { interrupted: true }],
+    [
+      'a cancelled main-agent turn',
+      { mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 2 } }
+    ]
+  ] as const)('never treats %s with a real prompt as a value moment', async (_label, ending) => {
+    ;({ root, container } = renderObserver())
+
+    setAgentEntries({ pane: entry({ state: 'working' }) })
+    setAgentEntries({ pane: entry({ state: 'done', ...ending }) })
+    await act(async () => {
+      vi.advanceTimersByTime(2400)
+    })
+
+    expect(agentValueMoment).not.toHaveBeenCalled()
+    expect(showAgentValueMoment).not.toHaveBeenCalled()
+  })
+
   it('waits for other live agents and recent typing to quiet', async () => {
     ;({ root, container } = renderObserver())
 
