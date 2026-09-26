@@ -2,6 +2,8 @@ import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand,
+  getAiVaultAgentProviderSession,
+  getAiVaultResumeCodexHome,
   realHomeCodexResumeEnvDeletion
 } from '../../../src/shared/ai-vault-resume-command'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
@@ -44,7 +46,7 @@ export function buildMobileAiVaultResumeCommand(args: {
     cwd: args.session.cwd,
     platform: args.hostPlatform,
     commandOverride: args.commandOverride,
-    codexHome: getMobileAiVaultResumeCodexHome(args.session.codexHome, args.hostPlatform),
+    codexHome: getAiVaultResumeCodexHome(args.session.codexHome, args.hostPlatform),
     shell
   })
 }
@@ -74,16 +76,17 @@ export function buildMobileAiVaultResumeLaunch(args: {
     args.hostPlatform === 'win32'
       ? resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
       : undefined
-  const codexHome = getMobileAiVaultResumeCodexHome(args.session.codexHome, args.hostPlatform)
+  const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, args.hostPlatform)
   const cmdOverrides = normalizeMobileAiVaultResumeCommandOverrides(
     args.settings?.agentCmdOverrides
   )
   const commandOverride = cmdOverrides[args.session.agent] ?? null
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform)
-  if (isResumableTuiAgent(args.session.agent)) {
+  const providerSession = getAiVaultAgentProviderSession(args.session)
+  if (providerSession && isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
-      providerSession: { key: 'session_id', id: args.session.sessionId },
+      providerSession,
       cmdOverrides,
       platform: args.hostPlatform,
       shell,
@@ -255,14 +258,4 @@ export function resolveMobileAiVaultResumePlatform(
     return hostPlatform
   }
   return null
-}
-
-function getMobileAiVaultResumeCodexHome(
-  codexHome: string | null,
-  platform: NodeJS.Platform
-): string | null {
-  if (!codexHome || platform !== 'linux') {
-    return codexHome
-  }
-  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
 }

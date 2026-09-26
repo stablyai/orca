@@ -11,6 +11,8 @@ import {
   withoutEnvCommand
 } from './tui-agent-startup-shell'
 import type { AiVaultAgent, AiVaultSession } from './ai-vault-types'
+import { isResumableTuiAgent, type AgentProviderSessionMetadata } from './agent-session-resume'
+import { parseWslUncPath } from './wsl-paths'
 
 export function buildAiVaultResumeCommand(args: {
   agent: AiVaultAgent
@@ -175,6 +177,35 @@ export function realHomeCodexResumeEnvDeletion(
     return {}
   }
   return { envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] }
+}
+
+export function getAiVaultAgentProviderSession(
+  session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
+): AgentProviderSessionMetadata | null {
+  if (!isResumableTuiAgent(session.agent)) {
+    return null
+  }
+  if (session.agent === 'antigravity') {
+    return { key: 'conversation_id', id: session.sessionId }
+  }
+  if (session.agent === 'pi' || session.agent === 'prime-agent') {
+    return session.filePath
+      ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
+      : null
+  }
+  return { key: 'session_id', id: session.sessionId }
+}
+
+export function getAiVaultResumeCodexHome(
+  codexHome: string | null,
+  platform: NodeJS.Platform
+): string | null {
+  // Why: WSL UNC Codex homes must be POSIX when invoking Linux commands.
+  // Keep original paths unchanged for non-Linux targets.
+  if (!codexHome || platform !== 'linux') {
+    return codexHome
+  }
+  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
 }
 
 function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildAiVaultResumeCommand,
-  buildAiVaultResumeShellCommand
+  buildAiVaultResumeShellCommand,
+  getAiVaultAgentProviderSession,
+  getAiVaultResumeCodexHome
 } from './ai-vault-resume-command'
 
 describe('buildAiVaultResumeCommand', () => {
@@ -234,5 +236,78 @@ describe('buildAiVaultResumeShellCommand env removal', () => {
     ).toBe(
       'set "CODEX_HOME=" & set "ORCA_CODEX_HOME=" & cd /d "C:\\repo" && codex \'resume\' \'sid\''
     )
+  })
+})
+
+describe('getAiVaultAgentProviderSession', () => {
+  it('maps Antigravity to conversation_id', () => {
+    expect(
+      getAiVaultAgentProviderSession({
+        agent: 'antigravity',
+        sessionId: 'conv-123'
+      })
+    ).toEqual({ key: 'conversation_id', id: 'conv-123' })
+  })
+
+  it('maps standard resumable agents to session_id', () => {
+    expect(
+      getAiVaultAgentProviderSession({
+        agent: 'claude',
+        sessionId: 'session-123'
+      })
+    ).toEqual({ key: 'session_id', id: 'session-123' })
+  })
+
+  it('requires transcriptPath for Pi and Prime Agent', () => {
+    expect(
+      getAiVaultAgentProviderSession({
+        agent: 'pi',
+        sessionId: 'session-123'
+      })
+    ).toBeNull()
+
+    expect(
+      getAiVaultAgentProviderSession({
+        agent: 'pi',
+        sessionId: 'session-123',
+        filePath: '/path/to/session.jsonl'
+      })
+    ).toEqual({
+      key: 'session_id',
+      id: 'session-123',
+      transcriptPath: '/path/to/session.jsonl'
+    })
+  })
+
+  it('returns null for non-resumable agents', () => {
+    expect(
+      getAiVaultAgentProviderSession({
+        agent: 'cline',
+        sessionId: 'session-123'
+      })
+    ).toBeNull()
+  })
+})
+
+describe('getAiVaultResumeCodexHome', () => {
+  it('returns codexHome unchanged for non-linux platforms', () => {
+    expect(getAiVaultResumeCodexHome('\\\\wsl$\\Ubuntu\\home\\user\\.codex', 'win32')).toBe(
+      '\\\\wsl$\\Ubuntu\\home\\user\\.codex'
+    )
+    expect(getAiVaultResumeCodexHome('/Users/user/.codex', 'darwin')).toBe('/Users/user/.codex')
+  })
+
+  it('translates WSL UNC paths to POSIX paths on linux', () => {
+    expect(getAiVaultResumeCodexHome('\\\\wsl$\\Ubuntu\\home\\user\\.codex', 'linux')).toBe(
+      '/home/user/.codex'
+    )
+  })
+
+  it('preserves non-WSL paths on linux', () => {
+    expect(getAiVaultResumeCodexHome('/home/user/.codex', 'linux')).toBe('/home/user/.codex')
+  })
+
+  it('handles null/empty codexHome gracefully', () => {
+    expect(getAiVaultResumeCodexHome(null, 'linux')).toBeNull()
   })
 })
