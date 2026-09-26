@@ -14,6 +14,7 @@ import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../automation-precheck'
+import { interpretAutomationWorktreeRetention } from '../automation-worktree-retention'
 
 export const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
   message: 'Unknown provider'
@@ -22,6 +23,19 @@ export const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
 export const AutomationWorkspaceMode = z.enum(['existing', 'new_per_run']).optional()
 
 export const SetupDecision = z.enum(['inherit', 'run', 'skip']).optional()
+
+export const AutomationWorktreeRetentionInput = z
+  .unknown()
+  .optional()
+  .superRefine((value, ctx) => {
+    if (value !== undefined && interpretAutomationWorktreeRetention(value) === 'invalid') {
+      ctx.addIssue({ code: 'custom', message: 'Invalid worktree retention' })
+    }
+  })
+  .transform((value) => {
+    const interpreted = interpretAutomationWorktreeRetention(value)
+    return interpreted === 'invalid' ? undefined : interpreted
+  })
 
 export const ExecutionHostId = requiredString('Missing host id').transform((value, ctx) => {
   const hostId = normalizeExecutionHostId(value)
@@ -196,6 +210,7 @@ export const AutomationCreate = z.object({
   workspaceMode: AutomationWorkspaceMode,
   baseBranch: OptionalPlainString,
   setupDecision: SetupDecision,
+  worktreeRetention: AutomationWorktreeRetentionInput,
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule,
@@ -218,6 +233,7 @@ export const AutomationUpdateFields = z.object({
   // Why: update patches distinguish omitted from null so callers can clear a saved base branch.
   baseBranch: OptionalNullablePlainString,
   setupDecision: SetupDecision,
+  worktreeRetention: AutomationWorktreeRetentionInput,
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule.optional(),

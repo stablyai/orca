@@ -28,6 +28,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
+import { getWorktreeRetentionFlag } from './automation-worktree-retention-flag'
 import { resolveAutomationDestination } from '../automation-destination'
 import { RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
@@ -190,6 +191,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       workspace: target.workspace,
       workspaceMode,
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+      worktreeRetention: getWorktreeRetentionFlag(flags),
       reuseSession: getReuseSessionFlag(flags),
       timezone: getOptionalStringFlag(flags, 'timezone'),
       enabled: getEnabledFlag(flags),
@@ -220,6 +222,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       workspace: target.workspace,
       workspaceMode: getWorkspaceModeFlag(flags),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+      worktreeRetention: getWorktreeRetentionFlag(flags),
       reuseSession: getReuseSessionFlag(flags),
       timezone: getOptionalStringFlag(flags, 'timezone'),
       enabled: getEnabledFlag(flags),

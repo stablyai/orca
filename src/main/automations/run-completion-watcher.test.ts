@@ -388,4 +388,42 @@ describe('automationsChanged publication', () => {
     expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
     service.stop()
   })
+
+  it('asks new-per-run settlement to run once the headless run is finished', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Patrol',
+      prompt: 'Inspect',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      baseBranch: 'main',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-12T00:00:00Z').getTime()
+    })
+    const settled: string[] = []
+    const service = new AutomationService(store, {
+      headlessDispatcher: async () => ({
+        workspaceId: 'wt-created',
+        terminalSessionId: 'tab-1',
+        terminalPaneKey: LAUNCH_TARGET.terminalPaneKey,
+        terminalPtyId: 'pty-1',
+        completion: Promise.resolve({ status: 'completed', error: null })
+      }),
+      newPerRunSettlement: {
+        settle: async (finished) => {
+          settled.push(`${finished.status}:${finished.workspaceId ?? ''}`)
+        }
+      }
+    })
+
+    const run = await service.runNow(automation.id)
+    await vi.waitFor(() => {
+      expect(settled).toEqual(['completed:wt-created'])
+    })
+    expect(readRun(store, automation.id, run.id).status).toBe('completed')
+    service.stop()
+  })
 })

@@ -1,3 +1,4 @@
+import type { AutomationWorktreeRetention } from './automation-worktree-retention'
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
@@ -119,6 +120,8 @@ export type Automation = {
   workspaceId: string | null
   baseBranch: string | null
   setupDecision?: SetupDecision
+  /** Omitted means reclaim a clean success that is still on the base commit. */
+  worktreeRetention?: AutomationWorktreeRetention | null
   reuseSession: boolean
   timezone: string
   rrule: string
@@ -192,6 +195,7 @@ export type AutomationCreateInput = {
   workspaceId?: string | null
   baseBranch?: string | null
   setupDecision?: SetupDecision
+  worktreeRetention?: AutomationWorktreeRetention | null
   reuseSession?: boolean
   timezone: string
   rrule: string
@@ -214,6 +218,7 @@ export type AutomationUpdateInput = Partial<
     | 'workspaceId'
     | 'baseBranch'
     | 'setupDecision'
+    | 'worktreeRetention'
     | 'reuseSession'
     | 'timezone'
     | 'rrule'

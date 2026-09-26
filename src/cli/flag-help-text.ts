@@ -94,6 +94,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--reuse-session        Reuse the previous live session for existing-workspace runs',
   'fresh-session': '--fresh-session        Disable session reuse for future runs',
   'workspace-mode': '--workspace-mode <mode> existing or new-per-run',
+  'worktree-retention':
+    '--worktree-retention <policy> keep, reclaim-clean-success, keep-last:<n>, or default',
   'missed-run-grace-minutes': '--missed-run-grace-minutes <n> Missed-run grace window',
   'value-stdin': '--value-stdin         Read set-value payload from stdin',
   'window-id': '--window-id <id>      Target a window id from list-windows',
