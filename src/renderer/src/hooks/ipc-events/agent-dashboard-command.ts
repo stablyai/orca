@@ -23,7 +23,7 @@ export function toggleAgentDashboardFromShortcut(
   }
   const nextOpen = !state.agentDashboardDrawerOpen
   // The drawer self-closes with the sidebar: reveal only when opening, never while closing.
-  if (nextOpen) {
+  if (nextOpen && state.settings.experimentalAgentDashboardDocked !== true) {
     state.setSidebarOpen(true)
   }
   state.setAgentDashboardDrawerOpen(nextOpen)
