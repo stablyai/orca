@@ -30,7 +30,7 @@ import {
 import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
 import { resumeHeldStructuredAgentSession } from './structured-agent-session-hold-resume'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
-import { settleStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
+import { settleEndedStructuredAgentSessionChildWork } from './structured-agent-session-dead-generation-settlement'
 
 export type StructuredAgentSessionLifetimeContext = {
   deps: StructuredAgentSessionHostDeps
@@ -162,16 +162,14 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     acknowledgeRelease: () => context.deps.adapter.acknowledgeSessionRelease?.(sessionId),
     discardSink: () => context.runtimeState.discardEventSink(sessionId),
     settleWork: async () => {
-      const fence =
-        owed?.fence ?? structuredAgentSessionConversationFence(context.deps.store, sessionId)
-      const settled = await settleStructuredAgentSessionDeadGeneration({
+      const settled = await settleEndedStructuredAgentSessionChildWork({
         journal: session.journal,
         sessionId,
-        fence,
-        settlementId: `expected-close:${sessionId}:${fence}:${owed?.generation ?? 'unknown'}`,
-        pendingSubmissionReason: 'provider_closed_before_acknowledgement',
-        verdict: { state: 'interrupted', completedAt: context.now() },
-        showUnexpectedExitOutcome: false,
+        child: owed ?? {
+          generation: null,
+          fence: structuredAgentSessionConversationFence(context.deps.store, sessionId)
+        },
+        now: context.now(),
         onError: (id, error) => {
           settlementError = error
           context.deps.onEventSinkError?.({ sessionId: id, error })

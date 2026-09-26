@@ -71,7 +71,7 @@ export type AttachFlowInput = {
   openConversation: (record: AgentSessionRecord) => Promise<AgentSessionJournal>
   /** A failure after acquisition released the session's acquisition; `cause` is that failure and
    *  `rootGone` whether the release saw the provider root go. */
-  onAcquisitionReleased?: (cause: unknown, verdict: { rootGone: boolean }) => void
+  onAcquisitionReleased?: (cause: unknown, verdict: { rootGone: boolean }) => Promise<void> | void
 }
 
 export async function performAttach(

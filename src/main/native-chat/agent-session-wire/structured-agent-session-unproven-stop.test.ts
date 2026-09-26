@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
@@ -339,5 +340,35 @@ describe('a start the child was seen to die in (C′ trigger 2)', () => {
     expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'exit', rootGone: false })
     expect(lease()).toMatchObject({ claimStatus: 'live', handoffStage: 'recovering' })
     await expectNextSendStartsAfterRecovery()
+  })
+})
+
+describe('a re-attach that fails after it bound the live child', () => {
+  it('ends that child through the same settlement as every other end, so its question closes', async () => {
+    const params = hostTestAttachParams(lease()?.runtimeFence ?? null)
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+    const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-q', ordinal: 9 }
+    acquire.mock.calls.at(-1)?.[0].events?.appendItem(identity, {
+      kind: 'question',
+      question: 'Which target?',
+      options: [{ id: 'web', label: 'Web' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    })
+    await host.flushStreamedEvents(SESSION)
+    const question = () =>
+      host
+        .journalSnapshot(SESSION)
+        .items.find((item) => item.itemId === agentJournalItemKey(identity))
+    expect(question()?.body).toMatchObject({ resolution: { state: 'pending' } })
+    // The same attach again reuses the live child, then fails before it commits; its cleanup
+    // releases that child.
+    vi.spyOn(store, 'recordOperationOutcome').mockRejectedValueOnce(new Error('disk full'))
+
+    // It fails, however its replayed operation's own settlement then answers.
+    await host.attach(CALLER, params).catch(() => undefined)
+
+    expect(acquire).toHaveBeenCalledTimes(2)
+    expect(conversation()?.lastEndedChild).toMatchObject({ cause: 'attach-failed' })
+    expect(question()?.body).toMatchObject({ resolution: { state: 'cancelled' } })
   })
 })

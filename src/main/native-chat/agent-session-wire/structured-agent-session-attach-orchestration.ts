@@ -21,7 +21,10 @@ import {
   pinnedAgentSessionLaunchEnv
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
-import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
+import {
+  settleEndedStructuredAgentSessionChildWork,
+  settleStaleStructuredAgentSessionState
+} from './structured-agent-session-dead-generation-settlement'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type {
   StructuredAgentSessionProviderChild,
@@ -235,12 +238,12 @@ type AttachCandidate = {
   sink: DeferredStructuredAgentSessionEventSink
 }
 
-function endReleasedChild(
+async function endReleasedChild(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
   cause: unknown,
   verdict: StructuredAgentSessionStopVerdict
-): void {
+): Promise<void> {
   const session = context.sessions.get(sessionId)
   const child = session?.child
   if (
@@ -259,6 +262,14 @@ function endReleasedChild(
   }
   context.runtimeState.currentEventSink(sessionId)?.close()
   context.runtimeState.discardEventSink(sessionId)
+  // Closed first, so nothing the released child still emits revises what this settles.
+  await settleEndedStructuredAgentSessionChildWork({
+    journal: session.journal,
+    sessionId,
+    child,
+    now: context.now(),
+    onError: (id, error) => context.deps.onEventSinkError?.({ sessionId: id, error })
+  })
   context.publishStatus?.(sessionId)
 }
 

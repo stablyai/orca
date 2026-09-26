@@ -13,6 +13,7 @@ import {
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { structuredAgentSessionStartFailureRow } from './structured-agent-session-start-failure-row'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
+import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
 import {
   runningTurnLifecycleRevisions,
   turnVerdictFromDeathEvidence,
@@ -141,6 +142,29 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
   )
   const outcomeItems = runningTurns.length > 0 ? runningTurns : inProgressBefore
   return outcomeItems.some((item) => !isCleanlySettled(currentItems.get(item.itemId)))
+}
+
+/** What every child the host ends gets, whatever ended it: its running turn interrupted, its
+ *  prompts cancelled, and what it was handed left in doubt. An exit the provider reported is the
+ *  one other settlement, since it carries the exit's own words. */
+export function settleEndedStructuredAgentSessionChildWork(input: {
+  journal: DeadGenerationJournal
+  sessionId: string
+  child: StructuredAgentSessionProviderChildIdentity
+  now: number
+  onError: (sessionId: string, error: unknown) => void
+}): Promise<boolean> {
+  const { child, sessionId } = input
+  return settleStructuredAgentSessionDeadGeneration({
+    journal: input.journal,
+    sessionId,
+    fence: child.fence,
+    settlementId: `expected-close:${sessionId}:${child.fence}:${child.generation ?? 'unknown'}`,
+    pendingSubmissionReason: 'provider_closed_before_acknowledgement',
+    verdict: { state: 'interrupted', completedAt: input.now },
+    showUnexpectedExitOutcome: false,
+    onError: input.onError
+  })
 }
 
 export async function settleStructuredAgentSessionDeadGeneration(input: {
