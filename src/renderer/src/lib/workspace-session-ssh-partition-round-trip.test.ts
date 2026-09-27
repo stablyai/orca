@@ -121,26 +121,41 @@ describe('ssh host partition hydration', () => {
     ).toBe('session-1')
   })
 
-  it('leaves a workspace the local partition already holds tabs for untouched', async () => {
-    // The other direction of the same rule, and the reason adoption is only gap-filling: merging
-    // into a populated row would re-add tabs the user had closed on every launch.
-    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
-      partitionedApi(strandedPartitions([tab('tab-runtime')], [tab('tab-local')])),
-      repos
-    )
+  it('leaves a workspace the local partition holds tabs for untouched when the host has none', async () => {
+    // The base keeps its own copy while the owning partition has nothing to say about the tabs.
+    const partitions = strandedPartitions([], [tab('tab-local')])
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(partitionedApi(partitions), repos)
 
     expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
       'tab-local'
     ])
   })
 
-  it("leaves that workspace's other rows alone as well", async () => {
+  it('lets a populated host row replace leftover local tabs (#22503)', async () => {
+    // `local` is never pruned for an SSH workspace, so its PTY-less rows are tabs closed since the
+    // split. Letting them win restored each one as a fresh shell on every launch.
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(strandedPartitions([tab('tab-runtime')], [tab('tab-local', { ptyId: null })])),
+      repos
+    )
+
+    expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'tab-runtime'
+    ])
+    expect(read.session.activeTabIdByWorktree?.[WORKTREE_ID]).toBe('tab-runtime')
+    expect(read.contestedPrimaryHostBySessionKey[WORKTREE_ID]).toBe(SSH_HOST_ID)
+  })
+
+  it('keeps a local tab that still names a PTY the host never listed', async () => {
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(strandedPartitions([tab('tab-runtime')], [tab('tab-local')])),
       repos
     )
 
-    expect(read.session.activeTabIdByWorktree?.[WORKTREE_ID]).toBeUndefined()
+    expect(read.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'tab-runtime',
+      'tab-local'
+    ])
   })
 
   it('routes the reunited workspace back to the partition that owns it', async () => {

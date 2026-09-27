@@ -162,7 +162,7 @@ beforeEach(() => {
 
 /** The observed shape from #12721: the runtime owns the tab list in `ssh:<targetId>` while the
  *  local blob still carries the worktree key with an empty list. */
-function createStrandedStore(): InstanceType<typeof Store> {
+function createStrandedStore(localTabs: TerminalTab[] = []): InstanceType<typeof Store> {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-ssh-partition-export-')))
   directories.push(dir)
   const store = createSqliteTestStore(Store, { dataFile: join(dir, 'orca-data.json') })
@@ -172,7 +172,7 @@ function createStrandedStore(): InstanceType<typeof Store> {
   store.addRepo(remoteRepo(OTHER_REPO_ID, '/elsewhere/checkout', OTHER_TARGET_ID))
   store.setWorkspaceSession({
     ...getDefaultWorkspaceSession(),
-    tabsByWorktree: { [WORKTREE_ID]: [] }
+    tabsByWorktree: { [WORKTREE_ID]: localTabs }
   })
   store.setWorkspaceSession(
     {
@@ -234,5 +234,19 @@ describe('remoteWorkspace:setForConnectedTargets session fallback', () => {
     await publishToConnectedTarget(store)
 
     expect(hostSnapshot.session.tabsByWorktreePath[WORKTREE_PATH]).not.toEqual([])
+  })
+
+  it('publishes the owning partition rather than leftover local tabs (#22503)', async () => {
+    // Leftover `local` rows used to win whenever they were non-empty, so every sync re-uploaded
+    // tabs the user had closed and the next reconnect respawned them as empty shells.
+    const store = createStrandedStore([
+      { ...runtimeAuthoredTab(), id: 'tab-closed-long-ago', ptyId: null, title: 'Terminal 7' }
+    ])
+
+    await publishToConnectedTarget(store)
+
+    expect(hostSnapshot.session.tabsByWorktreePath[WORKTREE_PATH]?.map((tab) => tab.id)).toEqual([
+      'tab-runtime'
+    ])
   })
 })
