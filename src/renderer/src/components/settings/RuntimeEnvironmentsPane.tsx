@@ -43,6 +43,7 @@ export type { RuntimeHostDetails } from './runtime-environment-host-details'
 
 type RuntimeEnvironmentsPaneProps = {
   settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
   setActiveRuntimeEnvironmentPreference: (environmentId: string | null) => Promise<boolean>
   canGeneratePairingUrl?: boolean
   allowLocalRuntime?: boolean
@@ -51,6 +52,7 @@ type RuntimeEnvironmentsPaneProps = {
 
 export function RuntimeEnvironmentsPane({
   settings,
+  updateSettings,
   setActiveRuntimeEnvironmentPreference,
   canGeneratePairingUrl = true,
   allowLocalRuntime = true,
@@ -249,6 +251,7 @@ export function RuntimeEnvironmentsPane({
         activeValue={activeValue}
         environments={environments}
         detailsByEnvironmentId={detailsByEnvironmentId}
+        preferRunnerWhenLocalWeak={settings.preferRunnerWhenLocalWeak === true}
         isBusy={isBusy}
         isLoading={isLoading}
         onToggleAdvanced={() => setAdvancedOpen((current) => !current)}
@@ -256,6 +259,9 @@ export function RuntimeEnvironmentsPane({
           setSwitchError(null)
           setPendingSwitchValue(value)
         }}
+        onPreferRunnerWhenLocalWeakChange={(value) =>
+          updateSettings({ preferRunnerWhenLocalWeak: value })
+        }
         onRefresh={() => void loadEnvironments()}
       />
 

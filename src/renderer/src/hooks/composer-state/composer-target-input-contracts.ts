@@ -12,6 +12,7 @@ export type ComposerRuntimeTargetSelectionInput = Pick<
   | 'projects'
   | 'repoId'
   | 'repos'
+  | 'runtimeStatusByEnvironmentId'
   | 'selectedProjectGroup'
   | 'selectedProjectHostSetupOverrideId'
   | 'settings'

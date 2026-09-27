@@ -18,9 +18,11 @@ import type {
   NotificationPermissionStatusResult,
   NotificationSoundResult
 } from '../../shared/notification-settings-types'
+import type { LocalCapacitySignal } from '../../shared/local-capacity-signal-types'
 
 export type NotificationsApi = {
   getDesktopAwayState: () => Promise<boolean | undefined>
+  getLocalCapacitySignal: () => Promise<LocalCapacitySignal>
   dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
   /** `paneKeys` also retires every id main announced for those subjects. */
   dismiss: (ids: string[], paneKeys?: string[]) => Promise<NotificationDismissResult>

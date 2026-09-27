@@ -28,6 +28,7 @@ import { registerAiVaultHandlers } from '../ai-vault'
 import { registerAiVaultSearchHandlers } from '../ai-vault-search'
 import { registerNativeChatHandlers } from '../native-chat'
 import { registerNotificationHandlers } from '../notifications'
+import { registerLocalCapacitySignalHandler } from '../local-capacity-signal-handler'
 import { registerNotebookHandlers } from '../notebook'
 import { registerOnboardingHandlers } from '../onboarding'
 import { registerDashboardPopoutHandlers } from '../dashboard-popout'
@@ -169,6 +170,7 @@ export function registerCoreHandlers(
   registerStatsHandlers(stats)
   registerMemoryHandlers(store)
   registerNotificationHandlers(store, runtime)
+  registerLocalCapacitySignalHandler()
   registerNotebookHandlers(store)
   registerOnboardingHandlers(store)
   registerDashboardPopoutHandlers(store, keybindings)
