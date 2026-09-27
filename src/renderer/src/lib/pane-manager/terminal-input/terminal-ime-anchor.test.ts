@@ -88,4 +88,28 @@ describe('resolveAppDrawnImeCaret on captured agent transcripts', () => {
 
     expect(caretOf(terminal)).toEqual({ row: 2, column: 4 })
   })
+
+  // A wide character's second cell has width 0; it must not break a highlight run in two.
+  it.each([
+    ['a run of wide characters', '\x1b[7m안녕\x1b[27m'],
+    ['a narrow cell before a wide one', '\x1b[7ma안\x1b[27m'],
+    ['a wide cell before a narrow one', '\x1b[7m안a\x1b[27m'],
+    ['a highlighted Korean menu row', '\x1b[7m› 1. 신뢰하고 계속\x1b[27m']
+  ])('does not take %s for a caret', async (_name, row) => {
+    const terminal = await replay(`\x1b[?25l${row}\r\n  2. 종료`, 40, 4)
+
+    expect(caretOf(terminal)).toBeNull()
+  })
+
+  it('takes a lone inverse wide character for the caret it sits on', async () => {
+    const terminal = await replay('\x1b[?25l→ 안\x1b[7m녕\x1b[27m하\r\n', 20, 4)
+
+    expect(caretOf(terminal)).toEqual({ row: 0, column: 4 })
+  })
+
+  it('finds the caret after a highlight of wide characters on the same row', async () => {
+    const terminal = await replay('\x1b[?25l\x1b[7m세요\x1b[27m x\x1b[7m \x1b[27m\r\n', 20, 4)
+
+    expect(caretOf(terminal)).toEqual({ row: 0, column: 6 })
+  })
 })
