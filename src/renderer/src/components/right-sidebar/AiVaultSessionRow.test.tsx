@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
@@ -246,4 +246,24 @@ it('threads child resume through expanded parent details without resuming the pa
   await act(async () => {})
   fireEvent.click(screen.getByTitle('Resume in New Tab'))
   expect(resume.onResume).toHaveBeenCalledExactlyOnceWith(child, 'folder:target')
+})
+
+describe('VaultSessionRow host badge', () => {
+  it('marks a session that ran on another machine with that host name', async () => {
+    const { useAppStore } = await import('@/store')
+    const previousLabels = useAppStore.getState().sshTargetLabels
+    useAppStore.setState({ sshTargetLabels: new Map([['ssh-vps', 'build-box']]) })
+    onTestFinished(() => useAppStore.setState({ sshTargetLabels: previousLabels }))
+    renderRow({
+      session: { ...session, executionHostId: 'ssh:ssh-vps' }
+    })
+    const badge = screen.getByTestId('ai-vault-session-host')
+    expect(badge.textContent).toBe('build-box')
+    expect(badge.getAttribute('title')).toBe('Ran on build-box')
+  })
+
+  it('shows no host badge for sessions on this machine', () => {
+    renderRow()
+    expect(screen.queryByTestId('ai-vault-session-host')).toBeNull()
+  })
 })

@@ -1,5 +1,6 @@
 import type React from 'react'
 import { Badge } from '@/components/ui/badge'
+import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -16,6 +17,7 @@ import { translate } from '@/i18n/i18n'
 import { SessionTime } from './ai-vault-session-time'
 import { sessionModelLabel } from './ai-vault-session-display'
 import { agentLabel } from './ai-vault-session-filters'
+import { useAiVaultSessionHostLabel } from './ai-vault-session-host-label'
 import {
   aiVaultWorktreeStatusLabel,
   shouldShowAiVaultWorktreeStatusBadge,
@@ -41,6 +43,7 @@ export function SessionMetadata({
   vaultScope: AiVaultScope
 }) {
   const modelLabel = sessionModelLabel(session)
+  const hostLabel = useAiVaultSessionHostLabel(session.executionHostId)
   return (
     <div
       data-testid="ai-vault-session-metadata"
@@ -53,6 +56,7 @@ export function SessionMetadata({
         {/* Why: 'done' is the resting state of every finished pane — badging it
             would mark most rows; only live attention states earn a dot. */}
         {liveState && liveState !== 'done' ? <AgentStateDot state={liveState} /> : null}
+        {hostLabel ? <SessionHostBadge label={hostLabel} /> : null}
         <span className="min-w-0 shrink-[2] truncate">{agentLabel(session.agent)}</span>
         <span className="shrink-0 tabular-nums">
           {translate(
@@ -106,6 +110,21 @@ export function SessionMetadata({
         </div>
       ) : null}
     </div>
+  )
+}
+
+// Why first in the line: telling "ran on another machine" apart at a glance is the point, and
+// the shared host chip keeps it identical to how workspace cards name their machine.
+function SessionHostBadge({ label }: { label: string }): React.JSX.Element {
+  const title = translate(
+    'auto.components.right.sidebar.AiVaultSessionRow.remoteHostTitle',
+    'Ran on {{value0}}',
+    { value0: label }
+  )
+  return (
+    <span data-testid="ai-vault-session-host" title={title} className="flex min-w-0 shrink">
+      <WorktreeHostContextBadge label={label} />
+    </span>
   )
 }
 

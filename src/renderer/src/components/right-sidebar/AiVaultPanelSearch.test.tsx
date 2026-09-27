@@ -7,15 +7,26 @@ import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import { AiVaultPanelSearch } from './AiVaultPanelSearch'
 import type { useAiVaultPanelSearch } from './use-ai-vault-search'
 
-const store = vi.hoisted(() => ({
+const storeState = vi.hoisted(() => ({
+  sshTargetLabels: new Map<string, string>(),
+  removedSshTargetLabels: new Map<string, string>(),
+  runtimeEnvironments: new Array<{ id: string; name: string }>(),
   settings: null,
   markFeatureTipsSeen: vi.fn(),
   updateSettingsOrThrow: vi.fn(async () => {})
 }))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: typeof storeState) => unknown) => selector(storeState),
+    { getState: () => storeState }
+  )
+}))
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  storeState.sshTargetLabels = new Map()
+})
 
 type PanelSearch = ReturnType<typeof useAiVaultPanelSearch>
 
@@ -71,6 +82,22 @@ describe('AiVaultPanelSearch', () => {
     expect(screen.getByRole('status').textContent).toBe(
       `Not searched: ${getExecutionHostLabel('local')} (search off) · build-box (unreachable) · paused (not ready) · moved (index changed) · old (unavailable)`
     )
+  })
+
+  it('names SSH hosts by their target label, not the internal id', () => {
+    storeState.sshTargetLabels = new Map([['ssh-build-box', 'build-box']])
+    const response = searchResults()
+    renderPanel(
+      panelSearch({
+        hits: response.hits,
+        response: {
+          ...response,
+          hosts: [{ executionHostId: 'ssh:ssh-build-box', outcome: 'no-service' }]
+        }
+      })
+    )
+
+    expect(screen.getByRole('status').textContent).toBe('Not searched: build-box (unavailable)')
   })
 
   it('says a computer does not have this workspace or project rather than blaming the search', () => {
@@ -153,8 +180,8 @@ describe('AiVaultPanelSearch', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Enable' }))
     })
-    expect(store.markFeatureTipsSeen).toHaveBeenCalledWith(['agent-session-search'])
-    expect(store.updateSettingsOrThrow).toHaveBeenCalledWith({
+    expect(storeState.markFeatureTipsSeen).toHaveBeenCalledWith(['agent-session-search'])
+    expect(storeState.updateSettingsOrThrow).toHaveBeenCalledWith({
       aiVaultSearch: { enabled: true, historyDays: null }
     })
     expect(search.retry).toHaveBeenCalled()
