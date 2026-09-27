@@ -43,8 +43,8 @@ import {
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
 import { captureHiddenRendererScreenshot } from './helpers/hidden-renderer-screenshot'
+import { RECOVERY_SCREENSHOT_DIR } from './helpers/cross-machine-recovery-picker-fixtures'
 
-const SCREENSHOT_DIR = path.join(process.cwd(), 'validation-screenshots', 'cross-machine-recovery')
 const CLI_ENTRY = path.join(process.cwd(), 'out', 'cli', 'index.js')
 const TERMINAL_TAB = 'e2e-agents-terminal'
 const LIVE_LEAF = '11111111-1111-4111-8111-111111111111'
@@ -329,7 +329,7 @@ function userDataPathOf(app: ElectronApplication): Promise<string> {
 
 async function screenshot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
   const file = `two-profile-${name}.png`
-  const body = await captureHiddenRendererScreenshot(page, path.join(SCREENSHOT_DIR, file))
+  const body = await captureHiddenRendererScreenshot(page, path.join(RECOVERY_SCREENSHOT_DIR, file))
   await testInfo.attach(file, { body, contentType: 'image/png' })
 }
 
