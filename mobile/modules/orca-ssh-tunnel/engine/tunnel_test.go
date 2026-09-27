@@ -312,8 +312,8 @@ func TestInvalidConfigAndAuth(t *testing.T) {
 	server := newTestServer(t)
 	c := server.config()
 	c.Password = "wrong"
-	if failure, _ := openFailure(t, NewTunnel(), encode(c)); failure == "" || strings.Contains(failure, "wrong") {
-		t.Fatal("auth accepted or secret exposed", failure)
+	if failure, _ := openFailure(t, NewTunnel(), encode(c)); failure != "SSH_AUTH_FAILED" {
+		t.Fatal("wrong password was not classified as an auth failure", failure)
 	}
 	c.TargetPort = 0
 	if failure, _ := openFailure(t, NewTunnel(), encode(c)); failure == "" {

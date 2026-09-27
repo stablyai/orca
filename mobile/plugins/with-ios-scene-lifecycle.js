@@ -53,6 +53,24 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
       restorationHandler: { _ in }
     )
   }
+
+  // Why: under scenes UIKit stops calling the app delegate's lifecycle methods,
+  // so forward them to keep ExpoAppDelegate subscribers working.
+  func sceneDidBecomeActive(_ scene: UIScene) {
+    (UIApplication.shared.delegate as? AppDelegate)?.applicationDidBecomeActive?(UIApplication.shared)
+  }
+
+  func sceneWillResignActive(_ scene: UIScene) {
+    (UIApplication.shared.delegate as? AppDelegate)?.applicationWillResignActive?(UIApplication.shared)
+  }
+
+  func sceneWillEnterForeground(_ scene: UIScene) {
+    (UIApplication.shared.delegate as? AppDelegate)?.applicationWillEnterForeground?(UIApplication.shared)
+  }
+
+  func sceneDidEnterBackground(_ scene: UIScene) {
+    (UIApplication.shared.delegate as? AppDelegate)?.applicationDidEnterBackground?(UIApplication.shared)
+  }
 }
 `
 

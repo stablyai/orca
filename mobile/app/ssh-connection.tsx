@@ -234,24 +234,24 @@ export default function SshConnectionScreen() {
     const dependents = profiles.filter((entry) => entry.jumpProfileId === profile.id)
     if (dependents.length > 0) {
       const names = dependents.map((entry) => entry.name).join(', ')
-      await new Promise<void>((resolve) => {
+      const confirmed = await new Promise<boolean>((resolve) => {
         Alert.alert(
           'Delete SSH connection?',
           `${names} use it as their jump host and will connect directly afterwards.`,
           [
-            { text: 'Cancel', style: 'cancel', onPress: () => resolve() },
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
             {
               text: 'Delete',
               style: 'destructive',
-              onPress: () => {
-                resolve()
-                void performDelete()
-              }
+              onPress: () => resolve(true)
             }
-          ]
+          ],
+          { cancelable: true, onDismiss: () => resolve(false) }
         )
       })
-      return
+      if (!confirmed) {
+        return
+      }
     }
     await performDelete()
   }

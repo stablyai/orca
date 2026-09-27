@@ -240,8 +240,7 @@ func (t *Tunnel) handshake(c configuration, auth []ssh.AuthMethod, verifyTarget,
 			if strings.Contains(err.Error(), "SSH_HOST_KEY_MISMATCH") {
 				return nil, errors.New("SSH_HOST_KEY_MISMATCH")
 			}
-			var authError *ssh.ServerAuthError
-			if errors.As(err, &authError) {
+			if isClientAuthFailure(err) {
 				return nil, errors.New("SSH_JUMP_AUTH_FAILED")
 			}
 			return nil, errors.New("SSH_JUMP_HANDSHAKE_FAILED")
@@ -260,11 +259,9 @@ func (t *Tunnel) handshake(c configuration, auth []ssh.AuthMethod, verifyTarget,
 		User: c.Username, Auth: auth, HostKeyCallback: verifyTarget,
 	})
 	if err != nil {
-		var authError *ssh.ServerAuthError
-		if errors.As(err, &authError) {
+		if isClientAuthFailure(err) {
 			return nil, errors.New("SSH_AUTH_FAILED")
 		}
-		// ssh.NewClientConn currently wraps authentication failures without a typed client error.
 		return nil, errors.New("SSH_HANDSHAKE_FAILED")
 	}
 	t.mu.Lock()
@@ -314,6 +311,12 @@ func (t *Tunnel) dialTargetStream(ctx context.Context, c configuration, stage fu
 	return channel, nil
 }
 
+// isClientAuthFailure recognizes x/crypto's client-side authentication
+// rejection, which is not surfaced as a typed ServerAuthError on the client.
+func isClientAuthFailure(err error) bool {
+	return strings.Contains(err.Error(), "unable to authenticate")
+}
+
 // sshClient runs the SSH handshake under a watchdog so a silent peer (or a
 // stalled jump channel, which cannot carry TCP deadlines) cannot hang forever.
 func (t *Tunnel) sshClient(raw net.Conn, address string, config *ssh.ClientConfig) (*ssh.Client, error) {
@@ -336,7 +339,9 @@ func (t *Tunnel) sshClient(raw net.Conn, address string, config *ssh.ClientConfi
 	case r := <-done:
 		return r.client, r.err
 	case <-ctx.Done():
-		raw.Close()
+		_ = raw.Close()
+		// Drain so a late host-key callback cannot race this tunnel's teardown.
+		<-done
 		// Why: ctx carries the connect deadline, so a second timer would decide
 		// the code at random and stay armed after the handshake returned.
 		if t.ctx.Err() != nil {
