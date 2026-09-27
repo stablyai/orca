@@ -1,69 +1,42 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type {
-  OrcaRecoveryDescriptorV1,
-  RecoveryAgentBinding,
-  RecoveryLayout,
-  RecoveryTab
-} from '../../../shared/cross-machine-recovery-descriptor'
+import type { RecoveryLayout } from '../../../shared/cross-machine-recovery-descriptor'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { importRecoveryWorkspaceWithHost } from './recovery-import'
 import { planRecoveryImport, type RecoveryPlanContext } from './recovery-import-plan'
 import { projectRecoveryLayout } from './recovery-layout-projection'
-import { descriptor, fixture, SOURCE_GROUP, SOURCE_TAB } from './recovery-import.test-fixture'
+import {
+  AGENT_SESSION_ID,
+  AGENT_TAB,
+  descriptor,
+  fixture,
+  SOURCE_GROUP,
+  SOURCE_LEAF,
+  SOURCE_TAB,
+  withActiveAgentSessionTab,
+  withPreferredClientView
+} from './recovery-import.test-fixture'
 
-const AGENT_TAB = 'structured-agent-session-orca-sess-1'
-const AGENT_SESSION_ID = '7b3e3e5f-3333-4444-8555-666677778888'
 const SOURCE_WT = 'src-repo::/src/wt'
 const OWNED_EDITOR_ID = `editor:${encodeURIComponent(SOURCE_WT)}:local:${encodeURIComponent('/src/wt/a.ts')}`
 
-function agentSessionTab(): RecoveryTab {
+function emptyView(): RecoveryLayout {
   return {
-    id: AGENT_TAB,
-    entityId: 'orca-sess-1',
-    groupId: SOURCE_GROUP,
-    contentType: 'agent-session',
-    agentSessionAgent: 'claude',
-    label: 'Claude chat',
-    customLabel: 'planning',
-    color: null,
-    sortOrder: 2,
-    createdAt: 3
-  }
-}
-
-function structuredBinding(): RecoveryAgentBinding {
-  return {
-    sourcePaneKey: AGENT_TAB,
-    sourceTabId: AGENT_TAB,
-    sourceLeafId: null,
-    surface: 'structured',
-    agent: 'claude',
-    providerSession: { key: 'session_id', id: AGENT_SESSION_ID },
-    structuredCursor: { provider: 'claude', sessionId: AGENT_SESSION_ID, leafUuid: 'leaf-uuid' },
-    liveness: 'sleeping',
-    state: 'done',
-    launch: { sourceAgentArgs: null, sourceEnvKeys: [] },
-    capturedAt: 10,
-    updatedAt: 30,
-    lastHumanInputAt: null
-  }
-}
-
-function withActiveAgentSessionTab(d: OrcaRecoveryDescriptorV1): OrcaRecoveryDescriptorV1 {
-  const group = d.layout.groups[0]!
-  return {
-    ...d,
-    layout: {
-      ...d.layout,
-      tabs: [...d.layout.tabs, agentSessionTab()],
-      groups: [{ ...group, activeTabId: AGENT_TAB, tabOrder: [...group.tabOrder, AGENT_TAB] }],
-      activeTabType: 'agent-session',
-      activeTabId: AGENT_TAB
-    },
-    bindings: [...d.bindings, structuredBinding()]
+    tabs: [],
+    groups: [],
+    groupLayout: null,
+    activeGroupId: null,
+    terminalTabs: [],
+    terminalLayouts: {},
+    startupCwdRelative: {},
+    editors: [],
+    activeEditorRelativePath: null,
+    browsers: [],
+    activeBrowserId: null,
+    activeTabType: null,
+    activeTabId: null
   }
 }
 
@@ -126,31 +99,7 @@ describe('structured session placeholders', () => {
   })
 
   it('keeps the host placeholder when the chosen client view lacks the agent-session tab', () => {
-    const d = withActiveAgentSessionTab(descriptor())
-    const view = descriptor().layout
-    d.presentation = {
-      views: [
-        {
-          clientKey: 'local-renderer',
-          clientInstanceId: 'client-1',
-          clientName: 'desk',
-          clientKind: 'local-renderer',
-          hostReceivedAt: 1,
-          lastHumanInputAt: 1,
-          lastHumanFocusAt: 1,
-          focus: {
-            isActiveWorkspace: true,
-            focusedTabId: SOURCE_TAB,
-            focusedLeafId: null,
-            focusedPaneKey: null,
-            windowFocused: true
-          },
-          view
-        }
-      ],
-      preferredClientKey: 'local-renderer',
-      freshness: 'client-view'
-    }
+    const d = withPreferredClientView(withActiveAgentSessionTab(descriptor()), descriptor().layout)
 
     const plan = planRecoveryImport(d, undefined, planContext('/dst/wt'))
 
@@ -166,45 +115,7 @@ describe('structured session placeholders', () => {
   })
 
   it('gives every host binding a visible tab when the chosen client view has no groups', () => {
-    const d = withActiveAgentSessionTab(descriptor())
-    const emptyView: RecoveryLayout = {
-      tabs: [],
-      groups: [],
-      groupLayout: null,
-      activeGroupId: null,
-      terminalTabs: [],
-      terminalLayouts: {},
-      startupCwdRelative: {},
-      editors: [],
-      activeEditorRelativePath: null,
-      browsers: [],
-      activeBrowserId: null,
-      activeTabType: null,
-      activeTabId: null
-    }
-    d.presentation = {
-      views: [
-        {
-          clientKey: 'local-renderer',
-          clientInstanceId: 'client-1',
-          clientName: 'desk',
-          clientKind: 'local-renderer',
-          hostReceivedAt: 1,
-          lastHumanInputAt: 1,
-          lastHumanFocusAt: 1,
-          focus: {
-            isActiveWorkspace: true,
-            focusedTabId: null,
-            focusedLeafId: null,
-            focusedPaneKey: null,
-            windowFocused: true
-          },
-          view: emptyView
-        }
-      ],
-      preferredClientKey: 'local-renderer',
-      freshness: 'client-view'
-    }
+    const d = withPreferredClientView(withActiveAgentSessionTab(descriptor()), emptyView())
 
     const plan = planRecoveryImport(d, undefined, planContext('/dst/wt'))
 
@@ -226,6 +137,71 @@ describe('structured session placeholders', () => {
     )
     expect(group.tabOrder).toEqual(paneTabIds)
     expect(group.activeTabId).toBe(plan.idMap.tabs[AGENT_TAB])
+  })
+
+  it('places a host binding whose terminal row the groupless client view kept', () => {
+    const host = descriptor().layout
+    const view: RecoveryLayout = {
+      ...emptyView(),
+      terminalTabs: host.terminalTabs,
+      terminalLayouts: host.terminalLayouts
+    }
+    const d = withPreferredClientView(withActiveAgentSessionTab(descriptor()), view)
+
+    const plan = planRecoveryImport(d, undefined, planContext('/dst/wt'))
+
+    expect(plan.presentationSource).toEqual({ kind: 'client-view', clientKey: 'local-renderer' })
+    const localGroup = plan.idMap.groups[SOURCE_GROUP]!
+    expect(plan.fragment.tabGroups.map((group) => group.id)).toEqual([localGroup])
+    expect(plan.fragment.tabGroupLayout).toEqual({ type: 'leaf', groupId: localGroup })
+    const panes = plan.bindings.map((planned) => parsePaneKey(planned.result.localPaneKey)!)
+    expect(panes.map((pane) => pane.tabId)).toEqual([
+      plan.idMap.tabs[SOURCE_TAB],
+      plan.idMap.tabs[AGENT_TAB]
+    ])
+    expect(panes[0]?.leafId).toBe(plan.idMap.leaves[SOURCE_LEAF])
+    expect(plan.fragment.terminalTabs.map((tab) => tab.id)).toEqual(panes.map((pane) => pane.tabId))
+    expect(plan.fragment.unifiedTabs.map((tab) => [tab.entityId, tab.groupId])).toEqual(
+      panes.map((pane) => [pane.tabId, localGroup])
+    )
+    expect(plan.fragment.tabGroups[0]?.tabOrder).toEqual(panes.map((pane) => pane.tabId))
+  })
+
+  it('synthesizes a tab and group for a host binding the host layout never placed', () => {
+    const d = descriptor()
+    const grouplessHost = {
+      ...d,
+      layout: { ...d.layout, tabs: [], groups: [], groupLayout: null, activeGroupId: null }
+    }
+    const ctx = planContext('/dst/wt')
+
+    const plan = planRecoveryImport(grouplessHost, undefined, ctx)
+
+    expect(plan.presentationSource).toEqual({ kind: 'host-layout' })
+    const pane = parsePaneKey(plan.bindings[0]!.result.localPaneKey)!
+    expect([pane.tabId, pane.leafId]).toEqual([
+      plan.idMap.tabs[SOURCE_TAB],
+      plan.idMap.leaves[SOURCE_LEAF]
+    ])
+    const groupId = plan.fragment.activeGroupId!
+    expect(plan.fragment.tabGroups).toEqual([
+      { id: groupId, worktreeId: ctx.worktreeId, activeTabId: pane.tabId, tabOrder: [pane.tabId] }
+    ])
+    expect(plan.fragment.tabGroupLayout).toEqual({ type: 'leaf', groupId })
+    expect(plan.fragment.unifiedTabs).toEqual([
+      {
+        id: pane.tabId,
+        entityId: pane.tabId,
+        groupId,
+        worktreeId: ctx.worktreeId,
+        contentType: 'terminal',
+        label: 'claude',
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 1
+      }
+    ])
   })
 })
 

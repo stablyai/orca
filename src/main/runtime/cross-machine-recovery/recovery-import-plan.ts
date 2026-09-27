@@ -13,15 +13,12 @@ import type {
   RecoveryLayout,
   RecoveryPathMapping,
   RecoveryPresentationSource,
-  RecoveryProviderSession,
-  RecoveryTabGroup
+  RecoveryProviderSession
 } from '../../../shared/cross-machine-recovery-descriptor'
 import type { RecoveryWorkspaceFragment } from '../../../shared/cross-machine-recovery-session-ops'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode
-} from '../../../shared/terminal-tab-types'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
+import { leafBelongsToTab, withHostBindingTabs } from './recovery-host-binding-tabs'
 import {
   remapRecoveryLayout,
   remapRecoveryPath,
@@ -74,106 +71,6 @@ export function selectRecoveryView(
   return view
     ? { layout: view.view, source: { kind: 'client-view', clientKey: view.clientKey } }
     : { layout: descriptor.layout, source: { kind: 'host-layout' } }
-}
-
-/** Host bindings win over view structure: a bound terminal tab the view lacks comes from the host. */
-export function withHostBindingTabs(
-  view: RecoveryLayout,
-  host: RecoveryLayout,
-  bindings: readonly RecoveryAgentBinding[]
-): RecoveryLayout {
-  if (view === host) {
-    return view
-  }
-  const present = new Set(view.terminalTabs.map((tab) => tab.id))
-  let targetGroupId = view.groups.some((group) => group.id === view.activeGroupId)
-    ? view.activeGroupId
-    : (view.groups[0]?.id ?? null)
-  let next = view
-  for (const binding of bindings) {
-    const hostTab = host.terminalTabs.find((tab) => tab.id === binding.sourceTabId)
-    if (!hostTab) {
-      continue
-    }
-    if (present.has(hostTab.id)) {
-      const leafId = binding.sourceLeafId
-      const hostLayout = host.terminalLayouts[hostTab.id]
-      // Why: a stale view that lost the bound leaf would strand its binding; the host's panes win.
-      if (
-        leafId &&
-        hostLayout &&
-        !leafBelongsToTab(next.terminalLayouts, hostTab.id, leafId) &&
-        leafBelongsToTab(host.terminalLayouts, hostTab.id, leafId)
-      ) {
-        next = { ...next, terminalLayouts: { ...next.terminalLayouts, [hostTab.id]: hostLayout } }
-      }
-      continue
-    }
-    present.add(hostTab.id)
-    const hostUnified = host.tabs.find(
-      (tab) => tab.contentType === 'terminal' && tab.entityId === hostTab.id
-    )
-    if (hostUnified && !targetGroupId) {
-      targetGroupId = hostUnified.groupId
-      next = withDestinationGroup(next, {
-        id: targetGroupId,
-        activeTabId: host.groups.find((group) => group.id === targetGroupId)?.activeTabId ?? null,
-        tabOrder: []
-      })
-    }
-    const hostLayout = host.terminalLayouts[hostTab.id]
-    const hostCwd = host.startupCwdRelative[hostTab.id]
-    next = {
-      ...next,
-      terminalTabs: [...next.terminalTabs, hostTab],
-      terminalLayouts: hostLayout
-        ? { ...next.terminalLayouts, [hostTab.id]: hostLayout }
-        : next.terminalLayouts,
-      startupCwdRelative:
-        hostCwd === undefined
-          ? next.startupCwdRelative
-          : { ...next.startupCwdRelative, [hostTab.id]: hostCwd },
-      ...(hostUnified && targetGroupId
-        ? {
-            tabs: [...next.tabs, { ...hostUnified, groupId: targetGroupId }],
-            groups: next.groups.map((group) =>
-              group.id === targetGroupId
-                ? { ...group, tabOrder: [...group.tabOrder, hostUnified.id] }
-                : group
-            )
-          }
-        : {})
-    }
-  }
-  return next
-}
-
-// Why: a view with no groups would strand host tabs, since every unified tab needs a group slot.
-function withDestinationGroup(layout: RecoveryLayout, group: RecoveryTabGroup): RecoveryLayout {
-  return {
-    ...layout,
-    groups: [...layout.groups, group],
-    groupLayout: { type: 'leaf', groupId: group.id },
-    activeGroupId: group.id
-  }
-}
-
-function leafBelongsToTab(
-  layouts: Readonly<Record<string, { root: TerminalPaneLayoutNode | null }>>,
-  tabId: string,
-  leafId: string
-): boolean {
-  const stack: (TerminalPaneLayoutNode | null | undefined)[] = [layouts[tabId]?.root]
-  while (stack.length > 0) {
-    const node = stack.pop()
-    if (node?.type === 'leaf' && node.leafId === leafId) {
-      return true
-    }
-    if (node?.type === 'split') {
-      stack.push(node.first, node.second)
-    }
-  }
-  return false
 }
 
 export function localRecoveryProviderSession(

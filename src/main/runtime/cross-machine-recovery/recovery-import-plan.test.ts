@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { importRecoveryWorkspaceWithHost } from './recovery-import'
-import { withHostBindingTabs } from './recovery-import-plan'
+import { withHostBindingTabs } from './recovery-host-binding-tabs'
 import {
   descriptor,
   fixture,
