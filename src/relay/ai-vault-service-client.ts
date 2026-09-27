@@ -22,7 +22,8 @@ import {
   shutdownRelayAiVaultServiceChild,
   type RelayAiVaultServiceApi,
   type RelayAiVaultServiceCall,
-  type RelayAiVaultServiceClientOptions
+  type RelayAiVaultServiceClientOptions,
+  type RelayAiVaultServiceValue
 } from './ai-vault-service-client-state'
 import {
   RELAY_AI_VAULT_SERVICE_PROTOCOL,
@@ -42,7 +43,7 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
   private readyTimer: NodeJS.Timeout | null = null
   private readonly active = new Map<RelayAiVaultServiceLane, RelayAiVaultServiceCall>()
   private readonly queue: RelayAiVaultServiceCall[] = []
-  private nextId = 1
+  protected nextId = 1
   private readonly restartPolicy: RelayAiVaultRestartPolicy
   private readonly idleRetirement = new RelayAiVaultIdleRetirement()
   private disposed = false
@@ -87,7 +88,7 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
     }
   }
 
-  private request<T extends AiVaultListResult | AiVaultSessionTitlesResult>(
+  protected request<T extends RelayAiVaultServiceValue>(
     request: RelayAiVaultServiceRequest,
     signal?: AbortSignal
   ): Promise<T> {

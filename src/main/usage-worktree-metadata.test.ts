@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { loadKnownUsageWorktreesByRepo } from './usage-worktree-metadata'
+import {
+  loadKnownSshUsageWorktreesByTarget,
+  loadKnownUsageWorktreesByRepo
+} from './usage-worktree-metadata'
 
 describe('loadKnownUsageWorktreesByRepo', () => {
   it('builds usage worktree refs from repo roots and persisted metadata', () => {
@@ -81,5 +84,63 @@ describe('loadKnownUsageWorktreesByRepo', () => {
     expect(result.size).toBe(repoCount)
     expect([...result.values()].every((worktrees) => worktrees.length === 2)).toBe(true)
     expect(repoIdReads).toBeLessThanOrEqual(repoCount * 4)
+  })
+})
+
+describe('loadKnownSshUsageWorktreesByTarget', () => {
+  it('groups SSH repos by target and keeps each host path as-is', () => {
+    const store = {
+      getAllWorktreeMeta: vi.fn(() => ({
+        'repo-local::/workspace/local-feature': { displayName: 'Local feature' },
+        'repo-a::/home/dev/repo-a-feature': { displayName: 'A feature' },
+        'repo-b::/srv/repo-b-wip': { displayName: '' }
+      }))
+    }
+    const repos = [
+      { id: 'repo-local', path: '/workspace/local', displayName: 'Local' },
+      { id: 'repo-a', path: '/home/dev/repo-a', displayName: 'Repo A', connectionId: 'box-1' },
+      { id: 'repo-b', path: '/srv/repo-b', displayName: '', connectionId: 'box-2' }
+    ]
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the loader reads only the fixture fields shown above.
+    expect(loadKnownSshUsageWorktreesByTarget(store as never, repos as never)).toEqual(
+      new Map([
+        [
+          'box-1',
+          [
+            {
+              repoId: 'repo-a',
+              worktreeId: 'repo-a::/home/dev/repo-a',
+              path: '/home/dev/repo-a',
+              displayName: 'Repo A'
+            },
+            {
+              repoId: 'repo-a',
+              worktreeId: 'repo-a::/home/dev/repo-a-feature',
+              path: '/home/dev/repo-a-feature',
+              displayName: 'A feature'
+            }
+          ]
+        ],
+        [
+          'box-2',
+          [
+            {
+              repoId: 'repo-b',
+              worktreeId: 'repo-b::/srv/repo-b',
+              path: '/srv/repo-b',
+              displayName: 'repo-b'
+            },
+            {
+              repoId: 'repo-b',
+              worktreeId: 'repo-b::/srv/repo-b-wip',
+              path: '/srv/repo-b-wip',
+              displayName: 'repo-b-wip'
+            }
+          ]
+        ]
+      ])
+    )
+    expect(store.getAllWorktreeMeta).toHaveBeenCalledTimes(1)
   })
 })

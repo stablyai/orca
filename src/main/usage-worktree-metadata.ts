@@ -3,6 +3,8 @@ import type { Repo } from '../shared/repo-types'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../shared/worktree/id'
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Store } from './persistence'
+import type { UsageScanWorktreeRef } from './usage/usage-provider-contract'
+import { createWorktreeRefs } from './usage/usage-worktree-refs'
 
 export type UsageWorktreeRef = {
   worktreeId: string
@@ -18,21 +20,56 @@ export function loadKnownUsageWorktreesByRepo(
   store: Pick<Store, 'getAllWorktreeMeta'>,
   repos: Repo[]
 ): Map<string, UsageWorktreeRef[]> {
-  const localRepos = repos.filter((repo) => !repo.connectionId)
+  return collectUsageWorktreesByRepo(
+    store,
+    repos.filter((repo) => !repo.connectionId)
+  )
+}
+
+/** SSH repos grouped by the target that owns them; paths are that host's own paths. */
+export function loadKnownSshUsageWorktreesByTarget(
+  store: Pick<Store, 'getAllWorktreeMeta'>,
+  repos: Repo[]
+): Map<string, UsageScanWorktreeRef[]> {
+  const reposByTarget = new Map<string, Repo[]>()
+  for (const repo of repos) {
+    if (repo.connectionId) {
+      const targetRepos = reposByTarget.get(repo.connectionId) ?? []
+      targetRepos.push(repo)
+      reposByTarget.set(repo.connectionId, targetRepos)
+    }
+  }
+  // Read persisted metadata once, not once per target.
+  const worktreeMeta = store.getAllWorktreeMeta()
+  const metaStore = { getAllWorktreeMeta: () => worktreeMeta }
+  const worktreesByTarget = new Map<string, UsageScanWorktreeRef[]>()
+  for (const [targetId, targetRepos] of reposByTarget) {
+    worktreesByTarget.set(
+      targetId,
+      createWorktreeRefs(targetRepos, collectUsageWorktreesByRepo(metaStore, targetRepos))
+    )
+  }
+  return worktreesByTarget
+}
+
+function collectUsageWorktreesByRepo(
+  store: Pick<Store, 'getAllWorktreeMeta'>,
+  scopedRepos: Repo[]
+): Map<string, UsageWorktreeRef[]> {
   // Why: all three usage scanners revisit persisted worktree metadata; index
   // repos once instead of linearly searching the full list for every row.
-  const localReposById = new Map<string, Repo>()
-  for (const repo of localRepos) {
+  const reposById = new Map<string, Repo>()
+  for (const repo of scopedRepos) {
     const repoId = repo.id
     // Preserve the former Array.find behavior if corrupt state repeats an ID.
-    if (!localReposById.has(repoId)) {
-      localReposById.set(repoId, repo)
+    if (!reposById.has(repoId)) {
+      reposById.set(repoId, repo)
     }
   }
   const worktreesByRepo = new Map<string, UsageWorktreeRef[]>()
   const seenPathsByRepo = new Map<string, Set<string>>()
 
-  for (const repo of localRepos) {
+  for (const repo of scopedRepos) {
     worktreesByRepo.set(repo.id, [
       {
         worktreeId: `${repo.id}::${repo.path}`,
@@ -50,7 +87,7 @@ export function loadKnownUsageWorktreesByRepo(
     if (!parsed) {
       continue
     }
-    const repo = localReposById.get(parsed.repoId)
+    const repo = reposById.get(parsed.repoId)
     if (!repo) {
       continue
     }
