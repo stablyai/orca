@@ -81,6 +81,25 @@ async function scrollAndSelectRows(
   )
 }
 
+// Must match the fixture's PROBE; the fixture keeps it out of the leak log.
+const PROBE = '\x1b]orca-kitty-probe\x1b\\'
+
+/** Sends PROBE through xterm's input path, behind any keyup bytes xterm already emitted. */
+async function sendProbeBehindTerminalInput(page: Page): Promise<void> {
+  await page.evaluate((probe) => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId = worktreeId ? state?.activeTabIdByWorktree?.[worktreeId] : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('Active terminal pane unavailable')
+    }
+    // Why false: not user input, so it cannot trigger scrollOnUserInput itself.
+    pane.terminal.input(probe, false)
+  }, PROBE)
+}
+
 function readViewport(page: Page): Promise<{ viewportY: number; baseY: number }> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
@@ -111,10 +130,11 @@ test.describe('terminal copy under kitty release reporting (#17606)', () => {
   }, testInfo) => {
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const inputLogPath = testInfo.outputPath('kitty-input.log')
+    const probeAckPath = testInfo.outputPath('kitty-probe.ack')
     await execInTerminal(
       orcaPage,
       ptyId,
-      `node ${JSON.stringify(FIXTURE_PATH)} ${JSON.stringify(inputLogPath)}`
+      `node ${JSON.stringify(FIXTURE_PATH)} ${JSON.stringify(inputLogPath)} ${JSON.stringify(probeAckPath)}`
     )
     await waitForTerminalOutput(orcaPage, 'KITTY_RELEASE_FIXTURE_READY')
     try {
@@ -136,7 +156,10 @@ test.describe('terminal copy under kitty release reporting (#17606)', () => {
         .toEqual([
           `scrollback line 25${process.platform === 'win32' ? '\r\n' : '\n'}scrollback line 26`
         ])
-      await orcaPage.waitForTimeout(500)
+      // Why a probe, not a sleep: once the fixture acks it, any leaked keyup
+      // bytes queued ahead of it are already in the input log.
+      await sendProbeBehindTerminalInput(orcaPage)
+      await expect.poll(() => existsSync(probeAckPath)).toBe(true)
 
       const after = await readViewport(orcaPage)
       const received = existsSync(inputLogPath) ? readFileSync(inputLogPath, 'utf8') : ''
