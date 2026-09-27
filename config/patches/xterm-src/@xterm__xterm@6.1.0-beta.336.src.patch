@@ -1832,10 +1832,37 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..7faf664ba23cd2bfe1b16cae5d9c1912
 +  return node.nodeType === Node.TEXT_NODE;
  }
 diff --git a/src/browser/renderer/dom/DomRenderer.ts b/src/browser/renderer/dom/DomRenderer.ts
-index 70e9c3a6d130d687b7f6c70ca8e8b518a8bee654..fde12d4a9bc0e610d756de6efccede16212c70a8 100644
+index 70e9c3a6d130d687b7f6c70ca8e8b518a8bee654..3b46bbc2e97b019b8f97680b6bd2e380adc1afd0 100644
 --- a/src/browser/renderer/dom/DomRenderer.ts
 +++ b/src/browser/renderer/dom/DomRenderer.ts
-@@ -217,6 +217,10 @@ export class DomRenderer extends Disposable implements IRenderer {
+@@ -14,7 +14,7 @@ import { ICharSizeService, ICoreBrowserService, IThemeService } from '../../serv
+ import { ILinkifier2, ILinkifierEvent, ITerminal, ReadonlyColorSet } from '../../Types';
+ import { color } from '../../../common/Color';
+ import { Disposable, toDisposable } from '../../../common/Lifecycle';
+-import { IBufferService, ICoreService, IInstantiationService, IOptionsService } from '../../../common/services/Services';
++import { IBufferService, ICoreService, IInstantiationService, IOptionsService, IUnicodeService } from '../../../common/services/Services';
+ import { Emitter } from '../../../common/Event';
+ import { addDisposableListener } from '../../Dom';
+ 
+@@ -74,7 +74,8 @@ export class DomRenderer extends Disposable implements IRenderer {
+     @IBufferService private readonly _bufferService: IBufferService,
+     @ICoreService private readonly _coreService: ICoreService,
+     @ICoreBrowserService private readonly _coreBrowserService: ICoreBrowserService,
+-    @IThemeService private readonly _themeService: IThemeService
++    @IThemeService private readonly _themeService: IThemeService,
++    @IUnicodeService unicodeService: IUnicodeService
+   ) {
+     super();
+     this._rowContainer = this._document.createElement('div');
+@@ -96,6 +97,7 @@ export class DomRenderer extends Disposable implements IRenderer {
+     this._injectCss(this._themeService.colors);
+ 
+     this._rowFactory = instantiationService.createInstance(DomRendererRowFactory, document);
++    this._rowFactory.unicodeService = unicodeService;
+ 
+     this._element.classList.add(Constants.TERMINAL_CLASS_PREFIX + this._terminalClass);
+     this._screenElement.appendChild(this._rowContainer);
+@@ -217,6 +219,10 @@ export class DomRenderer extends Disposable implements IRenderer {
        `}` +
        `${this._terminalSelector} span.${RowCss.BLINK_HIDDEN_CLASS} {` +
        ` visibility: hidden;` +
@@ -1847,10 +1874,18 @@ index 70e9c3a6d130d687b7f6c70ca8e8b518a8bee654..fde12d4a9bc0e610d756de6efccede16
      // Blink animation
      const blinkAnimationUnderlineId = `blink_underline_${this._terminalClass}`;
 diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
-index 6ae089a4387de14488f39f5dab7024cffdcd9d10..2f661a2b58759f1951684fb66d0ad51565d8be38 100644
+index 6ae089a4387de14488f39f5dab7024cffdcd9d10..44aa9b06d67afb5503552468e39520afcdd5e111 100644
 --- a/src/browser/renderer/dom/DomRendererRowFactory.ts
 +++ b/src/browser/renderer/dom/DomRendererRowFactory.ts
-@@ -15,7 +15,7 @@ import { JoinedCellData } from '../../services/CharacterJoinerService';
+@@ -8,14 +8,14 @@ import { IBufferLine, ICellData } from '../../../common/buffer/Types';
+ import { INVERTED_DEFAULT_COLOR } from '../shared/Constants';
+ import { WHITESPACE_CELL_CHAR, Attributes } from '../../../common/buffer/Constants';
+ import { CellData } from '../../../common/buffer/CellData';
+-import { ICoreService, IDecorationService, IOptionsService } from '../../../common/services/Services';
++import { ICoreService, IDecorationService, IOptionsService, IUnicodeService } from '../../../common/services/Services';
+ import { channels, color } from '../../../common/Color';
+ import { ICharacterJoinerService, ICoreBrowserService, IThemeService } from '../../services/Services';
+ import { JoinedCellData } from '../../services/CharacterJoinerService';
  import { treatGlyphAsBackgroundColor } from '../shared/RendererUtils';
  import { AttributeData } from '../../../common/buffer/AttributeData';
  import { WidthCache } from './WidthCache';
@@ -1878,18 +1913,29 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..2f661a2b58759f1951684fb66d0ad515
  
  export class DomRendererRowFactory {
    private _workCell: CellData = new CellData();
-@@ -181,6 +189,10 @@ export class DomRendererRowFactory {
+@@ -43,6 +51,8 @@ export class DomRendererRowFactory {
+   private _columnSelectMode: boolean = false;
+ 
+   public defaultSpacing = 0;
++  /** Orca: set by DomRenderer; without it (hand-built factories) wide glyphs stay unfitted. */
++  public unicodeService: IUnicodeService | undefined;
+ 
+   constructor(
+     private readonly _document: Document,
+@@ -181,6 +191,12 @@ export class DomRendererRowFactory {
  
        // lookup char render width and calc spacing
        spacing = width * cellWidth - widthCache.get(chars, cell.isBold(), cell.isItalic());
-+      // Orca: enlarged and centered wide glyphs carry their own spacing, so they never merge.
++      // Orca: enlarged and centered wide glyphs carry their own spacing, so they never merge. Like
++      // the WebGL atlas, only fit cells exactly as wide as their first code point.
 +      const wideGlyph = width > 1 && !isJoined && !cell.isInvisible() && this._optionsService.rawOptions.fitWideGlyphs
++        && width === this.unicodeService?.wcwidth(chars.codePointAt(0) ?? 0)
 +        ? widthCache.getWideGlyphFit(chars, cell.isBold(), cell.isItalic(), width * cellWidth)
 +        : undefined;
  
        if (!charElement) {
          charElement = this._document.createElement('span');
-@@ -212,6 +224,7 @@ export class DomRendererRowFactory {
+@@ -212,6 +228,7 @@ export class DomRendererRowFactory {
            && !isJoined
            && !isDecorated
            && isValidJoinRange
@@ -1897,7 +1943,7 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..2f661a2b58759f1951684fb66d0ad515
          ) {
            // no span alterations, thus only account chars skipping all code below
            if (cell.isInvisible()) {
-@@ -299,6 +312,10 @@ export class DomRendererRowFactory {
+@@ -299,6 +316,10 @@ export class DomRendererRowFactory {
          classes.push(RowCss.DIM_CLASS);
        }
  
@@ -1908,7 +1954,7 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..2f661a2b58759f1951684fb66d0ad515
        if (cell.isInvisible()) {
          text = WHITESPACE_CELL_CHAR;
        } else {
-@@ -354,6 +371,13 @@ export class DomRendererRowFactory {
+@@ -354,6 +375,13 @@ export class DomRendererRowFactory {
          bgColorMode = temp2;
        }
  
@@ -1922,7 +1968,7 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..2f661a2b58759f1951684fb66d0ad515
        // Apply any decoration foreground/background overrides, this must happen after inverse has
        // been applied
        let bgOverride: IColor | undefined;
-@@ -411,7 +435,7 @@ export class DomRendererRowFactory {
+@@ -411,7 +439,7 @@ export class DomRendererRowFactory {
            break;
          case Attributes.CM_RGB:
            resolvedBg = channels.toColor(bg >> 16, bg >> 8 & 0xFF, bg & 0xFF);
@@ -1931,7 +1977,7 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..2f661a2b58759f1951684fb66d0ad515
            break;
          case Attributes.CM_DEFAULT:
          default:
-@@ -448,7 +472,7 @@ export class DomRendererRowFactory {
+@@ -448,7 +476,7 @@ export class DomRendererRowFactory {
              (fg      ) & 0xFF
            );
            if (!this._applyMinimumContrast(charElement, resolvedBg, color, cell, bgOverride, fgOverride)) {
@@ -1940,7 +1986,7 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..2f661a2b58759f1951684fb66d0ad515
            }
            break;
          case Attributes.CM_DEFAULT:
-@@ -469,13 +493,25 @@ export class DomRendererRowFactory {
+@@ -469,13 +497,25 @@ export class DomRendererRowFactory {
        }
  
        // exclude conditions for cell merging - never merge these
@@ -1969,7 +2015,7 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..2f661a2b58759f1951684fb66d0ad515
          charElement.style.letterSpacing = `${spacing}px`;
        }
  
-@@ -513,7 +549,7 @@ export class DomRendererRowFactory {
+@@ -513,7 +553,7 @@ export class DomRendererRowFactory {
      }
  
      if (adjustedColor) {
@@ -1978,7 +2024,7 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..2f661a2b58759f1951684fb66d0ad515
        return true;
      }
  
-@@ -527,10 +563,6 @@ export class DomRendererRowFactory {
+@@ -527,10 +567,6 @@ export class DomRendererRowFactory {
      return this._themeService.colors.contrastCache;
    }
  
@@ -2099,10 +2145,10 @@ index d45938515e7a9903de0da0d61716fd42e4deea0c..92cab3ed07644b5ed318884cac8c425b
  }
 diff --git a/src/browser/renderer/shared/WideGlyphFit.ts b/src/browser/renderer/shared/WideGlyphFit.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..254f950077fe22222a7ffddc7f49fdca4ad928c5
+index 0000000000000000000000000000000000000000..fbd9855c62cbfbdab1fa867269f2860d46c89fbd
 --- /dev/null
 +++ b/src/browser/renderer/shared/WideGlyphFit.ts
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,131 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
@@ -2173,7 +2219,7 @@ index 0000000000000000000000000000000000000000..254f950077fe22222a7ffddc7f49fdca
 +  return { width: metrics.width, ascent: metrics.actualBoundingBoxAscent, descent: metrics.actualBoundingBoxDescent };
 +}
 +
-+/** Largest scale that keeps `ink` within the span and the line box's full height. */
++/** Largest scale that keeps `ink` within the span and the line box's full height; below 1 when it cannot fit. */
 +function maxScale(ink: IInkExtent, box: IWideGlyphBox): number {
 +  const height = ink.ascent + ink.descent;
 +  return Math.min(box.span / ink.width, height > 0 ? (box.ascent + box.descent) / height : Infinity);
@@ -2204,12 +2250,14 @@ index 0000000000000000000000000000000000000000..254f950077fe22222a7ffddc7f49fdca
 +      return { scale: 1, offset: (box.span - glyph.width) / 2, shift: 0 };
 +    }
 +    // Also bound by the glyph itself: a code point the samples miss may come from another face.
++    // Never shrinks: a glyph taller than the line box keeps its size and overflows it, as unfitted.
 +    const scale = Math.max(1, Math.min(face.scale, maxScale(glyph, box)));
-+    // The face's shift, not the glyph's, keeps every glyph of the face on one baseline.
-+    const shift = Math.min(
++    // The face's shift, not the glyph's, keeps every glyph of the face on one baseline; it only
++    // ever lowers, so an overflowing glyph never rises above where it draws unfitted.
++    const shift = Math.max(0, Math.min(
 +      Math.max(baselineShift(face.ink, scale, box), glyph.ascent * scale - box.ascent),
 +      box.descent - glyph.descent * scale
-+    );
++    ));
 +    return { scale, offset: (box.span - glyph.width * scale) / 2, shift };
 +  }
 +

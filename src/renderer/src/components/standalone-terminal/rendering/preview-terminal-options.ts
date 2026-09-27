@@ -14,6 +14,7 @@ import { buildLocalConptyTerminalOptions } from '@/lib/pane-manager/terminal-pro
 import { buildFontFamily } from '../../../../../shared/styles/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../shared/terminal-themes/terminal-contrast-correction'
+import { resolveTerminalFitWideGlyphs } from '@/lib/pane-manager/terminal-wide-glyph-fit'
 
 /** Options a live settings change can write onto an open preview terminal. */
 export function buildPreviewAppearanceOptions(
@@ -40,6 +41,7 @@ export function buildPreviewAppearanceOptions(
     scrollOnUserInput: resolveTerminalScrollOnUserInput(settings?.terminalScrollOnUserInput),
     lineHeight: normalizeTerminalLineHeight(settings?.terminalLineHeight),
     wordSeparator: settings?.terminalWordSeparator,
+    fitWideGlyphs: resolveTerminalFitWideGlyphs(settings?.terminalFitWideGlyphs),
     // Why only 'true': 'left'/'right' are handled by the keydown policy, which needs Option composable at the xterm level.
     macOptionIsMeta,
     // Why: xterm renders an alpha background opaque unless transparency is on (matches applyTerminalAppearance).

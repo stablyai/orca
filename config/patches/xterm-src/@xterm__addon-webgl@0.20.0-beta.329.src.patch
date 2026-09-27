@@ -396,10 +396,10 @@ index 2d0f5a3a8ee7fc0765a0179cee0102edb9376e4b..92f1c7241e887cd907d21d91aa26c0de
      if (!this._cursorBlinkStateManager.value || this._cursorBlinkStateManager.value.isCursorVisible) {
 diff --git a/src/WideGlyphFit.ts b/src/WideGlyphFit.ts
 new file mode 100644
-index 0000000000000000000000000000000000000000..254f950077fe22222a7ffddc7f49fdca4ad928c5
+index 0000000000000000000000000000000000000000..fbd9855c62cbfbdab1fa867269f2860d46c89fbd
 --- /dev/null
 +++ b/src/WideGlyphFit.ts
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,131 @@
 +/**
 + * Copyright (c) 2026 The xterm.js authors. All rights reserved.
 + * @license MIT
@@ -470,7 +470,7 @@ index 0000000000000000000000000000000000000000..254f950077fe22222a7ffddc7f49fdca
 +  return { width: metrics.width, ascent: metrics.actualBoundingBoxAscent, descent: metrics.actualBoundingBoxDescent };
 +}
 +
-+/** Largest scale that keeps `ink` within the span and the line box's full height. */
++/** Largest scale that keeps `ink` within the span and the line box's full height; below 1 when it cannot fit. */
 +function maxScale(ink: IInkExtent, box: IWideGlyphBox): number {
 +  const height = ink.ascent + ink.descent;
 +  return Math.min(box.span / ink.width, height > 0 ? (box.ascent + box.descent) / height : Infinity);
@@ -501,12 +501,14 @@ index 0000000000000000000000000000000000000000..254f950077fe22222a7ffddc7f49fdca
 +      return { scale: 1, offset: (box.span - glyph.width) / 2, shift: 0 };
 +    }
 +    // Also bound by the glyph itself: a code point the samples miss may come from another face.
++    // Never shrinks: a glyph taller than the line box keeps its size and overflows it, as unfitted.
 +    const scale = Math.max(1, Math.min(face.scale, maxScale(glyph, box)));
-+    // The face's shift, not the glyph's, keeps every glyph of the face on one baseline.
-+    const shift = Math.min(
++    // The face's shift, not the glyph's, keeps every glyph of the face on one baseline; it only
++    // ever lowers, so an overflowing glyph never rises above where it draws unfitted.
++    const shift = Math.max(0, Math.min(
 +      Math.max(baselineShift(face.ink, scale, box), glyph.ascent * scale - box.ascent),
 +      box.descent - glyph.descent * scale
-+    );
++    ));
 +    return { scale, offset: (box.span - glyph.width * scale) / 2, shift };
 +  }
 +

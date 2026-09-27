@@ -82,6 +82,19 @@ describe('xterm wide glyph fit', () => {
     expect(cramped).toEqual({ scale: 1, offset: (33.7 - 24.2) / 2, shift: 0 })
   })
 
+  it('never shrinks or raises a glyph taller than the line box, only centers it', () => {
+    // A code point the samples miss, from a taller face: 35 + 9 exceeds the 33px box both ways.
+    const tall = (text: string): IWideGlyphMetrics =>
+      text === '똠'
+        ? { width: 24.2, actualBoundingBoxAscent: 35, actualBoundingBoxDescent: 9 }
+        : measure(text)
+    expect(new WideGlyphFitter().fit('똠', BOX, 'regular', tall)).toEqual({
+      scale: 1,
+      offset: (33.7 - 24.2) / 2,
+      shift: 0
+    })
+  })
+
   it('only centers wide glyphs outside the fitted scripts', () => {
     const fit = new WideGlyphFitter().fit('Ａ', BOX, 'regular', measure)
     expect(fit).toEqual({ scale: 1, offset: (33.7 - 28.4) / 2, shift: 0 })
