@@ -70,7 +70,7 @@ describe('GitHub provider request upgrade coalescing', () => {
     })
   })
 
-  it('rechecks every upgrade so strict callers cannot join a weaker replacement', async () => {
+  it('never joins a weaker replacement and never waits out more than one', async () => {
     const store = createTestStore()
     const weak = Promise.withResolvers<ListWorkItemsResult<GitHubWorkItem>>()
     const forced = Promise.withResolvers<ListWorkItemsResult<GitHubWorkItem>>()
@@ -94,24 +94,21 @@ describe('GitHub provider request upgrade coalescing', () => {
     )
     weak.resolve(workItems('weak'))
     await first
-    await vi.waitFor(() =>
-      expect(mockApi.gh.listWorkItems.mock.calls.length).toBeGreaterThanOrEqual(2)
-    )
-    const callsBeforeForcedCompletes = mockApi.gh.listWorkItems.mock.calls.length
-    forced.resolve(workItems('forced'))
-    await expect(forcedFetch).resolves.toEqual(workItems('forced').items)
-    await vi.waitFor(() =>
-      expect(mockApi.gh.listWorkItems.mock.calls.length).toBeGreaterThanOrEqual(3)
+    // Why: the strict callers must reach the bridge without waiting out the weaker
+    // replacement too — the upgrade wait is bounded, so a repeating weaker refresh
+    // can never starve them. They still share exactly one strict request.
+    await vi.waitFor(() => expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3))
+    expect(mockApi.gh.listWorkItems).toHaveBeenLastCalledWith(
+      expect.objectContaining({ noCache: true })
     )
     expect(strictSettled).not.toHaveBeenCalled()
     strict.resolve(workItems('strict'))
     await Promise.all(strictFollowers)
-    expect(callsBeforeForcedCompletes).toBe(2)
+    forced.resolve(workItems('forced'))
+    await expect(forcedFetch).resolves.toEqual(workItems('forced').items)
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3)
+    expect(strictSettled).toHaveBeenCalledTimes(20)
     expect(strictSettled.mock.calls.every(([rows]) => rows[0].title === 'strict')).toBe(true)
-    expect(mockApi.gh.listWorkItems).toHaveBeenLastCalledWith(
-      expect.objectContaining({ noCache: true })
-    )
   })
 
   it('keeps an invalidated request from removing its replacement dedupe entry', async () => {

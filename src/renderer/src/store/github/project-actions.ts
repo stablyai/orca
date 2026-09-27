@@ -57,17 +57,22 @@ export const createProjectActions = (
       }
     }
 
+    let waitedForUpgrade = false
     for (;;) {
       const existing = inflightProjectViewRequests.get(requestKey)
       if (!existing) {
         break
       }
       // Why: a forcing caller must not dedupe to a non-forcing in-flight request; wait for it to settle, then issue a fresh forced call (mirrors fetchWorkItems).
-      if (options?.force && !existing.force) {
-        await existing.promise.catch(() => {})
-      } else {
+      if (!options?.force || existing.force) {
         return existing.promise
       }
+      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      if (waitedForUpgrade) {
+        break
+      }
+      waitedForUpgrade = true
+      await existing.promise.catch(() => {})
     }
 
     const request = (async (): Promise<GetProjectViewTableResult> => {

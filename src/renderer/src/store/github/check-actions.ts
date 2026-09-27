@@ -87,19 +87,23 @@ export const createCheckActions = (
       return cachedChecks
     }
 
+    let waitedForUpgrade = false
     for (;;) {
       const inflightRequest = inflightChecksRequests.get(inflightKey)
       if (!inflightRequest) {
         break
       }
-      if (
-        (options?.force && !inflightRequest.force) ||
-        (options?.noCache && !inflightRequest.noCache)
-      ) {
-        await inflightRequest.promise.catch(() => {})
-      } else {
+      const weakerThanRequested =
+        (options?.force && !inflightRequest.force) || (options?.noCache && !inflightRequest.noCache)
+      if (!weakerThanRequested) {
         return inflightRequest.promise
       }
+      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      if (waitedForUpgrade) {
+        break
+      }
+      waitedForUpgrade = true
+      await inflightRequest.promise.catch(() => {})
     }
 
     const request = (async () => {

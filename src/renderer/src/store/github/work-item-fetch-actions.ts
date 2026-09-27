@@ -109,21 +109,26 @@ export const createWorkItemFetchActions = (
       options?.sourceContext
     )
     const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
+    let waitedForUpgrade = false
     for (;;) {
       const existing = inflightWorkItemsRequests.get(inflightKey)
       if (!existing) {
         break
       }
       // Why: a forcing/noCache caller must not dedupe to a weaker in-flight fetch (noCache is stricter — it must bypass gh api's cache too).
-      if (
+      const weakerThanRequested =
         (options?.force && !existing.force) ||
         (options?.noCache && !existing.noCache) ||
         (options?.requireComplete && !existing.requireComplete)
-      ) {
-        await existing.promise.catch(() => {})
-      } else {
+      if (!weakerThanRequested) {
         return existing.promise
       }
+      // Why: wait out one weaker request so peers can share the upgrade, but never twice — a steady stream of weaker callers would otherwise starve this one forever.
+      if (waitedForUpgrade) {
+        break
+      }
+      waitedForUpgrade = true
+      await existing.promise.catch(() => {})
     }
 
     const request = (async () => {
