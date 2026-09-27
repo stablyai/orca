@@ -333,6 +333,17 @@ function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination
     }
     copyFileSync(built, path.join(destination, relative))
   }
+  // Source files the patch adds ship too; test files are left out as .npmignore would.
+  const addedSources = run(
+    'git',
+    ['diff', '--name-only', '--diff-filter=A', '--relative', '--', 'src/'],
+    { cwd: packageRoot }
+  )
+  for (const relative of addedSources.split('\n').filter(Boolean)) {
+    if (!relative.endsWith('.test.ts')) {
+      copyFileSync(path.join(packageRoot, relative), path.join(destination, relative))
+    }
+  }
 }
 
 function diffFolders(folderA, folderB) {
@@ -383,6 +394,8 @@ function regeneratePackage(packageEntry, manifest, context) {
     [
       'apply',
       '--whitespace=nowarn',
+      // New source files must be visible to diffCheckoutSource and removed by the next reset.
+      '--intent-to-add',
       ...(packageDir === '.' ? [] : [`--directory=${packageDir}`]),
       path.join(repoRoot, packageEntry.sourcePatch)
     ],
