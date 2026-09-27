@@ -198,7 +198,8 @@ export function useMobileSessionTerminalSubscription(
               })
               return
             }
-            ref.init(cols, rows, initialData, false, oscLinks)
+            // Reconnect and foreground snapshots replace a live buffer without resetting the reader's place.
+            ref.init(cols, rows, initialData, true, oscLinks)
             initializedHandlesRef.current.add(handle)
             if (data.displayMode) {
               const displayMode = data.displayMode as MobileDisplayMode

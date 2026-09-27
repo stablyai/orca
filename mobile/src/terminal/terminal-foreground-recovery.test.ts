@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import type { RefObject } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ConnectionState } from '../transport/types'
@@ -8,6 +9,7 @@ import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
 } from './terminal-foreground-recovery'
+import { createForegroundReplayHarness } from './terminal-foreground-replay.test-support'
 
 const lifecycleSource = readMobileSessionRouteSource('../session/use-mobile-session-lifecycle.ts')
 
@@ -53,6 +55,65 @@ function createHarness(): RecoveryHarness {
 }
 
 describe('terminal foreground recovery', () => {
+  it.each(['connected', 'reconnecting'] as const)(
+    'keeps the reading row after foreground replay when initially %s',
+    async (connectionState) => {
+      const harness = createForegroundReplayHarness()
+      harness.subscribeToTerminal('term-1')
+      await harness.replay()
+      harness.scrollToLine(40)
+      const readingRow = harness.buffer().getLine(40)?.translateToString(true)
+      harness.connStateRef.current = connectionState
+
+      const outcome = recoverActiveTerminalAfterForeground(harness)
+      if (connectionState === 'reconnecting') {
+        expect(outcome).toBe('deferred')
+        harness.connStateRef.current = 'connected'
+        expect(recoverActiveTerminalAfterForeground(harness)).toBe('recovered')
+      } else {
+        expect(outcome).toBe('recovered')
+      }
+      harness.runScheduled()
+      await harness.replay()
+
+      expect(harness.buffer().viewportY).toBe(40)
+      expect(harness.buffer().getLine(harness.buffer().viewportY)?.translateToString(true)).toBe(
+        readingRow
+      )
+    }
+  )
+
+  it('opens at the bottom and stays there after foreground replay', async () => {
+    const harness = createForegroundReplayHarness()
+    harness.subscribeToTerminal('term-1')
+    await harness.replay()
+    expect(harness.buffer().baseY).toBeGreaterThan(0)
+    expect(harness.buffer().viewportY).toBe(harness.buffer().baseY)
+
+    recoverActiveTerminalAfterForeground(harness)
+    harness.runScheduled()
+    await harness.replay()
+
+    expect(harness.buffer().viewportY).toBe(harness.buffer().baseY)
+  })
+
+  it.each(['', 42, null])(
+    'clamps a reading position when the refreshed scrollback is empty or invalid (%j)',
+    async (serialized) => {
+      const harness = createForegroundReplayHarness()
+      harness.subscribeToTerminal('term-1')
+      await harness.replay()
+      harness.scrollToLine(40)
+
+      recoverActiveTerminalAfterForeground(harness)
+      harness.runScheduled()
+      await harness.replay(serialized)
+
+      expect(harness.buffer().viewportY).toBe(0)
+      expect(harness.buffer().baseY).toBe(0)
+    }
+  )
+
   it('detects iOS foreground transitions after backgrounding or inactive states', () => {
     expect(shouldRecoverTerminalOnAppStateChange('background', 'active', 'ios')).toBe(true)
     expect(shouldRecoverTerminalOnAppStateChange('inactive', 'active', 'ios')).toBe(true)
