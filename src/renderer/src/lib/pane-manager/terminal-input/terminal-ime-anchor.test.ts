@@ -1,0 +1,91 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { Terminal } from '@xterm/headless'
+import { describe, expect, it } from 'vitest'
+import { resolveAppDrawnImeCaret } from './terminal-ime-anchor'
+
+// Recorded with config/scripts/diagnostics/terminal-transcripts/capture-agent-pty-transcript.mjs at 100x30; see each .meta.json.
+const FIXTURES = join(__dirname, '../../../../../main/runtime/__fixtures__')
+
+function replay(data: string | Uint8Array, cols = 100, rows = 30): Promise<Terminal> {
+  const terminal = new Terminal({ cols, rows, allowProposedApi: true })
+  return new Promise((resolve) => terminal.write(data, () => resolve(terminal)))
+}
+
+function replayTranscript(name: string): Promise<Terminal> {
+  return replay(readFileSync(join(FIXTURES, `${name}.txt`)))
+}
+
+function caretOf(terminal: Terminal): ReturnType<typeof resolveAppDrawnImeCaret> {
+  return resolveAppDrawnImeCaret({
+    buffer: terminal.buffer.active,
+    rows: terminal.rows,
+    cols: terminal.cols,
+    cursorVisible: terminal.modes.showCursor
+  })
+}
+
+function charAt(terminal: Terminal, row: number, column: number): string {
+  const buffer = terminal.buffer.active
+  return (
+    buffer
+      .getLine(buffer.baseY + row)
+      ?.getCell(column)
+      ?.getChars() ?? ''
+  )
+}
+
+describe('resolveAppDrawnImeCaret on captured agent transcripts', () => {
+  it('finds cursor-agent’s inverse caret on the placeholder while the cursor is parked', async () => {
+    const terminal = await replayTranscript('cursor-agent-ime-ready')
+    const buffer = terminal.buffer.active
+
+    expect(terminal.modes.showCursor).toBe(false)
+    expect({ row: buffer.cursorY, column: buffer.cursorX }).toEqual({ row: 14, column: 0 })
+    expect(caretOf(terminal)).toEqual({ row: 9, column: 4 })
+    expect(charAt(terminal, 9, 4)).toBe('P')
+  })
+
+  it('follows cursor-agent’s caret through Korean, Backspace and Left/Right', async () => {
+    const terminal = await replayTranscript('cursor-agent-ime-korean-typed')
+
+    // "→ 안녕 하세요a한b" with the caret moved back onto "b".
+    expect(caretOf(terminal)).toEqual({ row: 9, column: 18 })
+    expect(charAt(terminal, 9, 18)).toBe('b')
+    expect(terminal.buffer.active.cursorY).toBe(14)
+  })
+
+  it.each([
+    ['claude-code-ime-korean-typed', { row: 26, column: 16 }],
+    ['codex-ime-korean-typed', { row: 10, column: 16 }],
+    ['grok-ime-korean-typed', { row: 25, column: 20 }]
+  ])('leaves %s to its shown cursor, which already sits on the caret', async (name, cursor) => {
+    const terminal = await replayTranscript(name)
+    const buffer = terminal.buffer.active
+
+    expect(terminal.modes.showCursor).toBe(true)
+    expect(caretOf(terminal)).toBeNull()
+    expect({ row: buffer.cursorY, column: buffer.cursorX }).toEqual(cursor)
+    expect(charAt(terminal, cursor.row, cursor.column)).toBe('b')
+  })
+
+  it('does not take a highlighted run for a caret', async () => {
+    const terminal = await replay(
+      '\x1b[?25l\x1b[7m› 1. Trust and continue\x1b[27m\r\n  2. Quit',
+      40,
+      4
+    )
+
+    expect(caretOf(terminal)).toBeNull()
+  })
+
+  it('prefers the lone inverse cell nearest the parked cursor', async () => {
+    const terminal = await replay(
+      '\x1b[?25l\x1b[7m \x1b[27m\r\n\r\n→ hi\x1b[7m \x1b[27m\r\n',
+      20,
+      4
+    )
+
+    expect(caretOf(terminal)).toEqual({ row: 2, column: 4 })
+  })
+})
