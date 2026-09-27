@@ -37,7 +37,6 @@ export type RuntimeClientSettings = Pick<
   | 'experimentalNewWorktreeCardStyle'
   | 'experimentalNativeChat'
   | 'openAgentTabsInChatByDefault'
-  | 'experimentalStructuredNativeChat'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
@@ -113,11 +112,10 @@ export class RuntimeClientSettingsController {
         : null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
-      // The three that decide whether a new agent tab -- and so an orchestration worker -- is a
+      // The two that decide whether a new agent tab -- and so an orchestration worker -- is a
       // structured chat session rather than a terminal agent.
       experimentalNativeChat: settings.experimentalNativeChat === true,
       openAgentTabsInChatByDefault: settings.openAgentTabsInChatByDefault === true,
-      experimentalStructuredNativeChat: settings.experimentalStructuredNativeChat === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',

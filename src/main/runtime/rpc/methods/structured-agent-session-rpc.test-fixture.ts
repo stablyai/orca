@@ -237,7 +237,7 @@ export function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcD
   })
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    getClientSettings: () => ({ experimentalNativeChat: true }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),

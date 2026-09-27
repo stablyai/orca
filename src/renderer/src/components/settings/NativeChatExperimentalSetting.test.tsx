@@ -39,37 +39,25 @@ function listedNames(container: HTMLElement): string[] {
 }
 
 describe('NativeChatExperimentalSetting shell environment', () => {
-  it('shows only when Chat UI, the Chat UI default view, and structured chat are all on', () => {
+  it('shows only when Chat UI and the Chat UI default view are both on', () => {
     for (const experimentalNativeChat of [false, true]) {
       for (const openAgentTabsInChatByDefault of [false, true]) {
-        for (const experimentalStructuredNativeChat of [false, true]) {
-          const { container, unmount } = renderSetting({
-            experimentalNativeChat,
-            openAgentTabsInChatByDefault,
-            experimentalStructuredNativeChat
-          })
-          const expected =
-            experimentalNativeChat &&
-            openAgentTabsInChatByDefault &&
-            experimentalStructuredNativeChat
-          expect(
-            container.querySelector(SHELL_ENV_TOGGLE) !== null,
-            JSON.stringify({
-              experimentalNativeChat,
-              openAgentTabsInChatByDefault,
-              experimentalStructuredNativeChat
-            })
-          ).toBe(expected)
-          unmount()
-        }
+        const { container, unmount } = renderSetting({
+          experimentalNativeChat,
+          openAgentTabsInChatByDefault
+        })
+        expect(
+          container.querySelector(SHELL_ENV_TOGGLE) !== null,
+          JSON.stringify({ experimentalNativeChat, openAgentTabsInChatByDefault })
+        ).toBe(experimentalNativeChat && openAgentTabsInChatByDefault)
+        unmount()
       }
     }
   })
 
   const structuredOn = {
     experimentalNativeChat: true,
-    openAgentTabsInChatByDefault: true,
-    experimentalStructuredNativeChat: true
+    openAgentTabsInChatByDefault: true
   }
   const chooseNames = { ...structuredOn, nativeChatInheritShellEnvironment: false }
 

@@ -366,13 +366,17 @@ describe('renderer startup runtime routing', () => {
     expect(reconnectIndex).toBeGreaterThan(capabilityIndex)
   })
 
-  it('skips startup structured tab projection while the host setting is off', () => {
-    const source = readSource(STARTUP_HYDRATION_PATH)
+  it('projects structured chats at startup only when some may exist', () => {
+    const source = readSource('src/renderer/src/runtime/local-structured-session-tabs-sync.ts')
     const projectIndex = source.indexOf("timeRendererStartupStep('project-structured-session-tabs'")
 
+    expect(readSource(STARTUP_HYDRATION_PATH)).toContain(
+      'await restoreLocalStructuredSessionTabsAtStartup()'
+    )
     expect(projectIndex).toBeGreaterThanOrEqual(0)
+    // Chat UI on, or the host holds a record: never the full census for a machine with neither.
     expect(source.slice(projectIndex - 180, projectIndex)).toContain(
-      'settings?.experimentalStructuredNativeChat === true'
+      'await localStructuredSessionsMayExist(useAppStore.getState().settings)'
     )
   })
 
@@ -384,14 +388,14 @@ describe('renderer startup runtime routing', () => {
 
     expect(probeIndex).toBeGreaterThanOrEqual(0)
     // Why pinned here: the structured-session-tabs sync is the cache's only other writer and it
-    // waits for workspaceSessionReady + terminalStartupRestorationReady + the experimental flag.
+    // waits for workspaceSessionReady + terminalStartupRestorationReady.
     // Every resolveAgentLaunchRoute reader — including the three that cannot await — reads an
     // unanswered cache as "unsupported", so a create in that window degrades to a bare
     // terminal (#19154). The probe must therefore start before the chain and outside its gates.
     expect(probeIndex).toBeLessThan(chainStart)
     expect(probeIndex).toBeLessThan(source.indexOf('await ', effectStart))
     expect(source.slice(effectStart, probeIndex)).not.toContain('if (')
-    expect(source.slice(effectStart, probeIndex)).not.toContain('experimentalStructuredNativeChat')
+    expect(source.slice(effectStart, probeIndex)).not.toContain('isNativeChatEnabled')
   })
 
   it('orders packaged restoration before adoption, projection, and default creation', () => {
@@ -410,9 +414,7 @@ describe('renderer startup runtime routing', () => {
       "timeRendererStartupStep('prepare-terminal-startup-restoration'"
     )
     const reconnectIndex = appSource.indexOf("timeRendererStartupStep('reconnect-terminals'")
-    const projectIndex = appSource.indexOf(
-      "timeRendererStartupStep('project-structured-session-tabs'"
-    )
+    const projectIndex = appSource.indexOf('await restoreLocalStructuredSessionTabsAtStartup()')
     const readyIndex = appSource.indexOf('actions.setTerminalStartupRestorationReady(true)')
     const gateStart = terminalSource.indexOf('const startupActivationGateWorktreeIdsRef')
     const gateEnd = terminalSource.indexOf('const startupResumeWorktreeIdsRef', gateStart)

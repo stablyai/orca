@@ -59,7 +59,7 @@ describe('NativeChatResumeStatusSegment', () => {
     consumeNativeChatResumeOnRestartDialogRequest()
     useAppStore.setState({
       ...useAppStore.getInitialState(),
-      settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true }
+      settings: { ...getDefaultSettings(''), experimentalNativeChat: true }
     })
   })
 
@@ -168,21 +168,56 @@ describe('NativeChatResumeStatusSegment', () => {
     ])
   })
 
-  it('hides when the feature is disabled or the host offers nothing', async () => {
-    rpc.mockResolvedValue({ sessions: candidates })
-    useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: false }
-    })
-    await mount()
-    expect(screen.queryByRole('button')).toBeNull()
-    // Nothing is even asked of the host while the feature is off.
-    expect(rpc).not.toHaveBeenCalled()
+  describe('with Chat UI off', () => {
+    const priorApi = window.api
+    const hasLocalStructuredAgentSessions = vi.fn()
 
-    cleanup()
-    rpc.mockResolvedValue({ sessions: [] })
-    useAppStore.setState({
-      settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true }
+    beforeEach(() => {
+      hasLocalStructuredAgentSessions.mockReset()
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: { ...priorApi, app: { ...priorApi?.app, hasLocalStructuredAgentSessions } }
+      })
+      useAppStore.setState({
+        settings: { ...getDefaultSettings(''), experimentalNativeChat: false }
+      })
     })
+
+    afterEach(() => {
+      Object.defineProperty(window, 'api', { configurable: true, value: priorApi })
+    })
+
+    it('asks the host, which owns the answer, without a separate local probe', async () => {
+      rpc.mockResolvedValue({ sessions: candidates })
+      await mount()
+
+      expect(screen.getByRole('button', { name: '2 chats available to resume' })).toBeTruthy()
+      expect(rpc.mock.calls.map((call) => call[1])).toEqual(['agentSession.restartResumable'])
+      expect(hasLocalStructuredAgentSessions).not.toHaveBeenCalled()
+    })
+
+    it('hides when the host holds no structured chat', async () => {
+      rpc.mockResolvedValue({ sessions: [], failed: [] })
+      await mount()
+
+      expect(screen.queryByRole('button')).toBeNull()
+    })
+  })
+
+  it('waits for settings, which carry the resume preference, before asking the host', async () => {
+    rpc.mockResolvedValue({ sessions: candidates })
+    useAppStore.setState({ settings: null })
+    await mount()
+
+    expect(rpc).not.toHaveBeenCalled()
+    await act(async () => {
+      useAppStore.setState({ settings: getDefaultSettings('') })
+    })
+    expect(rpc).toHaveBeenCalledWith(expect.anything(), 'agentSession.restartResumable')
+  })
+
+  it('hides when the host offers nothing', async () => {
+    rpc.mockResolvedValue({ sessions: [] })
     await mount()
     expect(screen.queryByRole('button')).toBeNull()
   })

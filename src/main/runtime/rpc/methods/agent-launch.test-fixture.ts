@@ -12,7 +12,6 @@ import type { RpcContext } from '../core'
 
 export const STRUCTURED_PREFERENCE = {
   experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
   openAgentTabsInChatByDefault: true
 }
 

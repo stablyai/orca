@@ -132,9 +132,10 @@ describe('committed adopting create RPC replay', () => {
     let selectedHome = originalHome
     const selectAccountHome = vi.fn(() => selectedHome)
     const runtime = new OrcaRuntimeService(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the replay path reads only these two settings from the store.
       {
         getSettings: () => ({
-          experimentalStructuredNativeChat: true,
+          experimentalNativeChat: true,
           agentDefaultEnv: { codex: {} }
         })
       } as never,
@@ -143,9 +144,12 @@ describe('committed adopting create RPC replay', () => {
     )
     // The structured surface is settings-gated for every caller, not just mobile; this test
     // probes durable-identity replay, which only runs once the gate admits the call.
-    vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
-      experimentalStructuredNativeChat: true
-    } as ReturnType<OrcaRuntimeService['getClientSettings']>)
+    vi.spyOn(runtime, 'getClientSettings').mockReturnValue(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission gate reads only the Chat UI setting.
+      {
+        experimentalNativeChat: true
+      } as ReturnType<OrcaRuntimeService['getClientSettings']>
+    )
     vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true
     })

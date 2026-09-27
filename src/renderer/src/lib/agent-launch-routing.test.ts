@@ -8,7 +8,6 @@ import {
 
 const settings = {
   experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
   openAgentTabsInChatByDefault: true
 }
 
@@ -73,15 +72,12 @@ describe('resolveAgentLaunchRoute', () => {
       route({
         launchText: sixtyLineDraft,
         promptDelivery: 'draft',
-        settings: { ...settings, experimentalStructuredNativeChat: false }
+        hostCapabilities: []
       })
     ).toBe('terminal-tui')
   })
 
   it('preserves toggle-off and terminal-default behavior', () => {
-    expect(route({ settings: { ...settings, experimentalStructuredNativeChat: false } })).toBe(
-      'legacy-native-chat'
-    )
     expect(route({ settings: { ...settings, openAgentTabsInChatByDefault: false } })).toBe(
       'terminal-tui'
     )
@@ -176,7 +172,7 @@ describe('explicit structured chat requests', () => {
       expect(
         structuredAgentLaunchSupported({
           ...input,
-          settings: { ...input.settings, experimentalStructuredNativeChat: false }
+          settings: { ...input.settings, experimentalNativeChat: false }
         })
       ).toBe(false)
     }

@@ -78,7 +78,11 @@ function runtimeStub(): unknown {
   const subscriptions = new RuntimeSubscriptionRegistry()
   return {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    // Why both: the baseline host gates on the retired key, the current one on Chat UI.
+    getClientSettings: () => ({
+      experimentalNativeChat: true,
+      experimentalStructuredNativeChat: true
+    }),
     ensureStructuredAgentSessionHost: async () => undefined,
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async () => {

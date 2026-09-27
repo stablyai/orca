@@ -91,7 +91,6 @@ export type RuntimeStore = {
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
     experimentalNativeChat?: GlobalSettings['experimentalNativeChat']
     openAgentTabsInChatByDefault?: GlobalSettings['openAgentTabsInChatByDefault']
-    experimentalStructuredNativeChat?: GlobalSettings['experimentalStructuredNativeChat']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
     visibleTaskProviders?: GlobalSettings['visibleTaskProviders']
@@ -133,5 +132,4 @@ export type RuntimeStore = {
     updates: Partial<GlobalSettings>,
     options?: { notifyListeners?: boolean; originWebContentsId?: number }
   ) => unknown
-  onSettingsChanged?: Store['onSettingsChanged']
 }

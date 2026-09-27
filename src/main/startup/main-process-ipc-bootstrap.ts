@@ -25,6 +25,10 @@ export function registerMainProcessIpcHandlers(): void {
     ])
     await state.runtime?.prepareStructuredAgentSessionStartupRestoration()
   })
+  ipcMain.handle(
+    'app:hasLocalStructuredAgentSessions',
+    () => state.runtime?.hasStructuredAgentSessionRecords() ?? false
+  )
   ipcMain.handle('app:recoverLegacyWorkerTerminalsForRendererStartup', () =>
     recoverLegacyWorkerTerminalsForRendererStartup({
       firstWindowStartupServicesReady: state.firstWindowStartupServicesReady,

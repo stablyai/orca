@@ -100,7 +100,7 @@ beforeEach(() => {
   vi.mocked(toast).mockClear()
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
-    settings: { ...getDefaultSettings(''), experimentalStructuredNativeChat: true },
+    settings: { ...getDefaultSettings(''), experimentalNativeChat: true },
     updateSettings: async (changes) => {
       useAppStore.setState((state) => ({
         settings: { ...getDefaultSettings(''), ...state.settings, ...changes }
@@ -145,6 +145,15 @@ it('keeps next-launch preference out of the current resume action', async () => 
     })
   )
   expect(rpc).toHaveBeenCalledTimes(2)
+})
+
+// Chat UI decides how new launches open; a chat that was working is still offered back.
+it('offers the resume with Chat UI off when the host holds structured chats', async () => {
+  rpc.mockResolvedValue({ sessions: offered })
+  useAppStore.setState({ settings: { ...getDefaultSettings(''), experimentalNativeChat: false } })
+  await mount(<NativeChatResumeOnRestartModal />)
+
+  expect(button('Resume 2 chats')).toBeTruthy()
 })
 
 // One primary action and one way out of it; the body copy carries the transparency.
@@ -296,7 +305,7 @@ it('resumes and continues once when the launch begins opted in', async () => {
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalStructuredNativeChat: true,
+      experimentalNativeChat: true,
       nativeChatResumeWorkOnRestart: true
     }
   })
@@ -320,12 +329,8 @@ it('resumes and continues once when the launch begins opted in', async () => {
   await act(async () =>
     useAppStore.getState().updateSettings({ nativeChatResumeWorkOnRestart: true })
   )
-  await act(async () =>
-    useAppStore.getState().updateSettings({ experimentalStructuredNativeChat: false })
-  )
-  await act(async () =>
-    useAppStore.getState().updateSettings({ experimentalStructuredNativeChat: true })
-  )
+  await act(async () => useAppStore.getState().updateSettings({ experimentalNativeChat: false }))
+  await act(async () => useAppStore.getState().updateSettings({ experimentalNativeChat: true }))
   expect(rpc.mock.calls.map((call) => [call[1], call[2]])).toEqual([
     ['agentSession.restartResumable', undefined],
     ['agentSession.restartContinue', {}]
@@ -341,7 +346,7 @@ it('reports refused and newly ineligible chats on an opted-in launch', async () 
   useAppStore.setState({
     settings: {
       ...getDefaultSettings(''),
-      experimentalStructuredNativeChat: true,
+      experimentalNativeChat: true,
       nativeChatResumeWorkOnRestart: true
     }
   })

@@ -312,7 +312,7 @@ beforeEach(async () => {
   shellEnvironmentPolicy = { inheritAll: true, names: [] }
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
+    getClientSettings: () => ({ experimentalNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async () => {
       const {

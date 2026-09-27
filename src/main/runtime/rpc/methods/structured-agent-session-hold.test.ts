@@ -98,7 +98,8 @@ beforeEach(async () => {
   // The structured surface is settings-gated for every caller, in-process included.
   vi.spyOn(runtime, 'getClientSettings').mockImplementation(
     () =>
-      ({ experimentalStructuredNativeChat: structuredNativeChatEnabled }) as ReturnType<
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the admission gate reads only the Chat UI setting.
+      ({ experimentalNativeChat: structuredNativeChatEnabled }) as ReturnType<
         OrcaRuntimeService['getClientSettings']
       >
   )

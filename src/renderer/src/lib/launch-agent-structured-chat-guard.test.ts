@@ -79,7 +79,6 @@ const store = {
     agentDefaultEnv: {},
     activeRuntimeEnvironmentId: null,
     experimentalNativeChat: true,
-    experimentalStructuredNativeChat: true,
     openAgentTabsInChatByDefault: true,
     nativeChatSessionOptions: undefined as
       | Record<

@@ -1,6 +1,9 @@
 /**
  * The one place that answers "should this launch be a structured native chat session?".
  *
+ * Structured chat is the only Chat UI runtime: a launch that routes to Chat UI is structured
+ * wherever it is supported, and falls back to terminal-backed chat where it is not.
+ *
  * Both launch surfaces call it. The renderer asks when a user opens an agent tab
  * (`resolveAgentLaunchRoute`); orchestration asks when it dispatches a worker, because the mode is
  * the user's own default rather than a per-call flag. Keeping the two halves — the settings default
@@ -17,7 +20,7 @@ import type { WorkspaceLaunchKind } from './workspace-launch-kind'
 
 export type NativeChatDefaultSettings = Pick<
   GlobalSettings,
-  'experimentalNativeChat' | 'experimentalStructuredNativeChat' | 'openAgentTabsInChatByDefault'
+  'experimentalNativeChat' | 'openAgentTabsInChatByDefault'
 >
 
 /** Why a launch that the user's default asked to be structured cannot be. */
@@ -53,22 +56,18 @@ export type StructuredNativeChatSupportInput = {
   reusesTerminal?: boolean
 }
 
+/** Chat UI is on. Every structured-chat gate reads this rather than the persisted key. */
+export function isNativeChatEnabled(
+  settings: Partial<Pick<NativeChatDefaultSettings, 'experimentalNativeChat'>> | null | undefined
+): boolean {
+  return settings?.experimentalNativeChat === true
+}
+
 /** The user's default for a new agent tab: native chat rather than the raw TUI. */
 export function agentTabsDefaultToNativeChat(
   settings: Partial<NativeChatDefaultSettings> | null | undefined
 ): boolean {
-  return (
-    settings?.experimentalNativeChat === true && settings?.openAgentTabsInChatByDefault === true
-  )
-}
-
-/** ...and specifically a structured native chat session rather than a terminal rendered as chat. */
-export function prefersStructuredNativeChatByDefault(
-  settings: Partial<NativeChatDefaultSettings> | null | undefined
-): boolean {
-  return (
-    agentTabsDefaultToNativeChat(settings) && settings?.experimentalStructuredNativeChat === true
-  )
+  return isNativeChatEnabled(settings) && settings?.openAgentTabsInChatByDefault === true
 }
 
 export function resolveStructuredNativeChatSupport(

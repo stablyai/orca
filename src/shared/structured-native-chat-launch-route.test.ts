@@ -7,15 +7,14 @@ import { describe, expect, it } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './protocol-version'
 import {
   agentTabsDefaultToNativeChat,
-  prefersStructuredNativeChatByDefault,
+  isNativeChatEnabled,
   resolveStructuredNativeChatSupport,
   type StructuredNativeChatSupportInput
 } from './structured-native-chat-launch-route'
 
 const ON = {
   experimentalNativeChat: true,
-  openAgentTabsInChatByDefault: true,
-  experimentalStructuredNativeChat: true
+  openAgentTabsInChatByDefault: true
 }
 
 function support(overrides: Partial<StructuredNativeChatSupportInput> = {}) {
@@ -29,24 +28,21 @@ function support(overrides: Partial<StructuredNativeChatSupportInput> = {}) {
 }
 
 describe('the settings default', () => {
-  it('needs all three toggles for structured, and the first two for native chat', () => {
-    expect(prefersStructuredNativeChatByDefault(ON)).toBe(true)
-    expect(prefersStructuredNativeChatByDefault({ ...ON, experimentalNativeChat: false })).toBe(
-      false
-    )
-    expect(
-      prefersStructuredNativeChatByDefault({ ...ON, openAgentTabsInChatByDefault: false })
-    ).toBe(false)
-    expect(
-      prefersStructuredNativeChatByDefault({ ...ON, experimentalStructuredNativeChat: false })
-    ).toBe(false)
-    expect(agentTabsDefaultToNativeChat({ ...ON, experimentalStructuredNativeChat: false })).toBe(
-      true
-    )
+  it('defaults new tabs to native chat only with Chat UI on and the Chat UI default view', () => {
+    expect(agentTabsDefaultToNativeChat(ON)).toBe(true)
+    expect(agentTabsDefaultToNativeChat({ ...ON, experimentalNativeChat: false })).toBe(false)
+    expect(agentTabsDefaultToNativeChat({ ...ON, openAgentTabsInChatByDefault: false })).toBe(false)
+  })
+
+  it('enables Chat UI from its own toggle, whatever the default view', () => {
+    const terminalDefaultView = { ...ON, openAgentTabsInChatByDefault: false }
+    expect(isNativeChatEnabled(ON)).toBe(true)
+    expect(isNativeChatEnabled(terminalDefaultView)).toBe(true)
+    expect(isNativeChatEnabled({ ...ON, experimentalNativeChat: false })).toBe(false)
   })
 
   it.each([null, undefined, {}])('reads %s as no preference', (settings) => {
-    expect(prefersStructuredNativeChatByDefault(settings)).toBe(false)
+    expect(isNativeChatEnabled(settings)).toBe(false)
     expect(agentTabsDefaultToNativeChat(settings)).toBe(false)
   })
 })

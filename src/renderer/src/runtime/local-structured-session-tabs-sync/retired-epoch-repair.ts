@@ -15,11 +15,7 @@
  * depends on the snapshot apply — which is what lets the apply prune this module's state.
  */
 
-import {
-  isCurrentLocalStructuredSessionGeneration,
-  localStructuredSessionEpochHistoryByWorktree,
-  localStructuredSessionGeneration
-} from './inventory-generation-fence'
+import { localStructuredSessionEpochHistoryByWorktree } from './inventory-publication-cursors'
 
 /** Bounded so a publisher that keeps re-sending a retired epoch cannot drive an endless refetch. */
 const MAX_REPAIR_ATTEMPTS = 3
@@ -38,7 +34,7 @@ type RepairState = {
   timer: ReturnType<typeof setTimeout> | null
 }
 
-export type RetiredEpochRepairRunner = (expectedGeneration: number) => Promise<unknown>
+export type RetiredEpochRepairRunner = () => Promise<unknown>
 
 const repairsByWorktree = new Map<string, RepairState>()
 
@@ -78,17 +74,12 @@ export function scheduleRetiredEpochRepair(
     })
     return
   }
-  const generation = localStructuredSessionGeneration()
   const delay = Math.min(BASE_REPAIR_DELAY_MS * 2 ** state.attempts, MAX_REPAIR_DELAY_MS)
   state.attempts += 1
   state.lastAttemptAt = now
   state.timer = setTimeout(() => {
     state.timer = null
-    if (!isCurrentLocalStructuredSessionGeneration(generation)) {
-      repairsByWorktree.delete(worktreeId)
-      return
-    }
-    void runRepair(generation)
+    void runRepair()
       .then(() => {
         // Why re-check rather than trust the call: a refresh that succeeds without reviving the
         // epoch has not repaired anything, and counting it as success would loop forever.

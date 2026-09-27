@@ -16,7 +16,7 @@ import {
   applyLocalStructuredSessionTabSnapshots,
   resetLocalStructuredSessionVersionForTests
 } from './local-structured-session-tabs-sync'
-import { localStructuredSessionEpochHistoryByWorktree } from './local-structured-session-tabs-sync/inventory-generation-fence'
+import { localStructuredSessionEpochHistoryByWorktree } from './local-structured-session-tabs-sync/inventory-publication-cursors'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 

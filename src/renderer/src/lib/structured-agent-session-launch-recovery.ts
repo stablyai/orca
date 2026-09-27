@@ -31,7 +31,7 @@ function throwIfLaunchCancelled(state: StructuredLaunchRecoveryState): void {
 }
 
 async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Promise<void> {
-  const snapshots = await refreshLocalStructuredSessionTabs(undefined, { authoritative: true })
+  const snapshots = await refreshLocalStructuredSessionTabs({ authoritative: true })
   throwIfLaunchCancelled(state)
   const published = snapshots.some(
     (snapshot) =>

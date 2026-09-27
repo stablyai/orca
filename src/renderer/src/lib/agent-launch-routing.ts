@@ -1,7 +1,8 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
-  prefersStructuredNativeChatByDefault,
+  agentTabsDefaultToNativeChat,
+  isNativeChatEnabled,
   resolveStructuredNativeChatSupport
 } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -18,12 +19,7 @@ export type AgentLaunchRoute = 'structured-native-chat' | 'legacy-native-chat' |
 export type AgentLaunchRoutingInput = {
   agent: TuiAgent
   settings:
-    | Pick<
-        GlobalSettings,
-        | 'experimentalNativeChat'
-        | 'experimentalStructuredNativeChat'
-        | 'openAgentTabsInChatByDefault'
-      >
+    | Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'>
     | null
     | undefined
   executionHostId: string
@@ -45,10 +41,7 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   // implied here: the structured resolver admits only claude/codex, both native-chat agents, and
   // refuses every non-local host, and a structured session reads its journal over RPC rather than
   // the transcript file, so local transcript readability does not apply either.
-  if (
-    prefersStructuredNativeChatByDefault(input.settings) &&
-    structuredAgentLaunchSupported(input)
-  ) {
+  if (agentTabsDefaultToNativeChat(input.settings) && structuredAgentLaunchSupported(input)) {
     return 'structured-native-chat'
   }
   const initialViewMode = decideInitialAgentTabViewMode({
@@ -67,7 +60,7 @@ export function structuredAgentLaunchSupported(
   input: Omit<AgentLaunchRoutingInput, 'launchText'>
 ): boolean {
   return (
-    input.settings?.experimentalStructuredNativeChat === true &&
+    isNativeChatEnabled(input.settings) &&
     resolveStructuredNativeChatSupport({
       agent: input.agent,
       executionHostId: input.executionHostId,

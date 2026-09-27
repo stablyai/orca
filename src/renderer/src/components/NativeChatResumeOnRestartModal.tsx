@@ -60,10 +60,7 @@ function selectedByDefault(failure: ResumeFailure | undefined): boolean {
 }
 
 export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
-  const structuredEnabled = useAppStore(
-    (store) => store.settings?.experimentalStructuredNativeChat === true
-  )
-  const { candidates, failed, listedAt } = useNativeChatRestartOffer(structuredEnabled)
+  const { candidates, failed, listedAt } = useNativeChatRestartOffer()
   const rows = useMemo<ResumeCandidate[]>(() => [...candidates, ...failed], [candidates, failed])
   const failureBySession = useMemo(
     () => new Map(failed.map((failure) => [failure.sessionId, failure])),
@@ -163,7 +160,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element | null {
     })
   }
 
-  if (!structuredEnabled || !open || rows.length === 0) {
+  if (!open || rows.length === 0) {
     return null
   }
 

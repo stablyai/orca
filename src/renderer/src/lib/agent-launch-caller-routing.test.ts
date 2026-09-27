@@ -58,7 +58,6 @@ vi.mock('@/runtime/local-runtime-capabilities', () => ({
 
 const CHAT_DEFAULT_SETTINGS = {
   experimentalNativeChat: true,
-  experimentalStructuredNativeChat: true,
   openAgentTabsInChatByDefault: true
 }
 
