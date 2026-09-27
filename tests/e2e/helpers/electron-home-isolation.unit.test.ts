@@ -1,11 +1,12 @@
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   areSameHomePath,
   assertElectronResolvedIsolatedHome,
-  createElectronHomeIsolation
+  createElectronHomeIsolation,
+  HERMETIC_SHELL_ENV
 } from './electron-home-isolation'
 
 const tempDirs: string[] = []
@@ -82,6 +83,39 @@ describe('createElectronHomeIsolation', () => {
         realHome: '/real/home'
       })
     ).toThrow(/orcaAppExtraEnv\.ORCA_E2E_USER_DATA_DIR/)
+  })
+
+  it('keeps the inherited shell without the hermetic overlay', () => {
+    const plainHome = createElectronHomeIsolation({
+      inheritedEnv: { SHELL: '/opt/homebrew/bin/fish' },
+      launchEnv: {},
+      extraEnv: {},
+      userDataDir: createUserDataDir(),
+      realHome: '/real/home'
+    })
+    expect(plainHome.env.SHELL).toBe('/opt/homebrew/bin/fish')
+    expect(plainHome.env.ZDOTDIR).toBeUndefined()
+    expect(readdirSync(plainHome.isolatedHome)).toEqual([])
+  })
+
+  it.each([
+    ['launchEnv', { launchEnv: HERMETIC_SHELL_ENV, extraEnv: {} }],
+    ['extraEnv', { launchEnv: {}, extraEnv: HERMETIC_SHELL_ENV }]
+  ])('pins a prompt-neutral shell when %s carries the hermetic overlay', (_name, overlays) => {
+    const hermetic = createElectronHomeIsolation({
+      inheritedEnv: { SHELL: '/opt/homebrew/bin/fish', ZDOTDIR: '/real/zdotdir' },
+      ...overlays,
+      userDataDir: createUserDataDir(),
+      realHome: '/real/home'
+    })
+    expect(hermetic.env.SHELL).toBe(process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash')
+    expect(hermetic.env.ZDOTDIR).toBe(hermetic.isolatedHome)
+    expect(readFileSync(path.join(hermetic.isolatedHome, '.zshrc'), 'utf8')).toBe(
+      "PROMPT='%# '\nRPROMPT=''\n"
+    )
+    expect(readFileSync(path.join(hermetic.isolatedHome, '.bash_profile'), 'utf8')).toBe(
+      "PS1='\\$ '\n"
+    )
   })
 
   it('compares Windows home paths case-insensitively', () => {

@@ -1,6 +1,14 @@
-import { mkdirSync, realpathSync } from 'node:fs'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+
+/** Launch env overlay that pins pane shells to a prompt showing no user, host or path. */
+export const HERMETIC_SHELL_ENV = { ORCA_E2E_HERMETIC_SHELL: '1' }
+const HERMETIC_SHELL = process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
+const HERMETIC_PROMPT_FILES = {
+  '.zshrc': "PROMPT='%# '\nRPROMPT=''\n",
+  '.bash_profile': "PS1='\\$ '\n"
+}
 
 const RESTRICTED_ENV_KEYS = new Set([
   'HOME',
@@ -79,6 +87,14 @@ export function createElectronHomeIsolation({
   if (areSameHomePath(isolatedHome, realHome)) {
     throw new Error('Refusing to launch E2E with the developer home as its isolated HOME')
   }
+  const hermeticShell = { ...launchEnv, ...extraEnv }.ORCA_E2E_HERMETIC_SHELL === '1'
+  // Why: stock prompts print user@host into screenshots; ZDOTDIR reaches these rc files even
+  // under macOS login(1), which resets HOME to the account's real home.
+  if (hermeticShell) {
+    for (const [file, content] of Object.entries(HERMETIC_PROMPT_FILES)) {
+      writeFileSync(path.join(isolatedHome, file), content)
+    }
+  }
 
   return {
     isolatedHome,
@@ -87,6 +103,7 @@ export function createElectronHomeIsolation({
       ...stripAmbientHomeAndCodexEnv(inheritedEnv),
       ...launchEnv,
       ...extraEnv,
+      ...(hermeticShell ? { SHELL: HERMETIC_SHELL, ZDOTDIR: isolatedHome } : {}),
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
       ORCA_E2E_USER_DATA_DIR: userDataDir,

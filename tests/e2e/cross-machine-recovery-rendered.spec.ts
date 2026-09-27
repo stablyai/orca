@@ -14,6 +14,7 @@ import {
   openRecoverSessionsFromJumpPalette,
   type RecoveryRenderedScenario
 } from './helpers/cross-machine-recovery-picker-fixtures'
+import { HERMETIC_SHELL_ENV } from './helpers/electron-home-isolation'
 import { captureHiddenRendererScreenshot } from './helpers/hidden-renderer-screenshot'
 
 const SHOWS: Record<RecoveryRenderedScenario, (dialog: Locator, row: Locator) => Promise<void>> = {
@@ -45,6 +46,8 @@ const SHOWS: Record<RecoveryRenderedScenario, (dialog: Locator, row: Locator) =>
     )
   }
 }
+
+test.use({ orcaAppExtraEnv: HERMETIC_SHELL_ENV })
 
 test.describe('Cross-machine recovery rendered picker states', () => {
   test.skip(

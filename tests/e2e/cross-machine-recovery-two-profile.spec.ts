@@ -5,7 +5,7 @@
  * export read back by a second runtime proves layout, dormant bindings and single-launch resume.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
@@ -42,6 +42,7 @@ import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
+import { HERMETIC_SHELL_ENV } from './helpers/electron-home-isolation'
 import { captureHiddenRendererScreenshot } from './helpers/hidden-renderer-screenshot'
 import { RECOVERY_SCREENSHOT_DIR } from './helpers/cross-machine-recovery-picker-fixtures'
 import {
@@ -372,9 +373,18 @@ function expectArgvRun(argv: readonly string[], run: readonly string[]): void {
 test('exports a workspace from one profile and imports it into another', async ({}, testInfo) => {
   test.setTimeout(300_000)
   const repoA = createSeededTestRepo()
-  const profileA = createRestartSession(testInfo, { ORCA_BACKGROUND_LAUNCH: '1' })
-  const fakeClaude = createFakeClaudeCli(path.join(testInfo.outputDir, 'fake-claude'))
-  const profileB = createRestartSession(testInfo, { ORCA_BACKGROUND_LAUNCH: '1' })
+  const profileA = createRestartSession(testInfo, {
+    ORCA_BACKGROUND_LAUNCH: '1',
+    ...HERMETIC_SHELL_ENV
+  })
+  // Why tmpdir: the pane echoes this path, and test-results sits under the developer's home.
+  const fakeClaudeDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-fake-claude-'))
+  const fakeClaude = createFakeClaudeCli(fakeClaudeDir)
+  mkdirSync(testInfo.outputDir, { recursive: true })
+  const profileB = createRestartSession(testInfo, {
+    ORCA_BACKGROUND_LAUNCH: '1',
+    ...HERMETIC_SHELL_ENV
+  })
   const running = new Set<ElectronApplication>()
   const launch = async (profile: typeof profileA) => {
     const launched = await profile.launch()
@@ -632,5 +642,6 @@ test('exports a workspace from one profile and imports it into another', async (
     }
     await profileA.dispose()
     await profileB.dispose()
+    rmSync(fakeClaudeDir, { recursive: true, force: true })
   }
 })

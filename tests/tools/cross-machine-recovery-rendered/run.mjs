@@ -1,5 +1,12 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync
+} from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 if (process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
@@ -48,15 +55,30 @@ const expected = [
 ]
 const captured = readdirSync(output).filter((file) => file.endsWith('.png'))
 const missing = expected.filter((file) => !captured.includes(file))
+const guardRecords = expected
+  .map((file) => path.join(output, `${file}.identity-guard.json`))
+  .filter((file) => existsSync(file))
+  .map((file) => JSON.parse(readFileSync(file, 'utf8')))
+const unguarded = captured.filter(
+  (file) => !guardRecords.some((record) => record.screenshot === file)
+)
+const leaking = guardRecords.filter((record) => record.leaks.length > 0)
 const report = {
   scope:
     'Recover Sessions picker per provider state against a fake cc-sync provider, the two-profile import placeholders, and the placeholder in a 50px pane, in hidden Electron windows.',
   playwrightExitStatus: run.status,
   captured: captured.sort(),
-  missing
+  missing,
+  machineIdentityGuard: {
+    checks:
+      'username, hostname, short hostname and home path in the renderer text and every terminal buffer, before and after each capture',
+    passed: leaking.length === 0 && unguarded.length === 0,
+    unguarded,
+    records: guardRecords
+  }
 }
 writeFileSync(path.join(output, 'report.json'), `${JSON.stringify(report, null, 2)}\n`)
 console.log(`Cross-machine recovery rendered evidence: ${output}`)
-if (run.status !== 0 || missing.length > 0) {
+if (run.status !== 0 || missing.length > 0 || !report.machineIdentityGuard.passed) {
   process.exit(run.status || 1)
 }

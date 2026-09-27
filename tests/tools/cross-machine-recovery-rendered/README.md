@@ -30,9 +30,18 @@ The runner sets `ORCA_RECOVERY_RENDERED_DIR` to a fresh, gitignored
   the collapsed menu trigger as `placeholder-50px-compact.png` and its open menu as
   `placeholder-50px-menu.png`.
 
-Open the output directory printed at the end of the run to inspect the eleven screenshots and
-`report.json`. The report records the Playwright exit status and lists captured and missing
-screenshots. The runner exits nonzero if Playwright fails or any expected screenshot is missing.
+Open the output directory printed at the end of the run to inspect the eleven screenshots,
+`report.json`, and one `.identity-guard.json` per screenshot. The report records the Playwright
+exit status, captured and missing screenshots, and the guard's result. The runner
+exits nonzero if Playwright fails or any expected screenshot is missing. It also exits nonzero
+if the guard detects this machine's username, hostname, or home path, or a screenshot has no
+guard record.
+
+The guard checks every capture so screenshots can be shared. Pane shells start with a neutral prompt
+from a fixture shell config in the disposable home. Fixture paths echoed by the terminal live
+under the OS temp directory. Before and after each capture, the guard checks visible text, form
+field values, and every terminal buffer for the machine's identity: its username, full or short
+hostname, or home path. If it finds any, it refuses the capture and writes no PNG.
 
 The specs use a fake cc-sync provider and a fake `claude` CLI. They check Orca rendering and
 recovery behavior; cc-sync transport and real Claude resume are outside this check.

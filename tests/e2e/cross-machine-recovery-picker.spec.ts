@@ -18,6 +18,7 @@ import {
   buildFixture,
   openRecoverSessionsFromJumpPalette
 } from './helpers/cross-machine-recovery-picker-fixtures'
+import { HERMETIC_SHELL_ENV } from './helpers/electron-home-isolation'
 import { captureHiddenRendererScreenshot } from './helpers/hidden-renderer-screenshot'
 
 const LEAKED_ENV = {
@@ -44,7 +45,7 @@ async function assertWindowsStayHidden(electronApp: ElectronApplication): Promis
   expect(windows.every((window) => !window.visible && !window.focused)).toBe(true)
 }
 
-test.use({ orcaAppExtraEnv: LEAKED_ENV })
+test.use({ orcaAppExtraEnv: { ...LEAKED_ENV, ...HERMETIC_SHELL_ENV } })
 
 test.describe('Cross-machine recovery picker', () => {
   test('lists provider items, re-runs divergence, cancels, and reveals the local worktree', async ({
