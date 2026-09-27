@@ -29,6 +29,22 @@ export const ORCAD_PARCEL_WATCHER_ENTRY = 'node_modules/@parcel/watcher/index.js
 export const ORCAD_PARCEL_WATCHER_NATIVE = 'node_modules/@parcel/watcher/watcher.node'
 export const ORCAD_EMOJI_SHORTCODE_DATASET =
   'node_modules/emojibase-data/en/shortcodes/emojibase.json'
+export const ORCAD_LINEAR_SDK_DIR = 'node_modules/@linear/sdk'
+export const ORCAD_LINEAR_SDK_PACKAGE_JSON = `${ORCAD_LINEAR_SDK_DIR}/package.json`
+
+/**
+ * @linear/sdk is required lazily, so esbuild cannot inline it and the deployment needs the
+ * package itself: the `require` target its exports map names, plus the chunks that target
+ * requires. Everything else in the package is typings and source maps (~22 MB).
+ *
+ * build-orcad asserts this list against the installed `dist/*.cjs` before packaging, so a
+ * version bump that adds a chunk fails the build rather than shipping a deployment whose
+ * `require('@linear/sdk')` throws MODULE_NOT_FOUND.
+ */
+export const ORCAD_LINEAR_SDK_RUNTIME_FILES = [
+  `${ORCAD_LINEAR_SDK_DIR}/dist/index.cjs`,
+  `${ORCAD_LINEAR_SDK_DIR}/dist/webhooks-nAfXvD4i.cjs`
+] as const
 
 export const ORCAD_VERSION = '0.1.0'
 
@@ -80,6 +96,9 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: ORCAD_PARCEL_WATCHER_ENTRY },
   { filename: ORCAD_PARCEL_WATCHER_NATIVE },
   { filename: ORCAD_EMOJI_SHORTCODE_DATASET },
+  // Lazily required too, so it travels as a package rather than as bundle input.
+  { filename: ORCAD_LINEAR_SDK_PACKAGE_JSON },
+  ...ORCAD_LINEAR_SDK_RUNTIME_FILES.map((filename) => ({ filename })),
   ...ORCAD_RIPGREP_ARTIFACTS.map((filename) => ({ filename })),
   ...ORCAD_RIPGREP_LICENSE_ARTIFACTS.map((filename) => ({ filename }))
 ]

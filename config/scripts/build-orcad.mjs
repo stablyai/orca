@@ -16,11 +16,13 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
+  realpathSync,
   rmSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import process from 'node:process'
 import { smokeProfileStateWorkers } from './profile-state-worker-smoke.mjs'
 import { materializeWatcherPackage } from './orcad-watcher-package.mjs'
@@ -28,6 +30,9 @@ import { stageOrcadWindowsProcessTree } from './orcad-windows-process-tree.mjs'
 import {
   ORCAD_BUILD_TARGET_FILENAME,
   ORCAD_EMOJI_SHORTCODE_DATASET,
+  ORCAD_LINEAR_SDK_DIR,
+  ORCAD_LINEAR_SDK_PACKAGE_JSON,
+  ORCAD_LINEAR_SDK_RUNTIME_FILES,
   orcadBunRuntimeFilename,
   ORCAD_PARCEL_WATCHER_ENTRY,
   ORCAD_PARCEL_WATCHER_NATIVE,
@@ -99,6 +104,34 @@ async function stageParcelWatcher(target) {
   copyFileSync(nativeSource, join(OUT_DIR, ORCAD_PARCEL_WATCHER_NATIVE))
 }
 
+/** Why a copy and not a bundle: linear-sdk.ts loads @linear/sdk through createRequire, which
+ *  esbuild cannot follow, so the deployment needs the package itself. Typings and source maps
+ *  stay behind — only the entry its exports map names plus its chunks are ever required. */
+function stageLinearSdk(outDir) {
+  // realpath because pnpm links node_modules/@linear/sdk into the content-addressed store.
+  const packageDir = realpathSync(join(ROOT, 'node_modules', '@linear', 'sdk'))
+  const runtimeFiles = readdirSync(join(packageDir, 'dist'))
+    .filter((entry) => entry.endsWith('.cjs'))
+    .sort()
+    .map((entry) => `${ORCAD_LINEAR_SDK_DIR}/dist/${entry}`)
+  // Why assert and not just copy: ORCAD_ARTIFACTS is the only list the template manifest, the
+  // install probe and the materializer read. A chunk missing from it would sit in out/orcad
+  // and be dropped from every deployment, which is the MODULE_NOT_FOUND this staging prevents.
+  if (runtimeFiles.join('\n') !== ORCAD_LINEAR_SDK_RUNTIME_FILES.join('\n')) {
+    throw new Error(
+      `[build-orcad] @linear/sdk's dist/*.cjs no longer matches ORCAD_LINEAR_SDK_RUNTIME_FILES ` +
+        `in src/shared/orcad-artifacts.ts. Declare:\n${runtimeFiles
+          .map((filename) => `  '${filename}',`)
+          .join('\n')}`
+    )
+  }
+  for (const filename of [ORCAD_LINEAR_SDK_PACKAGE_JSON, ...runtimeFiles]) {
+    const output = join(outDir, filename)
+    mkdirSync(dirname(output), { recursive: true })
+    copyFileSync(join(packageDir, relative(ORCAD_LINEAR_SDK_DIR, filename)), output)
+  }
+}
+
 rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(OUT_DIR, { recursive: true })
 const bunRuntimeSource = process.env.ORCAD_BUN_RUNTIME_PATH
@@ -127,6 +160,7 @@ copyFileSync(
   createRequire(import.meta.url).resolve('emojibase-data/en/shortcodes/emojibase.json'),
   emojiDatasetOutput
 )
+stageLinearSdk(OUT_DIR)
 if (existsSync(AGENT_BROWSER_SOURCE)) {
   copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
   if (!targetIsWindows) {
