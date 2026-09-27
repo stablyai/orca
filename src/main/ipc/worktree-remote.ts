@@ -157,6 +157,7 @@ import {
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
 } from '../agent-trust-presets'
+import { awaitAgentTrustWriteWithinDeadline } from '../agent-trust-write-deadline'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
@@ -443,7 +444,14 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         } else if (preset === 'copilot') {
           markCopilotFolderTrusted(worktree.path)
         } else if (preset === 'codex') {
-          markCodexProjectTrusted(worktree.path)
+          // Why: the PTY below spawns Codex immediately; a discarded Promise let
+          // it reach the trust menu before the write landed, and its rejection
+          // escaped this synchronous catch. Bounded so a wedged config lane
+          // cannot stall worktree creation.
+          await awaitAgentTrustWriteWithinDeadline(markCodexProjectTrusted(worktree.path), {
+            preset,
+            workspacePath: worktree.path
+          })
         }
       } catch {
         // Best-effort: launch still proceeds and the agent can ask interactively.

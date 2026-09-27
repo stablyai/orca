@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentTrustPreset } from '../../src/main/agent-trust-presets'
+import { AGENT_TRUST_WRITE_DEADLINE_MS } from '../../src/main/agent-trust-write-deadline'
 import { runExclusivelyForCodexTrustConfig } from '../../src/main/codex/codex-trust-config-mutation-queue'
 import { preflightAgentTrust } from '../../src/renderer/src/lib/agent-trust-preflight'
 import { launchAgentSessionContinuation } from '../../src/renderer/src/lib/launch-agent-session-continuation'
@@ -141,28 +142,95 @@ describe('agent trust completion', () => {
     await flush()
   })
 
-  it('adds no deadline or polling while a local write remains pending', async () => {
+  it('bounds a never-settling local write and continues untrusted', async () => {
     vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const write = deferred()
+    void write.promise.catch(() => {})
     fake.codex.mockReturnValue(write.promise)
     let settled = false
     const request = invoke({ preset: 'codex', workspacePath }).then(() => {
       settled = true
     })
     try {
-      await vi.advanceTimersByTimeAsync(60_000)
-      const settledBeforeWrite = settled
-      const pendingTimers = vi.getTimerCount()
-      write.resolve()
-      await request
-      expect(settledBeforeWrite).toBe(false)
-      expect(pendingTimers).toBe(0)
-      expect(fake.codex).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(AGENT_TRUST_WRITE_DEADLINE_MS - 1)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(2)
+      await expect(request).resolves.toBeUndefined()
+      expect(settled).toBe(true)
+      expect(warn).toHaveBeenCalledOnce()
+      expect(String(warn.mock.calls[0]?.[0])).toContain('did not settle')
+      // No leaked deadline timer keeps the handler or the process alive.
+      expect(vi.getTimerCount()).toBe(0)
     } finally {
+      warn.mockRestore()
       write.resolve()
-      await request
       vi.useRealTimers()
     }
+  })
+
+  it('admits an already-complete write without waiting for any timer', async () => {
+    vi.useFakeTimers()
+    fake.codex.mockResolvedValue(undefined)
+    try {
+      // No timer is advanced: "already done" must settle on microtasks alone.
+      await expect(invoke({ preset: 'codex', workspacePath })).resolves.toBeUndefined()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('absorbs a local rejection that arrives after the deadline', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const write = deferred()
+    fake.codex.mockReturnValue(write.promise)
+    try {
+      const request = invoke({ preset: 'codex', workspacePath })
+      await vi.advanceTimersByTimeAsync(AGENT_TRUST_WRITE_DEADLINE_MS + 1)
+      await expect(request).resolves.toBeUndefined()
+      // Unhandled here would fail the run: the abandoned write is still adopted.
+      write.reject(new Error('mock EACCES after deadline'))
+      await vi.advanceTimersByTimeAsync(1)
+    } finally {
+      warn.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds a never-settling SSH trust write without a local fallback', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const write = deferred()
+    void write.promise.catch(() => {})
+    fake.remote.mockReturnValue(write.promise)
+    try {
+      const request = invoke({ preset: 'codex', workspacePath, connectionId: 'ssh-1' })
+      await vi.advanceTimersByTimeAsync(AGENT_TRUST_WRITE_DEADLINE_MS + 1)
+      await expect(request).resolves.toBeUndefined()
+      // Loss of contact is not a verdict: nothing is written locally instead.
+      expect(fake.codex).not.toHaveBeenCalled()
+      expect(warn).toHaveBeenCalledOnce()
+    } finally {
+      warn.mockRestore()
+      write.resolve()
+      vi.useRealTimers()
+    }
+  })
+
+  it('settles two concurrent launches for the same workspace independently', async () => {
+    const first = deferred()
+    const second = deferred()
+    fake.codex.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    const earlier = invoke({ preset: 'codex', workspacePath })
+    const later = invoke({ preset: 'codex', workspacePath })
+    first.reject(new Error('mock EACCES'))
+    await expect(earlier).resolves.toBeUndefined()
+    second.resolve()
+    await expect(later).resolves.toBeUndefined()
+    // Not deduped by design: the writer's upsert is idempotent per workspace.
+    expect(fake.codex).toHaveBeenCalledTimes(2)
   })
 
   it('keeps SSH trust on its remote owner and waits for its result', async () => {

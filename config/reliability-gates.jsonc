@@ -351,31 +351,14 @@
         "renderer agent preflight",
         "Codex continuation launch admission"
       ],
-      "platforms": [
-        "macos",
-        "linux",
-        "windows"
-      ],
-      "providers": [
-        "local",
-        "daemon",
-        "ssh",
-        "wsl",
-        "remote-runtime"
-      ],
-      "coveredPlatforms": [
-        "macos"
-      ],
-      "coveredProviders": [
-        "local",
-        "ssh"
-      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh"],
       "coverageNotes": "Actual main IPC handler, renderer preflight, session-continuation caller and config mutation queue with fake Electron bridge, config writer, launch and remote owner. Counts prove admission ordering only; no native PTY/CLI, actual config mutation or live provider evidence. Recognized native Codex launch preparation already awaits trust deeper in the stack.",
-      "motivatingLinks": [
-        "https://github.com/stablyai/orca/blob/main/src/main/ipc/agent-trust.ts"
-      ],
-      "invariant": "Trust preflight settles after the selected owner mutation settles; rejected writes remain best-effort after settlement and SSH failures never fall back to local trust.",
-      "oracle": "Held local write or actual queue predecessor yields zero continuation launch calls until release, then exactly one; delayed local rejection settles successfully afterward. SSH awaits its remote writer and never invokes local trust. Sixty seconds of fake pending time adds zero timers and one trust call.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/blob/main/src/main/ipc/agent-trust.ts"],
+      "invariant": "Trust preflight settles after the selected owner mutation settles, or after a bounded deadline if that mutation never settles; rejected, abandoned and SSH-unreachable writes leave the workspace untrusted and never fall back to local trust.",
+      "oracle": "Held local write or actual queue predecessor yields zero continuation launch calls until release, then exactly one; delayed local rejection settles successfully afterward. SSH awaits its remote writer and never invokes local trust. A never-settling local or SSH write resolves the handler at the deadline with a named warning, no leaked timer and no local fallback, and a rejection arriving after the deadline stays handled. An already-complete write admits the launch on microtasks with zero timers. Two concurrent launches for one workspace settle independently.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts"
       ],
@@ -392,7 +375,11 @@
             "holds the actual session-continuation launch call until the local write settles",
             "keeps renderer preflight pending behind the actual config mutation queue",
             "settles best-effort only after a queued local trust failure",
-            "adds no deadline or polling while a local write remains pending",
+            "bounds a never-settling local write and continues untrusted",
+            "admits an already-complete write without waiting for any timer",
+            "absorbs a local rejection that arrives after the deadline",
+            "bounds a never-settling SSH trust write without a local fallback",
+            "settles two concurrent launches for the same workspace independently",
             "keeps remote failures best-effort without a local fallback"
           ]
         }
@@ -422,20 +409,20 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "No new subprocess, polling, timer, retry or trust operation. Existing queue/write await is newly visible to IPC/caller: no timeout/cancellation and no finite delay bound; stuck predecessor can wait indefinitely. Reliability fix, no performance gain claim; separate trade-off PR."
+        "evidence": "No new subprocess, polling, retry or trust operation. Existing queue/write await is newly visible to IPC/caller and is capped by one per-call deadline timer, cleared on settlement, so a stuck predecessor degrades to the agent's own trust prompt instead of an indefinite caller wait. Reliability fix, no performance gain claim."
       },
       "knownGaps": [
         "CI soak pending.",
         "No live Codex CLI, PTY, trust prompt, native Electron app or actual trust-config mutation was exercised.",
         "Windows/Linux/WSL/daemon/remote-runtime behavior was not executed; remote owner is mocked. No routing/wire/PTY ownership change.",
         "Recognized native Codex launch preparation already awaits trust deeper; do not infer all actual launches currently race.",
-        "Another discarded trust Promise in worktree startup remains outside this candidate.",
-        "Existing queue has no timeout/cancellation; pending predecessor may keep caller waiting indefinitely."
+        "Abandoning a write at the deadline does not cancel it; a legitimate slow write (WSL grant sessions run to 30s) can land after the launch already started, restoring the pre-fix ordering for that case only.",
+        "The deadline value is a reasoned cap over observed lane holders, not a measured p95."
       ],
       "promotionCriteria": [
         "Retain pending-write/queue/launch-boundary red-green evidence and remote owner assertions; obtain actual platform/session evidence and CI soak before promotion."
       ],
-      "demotionRule": "Remain experimental until repeated independent/CI evidence; investigate ordering or indefinite-wait regressions without weakening completion assertions."
+      "demotionRule": "Remain experimental until repeated independent/CI evidence; investigate ordering or unbounded-wait regressions without weakening completion or deadline assertions."
     },
     {
       "id": "agent-session.journal-streaming-replay",
