@@ -207,9 +207,7 @@ export class SshConnection {
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
   private keyboardInteractiveCancelled = false
-  // Why per attempt, not per round: the server re-prompts in a NEW round when it rejects the
-  // auto-answered cache, so a per-round reset would replay the same bad password up to the
-  // round cap without ever asking the user.
+  // A rejected cached password must reach the user on the next round.
   private keyboardInteractivePasswordState = { passwordAutoAnswered: false }
   private hostKeyFingerprint: string | undefined
   private connectGeneration = 0
@@ -785,12 +783,7 @@ export class SshConnection {
           }
         },
         markCancelled: () => {
-          // Why: a superseded/disposed attempt still holds a pending prompt
-          // whose requestCredential resolves to undefined (see the coalesce
-          // above), which reads as a cancellation. Without this guard that
-          // stale attempt would set the flag on the live attempt's instance
-          // field and cause it to skip its own passphrase/password rungs as
-          // if the user had cancelled.
+          // A stale prompt must not cancel the current attempt.
           if (isCurrent()) {
             this.keyboardInteractiveCancelled = true
           }
@@ -900,9 +893,7 @@ export class SshConnection {
         throw err
       }
 
-      // Why: a cancelled keyboard-interactive prompt is an explicit user
-      // decision; falling through to another prompt or transport would ask
-      // again for the same login the user just declined to complete.
+      // Cancellation must stop the credential and transport fallback chain.
       if (this.keyboardInteractiveCancelled) {
         this.proxyProcess?.kill()
         this.proxyProcess = null
@@ -956,9 +947,7 @@ export class SshConnection {
               this.proxyProcess = null
               throw keyErr
             }
-            // Why: same reasoning as the top-level guard above — a cancelled
-            // keyboard-interactive prompt on this rung must not fall through
-            // to the passphrase/password rungs below.
+            // Key fallback must honor the same cancellation boundary.
             if (this.keyboardInteractiveCancelled) {
               this.proxyProcess?.kill()
               this.proxyProcess = null
@@ -1581,22 +1570,14 @@ export class SshConnection {
           () => rearmStartupTimer(SSH_KEYBOARD_INTERACTIVE_READY_TIMEOUT_MS)
         ).then(
           (responses) => {
-            // Why: a cancelled or superseded round has no server round-trip worth waiting on —
-            // finishing with an empty answer here would leave the connection "connecting" until
-            // the server eventually rejects it, well after the user already dismissed the dialog
-            // (or a newer attempt already took over). Still finish() unconditionally below even
-            // when already settled (e.g. disconnect() tore this attempt down through another
-            // path): ssh2 expects the keyboard-interactive callback answered regardless, and
-            // skipping it would leave that continuation dangling.
+            // Settle cancellation immediately, but still answer ssh2’s pending callback.
             if (
               responses === null &&
               (connectGeneration !== this.connectGeneration || this.keyboardInteractiveCancelled)
             ) {
               finish([])
               if (!settled) {
-                // Why the level tag: isAuthError() needs it to classify this as 'auth-failed'
-                // rather than a generic 'error' state, matching what a real server rejection of
-                // an empty answer would report.
+                // Preserve the auth-failed state for explicit cancellation.
                 const cancelledError = Object.assign(
                   new Error(
                     `Keyboard-interactive authentication cancelled for ${this.target.label}`
