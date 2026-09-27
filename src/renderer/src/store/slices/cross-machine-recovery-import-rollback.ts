@@ -1,6 +1,8 @@
 import type { StoreApi } from 'zustand'
+import { shallow } from 'zustand/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../types'
+import type { OpenFile } from './editor'
 import { sanitizeRecentTabIds } from './tab-group-state'
 
 type RecoveryStore = Pick<StoreApi<AppState>, 'setState'>
@@ -17,6 +19,16 @@ function addedRows<T extends Row>(
 
 function isStillStaged<T extends Row>(current: readonly T[] | undefined, staged: T): boolean {
   return current?.find((row) => row.id === staged.id) === staged
+}
+
+function withoutDiskBaseline({ lastKnownDiskSignature: _baseline, ...file }: OpenFile) {
+  return file
+}
+
+// Why: loading a clean tab stamps its disk baseline, which is bookkeeping rather than a user edit.
+function isFileStillStaged(current: readonly OpenFile[], staged: OpenFile): boolean {
+  const file = current.find((row) => row.id === staged.id)
+  return file !== undefined && shallow(withoutDiskBaseline(file), withoutDiskBaseline(staged))
 }
 
 // Why: an entry changed since staging holds a newer edit, so only still-staged values revert.
@@ -103,7 +115,7 @@ function droppedImportRows(before: AppState, staged: AppState, current: AppState
   const files = untouchedIds(
     addedRows(before.openFiles, staged.openFiles).filter((file) => file.worktreeId === id),
     (file) =>
-      isStillStaged(current.openFiles, file) &&
+      isFileStillStaged(current.openFiles, file) &&
       current.editorDrafts[file.id] === staged.editorDrafts[file.id]
   )
   const browsers = untouchedIds(

@@ -232,6 +232,8 @@ describe('cross-machine recovery renderer apply', () => {
 
     expect(reply).toEqual({ requestId: 'r1', error: 'disk full' })
     expect(store.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
+    expect(session.set).toHaveBeenCalledTimes(2)
+    expect(session.set.mock.calls[1][0].sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
   })
 
   it('removes an import whose persistence fails', async () => {
@@ -249,6 +251,12 @@ describe('cross-machine recovery renderer apply', () => {
     expect(state.activeFileIdByWorktree[WT]).toBeUndefined()
     expect(state.defaultTerminalTabsAppliedByWorktreeId[WT]).toBeUndefined()
     expect(state.recoveryImportKeyByWorktreeId[WT]).toBeUndefined()
+    expect(session.set).toHaveBeenCalledTimes(2)
+    const rewritten = session.set.mock.calls[1][0]
+    expect(rewritten.recoveryImportKeyByWorktreeId ?? {}).toEqual({})
+    expect(rewritten.sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
+    expect(rewritten.tabsByWorktree[WT] ?? []).toEqual([])
+    expect(session.flush).toHaveBeenCalledTimes(2)
   })
 
   it('keeps tabs opened while a replayed import fails to persist', async () => {
@@ -397,6 +405,24 @@ describe('cross-machine recovery renderer apply', () => {
     expect(state.recoveryImportKeyByWorktreeId[WT]).toBeUndefined()
   })
 
+  it('removes an imported file whose clean load only stamped its disk baseline, so a retry lands', async () => {
+    const { store, session, apply } = setup()
+    session.flush.mockImplementationOnce(async () => {
+      store.getState().setLastKnownDiskSignature('/repo1/wt/src/a.ts', 'loaded-disk-signature')
+      throw new Error('disk full')
+    })
+
+    expect(await apply(importOp())).toEqual({ requestId: 'r1', error: 'disk full' })
+    expect(store.getState().openFiles).toEqual([])
+    expect(store.getState().recoveryImportKeyByWorktreeId[WT]).toBeUndefined()
+
+    expect(await apply(importOp())).toEqual({
+      requestId: 'r1',
+      outcome: { ok: true, claimed: null }
+    })
+    expect(store.getState().openFiles.map((file) => file.id)).toEqual(['/repo1/wt/src/a.ts'])
+  })
+
   it('evaluates a retry only after the earlier import to that worktree rolls back', async () => {
     const { store, session, apply } = setup()
     let failFirstFlush!: (error: Error) => void
@@ -416,12 +442,13 @@ describe('cross-machine recovery renderer apply', () => {
 
     expect(await first).toEqual({ requestId: 'r1', error: 'disk full' })
     expect(await retry).toEqual({ requestId: 'r1', outcome: { ok: true, claimed: null } })
-    expect(session.set).toHaveBeenCalledTimes(2)
+    expect(session.set).toHaveBeenCalledTimes(3)
     const state = store.getState()
     expect(state.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-new'])
     expect(state.recoveryImportKeyByWorktreeId[WT]).toBe('key')
     expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toEqual(record)
-    expect(session.set.mock.calls[1][0].recoveryImportKeyByWorktreeId).toEqual({ [WT]: 'key' })
+    expect(session.set.mock.calls[1][0].recoveryImportKeyByWorktreeId ?? {}).toEqual({})
+    expect(session.set.mock.calls[2][0].recoveryImportKeyByWorktreeId).toEqual({ [WT]: 'key' })
   })
 
   it('binds an imported editor tab to its own file when another owner holds the path id', async () => {

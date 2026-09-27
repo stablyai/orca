@@ -223,6 +223,10 @@ async function serializedByDestination<T>(
   }
 }
 
+function persistSession(api: RecoveryPreloadApi, state: AppState): Promise<void> {
+  return persistWorkspaceSessionByHost(api.session, buildWorkspaceSessionPayload(state), state)
+}
+
 async function applyAndPersist(
   store: RecoveryStore,
   api: RecoveryPreloadApi,
@@ -239,12 +243,14 @@ async function applyAndPersist(
   const staged = store.getState()
   try {
     // Why: the host treats this reply as the durability boundary before resuming or reporting.
-    await persistWorkspaceSessionByHost(api.session, buildWorkspaceSessionPayload(staged), staged)
+    await persistSession(api, staged)
   } catch (error) {
-    // Why: main never receives a record claimed here, so only this rollback can restore it;
-    // a replay applied nothing, so rolling back would erase tabs opened since the import.
+    // Why: a replay applied nothing, so rolling back would erase tabs opened since the import.
     if (!outcome.alreadyApplied) {
       rollbackFailedRecoveryApply(store, op, before, staged)
+      // Why: main still holds the staged session and a coalesced or sibling write may already
+      // have committed it, so only writing the rollback keeps a reload from resurrecting the op.
+      await persistSession(api, store.getState())
     }
     throw error
   }
