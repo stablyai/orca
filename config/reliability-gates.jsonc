@@ -349,24 +349,28 @@
       "surfaces": [
         "agent trust IPC",
         "renderer agent preflight",
-        "Codex continuation launch admission"
+        "Codex continuation launch admission",
+        "main-process worktree startup trust",
+        "Codex launch and resume preparation"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "Actual main IPC handler, renderer preflight, session-continuation caller and config mutation queue with fake Electron bridge, config writer, launch and remote owner. Counts prove admission ordering only; no native PTY/CLI, actual config mutation or live provider evidence. Recognized native Codex launch preparation already awaits trust deeper in the stack.",
+      "coverageNotes": "Actual main IPC handler, renderer preflight, session-continuation caller and config mutation queue with fake Electron bridge, config writer, launch and remote owner, plus the actual main-process worktree-startup, Codex quick-launch-prep and Codex resume-prep modules with mocked trust writer, runtime home and hook service. Counts prove admission ordering and the per-call bound only; no native PTY/CLI, actual config mutation or live provider evidence.",
       "motivatingLinks": ["https://github.com/stablyai/orca/blob/main/src/main/ipc/agent-trust.ts"],
-      "invariant": "Trust preflight settles after the selected owner mutation settles, or after a bounded deadline if that mutation never settles; rejected, abandoned and SSH-unreachable writes leave the workspace untrusted and never fall back to local trust.",
-      "oracle": "Held local write or actual queue predecessor yields zero continuation launch calls until release, then exactly one; delayed local rejection settles successfully afterward. SSH awaits its remote writer and never invokes local trust. A never-settling local or SSH write resolves the handler at the deadline with a named warning, no leaked timer and no local fallback, and a rejection arriving after the deadline stays handled. An already-complete write admits the launch on microtasks with zero timers. Two concurrent launches for one workspace settle independently.",
+      "invariant": "Every Codex trust write a launch waits on settles before that launch proceeds, or is abandoned at a bounded deadline; rejected, abandoned and SSH-unreachable writes leave the workspace untrusted and never fall back to local trust.",
+      "oracle": "Held local write or actual queue predecessor yields zero continuation launch calls until release, then exactly one; delayed local rejection settles successfully afterward. SSH awaits its remote writer and never invokes local trust. A never-settling local or SSH write resolves the handler at the deadline with a named warning, no leaked timer and no local fallback, and a rejection arriving after the deadline stays handled. An already-complete write admits the launch on microtasks with zero timers. Two concurrent launches for one workspace settle independently. In the main-process worktree-startup, Codex quick-launch-prep and Codex resume-prep modules a never-settling write resolves the caller at the deadline, still yields the launch home or resume outcome, leaks no timer, and writes no other preset artifact; the write stays ordered before the runtime-home and hook-repair steps the spawn waits on.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts src/main/startup/codex-launch-trust-write-deadline.test.ts src/main/runtime/runtime-worktree-agent-startup.test.ts"
       ],
       "testFiles": [
         "tests/e2e/agent-trust-completion.unit.test.ts",
         "src/renderer/src/lib/agent-trust-preflight.test.ts",
         "src/renderer/src/lib/launch-agent-session-continuation.test.ts",
-        "src/main/remote-agent-trust-presets.test.ts"
+        "src/main/remote-agent-trust-presets.test.ts",
+        "src/main/startup/codex-launch-trust-write-deadline.test.ts",
+        "src/main/runtime/runtime-worktree-agent-startup.test.ts"
       ],
       "assertionRefs": [
         {
@@ -382,6 +386,23 @@
             "settles two concurrent launches for the same workspace independently",
             "keeps remote failures best-effort without a local fallback"
           ]
+        },
+        {
+          "file": "src/main/startup/codex-launch-trust-write-deadline.test.ts",
+          "assertions": [
+            "bounds a never-settling write in quick-launch prep and still returns the launch home",
+            "keeps the quick-launch trust write ahead of the home the spawn waits on",
+            "bounds a never-settling write in resume prep and still resolves the resume home",
+            "keeps the resume trust write ahead of the hook repair that precedes the spawn",
+            "contains a rejected resume trust write without trusting the workspace elsewhere"
+          ]
+        },
+        {
+          "file": "src/main/runtime/runtime-worktree-agent-startup.test.ts",
+          "assertions": [
+            "waits for the Codex trust write before resolving",
+            "bounds a never-settling Codex trust write instead of holding the launch open"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -389,10 +410,10 @@
           "date": "2026-09-27",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts src/main/startup/codex-launch-trust-write-deadline.test.ts src/main/runtime/runtime-worktree-agent-startup.test.ts",
           "result": "passed",
-          "durationSeconds": 0.199,
-          "summary": "36 tests across four suites pass: 15 in the trust-completion suite, of which four are the deadline cases this candidate adds, plus 8 renderer preflight, 7 continuation-launch and 6 remote-preset tests. No native launch, PTY or actual config write."
+          "durationSeconds": 0.413,
+          "summary": "53 tests across six suites pass: 15 trust-completion (four deadline cases), 8 renderer preflight, 7 continuation-launch, 6 remote-preset, 5 Codex launch/resume prep deadline and 12 worktree-startup tests. Six of those are the bound and ordering cases this candidate adds. No native launch, PTY or actual config write."
         }
       ],
       "runtimeBudget": {
@@ -405,21 +426,21 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Re-run at this head against the same 15-test suite. Pre-await implementation: 5 fail/10 pass - the three launch-admission orderings plus the never-settling local and SSH cases, the SSH one only by exhausting the test timeout. Unbounded-await implementation: 3 fail/12 pass - never-settling local write, post-deadline rejection and never-settling SSH write all hang to the test timeout. The already-complete-write case passes unbounded too, so it is a timer control, not a red. This head: 15 pass, 36 across the four suites."
+        "evidence": "Trust-completion suite, re-run at the earlier head. Pre-await implementation: 5 fail/10 pass - the three launch-admission orderings plus the never-settling local and SSH cases, the SSH one only by exhausting the test timeout. Unbounded-await implementation: 3 fail/12 pass - never-settling local write, post-deadline rejection and never-settling SSH write all hang to the test timeout. The already-complete-write case passes unbounded too, so it is a timer control, not a red. Launch-prep and worktree-startup suites, this head: with the three call sites reverted to a bare await, 3 fail/14 pass - the quick-launch, resume and worktree-startup never-settling cases each hang to the 30s vitest timeout; restored, 17 pass. Whole gate at this head: 53 pass across six suites."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "No new subprocess, polling, retry or trust operation. Existing queue/write await is newly visible to IPC/caller and is capped by one per-call deadline timer, cleared on settlement, so a stuck predecessor degrades to the agent's own trust prompt instead of an indefinite caller wait. Reliability fix, no performance gain claim."
+        "evidence": "No new subprocess, polling, retry or trust operation. Each awaited trust write is capped by one per-call deadline timer, cleared on settlement, so a stuck predecessor degrades to the agent's own trust prompt instead of an indefinite caller wait. Five call sites now share that one timer shape; no site gained a second write or a retry. Reliability fix, no performance gain claim."
       },
       "knownGaps": [
         "CI soak pending.",
         "No live Codex CLI, PTY, trust prompt, native Electron app or actual trust-config mutation was exercised.",
         "Windows/Linux/WSL/daemon/remote-runtime behavior was not executed; remote owner is mocked. No routing/wire/PTY ownership change.",
-        "Recognized native Codex launch preparation already awaits trust deeper; do not infer all actual launches currently race.",
         "Abandoning a write at the deadline does not cancel it; a legitimate slow write (WSL grant sessions run to 30s) can land after the launch already started, restoring the pre-fix ordering for that case only.",
         "The deadline value is a reasoned cap over observed lane holders, not a measured p95.",
-        "Only the trust IPC handler is exercised. The candidate also bounds the local worktree-startup write in src/main/ipc/worktree-remote.ts, and no test in these suites covers that call site.",
-        "The cap is per call site, not global: the awaited Codex trust writes in runtime/runtime-worktree-agent-startup.ts, startup/codex-launch-preparation.ts and startup/codex-session-resume-launch.ts remain unbounded, so the bounded-wait invariant covers this gate's surfaces only."
+        "All five awaited Codex trust writes are now bounded by the same helper: the agentTrust:markTrusted IPC handler, ipc/worktree-remote.ts, runtime/runtime-worktree-agent-startup.ts, startup/codex-launch-preparation.ts and startup/codex-session-resume-launch.ts. Four have a test in these suites; the ipc/worktree-remote.ts site is bounded but still has no test here.",
+        "The cap remains per call site, not global. Two launches racing the same wedged lane each wait their own deadline, so the worst case a user can see is one deadline per launch, not one shared cap.",
+        "The remote (SSH) trust write reached through markRemoteWorktreeTrusted in runtime/runtime-worktree-agent-startup.ts is still awaited unbounded; only the IPC handler's remote write is capped. That path is preset-agnostic and out of this change's Codex scope."
       ],
       "promotionCriteria": [
         "Retain pending-write/queue/launch-boundary red-green evidence and remote owner assertions; obtain actual platform/session evidence and CI soak before promotion."
