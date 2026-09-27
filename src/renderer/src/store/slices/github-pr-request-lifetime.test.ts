@@ -105,6 +105,7 @@ describe('pull-request lookup ownership after newer settlement', () => {
       }
       await first
       const activeAfter = inflightPRRequests.get(key)
+      const cachedAfterStale = store.getState().prCache[key]?.data?.number
       const refreshStateAfter = store.getState().prRefreshStates[key]
       vi.setSystemTime(4000)
       const follower = store.getState().fetchPRForBranch(path, branch, secondOptions)
@@ -116,9 +117,12 @@ describe('pull-request lookup ownership after newer settlement', () => {
       const results = await Promise.all([third, follower])
 
       expect(activeAfter).toBe(activeBefore)
+      // The stale lookup asked for PR 10; only the live lookup may publish.
+      expect(cachedAfterStale).toBe(20)
       expect(refreshStateAfter).toBeUndefined()
       expect(requestCount).toBe(3)
       expect(results.map((result) => result?.number)).toEqual([30, 30])
+      expect(store.getState().prCache[key]?.data?.number).toBe(30)
       expect(inflightPRRequests.size).toBe(0)
       expect(prRequestGenerations.size).toBe(0)
       if (route === 'runtime') {
