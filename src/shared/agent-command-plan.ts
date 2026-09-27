@@ -4,18 +4,26 @@ import {
   type CommandTemplateBackslash
 } from './commit-message-prompt'
 
+type AgentBinaryPlan =
+  | { ok: true; binary: string; prefixArgs: string[]; env?: Record<string, string> }
+  | { ok: false; error: string }
+
 export function planAgentBinary(
   defaultBinary: string,
   commandOverride: string | undefined,
   backslash: CommandTemplateBackslash = 'escape'
-):
-  | { ok: true; binary: string; prefixArgs: string[]; env?: Record<string, string> }
-  | { ok: false; error: string } {
+): AgentBinaryPlan {
   const command = commandOverride?.trim()
-  if (!command) {
-    return { ok: true, binary: defaultBinary, prefixArgs: [] }
-  }
+  return command
+    ? planAgentCommand(command, backslash)
+    : { ok: true, binary: defaultBinary, prefixArgs: [] }
+}
 
+/** Splits a typed agent command into leading `NAME=value` env, the binary, and its fixed args. */
+export function planAgentCommand(
+  command: string,
+  backslash: CommandTemplateBackslash = 'escape'
+): AgentBinaryPlan {
   const tokenized = tokenizeCustomCommandTemplate(command, backslash)
   if (!tokenized.ok) {
     return { ok: false, error: `Agent command override is invalid: ${tokenized.error}` }

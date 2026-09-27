@@ -373,14 +373,8 @@ test('exports a workspace from one profile and imports it into another', async (
   test.setTimeout(300_000)
   const repoA = createSeededTestRepo()
   const profileA = createRestartSession(testInfo, { ORCA_BACKGROUND_LAUNCH: '1' })
-  const fakeClaude = createFakeClaudeCli(
-    path.join(testInfo.outputDir, 'fake-claude'),
-    process.env.PATH ?? ''
-  )
-  const profileB = createRestartSession(testInfo, {
-    ORCA_BACKGROUND_LAUNCH: '1',
-    PATH: fakeClaude.searchPath
-  })
+  const fakeClaude = createFakeClaudeCli(path.join(testInfo.outputDir, 'fake-claude'))
+  const profileB = createRestartSession(testInfo, { ORCA_BACKGROUND_LAUNCH: '1' })
   const running = new Set<ElectronApplication>()
   const launch = async (profile: typeof profileA) => {
     const launched = await profile.launch()
@@ -465,9 +459,9 @@ test('exports a workspace from one profile and imports it into another', async (
 
     let b = await launch(profileB)
     await waitForSessionReady(b.page)
-    // Why an override on top of PATH: the pane's login shell rebuilds PATH from the user's rc
-    // files, so a bare `claude` there resolves the machine's real CLI. The `--help` probe runs
-    // in main and still reads the fake off PATH.
+    // Why an override, not PATH: the pane's login shell rebuilds PATH from the user's rc files,
+    // so a bare `claude` there resolves the machine's real CLI. Only the override reaches the
+    // fake, so its `--help` ledger entry proves the probe follows the launch command.
     await b.page.evaluate(
       async ({ agentCommand, terminalWindowsShell }) => {
         await window.__store!.getState().updateSettings({
@@ -533,6 +527,9 @@ test('exports a workspace from one profile and imports it into another', async (
       '--append-system-prompt',
       APPEND_SYSTEM_PROMPT
     ])
+    expect(
+      fakeClaude.invocations().filter((invocation) => invocation.argv.includes('--help'))
+    ).toHaveLength(1)
     await expect(placeholder(b.page, bound[PROVIDER.sleepA].localPaneKey)).toBeVisible()
     await expect(placeholder(b.page, bound[PROVIDER.sleepB].localPaneKey)).toBeVisible()
     await expect(placeholder(b.page, bound[PROVIDER.live].localPaneKey)).toHaveCount(0)
