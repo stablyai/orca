@@ -401,6 +401,13 @@ call it.
 - Hydration honesty: a restored non-done row is `restoredUnconfirmed` and is
   never fresh.
 
+Activity grouping follows a fresh current row. A working row that freshness
+did not promote — the display window expired, or the row was only restored and
+not confirmed — reads as unverifiable (No recent update), for git worktrees and
+folder workspaces. It does not stay Working, and it does not fall through to an
+older completion. A thread with no status evidence is unverifiable. This is
+presentation policy; it does not change remote-mirror authority or ordering.
+
 ## PR 1b reliability contract
 
 - **Invariant (`agent-session.status-host-ownership`):** each execution host has
