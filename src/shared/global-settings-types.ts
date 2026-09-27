@@ -26,6 +26,7 @@ import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
+import type { AgentPostPasteSubmitInput } from './tui-agent-post-paste-submit'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -413,6 +414,8 @@ export type GlobalSettings = {
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+  /** Per-agent key Orca sends after paste-submit; missing values use Enter. */
+  agentPostPasteSubmitInputs?: Partial<Record<TuiAgent, AgentPostPasteSubmitInput>>
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup doesn't reinstall global agent hook entries the user just removed. */
