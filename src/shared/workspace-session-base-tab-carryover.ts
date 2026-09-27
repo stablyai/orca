@@ -79,7 +79,10 @@ export function hostWonTabRow(
  */
 export type CarriedSurface = {
   contentType: 'editor' | 'browser'
+  /** The id hydration will look the entry up by; an editor entry's tab id is the same value. */
   entityId: string
+  /** Other ids the base's own entry may name the same entity by, most specific first. */
+  baseEntityIds?: readonly string[]
   build?: (placement: { groupId: string; sortOrder: number }) => Tab
 }
 
@@ -193,13 +196,25 @@ function surfaceAdditions(
   // Why after every existing entry: unified hydration orders a row by `sortOrder`.
   let sortOrder = Math.max(-1, ...row.map((entry) => entry.sortOrder))
   for (const surface of surfaces ?? []) {
-    const names = (entry: Tab): boolean =>
-      entry.contentType === surface.contentType && entry.entityId === surface.entityId
-    if (row.some(names)) {
+    const names =
+      (entityId: string) =>
+      (entry: Tab): boolean =>
+        entry.contentType === surface.contentType && entry.entityId === entityId
+    if (row.some(names(surface.entityId))) {
       continue
     }
-    const own = baseRow?.find(names)
-    const entry = own ? { ...own, groupId } : surface.build?.({ groupId, sortOrder: ++sortOrder })
+    const own = [surface.entityId, ...(surface.baseEntityIds ?? [])]
+      .map((entityId) => baseRow?.find(names(entityId)))
+      .find((entry) => entry !== undefined)
+    // Why an editor entry is re-keyed: the base's own id may be a form hydration now gives a
+    // different file, and an editor tab's id is its entity id.
+    const rekeyed =
+      own && surface.contentType === 'editor'
+        ? { ...own, id: surface.entityId, entityId: surface.entityId }
+        : own
+    const entry = rekeyed
+      ? { ...rekeyed, groupId }
+      : surface.build?.({ groupId, sortOrder: ++sortOrder })
     if (entry) {
       additions.push(entry)
     }

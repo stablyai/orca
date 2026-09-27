@@ -1,4 +1,6 @@
 import type { BrowserWorkspace } from './browser-workspace-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
+import { buildOwnedEditorFileId, runtimeOwnerKey } from './editor-file-id'
 import type { Tab } from './tab-types'
 import type { PersistedOpenFile, WorkspaceSessionState } from './workspace-session-state-types'
 import { newestHostEvidenceAt, type CarriedSurface } from './workspace-session-base-tab-carryover'
@@ -42,14 +44,21 @@ export function carryBaseEntriesIntoHostRows(
       if (carried.length === 0) {
         continue
       }
-      openFilesByWorktree[key] = [...hostFiles, ...carried]
-      for (const file of carried) {
+      const row = [...hostFiles, ...carried]
+      openFilesByWorktree[key] = row
+      carried.forEach((file, index) => {
+        const tabId = hydratedEditorTabId(file, key, row.slice(0, hostFiles.length + index))
         addSurface(key, {
           contentType: 'editor',
-          entityId: file.filePath,
-          build: (placement) => editorEntryFor(file, placement)
+          entityId: tabId,
+          // Why every form: the base persisted the entry under whichever id the file had then.
+          baseEntityIds: [
+            buildOwnedEditorFileId(file.filePath, key, file.runtimeEnvironmentId),
+            file.filePath
+          ],
+          build: (placement) => editorEntryFor(file, tabId, placement)
         })
-      }
+      })
     }
     next.openFilesByWorktree = openFilesByWorktree
   }
@@ -96,7 +105,30 @@ function replacedRowKeys(
 
 /** Hydration keys a restored file by path within its runtime, so the same pair is one file. */
 function openFileIdentity(file: PersistedOpenFile): string {
-  return `${file.runtimeEnvironmentId ?? ''}\u0000${file.filePath}`
+  return `${runtimeOwnerKey(file.runtimeEnvironmentId) ?? ''}\u0000${file.filePath}`
+}
+
+/**
+ * The unified tab id that `hydrate-editor-session.ts` will match to a carried file, given the files
+ * hydration walks before it in the same row. Without it a draft restores with no tab to show it.
+ *  - A runtime-owned file, or any file of the floating workspace, hydrates under its owned id.
+ *  - A local file hydrates under its path. But when an earlier file holds the same path for a
+ *    runtime, hydration reads the path as taken: it moves a tab named by the bare path to that
+ *    earlier file, and moves one named by the local owned id to this one.
+ */
+function hydratedEditorTabId(
+  file: PersistedOpenFile,
+  key: string,
+  earlier: readonly PersistedOpenFile[]
+): string {
+  const owned = buildOwnedEditorFileId(file.filePath, key, file.runtimeEnvironmentId)
+  if (key === FLOATING_TERMINAL_WORKTREE_ID || runtimeOwnerKey(file.runtimeEnvironmentId)) {
+    return owned
+  }
+  const pathTaken = earlier.some(
+    (other) => other.filePath === file.filePath && runtimeOwnerKey(other.runtimeEnvironmentId)
+  )
+  return pathTaken ? owned : file.filePath
 }
 
 function unsavedBaseFiles(
@@ -135,11 +167,12 @@ function newerBaseBrowsers(
 /** Built the way legacy hydration builds an editor entry, which is what a carried file lacked. */
 function editorEntryFor(
   file: PersistedOpenFile,
+  tabId: string,
   { groupId, sortOrder }: { groupId: string; sortOrder: number }
 ): Tab {
   return {
-    id: file.filePath,
-    entityId: file.filePath,
+    id: tabId,
+    entityId: tabId,
     groupId,
     worktreeId: file.worktreeId,
     contentType: 'editor',
