@@ -9,6 +9,7 @@ import {
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './orca-runtime-postlude'
 import { withTimeout } from './runtime-async-boundaries'
+import { hasUnfinishedKimiTurn } from './tui-idle-evidence'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptPreview
@@ -53,6 +54,11 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
     if (providerTimeoutMs < 1) {
       return
     }
+    const readPtyId =
+      this.getLivePtyForHandle(waiter.handle)?.pty.ptyId ??
+      this.getLiveLeafForHandle(waiter.handle).leaf.ptyId
+    const readIncarnationId =
+      (readPtyId ? this.ptysById.get(readPtyId)?.incarnationId : null) ?? null
     void withTimeout(
       this.readTerminal(waiter.handle, agent === 'antigravity' ? { screen: true } : {}, {
         timeoutMs: providerTimeoutMs,
@@ -72,16 +78,35 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
         ) {
           return
         }
+        // Both identity and status may change while the screen read is in flight.
+        const ptyId =
+          this.getLivePtyForHandle(waiter.handle)?.pty.ptyId ??
+          this.getLiveLeafForHandle(waiter.handle).leaf.ptyId
+        const liveIncarnationId = (ptyId ? this.ptysById.get(ptyId)?.incarnationId : null) ?? null
+        // A replacement can retain both its handle and PTY id, but not its predecessor's screen.
+        if (ptyId !== readPtyId || liveIncarnationId !== readIncarnationId) {
+          return
+        }
+        const liveAgent = this.getPaneAgentForTuiIdle(ptyId)
         const snapshotText =
-          agent === 'antigravity'
+          liveAgent === 'antigravity'
             ? [...projection.tail, projection.draft ?? ''].join('\n')
             : projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
         const ready =
-          agent === 'antigravity'
+          liveAgent === 'antigravity'
             ? isAntigravityReadyPromptSnapshot(snapshotText)
-            : isKnownReadyPromptPreview(snapshotText)
+            : isKnownReadyPromptPreview(snapshotText, liveAgent)
         if (!blockedReason && !ready) {
+          return
+        }
+        if (
+          !blockedReason &&
+          hasUnfinishedKimiTurn(
+            liveAgent,
+            (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null
+          )
+        ) {
           return
         }
         const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)

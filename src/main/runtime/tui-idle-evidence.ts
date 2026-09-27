@@ -60,6 +60,14 @@ export function hasFreshWorkingFirstPartyStatus(status: FirstPartyAgentStatus): 
   return isFreshNonDoneAgentStatus(status ?? undefined)
 }
 
+/** Status age cannot prove Kimi finished; completion or a provider reset clears this veto. */
+export function hasUnfinishedKimiTurn(
+  agent: TuiAgent | null | undefined,
+  status: FirstPartyAgentStatus
+): boolean {
+  return agent === 'kimi' && status !== null && status.state !== 'done'
+}
+
 /**
  * Whether a name-only title from `agent` may be held to the tier-3 quiescence demand.
  *
@@ -160,6 +168,10 @@ export function hasQuietMuseReadyPrompt(
 
 /** The one place the tiers are combined; every satisfaction site routes here. */
 export function isTuiIdleSatisfied(input: TuiIdleSatisfactionInput): boolean {
+  // Kimi's startup frame can remain in the tail after its first turn begins.
+  if (hasUnfinishedKimiTurn(input.agent, input.firstPartyStatus)) {
+    return false
+  }
   // Why the title before the body: both are tier 1, so either settles, but the title is a
   // memoized lookup and the body is a fresh multi-KB scan. Same verdict, cheaper order.
   if (hasExplicitIdleTitle(input.record, input.rendererTitle) || input.readPositiveBodyEvidence()) {
