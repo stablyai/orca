@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from './constants'
 import type { Tab, TabGroup } from './tab-types'
-import type { TerminalTab } from './terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { adoptStrandedHostPartitionSession } from './workspace-session-stranded-partition-adoption'
+import { worktreeWorkspaceKey } from './workspace-scope'
 
 const WORKTREE_ID = 'repo-remote::/remote/checkout/feature'
 
@@ -240,5 +241,96 @@ describe('adoptStrandedHostPartitionSession terminal tab ownership', () => {
 
     expect(result.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['l1'])
     expect(result.adoptedWorkspaceIds.has(WORKTREE_ID)).toBe(false)
+  })
+})
+
+describe('adoptStrandedHostPartitionSession host-won tab records', () => {
+  function layout(ptyId: string): TerminalLayoutSnapshot {
+    return {
+      root: { type: 'leaf', leafId: 'leaf' },
+      activeLeafId: 'leaf',
+      expandedLeafId: null,
+      ptyIdsByLeafId: { leaf: ptyId }
+    }
+  }
+
+  it('takes the host tab-keyed and pane-keyed records for a tab the host copy wins', () => {
+    const result = adoptStrandedHostPartitionSession(
+      session({
+        tabsByWorktree: { [WORKTREE_ID]: [tab('shared'), tab('live-local')] },
+        terminalLayoutsByTabId: {
+          shared: layout('stale-pty'),
+          'live-local': layout('local-pty')
+        },
+        remoteSessionIdsByTabId: { shared: 'stale-session', 'live-local': 'local-session' },
+        terminalPtyIncarnationsByPaneKey: { 'shared:leaf': 'stale-incarnation' }
+      }),
+      session({
+        tabsByWorktree: { [WORKTREE_ID]: [tab('shared')] },
+        terminalLayoutsByTabId: { shared: layout('live-pty') },
+        remoteSessionIdsByTabId: { shared: 'live-session' },
+        terminalPtyIncarnationsByPaneKey: { 'shared:leaf': 'live-incarnation' }
+      })
+    )
+
+    expect(result.session.terminalLayoutsByTabId.shared?.ptyIdsByLeafId).toEqual({
+      leaf: 'live-pty'
+    })
+    expect(result.session.terminalLayoutsByTabId['live-local']?.ptyIdsByLeafId).toEqual({
+      leaf: 'local-pty'
+    })
+    expect(result.session.remoteSessionIdsByTabId).toEqual({
+      shared: 'live-session',
+      'live-local': 'local-session'
+    })
+    expect(result.session.terminalPtyIncarnationsByPaneKey).toEqual({
+      'shared:leaf': 'live-incarnation'
+    })
+  })
+
+  it('adds a carried terminal to the host group tab order', () => {
+    const result = adoptStrandedHostPartitionSession(
+      session({ tabsByWorktree: { [WORKTREE_ID]: [tab('live-local')] }, unifiedTabs: {} }),
+      session({
+        tabsByWorktree: { [WORKTREE_ID]: [tab('h1')] },
+        unifiedTabs: { [WORKTREE_ID]: [unified('h1', 'g1')] },
+        tabGroups: { [WORKTREE_ID]: [group('g1', ['h1'])] },
+        activeGroupIdByWorktree: { [WORKTREE_ID]: 'g1' }
+      })
+    )
+
+    expect(result.session.tabGroups?.[WORKTREE_ID]?.[0]?.tabOrder).toEqual(['h1', 'live-local'])
+  })
+
+  it("stamps a synthesized unified entry with the terminal's own worktree id", () => {
+    const key = worktreeWorkspaceKey(WORKTREE_ID)
+    const result = adoptStrandedHostPartitionSession(
+      session({ tabsByWorktree: { [key]: [tab('live-local')] }, unifiedTabs: {} }),
+      session({
+        tabsByWorktree: { [key]: [tab('h1')] },
+        unifiedTabs: { [key]: [{ ...unified('h1', 'g1') }] },
+        tabGroups: { [key]: [group('g1', ['h1'])] }
+      })
+    )
+
+    const carried = result.session.unifiedTabs?.[key]?.find((e) => e.entityId === 'live-local')
+    expect(carried?.worktreeId).toBe(WORKTREE_ID)
+  })
+
+  it('drops the unified entries of discarded local tabs when the host holds no unified row', () => {
+    const result = adoptStrandedHostPartitionSession(
+      session({
+        tabsByWorktree: { [WORKTREE_ID]: [tab('old', null)] },
+        unifiedTabs: { [WORKTREE_ID]: [unified('old', 'g-local')] },
+        tabGroups: { [WORKTREE_ID]: [group('g-local', ['old'])] },
+        activeGroupIdByWorktree: { [WORKTREE_ID]: 'g-local' }
+      }),
+      session({ tabsByWorktree: { [WORKTREE_ID]: [{ ...tab('h1'), createdAt: 10 }] } })
+    )
+
+    expect(
+      result.session.unifiedTabs?.[WORKTREE_ID]?.map((entry) => [entry.entityId, entry.groupId])
+    ).toEqual([['h1', 'g-local']])
+    expect(result.session.tabGroups?.[WORKTREE_ID]?.[0]?.tabOrder).toEqual(['h1'])
   })
 })

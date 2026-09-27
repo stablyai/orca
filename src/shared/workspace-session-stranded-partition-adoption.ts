@@ -8,12 +8,13 @@ import { isWorktreeHostIdentity as isHostQualifiedSessionKey } from './worktree/
 import {
   buildWorktreeIdByFileId,
   buildWorktreeIdByTabId,
+  tabIdForPaneKey,
   worktreeIdForPaneKey
 } from './workspace-session-host-records'
-import type { TerminalTab } from './terminal-tab-types'
 import {
-  attachCarriedTabsToUnifiedRows,
-  baseTabsTheHostNeverListed
+  hostWonTabRow,
+  reconcileHostWonUnifiedRows,
+  type HostWonTabRow
 } from './workspace-session-base-tab-carryover'
 
 /**
@@ -311,7 +312,8 @@ export function adoptStrandedHostPartitionSession(
     contested.has(normalizeWorkspaceSessionKeyToWorkspaceId(key))
 
   const next: WorkspaceSessionState = { ...base, tabsByWorktree: { ...base.tabsByWorktree } }
-  const carriedByKey = new Map<string, TerminalTab[]>()
+  const hostWonRows = new Map<string, HostWonTabRow>()
+  const hostWonTabIds = new Set<string>()
   for (const [key, tabs] of Object.entries(host.tabsByWorktree ?? {})) {
     if (!adopts(key) || !Array.isArray(tabs)) {
       continue
@@ -321,10 +323,11 @@ export function adoptStrandedHostPartitionSession(
     // "the base has tabs here" is what let #12721's empty local list win over the host's real one
     // whenever the id happened to be contested.
     if (!isContested(key) || hostHasNothingFor(next.tabsByWorktree[key])) {
-      const carried = baseTabsTheHostNeverListed(next.tabsByWorktree[key], tabs, base, host, key)
-      next.tabsByWorktree[key] = carried.length > 0 ? [...tabs, ...carried] : tabs
-      if (carried.length > 0) {
-        carriedByKey.set(key, carried)
+      const row = hostWonTabRow(next.tabsByWorktree[key], tabs, base, host, key)
+      next.tabsByWorktree[key] = row.tabs
+      hostWonRows.set(key, row)
+      for (const terminal of tabs) {
+        hostWonTabIds.add(terminal.id)
       }
     }
   }
@@ -377,12 +380,24 @@ export function adoptStrandedHostPartitionSession(
         }
         break
       }
+      // Why replace for a host-won tab: its host row is the live copy, and a base layout or
+      // reattach id beside it would pair the live tab with a dead relay's PTY.
       case 'tabKeyed':
-        adoptRecord(next, host, field, (key) => adoptsResolved(worktreeIdByTabId.get(key)))
+        adoptRecord(
+          next,
+          host,
+          field,
+          (key) => adoptsResolved(worktreeIdByTabId.get(key)),
+          (key) => hostWonTabIds.has(key)
+        )
         break
       case 'paneKeyed':
-        adoptRecord(next, host, field, (key) =>
-          adoptsResolved(worktreeIdForPaneKey(worktreeIdByTabId, key))
+        adoptRecord(
+          next,
+          host,
+          field,
+          (key) => adoptsResolved(worktreeIdForPaneKey(worktreeIdByTabId, key)),
+          (key) => hostWonTabIds.has(tabIdForPaneKey(key) ?? '')
         )
         break
       case 'sleepingAgentKeyed':
@@ -406,7 +421,7 @@ export function adoptStrandedHostPartitionSession(
         break
     }
   }
-  attachCarriedTabsToUnifiedRows(next, base, host, carriedByKey)
+  reconcileHostWonUnifiedRows(next, base, hostWonRows)
   // Why contested ids are withheld: the write path would route the whole bare id here, carrying the
   // co-claimant's rows into this host's partition — the loss the gap-fill above exists to prevent.
   const adoptedWorkspaceIds = new Set(

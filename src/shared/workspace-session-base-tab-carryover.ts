@@ -10,7 +10,7 @@ import { normalizeWorkspaceSessionKeyToWorkspaceId } from './workspace-scope'
  * the host's newest evidence for this workspace. Why the time bound: a tab parked on an unresolved
  * host has no PTY yet and leaves no persisted marker; legacy residue is older than the host's rows.
  */
-export function baseTabsTheHostNeverListed(
+function baseTabsTheHostNeverListed(
   baseTabs: readonly TerminalTab[] | undefined,
   hostTabs: readonly TerminalTab[],
   base: WorkspaceSessionState,
@@ -49,49 +49,90 @@ function newestHostEvidenceAt(
   return newest
 }
 
-/**
- * Give each carried terminal a unified entry: a unified-format session renders only terminals listed
- * there, and a bare row hydrates with no surface and loses its PTY lease (#23390). Group repair
- * during hydration re-homes an entry whose group does not exist.
- */
-export function attachCarriedTabsToUnifiedRows(
-  next: WorkspaceSessionState,
+export type HostWonTabRow = {
+  tabs: TerminalTab[]
+  carried: readonly TerminalTab[]
+  /** Base tab ids the host row replaced and did not carry. */
+  discardedTabIds: ReadonlySet<string>
+}
+
+/** The row a populated host tab row leaves behind once it replaces the base's. */
+export function hostWonTabRow(
+  baseTabs: readonly TerminalTab[] | undefined,
+  hostTabs: TerminalTab[],
   base: WorkspaceSessionState,
   host: WorkspaceSessionState,
-  carriedByKey: ReadonlyMap<string, readonly TerminalTab[]>
+  workspaceKey: string
+): HostWonTabRow {
+  const carried = baseTabsTheHostNeverListed(baseTabs, hostTabs, base, host, workspaceKey)
+  const tabs = carried.length > 0 ? [...hostTabs, ...carried] : hostTabs
+  const kept = new Set(tabs.map((terminal) => terminal.id))
+  const discardedTabIds = new Set(
+    (baseTabs ?? []).map((terminal) => terminal.id).filter((id) => !kept.has(id))
+  )
+  return { tabs, carried, discardedTabIds }
+}
+
+/**
+ * Line the unified surface up with a row the host won: a unified-format session renders only the
+ * terminals listed there, so a tab without an entry loses its PTY lease (#23390), and a discarded
+ * base tab's entry would keep showing a closed tab when the host supplied no unified row of its own.
+ */
+export function reconcileHostWonUnifiedRows(
+  next: WorkspaceSessionState,
+  base: WorkspaceSessionState,
+  rowsByKey: ReadonlyMap<string, HostWonTabRow>
 ): void {
-  if (carriedByKey.size === 0 || !next.unifiedTabs) {
+  if (rowsByKey.size === 0 || !next.unifiedTabs) {
     return
   }
   const unifiedTabs = { ...next.unifiedTabs }
-  for (const [key, carried] of carriedByKey) {
-    const row = unifiedTabs[key] ?? []
-    const present = new Set(row.map((tab) => tab.entityId))
-    const groupId =
-      host.activeGroupIdByWorktree?.[key] ?? host.tabGroups?.[key]?.[0]?.id ?? `carried:${key}`
+  const tabGroups = next.tabGroups ? { ...next.tabGroups } : undefined
+  for (const [key, { tabs, carried, discardedTabIds }] of rowsByKey) {
+    const row = (unifiedTabs[key] ?? []).filter(
+      (entry) => entry.contentType !== 'terminal' || !discardedTabIds.has(entry.entityId)
+    )
+    const present = new Set(row.map((entry) => entry.entityId))
+    const groups = tabGroups?.[key]
+    const groupId = next.activeGroupIdByWorktree?.[key] ?? groups?.[0]?.id ?? `carried:${key}`
+    const carriedIds = new Set(carried.map((terminal) => terminal.id))
     const additions: Tab[] = []
-    for (const terminal of carried) {
+    for (const terminal of tabs) {
       if (present.has(terminal.id)) {
         continue
       }
-      const own = base.unifiedTabs?.[key]?.find(
-        (tab) => tab.contentType === 'terminal' && tab.entityId === terminal.id
-      )
-      additions.push(own ? { ...own, groupId } : unifiedEntryFor(terminal, key, groupId))
+      const own = carriedIds.has(terminal.id)
+        ? base.unifiedTabs?.[key]?.find(
+            (entry) => entry.contentType === 'terminal' && entry.entityId === terminal.id
+          )
+        : undefined
+      additions.push(own ? { ...own, groupId } : unifiedEntryFor(terminal, groupId))
     }
-    if (additions.length > 0) {
+    if (additions.length > 0 || row.length !== (unifiedTabs[key]?.length ?? 0)) {
       unifiedTabs[key] = [...row, ...additions]
+    }
+    if (tabGroups && groups) {
+      const addedIds = additions.map((entry) => entry.id)
+      tabGroups[key] = groups.map((group) => {
+        const tabOrder = group.tabOrder.filter((tabId) => !discardedTabIds.has(tabId))
+        return group.id === groupId
+          ? { ...group, tabOrder: [...tabOrder, ...addedIds] }
+          : { ...group, tabOrder }
+      })
     }
   }
   next.unifiedTabs = unifiedTabs
+  if (tabGroups) {
+    next.tabGroups = tabGroups
+  }
 }
 
-function unifiedEntryFor(terminal: TerminalTab, worktreeId: string, groupId: string): Tab {
+function unifiedEntryFor(terminal: TerminalTab, groupId: string): Tab {
   return {
     id: terminal.id,
     entityId: terminal.id,
     groupId,
-    worktreeId,
+    worktreeId: terminal.worktreeId,
     contentType: 'terminal',
     label: terminal.title,
     customLabel: terminal.customTitle,

@@ -54,14 +54,19 @@ export function extendWorktreeIdByTabId(
   return byTab
 }
 
-/** The workspace a pane key belongs to. A pane key is `<tabId>:<leafId>`; both the split and the
+/** The tab a pane key belongs to. A pane key is `<tabId>:<leafId>`; both the split and the
  *  stranded-partition adoption resolve it here so neither can parse it its own way. */
+export function tabIdForPaneKey(paneKey: string): string | undefined {
+  const separator = paneKey.lastIndexOf(':')
+  return separator > 0 ? paneKey.slice(0, separator) : undefined
+}
+
 export function worktreeIdForPaneKey(
   worktreeIdByTabId: Map<string, string>,
   paneKey: string
 ): string | undefined {
-  const separator = paneKey.lastIndexOf(':')
-  return separator > 0 ? worktreeIdByTabId.get(paneKey.slice(0, separator)) : undefined
+  const tabId = tabIdForPaneKey(paneKey)
+  return tabId === undefined ? undefined : worktreeIdByTabId.get(tabId)
 }
 
 export function buildWorktreeIdByFileId(state: WorkspaceSessionState): Map<string, string> {
