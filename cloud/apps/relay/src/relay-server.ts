@@ -384,7 +384,11 @@ export function createRelayServer(
                     code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL
                   })
                 )
-                webSocket.close(RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'invalid invite')
+                closeRelayWebSocket(
+                  webSocket,
+                  RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
+                  'invalid invite'
+                )
                 return
               }
               phoneAdmission?.hostData.release()
@@ -397,7 +401,7 @@ export function createRelayServer(
                   assignmentEpoch: assignment.assignmentEpoch
                 })
               )
-              webSocket.close(RELAY_CLOSE_CODE.DRAINING, 'connect to assigned cell')
+              closeRelayWebSocket(webSocket, RELAY_CLOSE_CODE.DRAINING, 'connect to assigned cell')
               return
             }
             await sessions.acceptClient(
@@ -581,5 +585,5 @@ export function createRelayServer(
 
 export function closeWithDrain(socket: WebSocket, graceMs: number): void {
   socket.send(JSON.stringify({ type: 'drain', graceMs, recovery: 'resolve-director' }))
-  socket.close(RELAY_CLOSE_CODE.DRAINING, 'resolve configured director')
+  closeRelayWebSocket(socket, RELAY_CLOSE_CODE.DRAINING, 'resolve configured director')
 }
