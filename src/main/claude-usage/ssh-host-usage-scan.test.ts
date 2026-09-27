@@ -78,7 +78,7 @@ function transport(
 }
 
 describe('scanClaudeUsageOnSshHosts', () => {
-  it('collects every page and scopes non-worktree keys to the host', async () => {
+  it('collects every page and scopes every key to the host', async () => {
     const worktrees = [
       { repoId: 'r', worktreeId: 'r::/home/dev/repo', path: '/home/dev/repo', displayName: 'Repo' }
     ]
@@ -106,13 +106,36 @@ describe('scanClaudeUsageOnSshHosts', () => {
     ] satisfies SshClaudeUsageScanParams[])
     expect(result.box.scannedAt).toBe(42)
     expect(result.box.sessions.map((row) => row.locationBreakdown[0].locationKey)).toEqual([
-      'worktree:r::/home/dev/repo',
+      'ssh:box|worktree:r::/home/dev/repo',
       'ssh:box|unscoped'
     ])
     expect(result.box.dailyAggregates.map((row) => row.projectKey)).toEqual([
       'ssh:box|cwd:/tmp/scratch',
       'ssh:box|cwd:/tmp/scratch'
     ])
+  })
+
+  it('keeps one project repo id on two hosts in separate rows', async () => {
+    // A project's repo id is shared by its execution hosts, so the same checkout
+    // path on two hosts produces the same worktree id.
+    const worktreeKey = 'worktree:project-1::/home/dev/repo'
+    const result = await scanClaudeUsageOnSshHosts({
+      transport: transport(['box-a', 'box-b'], async () => ({
+        scanId: 'scan-1',
+        pageIndex: 0,
+        pageCount: 1,
+        sessions: [session('s', worktreeKey)],
+        dailyAggregates: [daily('2026-09-01', worktreeKey)]
+      })),
+      worktreesByTarget: new Map(),
+      previous: {}
+    })
+
+    expect(result['box-a'].dailyAggregates[0].projectKey).toBe(`ssh:box-a|${worktreeKey}`)
+    expect(result['box-b'].dailyAggregates[0].projectKey).toBe(`ssh:box-b|${worktreeKey}`)
+    expect(result['box-a'].sessions[0].locationBreakdown[0].locationKey).toBe(
+      `ssh:box-a|${worktreeKey}`
+    )
   })
 
   it('keeps the last snapshot of offline, failing, and too-old hosts', async () => {

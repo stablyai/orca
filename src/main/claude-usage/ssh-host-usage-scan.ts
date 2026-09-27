@@ -33,10 +33,11 @@ function isScanPage(value: unknown): value is SshClaudeUsageScanResult {
   )
 }
 
-// Why: `worktree:<id>` keys are already unique across hosts, but cwd and
-// unscoped buckets would merge identical paths from different machines.
+// Why: every key needs the host, `worktree:` included. A worktree id is
+// `<repoId>::<path>`, and one project's repo id is shared by all its execution
+// hosts, so the same checkout path on two hosts (or on this Mac) yields one id.
 function hostScopedKey(targetId: string, key: string): string {
-  return key.startsWith('worktree:') ? key : `ssh:${targetId}|${key}`
+  return `ssh:${targetId}|${key}`
 }
 
 function scopeSession(targetId: string, session: ClaudeUsageSession): ClaudeUsageSession {
