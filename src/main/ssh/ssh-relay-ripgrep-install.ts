@@ -6,8 +6,8 @@
  *
  * Uploads land in a private `.upload-<token>` stage and are renamed into place only after a size
  * check, so an interrupted or concurrent deploy never leaves a truncated binary at the final path.
- * Every failure is reported, never thrown: the relay falls back to PATH `rg` and its git/readdir
- * chain, which is exactly what it did before this binary existed.
+ * Ordinary failures use the relay's PATH `rg` and git/readdir fallback; unconfirmed remote stops
+ * propagate so deployment cannot start more work while the previous operation may still run.
  */
 import { randomBytes } from 'node:crypto'
 import { statSync } from 'node:fs'
@@ -15,6 +15,7 @@ import { dirname } from 'node:path'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { uploadRelayDirectory } from './ssh-relay-install-transfers'
 import {
   createRelayUploadStageNamespace,
@@ -52,7 +53,7 @@ export function remoteRipgrepRefFileName(entryName: string): string {
   return `${REMOTE_RIPGREP_REF_PREFIX}${entryName}`
 }
 
-/** Record which ripgrep build a relay directory runs against. Best-effort: never fails a deploy. */
+/** Record the relay's ripgrep build; only an unconfirmed remote stop rejects. */
 export async function recordRemoteRipgrepReference(
   conn: SshConnection,
   host: RemoteHostPlatform,
@@ -73,6 +74,9 @@ export async function recordRemoteRipgrepReference(
     )
     return true
   } catch (error) {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
     console.warn(
       '[ssh-relay] Could not record the ripgrep reference; skipping the bundled binary:',
       error instanceof Error ? error.message : String(error)
@@ -117,7 +121,7 @@ export function remoteRipgrepLayout(
   }
 }
 
-/** Make sure the host has Orca's ripgrep at `remoteRipgrepLayout().binaryPath`; never throws. */
+/** Ensure the host has Orca's ripgrep; only an unconfirmed remote stop rejects. */
 export async function ensureRemoteBundledRipgrep(
   conn: SshConnection,
   host: RemoteHostPlatform,
@@ -150,6 +154,9 @@ async function installOrReport(
     }
     return await installRemoteRipgrep(conn, host, layout, localBinary, options.signal)
   } catch (error) {
+    if (isUnconfirmedSshCommandTermination(error)) {
+      throw error
+    }
     console.warn(
       '[ssh-relay] Bundled ripgrep install failed; the relay will use rg from PATH:',
       error instanceof Error ? error.message : String(error)
@@ -184,6 +191,7 @@ async function installRemoteRipgrep(
   }
 
   let promoted = false
+  let cleanupAllowed = true
   try {
     await uploadRelayDirectory(
       conn,
@@ -204,12 +212,19 @@ async function installRemoteRipgrep(
     }
     console.log(`[ssh-relay] Installed bundled ripgrep at ${layout.binaryPath} (${size} bytes)`)
     return 'installed'
+  } catch (error) {
+    cleanupAllowed = !isUnconfirmedSshCommandTermination(error)
+    throw error
   } finally {
-    if (!promoted) {
+    if (!promoted && cleanupAllowed) {
       // Why best-effort: the next deploy's probe also sweeps stale stages.
       await execCommand(conn, removeRemoteTreeCommand(host, stageDir), {
         wrapCommand: !isWindowsRemoteHost(host)
-      }).catch(() => {})
+      }).catch((error) => {
+        if (isUnconfirmedSshCommandTermination(error)) {
+          throw error
+        }
+      })
     }
   }
 }

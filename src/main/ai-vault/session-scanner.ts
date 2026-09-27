@@ -240,7 +240,8 @@ async function parseSessionCandidates(args: {
           args.platform,
           args.executionHostId,
           args.parseStats,
-          args.antigravityWorkspaceResolver
+          args.antigravityWorkspaceResolver,
+          args.signal
         )
       )
     )
@@ -268,10 +269,17 @@ async function parseSessionCandidate(
   platform: NodeJS.Platform,
   executionHostId: ExecutionHostId,
   parseStats: SessionParseStats,
-  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
+  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver,
+  signal?: AbortSignal
 ): Promise<SessionParseResult> {
   try {
-    let session = await parseAgentSessionFileCached(candidate, platform, parseStats)
+    let session = await parseAgentSessionFileCached(
+      candidate,
+      platform,
+      parseStats,
+      undefined,
+      signal
+    )
     if (session && candidate.antigravityHistoryPath && antigravityWorkspaceResolver) {
       session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
     }

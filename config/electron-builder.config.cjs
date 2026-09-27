@@ -210,6 +210,8 @@ module.exports = {
     // it is gitignored, but exclude it defensively so a stray local capture at
     // package time never bloats app.asar.
     '!pr-evidence{,/**/*}',
+    // Local build logs and rollback copies are never application resources.
+    '!notes{,/**/*}',
     // Why: local agent/tooling directories may contain worktree symlink loops;
     // they are never runtime inputs and must not be traversed by electron-builder.
     '!{.claude,.grok,.agents,.codex}{,/**/*}',
@@ -284,6 +286,7 @@ module.exports = {
     'out/main/gemini/**',
     'out/main/grok/**',
     'out/main/hermes/**',
+    'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',

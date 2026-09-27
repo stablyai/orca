@@ -2,11 +2,14 @@ import { z } from 'zod'
 
 export const PROFILE_STATE_RECOVERY_FLAG = '--profile-state-recovery'
 export const PROFILE_STATE_RECOVERY_RESULT_PREFIX = '[profile-state-recovery] '
+/** Desktop variant: applies a startup-dialog choice, then relaunches Orca normally. */
+export const PROFILE_STATE_DESKTOP_RECOVERY_FLAG = '--profile-state-desktop-recovery'
 
 const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 const selectorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('json'), revision: positiveInteger }).strict(),
   z.object({ kind: z.literal('current-json') }).strict(),
+  z.object({ kind: z.literal('current-sqlite') }).strict(),
   z.object({ kind: z.literal('sqlite'), backupId: z.string().min(1) }).strict()
 ])
 

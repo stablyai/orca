@@ -2,6 +2,9 @@ import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
+import { currentDispatchAssigneeRun } from '../messaging/recipient-routing'
 import {
   RunCreateParams,
   RunCurrentParams,
@@ -9,6 +12,18 @@ import {
   RunShowParams,
   RunUseParams
 } from '../../../../../../shared/rpc-contract/orchestration-runs-params'
+
+function cancelBoundDispatchWaiters(
+  runtime: OrcaRuntimeService,
+  caller: OrchestrationCallerIdentity,
+  runId: string
+): void {
+  const db = runtime.getOrchestrationDb()
+  const dispatch = db.getActiveDispatchForIdentity(caller.address, caller.paneKey ?? undefined)
+  if (dispatch && currentDispatchAssigneeRun(runtime, db, dispatch)?.id === runId) {
+    runtime.cancelMessageWaiters(`dispatch:${dispatch.id}`)
+  }
+}
 
 export const ORCHESTRATION_RUN_METHODS = [
   defineMethod({
@@ -30,6 +45,7 @@ export const ORCHESTRATION_RUN_METHODS = [
         coordinatorOrcaSessionId: caller.orcaSessionId
       })
       runtime.cancelMessageWaiters(params.from)
+      cancelBoundDispatchWaiters(runtime, caller, run.id)
       if (priorRun) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
       }
@@ -86,6 +102,7 @@ export const ORCHESTRATION_RUN_METHODS = [
         )
       }
       runtime.cancelMessageWaiters(params.from)
+      cancelBoundDispatchWaiters(runtime, caller, run.id)
       runtime.cancelMessageWaiters(`run:${params.id}`)
       if (priorRun && priorRun.id !== params.id) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)

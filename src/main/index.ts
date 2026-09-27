@@ -16,10 +16,16 @@ import { shouldActivateDesktopForSecondInstance } from './startup/single-instanc
 import { resolveOpenedMarkdownDocuments } from './startup/os-opened-markdown-files'
 import {
   formatProfileStateStartupFailure,
+  isDivergedProfileStateFailure,
   profileStateStartupFailureClass
 } from './persistence/profile-state/profile-state-startup-failure'
 import { recordDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
-import { presentProfileStateStartupRecoveryDialog } from './persistence/profile-state/profile-state-startup-recovery-dialog'
+import {
+  chooseProfileStateCopy,
+  presentProfileStateStartupRecoveryDialog,
+  readProfileStateCopySavedTimes
+} from './persistence/profile-state/profile-state-startup-recovery-dialog'
+import { profileStateDesktopRecoveryArgs } from './startup/profile-state-recovery-preflight'
 
 function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   return openMainWindowController(options)
@@ -132,6 +138,24 @@ if (preflightReady) {
       console.error(`[profile-state] ${message}`)
       if (!state.isServeMode && !isBackgroundLaunch()) {
         try {
+          if (isDivergedProfileStateFailure(error)) {
+            const userDataPath = app.getPath('userData')
+            const choice = await chooseProfileStateCopy({
+              ...readProfileStateCopySavedTimes(userDataPath),
+              showMessageBox: (options) => dialog.showMessageBox(options)
+            })
+            if (choice !== undefined) {
+              // Recovery needs both profile locks, which only a fresh process can own safely.
+              app.relaunch({
+                args: profileStateDesktopRecoveryArgs(process.argv, {
+                  userDataPath,
+                  selector: { kind: choice }
+                })
+              })
+            }
+            app.exit(1)
+            return
+          }
           await presentProfileStateStartupRecoveryDialog({
             message,
             ...(failureClass === 'recovery-required' || failureClass === 'ambiguous-authority'

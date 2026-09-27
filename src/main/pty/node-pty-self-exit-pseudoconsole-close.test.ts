@@ -84,7 +84,7 @@ describe('node-pty patch: pseudoconsole close on the self-exit path', () => {
       [
         '+      baton->shellExited = true;',
         '+      if (baton->consoleClosed) {',
-        '+        const bool removed = remove_pty_baton(baton->id);',
+        '+        const bool removed = remove_pty_baton_locked(baton->id);',
         '+        assert(removed);',
         '+        (void)removed;',
         '+      }'
@@ -138,7 +138,7 @@ describe('node-pty patch: pseudoconsole close on the self-exit path', () => {
     expect(ptyKillHunk).toContain(
       [
         '+      if (handle->shellExited) {',
-        '+        const bool removed = remove_pty_baton(id);',
+        '+        const bool removed = remove_pty_baton_locked(id);',
         '+        assert(removed);',
         '+        (void)removed;'
       ].join('\n')

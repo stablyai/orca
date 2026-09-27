@@ -35,6 +35,32 @@ describe('deployment C library selection', () => {
     ).rejects.toThrow('Could not identify')
   })
 
+  it('checks connection ownership again before the fallback probe', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    const generation = conn.getConnectGeneration()
+    const firstProbe = Promise.withResolvers<string>()
+    vi.mocked(execCommand).mockReturnValueOnce(firstProbe.promise)
+    const exec = vi.fn(async (command: string) => {
+      if (conn.getConnectGeneration() !== generation) {
+        throw new Error('SSH connection changed during SQLite runtime setup.')
+      }
+      return execCommand(conn, command)
+    })
+    const pending = resolveOrcadDeploymentTarget({
+      conn,
+      host: getRemoteHostPlatform('linux-x64'),
+      exec
+    })
+    expect(execCommand).toHaveBeenCalledOnce()
+
+    await conn.disconnect()
+    firstProbe.resolve('ldd: not found')
+
+    await expect(pending).rejects.toThrow('SSH connection changed')
+    expect(exec).toHaveBeenLastCalledWith(expect.stringContaining('getconf GNU_LIBC_VERSION'))
+    expect(execCommand).toHaveBeenCalledOnce()
+  })
+
   it.each([
     ['ldd (Ubuntu GLIBC 2.31-0ubuntu9) 2.31', 'glibc'],
     ['ldd (GNU libc) 2.28', 'glibc'],

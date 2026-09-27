@@ -1,75 +1,14 @@
 import { parentPort } from 'node:worker_threads'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { captureOpenCodeSqliteSession } from './session-scanner-opencode-sqlite-capture'
-import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
-import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
-import { listOpenCode2SqliteSessions } from './session-scanner-opencode2-sqlite-list'
-import {
-  captureOpenCode2SqliteSession,
-  parseOpenCode2SqliteSession
-} from './session-scanner-opencode2-sqlite'
-import type {
-  OpenCodeSqliteWorkerRequest,
-  OpenCodeSqliteWorkerResponse
-} from './session-scanner-opencode-sqlite-worker-protocol'
-
-// Why (#8864): OpenCode SQLite reads use synchronous node:sqlite. Running them
-// on this worker thread keeps the multi-GB-DB scan off the Electron main-process
-// event loop. The client dispatches one request at a time, so this loop stays
-// serial; imports must remain electron-free (see the worker-protocol note).
+import type { OpenCodeSqliteWorkerRequest } from './session-scanner-opencode-sqlite-worker-protocol'
+import { handleOpenCodeSqliteRequest } from './session-scanner-opencode-sqlite-dispatch'
 
 if (!parentPort) {
   throw new Error('OpenCode SQLite worker must run with a parent port.')
 }
 const port = parentPort
 
-async function handleRequest(
-  request: OpenCodeSqliteWorkerRequest
-): Promise<OpenCodeSqliteWorkerResponse> {
-  try {
-    if (request.kind === 'list') {
-      const issues: AiVaultScanIssue[] = []
-      const candidates =
-        request.agent === 'opencode2'
-          ? await listOpenCode2SqliteSessions({
-              dbPaths: request.dbPaths,
-              limit: request.limit,
-              issues
-            })
-          : await listOpenCodeSqliteSessions({
-              dbPaths: request.dbPaths,
-              limit: request.limit,
-              issues
-            })
-      return { id: request.id, ok: true, value: { candidates, issues } }
-    }
-    if (request.kind === 'capture') {
-      const capture =
-        request.agent === 'opencode2'
-          ? await captureOpenCode2SqliteSession(request)
-          : await captureOpenCodeSqliteSession(request)
-      return { id: request.id, ok: true, value: capture }
-    }
-    const session =
-      request.agent === 'opencode2'
-        ? await parseOpenCode2SqliteSession({
-            dbPath: request.dbPath,
-            sessionId: request.sessionId,
-            platform: request.platform
-          })
-        : await parseOpenCodeSqliteSession({
-            dbPath: request.dbPath,
-            sessionId: request.sessionId,
-            platform: request.platform
-          })
-    return { id: request.id, ok: true, value: session }
-  } catch (err) {
-    return { id: request.id, ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
-}
-
 port.on('message', (request: OpenCodeSqliteWorkerRequest) => {
-  void handleRequest(request).then((response) => {
+  void handleOpenCodeSqliteRequest(request).then((response) => {
     try {
       port.postMessage(response)
     } catch {

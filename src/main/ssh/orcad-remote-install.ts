@@ -1,6 +1,7 @@
 import { orcadBunRuntimeFilename } from '../../shared/orcad-artifacts'
 import { orcadAgentBrowserNativeName } from '../../shared/orcad-agent-browser-name'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { shellEscape } from './ssh-connection-utils'
 import type { SshConnection } from './ssh-connection'
 import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
@@ -32,6 +33,7 @@ export async function installOrcadBundle(
     return
   }
   await acquireInstallLock(options.conn, remoteDir, options.host, { signal: options.signal })
+  let preserveInstallLock = false
   try {
     // Re-probe under the lock: a sibling deploy may have finished while we waited.
     if (
@@ -61,8 +63,13 @@ export async function installOrcadBundle(
       signal: options.signal,
       releaseLock: false
     })
+  } catch (error) {
+    preserveInstallLock = isUnconfirmedSshCommandTermination(error)
+    throw error
   } finally {
-    await abandonInstall(options.conn, remoteDir, options.host)
+    if (!preserveInstallLock) {
+      await abandonInstall(options.conn, remoteDir, options.host)
+    }
   }
 }
 

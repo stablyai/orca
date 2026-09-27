@@ -130,7 +130,12 @@ export function getInheritedAgentHookEnvKeysToDelete(
 ): string[] {
   const env = spawnEnv ?? {}
   // Why: providers merge process.env after cleanup; delete stale hook keys without dropping fresh coordinates buildPtyHostEnv set.
-  return AGENT_HOOK_RUNTIME_ENV_KEYS.filter((key) => env[key] === undefined)
+  return [
+    ...AGENT_HOOK_RUNTIME_ENV_KEYS,
+    'ORCA_OPENCODE_AGENT',
+    'ORCA_OPENCODE_CONFIG_DIR',
+    'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+  ].filter((key) => env[key] === undefined)
 }
 
 export function getInheritedClaudeSessionStampEnvKeysToDelete(
@@ -142,25 +147,7 @@ export function getInheritedClaudeSessionStampEnvKeysToDelete(
   return CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined)
 }
 
-// Why: a nested terminal can inherit prior OpenCode/Pi/OMP overlay env; restore the user's recorded source dir, else strip only Orca-owned values.
-export function restoreOrStripOverlayEnv(
-  baseEnv: Record<string, string>,
-  keys: {
-    primary: string
-    overlay: string
-    source: string
-  }
-): void {
-  const sourceValue = baseEnv[keys.source] ?? process.env[keys.source]
-  const overlayValue = baseEnv[keys.overlay] ?? process.env[keys.overlay]
-  if (sourceValue) {
-    baseEnv[keys.primary] = sourceValue
-  } else if (overlayValue && baseEnv[keys.primary] === overlayValue) {
-    delete baseEnv[keys.primary]
-  }
-  delete baseEnv[keys.overlay]
-  delete baseEnv[keys.source]
-}
+export { restoreOrStripOverlayEnv } from '../../../../shared/agent-overlay-env'
 
 export function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
   const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCommand ?? ''))
@@ -185,14 +172,17 @@ export function resolveMimocodeSourceHome(baseEnv: Record<string, string>): stri
 export function resolveOpenCodeSourceConfigDir(
   baseEnv: Record<string, string>
 ): string | undefined {
+  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
+  const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_CONFIG_DIR
+  if (configDir && orcaConfigDir && configDir !== orcaConfigDir) {
+    return configDir
+  }
   const sourceDir =
     baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
   if (sourceDir) {
     return sourceDir
   }
 
-  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
-  const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_CONFIG_DIR
   // Why: with no recorded source dir, an inherited OPENCODE_CONFIG_DIR is Orca-owned, not user config; treating it as user config makes child Orcas mirror the hook dir.
   if (configDir && orcaConfigDir && configDir === orcaConfigDir) {
     return undefined

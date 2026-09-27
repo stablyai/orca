@@ -62,7 +62,7 @@ export function initializeMainProcessObservers(): void {
     track('profile_state_authority_selected', {
       backend: profileStateStartup.backend,
       classification: profileStateStartup.classification,
-      authority_mode: profileStateStartup.authorityMode,
+      authority_mode: 'sqlite-established',
       runtime: profileStateStartup.runtime,
       migrated: profileStateStartup.migrated
     })

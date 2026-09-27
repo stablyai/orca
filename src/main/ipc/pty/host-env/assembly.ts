@@ -1,5 +1,5 @@
 import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
-import { isOpenCode2LaunchCommand } from '../../../../shared/opencode-launch-command'
+import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
@@ -48,12 +48,11 @@ export function buildPtyHostEnv(
   // Why: local path's baseEnv includes process.env but the daemon path doesn't (fork inheritance, not IPC); check both sources so guards stay in lock-step across spawn paths.
   const preexistingOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv)
   const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(baseEnv, opts.launchCommand)
-  // Typed launches do not carry the picker identity; infer the beta binary so
-  // it receives the OpenCode 2 hook endpoint and isolated plugin overlay.
-  const openCodeAgent =
-    opts.launchAgent === 'opencode2' || isOpenCode2LaunchCommand(launchCommandHint)
-      ? 'opencode2'
-      : 'opencode'
+  const openCodeAgent = selectOpenCodeHookAgent(
+    opts.launchAgent,
+    launchCommandHint,
+    (agent) => opts.agentStatusHooksEnabled && isTuiAgentEnabled(agent, opts.disabledTuiAgents)
+  )
   const explicitPiAgentKind = isPiCompatibleAgentType(opts.launchAgent)
     ? opts.launchAgent
     : opts.launchAgent === undefined
@@ -88,12 +87,22 @@ export function buildPtyHostEnv(
       ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
 
-  if (opts.agentStatusHooksEnabled) {
+  restoreOrStripOverlayEnv(baseEnv, {
+    primary: 'OPENCODE_CONFIG_DIR',
+    overlay: 'ORCA_OPENCODE_CONFIG_DIR',
+    source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR',
+    preserveExplicitPrimary: true
+  })
+  delete baseEnv.ORCA_OPENCODE_AGENT
+  if (openCodeAgent) {
     // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
     const openCodeStatusService =
       openCodeAgent === 'opencode2' ? openCode2HookService : openCodeHookService
     baseEnv.ORCA_OPENCODE_AGENT = openCodeAgent
-    Object.assign(baseEnv, openCodeStatusService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
+    // WSL owns its config writes; only the guest overlay may enter a WSL pane.
+    if (!opts.isWsl) {
+      Object.assign(baseEnv, openCodeStatusService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
+    }
     if (baseEnv.OPENCODE_CONFIG_DIR) {
       // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
       baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
@@ -104,6 +113,8 @@ export function buildPtyHostEnv(
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
+  }
+  if (opts.agentStatusHooksEnabled) {
     if (isMimoLaunchCommand(launchCommandHint)) {
       const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
       Object.assign(baseEnv, mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeHome))
@@ -117,11 +128,6 @@ export function buildPtyHostEnv(
       }
     }
   } else {
-    restoreOrStripOverlayEnv(baseEnv, {
-      primary: 'OPENCODE_CONFIG_DIR',
-      overlay: 'ORCA_OPENCODE_CONFIG_DIR',
-      source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
-    })
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'MIMOCODE_HOME',
       overlay: 'ORCA_MIMOCODE_HOME',
@@ -148,13 +154,15 @@ export function buildPtyHostEnv(
         baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
       }
       // Why: OpenCode loads its status plugin from a guest config overlay, so point OPENCODE_CONFIG_DIR at the guest dir the relay materialized.
-      const opencodeOverlayDir = wslHookRelayManager.getOpenCodeOverlayDir(distro, openCodeAgent)
+      const opencodeOverlayDir = openCodeAgent
+        ? wslHookRelayManager.getOpenCodeOverlayDir(distro, openCodeAgent)
+        : null
       if (opencodeOverlayDir) {
         baseEnv.OPENCODE_CONFIG_DIR = opencodeOverlayDir
         baseEnv.ORCA_OPENCODE_CONFIG_DIR = opencodeOverlayDir
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       } else {
-        // Why: relay not connected yet (or older guest bundle) — never cross the Windows overlay path into WSL; drop it so in-guest OpenCode uses its own config (pre-fix behavior, no status but no regression).
+        // Only guest overlays belong in WSL; otherwise let OpenCode use its guest config.
         delete baseEnv.OPENCODE_CONFIG_DIR
         delete baseEnv.ORCA_OPENCODE_CONFIG_DIR
         delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR

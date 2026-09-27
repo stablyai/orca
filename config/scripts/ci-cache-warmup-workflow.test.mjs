@@ -27,8 +27,12 @@ it('publishes incremental state under a key and prefix that new PRs restore', ()
   expect(steps.indexOf(check)).toBeGreaterThan(steps.indexOf(cache))
 })
 
-it('bounds warming to one hosted job and validates changes without granting writes', () => {
-  expect(Object.keys(workflow.jobs)).toEqual(['warm'])
+it('bounds warming to the required platforms and validates changes without granting writes', () => {
+  expect(Object.keys(workflow.jobs)).toEqual([
+    'warm',
+    'warm-windows',
+    'warm-linux-package-fixtures'
+  ])
   expect(workflow.jobs.warm['timeout-minutes']).toBeLessThanOrEqual(10)
   expect(workflow.permissions).toEqual({ contents: 'read' })
   expect(workflow.on.push.branches).toEqual(['main'])
@@ -37,4 +41,22 @@ it('bounds warming to one hosted job and validates changes without granting writ
   expect(workflow.concurrency['cancel-in-progress']).toBe(true)
   expect(workflow.concurrency.group).toContain('github.event.pull_request.number || github.ref')
   expect(steps[0].with['persist-credentials']).toBe(false)
+})
+
+it('warms and probes both Windows images with the persistence job runtime', () => {
+  const job = workflow.jobs['warm-windows']
+  const persistence = readWorkflow('bun-profile-tests').jobs.persistence
+  expect(job.strategy.matrix.os).toEqual(
+    persistence.strategy.matrix.os.filter((os) => os.startsWith('windows-'))
+  )
+  expect(job['runs-on']).toBe('${{ matrix.os }}')
+  expect(job.strategy['fail-fast']).toBe(false)
+  expect(job['timeout-minutes']).toBeLessThanOrEqual(20)
+  expect(job.env.ORCA_BACKGROUND_LAUNCH).toBe('1')
+  expect(job.steps[0].with['persist-credentials']).toBe(false)
+  const install = job.steps.find(
+    (step) => step.uses === './.github/actions/install-node-dependencies'
+  )
+  expect(install.with).toEqual({ 'native-runtime': 'node' })
+  expect(job.steps.at(-1).run).toBe('node config/scripts/ensure-native-runtime.mjs --check-only')
 })

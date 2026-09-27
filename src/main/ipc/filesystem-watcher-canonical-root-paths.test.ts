@@ -1,3 +1,4 @@
+import { createWatcherSender } from './filesystem-watcher-test-sender'
 /*
  * macOS FSEvents reports OS-canonical paths (symlinks resolved, on-disk
  * casing). Before the rewrite at the watcher boundary those events reached the
@@ -80,7 +81,7 @@ describe('local filesystem watcher canonical root paths', () => {
       return { unsubscribe: vi.fn() } as never
     })
     const sendMock = vi.fn()
-    const sender = { isDestroyed: () => false, send: sendMock, once: vi.fn(), id: 1 }
+    const sender = createWatcherSender(1, sendMock)
     await handlers['fs:watchWorktree']({ sender }, { worktreePath })
     watcherCallback!(null, events)
     await vi.waitFor(

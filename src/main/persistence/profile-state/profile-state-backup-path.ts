@@ -1,6 +1,7 @@
 import { profileStateDatabaseFiles } from './profile-state-storage-classification'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
 const BACKUP_ID_PATTERN =
@@ -30,17 +31,37 @@ export function profileStateDatabaseBackupPath(databaseFile: string, id: string)
 export function profileStateDatabaseBackups(
   databaseFile: string
 ): readonly ProfileStateDatabaseBackup[] {
-  const directory = dirname(databaseFile)
-  const prefix = `${basename(databaseFile)}.backup.`
   let entries: string[]
   try {
-    entries = readdirSync(directory)
+    entries = readdirSync(dirname(databaseFile))
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return []
     }
     throw error
   }
+  return parseBackupEntries(databaseFile, entries)
+}
+
+export async function profileStateDatabaseBackupsAsync(
+  databaseFile: string
+): Promise<readonly ProfileStateDatabaseBackup[]> {
+  try {
+    return parseBackupEntries(databaseFile, await readdir(dirname(databaseFile)))
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return []
+    }
+    throw error
+  }
+}
+
+function parseBackupEntries(
+  databaseFile: string,
+  entries: readonly string[]
+): readonly ProfileStateDatabaseBackup[] {
+  const directory = dirname(databaseFile)
+  const prefix = `${basename(databaseFile)}.backup.`
   return entries
     .flatMap((name) => {
       if (typeof name !== 'string' || !name.startsWith(prefix) || !name.endsWith('.db')) {

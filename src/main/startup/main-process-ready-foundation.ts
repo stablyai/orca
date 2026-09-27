@@ -12,10 +12,7 @@ import {
 import { browserCertificateTrustController } from '../browser/browser-manager'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence'
-import {
-  createProfileStateStoreForStartup,
-  desktopProfileStateAuthorityMode
-} from '../persistence/profile-state/profile-state-startup-authority'
+import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import { initializeBrowserClientHostId } from '../browser/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
 import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
@@ -139,20 +136,17 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
   // read has to have happened by then or the renderer and the browser-host lease disagree.
   initializeBrowserClientHostId(profile.profileDirectory)
-  const profileStateAuthorityMode = desktopProfileStateAuthorityMode()
   const profileState = await createProfileStateStoreForStartup({
     dataFile: profile.dataFile,
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,
     runtime: 'desktop',
-    authorityMode: profileStateAuthorityMode,
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
     onPersistenceFailure: reportProfileStateWriteFailure
   })
   state.profileStateStartup = {
     backend: profileState.backend,
     classification: profileState.classification,
-    authorityMode: profileStateAuthorityMode,
     runtime: 'desktop',
     migrated: profileState.migrated
   }

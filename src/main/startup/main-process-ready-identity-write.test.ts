@@ -83,7 +83,6 @@ vi.mock('../persistence', () => ({
   getCanonicalUserDataPath: () => mocks.userDataPath
 }))
 vi.mock('../persistence/profile-state/profile-state-startup-authority', () => ({
-  desktopProfileStateAuthorityMode: () => 'legacy',
   createProfileStateStoreForStartup: () => ({
     store: {
       getSettings: () => ({}),

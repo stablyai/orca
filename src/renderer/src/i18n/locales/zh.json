@@ -14852,6 +14852,7 @@
           "f1aa04b5cf": "这个文件",
           "8b87612461": "所有未发送的笔记"
         },
+        "diffCommentSaveFailed": "保存评论失败",
         "DiffSectionBody": {
           "35d6afb5be": "二进制文件已更改",
           "cef4cf0ff5": "重试",
@@ -15495,7 +15496,10 @@
             "2b3ce6d394": "取消",
             "e05063cfc1": "行 {{value0}}",
             "c845170b3b": "行 {{value0}}-{{value1}}",
-            "commentTooLarge": "评论过长，无法安全提交。"
+            "commentTooLarge": "评论过长，无法安全提交。",
+            "f6c449191e": "为AI添加注释",
+            "5fa4bfebaa": "添加备注",
+            "5e9b3d0c2e": "添加..."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "此注"
@@ -17442,9 +17446,9 @@
         "responding": "智能体正在回复",
         "working": "处理中…",
         "thinking": "思维",
-        "workingFor": "为 {{value0}} 工作",
-        "workedFor": "为 {{value0}} 工作",
-        "toggleDetails": "切换转弯详情"
+        "workingFor": "已工作 {{value0}}",
+        "workedFor": "工作了 {{value0}}",
+        "toggleDetails": "切换回合详情"
       },
       "jumpToLatest": "跳到最新消息",
       "toggle": {
@@ -17983,10 +17987,10 @@
     },
     "cmd-j": {
       "paletteSessionAge": {
-        "minutes": "{{value0}}米",
-        "hours": "{{value0}}h",
-        "days": "{{value0}}d",
-        "underOneMinute": "<1m"
+        "minutes": "{{value0}}分",
+        "hours": "{{value0}}小时",
+        "days": "{{value0}}天",
+        "underOneMinute": "<1分钟"
       }
     },
     "settings": {

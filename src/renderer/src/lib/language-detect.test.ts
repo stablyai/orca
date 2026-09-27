@@ -20,6 +20,22 @@ describe('detectLanguage', () => {
     expect(detectLanguage('packages/app.nimble')).toBe('nim')
   })
 
+  it.each([
+    'documents/report.typ',
+    'C:\\documents\\REPORT.TYP',
+    '\\\\server\\share\\report.typ',
+    '/home/user/folder workspace/Report.TyP'
+  ])('maps Typst source %s to the typst language id', (filePath) => {
+    expect(detectLanguage(filePath)).toBe('typst')
+  })
+
+  it.each(['report.typ.bak', 'report.typx', 'documents.typ/README', 'documents.typ\\README'])(
+    'keeps non-Typst file %s on plaintext',
+    (filePath) => {
+      expect(detectLanguage(filePath)).toBe('plaintext')
+    }
+  )
+
   it('maps exact filenames from Windows paths', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')

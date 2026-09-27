@@ -2863,6 +2863,39 @@ html.native-shell .app-layout {
   max-width: 420px;
 }
 
+/* Why: embedded card in the diff flow, not a floating popup — use the
+   documented "subtle lift" tier (shadow-xs) rather than a hand-rolled shadow.
+   Restated under `.dark` (same value) so this still outranks the base
+   `.orca-diff-comment-popover` dark shadow at equal selector specificity. */
+.orca-diff-comment-inline > .orca-diff-comment-draft-card {
+  position: relative;
+  left: auto;
+  right: auto;
+  width: 100%;
+  max-width: 420px;
+  z-index: 1;
+  @apply shadow-xs;
+}
+
+.dark .orca-diff-comment-inline > .orca-diff-comment-draft-card {
+  @apply shadow-xs;
+}
+
+.orca-diff-comment-draft-margin {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.orca-diff-comment-draft-margin::after {
+  content: '';
+  width: 3px;
+  height: 100%;
+  background: var(--primary);
+  border-radius: 1px;
+}
+
 /* Why: the saved note used to blend into the editor background because it
    reused the same muted/background mix the editor itself uses. Stay
    grayscale to match the rest of the UI, but lift the card off the editor

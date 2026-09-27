@@ -6,7 +6,7 @@ import {
   readAgentHookSettingsFromProfileState,
   updateAgentHookSettingsFromProfileState
 } from './profile-state-offline-settings'
-import * as exportPaths from './profile-state-export-path'
+import * as exportPaths from './legacy-json/profile-state-export-path'
 import { ProfileStateRecoveryRequiredError } from './profile-state-recovery-required'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 
@@ -50,16 +50,16 @@ describe.each(['json', 'sqlite'] as const)('offline settings %s updates', (backe
       }
 
       expect(updateAgentHookSettingsFromProfileState(location, false)).toEqual({
-        settingsPath: backend === 'sqlite' ? location.databaseFile : location.dataFile,
+        settingsPath: location.databaseFile,
         settings: {
           agentCmdOverrides: { claude: 'claude --model opus' },
           disabledTuiAgents: ['codex', 'future-agent', 'codex']
         }
       })
-      const persisted =
-        backend === 'sqlite'
-          ? authority.readSerializedState()
-          : readFileSync(location.dataFile, 'utf8')
+      const persisted = authority.readSerializedState()
+      if (backend === 'json') {
+        expect(readFileSync(location.dataFile, 'utf8')).toBe(JSON.stringify(original))
+      }
       expect(JSON.parse(persisted ?? 'null')).toMatchObject({
         ...original,
         settings: { ...original.settings, agentStatusHooksEnabled: false }

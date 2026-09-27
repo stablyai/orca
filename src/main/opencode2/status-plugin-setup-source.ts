@@ -10,6 +10,7 @@ const NON_SESSION_FORM_OWNERS = new Set(["global"]);
 
 async function setupOpenCode2Status(ctx) {
   const noop = async () => {};
+  let hooks;
   // Why: OpenCode may probe setup() with no context during startup, and the setup
   // API shape can drift between releases. Never throw from setup — a throw surfaces
   // as an 'orca-opencode-status' plugin failed error in the TUI, which is worse
@@ -23,7 +24,7 @@ async function setupOpenCode2Status(ctx) {
     // Without it, resolveRootSessionID returns null for every session and a
     // subagent's work publishes as if it were the root's.
     const client = { session: { get: async (input, options) => { const result = await ctx.session.get(input, options); return result && typeof result.id === "string" ? { data: result } : result; } } };
-    const hooks = await OrcaOpenCodeStatusPlugin({ client });
+    hooks = await OrcaOpenCodeStatusPlugin({ client });
     if (!hooks || typeof hooks.event !== "function") return noop;
     const promptRegistration = await ctx.session.hook("prompt", async (properties) => {
       await hooks.event({ event: { type: "session.next.prompt.admitted", properties } });
@@ -79,14 +80,22 @@ async function setupOpenCode2Status(ctx) {
     return async () => {
       try {
         controller.abort();
-        await promptRegistration?.dispose?.();
-        await consuming;
-        await hooks.dispose?.();
+        // Each owner must finish cleanup even when an earlier disposer rejects.
+        try {
+          await promptRegistration?.dispose?.();
+        } finally {
+          try {
+            await consuming;
+          } finally {
+            await hooks.dispose?.();
+          }
+        }
       } catch {
         // Why: cleanup runs during plugin unload; a throw here also fails the plugin.
       }
     };
   } catch {
+    try { await hooks?.dispose?.(); } catch {}
     return noop;
   }
 }

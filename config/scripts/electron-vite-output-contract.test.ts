@@ -109,14 +109,15 @@ describe('Electron Vite output contract', () => {
     }
 
     for (const name of [
+      'orca-profiles/profile-index-store',
       'persistence/profile-state/profile-state-access',
       'persistence/profile-state/profile-state-active-location',
       'persistence/profile-state/profile-state-backup-path',
       'persistence/profile-state/profile-state-database-recovery',
       'persistence/profile-state/profile-state-domain-reader',
-      'persistence/profile-state/profile-state-export-path',
+      'persistence/profile-state/legacy-json/profile-state-export-path',
       'persistence/profile-state/profile-state-offline-settings',
-      'persistence/profile-state/profile-state-recovery',
+      'persistence/profile-state/legacy-json/profile-state-recovery',
       'persistence/profile-state/profile-state-recovery-command',
       'persistence/profile-state/profile-state-storage-classification',
       'startup/http1-compatibility-marker'
@@ -124,6 +125,9 @@ describe('Electron Vite output contract', () => {
       expect(input).toHaveProperty(name)
     }
     expect(electronBuilderConfig.asarUnpack).toContain('out/main/persistence/profile-state/**')
+    expect(electronBuilderConfig.asarUnpack).toContain(
+      'out/main/orca-profiles/profile-index-store.js'
+    )
     expect(electronBuilderConfig.asarUnpack).toContain(
       'out/main/startup/http1-compatibility-marker.js'
     )

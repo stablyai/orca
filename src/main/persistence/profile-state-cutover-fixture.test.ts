@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import {
   buildProfileStateCutoverFixture,
   canonicalProfileStateJson
@@ -15,7 +16,13 @@ import {
   profileStateDatabaseFile
 } from './profile-state/profile-state-database'
 import { Store } from './loading-store/store'
-import { createStore, dataFile, testState, writeDataFile } from '../persistence-test-harness'
+import {
+  closeTestStores,
+  createStore,
+  dataFile,
+  testState,
+  writeDataFile
+} from '../persistence-test-harness'
 
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
@@ -43,8 +50,9 @@ describe('profile-state cutover fixture', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-profile-cutover-fixture-'))
   })
 
-  afterEach(() => {
-    rmSync(testState.dir, { recursive: true, force: true })
+  afterEach(async () => {
+    await closeTestStores()
+    removeTreeSync(testState.dir)
   })
 
   it('keeps object insertion order out of semantic comparisons while preserving array order', () => {

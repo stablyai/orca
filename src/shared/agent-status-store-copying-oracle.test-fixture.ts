@@ -83,6 +83,9 @@ export function createCopyingAgentStatusStoreOracle(epoch: string): CopyingAgent
     getAliasesForChild: (childWorkId) =>
       [...current.aliases.values()].filter((alias) => alias.childWorkId === childWorkId),
     resolveChildAliases(aliases) {
+      if (aliases.length === 0) {
+        return []
+      }
       const keys = new Set(aliases.map(serializeAgentChildWorkAliasKey))
       const matches: AgentChildWorkAliasRecord[] = []
       for (const alias of current.aliases.values()) {

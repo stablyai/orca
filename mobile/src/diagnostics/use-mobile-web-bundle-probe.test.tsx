@@ -23,6 +23,9 @@ vi.mock('../transport/runtime-status-probe', () => ({ startRuntimeStatusProbe: (
 vi.mock('../transport/connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
 }))
+vi.mock('../transport/connection-log-background-flush', () => ({
+  subscribeConnectionLogBackgroundFlush: () => () => {}
+}))
 vi.mock('../transport/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: (...args: unknown[]) => fetchMock(...args)
 }))

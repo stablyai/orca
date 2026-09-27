@@ -62,9 +62,12 @@ it('keeps POSIX builds independent of Windows build tools', () => {
   expect(() => stageOrcadWindowsProcessTree('absent', 'absent', 'linux-x64-glibc')).not.toThrow()
 })
 
-it('reuses the checked native addon from an ordinary Windows host install', () => {
-  const { root, output, installed } = installedFixture()
-  stageOrcadWindowsProcessTree(root, output, 'win32-x64', windowsHost)
+it.each([
+  ['x64', 0x8664],
+  ['arm64', 0xaa64]
+])('reuses the checked native addon from a Windows %s host install', (arch, machine) => {
+  const { root, output, installed } = installedFixture(machine)
+  stageOrcadWindowsProcessTree(root, output, `win32-${arch}`, { platform: 'win32', arch })
   expect(readFileSync(join(output, 'windows-process-tree.node'))).toEqual(readFileSync(installed))
 })
 

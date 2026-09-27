@@ -64,6 +64,9 @@ vi.mock('../ripgrep/bundled-ripgrep-path', () => ({
 // Why: the fire-and-forget ripgrep install would drain the queued exec mocks.
 // Why: the post-launch ripgrep cache GC is fire-and-forget and would drain the queued exec mocks.
 vi.mock('./ssh-relay-ripgrep-cache-gc', () => ({ gcRemoteRipgrepCache: vi.fn() }))
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
 vi.mock('./ssh-relay-ripgrep-install', async (importOriginal) => ({
   ...(await importOriginal<typeof RelayRipgrepInstallModule>()),
   ensureRemoteBundledRipgrep: vi.fn().mockResolvedValue('present'),
@@ -310,6 +313,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
       .mockResolvedValueOnce('')
       .mockResolvedValueOnce('READY')
       .mockResolvedValueOnce('') // persist active pipe A
+      .mockResolvedValueOnce('') // deferred stale-stage cleanup A
       .mockRejectedValueOnce(new Error('uname not found')) // tagged POSIX platform probe B
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows X64')
       .mockResolvedValueOnce('C:\\Users\\me user')
@@ -321,6 +325,7 @@ describe('deployAndLaunchRelay on Windows remotes', () => {
       .mockResolvedValueOnce('') // persist active pipe B
 
     await deployAndLaunchRelay(connA, undefined, 300, 'target-a')
+    await new Promise<void>((resolve) => setImmediate(resolve))
     await deployAndLaunchRelay(connB, undefined, 300, 'target-b')
 
     const markerPaths = mockExecCommand.mock.calls

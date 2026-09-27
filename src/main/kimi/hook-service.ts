@@ -14,6 +14,7 @@ import { dirname, join, posix as pathPosix } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
@@ -149,7 +150,14 @@ function writeConfigToml(configPath: string, text: string): void {
     } catch {
       // Fall through to the atomic write path.
     }
-    mode = statSync(configPath).mode & 0o777
+    try {
+      mode = statSync(configPath).mode & 0o777
+    } catch (error) {
+      // Why: file was deleted between the existsSync check and here — nothing to preserve.
+      if (!isDefinitiveAbsence(error)) {
+        throw error
+      }
+    }
   }
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   try {

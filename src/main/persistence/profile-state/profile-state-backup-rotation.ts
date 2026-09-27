@@ -2,7 +2,8 @@ import { lstat, rm } from 'node:fs/promises'
 import {
   createProfileStateDatabaseBackupId,
   profileStateDatabaseBackupPath,
-  profileStateDatabaseBackups
+  profileStateDatabaseBackupsAsync,
+  type ProfileStateDatabaseBackup
 } from './profile-state-backup-path'
 import { runProfileStateBackup } from './profile-state-backup-worker'
 import { removeAbandonedProfileStateBackupFiles } from './profile-state-backup-temporary-files'
@@ -93,8 +94,8 @@ export class ProfileStateBackupRotation {
     }
   }
 
-  private async regularBackups(): Promise<ReturnType<typeof profileStateDatabaseBackups>> {
-    const backups = profileStateDatabaseBackups(this.databasePath)
+  private async regularBackups(): Promise<readonly ProfileStateDatabaseBackup[]> {
+    const backups = await profileStateDatabaseBackupsAsync(this.databasePath)
     const candidates = await Promise.all(
       backups.map(async (backup) => {
         try {

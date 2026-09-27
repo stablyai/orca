@@ -22,14 +22,14 @@ import {
 import { readProfileStateDocuments } from './profile-state-document-reader'
 
 import { readProfileStateRevision } from './profile-state-revision'
-import { readProfileStateJsonAcceptance } from './profile-state-json-acceptance'
+import { readProfileStateJsonAcceptance } from './legacy-json/profile-state-json-acceptance'
 
 export {
   acceptProfileStateJsonCompatibility,
   readProfileStateJsonAcceptance,
   stageProfileStateJsonCompatibility,
   type ProfileStateJsonAcceptance
-} from './profile-state-json-acceptance'
+} from './legacy-json/profile-state-json-acceptance'
 
 export { readProfileStateRevision } from './profile-state-revision'
 export { readProfileStateDocuments } from './profile-state-document-reader'

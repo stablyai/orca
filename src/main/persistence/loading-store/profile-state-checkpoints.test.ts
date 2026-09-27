@@ -6,7 +6,7 @@ import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixtur
 import { openProfileStateDatabaseReadOnly } from '../profile-state/profile-state-database'
 import { parseProfileStateRoot } from '../profile-state/profile-state-document-validation'
 import { readProfileStateSnapshot } from '../profile-state/profile-state-documents'
-import { profileStateJsonExportPath } from '../profile-state/profile-state-export-path'
+import { profileStateJsonExportPath } from '../profile-state/legacy-json/profile-state-export-path'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { Store } from './store'
 import { scheduleSave } from './write-scheduling'

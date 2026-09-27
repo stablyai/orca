@@ -34,7 +34,7 @@ import {
   writeProfileStateAuthorityJsonExport,
   writeProfileStateAuthorityCompatibilityExport,
   writeProfileStateAuthorityCompatibilityExportAsync
-} from './profile-state-authority-exports'
+} from './legacy-json/profile-state-authority-exports'
 import { buildCompleteDocumentReplacements } from './profile-state-complete-replacements'
 import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'

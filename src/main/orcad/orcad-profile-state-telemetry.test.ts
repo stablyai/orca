@@ -8,7 +8,7 @@ import {
 const selection: OrcadProfileStateAuthoritySelection = {
   backend: 'sqlite',
   classification: 'json-only',
-  authority_mode: 'sqlite-candidate',
+  authority_mode: 'sqlite-established',
   runtime: 'orcad',
   migrated: true
 }

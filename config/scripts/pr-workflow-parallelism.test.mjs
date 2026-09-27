@@ -1,6 +1,7 @@
 import { existsSync, globSync, readFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
+import { mobileWebCheckArgs } from './run-mobile-web-app-checks.mjs'
 import { MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV } from './mobile-web-app-bundle-dependencies.mjs'
 
 const workflow = parse(readFileSync('.github/workflows/pr.yml', 'utf8'))
@@ -517,8 +518,15 @@ describe('PR workflow parallelism', () => {
     // sharded `test` job green. Only this env var stops that skip from spreading to the one job
     // that installs them, so a typo here would leave the whole job passing vacuously.
     const step = workflow.jobs.mobile_web_app.steps.find((entry) =>
-      entry.run?.includes('build-mobile-web-app-bundle.test.mjs')
+      entry.run?.includes('node config/scripts/run-mobile-web-app-checks.mjs')
     )
     expect(step.env[MOBILE_WEB_APP_DEPENDENCIES_REQUIRED_ENV]).toBe('1')
+    expect(mobileWebCheckArgs).toEqual([
+      'run',
+      '--config',
+      'config/vitest.config.ts',
+      'config/scripts/mobile-web-app-',
+      'config/scripts/build-mobile-web-app-bundle.test.mjs'
+    ])
   })
 })

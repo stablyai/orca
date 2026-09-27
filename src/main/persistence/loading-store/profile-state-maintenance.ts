@@ -1,9 +1,4 @@
-import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
-import { profileStateDatabaseFile } from '../../../shared/profile-state-storage-paths'
 import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
-import { hasProfileStateDatabaseFiles } from '../profile-state/profile-state-storage-classification'
 import type { ProfileStateMaintenance } from './profile-state-authority'
 import type { StoreDomains } from './store-domain-composition'
 import type { StoreRuntimeState } from './store-runtime-state'
@@ -159,15 +154,13 @@ async function pauseProfileState(
     return authority.pauseForMaintenance()
   }
   await authority?.close?.()
-  if (authority) {
-    throw new Error('Profile authority cannot safely resume from maintenance')
-  }
-  return pauseJsonProfile(runtime.dataFile)
+  throw new Error('Profile authority cannot safely resume from maintenance')
 }
 
 async function drainProfileFileWork(runtime: StoreRuntimeState): Promise<void> {
   await drainProfileStateOperations([
     ...runtime.pendingProfileFlushes,
+    runtime.staleProfileStateTempCleanup,
     runtime.pendingWrite,
     runtime.pendingSnapshotFileWork,
     runtime.pendingGithubCacheWrite,
@@ -176,23 +169,4 @@ async function drainProfileFileWork(runtime: StoreRuntimeState): Promise<void> {
       runtime.profileMaintenancePending || runtime.quitFlushStarted
     )
   ])
-}
-
-async function pauseJsonProfile(dataFile: string): Promise<ProfileStateMaintenance> {
-  const before = createHash('sha256')
-    .update(await readFile(dataFile))
-    .digest('hex')
-  return {
-    resume: async () => {
-      const current = createHash('sha256')
-        .update(await readFile(dataFile))
-        .digest('hex')
-      if (
-        hasProfileStateDatabaseFiles(profileStateDatabaseFile(dirname(dataFile))) ||
-        current !== before
-      ) {
-        throw new Error('Profile storage changed during maintenance; reload is required')
-      }
-    }
-  }
 }

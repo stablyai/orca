@@ -13,7 +13,7 @@ try {
   await build({
     stdin: {
       contents: [
-        `export { runProcessSync } from ${JSON.stringify(join(root, 'src/shared/child-process/run-process.ts'))}`
+        `export { runProcessSync, spawnProcess } from ${JSON.stringify(join(root, 'src/shared/child-process/run-process.ts'))}`
       ].join('\n'),
       resolveDir: root,
       sourcefile: 'script-child-process-entry.ts'
@@ -31,3 +31,5 @@ try {
 }
 
 export const runProcessSync = implementation.runProcessSync
+
+export const spawnProcess = implementation.spawnProcess

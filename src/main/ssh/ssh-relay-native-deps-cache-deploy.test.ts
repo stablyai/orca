@@ -35,6 +35,9 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn()
 }))
 
+vi.mock('./ssh-relay-opencode-runtime', () => ({
+  ensureRemoteOpenCodeRuntime: vi.fn().mockResolvedValue('ready')
+}))
 vi.mock('./ssh-relay-ripgrep-install', () => ({
   remoteRipgrepLayout: vi.fn().mockReturnValue(null),
   recordRemoteRipgrepReference: vi.fn().mockResolvedValue(false),

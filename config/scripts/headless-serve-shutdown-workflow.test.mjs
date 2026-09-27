@@ -58,7 +58,8 @@ describe('headless serve shutdown PR gate', () => {
     const shutdownStep = steps.find((step) => step.name === 'Verify headless serve signal shutdown')
 
     expect(workflow.jobs.package['timeout-minutes']).toBe(90)
-    expect(packageStep.run).toContain('--linux AppImage deb rpm --x64 --publish never')
+    expect(packageStep.run).toContain('--linux dir --x64 --publish never')
+    expect(packageStep.run).toContain('node config/scripts/package-linux-formats.mjs')
     expect(markerStep.run).toContain('dpkg-deb --fsys-tarfile')
     expect(markerStep.run).toContain('rpm2cpio')
     expect(steps.indexOf(markerStep)).toBeGreaterThan(steps.indexOf(packageStep))

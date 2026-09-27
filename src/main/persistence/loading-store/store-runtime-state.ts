@@ -47,10 +47,7 @@ export class StoreRuntimeState {
   writeTimer: ReturnType<typeof setTimeout> | null = null
   pendingWrite: Promise<void> | null = null
   pendingSnapshotFileWork: Promise<void> | null = null
-  readonly staleTempCleanup: Promise<void>
   writeGeneration = 0
-  inFlightAsyncTmpFile: string | null = null
-  backupRotationInFlight = false
   writesFrozen = false
   fatalMutationError: Error | null = null
   durableMutationPhase: 'mutate' | 'rollback' | null = null
@@ -69,6 +66,8 @@ export class StoreRuntimeState {
   githubCacheGeneration = 0
   pendingGithubCacheWrite: Promise<void> | null = null
   readonly staleGithubCacheTempCleanup: Promise<void>
+  /** Reclaim compatibility-export temps left by a process killed during rename. */
+  readonly staleProfileStateTempCleanup: Promise<void>
   readonly gitUsernameCache = new Map<string, string>()
   readonly protectedSecrets = new ProtectedSecretPersistence()
   loadNeedsSave = false
@@ -93,9 +92,11 @@ export class StoreRuntimeState {
     this.dataFile = options.dataFile ?? getDataFile()
     this.storageAuthority = options.storageAuthority ?? 'desktop'
     this.profileStateAuthority = options.profileStateAuthority
-    this.staleTempCleanup = removeStaleDurableWriteTempFiles(this.dataFile, {
-      minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS
-    })
+    this.staleProfileStateTempCleanup = this.profileStateAuthority
+      ? removeStaleDurableWriteTempFiles(this.dataFile, {
+          minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS
+        })
+      : Promise.resolve()
     this.staleGithubCacheTempCleanup = removeStaleDurableWriteTempFiles(
       getGithubCacheFile(this.dataFile),
       { minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS }

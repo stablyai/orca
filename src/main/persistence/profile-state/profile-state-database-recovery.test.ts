@@ -24,9 +24,9 @@ import {
 } from './profile-state-backup-path'
 import { writeProfileStateDatabaseSnapshotAsync } from './profile-state-database-snapshot'
 import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
-import { restoreProfileStateJsonExport } from './profile-state-recovery'
+import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
 import { acquireProfileStateMaintenance } from './profile-state-access'
-import { profileStateJsonExportPath } from './profile-state-export-path'
+import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
 
 const directories: string[] = []
 const profileId = 'profile-recovery-test'

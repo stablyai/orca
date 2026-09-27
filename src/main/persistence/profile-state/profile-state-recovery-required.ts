@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
-import { hasStateBackup } from './profile-state-legacy-backup-path'
-import { profileStateJsonExportPaths } from './profile-state-export-path'
+import { hasStateBackup } from './legacy-json/profile-state-legacy-backup-path'
+import { profileStateJsonExportPaths } from './legacy-json/profile-state-export-path'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
 
 type ProfileStateRecoveryLocation = {
@@ -12,7 +12,11 @@ type ProfileStateRecoveryLocation = {
 export class ProfileStateAuthorityBootstrapError extends Error {
   readonly code = 'ambiguous-profile-state' as const
 
-  constructor(message: string) {
+  /** `diverged-json`: both copies are readable, so the user can pick one at startup. */
+  constructor(
+    message: string,
+    readonly divergence?: 'diverged-json'
+  ) {
     super(message)
     this.name = 'ProfileStateAuthorityBootstrapError'
   }

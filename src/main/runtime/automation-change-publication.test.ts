@@ -1,3 +1,4 @@
+import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
 /**
  * A definition change must name the host it affected, and a change that moves a
  * record between hosts must name both — a subscriber that never hears about the
@@ -106,7 +107,7 @@ async function makeRuntime() {
   vi.resetModules()
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
-  const store = new Store()
+  const store = createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
   const { OrcaRuntimeService } = await import('./orca-runtime')
   const runtime = new OrcaRuntimeService(store as never)
   const published: AutomationsChangedPayload[] = []
@@ -127,7 +128,8 @@ beforeEach(() => {
   })
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTestStores()
   rmSync(testState.dir, { recursive: true, force: true })
 })
 

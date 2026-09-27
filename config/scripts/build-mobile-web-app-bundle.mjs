@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { readRouteSnapshot } from './mobile-web-app-route-snapshot.mjs'
 import { realpathSync } from 'node:fs'
 import { basename, extname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
@@ -466,7 +467,10 @@ const isScriptOutput = (path) => path.endsWith('.js')
  * wrap every route, and their imports are part of the page as surely as the route module's.
  */
 export async function mobileWebAppRouteClosure(routeModule) {
-  return await mobileWebAppModuleClosure(['app/_layout', 'app/h/_layout', routeModule])
+  return (
+    readRouteSnapshot(routeModule) ??
+    (await mobileWebAppModuleClosure(['app/_layout', 'app/h/_layout', routeModule]))
+  )
 }
 
 /**

@@ -10,6 +10,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'connect',
   'current',
   'current-json',
+  'current-sqlite',
   'debug',
   'dry-run',
   'enter',

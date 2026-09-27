@@ -2944,14 +2944,14 @@ async function performLocalWorktreeCreate(
   // Why gated: registration replaces the repo's root set, so registering a create recovered without
   // a listing would revoke filesystem access to every worktree that listing would have named.
   if (listingComplete) {
-    registerWorktreeRootsForRepo(store, repo.id, [
+    registerWorktreeRootsForRepo(store, repo, [
       repo.path,
       ...gitWorktrees.map((worktree) => worktree.path)
     ])
   } else {
     // Recovered without a listing: authorize just the new root, or the create the user just made
     // is rejected by filesystem/git-status IPC until a full scan repopulates the cache.
-    registerCreatedWorktreeRoot(store, repo.id, created.path)
+    registerCreatedWorktreeRoot(store, repo, created.path)
   }
 
   // Why: link user-configured shared paths (e.g. `node_modules`, `.env`) before setup runs so setup scripts see them in place.

@@ -5,9 +5,9 @@ import { expect, it, vi } from 'vitest'
 import { Store } from '../loading-store/store'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
-import { profileStateJsonExportPath } from './profile-state-export-path'
+import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
 import { acquireProfileStateMaintenance } from './profile-state-access'
-import { restoreProfileStateJsonExport } from './profile-state-recovery'
+import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
 import { openProfileStateDatabase } from './profile-state-database'
 import {
   bootstrapProfileStateAuthority,

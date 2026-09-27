@@ -25,6 +25,7 @@ type WriteFlushBarrierOperationsRuntime = Pick<
   | 'quitFlushPromise'
   | 'quitFlushStarted'
   | 'staleGithubCacheTempCleanup'
+  | 'staleProfileStateTempCleanup'
   | 'state'
   | 'writeGeneration'
   | 'writeTimer'
@@ -98,6 +99,7 @@ export class WriteFlushBarrierOperations {
         }
         await drainProfileStateOperations([
           ...runtime.pendingProfileFlushes,
+          runtime.staleProfileStateTempCleanup,
           runtime.profileStateAuthority?.drainBackups?.(true)
         ])
         await flushCurrentStateAsync(this, { final: true })
@@ -300,9 +302,7 @@ export function writeGithubCacheSnapshotSync(owner: WriteFlushBarrierOperations)
   } catch (err) {
     try {
       unlinkSync(tmpFile)
-    } catch {
-      // Best-effort cleanup.
-    }
+    } catch {}
     console.warn('[persistence] Failed to write github cache snapshot:', err)
   }
 }

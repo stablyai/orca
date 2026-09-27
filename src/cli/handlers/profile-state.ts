@@ -50,6 +50,9 @@ function formatRollback(result: ProfileStateRollbackResult): string {
   return [
     `profileId: ${result.profileId}`,
     result.revision === null ? 'source: current JSON' : `revision: ${result.revision}`,
+    ...(result.storage === 'sqlite' && result.backupId === undefined
+      ? ['source: current SQLite']
+      : []),
     `storage: ${result.storage}`,
     `restored: ${result.restoredPath}`,
     `quarantine: ${result.quarantineDirectory}`,
@@ -119,17 +122,20 @@ export const PROFILE_STATE_HANDLERS: Record<string, CommandHandler> = {
 }
 
 function parseSelector(flags: Map<string, string | boolean>): ProfileStateRecoverySelector {
-  if (['revision', 'backup', 'current-json'].filter((flag) => flags.has(flag)).length !== 1) {
+  const selectors = ['revision', 'backup', 'current-json', 'current-sqlite'] as const
+  if (selectors.filter((flag) => flags.has(flag)).length !== 1) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Select exactly one of --revision, --backup, or --current-json.'
+      'Select exactly one of --revision, --backup, --current-json, or --current-sqlite.'
     )
   }
-  if (flags.has('current-json')) {
-    if (flags.get('current-json') !== true) {
-      throw new RuntimeClientError('invalid_argument', '--current-json does not take a value.')
+  for (const kind of ['current-json', 'current-sqlite'] as const) {
+    if (flags.has(kind)) {
+      if (flags.get(kind) !== true) {
+        throw new RuntimeClientError('invalid_argument', `--${kind} does not take a value.`)
+      }
+      return { kind }
     }
-    return { kind: 'current-json' }
   }
   if (!flags.has('backup')) {
     return { kind: 'json', revision: parseRevision(flags) }

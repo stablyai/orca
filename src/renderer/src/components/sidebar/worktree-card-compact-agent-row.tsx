@@ -89,6 +89,7 @@ type CompactAgentRowProps = {
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
   cacheTimerActive?: boolean
+  isUnvisited?: boolean
 }
 
 export const CompactAgentRow = React.memo(function CompactAgentRow({
@@ -104,7 +105,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   disclosureInGutter = false,
   isFocusedPane = false,
   hideIdentityIcon = false,
-  cacheTimerActive = true
+  cacheTimerActive = true,
+  isUnvisited = false
 }: CompactAgentRowProps) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -231,7 +233,12 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       >
         {/* Why: the selected-row fill is strong enough to wash out the dimmed
             prompt/secondary text, so lift both toward full foreground when focused. */}
-        <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
+        <span
+          className={cn(
+            isUnvisited ? 'font-semibold text-foreground' : 'font-normal text-muted-foreground/90',
+            isFocusedPane && !isUnvisited && 'text-foreground'
+          )}
+        >
           {leadingText}
         </span>
         {trailingText && (

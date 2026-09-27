@@ -235,7 +235,18 @@ jobs:
       # which is a property of the import graph. This proves the Node artifact it enables
       # actually boots, pairs, creates a worktree and round-trips a real PTY.
       - name: Boot orcad and round-trip a terminal
-        run: pnpm run smoke:orcad-terminal
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: |
+          # Detection failures run the smoke; renames retain the removed input path.
+          if git diff --name-only --no-renames -z --merge-base "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/orcad-smoke-changes" &&
+            scope="$(node config/scripts/orcad-terminal-smoke-change-scope.mjs "$RUNNER_TEMP/orcad-smoke-changes")" && [ "$scope" = false ]; then
+            echo "Orcad terminal smoke inputs are unchanged."
+          else
+            pnpm run smoke:orcad-terminal
+          fi
 
       - name: Verify the generated RPC params catalog
         run: pnpm run verify:rpc-params-catalog
@@ -258,7 +269,17 @@ jobs:
       # Why: extraction writes sorted evidence to an isolated temporary path,
       # so feature PRs need one normalized AST pass rather than a three-OS matrix.
       - name: Verify localization extraction
-        run: pnpm run verify:localization-extraction
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Detection failures run the full check; renames retain the removed input path.
+          if git diff --name-only --no-renames -z --merge-base "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/localization-changes" &&
+            scope="$(node config/scripts/localization-extraction-change-scope.mjs "$RUNNER_TEMP/localization-changes")" && [ "$scope" = false ]; then
+            echo "Localization extraction inputs are unchanged."
+          else
+            pnpm run verify:localization-extraction
+          fi
 
       - name: Verify localization coverage
         run: pnpm run verify:localization-coverage
@@ -689,17 +710,12 @@ jobs:
       # one `pr-code-change-scope.mjs` fires this job on, so naming a test into the family is all
       # it takes to have it run. Quoted because these are vitest filename filters, matched as
       # substrings against the discovered files, and the shell must not touch them.
-      #
-      # Cost: 18 files in 25-30s wall, of which the frame-budget sweep is 2.5s. That sweep encodes
-      # 111 noise JPEGs in Chromium, so it is the one step here whose cost grows with its viewport
-      # set; adding rows to that set is a decision about this job's runtime.
+      # Route censuses share fresh dependency lists for this invocation; scratch builds stay independent.
       - name: Builder, override census and render checks
         env:
           ORCA_MOBILE_WEB_APP_DEPS_REQUIRED: '1'
         run: |
-          pnpm exec vitest run --config config/vitest.config.ts \
-            'config/scripts/mobile-web-app-' \
-            'config/scripts/build-mobile-web-app-bundle.test.mjs'
+          node config/scripts/run-mobile-web-app-checks.mjs
 
   cross-version-wire:
     name: cross-version wire compatibility
@@ -850,12 +866,12 @@ jobs:
 
       - name: Package unpacked app
         env:
+          ORCA_BACKGROUND_LAUNCH: '1'
           ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
-        # PR artifacts are only inspected locally; gzip avoids release-size xz compression.
-        run: >-
-          pnpm exec electron-builder --config config/electron-builder.config.cjs
-          --linux AppImage deb rpm --x64 --publish never
-          --config.deb.compression=gz --config.rpm.compression=gzip
+        # Prepare once with every hook, then isolate the format-specific mutations.
+        run: |
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --linux dir --x64 --publish never
+          node config/scripts/package-linux-formats.mjs
 
       - name: Verify root-package marker payloads
         run: |
@@ -870,13 +886,27 @@ jobs:
           [[ "$deb_marker" == deb ]] || { echo "Expected deb marker, got: $deb_marker"; exit 1; }
           [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
 
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        id: shutdown-fixture-cache
+        with:
+          fixture: headless-serve-shutdown
+
       - name: Verify headless serve signal shutdown
+        env:
+          ORCA_SHUTDOWN_FIXTURE_CACHE_IMAGE: ${{ steps.shutdown-fixture-cache.outputs.image }}
         run: >-
           node config/scripts/run-headless-serve-shutdown-docker.mjs
           --appimage dist/orca-linux.AppImage --all-entrypoints
 
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        id: cli-fixture-cache
+        with:
+          fixture: cli-launch-contract
+
       # A default container reproduces the hostile AppImage launch environment.
       - name: Verify Linux CLI launch contract
+        env:
+          ORCA_CLI_FIXTURE_CACHE_IMAGE: ${{ steps.cli-fixture-cache.outputs.image }}
         run: node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage
 
       - name: Smoke packaged CLI
@@ -899,14 +929,15 @@ jobs:
           persist-credentials: false
 
       - name: Cache electron-builder downloads
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~\AppData\Local\electron\Cache
             ~\AppData\Local\electron-builder\Cache
-          key: electron-builder-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          # Release builds seed this exact path set; PR-local copies cannot serve other PRs.
+          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            electron-builder-windows-
+            electron-builder-win-
 
       # Why persist-native-cache false: this job later rebuilds the same path for
       # Electron. A post-job save would store the Electron ABI under the Node key.
@@ -941,6 +972,7 @@ jobs:
           config/scripts/rebuild-native-deps.test.mjs
           config/scripts/rebuild-native-deps-windows-process-tree.test.mjs
           config/scripts/rebuild-native-deps-node-pty.test.mjs
+          config/scripts/nsis-process-check.test.mjs
           config/scripts/ensure-native-runtime-job-ownership.test.mjs
           config/scripts/verify-packaged-node-pty-job-ownership.test.mjs
           config/scripts/windows-pe-machine.test.mjs
