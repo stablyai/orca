@@ -1,10 +1,18 @@
 import { Buffer } from 'node:buffer'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { createRemoteCliInstallPlan } from './ssh-remote-cli-launcher'
+import { createRemoteCliInstallPlan, POSIX_REMOTE_XDG_OPEN_SHIM } from './ssh-remote-cli-launcher'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 // Why: the compile case is six process creations - powershell.exe -> csc.exe,
@@ -240,10 +248,77 @@ describe('SSH remote Orca CLI launcher', () => {
 
     expect(plan.launcherPath).toBe('/home/me/.orca-relay/bin/orca')
     expect(plan.files).toEqual([
+      expect.objectContaining({ path: '/home/me/.orca-relay/bin/xdg-open' }),
       expect.objectContaining({
         path: '/home/me/.orca-relay/bin/orca',
         contents: expect.stringContaining('--orca-cli "$@"')
       })
     ])
+    expect(plan.postWriteCommands).toContain("chmod +x '/home/me/.orca-relay/bin/xdg-open'")
+  })
+
+  describe('POSIX xdg-open shim', () => {
+    function runShim(opts: { orcaExit: number; withRealXdgOpen: boolean; arg: string }) {
+      const root = mkdtempSync(join(tmpdir(), 'orca-xdg-'))
+      const bin = join(root, 'bin')
+      const other = join(root, 'other')
+      mkdirSync(bin)
+      mkdirSync(other)
+      const log = join(root, 'calls.log')
+      writeFileSync(join(bin, 'xdg-open'), POSIX_REMOTE_XDG_OPEN_SHIM, { mode: 0o755 })
+      writeFileSync(
+        join(bin, 'orca'),
+        `#!/bin/sh\necho "orca $*" >> '${log}'\nexit ${opts.orcaExit}\n`,
+        { mode: 0o755 }
+      )
+      if (opts.withRealXdgOpen) {
+        writeFileSync(join(other, 'xdg-open'), `#!/bin/sh\necho "real $*" >> '${log}'\n`, {
+          mode: 0o755
+        })
+      }
+      // Why an isolated PATH: the machine running the test may have its own xdg-open.
+      const sys = join(root, 'sys')
+      mkdirSync(sys)
+      symlinkSync(
+        spawnSync('/bin/sh', ['-c', 'command -v dirname'], { encoding: 'utf8' }).stdout.trim(),
+        join(sys, 'dirname')
+      )
+      const result = spawnSync('/bin/sh', [join(bin, 'xdg-open'), opts.arg], {
+        encoding: 'utf8',
+        env: { PATH: `${bin}:${other}:${sys}` }
+      })
+      const calls = existsSync(log) ? readFileSync(log, 'utf8').trim() : ''
+      rmSync(root, { recursive: true, force: true })
+      return { status: result.status, stderr: result.stderr, calls }
+    }
+
+    itPosix('sends http(s) links to the desktop through orca open-url', () => {
+      const run = runShim({ orcaExit: 0, withRealXdgOpen: true, arg: 'https://auth.example/login' })
+      expect(run.status).toBe(0)
+      expect(run.calls).toBe('orca open-url --url https://auth.example/login')
+    })
+
+    itPosix('prints the link when the desktop cannot be reached', () => {
+      const run = runShim({ orcaExit: 1, withRealXdgOpen: true, arg: 'https://auth.example/x' })
+      expect(run.status).toBe(0)
+      expect(run.stderr).toContain('Open this link: https://auth.example/x')
+      expect(run.calls).not.toContain('real')
+    })
+
+    itPosix('passes non-web targets to the host xdg-open, never to itself', () => {
+      const run = runShim({ orcaExit: 0, withRealXdgOpen: true, arg: '/tmp/report.pdf' })
+      expect(run.status).toBe(0)
+      expect(run.calls).toBe('real /tmp/report.pdf')
+    })
+
+    itPosix('fails clearly when the host has no xdg-open for a non-web target', () => {
+      const run = runShim({ orcaExit: 0, withRealXdgOpen: false, arg: '/tmp/report.pdf' })
+      expect(run.status).toBe(3)
+      expect(run.calls).toBe('')
+    })
   })
 })
+
+function itPosix(name: string, test: () => void): void {
+  ;(process.platform === 'win32' ? it.skip : it)(name, test)
+}

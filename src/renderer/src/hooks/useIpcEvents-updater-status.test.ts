@@ -134,6 +134,7 @@ describe('useIpcEvents updater integration', () => {
           onRequestTabCreate: () => () => {},
           replyTabCreate: () => {},
           onRequestTabClose: () => () => {},
+          onRemoteOpenUrlRequest: () => () => {},
           replyTabClose: () => {},
           onRequestTabSetProfile: () => () => {},
           replyTabSetProfile: () => {},

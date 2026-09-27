@@ -71,6 +71,7 @@ export function buildWindowApi(args: {
         onRequestTabCreate: () => () => {},
         replyTabCreate: () => {},
         onRequestTabClose: () => () => {},
+        onRemoteOpenUrlRequest: () => () => {},
         replyTabClose: () => {},
         onRequestTabSetProfile: () => () => {},
         replyTabSetProfile: () => {},

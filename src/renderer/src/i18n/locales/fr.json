@@ -18427,5 +18427,10 @@
   },
   "common": {
     "retry": "Réessayer"
+  },
+  "remoteOpenUrl": {
+    "title": "{{value0}} veut ouvrir {{value1}}",
+    "open": "Ouvrir",
+    "dismiss": "Ignorer"
   }
 }
