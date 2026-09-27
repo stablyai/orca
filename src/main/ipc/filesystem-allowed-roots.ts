@@ -1,11 +1,11 @@
-import { resolve } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import type { Store } from '../persistence'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
 import {
   getWorktreeMirrorDistroForRuntime,
   resolveLocalProjectRuntimesForRepos
 } from '../project-runtime-git-options'
-import { isPathInsideOrEqual, isRuntimePathAbsolute } from '../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import {
   buildProjectGroupChildIndex,
   collectProjectGroupSubtreeIds,
@@ -54,6 +54,12 @@ function isRemoteOnlyFolderScope(
   return hasRemoteCandidate
 }
 
+/**
+ * Deliberately stricter than `resolveFolderWorkspaceHost`, which lets the workspace's own
+ * `executionHostId` pin win: a workspace pinned `local` under a group carrying only a legacy
+ * `connectionId` dispatches locally but is denied here. Letting the pin win would hand out a root
+ * the store refuses today, so authorization keeps the fail-closed read of either field.
+ */
 function hasRemoteFolderWorkspaceOwner(
   workspace: FolderWorkspace,
   projectGroups: readonly ProjectGroup[]
@@ -101,6 +107,28 @@ function getLocalFolderScopeRoots(store: Store, repos: readonly Repo[]): string[
   return roots
 }
 
+/** The single path implementation that both judges and resolves a local root. */
+type HostPathResolver = {
+  isAbsolute: (value: string) => boolean
+  resolve: (value: string) => string
+}
+
+/**
+ * The allowed root a `workspaceDir` with no local repo to anchor it may contribute, or `null`.
+ *
+ * The predicate has to be the host's own, not `isRuntimePathAbsolute`: that helper accepts either
+ * flavour, so on POSIX it calls `C:\ws` absolute while this `resolve` reads the same string as a
+ * relative name and anchors the root under the main-process cwd — authorizing an unrelated local
+ * tree. Pairing both here keeps them from diverging again; `hostPath` is injectable so the
+ * flavour matrix can run POSIX and Windows without the test choosing on `process.platform`.
+ */
+export function resolveUnanchoredWorkspaceRoot(
+  workspaceDir: string,
+  hostPath: HostPathResolver = { isAbsolute, resolve }
+): string | null {
+  return hostPath.isAbsolute(workspaceDir) ? hostPath.resolve(workspaceDir) : null
+}
+
 export function getAllowedRoots(store: Store): string[] {
   // Why one read: `getRepos` rehydrates every repo, and this runs twice per filesystem IPC.
   const repos = store.getRepos()
@@ -112,10 +140,9 @@ export function getAllowedRoots(store: Store): string[] {
   ]
   if (settings.workspaceDir) {
     if (localRepos.length === 0) {
-      // A repo-relative workspaceDir has no repo left to anchor it, and `resolve` would anchor it to
-      // the main-process cwd instead — an unrelated directory (`..` reaching that cwd's parent).
-      if (isRuntimePathAbsolute(settings.workspaceDir)) {
-        roots.push(resolve(settings.workspaceDir))
+      const unanchoredRoot = resolveUnanchoredWorkspaceRoot(settings.workspaceDir)
+      if (unanchoredRoot) {
+        roots.push(unanchoredRoot)
       }
     } else {
       const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(store, localRepos)

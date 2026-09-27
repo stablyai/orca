@@ -1,10 +1,15 @@
-import { join, resolve } from 'node:path'
+import { join, posix, resolve, win32 } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type { Repo } from '../../shared/repo-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import { getAllowedRoots, getLocalRepos } from './filesystem-allowed-roots'
+import { resolveFolderWorkspaceHost } from '../../shared/folder-workspace-execution-host'
+import {
+  getAllowedRoots,
+  getLocalRepos,
+  resolveUnanchoredWorkspaceRoot
+} from './filesystem-allowed-roots'
 import { isPathAllowed } from './filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,
@@ -259,6 +264,30 @@ it('preserves explicit local folder overrides and the legacy empty connection ov
   ).toEqual([root])
 })
 
+it('denies a workspace pinned local under a group carrying only a legacy connection', () => {
+  const pinnedFolder = folder({ executionHostId: 'local' })
+  const legacyGroup = group({ connectionId: 'host-a' })
+  const store = storeFor([], [legacyGroup], [pinnedFolder])
+  expect(getAllowedRoots(store)).toEqual([])
+  expect(isPathAllowed(join(root, 'file'), store)).toBe(false)
+  // Dispatch reads the same row as local; authorization is deliberately the stricter of the two,
+  // because agreeing would grant a root this store refuses today.
+  expect(
+    resolveFolderWorkspaceHost(
+      { folderWorkspaces: [pinnedFolder], projectGroups: [legacyGroup], repos: [] },
+      'folder'
+    )
+  ).toEqual({ kind: 'local' })
+  // The mirrored row needs no such note: the workspace's own legacy connection is remote on both sides.
+  const mirrored = storeFor(
+    [],
+    [group({ executionHostId: 'local' }, { parentPath: null })],
+    [folder({ connectionId: 'host-a' })]
+  )
+  expect(getAllowedRoots(mirrored)).toEqual([])
+  expect(isPathAllowed(join(root, 'file'), mirrored)).toBe(false)
+})
+
 it('still grants a local directory that happens to share an SSH repo path', () => {
   const store = storeFor([
     repo({ executionHostId: 'ssh:host-a' }),
@@ -287,12 +316,10 @@ describe('workspace-directory fallback', () => {
     ).toBe(false)
   })
 
-  it.each([
-    ['POSIX absolute', '/ws-fixture'],
-    ['Windows drive', 'C:\\orca-ws'],
-    ['Windows UNC', '\\\\wsl$\\Ubuntu\\home\\me\\ws']
-  ])('grants a %s workspace directory with no local repo', (_case, dir) => {
-    expect(getAllowedRoots(storeFor([], [], [], { workspaceDir: dir }))).toHaveLength(1)
+  it('grants a workspace directory this host reads as absolute, with no local repo', () => {
+    expect(getAllowedRoots(storeFor([], [], [], { workspaceDir: '/ws-fixture' }))).toEqual([
+      resolve('/ws-fixture')
+    ])
   })
 
   it.each([
@@ -310,4 +337,33 @@ describe('workspace-directory fallback', () => {
       )
     ).toEqual([])
   })
+
+  // Why guarded rather than injected: this is the end-to-end claim that the foreign-flavour string
+  // never reaches `resolve`, so it has to run against the real host path module — and on Windows the
+  // same string is a legitimate root. The flavour matrix below covers both hosts unguarded.
+  it.skipIf(process.platform === 'win32')(
+    'does not anchor a Windows-style workspace directory under the POSIX main-process cwd',
+    () => {
+      const store = storeFor([], [], [], { workspaceDir: 'C:\\workspaces' })
+      expect(getAllowedRoots(store)).toEqual([])
+      // The cross-platform predicate used to grant exactly this: `<cwd>/C:\workspaces`.
+      expect(isPathAllowed(join(resolve('C:\\workspaces'), 'file'), store)).toBe(false)
+    }
+  )
+
+  it.each([
+    ['POSIX absolute on POSIX', posix, '/orca-ws', true],
+    ['relative on POSIX', posix, '../orca-ws', false],
+    ['Windows drive on POSIX', posix, 'C:\\orca-ws', false],
+    ['Windows UNC on POSIX', posix, '\\\\wsl$\\Ubuntu\\home\\me\\ws', false],
+    ['POSIX absolute on Windows', win32, '/orca-ws', true],
+    ['relative on Windows', win32, '..\\orca-ws', false],
+    ['Windows drive on Windows', win32, 'C:\\orca-ws', true],
+    ['Windows UNC on Windows', win32, '\\\\wsl$\\Ubuntu\\home\\me\\ws', true]
+  ])(
+    'grants an unanchored %s workspace directory only when that host reads it as absolute',
+    (_case, hostPath, dir, granted) => {
+      expect(resolveUnanchoredWorkspaceRoot(dir, hostPath) !== null).toBe(granted)
+    }
+  )
 })
