@@ -8,6 +8,7 @@ import {
   type WakeHibernatedAgentsWorktreeDetail
 } from '@/constants/terminal'
 import type { ResumeSleepingAgentSessionsOptions } from './resume-sleeping-agent-session'
+import type * as SleepingAgentPaneOwnership from './sleeping-agent-pane-ownership'
 
 const resumeSpy = vi.fn<
   (worktreeId: string, options?: ResumeSleepingAgentSessionsOptions) => number
@@ -22,7 +23,9 @@ vi.mock('./resume-sleeping-agent-session', () => ({
 // Why: control passive-vs-non-passive classification directly so the test asserts
 // the gating, not the predicate internals.
 const isPassiveSpy = vi.fn()
-vi.mock('./sleeping-agent-pane-ownership', () => ({
+vi.mock('./sleeping-agent-pane-ownership', async (importOriginal) => ({
+  getSleepingRecordTabId: (await importOriginal<typeof SleepingAgentPaneOwnership>())
+    .getSleepingRecordTabId,
   isPassiveCompletedHibernationEvidence: (record: unknown) => isPassiveSpy(record),
   recordPaneIsOwnedByPreservedPane: () => false,
   getProviderSessionClaimKey: (record: {

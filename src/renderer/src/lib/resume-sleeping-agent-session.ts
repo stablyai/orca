@@ -9,6 +9,7 @@ import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence,
   recordPaneIsOwnedByPreservedPane,
+  sleepingRecordTabIsGone,
   stablePaneHasLivePty
 } from './sleeping-agent-pane-ownership'
 import {
@@ -250,6 +251,15 @@ export function resumeSleepingAgentSessionsForWorktree(
   for (const record of worktreeRecords) {
     const currentState = useAppStore.getState()
     if (currentState.sleepingAgentSessionsByPaneKey[record.paneKey] !== record) {
+      continue
+    }
+    // Why before the skip: an invalid terminal record whose tab is gone is owned by no pane, so the
+    // skip protected nothing and kept a tab-less duplicate alive forever (#23391).
+    if (
+      isInvalidWorktreeActivationRecord(record) &&
+      sleepingRecordTabIsGone(record, currentState)
+    ) {
+      state.clearSleepingAgentSession(record.paneKey)
       continue
     }
     const claimKey = getProviderSessionClaimKey(record)
