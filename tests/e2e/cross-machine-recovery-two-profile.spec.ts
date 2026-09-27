@@ -44,6 +44,10 @@ import {
 } from './helpers/fake-agent-command-override'
 import { captureHiddenRendererScreenshot } from './helpers/hidden-renderer-screenshot'
 import { RECOVERY_SCREENSHOT_DIR } from './helpers/cross-machine-recovery-picker-fixtures'
+import {
+  recoveredSessionPlaceholder as placeholder,
+  unusableParts
+} from './helpers/recovered-session-placeholder'
 
 const CLI_ENTRY = path.join(process.cwd(), 'out', 'cli', 'index.js')
 const TERMINAL_TAB = 'e2e-agents-terminal'
@@ -333,10 +337,6 @@ async function screenshot(page: Page, testInfo: TestInfo, name: string): Promise
   await testInfo.attach(file, { body, contentType: 'image/png' })
 }
 
-function placeholder(page: Page, paneKey: string) {
-  return page.locator(`[data-testid="recovered-session-placeholder"][data-pane-key="${paneKey}"]`)
-}
-
 function ptyCount(page: Page, tabId: string): Promise<number> {
   return page.evaluate(
     (tabId) => window.__store!.getState().ptyIdsByTabId[tabId]?.length ?? 0,
@@ -550,6 +550,13 @@ test('exports a workspace from one profile and imports it into another', async (
       ].sort()
     )
     expect(fakeClaude.launches()).toHaveLength(1)
+    for (const paneKey of [
+      bound[PROVIDER.sleepA].localPaneKey,
+      bound[PROVIDER.sleepB].localPaneKey,
+      structuredPane
+    ]) {
+      expect(await unusableParts(placeholder(b.page, paneKey), 'pane')).toEqual([])
+    }
     await screenshot(b.page, testInfo, '3-structured-placeholder')
 
     await placeholder(b.page, structuredPane).getByRole('button', { name: 'Resume' }).click()

@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import { isTerminalLeafId, type TerminalLeafId } from '../../../../shared/stable-pane-id'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { onDormantRecoveryPaneShellRelease } from '@/lib/dormant-recovery-shell-release'
 import { useAppStore } from '@/store'
 import { RecoveredSessionResumePortals } from './RecoveredSessionResumePortals'
@@ -64,12 +65,28 @@ describe('RecoveredSessionResumePortals', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     render(
-      <RecoveredSessionResumePortals
-        panes={[{ id: 1, container, leafId: terminalLeaf() }]}
-        tabId="tab-1"
-        worktreeId="repo::/wt"
-      />
+      <TooltipProvider>
+        <RecoveredSessionResumePortals
+          panes={[{ id: 1, container, leafId: terminalLeaf() }]}
+          tabId="tab-1"
+          worktreeId="repo::/wt"
+        />
+      </TooltipProvider>
     )
+  }
+
+  async function chooseFromCompactMenu(name: string): Promise<void> {
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Recovered session' }), { key: 'Enter' })
+    })
+    const item = within(screen.getByRole('menu', { name: 'Recovered session' })).getByRole(
+      'menuitem',
+      { name }
+    )
+    await act(async () => {
+      item.focus()
+      fireEvent.keyDown(item, { key: 'Enter' })
+    })
   }
 
   it('launches nothing until Resume is clicked, then resumes exactly once', () => {
@@ -110,9 +127,67 @@ describe('RecoveredSessionResumePortals', () => {
     stopListening()
   })
 
+  it('stacks in narrow panes and collapses to a menu trigger in the narrowest', () => {
+    renderPortals('recovery')
+
+    expect(screen.getByTestId('recovered-session-placeholder').className.split(' ')).toEqual(
+      expect.arrayContaining([
+        '@container/recovered-session',
+        'max-h-full',
+        'overflow-y-auto',
+        'pt-(--orca-pane-title-height)'
+      ])
+    )
+    expect(screen.getByTestId('recovered-session-placeholder-card').className.split(' ')).toEqual(
+      expect.arrayContaining([
+        'flex-wrap',
+        '@max-md/recovered-session:flex-col',
+        '@max-md/recovered-session:items-stretch',
+        '@max-md/recovered-session:self-stretch',
+        '@max-[10rem]/recovered-session:hidden'
+      ])
+    )
+    expect(
+      screen.getByTestId('recovered-session-placeholder-compact').className.split(' ')
+    ).toEqual(expect.arrayContaining(['hidden', '@max-[10rem]/recovered-session:flex']))
+    expect(screen.getByText('Recovered session').className.split(' ')).toContain('wrap-anywhere')
+    for (const name of ['Resume', 'Start shell instead']) {
+      const button = screen.getByRole('button', { name })
+      expect(button.className.split(' ')).toContain('h-auto')
+      expect(button.className.split(' ')).not.toContain('h-8')
+      expect(within(button).getByText(name).className.split(' ')).toEqual(
+        expect.arrayContaining(['whitespace-normal', 'wrap-anywhere'])
+      )
+    }
+  })
+
+  it('resumes exactly once from the compact menu', async () => {
+    renderPortals('recovery')
+
+    await chooseFromCompactMenu('Resume')
+
+    expect(resumeLocal).toHaveBeenCalledTimes(1)
+    expect(resumeLocal).toHaveBeenCalledWith({ worktreeId: 'repo::/wt', binding: BINDING })
+    expect(releaseLocal).not.toHaveBeenCalled()
+  })
+
+  it('releases the binding, then its pane, from the compact menu', async () => {
+    const paneReleased = vi.fn()
+    const stopListening = onDormantRecoveryPaneShellRelease(`tab-1:${LEAF}`, paneReleased)
+    renderPortals('recovery')
+
+    await chooseFromCompactMenu('Start shell instead')
+
+    expect(releaseLocal).toHaveBeenCalledWith({ worktreeId: 'repo::/wt', binding: BINDING })
+    await vi.waitFor(() => expect(paneReleased).toHaveBeenCalledTimes(1))
+    expect(resumeLocal).not.toHaveBeenCalled()
+    stopListening()
+  })
+
   it('offers no Resume for ordinary sleeping records', () => {
     renderPortals('worktree-sleep')
 
     expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Recovered session' })).toBeNull()
   })
 })
