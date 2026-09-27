@@ -13,9 +13,6 @@ export function withHostBindingTabs(
   host: RecoveryLayout,
   bindings: readonly RecoveryAgentBinding[]
 ): RecoveryLayout {
-  if (view === host) {
-    return view
-  }
   let next = view
   for (const binding of bindings) {
     const hostTab = host.terminalTabs.find((tab) => tab.id === binding.sourceTabId)
@@ -25,7 +22,7 @@ export function withHostBindingTabs(
     next = next.terminalTabs.some((tab) => tab.id === hostTab.id)
       ? withHostBoundLeaf(next, host, hostTab.id, binding.sourceLeafId)
       : withHostTerminalRow(next, host, hostTab)
-    next = withPlacedTerminalTab(next, host, hostTab.id)
+    next = withPlacedTerminalTab(next, host, hostTab)
   }
   return next
 }
@@ -73,10 +70,10 @@ function withHostTerminalRow(
 function withPlacedTerminalTab(
   layout: RecoveryLayout,
   host: RecoveryLayout,
-  terminalId: string
+  terminal: RecoveryTerminalTab
 ): RecoveryLayout {
   const isTerminal = (tab: RecoveryTab): boolean =>
-    tab.contentType === 'terminal' && tab.entityId === terminalId
+    tab.contentType === 'terminal' && tab.entityId === terminal.id
   const current = layout.tabs.find(isTerminal)
   if (
     current &&
@@ -86,20 +83,20 @@ function withPlacedTerminalTab(
   ) {
     return layout
   }
-  const tab = current ?? host.tabs.find(isTerminal)
-  if (!tab) {
-    return layout
-  }
+  const placed = current ?? host.tabs.find(isTerminal)
   const target =
-    layout.groups.find((group) => group.id === tab.groupId) ??
+    layout.groups.find((group) => group.id === placed?.groupId) ??
     layout.groups.find((group) => group.id === layout.activeGroupId) ??
     layout.groups[0]
-  const groupId = target?.id ?? tab.groupId
+  // Why: host-admitted spawns persist a terminal row with no unified tab or group at all;
+  // the synthesized group's source id only keys the remap, which mints the local id.
+  const groupId = target?.id ?? placed?.groupId ?? terminal.id
+  const tab = placed ?? unifiedTerminalTab(terminal, groupId)
   const next = target
     ? layout
     : withDestinationGroup(layout, {
         id: groupId,
-        activeTabId: host.groups.find((group) => group.id === groupId)?.activeTabId ?? null,
+        activeTabId: host.groups.find((group) => group.id === groupId)?.activeTabId ?? tab.id,
         tabOrder: []
       })
   return {
@@ -109,6 +106,25 @@ function withPlacedTerminalTab(
       const tabOrder = group.tabOrder.filter((id) => id !== tab.id)
       return { ...group, tabOrder: group.id === groupId ? [...tabOrder, tab.id] : tabOrder }
     })
+  }
+}
+
+function unifiedTerminalTab(terminal: RecoveryTerminalTab, groupId: string): RecoveryTab {
+  return {
+    id: terminal.id,
+    entityId: terminal.id,
+    groupId,
+    contentType: 'terminal',
+    label: terminal.title,
+    ...(terminal.quickCommandLabel?.trim()
+      ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
+      : {}),
+    ...(terminal.generatedTitle?.trim() ? { generatedLabel: terminal.generatedTitle.trim() } : {}),
+    ...(terminal.aiVaultTitle ? { aiVaultTitle: terminal.aiVaultTitle } : {}),
+    customLabel: terminal.customTitle,
+    color: terminal.color,
+    sortOrder: terminal.sortOrder,
+    createdAt: terminal.createdAt
   }
 }
 

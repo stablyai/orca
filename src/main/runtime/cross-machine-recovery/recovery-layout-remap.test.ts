@@ -166,6 +166,43 @@ describe('structured session placeholders', () => {
     )
     expect(plan.fragment.tabGroups[0]?.tabOrder).toEqual(panes.map((pane) => pane.tabId))
   })
+
+  it('synthesizes a tab and group for a host binding the host layout never placed', () => {
+    const d = descriptor()
+    const grouplessHost = {
+      ...d,
+      layout: { ...d.layout, tabs: [], groups: [], groupLayout: null, activeGroupId: null }
+    }
+    const ctx = planContext('/dst/wt')
+
+    const plan = planRecoveryImport(grouplessHost, undefined, ctx)
+
+    expect(plan.presentationSource).toEqual({ kind: 'host-layout' })
+    const pane = parsePaneKey(plan.bindings[0]!.result.localPaneKey)!
+    expect([pane.tabId, pane.leafId]).toEqual([
+      plan.idMap.tabs[SOURCE_TAB],
+      plan.idMap.leaves[SOURCE_LEAF]
+    ])
+    const groupId = plan.fragment.activeGroupId!
+    expect(plan.fragment.tabGroups).toEqual([
+      { id: groupId, worktreeId: ctx.worktreeId, activeTabId: pane.tabId, tabOrder: [pane.tabId] }
+    ])
+    expect(plan.fragment.tabGroupLayout).toEqual({ type: 'leaf', groupId })
+    expect(plan.fragment.unifiedTabs).toEqual([
+      {
+        id: pane.tabId,
+        entityId: pane.tabId,
+        groupId,
+        worktreeId: ctx.worktreeId,
+        contentType: 'terminal',
+        label: 'claude',
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 1
+      }
+    ])
+  })
 })
 
 describe('workspace-scoped editor ids', () => {
