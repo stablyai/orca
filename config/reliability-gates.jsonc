@@ -386,13 +386,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-26",
+          "date": "2026-09-27",
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/agent-trust-completion.unit.test.ts src/renderer/src/lib/agent-trust-preflight.test.ts src/renderer/src/lib/launch-agent-session-continuation.test.ts src/main/remote-agent-trust-presets.test.ts",
           "result": "passed",
-          "durationSeconds": 0.173,
-          "summary": "32 author tests /4 suites pass; independently rerun32pass. New11pass versus original4fail/7pass. Four independent queue/registration/remote controls pass; original2fail/2pass. No native launch or config writes."
+          "durationSeconds": 0.199,
+          "summary": "36 tests across four suites pass: 15 in the trust-completion suite, of which four are the deadline cases this candidate adds, plus 8 renderer preflight, 7 continuation-launch and 6 remote-preset tests. No native launch, PTY or actual config write."
         }
       ],
       "runtimeBudget": {
@@ -405,7 +405,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Original new suite fails four pending-write/queue/continuation assertions and passes seven; await candidate passes11. Separate actual IPC count probe originally resolves before write; candidate remains pending."
+        "evidence": "Re-run at this head against the same 15-test suite. Pre-await implementation: 5 fail/10 pass - the three launch-admission orderings plus the never-settling local and SSH cases, the SSH one only by exhausting the test timeout. Unbounded-await implementation: 3 fail/12 pass - never-settling local write, post-deadline rejection and never-settling SSH write all hang to the test timeout. The already-complete-write case passes unbounded too, so it is a timer control, not a red. This head: 15 pass, 36 across the four suites."
       },
       "performanceBudget": {
         "required": true,
@@ -417,7 +417,9 @@
         "Windows/Linux/WSL/daemon/remote-runtime behavior was not executed; remote owner is mocked. No routing/wire/PTY ownership change.",
         "Recognized native Codex launch preparation already awaits trust deeper; do not infer all actual launches currently race.",
         "Abandoning a write at the deadline does not cancel it; a legitimate slow write (WSL grant sessions run to 30s) can land after the launch already started, restoring the pre-fix ordering for that case only.",
-        "The deadline value is a reasoned cap over observed lane holders, not a measured p95."
+        "The deadline value is a reasoned cap over observed lane holders, not a measured p95.",
+        "Only the trust IPC handler is exercised. The candidate also bounds the local worktree-startup write in src/main/ipc/worktree-remote.ts, and no test in these suites covers that call site.",
+        "The cap is per call site, not global: the awaited Codex trust writes in runtime/runtime-worktree-agent-startup.ts, startup/codex-launch-preparation.ts and startup/codex-session-resume-launch.ts remain unbounded, so the bounded-wait invariant covers this gate's surfaces only."
       ],
       "promotionCriteria": [
         "Retain pending-write/queue/launch-boundary red-green evidence and remote owner assertions; obtain actual platform/session evidence and CI soak before promotion."
