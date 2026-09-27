@@ -12,7 +12,8 @@ import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidato
 export class OrcaRuntimeWithCrossMachineRecoveryHost extends OrcaRuntimeWithCrossMachineRecovery {
   private readonly crossMachineRecoveryResumeHolds = createRecoveryResumeHolds()
   private readonly claudeAppendSystemPromptProbe = createClaudeHelpFlagProbe(
-    CLAUDE_APPEND_SYSTEM_PROMPT_FLAG
+    CLAUDE_APPEND_SYSTEM_PROMPT_FLAG,
+    () => this.requireStore().getSettings()
   )
 
   // Why: addRepo is installed on the final runtime prototype, so callers holding that type supply it.

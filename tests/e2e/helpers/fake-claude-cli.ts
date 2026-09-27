@@ -1,12 +1,10 @@
-import { accessSync, chmodSync, constants, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 export type FakeClaudeInvocation = { argv: string[]; pid: number; cwd: string }
 
 export type FakeClaudeCli = {
   binDir: string
-  /** PATH with the fake first and every directory holding another `claude` removed. */
-  searchPath: string
   invocations: () => FakeClaudeInvocation[]
   /** Invocations other than the `--help` / `--version` capability probes. */
   launches: () => FakeClaudeInvocation[]
@@ -29,16 +27,7 @@ process.stdin.resume()
 setInterval(() => {}, 1 << 30)
 `
 
-function holdsClaude(dir: string): boolean {
-  try {
-    accessSync(path.join(dir, 'claude'), constants.X_OK)
-    return true
-  } catch {
-    return false
-  }
-}
-
-export function createFakeClaudeCli(dir: string, inheritedPath: string): FakeClaudeCli {
+export function createFakeClaudeCli(dir: string): FakeClaudeCli {
   const binDir = path.join(dir, 'bin')
   mkdirSync(binDir, { recursive: true })
   const ledger = path.join(dir, 'invocations.jsonl')
@@ -61,10 +50,6 @@ export function createFakeClaudeCli(dir: string, inheritedPath: string): FakeCla
       .map((line) => JSON.parse(line) as FakeClaudeInvocation)
   return {
     binDir,
-    searchPath: [
-      binDir,
-      ...inheritedPath.split(path.delimiter).filter((d) => !holdsClaude(d))
-    ].join(path.delimiter),
     invocations,
     launches: () =>
       invocations().filter(

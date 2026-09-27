@@ -21,6 +21,21 @@ export type ResolvedAgentLaunchCommand =
     }
   | { ok: false; error: string }
 
+/** The command a launch types before any arguments: the user's override, else the agent's default. */
+export function resolveAgentBaseLaunchCommand(args: {
+  agent: TuiAgent
+  cmdOverrides: Partial<Record<TuiAgent, string>>
+  platform: NodeJS.Platform
+  isRemote?: boolean
+}): string {
+  return (
+    args.cmdOverrides[args.agent] ||
+    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
+      isRemote: args.isRemote
+    })
+  )
+}
+
 export function resolveAgentLaunchCommand(args: {
   agent: TuiAgent
   cmdOverrides: Partial<Record<TuiAgent, string>>
@@ -32,11 +47,7 @@ export function resolveAgentLaunchCommand(args: {
   isRemote?: boolean
 }): ResolvedAgentLaunchCommand {
   const override = args.cmdOverrides[args.agent]
-  const command =
-    override ||
-    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
-      isRemote: args.isRemote
-    })
+  const command = resolveAgentBaseLaunchCommand(args)
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {
     return suffix

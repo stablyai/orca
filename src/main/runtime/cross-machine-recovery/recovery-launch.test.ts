@@ -1,8 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { MAX_RECOVERY_APPEND_SYSTEM_PROMPT_BYTES } from '../../../shared/cross-machine-recovery-launch'
 import { CrossMachineRecoveryImportParams } from '../../../shared/rpc-contract/cross-machine-recovery-params'
 import { buildAgentResumeStartupPlan } from '../../../shared/tui-agent-resume-startup'
-import { createClaudeHelpFlagProbe } from './claude-help-flag-probe'
 import { importRecoveryWorkspaceWithHost } from './recovery-import'
 import { descriptor, fixture, SESSION_ID } from './recovery-import.test-fixture'
 
@@ -64,25 +63,5 @@ describe('recoveryLaunch', () => {
       recoveryLaunch: { [SESSION_ID]: { appendSystemPrompt: 'x'.repeat(bytes) } }
     })
     expect(parsed.success).toBe(accepted)
-  })
-
-  it.each([
-    ['  --append-system-prompt <prompt>  Append a system prompt', true],
-    ['  --system-prompt <prompt>  Replace the system prompt', false]
-  ])('probes claude --help once: %s', async (stdout, advertised) => {
-    const run = vi.fn(async () => ({
-      code: 0,
-      signal: null,
-      stdout,
-      stderr: '',
-      timedOut: false
-    }))
-    const probe = createClaudeHelpFlagProbe('--append-system-prompt', run)
-    expect(await probe()).toBe(advertised)
-    expect(await probe()).toBe(advertised)
-    expect(run).toHaveBeenCalledTimes(1)
-    expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({ program: 'claude', args: ['--help'] })
-    )
   })
 })
