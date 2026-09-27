@@ -35,6 +35,43 @@ function charAt(terminal: Terminal, row: number, column: number): string {
   )
 }
 
+type HiddenCursorState = {
+  cursor: { row: number; column: number }
+  parked: boolean
+  caret: ReturnType<typeof resolveAppDrawnImeCaret>
+}
+
+// Every escape sequence is a point a composition event could land between two parsed writes.
+const ESC = '\\x1b'
+const TRANSCRIPT_TOKEN = new RegExp(
+  `${ESC}\\[[0-9;?<>=]*[ -/]*[@-~]|${ESC}\\][^\\x07${ESC}]*(?:\\x07|${ESC}\\\\)|${ESC}[^[\\]]|[^${ESC}]+`,
+  'g'
+)
+
+/** Samples the rule at every intermediate state of a replay in which the cursor is hidden. */
+async function hiddenCursorStates(name: string): Promise<HiddenCursorState[]> {
+  const terminal = new Terminal({ cols: 100, rows: 30, allowProposedApi: true })
+  const states: HiddenCursorState[] = []
+  const sample = (): void => {
+    if (terminal.modes.showCursor) {
+      return
+    }
+    const buffer = terminal.buffer.active
+    const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) ?? ''
+    states.push({
+      cursor: { row: buffer.cursorY, column: buffer.cursorX },
+      parked: buffer.cursorX === 0 && line.trim() === '',
+      caret: caretOf(terminal)
+    })
+  }
+  const data = readFileSync(join(FIXTURES, `${name}.txt`), 'utf8')
+  for (const token of data.match(TRANSCRIPT_TOKEN) ?? []) {
+    terminal.write(token, sample)
+  }
+  await new Promise<void>((resolve) => terminal.write('', resolve))
+  return states
+}
+
 describe('resolveAppDrawnImeCaret on captured agent transcripts', () => {
   it('finds cursor-agent’s inverse caret on the placeholder while the cursor is parked', async () => {
     const terminal = await replayTranscript('cursor-agent-ime-ready')
@@ -111,5 +148,28 @@ describe('resolveAppDrawnImeCaret on captured agent transcripts', () => {
     const terminal = await replay('\x1b[?25l\x1b[7m세요\x1b[27m x\x1b[7m \x1b[27m\r\n', 20, 4)
 
     expect(caretOf(terminal)).toEqual({ row: 0, column: 6 })
+  })
+
+  // Why no parked-cursor gate: the other agents hide the cursor around nearly every repaint but
+  // never paint a lone inverse cell, while cursor-agent is mid-repaint (cursor not parked) in most
+  // of the states that show its caret.
+  it.each(['claude-code-ime-korean-typed', 'codex-ime-korean-typed', 'grok-ime-korean-typed'])(
+    'never relocates %s at any hidden-cursor state of its repaints',
+    async (name) => {
+      const states = await hiddenCursorStates(name)
+
+      expect(states.length).toBeGreaterThan(200)
+      expect(states.filter((state) => state.caret !== null)).toEqual([])
+    }
+  )
+
+  it('finds cursor-agent’s caret on its input row mid-repaint, not only while parked', async () => {
+    const states = (await hiddenCursorStates('cursor-agent-ime-korean-typed')).filter(
+      (state) => state.caret !== null
+    )
+    const midRepaint = states.filter((state) => !state.parked)
+
+    expect(midRepaint.length).toBeGreaterThan(states.length / 2)
+    expect(new Set(states.map((state) => state.caret?.row))).toEqual(new Set([9]))
   })
 })
