@@ -4,7 +4,7 @@ import { join } from 'node:path'
 const fake = vi.hoisted(() => ({
   files: new Map<string, string>(),
   handlers: new Map<string, (...args: unknown[]) => void>(),
-  write: vi.fn<(path: string, html: string, encoding: string) => Promise<void>>(),
+  write: vi.fn<(path: string, html: string, options: unknown) => Promise<void>>(),
   unlink: vi.fn<(path: string) => Promise<void>>(),
   construct: vi.fn<(options: unknown) => void>(),
   load: vi.fn<(path: string) => Promise<void>>(),
@@ -75,7 +75,7 @@ describe('htmlToPdf resource ownership', () => {
 
     await expect(htmlToPdf(HTML)).rejects.toBe(error)
 
-    expect(fake.write).toHaveBeenCalledWith(TEMP_PATH, HTML, 'utf-8')
+    expect(fake.write).toHaveBeenCalledWith(TEMP_PATH, HTML, { encoding: 'utf-8', flag: 'wx' })
     expect(fake.unlink).toHaveBeenCalledExactlyOnceWith(TEMP_PATH)
     expect(fake.files.size).toBe(0)
     expect(fake.destroy).not.toHaveBeenCalled()
@@ -240,5 +240,76 @@ describe('htmlToPdf resource ownership', () => {
     expect(fake.destroy).toHaveBeenCalledOnce()
     expect(fake.unlink).toHaveBeenCalledExactlyOnceWith(TEMP_PATH)
     expect(vi.getTimerCount()).toBe(0)
+  })
+  it('leaves a pre-existing file at the temp path in place instead of deleting it', async () => {
+    const error = Object.assign(new Error('file already exists'), { code: 'EEXIST' })
+    fake.files.set(TEMP_PATH, 'FILE THIS EXPORT DID NOT CREATE')
+    fake.write.mockRejectedValue(error)
+
+    await expect(htmlToPdf(HTML)).rejects.toBe(error)
+
+    expect(fake.unlink).not.toHaveBeenCalled()
+    expect(fake.files.get(TEMP_PATH)).toBe('FILE THIS EXPORT DID NOT CREATE')
+    expect(fake.construct).not.toHaveBeenCalled()
+  })
+
+  it('times out and cleans up when loading never settles', async () => {
+    fake.load.mockReturnValue(new Promise<void>(() => {}))
+
+    const result = expect(htmlToPdf(HTML)).rejects.toBeInstanceOf(ExportTimeoutError)
+    await vi.advanceTimersByTimeAsync(60_000)
+    await result
+
+    expect(fake.images).not.toHaveBeenCalled()
+    expect(fake.destroy).toHaveBeenCalledOnce()
+    expect(fake.unlink).toHaveBeenCalledExactlyOnceWith(TEMP_PATH)
+    expect(fake.files.size).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('times out and cleans up when neither load event ever fires', async () => {
+    fake.load.mockResolvedValue()
+
+    const result = expect(htmlToPdf(HTML)).rejects.toBeInstanceOf(ExportTimeoutError)
+    await vi.advanceTimersByTimeAsync(60_000)
+    await result
+
+    expect(fake.print).not.toHaveBeenCalled()
+    expect(fake.destroy).toHaveBeenCalledOnce()
+    expect(fake.files.size).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('cleans up after a did-fail-load event', async () => {
+    fake.load.mockImplementation(async () => {
+      fake.handlers.get('did-fail-load')?.({}, -6, 'ERR_FILE_NOT_FOUND')
+    })
+
+    await expect(htmlToPdf(HTML)).rejects.toThrow('ERR_FILE_NOT_FOUND (-6)')
+
+    expect(fake.images).not.toHaveBeenCalled()
+    expect(fake.destroy).toHaveBeenCalledOnce()
+    expect(fake.files.size).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('never removes a temp path belonging to a concurrent export', async () => {
+    const images = Promise.withResolvers<void>()
+    fake.images.mockReturnValueOnce(images.promise)
+    fake.uuid.mockReturnValueOnce('first-export').mockReturnValueOnce('second-export')
+    const firstPath = join('/mock-export-temp', 'orca-export-first-export.html')
+    const secondPath = join('/mock-export-temp', 'orca-export-second-export.html')
+
+    const first = htmlToPdf(HTML)
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(htmlToPdf(HTML)).resolves.toBe(PDF)
+
+    expect(fake.unlink).toHaveBeenCalledExactlyOnceWith(secondPath)
+    expect(fake.files.has(firstPath)).toBe(true)
+
+    images.resolve()
+    await expect(first).resolves.toBe(PDF)
+    expect(fake.unlink).toHaveBeenCalledWith(firstPath)
+    expect(fake.files.size).toBe(0)
   })
 })
