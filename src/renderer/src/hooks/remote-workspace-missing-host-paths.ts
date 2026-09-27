@@ -3,6 +3,10 @@ import {
   type PathExistenceResult
 } from '../../../shared/path-existence-batch'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import {
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost
+} from '../../../shared/execution-host'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { RemoteWorkspaceSnapshotPlacementStore } from './remote-workspace-snapshot-placement'
@@ -72,36 +76,53 @@ export async function confirmPathsMissingOnHost(
 }
 
 /**
- * Drop this client's rows for worktrees whose directory the host reported gone.
+ * Drop this client's rows for worktrees whose directory the host reported gone, and return the
+ * paths that are now fully released (no client row left under them).
  *
  * Why: such a key is invisible (no catalog row places it), yet the export filter only checks repo
  * ownership, so every upload would re-publish it to the host snapshot and the next pull would
  * trip over it again. This is the same purge an authoritative listing runs for a removed worktree.
+ * A path whose row survives stays unplaced: syncing would keep re-publishing it.
  */
 export function purgeClientRowsForMissingHostPaths(
   store: RemoteWorkspaceSnapshotPlacementStore,
   authority: DirectSshAuthority,
   missingPaths: ReadonlySet<string>,
   placedWorktreeIds: ReadonlySet<string>
-): void {
+): Set<string> {
   if (missingPaths.size === 0) {
-    return
+    return new Set()
   }
   const missingKeys = new Set([...missingPaths].map(normalizeRuntimePathForComparison))
   const state = store.getState()
+  const retainedKeys = new Set<string>()
   const staleIds = Object.keys(state.tabsByWorktree).filter((worktreeId) => {
     if (placedWorktreeIds.has(worktreeId)) {
       return false
     }
     const parsed = splitWorktreeId(worktreeId)
-    if (!parsed || !missingKeys.has(normalizeRuntimePathForComparison(parsed.worktreePath))) {
+    const pathKey = parsed ? normalizeRuntimePathForComparison(parsed.worktreePath) : null
+    if (!parsed || !pathKey || !missingKeys.has(pathKey)) {
       return false
     }
     // A repo id registered on another host too could name a live local path; leave it alone.
+    // Ownership may be spelled only as `executionHostId: ssh:<target>` (#11163).
     const repoRows = state.repos.filter((repo) => repo.id === parsed.repoId)
-    return repoRows.length > 0 && repoRows.every((repo) => repo.connectionId === authority.targetId)
+    const owned =
+      repoRows.length > 0 &&
+      repoRows.every(
+        (repo) =>
+          getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo)) === authority.targetId
+      )
+    if (!owned) {
+      retainedKeys.add(pathKey)
+    }
+    return owned
   })
   if (staleIds.length > 0) {
     state.purgeWorktreeTerminalState(staleIds)
   }
+  return new Set(
+    [...missingPaths].filter((path) => !retainedKeys.has(normalizeRuntimePathForComparison(path)))
+  )
 }

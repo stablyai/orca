@@ -201,7 +201,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
       return 'stale'
     }
     if (missingHostPaths.size > 0) {
-      purgeClientRowsForMissingHostPaths(
+      missingHostPaths = purgeClientRowsForMissingHostPaths(
         store,
         authority,
         missingHostPaths,

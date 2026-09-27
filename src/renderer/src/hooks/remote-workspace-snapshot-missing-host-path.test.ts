@@ -232,6 +232,21 @@ describe('host snapshot rows under a path the host reports gone', () => {
     await applySnapshot(store, existence({ exists: false }))
 
     expect(store.getState().tabsByWorktree[REMOVED_ID]?.map((tab) => tab.id)).toEqual(['GHOST'])
+    // The surviving row would be re-published by the next upload, so the target cannot sync.
+    expect(syncStatus(store)?.phase).toBe('conflict')
+  })
+
+  it('purges rows of a repo whose ssh owner is stamped only as executionHostId', async () => {
+    const store = createStore()
+    store.setState({
+      repos: [{ ...repoRow('repoA', null), executionHostId: `ssh:${TARGET_ID}` }]
+    })
+    addClientGhostRow(store)
+
+    await applySnapshot(store, existence({ exists: false }))
+
+    expect(store.getState().tabsByWorktree[REMOVED_ID]).toBeUndefined()
+    expect(syncStatus(store)?.phase).toBe('synced')
   })
 
   it('keeps the conflict, with the path in the message, when the directory still exists', async () => {
