@@ -79,6 +79,7 @@ export function createRemoteWorkspaceTargetSync(
         waitForWorkspaceSessionReady: (signal) =>
           waitForRemoteWorkspaceSessionReady(deps.store, signal),
         finalizeHydratedTerminals: deps.finalizeHydratedTerminals,
+        readHostPathExistence: deps.readHostPathExistence,
         onUnplacedTabWorktreePaths: (worktreePaths) => {
           unplacedTabWorktreePaths = worktreePaths
         }

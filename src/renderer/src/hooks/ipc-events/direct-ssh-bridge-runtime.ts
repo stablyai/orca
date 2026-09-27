@@ -140,7 +140,13 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
       finalizeHydratedTerminals: (authority) =>
         directSshAuthoritiesEqual(reconnectAuthorityByTarget.get(authority.targetId), authority)
           ? reconnectCoordinator.finalizeHydratedTerminals(authority)
-          : 0
+          : 0,
+      readHostPathExistence: async (targetId, filePaths) => {
+        if (!window.api.fs.pathsExist) {
+          throw new Error('Path existence batch unavailable')
+        }
+        return window.api.fs.pathsExist({ filePaths, connectionId: targetId })
+      }
     })
   }
   const prepareAndSync: DirectSshBridgeRuntime['prepareAndSync'] = async (
