@@ -323,6 +323,70 @@ describe('deployAndLaunchRelay staged uploads', () => {
     expect(uploadStageRemovals[0]).toContain('/.orca-remote/.upload-stages/claim-0')
   })
 
+  it.each(['lock acquisition', 'locked recheck'])(
+    'preserves the stage after uncertain %s termination',
+    async (phase) => {
+      const conn = makeMockConnection()
+      const error = Object.assign(new Error('install command still running'), {
+        sshChannelCloseConfirmed: false
+      })
+      vi.mocked(isRelayAlreadyInstalled).mockResolvedValueOnce(false)
+      if (phase === 'lock acquisition') {
+        vi.mocked(acquireInstallLock).mockRejectedValueOnce(error)
+      } else {
+        vi.mocked(isRelayAlreadyInstalled).mockRejectedValueOnce(error)
+      }
+      vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
+        if (command.includes('uname')) {
+          return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
+        }
+        if (command === 'echo $HOME') {
+          return '/home/user'
+        }
+        return stageCommandResponse(command) ?? ''
+      })
+      conn.writeFile = vi.fn().mockResolvedValue(undefined)
+      conn.uploadDirectory = vi.fn().mockResolvedValue(undefined)
+
+      await expect(deployAndLaunchRelay(conn)).rejects.toBe(error)
+      expect(
+        vi
+          .mocked(execCommand)
+          .mock.calls.some(
+            ([, command]) =>
+              /\.sftp-namespace-[0-9a-f]{32}/u.test(command) && command.includes('rm -rf')
+          )
+      ).toBe(false)
+      expect(conn.exec).not.toHaveBeenCalled()
+    }
+  )
+
+  it('stops before launch when owned-stage cleanup cannot confirm termination', async () => {
+    const conn = makeMockConnection()
+    const error = Object.assign(new Error('stage removal still running'), {
+      sshChannelCloseConfirmed: false
+    })
+    vi.mocked(isRelayAlreadyInstalled).mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
+      if (/\.sftp-namespace-[0-9a-f]{32}/u.test(command) && command.includes('rm -rf')) {
+        throw error
+      }
+      if (command.includes('uname')) {
+        return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
+      }
+      if (command === 'echo $HOME') {
+        return '/home/user'
+      }
+      return stageCommandResponse(command) ?? ''
+    })
+    conn.writeFile = vi.fn().mockResolvedValue(undefined)
+    conn.uploadDirectory = vi.fn().mockResolvedValue(undefined)
+
+    await expect(deployAndLaunchRelay(conn)).rejects.toBe(error)
+    expect(conn.exec).not.toHaveBeenCalled()
+    expect(ensureRemoteBundledRipgrep).not.toHaveBeenCalled()
+  })
+
   it('runs bounded fixed-path recovery before a fresh upload', async () => {
     const conn = makeMockConnection()
     const events: string[] = []
@@ -402,6 +466,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
       await deployAndLaunchRelay(conn)
     }
 
+    await vi.waitFor(() => expect(events).toHaveLength(24))
     expect(events).toEqual(Array.from({ length: 12 }, () => ['launch-ready', 'recover']).flat())
     const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)
     const recoveryCommands = commands.filter((command) => command.includes('deleting_old='))
@@ -578,12 +643,15 @@ describe('deployAndLaunchRelay staged uploads', () => {
     await deployAndLaunchRelay(conn)
     expect(conn.uploadDirectory).toHaveBeenCalledTimes(2)
   })
-  // Why: a cold host's rg upload is a multi-MB transfer. While the cleanup sweep was chained
-  // behind it, stale upload stages and superseded version dirs sat on the remote for that whole
-  // duration. A never-settling install stands in for that transfer.
-  it('sweeps stale upload stages without waiting for the ripgrep upload', async () => {
+  it('returns the relay before ripgrep finishes but defers stale-stage cleanup', async () => {
     const conn = makeMockConnection()
-    vi.mocked(ensureRemoteBundledRipgrep).mockReturnValueOnce(new Promise(() => {}))
+    let finishUpload = (): void => {}
+    vi.mocked(ensureRemoteBundledRipgrep).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishUpload = () => resolve('present')
+        })
+    )
     let socketProbe = 0
     vi.mocked(execCommand).mockImplementation((_conn, command) => {
       if (command.includes('uname')) {
@@ -598,7 +666,15 @@ describe('deployAndLaunchRelay staged uploads', () => {
       return Promise.resolve('')
     })
 
-    await deployAndLaunchRelay(conn)
+    const deployed = await deployAndLaunchRelay(conn)
+    expect(deployed.transport).toBeDefined()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    expect(
+      vi
+        .mocked(execCommand)
+        .mock.calls.some(([, command]) => command.includes(RELAY_UPLOAD_STAGE_POOL_NAME))
+    ).toBe(false)
+    finishUpload()
 
     await vi.waitFor(() => {
       const commands = vi.mocked(execCommand).mock.calls.map(([, command]) => command)

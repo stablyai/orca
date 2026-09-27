@@ -198,6 +198,7 @@ describe('per-job path classification', () => {
 
   it('runs Linux packaging when an artifact contract changes', () => {
     for (const file of [
+      '.github/actions/prepare-linux-package-fixture/action.yml',
       'config/docker/cli-launch-contract/Dockerfile',
       'config/docker/cli-launch-contract/run-cli-case.sh',
       'config/docker/headless-pairing/Dockerfile',

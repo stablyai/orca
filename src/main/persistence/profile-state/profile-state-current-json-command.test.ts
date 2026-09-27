@@ -13,7 +13,7 @@ import {
   createProfileStateDatabaseBackupId,
   profileStateDatabaseBackupPath
 } from './profile-state-backup-path'
-import { profileStateJsonExportPath } from './profile-state-export-path'
+import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
 const roots: string[] = []
 const profileId = 'current-json-recovery'
 const originalState = { settings: { theme: 'dark', httpProxyUrl: 'sealed:original' } }

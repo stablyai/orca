@@ -258,7 +258,17 @@ jobs:
       # Why: extraction writes sorted evidence to an isolated temporary path,
       # so feature PRs need one normalized AST pass rather than a three-OS matrix.
       - name: Verify localization extraction
-        run: pnpm run verify:localization-extraction
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Detection failures run the full check; renames retain the removed input path.
+          if git diff --name-only --no-renames -z --merge-base "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/localization-changes" &&
+            scope="$(node config/scripts/localization-extraction-change-scope.mjs "$RUNNER_TEMP/localization-changes")" && [ "$scope" = false ]; then
+            echo "Localization extraction inputs are unchanged."
+          else
+            pnpm run verify:localization-extraction
+          fi
 
       - name: Verify localization coverage
         run: pnpm run verify:localization-coverage
@@ -870,13 +880,27 @@ jobs:
           [[ "$deb_marker" == deb ]] || { echo "Expected deb marker, got: $deb_marker"; exit 1; }
           [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
 
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        id: shutdown-fixture-cache
+        with:
+          fixture: headless-serve-shutdown
+
       - name: Verify headless serve signal shutdown
+        env:
+          ORCA_SHUTDOWN_FIXTURE_CACHE_IMAGE: ${{ steps.shutdown-fixture-cache.outputs.image }}
         run: >-
           node config/scripts/run-headless-serve-shutdown-docker.mjs
           --appimage dist/orca-linux.AppImage --all-entrypoints
 
+      - uses: ./.github/actions/prepare-linux-package-fixture
+        id: cli-fixture-cache
+        with:
+          fixture: cli-launch-contract
+
       # A default container reproduces the hostile AppImage launch environment.
       - name: Verify Linux CLI launch contract
+        env:
+          ORCA_CLI_FIXTURE_CACHE_IMAGE: ${{ steps.cli-fixture-cache.outputs.image }}
         run: node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage
 
       - name: Smoke packaged CLI
@@ -942,6 +966,7 @@ jobs:
           config/scripts/rebuild-native-deps.test.mjs
           config/scripts/rebuild-native-deps-windows-process-tree.test.mjs
           config/scripts/rebuild-native-deps-node-pty.test.mjs
+          config/scripts/nsis-process-check.test.mjs
           config/scripts/ensure-native-runtime-job-ownership.test.mjs
           config/scripts/verify-packaged-node-pty-job-ownership.test.mjs
           config/scripts/windows-pe-machine.test.mjs

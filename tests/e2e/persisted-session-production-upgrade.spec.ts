@@ -23,7 +23,7 @@ import { openProfileStateDatabaseReadOnly } from '../../src/main/persistence/pro
 import { readProfileStateSnapshot } from '../../src/main/persistence/profile-state/profile-state-documents'
 import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import { acquireProfileStateMaintenance } from '../../src/main/persistence/profile-state/profile-state-access'
-import { restoreProfileStateJsonExport } from '../../src/main/persistence/profile-state/profile-state-recovery'
+import { restoreProfileStateJsonExport } from '../../src/main/persistence/profile-state/legacy-json/profile-state-recovery'
 import {
   discoverActivePtyId,
   execInTerminal,

@@ -9,6 +9,7 @@ type ProfileStateRecoveryFailure = {
 type ProfileStateAuthorityFailure = {
   code: 'ambiguous-profile-state'
   message: string
+  divergence?: unknown
 }
 
 export type ProfileStateStartupFailureClass =
@@ -44,6 +45,11 @@ export function profileStateStartupFailureClass(
     }
   }
   return undefined
+}
+
+/** Both copies are readable and differ only because JSON changed outside SQLite. */
+export function isDivergedProfileStateFailure(error: unknown): boolean {
+  return isProfileStateAuthorityFailure(error) && error.divergence === 'diverged-json'
 }
 
 /** Format profile-state startup failures without exposing a generic fatal-error path. */

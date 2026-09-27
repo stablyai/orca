@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  renameSync
+} from 'node:fs'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -249,6 +256,45 @@ describe('profile index store', () => {
     expect(recovered.profiles.length).toBeGreaterThanOrEqual(2)
   })
 
+  it('retains the selected profile when only its backup index remains', async () => {
+    const store = await loadProfileIndexStore()
+    store.ensureActiveOrcaProfile()
+    const created = store.createLocalOrcaProfile({ name: 'Work' })
+    store.setActiveOrcaProfile(created.profile.id)
+    const indexPath = store.getOrcaProfileIndexPath()
+    renameSync(indexPath, `${indexPath}.bak`)
+
+    expect(store.loadOrCreateProfileIndex(testState.dir).activeProfileId).toBe(created.profile.id)
+    expect(store.ensureActiveOrcaProfile().profile.id).toBe(created.profile.id)
+    expect(readJson(indexPath)).toMatchObject({ activeProfileId: created.profile.id })
+  })
+
+  it.each(['primary', 'backup', 'both'] as const)(
+    'refuses an unreadable %s index without replacing it',
+    async (source) => {
+      const store = await loadProfileIndexStore()
+      const indexPath = store.getOrcaProfileIndexPath()
+      if (source !== 'backup') {
+        writeFileSync(indexPath, '{broken-primary')
+      }
+      if (source !== 'primary') {
+        writeFileSync(`${indexPath}.bak`, '{broken-backup')
+      }
+
+      expect(() => store.loadOrCreateProfileIndex(testState.dir)).toThrow(
+        'Could not read active profile index'
+      )
+      expect(() => store.ensureActiveOrcaProfile()).toThrow('Could not read active profile index')
+      if (source !== 'backup') {
+        expect(readFileSync(indexPath, 'utf8')).toBe('{broken-primary')
+      }
+      if (source !== 'primary') {
+        expect(readFileSync(`${indexPath}.bak`, 'utf8')).toBe('{broken-backup')
+      }
+      expect(existsSync(join(testState.dir, 'profiles'))).toBe(false)
+    }
+  )
+
   it('rejects profile ids that are not safe path segments', async () => {
     const store = await loadProfileIndexStore()
     const indexPath = store.getOrcaProfileIndexPath()
@@ -270,8 +316,7 @@ describe('profile index store', () => {
     mkdirSync(testState.dir, { recursive: true })
     writeFileSync(indexPath, JSON.stringify(index), 'utf-8')
 
-    // The tampered entry is filtered; startup falls back to a fresh default.
-    const state = store.ensureActiveOrcaProfile()
-    expect(state.profile.id).toBe(DEFAULT_LOCAL_ORCA_PROFILE_ID)
+    expect(() => store.ensureActiveOrcaProfile()).toThrow('Could not read active profile index')
+    expect(readJson(indexPath)).toEqual(index)
   })
 })

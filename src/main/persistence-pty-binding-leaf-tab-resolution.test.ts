@@ -1,10 +1,16 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  makeTerminalTab
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import { findTerminalTabIdForLeaf } from './runtime/workspace-session-terminal-membership-authority'
-import { testState, createStore, makeTerminalTab } from './persistence-test-harness'
+
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 
 vi.mock('electron', () => ({
@@ -19,7 +25,8 @@ describe('findTerminalTabIdForLeaf after persistPtyBinding grafts a leaf', () =>
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

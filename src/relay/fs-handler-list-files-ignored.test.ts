@@ -670,7 +670,12 @@ describe('relay quick open ignored file listing', () => {
       'rg',
       ['--version'],
       // windowsHide: the probe must never flash a console window on Windows.
-      { env: buildRelayCommandEnv(), stdio: 'ignore', windowsHide: true }
+      expect.objectContaining({
+        env: buildRelayCommandEnv(),
+        stdio: 'ignore',
+        windowsHide: true,
+        shell: false
+      })
     ])
     listProbe.emit('close', 0, null)
     await expect(listing).rejects.toThrow(`Search root is not reachable: ${missingRoot}`)

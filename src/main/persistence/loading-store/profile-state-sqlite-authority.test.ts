@@ -25,7 +25,7 @@ import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from '../profile-state/profile-state-database'
-import { profileStateJsonExportPath } from '../profile-state/profile-state-export-path'
+import { profileStateJsonExportPath } from '../profile-state/legacy-json/profile-state-export-path'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
 
 vi.mock('electron', () => ({
@@ -70,12 +70,12 @@ function createAuthority(databasePath: string, profileId: string): ProfileStateS
 }
 
 beforeEach(() => {
-  vi.spyOn(ProfileStateSqliteAuthority.prototype, 'scheduleBackup').mockImplementation(
-    function (this: ProfileStateSqliteAuthority) {
-      backupAuthorities.add(this)
-      scheduleBackup.call(this)
-    }
-  )
+  vi.spyOn(ProfileStateSqliteAuthority.prototype, 'scheduleBackup').mockImplementation(function (
+    this: ProfileStateSqliteAuthority
+  ) {
+    backupAuthorities.add(this)
+    scheduleBackup.call(this)
+  })
 })
 
 afterEach(async () => {
@@ -358,11 +358,14 @@ describe('Store with an injected SQLite profile-state authority', () => {
     const dataFile = join(directory, 'orca-data.json')
     const databasePath = join(directory, 'profile-state.db')
     const seedDataFile = join(directory, 'seed-orca-data.json')
-    const seedStore = new Store({ dataFile: seedDataFile })
+    const seedStore = new Store({
+      dataFile: seedDataFile,
+      serializedState: existsSync(seedDataFile) ? readFileSync(seedDataFile, 'utf8') : '{}'
+    })
     seedStore.updateSettings({ theme: 'light' })
     seedStore.flushOrThrow()
     const seed = createAuthority(databasePath, 'profile-authority-test')
-    seed.writeSerializedState(readFileSync(seedDataFile))
+    seed.writeSerializedState(Buffer.from(seedStore.prepareProfileStateExport().json))
     seedStore.freezeWrites()
 
     const authority = createAuthority(databasePath, 'profile-authority-test')
@@ -395,10 +398,13 @@ describe('Store with an injected SQLite profile-state authority', () => {
     const databasePath = join(directory, 'profile-state.db')
     const fixtureFile = join(directory, 'fixture-orca-data.json')
     writeFileSync(fixtureFile, JSON.stringify(buildProfileStateCutoverFixture(directory)))
-    const seedStore = new Store({ dataFile: fixtureFile })
+    const seedStore = new Store({
+      dataFile: fixtureFile,
+      serializedState: existsSync(fixtureFile) ? readFileSync(fixtureFile, 'utf8') : '{}'
+    })
     seedStore.flushOrThrow()
     const seed = createAuthority(databasePath, 'profile-authority-test')
-    seed.writeSerializedState(readFileSync(fixtureFile))
+    seed.writeSerializedState(Buffer.from(seedStore.prepareProfileStateExport().json))
     seedStore.freezeWrites()
 
     const authority = createAuthority(databasePath, 'profile-authority-test')
@@ -476,10 +482,13 @@ describe('Store with an injected SQLite profile-state authority', () => {
     const seedDataFile = join(directory, 'seed-orca-data.json')
     const databasePath = join(directory, 'profile-state.db')
     writeFileSync(seedDataFile, JSON.stringify(buildProfileStateCutoverFixture(directory)))
-    const seedStore = new Store({ dataFile: seedDataFile })
+    const seedStore = new Store({
+      dataFile: seedDataFile,
+      serializedState: existsSync(seedDataFile) ? readFileSync(seedDataFile, 'utf8') : '{}'
+    })
     seedStore.flushOrThrow()
     const seed = createAuthority(databasePath, 'profile-authority-test')
-    seed.writeSerializedState(readFileSync(seedDataFile))
+    seed.writeSerializedState(Buffer.from(seedStore.prepareProfileStateExport().json))
     seedStore.freezeWrites()
 
     const authority = createAuthority(databasePath, 'profile-authority-test')
@@ -512,10 +521,13 @@ describe('Store with an injected SQLite profile-state authority', () => {
     const seedDataFile = join(directory, 'seed-orca-data.json')
     const databasePath = join(directory, 'profile-state.db')
     writeFileSync(seedDataFile, JSON.stringify(buildProfileStateCutoverFixture(directory)))
-    const seedStore = new Store({ dataFile: seedDataFile })
+    const seedStore = new Store({
+      dataFile: seedDataFile,
+      serializedState: existsSync(seedDataFile) ? readFileSync(seedDataFile, 'utf8') : '{}'
+    })
     seedStore.flushOrThrow()
     const seed = createAuthority(databasePath, 'profile-authority-test')
-    seed.writeSerializedState(readFileSync(seedDataFile))
+    seed.writeSerializedState(Buffer.from(seedStore.prepareProfileStateExport().json))
     seedStore.freezeWrites()
 
     const authority = createAuthority(databasePath, 'profile-authority-test')
@@ -585,10 +597,13 @@ describe('Store with an injected SQLite profile-state authority', () => {
     const seedDataFile = join(directory, 'seed-orca-data.json')
     const databasePath = join(directory, 'profile-state.db')
     writeFileSync(seedDataFile, JSON.stringify(buildProfileStateCutoverFixture(directory)))
-    const seedStore = new Store({ dataFile: seedDataFile })
+    const seedStore = new Store({
+      dataFile: seedDataFile,
+      serializedState: existsSync(seedDataFile) ? readFileSync(seedDataFile, 'utf8') : '{}'
+    })
     seedStore.flushOrThrow()
     const seed = createAuthority(databasePath, 'profile-authority-test')
-    seed.writeSerializedState(readFileSync(seedDataFile))
+    seed.writeSerializedState(Buffer.from(seedStore.prepareProfileStateExport().json))
     seedStore.freezeWrites()
 
     const store = new Store({
@@ -631,10 +646,13 @@ describe('Store with an injected SQLite profile-state authority', () => {
     const seedDataFile = join(directory, 'seed-orca-data.json')
     const databasePath = join(directory, 'profile-state.db')
     writeFileSync(seedDataFile, JSON.stringify(buildProfileStateCutoverFixture(directory)))
-    const seedStore = new Store({ dataFile: seedDataFile })
+    const seedStore = new Store({
+      dataFile: seedDataFile,
+      serializedState: existsSync(seedDataFile) ? readFileSync(seedDataFile, 'utf8') : '{}'
+    })
     seedStore.flushOrThrow()
     const seed = createAuthority(databasePath, 'profile-authority-test')
-    seed.writeSerializedState(readFileSync(seedDataFile))
+    seed.writeSerializedState(Buffer.from(seedStore.prepareProfileStateExport().json))
     seedStore.freezeWrites()
 
     const authority = createAuthority(databasePath, 'profile-authority-test')
@@ -690,7 +708,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
     temporaryDirectories.push(directory)
     const dataFile = join(directory, 'orca-data.json')
     const databasePath = join(directory, 'profile-state.db')
-    const seed = new Store({ dataFile })
+    const seed = new Store({ dataFile, serializedState: '{}' })
     seed.flushOrThrow()
     const authority = createAuthority(databasePath, 'profile-authority-test')
     authority.writeSerializedState(Buffer.from(seed.prepareProfileStateExport().json, 'utf8'))
@@ -711,7 +729,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
     temporaryDirectories.push(directory)
     const dataFile = join(directory, 'orca-data.json')
     const databasePath = join(directory, 'profile-state.db')
-    const seed = new Store({ dataFile })
+    const seed = new Store({ dataFile, serializedState: '{}' })
     seed.updateSettings({ theme: 'light' })
     seed.flushOrThrow()
     const authority = createAuthority(databasePath, 'profile-authority-test')
@@ -746,7 +764,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
     temporaryDirectories.push(directory)
     const dataFile = join(directory, 'orca-data.json')
     const databasePath = join(directory, 'profile-state.db')
-    const seed = new Store({ dataFile })
+    const seed = new Store({ dataFile, serializedState: '{}' })
     seed.updateSettings({ theme: 'light' })
     seed.flushOrThrow()
     const authority = createAuthority(databasePath, 'profile-authority-test')
@@ -774,8 +792,7 @@ describe('Store with an injected SQLite profile-state authority', () => {
     const reopened = createProfileStateStore({
       dataFile,
       databaseFile: databasePath,
-      profileId: 'profile-authority-test',
-      authorityMode: 'sqlite-established'
+      profileId: 'profile-authority-test'
     })
     expect(reopened.backend).toBe('sqlite')
     expect(reopened.store.getSettings().theme).toBe('dark')
@@ -842,16 +859,18 @@ describe('Store with an injected SQLite profile-state authority', () => {
     expect(readFileSync(databasePath)).toEqual(sourceBytes)
   })
 
-  it('keeps the Store export path JSON-compatible without creating SQLite', () => {
+  it('prepares frozen JSON imports without permitting file publication', () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-store-profile-state-legacy-export-'))
     temporaryDirectories.push(directory)
     const dataFile = join(directory, 'orca-data.json')
-    const store = new Store({ dataFile })
+    const store = new Store({ dataFile, serializedState: '{"settings":{"theme":"light"}}' })
     store.updateSettings({ theme: 'dark' })
 
     const exportPath = join(directory, 'rollback', 'orca-data.json.legacy.json')
-    expect(store.writeProfileStateJsonExport(exportPath)).toBeUndefined()
-    expect(JSON.parse(readFileSync(exportPath, 'utf8')).settings.theme).toBe('dark')
+    expect(() => store.writeProfileStateJsonExport(exportPath)).toThrow('require a SQLite')
+    expect(JSON.parse(store.prepareProfileStateExport().json).settings.theme).toBe('dark')
+    expect(existsSync(exportPath)).toBe(false)
+    expect(existsSync(dataFile)).toBe(false)
     expect(existsSync(join(directory, 'profile-state.db'))).toBe(false)
     store.freezeWrites()
   })

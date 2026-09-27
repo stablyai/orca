@@ -27,7 +27,7 @@ describe('pre-ready profile-state recovery boundary', () => {
     const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
     const { writeHttp1CompatibilityMarker } = await import('./http1-compatibility-marker')
     const { profileStateJsonExportPath } =
-      await import('../persistence/profile-state/profile-state-export-path')
+      await import('../persistence/profile-state/legacy-json/profile-state-export-path')
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-profile-'))
     temporaryDirectories.push(userDataPath)
     const profileDirectory = join(userDataPath, 'profiles', 'profile-b')

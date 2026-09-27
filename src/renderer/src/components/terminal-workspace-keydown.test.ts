@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { handleSwitchTabAcrossAllTypes } from '../hooks/ipc-tab-switch'
+import { registerMouseShortcutDispatch } from '@/lib/mouse-shortcut-dispatch'
+import { handleSwitchTabAcrossAllTypes, handleSwitchTerminalTab } from '../hooks/ipc-tab-switch'
 import { switchFloatingWorkspaceTab } from '@/lib/floating-workspace-terminal-actions'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import type { Tab } from '../../../shared/tab-types'
@@ -329,5 +330,74 @@ describe('shared tab navigation routing', () => {
     expect(switchFloatingWorkspaceTab).toHaveBeenCalledTimes(2)
     expect(switchFloatingWorkspaceTab).toHaveBeenLastCalledWith(mocks.state, 1, 'all-types')
     expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
+  })
+})
+
+describe('mouse workspace shortcut routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.targetInsideFloatingPanel = false
+    mocks.state = { activeWorktreeId: controller.activeWorktreeId }
+  })
+
+  it.each([false, true])('switches terminal tabs once with floating focus %s', (floating) => {
+    mocks.floatingFocused = floating
+    const target = document.createElement('textarea')
+    target.className = 'xterm-helper-textarea'
+    document.body.appendChild(target)
+    target.focus()
+    const mouseController = {
+      ...controller,
+      keybindings: { 'tab.nextTerminal': ['Mod+MouseForward'] }
+    }
+    const listener = (event: KeyboardEvent): void =>
+      handleTerminalWorkspaceKeyDown(event, mouseController, 'linux')
+    window.addEventListener('keydown', listener, true)
+    const cleanup = registerMouseShortcutDispatch(() => true)
+    try {
+      const press = new MouseEvent('mousedown', {
+        button: 4,
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+      target.dispatchEvent(press)
+      target.dispatchEvent(
+        new MouseEvent('mouseup', { button: 4, bubbles: true, cancelable: true })
+      )
+      expect(press.defaultPrevented).toBe(true)
+      if (floating) {
+        expect(switchFloatingWorkspaceTab).toHaveBeenCalledExactlyOnceWith(
+          mocks.state,
+          1,
+          'terminal'
+        )
+        expect(handleSwitchTerminalTab).not.toHaveBeenCalled()
+      } else {
+        expect(handleSwitchTerminalTab).toHaveBeenCalledExactlyOnceWith(1)
+      }
+    } finally {
+      cleanup()
+      window.removeEventListener('keydown', listener, true)
+      target.remove()
+    }
+  })
+
+  it('does not execute an existing binding while recording it', () => {
+    const target = document.createElement('button')
+    target.setAttribute('data-shortcut-recorder-active', '')
+    const event = new KeyboardEvent('keydown', { key: 'MouseBack', cancelable: true })
+    Object.defineProperty(event, 'target', { value: target })
+    handleTerminalWorkspaceKeyDown(
+      event,
+      {
+        ...controller,
+        keybindings: { 'tab.previousTerminal': ['MouseBack'] }
+      },
+      'linux'
+    )
+    expect(handleSwitchTerminalTab).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
   })
 })

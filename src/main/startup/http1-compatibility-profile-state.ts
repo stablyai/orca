@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { profileStateJsonExportPaths } from '../persistence/profile-state/profile-state-export-path'
+import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
 import { profileStateDatabaseBackups } from '../persistence/profile-state/profile-state-backup-path'
 import { hasProfileStateDatabaseFiles } from '../persistence/profile-state/profile-state-storage-classification'
 

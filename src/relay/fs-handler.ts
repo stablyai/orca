@@ -101,7 +101,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.renameNoClobber', (p) => renameRelayPathNoClobber(p))
     this.dispatcher.onRequest('fs.copy', (p) => copyRelayPath(p))
     this.dispatcher.onRequest('fs.realpath', (p) => realpathRelayPath(p))
-    this.dispatcher.onRequest('fs.search', (p) => this.search(p))
+    this.dispatcher.onRequest('fs.search', (p, context) => this.search(p, context))
     this.dispatcher.onRequest('fs.getCapabilities', async () => ({
       quickOpenSearchVersion: 1,
       rangedReadVersion: 1,
@@ -185,7 +185,7 @@ export class FsHandler {
     })
   }
 
-  private async search(params: Record<string, unknown>) {
+  private async search(params: Record<string, unknown>, context?: RequestContext) {
     const query = params.query as string
     const rootPath = expandTilde(params.rootPath as string)
     const caseSensitive = params.caseSensitive as boolean | undefined
@@ -204,7 +204,8 @@ export class FsHandler {
       useRegex,
       includePattern,
       excludePattern,
-      maxResults
+      maxResults,
+      signal: context?.signal
     }
     try {
       return await searchWithRg(rootPath, query, options)

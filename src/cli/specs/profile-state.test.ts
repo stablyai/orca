@@ -14,6 +14,12 @@ describe('profile state rollback discovery', () => {
     expect(() => validateCommandAndFlags(PROFILE_STATE_COMMAND_SPECS, parsed)).not.toThrow()
   })
 
+  it('parses the current SQLite selector as a boolean', () => {
+    const parsed = parseArgs(['profile', 'state', 'rollback', '--current-sqlite'])
+    expect(parsed.flags.get('current-sqlite')).toBe(true)
+    expect(() => validateCommandAndFlags(PROFILE_STATE_COMMAND_SPECS, parsed)).not.toThrow()
+  })
+
   it('explains that adoption selects one full state and preserves both copies', () => {
     const spec = PROFILE_STATE_COMMAND_SPECS.find((item) => item.path.at(-1) === 'rollback')
     expect(spec?.usage).toContain('--current-json')

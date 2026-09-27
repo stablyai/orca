@@ -21,7 +21,7 @@ import { TerminalHostTombstones } from './terminal-host-tombstones'
 import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
-import { rejectOnAbort } from './terminal-attach-cancellation'
+import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
 import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
 import {
@@ -84,7 +84,7 @@ export class TerminalHost {
       // Why: the create ahead of us can be stuck on an unreachable share for
       // minutes. Waiting unconditionally is what let one dead path strand every
       // later create and attach for the session, so a canceled caller leaves.
-      await Promise.race([inFlight, rejectOnAbort(opts.cancelSignal, opts.sessionId)])
+      await waitForTerminalAttachOperation(inFlight, opts.cancelSignal, opts.sessionId)
       this.assertCreateOrAttachAllowed(opts)
     }
     this.assertCreateOrAttachAllowed(opts)

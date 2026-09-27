@@ -124,6 +124,9 @@ export function useHoldDictationGesture({
     }
 
     const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.target instanceof Element && e.target.closest('[data-shortcut-recorder-active]')) {
+        return
+      }
       if (keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)) {
         if (!settings?.voice?.enabled || !settings.voice.sttModel) {
           return

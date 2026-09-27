@@ -1,12 +1,18 @@
+import {
+  closeTestStores,
+  testState,
+  createStore,
+  makeTerminalTab
+} from './persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
-vi.mock('node:fs', { spy: true })
-import { rmSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { ProfileStateSqliteAuthority } from './persistence/profile-state/profile-state-sqlite-authority'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../shared/constants'
-import { testState, createStore, makeTerminalTab } from './persistence-test-harness'
+
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
@@ -57,7 +63,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('rejects a split source incarnation mismatch', async () => {
@@ -350,7 +357,11 @@ describe('Store', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
     })
-    vi.mocked(writeFileSync).mockImplementationOnce(() => {
+    store.flushOrThrow()
+    vi.spyOn(
+      ProfileStateSqliteAuthority.prototype,
+      'writeSerializedDomains'
+    ).mockImplementationOnce(() => {
       throw new Error('disk full')
     })
 

@@ -1,3 +1,4 @@
+import { createSqliteTestStore } from '../../persistence-test-harness'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -26,6 +27,12 @@ const directories: string[] = []
 const stores: Store[] = []
 const livePaneKey = 'live-tab:11111111-1111-4111-8111-111111111111'
 
+it('refuses a writable Store before constructing domains without an authority', () => {
+  const createDomains = vi.spyOn(composition, 'createStoreDomains')
+  expect(() => new Store()).toThrow('requires a SQLite profile-state authority')
+  expect(createDomains).not.toHaveBeenCalled()
+})
+
 afterEach(async () => {
   agentHookServer.setPaneKeyAliasPersistenceListener(null)
   setMigrationUnsupportedPtyPersistenceListener(null)
@@ -45,7 +52,7 @@ it.each([false, true])('isolates imported aliases and live listeners (load failu
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   const directory = mkdtempSync(join(tmpdir(), 'orca-import-lifetime-'))
   directories.push(directory)
-  const live = new Store({ dataFile: join(directory, 'live', 'orca-data.json') })
+  const live = createSqliteTestStore(Store, { dataFile: join(directory, 'live', 'orca-data.json') })
   stores.push(live)
   const source = buildProfileStateCutoverFixture(directory)
   for (const session of [

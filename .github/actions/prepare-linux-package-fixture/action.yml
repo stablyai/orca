@@ -1,0 +1,63 @@
+name: Prepare cached Linux package fixture
+description: Restore Docker build layers; only the main warmer builds and saves missing images.
+inputs:
+  fixture:
+    description: Directory name below config/docker.
+    required: true
+  save-cache:
+    description: Build and save a missing fixture on the default branch.
+    default: 'false'
+outputs:
+  image:
+    description: Loaded image to use as a Docker build cache, or empty on a cache miss.
+    value: ${{ steps.image.outputs.image }}
+runs:
+  using: composite
+  steps:
+    - name: Restore fixture image
+      id: cache
+      uses: actions/cache/restore@v5
+      continue-on-error: true
+      with:
+        path: ${{ runner.temp }}/orca-package-fixtures/${{ inputs.fixture }}.tar
+        key: linux-package-fixture-v1-${{ runner.os }}-${{ runner.arch }}-linux-amd64-${{ inputs.fixture }}-${{ hashFiles(format('config/docker/{0}/**', inputs.fixture), '.github/actions/prepare-linux-package-fixture/action.yml') }}
+
+    - name: Load or seed fixture build cache
+      id: image
+      shell: bash
+      env:
+        FIXTURE: ${{ inputs.fixture }}
+        SAVE_CACHE: ${{ inputs.save-cache }}
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        case "$FIXTURE" in
+          headless-serve-shutdown|cli-launch-contract) ;;
+          *) echo "Unsupported package fixture: $FIXTURE" >&2; exit 1 ;;
+        esac
+        archive="$RUNNER_TEMP/orca-package-fixtures/$FIXTURE.tar"
+        image="orca-package-fixture-$FIXTURE:cache"
+        if [[ "$CACHE_HIT" == true ]] && docker load --input "$archive"; then
+          if docker image inspect "$image" > /dev/null; then
+            echo "image=$image" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+        fi
+        if [[ "$SAVE_CACHE" != true ]]; then
+          echo 'No usable fixture cache; the package runner will build normally.'
+          exit 0
+        fi
+        docker build --platform linux/amd64 --build-arg BUILDKIT_INLINE_CACHE=1 \
+          --tag "$image" --file "config/docker/$FIXTURE/Dockerfile" "config/docker/$FIXTURE"
+        mkdir -p "$(dirname "$archive")"
+        docker save --output "$archive" "$image"
+        echo "image=$image" >> "$GITHUB_OUTPUT"
+        echo 'built=true' >> "$GITHUB_OUTPUT"
+
+    - name: Save fixture image
+      if: inputs.save-cache == 'true' && steps.cache.outputs.cache-hit != 'true' && steps.image.outputs.built == 'true'
+      uses: actions/cache/save@v5
+      continue-on-error: true
+      with:
+        path: ${{ runner.temp }}/orca-package-fixtures/${{ inputs.fixture }}.tar
+        key: ${{ steps.cache.outputs.cache-primary-key }}

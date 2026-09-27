@@ -11077,7 +11077,7 @@
           "e27c8d45bf": "Les diagnostics sont désactivés par une variable d'environnement."
         },
         "ShortcutCommandBlock": {
-          "eb72c52c28": "Appuyez sur un raccourci, ou appuyez deux fois sur une touche modificatrice (ex. {{value0}}). Échap annule.",
+          "eb72c52c28": "Appuyez sur des touches, un bouton Précédent/Suivant de la souris ou deux fois sur une touche modificatrice (ex. {{value0}}). Échap annule.",
           "70b5d25583": "Raccourci {{value0}}",
           "287e07ddde": "Modifié",
           "3c83cd7d1c": "Désactivé",
@@ -15599,7 +15599,10 @@
             "2b3ce6d394": "Annuler",
             "e05063cfc1": "Ligne {{value0}}",
             "c845170b3b": "Lignes {{value0}}-{{value1}}",
-            "commentTooLarge": "Le commentaire est trop volumineux pour être envoyé sans risque."
+            "commentTooLarge": "Le commentaire est trop volumineux pour être envoyé sans risque.",
+            "f6c449191e": "Ajouter une note pour l'IA",
+            "5fa4bfebaa": "Ajouter une note",
+            "5e9b3d0c2e": "Ajout..."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "Cette note"

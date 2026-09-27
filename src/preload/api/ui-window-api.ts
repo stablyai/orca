@@ -1,3 +1,4 @@
+import type { MouseShortcutInput } from '../../shared/mouse-shortcut-input'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type { NativeFileDropPayload } from '../../shared/native-file-drop'
@@ -36,6 +37,7 @@ export type UiWindowApi = {
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null) => void
   setTerminalInputFocused: (focused: boolean) => void
   setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void
+  dispatchMouseShortcut?: (input: MouseShortcutInput) => void
   setShortcutRecorderFocused: (focused: boolean) => void
   onRichMarkdownContextCommand: (
     callback: (payload: RichMarkdownContextMenuCommandPayload) => void

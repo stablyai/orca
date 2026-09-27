@@ -1,7 +1,4 @@
-import {
-  createProfileStateStoreForStartup,
-  orcadProfileStateAuthorityMode
-} from '../persistence/profile-state/profile-state-startup-authority'
+import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import type { ProfileStateStoreFactoryResult } from '../persistence/profile-state/profile-state-store-factory'
 import { ensureActiveOrcaProfile, initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
 import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
@@ -18,7 +15,7 @@ export type OrcadProfileStateStartup = {
   authority: {
     backend: ProfileStateStoreFactoryResult['backend']
     classification: ProfileStateStoreFactoryResult['classification']
-    authority_mode: ReturnType<typeof orcadProfileStateAuthorityMode>
+    authority_mode: 'sqlite-established'
     runtime: 'orcad'
     migrated: boolean
   }
@@ -30,19 +27,17 @@ export async function createOrcadProfileStateStartup(
 ): Promise<OrcadProfileStateStartup> {
   initOrcaProfilePaths()
   const profile = ensureActiveOrcaProfile(userDataPath)
-  const authorityMode = orcadProfileStateAuthorityMode()
   const result = await createProfileStateStoreForStartup({
     dataFile: profile.dataFile,
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,
     runtime: 'orcad',
-    authorityMode,
     storageAuthority: 'runtime'
   })
   const authority = {
     backend: result.backend,
     classification: result.classification,
-    authority_mode: authorityMode,
+    authority_mode: 'sqlite-established' as const,
     runtime: 'orcad' as const,
     migrated: result.migrated
   }

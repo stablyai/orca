@@ -7,8 +7,6 @@ import { join, resolve } from 'node:path'
 import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixture'
 import {
   createProfileStateStoreForStartup,
-  desktopProfileStateAuthorityMode,
-  orcadProfileStateAuthorityMode,
   ProfileStateStartupAuthorityError,
   type ProfileStateStartupAuthorityOptions
 } from './profile-state-startup-authority'
@@ -82,12 +80,6 @@ afterEach(() => {
 })
 
 describe('profile-state startup authority boundary', () => {
-  it('establishes desktop SQLite by default while preserving orcad capability selection', () => {
-    expect(desktopProfileStateAuthorityMode()).toBe('sqlite-candidate')
-    expect(orcadProfileStateAuthorityMode(true)).toBe('sqlite-candidate')
-    expect(orcadProfileStateAuthorityMode(false)).toBe('legacy')
-  })
-
   it('imports legacy desktop state by default and reopens acknowledged SQLite state', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-profile-state-startup-authority-'))
     temporaryDirectories.push(directory)
@@ -95,25 +87,15 @@ describe('profile-state startup authority boundary', () => {
     const databaseFile = profileStateDatabaseFile(directory)
     writeFileSync(dataFile, JSON.stringify(buildProfileStateCutoverFixture(directory)))
 
-    const base: Omit<ProfileStateStartupAuthorityOptions, 'runtime' | 'authorityMode'> = {
+    const base: Omit<ProfileStateStartupAuthorityOptions, 'runtime'> = {
       dataFile,
       databaseFile,
       profileId: 'startup-authority-test',
       storageAuthority: 'desktop'
     }
-    const legacy = await createProfileStateStoreForStartup({
-      ...base,
-      runtime: 'desktop',
-      authorityMode: 'legacy'
-    })
-    expect(legacy.backend).toBe('json')
-    expect(existsSync(databaseFile)).toBe(false)
-    await legacy.store.freezeWritesAsync()
-
     const candidate = await createProfileStateStoreForStartup({
       ...base,
-      runtime: 'desktop',
-      authorityMode: desktopProfileStateAuthorityMode()
+      runtime: 'desktop'
     })
     expect(candidate.backend).toBe('sqlite')
     expect(candidate.migrated).toBe(true)
@@ -124,8 +106,7 @@ describe('profile-state startup authority boundary', () => {
 
     const restarted = await createProfileStateStoreForStartup({
       ...base,
-      runtime: 'desktop',
-      authorityMode: desktopProfileStateAuthorityMode()
+      runtime: 'desktop'
     })
     expect(restarted.backend).toBe('sqlite')
     expect(restarted.classification).toBe('sqlite-only')
@@ -134,42 +115,23 @@ describe('profile-state startup authority boundary', () => {
 
     const packaged = await createProfileStateStoreForStartup({
       ...base,
-      runtime: 'desktop',
-      authorityMode: desktopProfileStateAuthorityMode()
+      runtime: 'desktop'
     })
     expect(packaged.backend).toBe('sqlite')
     expect(packaged.classification).toBe('sqlite-only')
     expect(packaged.store.getSettings().theme).toBe('dark')
     await packaged.store.freezeWritesAsync()
 
-    await expect(
-      createProfileStateStoreForStartup({
-        ...base,
-        runtime: 'desktop',
-        authorityMode: 'legacy'
-      })
-    ).rejects.toThrowError(expect.objectContaining({ code: 'profile-state-authority-required' }))
-
     const orcad = await createProfileStateStoreForStartup({
       ...base,
       runtime: 'orcad',
-      authorityMode: 'sqlite-candidate',
       storageAuthority: 'runtime'
     })
     expect(orcad.backend).toBe('sqlite')
     await orcad.store.freezeWritesAsync()
-
-    await expect(
-      createProfileStateStoreForStartup({
-        ...base,
-        runtime: 'orcad',
-        authorityMode: 'legacy',
-        storageAuthority: 'runtime'
-      })
-    ).rejects.toThrowError(expect.objectContaining({ code: 'profile-state-authority-required' }))
   })
 
-  it('rejects an orcad candidate request on a Node 18-style host', async () => {
+  it('rejects direct orcad startup on an incapable runtime', async () => {
     const original = process.getBuiltinModule
     vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
       if (id === 'node:sqlite' || id === 'bun:sqlite') {
@@ -184,7 +146,6 @@ describe('profile-state startup authority boundary', () => {
         databaseFile: join(tmpdir(), 'missing-profile-state.db'),
         profileId: 'startup-authority-node18-test',
         runtime: 'orcad',
-        authorityMode: 'sqlite-candidate',
         storageAuthority: 'runtime'
       })
     ).rejects.toThrowError(ProfileStateStartupAuthorityError)
@@ -198,7 +159,6 @@ describe('profile-state startup authority boundary', () => {
       databaseFile: profileStateDatabaseFile(directory),
       profileId: 'default-empty',
       runtime: 'desktop',
-      authorityMode: desktopProfileStateAuthorityMode(),
       storageAuthority: 'desktop'
     }
     const first = await createProfileStateStoreForStartup(options)
@@ -232,7 +192,6 @@ describe('profile-state startup authority boundary', () => {
         databaseFile: profileStateDatabaseFile(directory),
         profileId: 'default-invalid',
         runtime: 'desktop',
-        authorityMode: desktopProfileStateAuthorityMode(),
         storageAuthority: 'desktop'
       }
       if (kind === 'corrupt') {
@@ -277,7 +236,6 @@ describe('profile-state startup authority boundary', () => {
       databaseFile,
       profileId: 'orcad-capable-test',
       runtime: 'orcad',
-      authorityMode: orcadProfileStateAuthorityMode(true),
       storageAuthority: 'runtime'
     })
 
@@ -287,7 +245,7 @@ describe('profile-state startup authority boundary', () => {
     await result.store.freezeWritesAsync()
   })
 
-  it('keeps a runtime with SQLite but no native backup on JSON authority', async () => {
+  it('refuses a runtime with SQLite but no native backup', async () => {
     const original = process.getBuiltinModule
     vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) => {
       if (id === 'bun:sqlite') {
@@ -295,38 +253,40 @@ describe('profile-state startup authority boundary', () => {
       }
       return id === 'node:sqlite' ? { DatabaseSync: class {} } : original(id)
     })
-    expect(orcadProfileStateAuthorityMode()).toBe('legacy')
     await expect(
       createProfileStateStoreForStartup({
         dataFile: join(tmpdir(), 'missing-backup-orca-data.json'),
         databaseFile: join(tmpdir(), 'missing-backup-profile-state.db'),
         profileId: 'missing-native-backup',
         runtime: 'orcad',
-        authorityMode: 'sqlite-candidate',
         storageAuthority: 'runtime'
       })
     ).rejects.toThrowError(ProfileStateStartupAuthorityError)
   })
 
-  it('keeps a JSON-only orcad profile on JSON when the runtime lacks SQLite', async () => {
+  it('leaves legacy JSON untouched when the runtime cannot own SQLite', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'orca-profile-state-orcad-node18-'))
     temporaryDirectories.push(directory)
     const dataFile = join(directory, 'orca-data.json')
     const databaseFile = profileStateDatabaseFile(directory)
-    writeFileSync(dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
+    const source = JSON.stringify({ settings: { theme: 'dark' } })
+    writeFileSync(dataFile, source)
+    const original = process.getBuiltinModule
+    vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) =>
+      id === 'node:sqlite' || id === 'bun:sqlite' ? undefined : original(id)
+    )
 
-    const result = await createProfileStateStoreForStartup({
-      dataFile,
-      databaseFile,
-      profileId: 'orcad-node18-test',
-      runtime: 'orcad',
-      authorityMode: orcadProfileStateAuthorityMode(false),
-      storageAuthority: 'runtime'
-    })
+    await expect(
+      createProfileStateStoreForStartup({
+        dataFile,
+        databaseFile,
+        profileId: 'orcad-node18-test',
+        runtime: 'orcad',
+        storageAuthority: 'runtime'
+      })
+    ).rejects.toThrowError(ProfileStateStartupAuthorityError)
 
-    expect(result.backend).toBe('json')
-    expect(result.migrated).toBe(false)
-    expect(result.store.getSettings().theme).toBe('dark')
-    await result.store.freezeWritesAsync()
+    expect(readFileSync(dataFile, 'utf8')).toBe(source)
+    expect(existsSync(databaseFile)).toBe(false)
   })
 })

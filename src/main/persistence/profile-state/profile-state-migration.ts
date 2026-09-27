@@ -4,7 +4,7 @@ import { dirname } from 'node:path'
 import { publishProfileStateDatabase } from './profile-state-database-publication'
 import { openProfileStateDatabase } from './profile-state-database'
 import { hashProfileStateJson, importProfileStateJson } from './profile-state-documents'
-import { writeVersionedProfileStateExport } from './profile-state-versioned-export'
+import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
 import { assertProfileStateCanInitialize } from './profile-state-recovery-required'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import {

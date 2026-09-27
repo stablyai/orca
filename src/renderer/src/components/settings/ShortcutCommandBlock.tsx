@@ -76,7 +76,7 @@ export function ShortcutCommandBlock({
   const doubleTapHint = platform === 'darwin' ? '⇧⇧' : 'Shift Shift'
   const recordingMessage = translate(
     'auto.components.settings.ShortcutCommandBlock.eb72c52c28',
-    'Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',
+    'Press keys, a mouse Back/Forward button, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',
     { value0: doubleTapHint }
   )
   // Errors win, then the live recording hint, then a standing conflict warning.

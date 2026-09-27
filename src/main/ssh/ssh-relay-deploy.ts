@@ -328,8 +328,17 @@ async function resolveRelayBootstrapState(
     signal?.throwIfAborted()
     return { ...installState, nodePath }
   } catch (err) {
-    abortController.abort()
+    // Let an admitted probe finish before retrying a refused parallel session.
+    if (!isSshSessionLimitError(err)) {
+      abortController.abort()
+    }
     const settled = await Promise.allSettled([installStatePromise, nodePathPromise])
+    const unconfirmed = settled.find(
+      (result) => result.status === 'rejected' && isUnconfirmedSshCommandTermination(result.reason)
+    )
+    if (unconfirmed?.status === 'rejected') {
+      throw unconfirmed.reason
+    }
     signal?.throwIfAborted()
     if (!isSshSessionLimitError(err)) {
       throw err
@@ -483,32 +492,18 @@ async function deployAndLaunchRelayAttempt(
     onProgress?.('Uploading relay...')
     console.log('[ssh-relay] Uploading relay...')
     try {
-      try {
-        await uploadRelay(
-          conn,
-          platform,
-          uploadStagePayloadDir,
-          fullVersion,
-          hostPlatform,
-          deploySignal,
-          { rootDir: uploadStage.slotDir, namespace: uploadStageSftpNamespace }
-        )
-      } catch (err) {
-        if (isUnconfirmedSshCommandTermination(err)) {
-          uploadStageCleanupAllowed = false
-        }
-        throw err
-      }
+      await uploadRelay(
+        conn,
+        platform,
+        uploadStagePayloadDir,
+        fullVersion,
+        hostPlatform,
+        deploySignal,
+        { rootDir: uploadStage.slotDir, namespace: uploadStageSftpNamespace }
+      )
 
-      try {
-        await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
-        ownsInstallLock = true
-      } catch (err) {
-        if (isUnconfirmedSshCommandTermination(err)) {
-          ownsInstallLock = true
-        }
-        throw err
-      }
+      await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
+      ownsInstallLock = true
       try {
         // Re-probe after acquiring the lock — a sibling installer may have finished while we waited.
         if (
@@ -523,26 +518,19 @@ async function deployAndLaunchRelayAttempt(
             homeRelativeRelayDir,
             deploySignal
           )
-          try {
-            const promotion = await execHostCommand(
-              conn,
+          const promotion = await execHostCommand(
+            conn,
+            hostPlatform,
+            promoteOwnedRelayUploadStageCommand(
               hostPlatform,
-              promoteOwnedRelayUploadStageCommand(
-                hostPlatform,
-                uploadStage,
-                uploadStageOwner,
-                remoteRelayDir
-              ),
-              { signal: deploySignal }
-            )
-            if (!relayUploadStagePromotionConfirmed(uploadStageOwner, promotion)) {
-              throw new Error('Relay upload stage ownership was lost before promotion')
-            }
-          } catch (err) {
-            if (isUnconfirmedSshCommandTermination(err)) {
-              uploadStageCleanupAllowed = false
-            }
-            throw err
+              uploadStage,
+              uploadStageOwner,
+              remoteRelayDir
+            ),
+            { signal: deploySignal }
+          )
+          if (!relayUploadStagePromotionConfirmed(uploadStageOwner, promotion)) {
+            throw new Error('Relay upload stage ownership was lost before promotion')
           }
           console.log('[ssh-relay] Upload complete')
 
@@ -574,13 +562,20 @@ async function deployAndLaunchRelayAttempt(
         }
         throw err
       }
+    } catch (error) {
+      uploadStageCleanupAllowed = !isUnconfirmedSshCommandTermination(error)
+      throw error
     } finally {
       if (uploadStageCleanupAllowed) {
         await execHostCommand(
           conn,
           hostPlatform,
           cleanupOwnedRelayUploadStageCommand(hostPlatform, uploadStage, uploadStageOwner)
-        ).catch(() => {})
+        ).catch((error) => {
+          if (isUnconfirmedSshCommandTermination(error)) {
+            throw error
+          }
+        })
       }
     }
   }
@@ -594,55 +589,65 @@ async function deployAndLaunchRelayAttempt(
       remoteRelayDir,
       ripgrepLayout.entryName
     ))
-  let launched: Awaited<ReturnType<typeof launchRelay>>
-  let launchLivenessObserved = false
+  deploySignal?.throwIfAborted()
+  onProgress?.('Starting relay...')
+  console.log('[ssh-relay] Launching relay...')
+  // A failed launch retains its fences until stale recovery can establish liveness.
+  const launched = await launchRelay(
+    conn,
+    remoteRelayDir,
+    hostPlatform,
+    nodePath,
+    graceTimeSeconds,
+    relayInstanceId,
+    deploySignal,
+    ripgrepReferenced ? ripgrepLayout.binaryPath : undefined
+  )
+  let launchCleanupSettled = true
   try {
-    deploySignal?.throwIfAborted()
-    onProgress?.('Starting relay...')
-    console.log('[ssh-relay] Launching relay...')
-    launched = await launchRelay(
-      conn,
-      remoteRelayDir,
-      hostPlatform,
-      nodePath,
-      graceTimeSeconds,
-      relayInstanceId,
-      deploySignal,
-      ripgrepReferenced ? ripgrepLayout.binaryPath : undefined
-    )
-    launchLivenessObserved = true
-  } finally {
-    // Why: older clients understand only the install lock; if launch never goes live, keep it so their GC can't race a caller waiting behind this owner.
-    if (ownsInstallLock && launchLivenessObserved) {
+    if (ownsInstallLock) {
       await abandonInstall(conn, remoteRelayDir, hostPlatform)
     }
-    // The detached start may outlive a timed-out SSH command; keep the fence on failed launch until stale recovery proves the handoff ended.
-    if (launchGcClaimToken && launchLivenessObserved) {
+    if (launchGcClaimToken) {
       await releaseRelayGcClaimWithRetry(conn, remoteRelayDir, launchGcClaimToken, hostPlatform)
     }
+  } catch (error) {
+    // Keep the connected transport, but stop optional commands after uncertain fence release.
+    launchCleanupSettled = !isUnconfirmedSshCommandTermination(error)
+    console.warn('[ssh-relay] Launch fence release failed:', error)
   }
   console.log('[ssh-relay] Relay started successfully')
 
   // Keep background commands serial for SSH transports that allow only one exec at a time.
   const ripgrepEntry = ripgrepLayout?.entryName
   const ripgrepInstall = (
-    ripgrepReferenced
+    ripgrepReferenced && launchCleanupSettled
       ? ensureRemoteBundledRipgrep(conn, hostPlatform, remoteHome, { signal: deploySignal })
       : Promise.resolve()
-  ).catch(() => {})
-  const runtimeInstall = (conn.canRunConcurrentExecCommands() ? Promise.resolve() : ripgrepInstall)
-    .then(() =>
-      ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
-        nodePath: launched.nodePath,
-        relayDir: remoteRelayDir,
-        signal: deploySignal
-      })
+  ).then(
+    () => launchCleanupSettled,
+    (error) => !isUnconfirmedSshCommandTermination(error)
+  )
+  const runtimeInstall = (
+    conn.canRunConcurrentExecCommands() ? Promise.resolve(launchCleanupSettled) : ripgrepInstall
+  )
+    .then((ripgrepSettled) =>
+      ripgrepSettled
+        ? ensureRemoteOpenCodeRuntime(conn, hostPlatform, remoteHome, {
+            nodePath: launched.nodePath,
+            relayDir: remoteRelayDir,
+            signal: deploySignal
+          })
+        : ('teardown-unconfirmed' as const)
     )
     .catch(() => 'teardown-unconfirmed' as const)
-  const cleanupReady = conn.canRunConcurrentExecCommands() ? Promise.resolve() : runtimeInstall
 
-  const backgroundCleanup = cleanupReady.then((runtimeOutcome) => {
-    if (runtimeOutcome === 'teardown-unconfirmed') {
+  const cleanupReady = Promise.all([ripgrepInstall, runtimeInstall]).then(
+    ([ripgrepSettled, runtimeOutcome]) =>
+      ripgrepSettled && runtimeOutcome !== 'teardown-unconfirmed'
+  )
+  const backgroundCleanup = cleanupReady.then((ready) => {
+    if (!ready) {
       return false
     }
     return (
@@ -1010,7 +1015,9 @@ async function repairInstalledNativeDeps(
         signal
       })
     } catch (err) {
-      await abandonInstall(conn, remoteDir, hostPlatform)
+      if (!isUnconfirmedSshCommandTermination(err)) {
+        await abandonInstall(conn, remoteDir, hostPlatform)
+      }
       throw err
     }
     if (!stillInstalled) {
@@ -1157,7 +1164,9 @@ async function acquireRelayLaunchGcFence(
     // Why: a caller without the install lock still needs its own durable fence; never borrow another connection's lock through launch.
     return token
   } catch (err) {
-    await releaseRelayGcClaimWithRetry(conn, remoteDir, token, hostPlatform)
+    if (!isUnconfirmedSshCommandTermination(err)) {
+      await releaseRelayGcClaimWithRetry(conn, remoteDir, token, hostPlatform)
+    }
     throw err
   }
 }
