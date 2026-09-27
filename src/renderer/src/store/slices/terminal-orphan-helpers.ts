@@ -54,6 +54,7 @@ type OrphanTerminalCleanupState = Pick<
   | 'cacheTimerByKey'
   | 'activeTabIdByWorktree'
   | 'activeTabId'
+  | 'unreadTerminalTabs'
 >
 
 export function getOrphanTerminalIds(
@@ -89,6 +90,10 @@ export function getOrphanTerminalIds(
   )
 }
 
+/**
+ * Removes swept orphan terminal rows and every per-tab entry keyed by their ids, including their
+ * unread markers. The unread map keeps its identity when no orphan holds a marker.
+ */
 export function buildOrphanTerminalCleanupPatch(
   state: OrphanTerminalCleanupState,
   worktreeId: string,
@@ -112,6 +117,7 @@ export function buildOrphanTerminalCleanupPatch(
   | 'cacheTimerByKey'
   | 'activeTabIdByWorktree'
   | 'activeTabId'
+  | 'unreadTerminalTabs'
 > {
   if (orphanTerminalIds.size === 0) {
     return {
@@ -131,7 +137,8 @@ export function buildOrphanTerminalCleanupPatch(
       tabBarOrderByWorktree: state.tabBarOrderByWorktree,
       cacheTimerByKey: state.cacheTimerByKey,
       activeTabIdByWorktree: state.activeTabIdByWorktree,
-      activeTabId: state.activeTabId
+      activeTabId: state.activeTabId,
+      unreadTerminalTabs: state.unreadTerminalTabs
     }
   }
 
@@ -159,6 +166,8 @@ export function buildOrphanTerminalCleanupPatch(
     )
   }
   const nextCacheTimerByKey = { ...state.cacheTimerByKey }
+  // Why copy lazily: the unread map feeds the floating launcher and tab-strip selectors, so an unchanged sweep keeps its identity.
+  let nextUnreadTerminalTabs = state.unreadTerminalTabs
 
   // Why: orphan runtime terminals no longer have a backing unified tab or live
   // PTY, so every per-tab cache keyed off that runtime ID must disappear with
@@ -177,6 +186,12 @@ export function buildOrphanTerminalCleanupPatch(
     delete nextAutomaticAgentResumeClaimsByTabId[orphanTabId]
     delete nextNativeChatLaunchPromptByTabId[orphanTabId]
     delete nextNativeChatLaunchDraftByTabId[orphanTabId]
+    if (nextUnreadTerminalTabs[orphanTabId]) {
+      if (nextUnreadTerminalTabs === state.unreadTerminalTabs) {
+        nextUnreadTerminalTabs = { ...state.unreadTerminalTabs }
+      }
+      delete nextUnreadTerminalTabs[orphanTabId]
+    }
     for (const key of Object.keys(nextCacheTimerByKey)) {
       if (key.startsWith(`${orphanTabId}:`)) {
         delete nextCacheTimerByKey[key]
@@ -212,6 +227,7 @@ export function buildOrphanTerminalCleanupPatch(
     cacheTimerByKey: nextCacheTimerByKey,
     activeTabIdByWorktree: nextActiveTabIdByWorktree,
     activeTabId:
-      state.activeTabId && orphanTerminalIds.has(state.activeTabId) ? null : state.activeTabId
+      state.activeTabId && orphanTerminalIds.has(state.activeTabId) ? null : state.activeTabId,
+    unreadTerminalTabs: nextUnreadTerminalTabs
   }
 }

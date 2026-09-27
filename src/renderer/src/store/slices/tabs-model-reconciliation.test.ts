@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeTab, makeTabGroup, makeUnifiedTab } from './store-test-helpers'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -582,6 +582,88 @@ describe('TabsSlice', () => {
       const result = store.getState().reconcileWorktreeTabModel(WT)
       expect(result.renderableTabCount).toBe(1)
       expect(result.activeRenderableTabId).toBe(tab.id)
+    })
+  })
+
+  describe('orphan sweep unread markers', () => {
+    it('retires the marker of a swept orphan row', () => {
+      store.setState({
+        tabsByWorktree: { [WT]: [makeTab({ id: 'orphan', worktreeId: WT })] },
+        unifiedTabsByWorktree: { [WT]: [] },
+        groupsByWorktree: { [WT]: [] },
+        unreadTerminalTabs: { orphan: 'terminal-bell', elsewhere: 'terminal-bell' }
+      })
+
+      store.getState().reconcileWorktreeTabModel(WT)
+
+      expect(store.getState().tabsByWorktree[WT]).toEqual([])
+      expect(store.getState().unreadTerminalTabs).toEqual({ elsewhere: 'terminal-bell' })
+    })
+
+    it('clears both markers when one reconcile drops a unified terminal and sweeps an orphan', () => {
+      const live = makeUnifiedTab({ id: 'live', worktreeId: WT, groupId: 'g-1' })
+      const dropped = makeUnifiedTab({ id: 'dropped', worktreeId: WT, groupId: 'g-1' })
+      store.setState({
+        tabsByWorktree: {
+          [WT]: [
+            makeTab({ id: 'live', worktreeId: WT, ptyId: 'pty-live' }),
+            makeTab({ id: 'orphan', worktreeId: WT })
+          ]
+        },
+        ptyIdsByTabId: { live: ['pty-live'] },
+        unifiedTabsByWorktree: { [WT]: [live, dropped] },
+        groupsByWorktree: {
+          [WT]: [
+            makeTabGroup({
+              id: 'g-1',
+              worktreeId: WT,
+              activeTabId: 'live',
+              tabOrder: ['live', 'dropped']
+            })
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: 'g-1' },
+        unreadTerminalTabs: { dropped: true, orphan: 'terminal-bell', live: 'terminal-bell' }
+      })
+
+      store.getState().reconcileWorktreeTabModel(WT)
+
+      expect(store.getState().unifiedTabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['live'])
+      expect(store.getState().unreadTerminalTabs).toEqual({ live: 'terminal-bell' })
+    })
+
+    it('keeps markers on reconnect-, relay-, deferred-SSH- and unverified-loss-protected rows', () => {
+      const protectedIds = ['reconnecting', 'relay', 'deferred-ssh', 'host-lost']
+      const unread = Object.fromEntries(protectedIds.map((id) => [id, 'terminal-bell' as const]))
+      store.setState({
+        tabsByWorktree: { [WT]: protectedIds.map((id) => makeTab({ id, worktreeId: WT })) },
+        pendingReconnectPtyIdByTabId: { reconnecting: 'session-live' },
+        lastKnownRelayPtyIdByTabId: { relay: 'relay:conn@@pty-live' },
+        deferredSshSessionIdsByTabId: { 'deferred-ssh': 'ssh-session-live' },
+        unverifiedPtyLossTabIds: { 'host-lost': true },
+        unifiedTabsByWorktree: { [WT]: [] },
+        groupsByWorktree: {},
+        activeGroupIdByWorktree: {},
+        unreadTerminalTabs: unread
+      })
+
+      store.getState().reconcileWorktreeTabModel(WT)
+
+      expect(store.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(protectedIds)
+      expect(store.getState().unreadTerminalTabs).toEqual(unread)
+    })
+
+    it('retires the orphan marker when creating a tab sweeps the orphan', () => {
+      store.setState({
+        tabsByWorktree: { [WT]: [makeTab({ id: 'orphan', worktreeId: WT })] },
+        unifiedTabsByWorktree: { [WT]: [] },
+        unreadTerminalTabs: { orphan: 'terminal-bell' }
+      })
+
+      store.getState().createTab(WT, undefined, undefined, { activate: false })
+
+      expect(store.getState().tabsByWorktree[WT]?.some((tab) => tab.id === 'orphan')).toBe(false)
+      expect(store.getState().unreadTerminalTabs).toEqual({})
     })
   })
 })

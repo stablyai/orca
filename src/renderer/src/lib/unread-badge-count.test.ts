@@ -1,43 +1,88 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
-import type { Worktree } from '../../../shared/worktree/types'
-import { getUnreadBadgeCount } from './unread-badge-count'
+import { makeFolderWorkspace, makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { getUnreadBadgeCount, type UnreadBadgeCountSources } from './unread-badge-count'
 
-function worktree(id: string, isUnread: boolean): Worktree {
-  return { id, isUnread } as Worktree
-}
-
-function tab(id: string): TerminalTab {
-  return { id } as TerminalTab
+function count(overrides: Partial<UnreadBadgeCountSources>): number {
+  return getUnreadBadgeCount({
+    worktreesByRepo: {},
+    folderWorkspaces: [],
+    floatingWorkspaceHasUnread: false,
+    ...overrides
+  })
 }
 
 describe('getUnreadBadgeCount', () => {
   it('counts unread worktrees', () => {
     expect(
-      getUnreadBadgeCount({
-        worktreesByRepo: { repo: [worktree('wt-1', true), worktree('wt-2', false)] },
-        tabsByWorktree: {},
-        unreadTerminalTabs: {}
+      count({
+        worktreesByRepo: {
+          repo: [
+            makeWorktree({ id: 'wt-1', repoId: 'repo', isUnread: true }),
+            makeWorktree({ id: 'wt-2', repoId: 'repo' })
+          ]
+        }
+      })
+    ).toBe(1)
+    expect(
+      count({
+        worktreesByRepo: {
+          repo: [
+            makeWorktree({ id: 'wt-1', repoId: 'repo', isUnread: true }),
+            makeWorktree({ id: 'wt-2', repoId: 'repo', isUnread: true })
+          ]
+        }
+      })
+    ).toBe(2)
+  })
+
+  it('dedupes one worktree id listed under two repo buckets', () => {
+    expect(
+      count({
+        worktreesByRepo: {
+          'repo-a': [makeWorktree({ id: 'shared', repoId: 'repo-a', isUnread: true })],
+          'repo-b': [makeWorktree({ id: 'shared', repoId: 'repo-b', isUnread: true })]
+        }
       })
     ).toBe(1)
   })
 
-  it('dedupes unread terminal tabs against their worktree', () => {
+  it('does not count archived worktrees or folders, which the sidebar never renders', () => {
     expect(
-      getUnreadBadgeCount({
-        worktreesByRepo: { repo: [worktree('wt-1', true)] },
-        tabsByWorktree: { 'wt-1': [tab('tab-1'), tab('tab-2')] },
-        unreadTerminalTabs: { 'tab-1': true, 'tab-2': true }
+      count({
+        worktreesByRepo: {
+          repo: [makeWorktree({ id: 'wt-1', repoId: 'repo', isUnread: true, isArchived: true })]
+        },
+        folderWorkspaces: [makeFolderWorkspace({ id: 'f-1', isUnread: true, isArchived: true })]
       })
-    ).toBe(1)
+    ).toBe(0)
   })
 
-  it('counts tab-only unread activity by owning worktree', () => {
+  it('counts unread folder workspaces by their workspace key', () => {
+    expect(count({ folderWorkspaces: [makeFolderWorkspace({ id: 'f-1', isUnread: true })] })).toBe(
+      1
+    )
+    // A folder whose raw id equals a worktree id is still a different workspace.
     expect(
-      getUnreadBadgeCount({
-        worktreesByRepo: { repo: [worktree('wt-1', false), worktree('wt-2', false)] },
-        tabsByWorktree: { 'wt-1': [tab('tab-1')], 'wt-2': [tab('tab-2')] },
-        unreadTerminalTabs: { 'tab-1': true, 'tab-2': true }
+      count({
+        worktreesByRepo: {
+          repo: [makeWorktree({ id: 'f-1', repoId: 'repo', isUnread: true })]
+        },
+        folderWorkspaces: [
+          makeFolderWorkspace({ id: 'f-1', isUnread: true }),
+          makeFolderWorkspace({ id: 'f-2' })
+        ]
+      })
+    ).toBe(2)
+  })
+
+  it('counts the floating workspace once', () => {
+    expect(count({ floatingWorkspaceHasUnread: true })).toBe(1)
+    expect(
+      count({
+        worktreesByRepo: {
+          repo: [makeWorktree({ id: 'wt-1', repoId: 'repo', isUnread: true })]
+        },
+        floatingWorkspaceHasUnread: true
       })
     ).toBe(2)
   })

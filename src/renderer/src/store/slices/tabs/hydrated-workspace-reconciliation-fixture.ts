@@ -110,10 +110,11 @@ function buildLegacyWorkspace(draft: FixtureDraft, worktreeId: string): number {
   return 1
 }
 
-/** No PTY and no unified row: swept, which writes the store-global per-tab maps. */
+/** No PTY and no unified row: swept, which writes the store-global per-tab maps and its unread marker. */
 function buildOrphanWorkspace(draft: FixtureDraft, worktreeId: string): number {
   const orphan = `${worktreeId}#orphan`
   draft.tabsByWorktree[worktreeId] = [runtimeTab(orphan, worktreeId, { ptyId: null })]
+  draft.unreadTerminalTabs[orphan] = true
   draft.tabBarOrderByWorktree[worktreeId] = [orphan]
   draft.activeTabIdByWorktree[worktreeId] = orphan
   draft.cacheTimerByKey[`${orphan}:git`] = 1

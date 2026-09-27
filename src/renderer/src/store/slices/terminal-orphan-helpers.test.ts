@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { getOrphanTerminalIds } from './terminal-orphan-helpers'
+import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { buildTerminalTabRetirementPlan } from './terminal-tab-retirement'
 
 // Regression coverage for #9911 ("Terminal window auto-closing. Unable to
@@ -124,5 +124,59 @@ describe('getOrphanTerminalIds reconnect-map liveness', () => {
     })
 
     expect(getOrphanTerminalIds(state, 'wt-1')).toContain('stale-layout')
+  })
+})
+
+type CleanupState = Parameters<typeof buildOrphanTerminalCleanupPatch>[0]
+
+function makeCleanupState(overrides: Partial<CleanupState> = {}): CleanupState {
+  return {
+    tabsByWorktree: {
+      'wt-1': [makeTab({ id: 'orphan' }), makeTab({ id: 'live', ptyId: 'pty-live' })]
+    },
+    ptyIdsByTabId: { live: ['pty-live'] },
+    runtimePaneTitlesByTabId: {},
+    expandedPaneByTabId: {},
+    canExpandPaneByTabId: {},
+    terminalLayoutsByTabId: {},
+    pendingStartupByTabId: {},
+    pendingInitialCwdByTabId: {},
+    pendingSetupSplitByTabId: {},
+    pendingIssueCommandSplitByTabId: {},
+    automaticAgentResumeClaimsByTabId: {},
+    nativeChatLaunchPromptByTabId: {},
+    nativeChatLaunchDraftByTabId: {},
+    tabBarOrderByWorktree: { 'wt-1': ['orphan', 'live'] },
+    cacheTimerByKey: {},
+    activeTabIdByWorktree: { 'wt-1': 'live' },
+    activeTabId: 'live',
+    unreadTerminalTabs: {},
+    ...overrides
+  }
+}
+
+describe('buildOrphanTerminalCleanupPatch unread markers', () => {
+  it('retires the swept row marker and keeps sibling markers', () => {
+    const unreadTerminalTabs = { orphan: 'terminal-bell' as const, live: 'terminal-bell' as const }
+    const state = makeCleanupState({ unreadTerminalTabs })
+
+    const patch = buildOrphanTerminalCleanupPatch(state, 'wt-1', new Set(['orphan']))
+
+    expect(patch.unreadTerminalTabs).toEqual({ live: 'terminal-bell' })
+    expect(patch.tabsByWorktree['wt-1']?.map((tab) => tab.id)).toEqual(['live'])
+    // The input state is never mutated.
+    expect(unreadTerminalTabs).toEqual({ orphan: 'terminal-bell', live: 'terminal-bell' })
+  })
+
+  it('keeps the unread map identity when no swept row holds a marker', () => {
+    const unreadTerminalTabs = { live: 'terminal-bell' as const }
+    const state = makeCleanupState({ unreadTerminalTabs })
+
+    expect(
+      buildOrphanTerminalCleanupPatch(state, 'wt-1', new Set(['orphan'])).unreadTerminalTabs
+    ).toBe(unreadTerminalTabs)
+    expect(buildOrphanTerminalCleanupPatch(state, 'wt-1', new Set()).unreadTerminalTabs).toBe(
+      unreadTerminalTabs
+    )
   })
 })

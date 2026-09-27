@@ -81,17 +81,23 @@ export function createTabsCloseActions(
         (group.recentTabIds ?? []).filter((id) => id !== tabId),
         remainingOrder
       )
-      const terminalEntityId = tab.contentType === 'terminal' ? tab.entityId : null
+      // Why: markers are keyed by terminal entity id, or by unified tab id for structured chats.
+      const unreadMarkerKey =
+        tab.contentType === 'terminal'
+          ? tab.entityId
+          : tab.contentType === 'agent-session'
+            ? tab.id
+            : null
 
       set((current) => {
         const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter(
           (item) => item.id !== tabId
         )
-        // Why: close-to-right/others bypass terminals.closeTab, so clear the entityId-keyed unread flag here or a stale dot leaks.
+        // Why: close-to-right/others bypass terminals.closeTab, so clear the unread marker here or a stale dot leaks.
         let nextUnreadTerminalTabs = current.unreadTerminalTabs
-        if (terminalEntityId && current.unreadTerminalTabs[terminalEntityId]) {
+        if (unreadMarkerKey && current.unreadTerminalTabs[unreadMarkerKey]) {
           nextUnreadTerminalTabs = { ...current.unreadTerminalTabs }
-          delete nextUnreadTerminalTabs[terminalEntityId]
+          delete nextUnreadTerminalTabs[unreadMarkerKey]
         }
         let nextGroups = (current.groupsByWorktree[worktreeId] ?? []).map((candidate) =>
           candidate.id === group.id

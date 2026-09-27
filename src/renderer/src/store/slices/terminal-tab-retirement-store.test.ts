@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 
 const mockKill = vi.fn().mockResolvedValue(undefined)
 const mockRuntimeCall = vi.fn().mockResolvedValue({
@@ -21,6 +22,7 @@ import {
   capturedPanesByTabId,
   parkedWatchersByTabId
 } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import type { Tab } from '../../../../shared/tab-types'
 import {
   createTestStore,
   makeWorktree,
@@ -349,5 +351,87 @@ describe('terminal tab retirement store boundary', () => {
 
     expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
     warn.mockRestore()
+  })
+
+  describe('unread marker retirement on unified close', () => {
+    function seedUnifiedTabs(store: ReturnType<typeof createRetirementStore>, tabs: Tab[]): void {
+      seedStore(store, {
+        tabsByWorktree: { 'wt-1': [] },
+        unifiedTabsByWorktree: { 'wt-1': tabs },
+        groupsByWorktree: {
+          'wt-1': [
+            makeTabGroup({
+              id: 'group-1',
+              worktreeId: 'wt-1',
+              activeTabId: tabs[0]?.id ?? null,
+              tabOrder: tabs.map((tab) => tab.id)
+            })
+          ]
+        }
+      })
+    }
+
+    function agentSessionTab(sessionId: string): Tab {
+      return makeUnifiedTab({
+        id: structuredAgentSessionTabId(sessionId),
+        entityId: sessionId,
+        contentType: 'agent-session',
+        worktreeId: 'wt-1',
+        groupId: 'group-1'
+      })
+    }
+
+    it('retires an agent-session marker by unified id and keeps it gone when the id returns', () => {
+      const store = createRetirementStore()
+      const session = agentSessionTab('session-1')
+      const sibling = agentSessionTab('session-2')
+      seedUnifiedTabs(store, [session, sibling])
+      store.getState().markTerminalTabUnread(session.id, 'agent-completion')
+      store.getState().markTerminalTabUnread(sibling.id, 'agent-completion')
+
+      store.getState().closeUnifiedTab(session.id)
+
+      expect(store.getState().unreadTerminalTabs).toEqual({ [sibling.id]: 'agent-completion' })
+      // The id is deterministic, so a reopened session must not inherit the old marker.
+      seedUnifiedTabs(store, [session, sibling])
+      expect(store.getState().unreadTerminalTabs[session.id]).toBeUndefined()
+    })
+
+    it('retires a terminal marker by entity id, not by unified id', () => {
+      const store = createRetirementStore()
+      const terminal = makeUnifiedTab({
+        id: 'unified-1',
+        entityId: 'terminal-1',
+        worktreeId: 'wt-1',
+        groupId: 'group-1'
+      })
+      seedUnifiedTabs(store, [terminal])
+      seedStore(store, { unreadTerminalTabs: { 'terminal-1': 'terminal-bell', 'unified-1': true } })
+
+      store.getState().closeUnifiedTab(terminal.id, { terminalRetirementHandled: true })
+
+      expect(store.getState().unreadTerminalTabs).toEqual({ 'unified-1': true })
+    })
+
+    it('leaves the unread map untouched for unmarked tabs and non-terminal content', () => {
+      const store = createRetirementStore()
+      const editor = makeUnifiedTab({
+        id: 'editor-1',
+        entityId: 'agent-session-lookalike',
+        contentType: 'editor',
+        worktreeId: 'wt-1',
+        groupId: 'group-1'
+      })
+      const session = agentSessionTab('session-3')
+      seedUnifiedTabs(store, [editor, session])
+      const unread = { 'editor-1': true as const, 'agent-session-lookalike': true as const }
+      seedStore(store, { unreadTerminalTabs: unread })
+
+      store.getState().closeUnifiedTab(editor.id)
+      store.getState().closeUnifiedTab(session.id)
+
+      expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([])
+      expect(store.getState().unreadTerminalTabs).toBe(unread)
+    })
   })
 })

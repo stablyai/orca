@@ -1,4 +1,33 @@
 /**
+ * Identity-first equality over two arrays under a projection of each item: the same array, or the
+ * same length with every item pair accepted by `isSameItem`. A missing side or a hole is unequal.
+ */
+export function sameProjectedItems<T>(
+  previous: readonly T[] | undefined,
+  next: readonly T[] | undefined,
+  isSameItem: (previous: T, next: T) => boolean
+): boolean {
+  if (previous === next) {
+    return true
+  }
+  if (!previous || !next || previous.length !== next.length) {
+    return false
+  }
+  for (let index = 0; index < next.length; index += 1) {
+    const previousItem = previous[index]
+    const nextItem = next[index]
+    if (
+      previousItem === undefined ||
+      nextItem === undefined ||
+      !isSameItem(previousItem, nextItem)
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
  * Identity-first equality over a `Record<string, readonly T[]>` under a projection of each item.
  *
  * Why not `createWorktreeTabBucketProjection`: that builds a projected record so callers can hold
@@ -18,24 +47,8 @@ export function sameBucketRecords<T>(
     return false
   }
   for (const key of keys) {
-    const nextItems = next[key]
-    const previousItems = previous[key]
-    if (previousItems === nextItems) {
-      continue
-    }
-    if (!previousItems || !nextItems || previousItems.length !== nextItems.length) {
+    if (!sameProjectedItems(previous[key], next[key], isSameItem)) {
       return false
-    }
-    for (let index = 0; index < nextItems.length; index += 1) {
-      const previousItem = previousItems[index]
-      const nextItem = nextItems[index]
-      if (
-        previousItem === undefined ||
-        nextItem === undefined ||
-        !isSameItem(previousItem, nextItem)
-      ) {
-        return false
-      }
     }
   }
   return true

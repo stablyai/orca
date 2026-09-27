@@ -195,16 +195,18 @@ export function projectWorktreeTabModelReconciliation(
     const droppedTerminalEntityIds = unifiedTabs.flatMap((tab) =>
       tab.contentType === 'terminal' && !validTabIds.has(tab.id) ? [tab.entityId] : []
     )
+    // Why orphans too: retiring their markers here keeps batch ownership of the unread map in one place.
+    const retiredMarkerIds = [...droppedTerminalEntityIds, ...orphanTerminalIds]
     let nextUnreadTerminalTabs = state.unreadTerminalTabs
-    if (droppedTerminalEntityIds.length > 0) {
+    if (retiredMarkerIds.some((id) => state.unreadTerminalTabs[id])) {
       // A batch that already owns this map published it in an earlier patch, so
       // draining further entries in place needs no second patch entry.
       const owned = batch?.ownedStateKeys.has('unreadTerminalTabs') === true
       const copy = owned ? state.unreadTerminalTabs : { ...state.unreadTerminalTabs }
       let changed = false
-      for (const entityId of droppedTerminalEntityIds) {
-        if (copy[entityId]) {
-          delete copy[entityId]
+      for (const markerId of retiredMarkerIds) {
+        if (copy[markerId]) {
+          delete copy[markerId]
           changed = true
         }
       }
@@ -250,8 +252,13 @@ export function projectWorktreeTabModelReconciliation(
             )
           }
         : {}),
+      // Why the cleaned map: the orphan patch spreads last, so reading the original map would resurrect deletions above.
       ...(orphanTerminalIds.size > 0
-        ? buildOrphanTerminalCleanupPatch(state, worktreeId, orphanTerminalIds)
+        ? buildOrphanTerminalCleanupPatch(
+            { ...state, unreadTerminalTabs: nextUnreadTerminalTabs },
+            worktreeId,
+            orphanTerminalIds
+          )
         : {})
     }
   }

@@ -113,6 +113,19 @@ describe('whole-session workspace tab-model reconciliation', () => {
     }
   })
 
+  it('retires dropped and orphan unread markers without mutating the hydrated map', () => {
+    const { store, workspaceIds } = hydrateFixtureStore()
+    const hydratedUnread = store.getState().unreadTerminalTabs
+    const hydratedKeys = Object.keys(hydratedUnread)
+    expect(hydratedKeys.some((key) => key.endsWith('#orphan'))).toBe(true)
+    expect(hydratedKeys.some((key) => key.endsWith('#stale'))).toBe(true)
+
+    store.getState().reconcileWorktreeTabModels(workspaceIds)
+
+    expect(store.getState().unreadTerminalTabs).toEqual({})
+    expect(Object.keys(hydratedUnread)).toEqual(hydratedKeys)
+  })
+
   it('re-reconciling the batched result is a no-op, as it is for the per-workspace path', () => {
     const { store, workspaceIds } = hydrateFixtureStore()
     store.getState().reconcileWorktreeTabModels(workspaceIds)
