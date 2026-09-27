@@ -76,7 +76,10 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     // coordinator's per-leaf path). Gating callers meant each new one silently bypassed the
     // check; gating the commit point cannot be bypassed. Refusal parks and re-offers rather
     // than dropping — `isAgentSettledForDelivery` arms the re-check.
-    if (!this.deps.isAgentSettledForDelivery(leaf)) {
+    if (
+      typeof this.deps.isAgentSettledForDelivery !== 'function' ||
+      !this.deps.isAgentSettledForDelivery(leaf)
+    ) {
       this.parkRedelivery(mailboxHandle, options.reservedTypes)
       return
     }
@@ -217,6 +220,14 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       this.state.deferFlightUntilIdle(ptyId)
     }
     this.state.takeDeferredEnter(ptyId)?.()
+  }
+
+  observeVisibleComposerProjection(ptyId: string, draft: string | null): void {
+    const normalized = draft?.replace(/\s+/g, ' ').trim()
+    if (!normalized) {
+      return
+    }
+    this.state.takeDeferredEnterForPointer(ptyId, normalized)?.()
   }
 
   markPtyColdParked(ptyId: string): void {

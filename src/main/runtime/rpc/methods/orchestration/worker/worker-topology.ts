@@ -207,6 +207,17 @@ export function isUnknownWorkerStartOutcome(error: unknown, stage: string): bool
   if (code === 'operation_unknown') {
     return true
   }
+  if (
+    code === 'terminal_wait_timeout' &&
+    stage === 'agent_readiness' &&
+    error &&
+    typeof error === 'object' &&
+    (error as { terminalLive?: unknown }).terminalLive === true
+  ) {
+    // A live agent may become ready after the bounded startup wait. Keep the
+    // existing handle observable instead of creating a duplicate dispatch.
+    return true
+  }
   if (stage !== 'worktree_create') {
     return false
   }

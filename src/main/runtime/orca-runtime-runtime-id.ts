@@ -327,6 +327,7 @@ export class OrcaRuntimeWithRuntimeId {
   )
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({
+    getScreenReadiness: (ptyId, text) => this.getTerminalScreenReadiness(ptyId, text),
     intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
     quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
@@ -341,6 +342,7 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected readonly terminalWait = new RuntimeTerminalWaitController(
     {
+      getScreenReadiness: (ptyId, text) => this.getTerminalScreenReadiness(ptyId, text),
       defaultTimeoutMs: TUI_IDLE_DEFAULT_TIMEOUT_MS,
       getLivePty: (handle) => this.getLivePtyForHandle(handle),
       getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle),

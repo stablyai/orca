@@ -3,6 +3,7 @@ import { OrchestrationDb } from './db'
 import { OrchestrationMailboxPointerDelivery } from './mailbox-pointer-delivery'
 import { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
+import { formatMessagePointer } from './formatter'
 import {
   WRITE_ACCEPTED,
   writeRefused,
@@ -59,6 +60,126 @@ function stageArgs(db: OrchestrationDb, state: OrchestrationMailboxPointerState)
 }
 
 describe('mailbox pointer staging watermark', () => {
+  it('does not stage a pointer when the current pane is not settled', () => {
+    const db = new OrchestrationDb(':memory:')
+    db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'run:run-1', subject: 'running' })
+    const writePty = vi.fn(() => WRITE_ACCEPTED)
+    const delivery = new OrchestrationMailboxPointerDelivery<never>({
+      ...pointerDeps(db, writePty),
+      isAgentSettledForDelivery: () => false,
+      redriveMailbox: vi.fn()
+    } as never)
+
+    try {
+      delivery.deliver(LEAF, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
+      expect(writePty).not.toHaveBeenCalled()
+    } finally {
+      db.close()
+    }
+  })
+
+  it('fails closed when the readiness dependency is missing at runtime', () => {
+    const db = new OrchestrationDb(':memory:')
+    db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'missing gate'
+    })
+    const writePty = vi.fn(() => WRITE_ACCEPTED)
+    const delivery = new OrchestrationMailboxPointerDelivery<never>({
+      ...pointerDeps(db, writePty),
+      isAgentSettledForDelivery: undefined,
+      redriveMailbox: vi.fn()
+    } as never)
+
+    try {
+      delivery.deliver(LEAF, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
+      expect(writePty).not.toHaveBeenCalled()
+    } finally {
+      db.close()
+    }
+  })
+
+  it('applies Cursor draft ownership when identity exists only on the tab title', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'tab identity'
+    })
+    const writePty = vi.fn(() => WRITE_ACCEPTED)
+    const delivery = new OrchestrationMailboxPointerDelivery<never>({
+      ...pointerDeps(db, writePty),
+      getTabTitle: () => 'Cursor ready',
+      getVisibleComposerDraft: () => undefined,
+      redriveMailbox: vi.fn()
+    } as never)
+
+    try {
+      delivery.deliver(LEAF, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(writePty).not.toHaveBeenCalledWith('pty-1', '\r')
+      expect(db.getMessageById(message.id)?.delivered_at).toBeNull()
+    } finally {
+      db.close()
+      vi.useRealTimers()
+    }
+  })
+
+  it('submits a Cursor completion after the pointer is accepted', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'cursor completion'
+    })
+    const cursorLeaf = { ...LEAF, lastOscTitle: 'Cursor ready' }
+    const writePty = vi.fn(() => WRITE_ACCEPTED)
+    let settled = true
+    const delivery = new OrchestrationMailboxPointerDelivery<never>({
+      ...pointerDeps(db, writePty),
+      getLeaf: () => cursorLeaf,
+      getLiveLeafForHandle: () => cursorLeaf,
+      isAgentSettledForDelivery: () => settled,
+      getVisibleComposerDraft: () => formatMessagePointer(1, 'run:run-1', 'orca').trim(),
+      resolveSubmitTarget: () => ({
+        leaf: cursorLeaf,
+        terminalHandle: 'term-1',
+        processIncarnation: 'inc-1'
+      }),
+      redriveMailbox: vi.fn()
+    } as never)
+
+    try {
+      delivery.deliver(cursorLeaf, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
+      expect(writePty).toHaveBeenCalledWith('pty-1', expect.stringContaining('orchestration check'))
+      expect(writePty).not.toHaveBeenCalledWith('pty-1', '\r')
+
+      settled = false
+      await vi.advanceTimersByTimeAsync(500)
+      await Promise.resolve()
+      expect(writePty).not.toHaveBeenCalledWith('pty-1', '\r')
+
+      settled = true
+      delivery.observeAgentIdle('pty-1')
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(writePty).toHaveBeenCalledWith('pty-1', '\r')
+      await vi.waitFor(() =>
+        expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
+      )
+    } finally {
+      db.close()
+      vi.useRealTimers()
+    }
+  })
+
   it('leaves no watermark when the reservation claim is lost', () => {
     const db = new OrchestrationDb(':memory:')
     const message = db.insertMessage({

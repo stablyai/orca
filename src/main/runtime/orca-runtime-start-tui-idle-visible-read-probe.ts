@@ -9,10 +9,8 @@ import {
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './orca-runtime-postlude'
 import { withTimeout } from './runtime-async-boundaries'
-import {
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
-} from './terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
+import { isKnownReadyTerminalScreen } from './terminal-screen-readiness'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
@@ -24,7 +22,6 @@ import {
   buildTerminalWaitResult
 } from './terminal-wait-results'
 import { createSetupCompletionScanner } from './orchestration/setup-completion-signal'
-import { isAntigravityReadyPromptSnapshot } from './antigravity-terminal-readiness'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
@@ -77,11 +74,7 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
             ? [...projection.tail, projection.draft ?? ''].join('\n')
             : projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        const ready =
-          agent === 'antigravity'
-            ? isAntigravityReadyPromptSnapshot(snapshotText)
-            : isKnownReadyPromptPreview(snapshotText)
-        if (!blockedReason && !ready) {
+        if (!blockedReason && !isKnownReadyTerminalScreen(projection)) {
           return
         }
         const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)

@@ -1,4 +1,3 @@
-import { isCursorAgentTitle } from '../../../shared/agent-detection'
 import { formatMessagePointer } from './formatter'
 import type {
   OrchestrationMailboxPointerMessage,
@@ -94,14 +93,13 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     args.settle(ptyId, flight)
   }
   try {
-    const writeResult = args.deps.writePty(
-      ptyId,
-      formatMessagePointer(
-        args.messages.length,
-        args.mailboxHandle,
-        args.deps.getCliCommand(expectedTarget.terminalHandle)
-      )
+    const pointerPayload = formatMessagePointer(
+      args.messages.length,
+      args.mailboxHandle,
+      args.deps.getCliCommand(expectedTarget.terminalHandle)
     )
+    flight.pointerPayload = pointerPayload.replace(/\s+/g, ' ').trim()
+    const writeResult = args.deps.writePty(ptyId, pointerPayload)
     if (isSettledWrite(writeResult)) {
       settlePointerWrite(writeResult)
       return
@@ -147,16 +145,6 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
       }
       return
     }
-    if (
-      [args.leaf.lastOscTitle, args.leaf.paneTitle, args.deps.getTabTitle(args.leaf.tabId)].some(
-        isCursorAgentTitle
-      )
-    ) {
-      db.markAsDelivered(flight.stagedMessageIds)
-      args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)
-      args.redrive(args.mailboxHandle)
-      return
-    }
     const submitEnter = (): void =>
       submitOrchestrationMailboxPointer(
         {
@@ -165,6 +153,9 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           getDb: args.deps.getDb,
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
           getMessageWaiters: args.deps.getMessageWaiters,
+          getTabTitle: args.deps.getTabTitle,
+          isAgentSettledForDelivery: args.deps.isAgentSettledForDelivery,
+          getVisibleComposerDraft: args.deps.getVisibleComposerDraft,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           writePty: args.deps.writePty,
           settle: args.settle,

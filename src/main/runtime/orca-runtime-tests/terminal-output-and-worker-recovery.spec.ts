@@ -512,7 +512,6 @@ describe('OrcaRuntimeService', () => {
       db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello' })
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
-
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -557,7 +556,6 @@ describe('OrcaRuntimeService', () => {
       })
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
-
       expect(write).toHaveBeenCalledWith(
         'pty-1',
         expect.stringContaining('You have 1 orchestration message')
@@ -578,7 +576,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('injects pending orchestration messages into Cursor Agent without auto-submitting', async () => {
+  it('submits pending orchestration messages into a completed Cursor Agent turn', async () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
@@ -600,6 +598,11 @@ describe('OrcaRuntimeService', () => {
       db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'hello cursor' })
 
       runtime.deliverPendingMessagesForHandle(terminal.handle)
+      runtime.onPtyData(
+        'pty-1',
+        '\x1b[?1049h\r\n────────\r\n❯ You have 1 orchestration message. Run `orca-dev orchestration check --run run_test`.\x1b[3G',
+        102
+      )
 
       expect(write).toHaveBeenCalledWith(
         'pty-1',
@@ -609,13 +612,267 @@ describe('OrcaRuntimeService', () => {
       const submitWrites = write.mock.calls.filter(
         ([ptyId, text]) => ptyId === 'pty-1' && text === '\r'
       )
-      expect(submitWrites).toHaveLength(0)
+      expect(submitWrites).toHaveLength(1)
 
       const unread = db.getUnreadMessages(mailbox)
       expect(unread).toHaveLength(1)
       expect(unread[0].read).toBe(0)
       expect(unread[0].delivered_at).toEqual(expect.any(String))
       db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not submit Cursor notification text when a new turn starts before Enter', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        writeWithSettlement: settledWriteStub(write),
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      bindSinglePtyRun(db, terminal.handle)
+      runtime.onPtyData('pty-1', '\x1b]0;\u280b Cursor Agent\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Cursor ready\x07', 101)
+      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'cursor turn' })
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+
+      runtime.onPtyData('pty-1', '\x1b]0;\u2807 Cursor Agent\x07', 102)
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(write.mock.calls.filter(([, text]) => text === '\r')).toHaveLength(0)
+      db.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('coalesces three completed Cursor notifications into one submission', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        writeWithSettlement: settledWriteStub(write),
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      const mailbox = bindSinglePtyRun(db, terminal.handle)
+      runtime.onPtyData('pty-1', '\x1b]0;\u280b Cursor Agent\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Cursor ready\x07', 101)
+      for (const subject of ['first notice', 'second notice', 'third notice']) {
+        db.insertMessage({ from: 'term_sender', to: terminal.handle, subject })
+      }
+
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+      runtime.onPtyData(
+        'pty-1',
+        '\x1b[?1049h\r\n────────\r\n❯ You have 3 orchestration messages. Run `orca-dev orchestration check --run run_test`.\x1b[3G',
+        102
+      )
+      expect(write).toHaveBeenCalledWith(
+        'pty-1',
+        expect.stringContaining('You have 3 orchestration messages')
+      )
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(write.mock.calls.filter(([, text]) => text === '\r')).toHaveLength(1)
+      expect(db.getUnreadMessages(mailbox)).toHaveLength(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not submit into a real Cursor composer draft', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        writeWithSettlement: settledWriteStub(write),
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      bindSinglePtyRun(db, terminal.handle)
+      runtime.onPtyData('pty-1', '\x1b]0;\u280b Cursor Agent\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b[?1049hBuild passed\r\n────────\r\n❯ user draft\x1b[3G', 101)
+      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'draft safety' })
+
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(write.mock.calls.filter(([, text]) => text === '\r')).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('submits once when a fresh Cursor projection confirms the runtime pointer', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        writeWithSettlement: settledWriteStub(write),
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime, 'pty-1', { tabTitle: 'Cursor Agent' })
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      bindSinglePtyRun(db, terminal.handle)
+      runtime.onPtyData('pty-1', '\x1b]0;Cursor ready\x07', 100)
+      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'fresh projection' })
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+      runtime.onPtyData(
+        'pty-1',
+        '\x1b[?1049h\r\n────────\r\n❯ You have 1 orchestration message. Run `orca-dev orchestration check --run run_test`.\x1b[3G',
+        101
+      )
+
+      await runtime.readTerminal(terminal.handle, { screen: true })
+      await runtime.readTerminal(terminal.handle, { screen: true })
+      await vi.runAllTimersAsync()
+
+      expect(write.mock.calls.filter(([, text]) => text === '\r')).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not accept a visible Cursor projection after a generation reset', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const internals = runtime as unknown as {
+      getPtyLifecycleGeneration: (ptyId: string) => number
+      advancePtyLifecycleGeneration: (ptyId: string) => void
+      readVisibleTerminalState: (ptyId: string) => Promise<unknown>
+      loadVisibleTerminalState: (ptyId: string) => Promise<unknown>
+      orchestrationMailboxPointerDelivery: {
+        observeVisibleComposerProjection: ReturnType<typeof vi.fn>
+      }
+    }
+    const observeProjection = vi.spyOn(
+      internals.orchestrationMailboxPointerDelivery,
+      'observeVisibleComposerProjection'
+    )
+    const pending = Promise.withResolvers<{
+      lines: string[]
+      draft: string
+      isAlternateScreen: boolean
+      sequence: number
+      generation: number
+    } | null>()
+    vi.spyOn(internals, 'loadVisibleTerminalState').mockReturnValue(pending.promise)
+    const generation = internals.getPtyLifecycleGeneration('pty-1')
+    const read = internals.readVisibleTerminalState('pty-1')
+    internals.advancePtyLifecycleGeneration('pty-1')
+    pending.resolve({
+      lines: [],
+      draft: 'You have 1 orchestration message',
+      isAlternateScreen: true,
+      sequence: 0,
+      generation
+    })
+
+    await read
+
+    expect(observeProjection).not.toHaveBeenCalled()
+  })
+
+  it('does not accept a visible Cursor projection behind the current output sequence', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const internals = runtime as unknown as {
+      getPtyLifecycleGeneration: (ptyId: string) => number
+      getPtyOutputSequence: (ptyId: string) => number
+      readVisibleTerminalState: (ptyId: string) => Promise<unknown>
+      loadVisibleTerminalState: (ptyId: string) => Promise<unknown>
+      orchestrationMailboxPointerDelivery: {
+        observeVisibleComposerProjection: ReturnType<typeof vi.fn>
+      }
+    }
+    const observeProjection = vi.spyOn(
+      internals.orchestrationMailboxPointerDelivery,
+      'observeVisibleComposerProjection'
+    )
+    const sequenceBeforeOutput = internals.getPtyOutputSequence('pty-1')
+    const pending = Promise.withResolvers<{
+      lines: string[]
+      draft: string
+      isAlternateScreen: boolean
+      sequence: number
+      generation: number
+    } | null>()
+    vi.spyOn(internals, 'loadVisibleTerminalState').mockReturnValue(pending.promise)
+    const generation = internals.getPtyLifecycleGeneration('pty-1')
+    const read = internals.readVisibleTerminalState('pty-1')
+    runtime.onPtyData('pty-1', 'new output', 1)
+    pending.resolve({
+      lines: [],
+      draft: 'You have 1 orchestration message',
+      isAlternateScreen: true,
+      sequence: 0,
+      generation
+    })
+
+    await read
+
+    expect(internals.getPtyOutputSequence('pty-1')).toBeGreaterThan(sequenceBeforeOutput)
+    expect(observeProjection).not.toHaveBeenCalled()
+  })
+
+  it('preserves a user append after the runtime pointer and skips Enter', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      const db = new InMemoryOrchestrationMessages()
+      const write = vi.fn().mockReturnValue(true)
+      setInMemoryOrchestrationMessages(runtime, db)
+      runtime.setPtyController({
+        write,
+        writeWithSettlement: settledWriteStub(write),
+        kill: vi.fn(),
+        getForegroundProcess: async () => null
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      bindSinglePtyRun(db, terminal.handle)
+      runtime.onPtyData('pty-1', '\x1b]0;\u280b Cursor Agent\x07', 100)
+      runtime.onPtyData('pty-1', '\x1b]0;Cursor ready\x07', 101)
+      db.insertMessage({ from: 'term_sender', to: terminal.handle, subject: 'append safety' })
+      runtime.deliverPendingMessagesForHandle(terminal.handle)
+      runtime.onPtyData(
+        'pty-1',
+        '\x1b[?1049h\r\n────────\r\n❯ You have 1 orchestration message. Run `orca-dev orchestration check --run run_test` user text\x1b[3G',
+        102
+      )
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(write.mock.calls.filter(([, text]) => text === '\r')).toHaveLength(0)
     } finally {
       vi.useRealTimers()
     }

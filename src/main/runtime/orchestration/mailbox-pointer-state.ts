@@ -8,6 +8,7 @@ export type OrchestrationMailboxDeliveryFlight = {
   idleObservedWhileDeferred: boolean
   /** The incarnation that staged this flight, so retirement can name the rows it owns. */
   processIncarnation?: string
+  pointerPayload?: string
 }
 
 export type ParkedOrchestrationMailboxDelivery = {
@@ -76,6 +77,14 @@ export class OrchestrationMailboxPointerState {
     flight.deferredUntilIdle = false
     flight.idleObservedWhileDeferred = false
     return submitEnter
+  }
+
+  takeDeferredEnterForPointer(ptyId: string, pointerPayload: string): (() => void) | null {
+    const flight = this.flightsByPtyId.get(ptyId)
+    if (flight?.pointerPayload !== pointerPayload) {
+      return null
+    }
+    return this.takeDeferredEnter(ptyId)
   }
 
   settleFlight(

@@ -115,6 +115,7 @@ export type RuntimeHeadlessTerminal = {
 }
 
 export type RuntimeVisibleTerminalState = {
+  headlessWriteChain?: Promise<void>
   lines: string[]
   draft?: string
   isAlternateScreen: boolean

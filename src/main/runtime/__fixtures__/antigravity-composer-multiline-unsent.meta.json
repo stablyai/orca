@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T08:13:59.393Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy TUI 1.2.1 with 'abc' typed into the composer, then shift+enter (ESC[13;2u), leaving an empty second composer row. The tail's last content line is a bare '>' whose line above is '> abc', not the composer rule. Ground truth: not ready \u2014 a prompt sent here is appended to the operator's unsubmitted text. This is the only capture that separates the rule clause from the caret clause.",
+  "exitCode": 0
+}

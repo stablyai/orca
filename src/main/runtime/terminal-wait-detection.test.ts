@@ -4,6 +4,7 @@ import {
   isKnownReadyPromptPreview,
   isMuseReadyPromptPreview
 } from './terminal-wait-detection'
+import { isKnownReadyTerminalScreen } from './terminal-screen-readiness'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
 // Why these shapes: Codex agents working on Orca print `rg` hits from this very detector and its
@@ -382,19 +383,20 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     expect(isKnownReadyPromptPreview(waitText)).toBe(false)
   })
 
-  // Discriminating: a stale dialog above a reprinted Gemini ready screen must stop being reported,
-  // which is the whole point of the dismissed-modal rule.
+  // Discriminating: the current-screen classifier, rather than the retained-text fallback, clears
+  // stale trust output once a real ready composer replaces it.
   it('clears once a Gemini ready screen replaces the dialog', () => {
-    const waitText = waitTextFor([
-      ...TRUST_DIALOG_WITH_CARET,
-      'Antigravity CLI 1.0.3',
-      'user@example.com (Antigravity Business)',
-      'Gemini 3.5 Flash (High)',
-      '>'
-    ])
-
-    expect(isKnownReadyPromptPreview(waitText)).toBe(true)
-    expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
+    expect(
+      isKnownReadyTerminalScreen({
+        tail: [
+          'Antigravity CLI 1.0.3',
+          '────────────────────────',
+          '>',
+          '────────────────────────',
+          '? for shortcuts Gemini 3.5 Flash · low'
+        ]
+      })
+    ).toBe(true)
   })
 
   it('recognizes a non-Gemini ready screen', () => {
