@@ -111,6 +111,21 @@ describe('hosted review in-flight invalidation', () => {
     }
   })
 
+  it('discards a retired answer that landed with no replacement to outrank it', async () => {
+    const oldResponse = Promise.withResolvers<HostedReviewInfo | null>()
+    const admitted = withHostedReviewBranchCache(identity, options, () => oldResponse.promise)
+    invalidateHostedReviewBranchCache(identity.repoPath, identity.executionHostId)
+    // Nothing replaced it, so only the scope generation stands between this
+    // pre-invalidation "no review" and the key it no longer owns. Adopting it
+    // would read as fresh and short-circuit the lookup for the review Orca just
+    // opened.
+    oldResponse.resolve(null)
+    expect(await admitted).toBeNull()
+    const freshLookup = vi.fn(async () => review)
+    expect(await withHostedReviewBranchCache(identity, options, freshLookup)).toEqual(review)
+    expect(freshLookup).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps other hosts, paths and their pending promises isolated', async () => {
     const others = [
       { ...identity, executionHostId: 'local' as const },

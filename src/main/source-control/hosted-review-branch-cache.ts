@@ -1,12 +1,3 @@
-import {
-  __resetHostedReviewInflightLookupsForTests,
-  expireOverdueInflight,
-  getInflightLookup,
-  releaseInflight,
-  retireInflightWithPrefix,
-  trackInflight,
-  type InflightToken
-} from './hosted-review-inflight-lookups'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { HostedReviewInfo } from '../../shared/hosted-review'
 import {
@@ -22,6 +13,15 @@ import {
   settleDetachedLookup,
   settleLookup
 } from './hosted-review-unsettled-lookups'
+import {
+  __resetHostedReviewInflightLookupsForTests,
+  expireOverdueInflight,
+  getInflightLookup,
+  releaseInflight,
+  retireInflightWithPrefix,
+  trackInflight,
+  type InflightToken
+} from './hosted-review-inflight-lookups'
 import {
   __resetHostedReviewScopeGenerationsForTests,
   bumpScopeGeneration,
