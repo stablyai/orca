@@ -160,6 +160,13 @@ describe('getGrokAccountUsage', () => {
     expect(hostShowsAccountUsage(snapshot)).toBe(false)
   })
 
+  it('hides Grok when auth is not configured and an ok response has no usage window', () => {
+    const snapshot = decode({ grok: grokLimits({ status: 'ok', weekly: null, monthly: null }) })
+
+    expect(getGrokAccountUsage(snapshot)).toBeNull()
+    expect(hostShowsAccountUsage(snapshot)).toBe(false)
+  })
+
   it('ignores a malformed Grok slot without dropping Claude', () => {
     const snapshot = decode({
       claude: grokLimits({ provider: 'claude', status: 'ok', session: windowOf(10, 300) }),

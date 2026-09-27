@@ -6,7 +6,6 @@ import {
 import {
   getUsageBarState,
   getWindowResetLabel,
-  hasActiveProviderUsage,
   hasRenderableUsage,
   type UsageBarState
 } from './account-usage-state'
@@ -84,7 +83,7 @@ export function getGrokAccountUsage(snapshot: AccountsSnapshot): GrokAccountUsag
   const authConfigured = readGrokAuthConfigured(snapshot)
   // Why: hide Grok when the desktop has neither a CLI session nor a usable meter,
   // so a Claude-only host does not grow an empty row.
-  if (!authConfigured && !hasActiveProviderUsage(limits)) {
+  if (!authConfigured && !readGrokWindowKey(limits)) {
     return null
   }
   return {
