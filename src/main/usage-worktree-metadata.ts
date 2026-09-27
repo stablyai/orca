@@ -2,6 +2,11 @@ import { basename } from 'node:path'
 import type { Repo } from '../shared/repo-types'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../shared/worktree/id'
 import { isFolderRepo } from '../shared/repo-kind'
+import {
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost,
+  LOCAL_EXECUTION_HOST_ID
+} from '../shared/execution-host'
 import type { Store } from './persistence'
 import type { UsageScanWorktreeRef } from './usage/usage-provider-contract'
 import { createWorktreeRefs } from './usage/usage-worktree-refs'
@@ -20,9 +25,11 @@ export function loadKnownUsageWorktreesByRepo(
   store: Pick<Store, 'getAllWorktreeMeta'>,
   repos: Repo[]
 ): Map<string, UsageWorktreeRef[]> {
+  // Why resolve the host: a repo row may name its SSH owner only as
+  // `executionHostId: ssh:<target>` with a null `connectionId`.
   return collectUsageWorktreesByRepo(
     store,
-    repos.filter((repo) => !repo.connectionId)
+    repos.filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
   )
 }
 
@@ -33,10 +40,13 @@ export function loadKnownSshUsageWorktreesByTarget(
 ): Map<string, UsageScanWorktreeRef[]> {
   const reposByTarget = new Map<string, Repo[]>()
   for (const repo of repos) {
-    if (repo.connectionId) {
-      const targetRepos = reposByTarget.get(repo.connectionId) ?? []
+    // Why the dialable target: the scan runs on that target's relay, so a row
+    // nested under a `runtime:` host is not ours to reach.
+    const targetId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+    if (targetId) {
+      const targetRepos = reposByTarget.get(targetId) ?? []
       targetRepos.push(repo)
-      reposByTarget.set(repo.connectionId, targetRepos)
+      reposByTarget.set(targetId, targetRepos)
     }
   }
   // Read persisted metadata once, not once per target.

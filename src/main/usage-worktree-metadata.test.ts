@@ -144,3 +144,42 @@ describe('loadKnownSshUsageWorktreesByTarget', () => {
     expect(store.getAllWorktreeMeta).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('usage worktree host resolution', () => {
+  // A repo row can name its SSH owner only in `executionHostId`, with a null `connectionId`.
+  const store = { getAllWorktreeMeta: () => ({}) }
+  const repos = [
+    { id: 'repo-local', path: '/workspace/local', displayName: 'Local' },
+    {
+      id: 'repo-ssh',
+      path: '/home/dev/repo',
+      displayName: 'Repo',
+      connectionId: null,
+      executionHostId: 'ssh:box-1'
+    },
+    {
+      id: 'repo-nested',
+      path: '/srv/nested',
+      displayName: 'Nested',
+      connectionId: 'box-9',
+      executionHostId: 'runtime:env-1'
+    }
+  ]
+
+  it('sends an executionHostId-only SSH repo to its host', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the loader reads only the fixture fields shown above.
+    const byTarget = loadKnownSshUsageWorktreesByTarget(store as never, repos as never)
+
+    expect([...byTarget.keys()]).toEqual(['box-1'])
+    expect(byTarget.get('box-1')?.map((ref) => ref.worktreeId)).toEqual([
+      'repo-ssh::/home/dev/repo'
+    ])
+  })
+
+  it('keeps SSH and runtime repos out of the local scan', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the loader reads only the fixture fields shown above.
+    const byRepo = loadKnownUsageWorktreesByRepo(store as never, repos as never)
+
+    expect([...byRepo.keys()]).toEqual(['repo-local'])
+  })
+})
