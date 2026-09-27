@@ -327,6 +327,15 @@ async function startOrcadRuntime(
         scope: 'runtime'
       })
 
+  if (!options.noPairing) {
+    const { installOrcadPairingRotation } = await import('./orcad-pairing-rotation')
+    installOrcadPairingRotation({
+      rpc,
+      userDataPath: runtimeUserDataPath,
+      pairingAddress: options.pairingAddress
+    })
+  }
+
   const readiness: ServeReadiness = {
     runtimeId: runtime.getRuntimeId(),
     boundEndpoint,
