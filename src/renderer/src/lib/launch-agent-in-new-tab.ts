@@ -291,6 +291,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       agent,
       submit: submitPastedPrompt,
       forcePaste: true,
+      hostPlatform: resolvedLaunchPlatform,
       onTimeout: timeoutNotice.onTimeout,
       ...(onPromptDeliveryUnconfirmed ? { onUnconfirmedDelivery: onPromptDeliveryUnconfirmed } : {})
     }).then((delivered) => {

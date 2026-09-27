@@ -31,6 +31,7 @@ export function deliverLaunchPromptToAgentTab(args: {
   content: string
   submit: boolean
   forcePaste: boolean
+  hostPlatform?: NodeJS.Platform
   timeoutMs?: number
   onTimeout?: () => void
   /** The paste was written without ever observing the agent's composer. */
@@ -65,6 +66,7 @@ export function deliverLaunchPromptToAgentTab(args: {
     agent,
     submit,
     forcePaste,
+    ...(args.hostPlatform ? { hostPlatform: args.hostPlatform } : {}),
     timeoutMs,
     onTimeout,
     onUnconfirmedDelivery
