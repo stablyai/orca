@@ -256,7 +256,7 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
  */
 export const POSIX_REMOTE_XDG_OPEN_SHIM = [
   '#!/usr/bin/env sh',
-  'self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)',
+  'self_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)',
   'case "${1:-}" in',
   '  http://*|https://*)',
   '    if "$self_dir/orca" open-url --url "$1" >/dev/null 2>&1; then exit 0; fi',
@@ -264,12 +264,24 @@ export const POSIX_REMOTE_XDG_OPEN_SHIM = [
   '    exit 0',
   '    ;;',
   'esac',
+  // Why a one-shot marker: however PATH spells this directory, a shim that was reached by
+  // delegation must never delegate again, so a loop back to itself cannot happen.
+  'if [ -n "${ORCA_XDG_OPEN_DELEGATED:-}" ]; then',
+  '  echo "xdg-open: no handler for ${1:-}" >&2',
+  '  exit 3',
+  'fi',
   'old_ifs=$IFS',
   'IFS=:',
   'for dir in $PATH; do',
   '  IFS=$old_ifs',
-  '  [ "$dir" = "$self_dir" ] && continue',
-  '  [ -x "$dir/xdg-open" ] && exec "$dir/xdg-open" "$@"',
+  '  [ -n "$dir" ] || continue',
+  // Why physical paths: `/bin/` and a symlink to this directory are both this shim.
+  '  real_dir=$(CDPATH= cd -- "$dir" 2>/dev/null && pwd -P) || continue',
+  '  [ "$real_dir" = "$self_dir" ] && continue',
+  '  if [ -x "$dir/xdg-open" ]; then',
+  '    export ORCA_XDG_OPEN_DELEGATED=1',
+  '    exec "$dir/xdg-open" "$@"',
+  '  fi',
   'done',
   'echo "xdg-open: no handler for ${1:-}" >&2',
   'exit 3',

@@ -258,7 +258,13 @@ describe('SSH remote Orca CLI launcher', () => {
   })
 
   describe('POSIX xdg-open shim', () => {
-    function runShim(opts: { orcaExit: number; withRealXdgOpen: boolean; arg: string }) {
+    function runShim(opts: {
+      orcaExit: number
+      withRealXdgOpen: boolean
+      arg: string
+      path?: (dirs: { root: string; bin: string; other: string; sys: string }) => string
+      env?: Record<string, string>
+    }) {
       const root = mkdtempSync(join(tmpdir(), 'orca-xdg-'))
       const bin = join(root, 'bin')
       const other = join(root, 'other')
@@ -285,7 +291,12 @@ describe('SSH remote Orca CLI launcher', () => {
       )
       const result = spawnSync('/bin/sh', [join(bin, 'xdg-open'), opts.arg], {
         encoding: 'utf8',
-        env: { PATH: `${bin}:${other}:${sys}` }
+        env: {
+          PATH: opts.path ? opts.path({ root, bin, other, sys }) : `${bin}:${other}:${sys}`,
+          ...opts.env
+        },
+        // Why a timeout: a shim that re-executes itself would otherwise hang the suite.
+        timeout: 5_000
       })
       const calls = existsSync(log) ? readFileSync(log, 'utf8').trim() : ''
       rmSync(root, { recursive: true, force: true })
@@ -309,6 +320,42 @@ describe('SSH remote Orca CLI launcher', () => {
       const run = runShim({ orcaExit: 0, withRealXdgOpen: true, arg: '/tmp/report.pdf' })
       expect(run.status).toBe(0)
       expect(run.calls).toBe('real /tmp/report.pdf')
+    })
+
+    itPosix('does not loop when PATH names its own directory with a trailing slash', () => {
+      const run = runShim({
+        orcaExit: 0,
+        withRealXdgOpen: true,
+        arg: '/tmp/report.pdf',
+        path: ({ bin, other, sys }) => `${bin}/:${other}:${sys}`
+      })
+      expect(run.status).toBe(0)
+      expect(run.calls).toBe('real /tmp/report.pdf')
+    })
+
+    itPosix('does not loop when PATH reaches its own directory through a symlink', () => {
+      const run = runShim({
+        orcaExit: 0,
+        withRealXdgOpen: true,
+        arg: '/tmp/report.pdf',
+        path: ({ root, bin, other, sys }) => {
+          symlinkSync(bin, join(root, 'alias'))
+          return `${join(root, 'alias')}:${bin}:${other}:${sys}`
+        }
+      })
+      expect(run.status).toBe(0)
+      expect(run.calls).toBe('real /tmp/report.pdf')
+    })
+
+    itPosix('refuses to delegate again when it was reached by delegation', () => {
+      const run = runShim({
+        orcaExit: 0,
+        withRealXdgOpen: true,
+        arg: '/tmp/report.pdf',
+        env: { ORCA_XDG_OPEN_DELEGATED: '1' }
+      })
+      expect(run.status).toBe(3)
+      expect(run.calls).toBe('')
     })
 
     itPosix('fails clearly when the host has no xdg-open for a non-web target', () => {

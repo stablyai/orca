@@ -22,6 +22,8 @@ export function runRemoteOpenUrl(
   if (typeof url !== 'string' || url.length === 0) {
     return { stdout: '', stderr: 'orca open-url: --url is required\n', exitCode: 2 }
   }
+  // Not in scope: SSH sessions owned by a paired Orca server have no desktop attachment here,
+  // so the xdg-open shim falls back to printing the link.
   if (!sshTargetId) {
     return {
       stdout: '',
