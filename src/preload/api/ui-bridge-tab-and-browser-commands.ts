@@ -7,6 +7,10 @@ import type {
 } from '../../shared/browser-page-command-target'
 import type { BrowserPageZoomCommand } from '../../shared/browser-page-zoom'
 import type {
+  RemoteOpenUrlApprovalResult,
+  RemoteOpenUrlRequestEvent
+} from '../../shared/remote-open-url'
+import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../shared/worktree/launch-types'
@@ -54,16 +58,14 @@ export const uiTabAndBrowserCommandsApi = {
   }): void => {
     ipcRenderer.send('browser:tabCloseReply', reply)
   },
-  onRemoteOpenUrlRequest: (
-    callback: (data: { url: string; sshTargetId: string }) => void
-  ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { url: string; sshTargetId: string }
-    ) => callback(data)
+  onRemoteOpenUrlRequest: (callback: (data: RemoteOpenUrlRequestEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: RemoteOpenUrlRequestEvent) =>
+      callback(data)
     ipcRenderer.on('browser:remoteOpenUrlRequest', listener)
     return () => ipcRenderer.removeListener('browser:remoteOpenUrlRequest', listener)
   },
+  approveRemoteOpenUrl: (requestId: string): Promise<RemoteOpenUrlApprovalResult> =>
+    ipcRenderer.invoke('browser:approveRemoteOpenUrl', { requestId }),
   onNewTerminalTab: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('ui:newTerminalTab', listener)

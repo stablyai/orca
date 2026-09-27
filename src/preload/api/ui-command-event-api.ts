@@ -15,6 +15,10 @@ import type {
 } from '../../shared/browser-page-command-target'
 import type { BrowserPageZoomCommand } from '../../shared/browser-page-zoom'
 import type {
+  RemoteOpenUrlApprovalResult,
+  RemoteOpenUrlRequestEvent
+} from '../../shared/remote-open-url'
+import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
@@ -106,9 +110,9 @@ export type UiCommandEventApi = {
     callback: (data: { requestId: string; tabId: string | null; worktreeId?: string }) => void
   ) => () => void
   /** A terminal on a remote host asked to open a URL; the desktop owner approves it first. */
-  onRemoteOpenUrlRequest: (
-    callback: (data: { url: string; sshTargetId: string }) => void
-  ) => () => void
+  onRemoteOpenUrlRequest: (callback: (data: RemoteOpenUrlRequestEvent) => void) => () => void
+  /** Owner approved; main opens its own recorded URL and forwards a loopback sign-in callback. */
+  approveRemoteOpenUrl: (requestId: string) => Promise<RemoteOpenUrlApprovalResult>
   replyTabClose: (reply: {
     requestId: string
     error?: string

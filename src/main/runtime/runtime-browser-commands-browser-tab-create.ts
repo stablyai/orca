@@ -17,6 +17,7 @@ import { browserNetworkExecutionHostKey } from '../browser/browser-network-execu
 import { waitForTabRegistration } from '../ipc/browser-tab-registration-wait'
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../shared/browser-client-automation-protocol'
 import { BROWSER_HOST_WEBVIEW_CAPABILITY } from './browser-host-capability-selection'
+import { issueRemoteOpenUrlTicket } from '../ssh/remote-open-url-requests'
 
 export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCommandsWithBrowserSetHeaders {
   async browserTabCreate(
@@ -232,9 +233,12 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
     if (!admitRemoteOpenUrl(params.sshTargetId)) {
       return 'rate_limited'
     }
+    const { requestId, ticket } = issueRemoteOpenUrlTicket(params)
     win.webContents.send('browser:remoteOpenUrlRequest', {
+      requestId,
       url: params.url,
-      sshTargetId: params.sshTargetId
+      sshTargetId: params.sshTargetId,
+      callbackPort: ticket.callback?.port ?? null
     })
     return 'sent'
   }

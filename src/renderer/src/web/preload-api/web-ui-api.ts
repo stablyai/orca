@@ -191,6 +191,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     replyTabSetProfile: () => {},
     onRequestTabClose: () => noopUnsubscribe,
     onRemoteOpenUrlRequest: () => noopUnsubscribe,
+    approveRemoteOpenUrl: async () => ({ status: 'expired' as const }),
     replyTabClose: () => {},
     onNewTerminalTab: () => noopUnsubscribe,
     onFocusBrowserAddressBar: () => noopUnsubscribe,
