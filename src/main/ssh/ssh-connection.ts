@@ -770,17 +770,16 @@ export class SshConnection {
       {
         targetId: this.target.id,
         hostDetail,
-        // Why the coalesce: this.requestCredential returns undefined when this
-        // attempt has been superseded/disposed (see its doc comment above) —
-        // KeyboardInteractiveSession's contract matches
-        // SshConnectionCallbacks.onCredentialRequest, which never returns
-        // undefined, so a stale attempt reads as "no answer" (null) same as an
-        // explicit user cancellation.
-        requestCredential: async (_targetId, kind, detail, echo) =>
-          (await this.requestCredential(kind, detail, connectGeneration, echo)) ?? null,
+        // Preserve a missing prompter as a capability gap, not a cancellation.
+        requestCredential: this.callbacks.onCredentialRequest
+          ? async (_targetId, kind, detail, echo) =>
+              (await this.requestCredential(kind, detail, connectGeneration, echo)) ?? null
+          : undefined,
         getCachedPassword: () => this.cachedPassword,
         setCachedPassword: (value) => {
-          this.cachedPassword = value
+          if (isCurrent()) {
+            this.cachedPassword = value
+          }
         },
         markCancelled: () => {
           // Why: a superseded/disposed attempt still holds a pending prompt
@@ -1595,10 +1594,12 @@ export class SshConnection {
                 // Why the level tag: isAuthError() needs it to classify this as 'auth-failed'
                 // rather than a generic 'error' state, matching what a real server rejection of
                 // an empty answer would report.
-                const cancelledError = new Error(
-                  `Keyboard-interactive authentication cancelled for ${this.target.label}`
-                ) as Error & { level?: string }
-                cancelledError.level = 'client-authentication'
+                const cancelledError = Object.assign(
+                  new Error(
+                    `Keyboard-interactive authentication cancelled for ${this.target.label}`
+                  ),
+                  { level: 'client-authentication' }
+                )
                 onStartupError(cancelledError)
               }
               return

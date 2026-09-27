@@ -76,6 +76,9 @@ export async function collectKeyboardInteractiveResponses(
           formatKeyboardInteractivePromptDetail(instructions, prompt.prompt),
           prompt.echo
         )
+    if (session.isCancelled()) {
+      return null
+    }
     if (value == null) {
       session.markCancelled()
       return null
@@ -94,6 +97,9 @@ async function answerPasswordPrompt(
     return cached
   }
   const value = await session.requestCredential?.(session.targetId, 'password', session.hostDetail)
+  if (session.isCancelled()) {
+    return null
+  }
   if (value == null) {
     return value
   }

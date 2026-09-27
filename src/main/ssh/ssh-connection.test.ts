@@ -310,12 +310,10 @@ describe('SshConnection', () => {
       await connectPromise
 
       expect(conn.getState().status).toBe('connected')
-      const retryConfig = clientInstances[1].lastConnectConfig as {
-        password?: string
-        tryKeyboard?: boolean
-      }
-      expect(retryConfig.tryKeyboard).toBe(true)
-      expect(retryConfig.password).toBe('password-123')
+      expect(clientInstances[1].lastConnectConfig).toMatchObject({
+        tryKeyboard: true,
+        password: 'password-123'
+      })
       expect(onCredentialRequest).toHaveBeenCalledWith(
         'target-1',
         'password',
@@ -514,6 +512,53 @@ describe('SshConnection', () => {
       await expect(connectPromise).rejects.toThrow('Keyboard-interactive authentication cancelled')
       expect(onCredentialRequest).toHaveBeenCalledTimes(1)
       expect(conn.getState().status).toBe('auth-failed')
+    })
+
+    it('does not restore the password cache when a prompt resolves after disconnect', async () => {
+      vi.stubEnv('SSH_AUTH_SOCK', '')
+      ssh2Mock.connectSequence = ['silent']
+      let answer: (value: string) => void = () => {}
+      const onCredentialRequest = vi.fn(
+        () =>
+          new Promise<string>((resolve) => {
+            answer = resolve
+          })
+      )
+      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+      const connecting = conn.connect()
+      connecting.catch(() => {})
+      await vi.waitFor(() => expect(eventHandlers.has('keyboard-interactive')).toBe(true))
+      const finish = vi.fn()
+      emitSshEvent(
+        'keyboard-interactive',
+        '',
+        '',
+        '',
+        [{ prompt: 'Password:', echo: false }],
+        finish
+      )
+      await vi.waitFor(() => expect(onCredentialRequest).toHaveBeenCalledOnce())
+      await conn.disconnect()
+      answer('obsolete-password')
+      await vi.waitFor(() => expect(finish).toHaveBeenCalledWith([]))
+      expect(conn.hasCachedCredential()).toBe(false)
+      expect(conn.getState().status).toBe('disconnected')
+      await expect(connecting).rejects.toThrow()
+    })
+
+    it('does not treat a missing credential callback as user cancellation', async () => {
+      vi.stubEnv('SSH_AUTH_SOCK', '')
+      ssh2Mock.connectSequence = ['silent']
+      const conn = new SshConnection(createTarget(), createCallbacks())
+      const connecting = conn.connect()
+      connecting.catch(() => {})
+      await vi.waitFor(() => expect(eventHandlers.has('keyboard-interactive')).toBe(true))
+      const finish = vi.fn()
+      emitSshEvent('keyboard-interactive', '', '', '', [{ prompt: 'Code:', echo: false }], finish)
+      await vi.waitFor(() => expect(finish).toHaveBeenCalledWith([]))
+      emitSshEvent('error', new Error('All configured authentication methods failed'))
+      await expect(connecting).rejects.toThrow('All configured authentication methods failed')
+      conn.disconnect()
     })
 
     it('fails auth (not cancellation) when the server rejects an incorrect MFA answer', async () => {

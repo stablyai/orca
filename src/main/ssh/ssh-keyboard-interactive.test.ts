@@ -177,6 +177,29 @@ describe('collectKeyboardInteractiveResponses', () => {
     expect(responses).toBeNull()
   })
 
+  it('discards a password resolved after the attempt is cancelled', async () => {
+    let answer: (value: string) => void = () => {}
+    const requestCredential = vi
+      .fn(async () => 'code')
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((resolve) => {
+            answer = resolve
+          })
+      )
+    const setCachedPassword = vi.fn()
+    const session = createSession({ requestCredential, setCachedPassword })
+    const collecting = collectKeyboardInteractiveResponses(session, '', [
+      { prompt: 'Password:', echo: false },
+      { prompt: 'Code:', echo: false }
+    ])
+    session.markCancelled()
+    answer('obsolete-password')
+    expect(await collecting).toBeNull()
+    expect(setCachedPassword).not.toHaveBeenCalled()
+    expect(requestCredential).toHaveBeenCalledTimes(1)
+  })
+
   it('accepts an empty response without caching it as a password', async () => {
     const requestCredential = vi.fn(async () => '')
     const setCachedPassword = vi.fn()
