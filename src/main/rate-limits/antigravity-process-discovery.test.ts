@@ -25,7 +25,7 @@ function failed(): ProcessResult {
 const REAL_ANTIGRAVITY_PROCESS_JSON = JSON.stringify({
   ProcessId: 78072,
   CommandLine:
-    'C:\\Users\\dev\\AppData\\Local\\Programs\\Antigravity\\resources\\bin\\language_server.exe --standalone --override_ide_name antigravity --subclient_type hub --app_data_dir antigravity --https_server_port 0 --csrf_token 55c16ac6-c94a-4e80-aa28-9e82b1064747'
+    'C:\\Users\\dev\\AppData\\Local\\Programs\\Antigravity\\resources\\bin\\language_server.exe --standalone --override_ide_name antigravity --subclient_type hub --app_data_dir antigravity --https_server_port 0 --csrf_token 00000000-0000-4000-8000-000000000000'
 })
 
 describe('discoverAntigravityRuntime (Windows)', () => {
@@ -43,7 +43,7 @@ describe('discoverAntigravityRuntime (Windows)', () => {
 
     expect(runtime).toEqual({
       pid: 78072,
-      csrfToken: '55c16ac6-c94a-4e80-aa28-9e82b1064747',
+      csrfToken: '00000000-0000-4000-8000-000000000000',
       ports: [51365, 51364]
     })
     // Why: every spawn must go through the shared run-process chokepoint
@@ -62,7 +62,7 @@ describe('discoverAntigravityRuntime (Windows)', () => {
 
     expect(runtime).toEqual({
       pid: 78072,
-      csrfToken: '55c16ac6-c94a-4e80-aa28-9e82b1064747',
+      csrfToken: '00000000-0000-4000-8000-000000000000',
       ports: [51364]
     })
   })
