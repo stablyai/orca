@@ -129,6 +129,29 @@ describe('plugin language-pack startup ownership', () => {
     expect(second.result.current).toEqual([pack('retained')])
   })
 
+  it('retries a wedged startup request instead of joining it for the session', async () => {
+    vi.useFakeTimers()
+    try {
+      const bridge = installBridge()
+      languagePacks.ensurePluginLanguagePacksLoaded()
+      // A request that is merely slow is shared, not duplicated.
+      vi.advanceTimersByTime(9_000)
+      languagePacks.ensurePluginLanguagePacksLoaded()
+      expect(bridge.listLanguagePacks).toHaveBeenCalledTimes(1)
+      // Past the join window it is wedged, so a later consumer must be able to make progress.
+      vi.advanceTimersByTime(2_000)
+      languagePacks.ensurePluginLanguagePacksLoaded()
+      expect(bridge.listLanguagePacks).toHaveBeenCalledTimes(2)
+      bridge.requests[1].resolve([pack('recovered')])
+      await vi.waitFor(() =>
+        expect(languagePacks.usePluginLanguagePackStore.getState().loaded).toBe(true)
+      )
+      expect(languagePacks.usePluginLanguagePackStore.getState().packs).toEqual([pack('recovered')])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('retains fail-closed loading and permits an explicit retry after rejection', async () => {
     const bridge = installBridge()
     const store = languagePacks.usePluginLanguagePackStore

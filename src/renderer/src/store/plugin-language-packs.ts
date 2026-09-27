@@ -11,8 +11,17 @@ type PluginLanguagePackState = {
   fetchPacks: () => Promise<void>
 }
 
+/**
+ * Joining the startup request saves a duplicate IPC round trip, but its handler awaits plugin
+ * discovery — a wedged one must not turn `ensurePluginLanguagePacksLoaded` into a no-op for the
+ * session, which would pin every consumer on built-in translations. Past this bound the pending
+ * request is wedged rather than slow, so a later consumer starts its own (mirrors the reasoning in
+ * `src/main/git/coalesced-probe.ts`).
+ */
+const STARTUP_REQUEST_JOIN_WINDOW_MS = 10_000
+
 let requestGeneration = 0
-let latestRequestPending = false
+let latestRequestStartedAt: number | null = null
 let changeSubscriptionStarted = false
 
 export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((set) => ({
@@ -20,11 +29,11 @@ export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((set
   loaded: false,
   fetchPacks: async () => {
     const generation = ++requestGeneration
-    latestRequestPending = true
+    latestRequestStartedAt = Date.now()
     const api = window.api?.plugins
     if (!api?.listLanguagePacks) {
       if (generation === requestGeneration) {
-        latestRequestPending = false
+        latestRequestStartedAt = null
         set({ packs: [], loaded: true })
       }
       return
@@ -49,7 +58,7 @@ export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((set
       }
     } finally {
       if (generation === requestGeneration) {
-        latestRequestPending = false
+        latestRequestStartedAt = null
       }
     }
   }
@@ -57,7 +66,10 @@ export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((set
 
 export function ensurePluginLanguagePacksLoaded(): void {
   const state = usePluginLanguagePackStore.getState()
-  if (!state.loaded && !latestRequestPending) {
+  const joinable =
+    latestRequestStartedAt !== null &&
+    Date.now() - latestRequestStartedAt < STARTUP_REQUEST_JOIN_WINDOW_MS
+  if (!state.loaded && !joinable) {
     void state.fetchPacks()
   }
   if (!changeSubscriptionStarted && window.api?.plugins?.onChanged) {
