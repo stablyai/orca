@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/hosted-review'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
+import { nextLookupGeneration } from '../lookup-generation-sequence'
 import {
   getHostedReviewCacheKey,
   linkedReviewHintKey,
@@ -36,7 +37,6 @@ import {
   hostedReviewRequestKey,
   hostedReviewRequestGenerations as requestGenerations,
   inflightHostedReviewRequests,
-  nextHostedReviewRequestGeneration,
   queueHostedReviewRevalidation,
   registerInflightHostedReviewRequest
 } from './hosted-review-request-state'
@@ -187,7 +187,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
 
     const inflightRequest = inflightHostedReviewRequests.get(requestKey)
     const startRequest = (): Promise<HostedReviewInfo | null> => {
-      const generation = nextHostedReviewRequestGeneration()
+      const generation = nextLookupGeneration()
       const requestStartedAt = Date.now()
       const requestStartedEntry = get().hostedReviewCache[cacheKey]
       requestGenerations.set(cacheKey, generation)
