@@ -18,6 +18,8 @@ import { withBoundedCacheEntry, WORK_ITEMS_CACHE_TTL } from './cache-policy'
 import {
   acquireProviderRequestSlot as acquireWorkItemSlot,
   inflightProjectViewRequests,
+  nextProviderRequestId,
+  ownsInflightRequest,
   releaseProviderRequestSlot as releaseWorkItemSlot
 } from './request-coordination'
 import {
@@ -75,6 +77,7 @@ export const createProjectActions = (
       await existing.promise.catch(() => {})
     }
 
+    const requestId = nextProviderRequestId()
     const request = (async (): Promise<GetProjectViewTableResult> => {
       await acquireWorkItemSlot()
       try {
@@ -87,6 +90,12 @@ export const createProjectActions = (
                 { timeoutMs: 60_000 }
               )
             : await window.api.gh.getProjectViewTable(args)
+        // Why: the bounded upgrade wait can leave us running beside a stronger request for this
+        // key, so neither write below may land once it owns the key — a late non-OK reply would
+        // otherwise stamp its error over the fresher table (or over a newer error) at the known key.
+        if (!ownsInflightRequest(inflightProjectViewRequests, requestKey, requestId)) {
+          return envelope
+        }
         if (envelope.ok) {
           const table = envelope.data
           const key = projectViewCacheKey(
@@ -129,13 +138,14 @@ export const createProjectActions = (
         releaseWorkItemSlot()
       }
     })().finally(() => {
-      if (inflightProjectViewRequests.get(requestKey)?.promise === request) {
+      if (ownsInflightRequest(inflightProjectViewRequests, requestKey, requestId)) {
         inflightProjectViewRequests.delete(requestKey)
       }
     })
 
     inflightProjectViewRequests.set(requestKey, {
       promise: request,
+      requestId,
       force: Boolean(options?.force)
     })
     return request
