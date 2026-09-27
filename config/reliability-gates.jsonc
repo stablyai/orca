@@ -268,38 +268,47 @@
       "motivatingLinks": [
         "https://github.com/stablyai/orca/blob/01ce5edf1aeec8a4b5cf06f531434be7d7c0cbcd/src/shared/ephemeral-vm-recipe-process.ts"
       ],
-      "invariant": "Decoded stdout and stderr callback contents and order remain unchanged, final tails preserve the previous per-chunk UTF-8 byte limit policy, and success or failure releases capture storage without recapturing late output.",
-      "oracle": "Compare byte-bounded tails against old and independent code-point models across wraps, growth, oversized chunks and unusual limits. Feed split and malformed UTF-8 through actual stream decoding. Require at most 5 MiB string encoding for 4 MiB output, collectible backing buffers after close and error, zero late capture work with preserved callbacks, and unchanged tails on forced cancellation or synchronous kill-close.",
+      "invariant": "Decoded stdout and stderr callback contents and order remain unchanged, final tails are the last capped run of raw output bytes with any leading partial UTF-8 sequence dropped, and success or failure releases capture storage without recapturing late output.",
+      "oracle": "Compare byte-bounded tails against the old per-chunk model and an independent code-point model across compaction, growth, oversized chunks and mid-character splits. Feed split and malformed UTF-8 through actual stream decoding. Require at most 5 MiB moved through the capture for 4 MiB of output with zero encoding, collectible backing buffers after close and error, zero late capture work with preserved callbacks, one decode per stream, unchanged tails on forced cancellation or synchronous kill-close, and every capture limit clamped to a bounded byte count.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/shared/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts"
       ],
       "testFiles": [
         "src/shared/ephemeral-vm-recipe-process.test.ts",
         "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
+        "src/shared/growing-byte-buffer.test.ts",
         "src/main/ephemeral-vm-recipe-runner.test.ts"
       ],
       "assertionRefs": [
         {
           "file": "src/shared/ephemeral-vm-recipe-output-capture.test.ts",
           "assertions": [
-            "matches the old UTF-8 tail for limit %s across varied chunk boundaries",
-            "matches a code-point oracle through oversized chunks, growth and many ring wraps",
+            "matches the old per-chunk UTF-8 tail for limit %s across varied chunk boundaries",
+            "retains the same code-point tail for limit %s wherever byte boundaries fall",
             "preserves stream decoding, callback boundaries and independent tails",
-            "keeps capture encoding proportional to incoming output",
+            "moves at most 5 MiB through the capture for 4 MiB of output",
             "releases capture storage after %s while preserving late callbacks",
-            "decodes once when force-kill closes synchronously"
+            "decodes once per stream when force-kill closes synchronously",
+            "clamps a $limit capture limit to a bounded byte count"
+          ]
+        },
+        {
+          "file": "src/shared/growing-byte-buffer.test.ts",
+          "assertions": [
+            "reads and writes correctly after the head offset has advanced",
+            "keeps a bounded suffix stable across many small appends without unbounded growth"
           ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-25",
+          "date": "2026-09-26",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/ephemeral-vm-recipe-process.test.ts src/shared/ephemeral-vm-recipe-output-capture.test.ts src/shared/growing-byte-buffer.test.ts src/main/ephemeral-vm-recipe-runner.test.ts",
           "result": "passed",
-          "durationSeconds": 1.24,
-          "summary": "44 tests across three suites passed, including forced-GC lifetime and synchronous SIGKILL-close cases."
+          "durationSeconds": 0.48,
+          "summary": "60 tests across four suites passed, including forced-GC lifetime, synchronous SIGKILL-close and the shared byte buffer's head-offset cases."
         }
       ],
       "runtimeBudget": {
@@ -312,11 +321,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Baseline encodes 938,999,808 bytes for 4 MiB output and fails the permanent 5 MiB budget. The initial ring prototype retained two backing buffers after error and encoded late output after close; both permanent lifetime cases fail there and pass after cleanup correction."
+        "evidence": "Baseline moves 943,194,112 bytes for 4 MiB output and fails the permanent 5 MiB budget. An earlier ring prototype retained two backing buffers after error and encoded late output after close; both permanent lifetime cases fail there and pass after cleanup correction. Dropping the head offset from GrowingByteBuffer keeps the byte budget but takes 12.36 ms instead of 0.25 ms."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Final actual runner: 4 MiB in 4 KiB chunks encodes 938,999,808 to 4,194,304 bytes; seven paired samples median 241.66 to 0.750 ms. A 64-byte one-shot is 1.375 to 2.417 microseconds; ring spare capacity increases active storage. No new polling, timers, subprocesses, wire fields or deadline changes."
+        "evidence": "4 MiB in 4 KiB chunks, seven paired samples, macOS: the old per-chunk re-encode moves 943,194,112 bytes in 265.78 ms median; raw-byte capture into GrowingByteBuffer moves 4,194,304 appended plus 1,048,576 decoded bytes, encodes nothing, and takes 0.25 ms. End to end through runRecipeCommand is 0.26 ms with no output callback and 0.78 ms with one (the callback decoder is the work setEncoding already did). A 64-byte one-shot is 0.075 to 0.206 microseconds; retained storage reserves spare capacity and can exceed a string. No new polling, timers, subprocesses, wire fields or deadline changes."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history.",
@@ -324,8 +333,8 @@
       ],
       "knownGaps": [
         "Synthetic output timings do not establish typical recipe prevalence, end-to-end provisioning gains or UI latency.",
-        "A live ring reserves spare capacity and can use more memory than a string; CJK bytes can exceed UTF-16 storage. Tiny output is slower, and oversized input still requires an input-sized encoding.",
-        "Fractional, NaN, infinite and unsafe-integer caps preserve prior coercion behavior without a new boundedness guarantee. No production override was found.",
+        "Retained storage reserves spare capacity and can use more memory than a string; CJK bytes can exceed UTF-16 storage. Tiny output is slower, and an oversized single chunk still copies its capped tail.",
+        "Malformed UTF-8 now yields a different tail than the old policy: replacement characters no longer inflate the byte count, so a malformed tail keeps more real output. No production override of the cap was found, and odd caps are clamped rather than coerced per chunk.",
         "Live VM providers, SSH lifecycle journeys, and native Windows or Linux termination were not run."
       ],
       "demotionRule": "Keep experimental or demote if output differs, discarded bytes return, settled capture remains reachable, cancellation loses its tail, or the deterministic encoding budget regresses. Never weaken the oracle or increase retries to obtain a pass."
