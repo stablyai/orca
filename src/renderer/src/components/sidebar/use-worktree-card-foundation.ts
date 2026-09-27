@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { selectWorktreeCardDisplayMode } from './worktree-card-layout'
 
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 import {
@@ -34,7 +35,10 @@ export function useWorktreeCardFoundation({
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
+  // Why narrowed: this request is app-global, so any row's rename re-rendered every mounted card.
+  const renamingWorktreeId = useAppStore((s) =>
+    s.renamingWorktreeId?.worktreeId === worktree.id ? s.renamingWorktreeId : null
+  )
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const settings = useAppStore((s) => s.settings)
@@ -45,7 +49,11 @@ export function useWorktreeCardFoundation({
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
-  const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
+  const { compactCards } = selectWorktreeCardDisplayMode(
+    newCardStyle,
+    settings?.compactWorktreeCards === true,
+    cardProps
+  )
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()

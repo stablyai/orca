@@ -45,7 +45,7 @@ export function useWorktreeListKeyboardNavigation(args: {
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
-  virtualizer: Virtualizer<HTMLDivElement, HTMLDivElement>
+  virtualizer: Pick<Virtualizer<HTMLDivElement, HTMLDivElement>, 'scrollToIndex'>
   scrollRef: React.RefObject<HTMLDivElement | null>
   activeModal: string
   markDirectScrollInput: () => void

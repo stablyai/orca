@@ -228,37 +228,3 @@ export function renderWorktreeItemRow(
     </div>
   )
 }
-
-// Rebuild the visible lineage subtree so each card renders its own children inline.
-export function renderWorktreeLineageDescendants(
-  ctx: WorktreeItemRowContext,
-  parent: WorktreeItemRow,
-  descendants: readonly WorktreeItemRow[]
-): React.ReactNode | undefined {
-  const childNodes: React.ReactNode[] = []
-  let cursor = 0
-  while (cursor < descendants.length) {
-    const child = descendants[cursor]
-    if (!child || child.depth !== parent.depth + 1) {
-      cursor++
-      continue
-    }
-
-    let nextSiblingIndex = cursor + 1
-    while (
-      nextSiblingIndex < descendants.length &&
-      descendants[nextSiblingIndex]!.depth > child.depth
-    ) {
-      nextSiblingIndex++
-    }
-
-    const childLineageChildren = renderWorktreeLineageDescendants(
-      ctx,
-      child,
-      descendants.slice(cursor + 1, nextSiblingIndex)
-    )
-    childNodes.push(renderWorktreeItemRow(ctx, child, true, childLineageChildren))
-    cursor = nextSiblingIndex
-  }
-  return childNodes.length > 0 ? childNodes : undefined
-}

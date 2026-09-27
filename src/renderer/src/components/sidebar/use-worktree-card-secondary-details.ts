@@ -1,4 +1,5 @@
 import React, { useCallback } from 'react'
+import { selectWorktreeCardDisplayMode } from './worktree-card-layout'
 import { toast } from 'sonner'
 
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
@@ -88,7 +89,11 @@ export function useWorktreeCardSecondaryDetails({
   const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
-  const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
+  const { showInlineAgentList } = selectWorktreeCardDisplayMode(
+    newCardStyle,
+    compactCards,
+    cardProps
+  )
   const compactInlineAgentRows = useWorktreeAgentRows(
     worktree.id,
     showInlineAgentList && agentActivityDisplayMode === 'compact'

@@ -57,33 +57,11 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-// Why: honor the real getItemKey so each virtual row's React key equals
-// getRenderRowKey(row). This is what makes the parent card remount when it
-// moves between a standalone 'item' row (key wt:...) and a 'lineage-group' row
-// (key lineage-group:...) as the child-worktrees group collapses/expands.
-vi.mock('@tanstack/react-virtual', () => ({
-  defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
-    Array.from({ length: endIndex - startIndex + 1 }, (_, index) => startIndex + index),
-  measureElement: () => 32,
-  useVirtualizer: ({
-    count,
-    getItemKey
-  }: {
-    count: number
-    getItemKey?: (index: number) => string | number
-  }) => ({
-    elementsCache: new Map(),
-    getTotalSize: () => count * 96,
-    getVirtualItems: () =>
-      Array.from({ length: count }, (_, index) => ({
-        index,
-        key: getItemKey ? getItemKey(index) : `row-${index}`,
-        start: index * 96
-      })),
-    measureElement: vi.fn(),
-    scrollToIndex: vi.fn()
-  })
-}))
+vi.mock('@tanstack/react-virtual', async () => {
+  const { createWorktreeListVirtualizerTestModule } =
+    await import('./worktree-list-virtualizer-test-fixture')
+  return createWorktreeListVirtualizerTestModule()
+})
 
 vi.mock('@/hooks/useVirtualizedScrollAnchor', () => ({
   VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT: 'orca:test-record-scroll-anchor',

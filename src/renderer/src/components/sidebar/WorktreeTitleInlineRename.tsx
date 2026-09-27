@@ -162,7 +162,7 @@ export function WorktreeTitleInlineRename({
     if (!input) {
       return
     }
-    input.focus()
+    input.focus({ preventScroll: true })
     // Why: double-click rename should make replacing the workspace title a one-keystroke action.
     input.select()
   }, [])
@@ -300,6 +300,8 @@ export function WorktreeTitleInlineRename({
             onClick={stopCardEvent}
             onDoubleClick={stopCardEvent}
             onPointerDown={stopCardEvent}
+            onTouchStart={stopCardEvent}
+            onFocus={stopCardEvent}
             onKeyDown={handleKeyDown}
             className={cn(
               'col-start-1 row-start-1 min-w-0 select-text truncate text-foreground outline-none',

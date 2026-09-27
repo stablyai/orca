@@ -38,3 +38,41 @@ describe('workspace port-scan surface actions', () => {
     expect(useAppStore.getState().workspacePortScanRefreshing).toBe(false)
   })
 })
+
+describe('sidebar reveal ownership', () => {
+  beforeEach(() => {
+    useAppStore.setState({ pendingRevealWorktree: null, pendingRevealSidebarRow: null })
+  })
+
+  it('replaces a worktree destination with the newer sidebar row request', () => {
+    const state = useAppStore.getState()
+    state.revealWorktreeInSidebar('old', { beginRename: true })
+    state.revealSidebarRow('folder:new', { behavior: 'smooth' })
+    expect(useAppStore.getState().pendingRevealWorktree).toBeNull()
+    expect(useAppStore.getState().pendingRevealSidebarRow?.rowKey).toBe('folder:new')
+  })
+
+  it('replaces a sidebar row destination with a host-qualified worktree request', () => {
+    const state = useAppStore.getState()
+    state.revealSidebarRow('repo:old')
+    state.revealWorktreeInSidebar('new', { executionHostId: 'ssh:host-a', beginRename: true })
+    expect(useAppStore.getState().pendingRevealSidebarRow).toBeNull()
+    expect(useAppStore.getState().pendingRevealWorktree).toMatchObject({
+      worktreeId: 'new',
+      executionHostId: 'ssh:host-a',
+      beginRename: true
+    })
+  })
+
+  it('gives repeated same-id requests distinct authority, including across hosts', () => {
+    const state = useAppStore.getState()
+    state.revealWorktreeInSidebar('same', { executionHostId: 'ssh:host-a' })
+    const first = useAppStore.getState().pendingRevealWorktree
+    state.revealWorktreeInSidebar('same', { executionHostId: 'ssh:host-a' })
+    const second = useAppStore.getState().pendingRevealWorktree
+    expect(second).not.toBe(first)
+    state.revealWorktreeInSidebar('same', { executionHostId: 'ssh:host-b' })
+    expect(useAppStore.getState().pendingRevealWorktree).not.toBe(second)
+    expect(useAppStore.getState().pendingRevealWorktree?.executionHostId).toBe('ssh:host-b')
+  })
+})

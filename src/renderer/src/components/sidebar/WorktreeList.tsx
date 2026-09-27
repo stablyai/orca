@@ -246,6 +246,8 @@ const WorktreeList = React.memo(function WorktreeList({
     worktreeMap,
     worktrees: allWorktrees,
     folderWorkspaces,
+    projectGroups,
+    defaultHostId,
     hasFilters,
     revealWorkspaceFilters
   })

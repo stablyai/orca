@@ -1,3 +1,11 @@
+export {
+  EMPTY_TERMINAL_LAYOUTS,
+  selectTerminalLayoutsForWorktree
+} from './worktree-terminal-layout-selector'
+import {
+  combineWorktreeAgentRowMembership,
+  reuseWorktreeMembership
+} from './worktree-agent-row-membership'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { AppState } from '@/store/types'
 import type {
@@ -13,8 +21,6 @@ import {
   recordLiveEntriesFullRebuild
 } from './worktree-agent-live-index-patch'
 import { selectWorktreeAgentOrchestration } from './worktree-agent-orchestration-index'
-import { createWorktreeRecordSelector } from '@/store/worktree-record-selector-cache'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 // Why frozen and exported: card hooks return these from their inactive branch,
 // so the identity has to be shared app-wide and safe from stray writes.
@@ -23,8 +29,6 @@ export const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES = Object.freeze(
   []
 ) as unknown as MigrationUnsupportedPtyEntry[]
 export const EMPTY_RETAINED = Object.freeze([]) as unknown as RetainedAgentEntry[]
-export const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> =
-  Object.freeze({})
 // Why: selector unit tests often pass partial store mocks; production state
 // owns these maps, but missing mock maps should behave like empty slices.
 const EMPTY_RECORD = {}
@@ -42,9 +46,10 @@ type WorktreeAgentRowsState = Pick<
 type TabWorktreeIndexCache = {
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
   tabIdToWorktreeId: Map<string, string>
+  worktreeIds: ReadonlySet<string>
 }
 
-type LiveTabWorktreeIndexCache = TabWorktreeIndexCache & {
+type LiveTabWorktreeIndexCache = Omit<TabWorktreeIndexCache, 'worktreeIds'> & {
   unifiedTabsByWorktree: WorktreeAgentRowsState['unifiedTabsByWorktree']
 }
 
@@ -52,16 +57,20 @@ type MigrationUnsupportedByWorktreeCache = {
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
   migrationUnsupportedByPtyId: WorktreeAgentRowsState['migrationUnsupportedByPtyId']
   entriesByWorktree: Map<string, MigrationUnsupportedPtyEntry[]>
+  worktreeIds: ReadonlySet<string>
 }
 
 type RetainedEntriesByWorktreeCache = {
   retainedAgentsByPaneKey: WorktreeAgentRowsState['retainedAgentsByPaneKey']
   entriesByWorktree: Map<string, RetainedAgentEntry[]>
+  worktreeIds: ReadonlySet<string>
 }
+
+type LiveWorktreeEntriesCache = LiveEntriesByWorktreeCache & { worktreeIds: ReadonlySet<string> }
 
 let tabWorktreeIndexCache: TabWorktreeIndexCache | null = null
 let liveTabWorktreeIndexCache: LiveTabWorktreeIndexCache | null = null
-let liveEntriesByWorktreeCache: LiveEntriesByWorktreeCache | null = null
+let liveEntriesByWorktreeCache: LiveWorktreeEntriesCache | null = null
 let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
 let retainedEntriesByWorktreeCache: RetainedEntriesByWorktreeCache | null = null
 
@@ -90,12 +99,20 @@ export function getTabIdToWorktreeId(
     return tabWorktreeIndexCache.tabIdToWorktreeId
   }
   const tabIdToWorktreeId = new Map<string, string>()
+  const worktreeIds = new Set<string>()
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    if (tabs.length > 0) {
+      worktreeIds.add(worktreeId)
+    }
     for (const tab of tabs) {
       tabIdToWorktreeId.set(tab.id, worktreeId)
     }
   }
-  tabWorktreeIndexCache = { tabsByWorktree, tabIdToWorktreeId }
+  tabWorktreeIndexCache = {
+    tabsByWorktree,
+    tabIdToWorktreeId,
+    worktreeIds: reuseWorktreeMembership(tabWorktreeIndexCache?.worktreeIds, worktreeIds)
+  }
   return tabIdToWorktreeId
 }
 
@@ -148,6 +165,7 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
         tabsByWorktree,
         unifiedTabsByWorktree,
         agentStatusByPaneKey,
+        worktreeIds: liveEntriesByWorktreeCache.worktreeIds,
         entriesByWorktree: patched
       }
       return patched
@@ -175,6 +193,10 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
     tabsByWorktree,
     unifiedTabsByWorktree,
     agentStatusByPaneKey,
+    worktreeIds: reuseWorktreeMembership(
+      liveEntriesByWorktreeCache?.worktreeIds,
+      entriesByWorktree.keys()
+    ),
     entriesByWorktree
   }
   return entriesByWorktree
@@ -217,6 +239,10 @@ function getMigrationUnsupportedByWorktree(
   migrationUnsupportedByWorktreeCache = {
     tabsByWorktree,
     migrationUnsupportedByPtyId,
+    worktreeIds: reuseWorktreeMembership(
+      migrationUnsupportedByWorktreeCache?.worktreeIds,
+      entriesByWorktree.keys()
+    ),
     entriesByWorktree
   }
   return entriesByWorktree
@@ -245,6 +271,10 @@ function getRetainedEntriesByWorktree(
   }
   retainedEntriesByWorktreeCache = {
     retainedAgentsByPaneKey,
+    worktreeIds: reuseWorktreeMembership(
+      retainedEntriesByWorktreeCache?.worktreeIds,
+      entriesByWorktree.keys()
+    ),
     entriesByWorktree
   }
   return entriesByWorktree
@@ -290,20 +320,17 @@ export function selectRuntimeAgentOrchestrationForWorktree(
   return selectWorktreeAgentOrchestration(state, worktreeId)
 }
 
-export const selectTerminalLayoutsForWorktree = createWorktreeRecordSelector<
-  Pick<AppState, 'tabsByWorktree' | 'terminalLayoutsByTabId'>,
-  Record<string, TerminalLayoutSnapshot | undefined>
->({
-  readSources: (state) => [
-    state.tabsByWorktree ?? EMPTY_RECORD,
-    state.terminalLayoutsByTabId ?? EMPTY_RECORD
-  ],
-  empty: EMPTY_TERMINAL_LAYOUTS,
-  build: (state, worktreeId) => {
-    const out: Record<string, TerminalLayoutSnapshot | undefined> = {}
-    for (const tab of (state.tabsByWorktree ?? EMPTY_RECORD)[worktreeId] ?? []) {
-      out[tab.id] = (state.terminalLayoutsByTabId ?? EMPTY_RECORD)[tab.id]
-    }
-    return out
-  }
-})
+export function selectWorktreeAgentRowCandidateIds(
+  state: WorktreeAgentRowsState
+): ReadonlySet<string> {
+  getTabIdToWorktreeId(state.tabsByWorktree ?? EMPTY_RECORD)
+  getLiveEntriesByWorktree(state)
+  getMigrationUnsupportedByWorktree(state)
+  getRetainedEntriesByWorktree(state)
+  return combineWorktreeAgentRowMembership(
+    tabWorktreeIndexCache!.worktreeIds,
+    liveEntriesByWorktreeCache!.worktreeIds,
+    migrationUnsupportedByWorktreeCache!.worktreeIds,
+    retainedEntriesByWorktreeCache!.worktreeIds
+  )
+}

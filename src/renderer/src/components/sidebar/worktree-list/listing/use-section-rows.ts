@@ -1,3 +1,4 @@
+import { getFolderRowKey } from './folder-row-identity'
 import { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -55,6 +56,7 @@ function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSec
       keys.add(row.rowKey)
     } else if (row.type === 'folder-workspace') {
       keys.add(folderWorkspaceKey(row.folderWorkspace.id))
+      keys.add(getFolderRowKey(row))
     } else if (row.type === 'pending-creation') {
       keys.add(`pending:${row.creationId}`)
     } else if (row.type === 'imported-worktrees-card') {

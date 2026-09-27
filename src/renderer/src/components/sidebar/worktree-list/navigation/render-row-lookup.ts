@@ -1,3 +1,4 @@
+import { getFolderRowKey } from '../listing/folder-row-identity'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -15,7 +16,7 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
     return row.rowKey
   }
   if (row.type === 'folder-workspace') {
-    return folderWorkspaceKey(row.folderWorkspace.id)
+    return getFolderRowKey(row)
   }
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`
@@ -30,6 +31,9 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
 }
 
 export function rowKeyMatchesRenderRow(row: RenderRow, rowKey: string): boolean {
+  if (row.type === 'folder-workspace' && rowKey === folderWorkspaceKey(row.folderWorkspace.id)) {
+    return true
+  }
   if (row.type === 'lineage-group') {
     return row.rows.some((item) => item.rowKey === rowKey)
   }
@@ -58,7 +62,12 @@ export function renderRowContainsWorktree(
     return false
   }
   if (row.type === 'folder-workspace') {
-    return folderWorkspaceKey(row.folderWorkspace.id) === worktreeId
+    return (
+      folderWorkspaceKey(row.folderWorkspace.id) === worktreeId &&
+      (executionHostId === undefined ||
+        getFolderRowKey(row) ===
+          getWorktreeHostIdentity({ id: worktreeId, hostId: executionHostId }))
+    )
   }
   if (row.type === 'lineage-group') {
     return row.rows.some((item) => itemMatchesWorktree(item, worktreeId, executionHostId))
@@ -112,7 +121,7 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
     // Why: host-qualified reveals are emitted for folder workspaces too, and a
     // walker that only knows item rows returns -1 so the reveal never lands.
     if (row.type === 'folder-workspace') {
-      if (folderWorkspaceKey(row.folderWorkspace.id) === worktree.id) {
+      if (renderRowContainsWorktree(row, worktree.id, worktree.hostId)) {
         return index
       }
       continue

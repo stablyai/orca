@@ -1,3 +1,4 @@
+import { hasWorktreeLineageChildChip } from './worktree-card-layout'
 import React, { useCallback } from 'react'
 
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -121,7 +122,10 @@ export function useWorktreeCardWorkspaceActions({
       ? translate('auto.components.sidebar.WorktreeList.0c6ee14f23', 'child')
       : translate('auto.components.sidebar.WorktreeList.045a8aed48', 'children')
   }`
-  const showLineageChildChip = lineageChildCount > 0 && onLineageToggle !== undefined
+  const showLineageChildChip = hasWorktreeLineageChildChip(
+    lineageChildCount,
+    onLineageToggle !== undefined
+  )
 
   const handleDragStart = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {

@@ -67,6 +67,7 @@ export function useWorktreeContextMenuModel({
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )
   const [menuOpen, setMenuOpen] = useState(false)
+  const [menuWasOpened, setMenuWasOpened] = useState(false)
   // Why: the Developer submenu is a power-user affordance, so it is revealed by
   // holding Option/Alt at right-click — captured at open time (like the Help
   // menu's admin options) so the submenu can't appear or vanish mid-menu and
@@ -142,7 +143,8 @@ export function useWorktreeContextMenuModel({
     [activeContextWorktrees, browserTabsByWorktree, ptyIdsByTabId, tabsByWorktree]
   )
   const lineageMenuActions = useWorkspaceLineageMenuActions({
-    enabled: !isMultiContext,
+    // Keep the existing closing-content behavior after the first open.
+    enabled: menuWasOpened && !isMultiContext,
     parent: worktree,
     worktrees: allWorktrees,
     lineageById: worktreeLineageById,
@@ -227,6 +229,9 @@ export function useWorktreeContextMenuModel({
 
   const setMenuOpenState = useCallback(
     (open: boolean) => {
+      if (open) {
+        setMenuWasOpened(true)
+      }
       setMenuOpen(open)
       if (!open) {
         // Why: the reveal is per-open, so a later plain right-click can't inherit it.

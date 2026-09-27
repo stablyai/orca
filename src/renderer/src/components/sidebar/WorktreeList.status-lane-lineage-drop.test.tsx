@@ -62,23 +62,11 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-vi.mock('@tanstack/react-virtual', () => ({
-  defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
-    Array.from({ length: endIndex - startIndex + 1 }, (_, index) => startIndex + index),
-  measureElement: () => 32,
-  useVirtualizer: ({ count }: { count: number }) => ({
-    elementsCache: new Map(),
-    getTotalSize: () => count * 96,
-    getVirtualItems: () =>
-      Array.from({ length: count }, (_, index) => ({
-        index,
-        key: `row-${index}`,
-        start: index * 96
-      })),
-    measureElement: vi.fn(),
-    scrollToIndex: vi.fn()
-  })
-}))
+vi.mock('@tanstack/react-virtual', async () => {
+  const { createWorktreeListVirtualizerTestModule } =
+    await import('./worktree-list-virtualizer-test-fixture')
+  return createWorktreeListVirtualizerTestModule()
+})
 
 vi.mock('@/hooks/useVirtualizedScrollAnchor', () => ({
   VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT: 'orca:test-record-scroll-anchor',

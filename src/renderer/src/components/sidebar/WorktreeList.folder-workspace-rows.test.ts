@@ -164,9 +164,12 @@ describe('WorktreeList lineage child card renderer', () => {
     setFolderWorkspaceFixtureState()
     const markup = await renderWorktreeListMarkup()
 
-    expect(markup).toContain(
-      'aria-activedescendant="worktree-list-option-folder%3Afolder-workspace-1"'
+    const optionId = 'worktree-list-option-local%7Cfolder%3Afolder-workspace-1'
+    expect(markup).toContain(`aria-activedescendant="${optionId}"`)
+    const matchingOptions = (markup.match(/<[^>]+>/g) ?? []).filter(
+      (tag) => tag.includes(`id="${optionId}"`) && tag.includes('role="option"')
     )
+    expect(matchingOptions).toHaveLength(1)
   })
 
   it('keeps folder workspace cards one compact step under their group header', async () => {

@@ -153,6 +153,7 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
     revealWorktreeInSidebar: (worktreeId, options) =>
       set({
         sidebarBody: 'workspaces',
+        pendingRevealSidebarRow: null,
         pendingRevealWorktree: {
           worktreeId,
           ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
@@ -164,6 +165,7 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
     revealSidebarRow: (rowKey, options) =>
       set({
         sidebarBody: 'workspaces',
+        pendingRevealWorktree: null,
         pendingRevealSidebarRow: {
           rowKey,
           behavior: options?.behavior ?? 'smooth',

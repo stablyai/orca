@@ -14,6 +14,7 @@ import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Row } from './worktree-list/grouping/row-types'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
+import { resolveSidebarRowHosts } from './worktree-list/listing/row-execution-hosts'
 
 export type HostHeaderRow = {
   type: 'host-header'
@@ -138,7 +139,7 @@ function localizePendingRowsForHost(
   const localized: Extract<Row, { type: 'header' }>[] = []
   for (const row of rows) {
     if (!row.hostWorktreeCounts) {
-      localized.push(row)
+      localized.push({ ...row, hostId })
       continue
     }
     const count = row.hostWorktreeCounts.get(hostId)
@@ -178,6 +179,7 @@ export function addHostSectionRows(args: {
   // headers as an operational/troubleshooting view.
   preferProjectGrouping?: boolean
 }): HostSectionRow[] {
+  const rows = resolveSidebarRowHosts(args.rows, args.defaultHostId)
   const visibleHostIds =
     args.visibleWorkspaceHostIds ??
     (args.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [args.workspaceHostScope])
@@ -186,10 +188,10 @@ export function addHostSectionRows(args: {
     args.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE &&
     !args.visibleWorkspaceHostIds
   ) {
-    return [...args.rows]
+    return rows
   }
   if ((visibleHostIds && visibleHostIds.length <= 1) || args.hostOptions.length <= 1) {
-    return [...args.rows]
+    return rows
   }
 
   const hostOptionsById = new Map(args.hostOptions.map((host) => [host.id, host]))
@@ -225,7 +227,19 @@ export function addHostSectionRows(args: {
     }
   }
 
-  for (const row of args.rows) {
+  for (const row of rows) {
+    if (
+      row.type === 'header' &&
+      row.repo &&
+      pendingRows.some(
+        (pending) =>
+          pending.projectGroup && (row.projectGroupDepth ?? 0) <= (pending.projectGroupDepth ?? 0)
+      )
+    ) {
+      flushUnusedPendingRows()
+      pendingRows = []
+      pendingRowsWereUsed = false
+    }
     const rowHostId = getRowHostId(row, args.defaultHostId)
     if (rowHostId) {
       const hostRows = rowsByHostId.get(rowHostId) ?? []
@@ -274,7 +288,7 @@ export function addHostSectionRows(args: {
   // when there are at least two host sections to tell apart. Registered-but-
   // empty hosts stay visible in the scope picker, not as headers.
   if (rowsByHostId.size <= 1) {
-    return [...args.rows]
+    return rows
   }
 
   const result: HostSectionRow[] = [...globalRows]

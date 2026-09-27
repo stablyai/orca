@@ -1,3 +1,4 @@
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { Crosshair } from 'lucide-react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -11,19 +12,23 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorktreeGroupBy } from '../grouping/row-types'
-import { getKnownSidebarWorktreeById } from './folder-reveal'
+import { getKnownSidebarWorktreeById, sidebarWorkspaceStillExists } from './folder-reveal'
 
 function workspacePassesFilters(
   worktree: Worktree,
   worktrees: readonly Worktree[],
-  folderWorkspaces: readonly FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[],
+  projectGroups?: readonly ProjectGroup[],
+  defaultHostId?: ExecutionHostId
 ): boolean {
   const identity = getWorktreeHostIdentity(worktree)
   return (
     worktrees.some((candidate) => getWorktreeHostIdentity(candidate) === identity) ||
-    folderWorkspaces.some((workspace) => folderWorkspaceKey(workspace.id) === worktree.id)
+    sidebarWorkspaceStillExists(worktree.id, [], folderWorkspaces, worktree.hostId ?? 'local', {
+      projectGroups,
+      defaultHostId
+    })
   )
 }
 
@@ -39,6 +44,8 @@ export function useSidebarRevealRequests(args: {
   worktreeMap: Map<string, Worktree>
   worktrees: readonly Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
+  projectGroups?: readonly ProjectGroup[]
+  defaultHostId?: ExecutionHostId
   hasFilters: boolean
   revealWorkspaceFilters: (worktree: Worktree) => void
 }): void {
@@ -52,6 +59,8 @@ export function useSidebarRevealRequests(args: {
     worktreeMap,
     worktrees,
     folderWorkspaces,
+    projectGroups,
+    defaultHostId,
     hasFilters,
     revealWorkspaceFilters
   } = args
@@ -85,7 +94,8 @@ export function useSidebarRevealRequests(args: {
         worktreeMap,
         folderWorkspaces,
         worktrees,
-        currentSidebarExecutionHostId
+        currentSidebarExecutionHostId,
+        { projectGroups, defaultHostId }
       )
       if (target) {
         revealWorkspaceFilters(target)
@@ -96,6 +106,8 @@ export function useSidebarRevealRequests(args: {
     hasFilters,
     currentSidebarExecutionHostId,
     folderWorkspaces,
+    projectGroups,
+    defaultHostId,
     pendingRevealSidebarRow,
     renderedSidebarRowKeys,
     setGroupBy,
@@ -129,7 +141,8 @@ export function useSidebarRevealRequests(args: {
         worktreeMap,
         folderWorkspaces,
         worktrees,
-        currentSidebarExecutionHostId
+        currentSidebarExecutionHostId,
+        { projectGroups, defaultHostId }
       )
       if (!activeWorktree || activeWorktree.isArchived) {
         return
@@ -137,7 +150,13 @@ export function useSidebarRevealRequests(args: {
       // Collapsed groups hide rows without excluding their workspaces from the filter results.
       if (
         hasFilters &&
-        !workspacePassesFilters(activeWorktree, visibleWorktrees, visibleFolderWorkspaces)
+        !workspacePassesFilters(
+          activeWorktree,
+          visibleWorktrees,
+          visibleFolderWorkspaces,
+          projectGroups,
+          defaultHostId
+        )
       ) {
         if (confirmationPending.current) {
           return
@@ -174,7 +193,9 @@ export function useSidebarRevealRequests(args: {
           !workspacePassesFilters(
             activeWorktree,
             latest.visibleWorktrees,
-            latest.visibleFolderWorkspaces
+            latest.visibleFolderWorkspaces,
+            latest.projectGroups,
+            latest.defaultHostId
           )
         ) {
           revealWorkspaceFilters(activeWorktree)
@@ -193,6 +214,8 @@ export function useSidebarRevealRequests(args: {
       currentSidebarWorktreeId,
       currentSidebarExecutionHostId,
       folderWorkspaces,
+      projectGroups,
+      defaultHostId,
       revealSidebarRow,
       visibleWorktrees,
       visibleFolderWorkspaces,

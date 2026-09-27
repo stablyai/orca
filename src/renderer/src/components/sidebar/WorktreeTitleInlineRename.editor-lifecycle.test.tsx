@@ -161,11 +161,13 @@ describe('WorktreeTitleInlineRename editor lifecycle', () => {
 
   it('focuses and selects the current name when the editor opens', () => {
     const select = vi.spyOn(HTMLInputElement.prototype, 'select')
+    const focus = vi.spyOn(HTMLInputElement.prototype, 'focus')
 
     const { input } = openEditorByShortcut()
 
     expect(document.activeElement).toBe(input)
     expect(select).toHaveBeenCalledTimes(1)
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
   // The hovercard editor never sets the unread flag, so a title change is the only

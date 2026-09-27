@@ -16,7 +16,7 @@ import {
   getSettingsFocusedExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { isDefaultBranchWorkspace } from '../../default-branch-workspace'
-import { getFolderWorkspaceExecutionHostIdForRows } from './host-filtering'
+import { getFolderWorkspaceHostId } from '../../folder-workspace-host-id'
 import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceFromOtherDevice
@@ -67,7 +67,7 @@ export function useSidebarWorktreeFilters() {
       getSettingsFocusedExecutionHostId(state.settings)
     )
     const workspaceScope = parseWorkspaceKey(worktree.id)
-    if (workspaceScope?.type === 'folder') {
+    if (workspaceScope?.type === 'folder' && !worktree.hostId) {
       const folderWorkspace = state.folderWorkspaces.find(
         (candidate) => candidate.id === workspaceScope.folderWorkspaceId
       )
@@ -75,11 +75,11 @@ export function useSidebarWorktreeFilters() {
         ? state.projectGroups.find((candidate) => candidate.id === folderWorkspace.projectGroupId)
         : undefined
       if (folderWorkspace) {
-        targetHostId = getFolderWorkspaceExecutionHostIdForRows({
+        targetHostId = getFolderWorkspaceHostId(
           folderWorkspace,
           projectGroup,
-          defaultHostId: getSettingsFocusedExecutionHostId(state.settings)
-        })
+          getSettingsFocusedExecutionHostId(state.settings)
+        )
       }
     }
 

@@ -37,3 +37,24 @@ Keep `ORCA_BACKGROUND_LAUNCH=1`: the application must still suppress automatic r
 This exception belongs only to this benchmark fixture; do not generalize it to local or self-hosted
 runs, paired-client helpers, native-focus tests, or production window policy. Background terminal
 panes remain hidden. Evidence: `docs/reference/terminal-perf-latency-investigation.md`.
+
+## Isolated sidebar motion presentation
+
+The sidebar motion specs that use `sidebar-animation-fixture.ts` have the second such exception, for
+the same native reason and under the same conditions: `sidebar-motion-presentation.ts` presents their
+window without focus on the hosted lane's own Xvfb display. A never-presented Linux window starves
+`requestAnimationFrame` once the page stops damaging its surface — viz withholds begin frames with
+reason `ThrottleUndrawnFrames` — which produced a ~283 ms observation gap that no product stall
+explains, and which the existing CDP screencast does not remove. This exception requires all of:
+
+- `ORCA_E2E_SIDEBAR_MOTION_XVFB=1`, set inside `xvfb-run` by the E2E workflow's two Linux lanes;
+- Linux, `GITHUB_ACTIONS=true`, `RUNNER_ENVIRONMENT=github-hosted`, and a nonempty `DISPLAY`;
+- confirmed native visibility of every window before any measurement.
+
+Both exceptions share the fail-closed guard in `isolated-display-presentation.ts` and keep distinct
+flags, so neither can enable the other; a flag set anywhere else is an error, never a silent
+downgrade to presenting. `ORCA_BACKGROUND_LAUNCH=1` stays set, so production launch policy still
+suppresses every automatic reveal and all focus activation. The hidden-window assertions are
+unchanged for every other run; on the presented lane the fixture asserts one show per presented
+window, zero focus events, and confirmed visibility. Do not generalize this to local or self-hosted
+runs, other specs, or production window policy.

@@ -114,6 +114,21 @@ async function seedVirtualizedManualWorktrees(page: Page): Promise<{
   }
 }
 
+async function sourceIsOutsideSidebar(page: Page, sourceId: string): Promise<boolean> {
+  return page.evaluate((draggedId) => {
+    const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+    const source = scroller?.querySelector<HTMLElement>(
+      `[data-worktree-id=${JSON.stringify(draggedId)}]`
+    )
+    if (!scroller || !source) {
+      return false
+    }
+    const viewport = scroller.getBoundingClientRect()
+    const bounds = source.getBoundingClientRect()
+    return bounds.bottom <= viewport.top || bounds.top >= viewport.bottom
+  }, sourceId)
+}
+
 async function sampleMountedPreviewOffsets(
   page: Page,
   sourceId: string
@@ -126,7 +141,19 @@ async function sampleMountedPreviewOffsets(
     const samples: PreviewOffsetSample[][] = []
     for (let frame = 0; frame < 20; frame++) {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-      if (document.querySelector(`[data-worktree-drag-id=${JSON.stringify(draggedId)}]`)) {
+      const source = scroller.querySelector<HTMLElement>(
+        `[data-worktree-drag-id=${JSON.stringify(draggedId)}]`
+      )
+      if (
+        !source ||
+        !document.querySelector('[data-worktree-sidebar-drag-preview="true"]') ||
+        !document.documentElement.hasAttribute('data-worktree-sidebar-pointer-dragging')
+      ) {
+        throw new Error('The retained offscreen source lost its active drag')
+      }
+      const sourceBounds = source.getBoundingClientRect()
+      const viewport = scroller.getBoundingClientRect()
+      if (sourceBounds.bottom > viewport.top && sourceBounds.top < viewport.bottom) {
         continue
       }
       const frameSamples = [
@@ -196,16 +223,18 @@ test('dragging a virtualized worktree downward keeps rows stable', async ({ orca
   try {
     const edgeX = scrollerBox.x + 2
     const edgeY = scrollerBox.y + scrollerBox.height - 8
-    // Keep the pointer in the edge zone while the renderer advances autoscroll.
+    const sourceOutsideVirtualRange = async () =>
+      (await sourceIsOutsideSidebar(orcaPage, sourceId)) && (await nextSource.count()) === 0
+    // The drag source stays retained; its neighbor proves the range actually recycled.
     for (let step = 0; step < 12; step++) {
       await orcaPage.mouse.move(edgeX, edgeY, { steps: 2 })
-      if ((await source.count()) === 0) {
+      if (await sourceOutsideVirtualRange()) {
         break
       }
       await orcaPage.waitForTimeout(100)
     }
-    if ((await source.count()) > 0) {
-      for (let step = 0; step < 8 && (await source.count()) > 0; step++) {
+    if (!(await sourceOutsideVirtualRange())) {
+      for (let step = 0; step < 8 && !(await sourceOutsideVirtualRange()); step++) {
         await scroller.evaluate((element) => {
           element.scrollTop = Math.min(
             element.scrollHeight,
@@ -217,11 +246,17 @@ test('dragging a virtualized worktree downward keeps rows stable', async ({ orca
       }
     }
     await expect
-      .poll(() => source.count(), {
+      .poll(sourceOutsideVirtualRange, {
         timeout: 10_000,
-        message: 'Downward autoscroll did not virtualize the dragged source row'
+        message: 'Downward autoscroll did not move the retained source outside the recycled range'
       })
-      .toBe(0)
+      .toBe(true)
+    await expect(source).toHaveCount(1)
+    await expect(orcaPage.locator('[data-worktree-sidebar-drag-preview="true"]')).toHaveCount(1)
+    await expect(orcaPage.locator('html')).toHaveAttribute('data-worktree-sidebar-pointer-dragging')
+    expect(await scroller.locator('[data-worktree-virtual-row]').count()).toBeLessThan(
+      SYNTHETIC_COUNT
+    )
 
     const samples = await sampleMountedPreviewOffsets(orcaPage, sourceId)
     expect(samples.length).toBeGreaterThan(0)

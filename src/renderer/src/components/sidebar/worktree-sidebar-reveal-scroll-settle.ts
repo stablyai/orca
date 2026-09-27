@@ -9,12 +9,15 @@
 export type PendingRevealScroll = {
   targetTop: number
   expiresAt: number
+  lastScrollTop?: number
+  lastMovementAt?: number
 }
 
-/** Ceiling for a browser smooth-scroll animation; also the escape hatch when the target turns out to be unreachable. */
+// Unreachable targets stop waiting unless the browser is still making native progress.
 export const REVEAL_SCROLL_SETTLE_TIMEOUT_MS = 1000
 
 const SETTLED_TOLERANCE_PX = 1
+const NATIVE_SCROLL_QUIET_MS = 100
 
 export function createPendingRevealScroll(targetTop: number, now: number): PendingRevealScroll {
   return { targetTop, expiresAt: now + REVEAL_SCROLL_SETTLE_TIMEOUT_MS }
@@ -29,8 +32,23 @@ export function isRevealScrollSettling({
   pending: PendingRevealScroll | null
   scrollTop: number
 }): boolean {
-  if (!pending || now >= pending.expiresAt) {
+  if (!pending) {
     return false
   }
-  return Math.abs(scrollTop - pending.targetTop) > SETTLED_TOLERANCE_PX
+  if (pending.lastScrollTop !== undefined && scrollTop !== pending.lastScrollTop) {
+    pending.lastMovementAt = now
+  }
+  pending.lastScrollTop = scrollTop
+  if (Math.abs(scrollTop - pending.targetTop) <= SETTLED_TOLERANCE_PX) {
+    return false
+  }
+  if (now < pending.expiresAt) {
+    return true
+  }
+  // One unchanged compositor frame does not mean native easing has ended.
+  return (
+    now < pending.expiresAt + REVEAL_SCROLL_SETTLE_TIMEOUT_MS &&
+    pending.lastMovementAt !== undefined &&
+    now - pending.lastMovementAt < NATIVE_SCROLL_QUIET_MS
+  )
 }

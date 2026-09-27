@@ -70,6 +70,7 @@ export function WorktreeCardHeader({
     isDeleting,
     showUnreadEmphasis,
     setTitleRenaming,
+    detailsHoverControl,
     handleRenameTitle,
     renamingWorktreeId,
     setRenamingWorktreeId,
@@ -175,7 +176,16 @@ export function WorktreeCardHeader({
           className="text-[13px] leading-5"
           editingClassName="flex-1"
           titleWrapper={titleWrapper}
-          onEditingChange={affiliateListMode ? undefined : setTitleRenaming}
+          onEditingChange={
+            affiliateListMode
+              ? undefined
+              : (editing) => {
+                  if (editing) {
+                    detailsHoverControl.closeHover()
+                  }
+                  setTitleRenaming(editing)
+                }
+          }
           onRename={handleRenameTitle}
           beginEditing={
             !affiliateListMode &&

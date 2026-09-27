@@ -1,12 +1,10 @@
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import { selectWorktreeCardIdentity } from './worktree-card-layout'
 import { useAppStore } from '@/store'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getWorktreeCardPrDisplay,
   isCachedMergedBranchPRCurrentForWorktree
@@ -25,24 +23,23 @@ export function useWorktreeCardReviewDetails({
   newCardStyle
 }: Pick<WorktreeCardProps, 'worktree' | 'repo'> &
   Pick<Foundation, 'settings' | 'projectGroups' | 'cardProps' | 'newCardStyle'>) {
-  const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
-  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
-  const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
-  const workspaceScope = parseWorkspaceKey(worktree.id)
-  const folderWorkspaceId =
-    workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
-  const isFolder = repo ? isFolderRepo(repo) : folderWorkspaceId !== null
-  // Why: project groups gate folder workspaces, so folder paths stay hidden from identity surfaces until that capability exists.
-  const hasProjectGroups = projectGroups.length > 0
-  const branchIdentityDisplay = !isFolder && branch.length > 0 ? branch : undefined
-  const folderPathIdentityDisplay =
-    isFolder && hasProjectGroups && worktree.path.trim().length > 0 ? worktree.path : undefined
-  const identityDisplay = branchIdentityDisplay ?? folderPathIdentityDisplay
-  const hasPathIdentityEnabled = cardProps.includes('branch')
-  const showIdentityInNewCard = newCardStyle && hasPathIdentityEnabled && Boolean(identityDisplay)
-  const folderMetaRowContent = newCardStyle
-    ? hasPathIdentityEnabled && Boolean(folderPathIdentityDisplay)
-    : isFolder
+  const {
+    detachedHeadDisplay,
+    branch,
+    folderWorkspaceId,
+    isFolder,
+    branchIdentityDisplay,
+    folderPathIdentityDisplay,
+    identityDisplay,
+    showIdentityInNewCard,
+    folderMetaRowContent
+  } = selectWorktreeCardIdentity({
+    worktree,
+    repo,
+    newCardStyle,
+    cardProps,
+    hasProjectGroups: projectGroups.length > 0
+  })
   const hostedReviewCacheKey =
     repo && branch
       ? getHostedReviewCacheKey(

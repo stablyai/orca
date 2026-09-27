@@ -61,6 +61,7 @@ export function WorktreeCardDetailsHover({
   automationProvenance,
   cliProvenance,
   children,
+  disabled = false,
   branchName,
   workspaceTitle,
   identityOrder = 'workspace-first',
@@ -93,7 +94,26 @@ export function WorktreeCardDetailsHover({
     closeHover
   } = hoverControl ?? internalHoverControl
   const [workspaceTitleEditing, setWorkspaceTitleEditing] = React.useState(false)
+  const hoverOpenIntentRef = React.useRef(true)
+  React.useLayoutEffect(() => {
+    // Retained Radix triggers can deliver a pre-edit open timer after cancellation.
+    if (disabled) {
+      hoverOpenIntentRef.current = false
+    }
+  }, [disabled])
+  const handleTriggerIntent = React.useCallback((): void => {
+    if (!disabled) {
+      hoverOpenIntentRef.current = true
+    }
+  }, [disabled])
   const pendingWorkspaceTitleCloseRef = React.useRef(false)
+  const handleHoverContentRef = React.useCallback((node: HTMLDivElement | null): void => {
+    if (!node) {
+      // A pending save can outlive its portal without reporting edit end.
+      pendingWorkspaceTitleCloseRef.current = false
+      setWorkspaceTitleEditing(false)
+    }
+  }, [])
   const handleWorkspaceTitleEditingChange = React.useCallback(
     (editing: boolean): void => {
       setWorkspaceTitleEditing(editing)
@@ -107,6 +127,13 @@ export function WorktreeCardDetailsHover({
   )
   const handleEffectiveHoverOpenChange = React.useCallback(
     (next: boolean): void => {
+      if (disabled) {
+        closeHover()
+        return
+      }
+      if (next && !hoverOpenIntentRef.current) {
+        return
+      }
       if (!next && workspaceTitleEditing) {
         pendingWorkspaceTitleCloseRef.current = true
         return
@@ -114,7 +141,7 @@ export function WorktreeCardDetailsHover({
       pendingWorkspaceTitleCloseRef.current = false
       handleHoverOpenChange(next)
     },
-    [handleHoverOpenChange, workspaceTitleEditing]
+    [closeHover, disabled, handleHoverOpenChange, workspaceTitleEditing]
   )
   const dismissAndRun = React.useCallback(
     (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
@@ -181,201 +208,212 @@ export function WorktreeCardDetailsHover({
 
   return (
     <HoverCard
-      open={hoverOpen || workspaceTitleEditing}
+      open={!disabled && (hoverOpen || workspaceTitleEditing)}
       onOpenChange={handleEffectiveHoverOpenChange}
       openDelay={openDelay}
       closeDelay={closeDelay}
     >
       <HoverCardTrigger
         asChild
-        onPointerEnter={hasComment(comment) ? preloadCommentMarkdown : undefined}
+        onFocus={handleTriggerIntent}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== 'touch') {
+            handleTriggerIntent()
+          }
+          if (hasComment(comment)) {
+            preloadCommentMarkdown()
+          }
+        }}
       >
         {children}
       </HoverCardTrigger>
-      <HoverCardContent
-        side="right"
-        align="start"
-        sideOffset={8}
-        className="w-80 max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek"
-        {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
-        onClick={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-      >
-        <SelectedTextCopyMenu className="space-y-3">
-          {showIdentityHeader && (
-            <WorktreeCardHoverIdentityHeader
-              branchName={branchName}
-              workspaceTitle={workspaceTitle}
-              identityOrder={identityOrder}
-              workspaceTitleRenameDisabled={workspaceTitleRenameDisabled}
-              onRenameWorkspaceTitle={onRenameWorkspaceTitle}
-              onWorkspaceTitleEditingChange={handleWorkspaceTitleEditingChange}
-            />
-          )}
-
-          <WorktreeCardIssueDetailSection
-            issue={issue}
-            issueMenuOpen={issueMenuOpen}
-            onIssueMenuOpenChange={handleIssueMenuOpenChange}
-            onCopyIssueLink={issue?.url ? handleCopyIssueLink : undefined}
-            onEditIssue={onEditIssue}
-            onOpenGitHubIssueInOrca={
-              onOpenGitHubIssueInOrca ? dismissAndRun(onOpenGitHubIssueInOrca) : undefined
-            }
-            onOpenIssueInBrowser={
-              onOpenIssueInBrowser && issue?.url
-                ? (url: string) => {
-                    closeHover()
-                    onOpenIssueInBrowser(url)
-                  }
-                : undefined
-            }
-          />
-
-          {linearIssue && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<LinearIcon className="size-3 text-muted-foreground" />}
-                label={translate(
-                  'auto.components.sidebar.WorktreeCardMeta.5e982e6128',
-                  'Linear {{value0}}',
-                  { value0: linearIssue.identifier }
-                )}
-                actions={
-                  <>
-                    {linearIssue.url && onOpenLinearIssueInOrca && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
-                          'Open in Orca'
-                        )}
-                        onClick={dismissAndRun(onOpenLinearIssueInOrca)}
-                      >
-                        <MonitorUp className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {linearIssue.url && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.e42941631a',
-                          'View on Linear'
-                        )}
-                        href={linearIssue.url}
-                      >
-                        <ExternalLink className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                  </>
-                }
+      {!disabled && (
+        <HoverCardContent
+          ref={handleHoverContentRef}
+          side="right"
+          align="start"
+          sideOffset={8}
+          className="w-80 max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek"
+          {...{ [WORKTREE_NATIVE_CONTEXT_MENU_ATTR]: '' }}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          <SelectedTextCopyMenu className="space-y-3">
+            {showIdentityHeader && (
+              <WorktreeCardHoverIdentityHeader
+                branchName={branchName}
+                workspaceTitle={workspaceTitle}
+                identityOrder={identityOrder}
+                workspaceTitleRenameDisabled={workspaceTitleRenameDisabled}
+                onRenameWorkspaceTitle={onRenameWorkspaceTitle}
+                onWorkspaceTitleEditingChange={handleWorkspaceTitleEditingChange}
               />
-              <WorktreeCardDetailSectionContent className="space-y-1.5">
-                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                  {linearIssue.title}
-                </div>
-                {((linearIssue.labels && linearIssue.labels.length > 0) ||
-                  linearIssue.stateName) && (
-                  <div className="flex flex-wrap gap-1">
-                    {linearIssue.stateName && (
-                      <LinearStateBadge stateName={linearIssue.stateName} />
-                    )}
-                    {(linearIssue.labels ?? []).map((label) => (
-                      <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
-                        {label}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
-          )}
+            )}
 
-          {jiraIssue && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<JiraIcon className="size-3 text-muted-foreground" />}
-                label={translate(
-                  'auto.components.sidebar.WorktreeCardMeta.jiraIssue',
-                  'Jira {{value0}}',
-                  { value0: jiraIssue.identifier }
-                )}
-                actions={
-                  <MetadataActionIcon
-                    label={translate(
-                      'auto.components.sidebar.WorktreeCardMeta.viewOnJira',
-                      'View on Jira'
-                    )}
-                    href={jiraIssue.url}
-                  >
-                    <ExternalLink className="size-3" />
-                  </MetadataActionIcon>
-                }
-              />
-              <WorktreeCardDetailSectionContent>
-                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                  {jiraIssue.title}
-                </div>
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
-          )}
-
-          <WorktreeCardReviewDetailSection
-            review={review}
-            reviewMenuOpen={reviewMenuOpen}
-            onReviewMenuOpenChange={handleReviewMenuOpenChange}
-            onOpenReviewInOrca={onOpenReviewInOrca}
-            onOpenReviewInBrowser={
-              onOpenReviewInBrowser && review?.url ? onOpenReviewInBrowser : undefined
-            }
-            onCopyReviewLink={review?.url ? handleCopyReviewLink : undefined}
-            onUnlinkReview={onUnlinkReview}
-            closeHover={closeHover}
-          />
-
-          {automationProvenance && (
-            <WorktreeCardAutomationDetailSection
-              provenance={automationProvenance}
-              onOpenAutomation={onOpenAutomation ? dismissAndRun(onOpenAutomation) : undefined}
-              onOpenAutomationRun={
-                onOpenAutomationRun ? dismissAndRun(onOpenAutomationRun) : undefined
+            <WorktreeCardIssueDetailSection
+              issue={issue}
+              issueMenuOpen={issueMenuOpen}
+              onIssueMenuOpenChange={handleIssueMenuOpenChange}
+              onCopyIssueLink={issue?.url ? handleCopyIssueLink : undefined}
+              onEditIssue={onEditIssue}
+              onOpenGitHubIssueInOrca={
+                onOpenGitHubIssueInOrca ? dismissAndRun(onOpenGitHubIssueInOrca) : undefined
+              }
+              onOpenIssueInBrowser={
+                onOpenIssueInBrowser && issue?.url
+                  ? (url: string) => {
+                      closeHover()
+                      onOpenIssueInBrowser(url)
+                    }
+                  : undefined
               }
             />
-          )}
 
-          {cliProvenance && <WorktreeCardCliDetailSection provenance={cliProvenance} />}
+            {linearIssue && (
+              <WorktreeCardDetailSection>
+                <DetailHeader
+                  icon={<LinearIcon className="size-3 text-muted-foreground" />}
+                  label={translate(
+                    'auto.components.sidebar.WorktreeCardMeta.5e982e6128',
+                    'Linear {{value0}}',
+                    { value0: linearIssue.identifier }
+                  )}
+                  actions={
+                    <>
+                      {linearIssue.url && onOpenLinearIssueInOrca && (
+                        <MetadataActionIcon
+                          label={translate(
+                            'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
+                            'Open in Orca'
+                          )}
+                          onClick={dismissAndRun(onOpenLinearIssueInOrca)}
+                        >
+                          <MonitorUp className="size-3" />
+                        </MetadataActionIcon>
+                      )}
+                      {linearIssue.url && (
+                        <MetadataActionIcon
+                          label={translate(
+                            'auto.components.sidebar.WorktreeCardMeta.e42941631a',
+                            'View on Linear'
+                          )}
+                          href={linearIssue.url}
+                        >
+                          <ExternalLink className="size-3" />
+                        </MetadataActionIcon>
+                      )}
+                    </>
+                  }
+                />
+                <WorktreeCardDetailSectionContent className="space-y-1.5">
+                  <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
+                    {linearIssue.title}
+                  </div>
+                  {((linearIssue.labels && linearIssue.labels.length > 0) ||
+                    linearIssue.stateName) && (
+                    <div className="flex flex-wrap gap-1">
+                      {linearIssue.stateName && (
+                        <LinearStateBadge stateName={linearIssue.stateName} />
+                      )}
+                      {(linearIssue.labels ?? []).map((label) => (
+                        <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
+                          {label}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </WorktreeCardDetailSectionContent>
+              </WorktreeCardDetailSection>
+            )}
 
-          {hasComment(comment) && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<StickyNote className="size-3 text-muted-foreground" />}
-                label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
-                actions={
-                  onEditComment ? (
+            {jiraIssue && (
+              <WorktreeCardDetailSection>
+                <DetailHeader
+                  icon={<JiraIcon className="size-3 text-muted-foreground" />}
+                  label={translate(
+                    'auto.components.sidebar.WorktreeCardMeta.jiraIssue',
+                    'Jira {{value0}}',
+                    { value0: jiraIssue.identifier }
+                  )}
+                  actions={
                     <MetadataActionIcon
                       label={translate(
-                        'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
-                        'Edit notes'
+                        'auto.components.sidebar.WorktreeCardMeta.viewOnJira',
+                        'View on Jira'
                       )}
-                      onClick={onEditComment}
+                      href={jiraIssue.url}
                     >
-                      <Pencil className="size-3" />
+                      <ExternalLink className="size-3" />
                     </MetadataActionIcon>
-                  ) : null
+                  }
+                />
+                <WorktreeCardDetailSectionContent>
+                  <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
+                    {jiraIssue.title}
+                  </div>
+                </WorktreeCardDetailSectionContent>
+              </WorktreeCardDetailSection>
+            )}
+
+            <WorktreeCardReviewDetailSection
+              review={review}
+              reviewMenuOpen={reviewMenuOpen}
+              onReviewMenuOpenChange={handleReviewMenuOpenChange}
+              onOpenReviewInOrca={onOpenReviewInOrca}
+              onOpenReviewInBrowser={
+                onOpenReviewInBrowser && review?.url ? onOpenReviewInBrowser : undefined
+              }
+              onCopyReviewLink={review?.url ? handleCopyReviewLink : undefined}
+              onUnlinkReview={onUnlinkReview}
+              closeHover={closeHover}
+            />
+
+            {automationProvenance && (
+              <WorktreeCardAutomationDetailSection
+                provenance={automationProvenance}
+                onOpenAutomation={onOpenAutomation ? dismissAndRun(onOpenAutomation) : undefined}
+                onOpenAutomationRun={
+                  onOpenAutomationRun ? dismissAndRun(onOpenAutomationRun) : undefined
                 }
               />
-              <WorktreeCardDetailSectionContent className="space-y-2">
-                <CommentMarkdownAsync
-                  content={comment ?? ''}
-                  className={COMMENT_MARKDOWN_CLASS_NAME}
-                  // Mirrors remark-breaks so the fallback keeps the note's line count.
-                  fallbackClassName="whitespace-pre-wrap"
-                />
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
-          )}
+            )}
 
-          {detailsAfter}
-        </SelectedTextCopyMenu>
-      </HoverCardContent>
+            {cliProvenance && <WorktreeCardCliDetailSection provenance={cliProvenance} />}
+
+            {hasComment(comment) && (
+              <WorktreeCardDetailSection>
+                <DetailHeader
+                  icon={<StickyNote className="size-3 text-muted-foreground" />}
+                  label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
+                  actions={
+                    onEditComment ? (
+                      <MetadataActionIcon
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
+                          'Edit notes'
+                        )}
+                        onClick={onEditComment}
+                      >
+                        <Pencil className="size-3" />
+                      </MetadataActionIcon>
+                    ) : null
+                  }
+                />
+                <WorktreeCardDetailSectionContent className="space-y-2">
+                  <CommentMarkdownAsync
+                    content={comment ?? ''}
+                    className={COMMENT_MARKDOWN_CLASS_NAME}
+                    // Mirrors remark-breaks so the fallback keeps the note's line count.
+                    fallbackClassName="whitespace-pre-wrap"
+                  />
+                </WorktreeCardDetailSectionContent>
+              </WorktreeCardDetailSection>
+            )}
+
+            {detailsAfter}
+          </SelectedTextCopyMenu>
+        </HoverCardContent>
+      )}
     </HoverCard>
   )
 }

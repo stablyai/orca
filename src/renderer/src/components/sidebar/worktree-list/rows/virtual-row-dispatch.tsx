@@ -23,16 +23,19 @@ import {
   renderNewExternalWorktreesInboxVirtualRow,
   renderPendingCreationVirtualRow
 } from './notice-rows'
-import {
-  renderWorktreeItemRow,
-  renderWorktreeLineageDescendants,
-  type WorktreeItemRowContext
-} from './item-row'
+import { renderWorktreeItemRow, type WorktreeItemRowContext } from './item-row'
 import { renderWorktreeSectionHeaderRow, type SectionHeaderRowContext } from './SectionHeader'
 import type { WorktreeRowDragState } from '../drag/row-state'
+import { VirtualizedLineageDescendants } from './VirtualizedLineageDescendants'
+import type { WorktreeListVirtualizer } from '../viewport/use-virtualizer'
+import type { VirtualizedWorktreeViewportProps } from '../viewport/viewport-props'
 
 export type WorktreeVirtualRowContext = {
   renderRows: RenderRow[]
+  scrollRef: React.RefObject<HTMLDivElement | null>
+  geometry: Pick<WorktreeListVirtualizer, 'model' | 'boundaries' | 'selected'>
+  pendingRevealWorktree: VirtualizedWorktreeViewportProps['pendingRevealWorktree']
+  pendingRevealSidebarRow: VirtualizedWorktreeViewportProps['pendingRevealSidebarRow']
   firstHeaderIndex: number
   activeStickyHeaderIndexRef: React.MutableRefObject<number | null>
   activeStickyHostIndexRef: React.MutableRefObject<number | null>
@@ -108,8 +111,10 @@ function renderLineageGroupVirtualRow(
   row: Extract<RenderRow, { type: 'lineage-group' }>,
   vItem: VirtualItem
 ): React.JSX.Element {
-  const [parent, ...children] = row.rows
-  const childIsActive = children.some((child) => child.worktree.id === ctx.activeWorktreeId)
+  const parent = row.rows[0]
+  const childIsActive = row.rows.some(
+    (child, index) => index > 0 && child.worktree.id === ctx.activeWorktreeId
+  )
   const parentPreviewOffset = parent
     ? (ctx.worktreeDragState.previewOffsetsByWorktreeId.get(parent.worktree.id) ?? 0)
     : 0
@@ -136,7 +141,10 @@ function renderLineageGroupVirtualRow(
               ctx.item,
               parent,
               false,
-              renderWorktreeLineageDescendants(ctx.item, parent, children),
+              <VirtualizedLineageDescendants
+                ctx={ctx}
+                root={ctx.geometry.model.nodeByRowKey.get(parent.rowKey)!}
+              />,
               childIsActive
             )
           : null}

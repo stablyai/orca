@@ -177,6 +177,56 @@ describe('revealing a filtered workspace', () => {
     await click('Keep filters')
   })
 
+  it.each([false, true])(
+    'checks the folder host before and after confirmation (becomes visible: %s)',
+    async (becomesVisible) => {
+      const local = {
+        id: 'same-folder',
+        projectGroupId: 'project-1',
+        executionHostId: 'local' as const,
+        name: 'Notes',
+        folderPath: '/notes',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 1,
+        lastActivityAt: 1,
+        createdAt: 1,
+        updatedAt: 1
+      }
+      const remote = { ...local, executionHostId: 'ssh:dev' as const }
+      args = {
+        ...args,
+        currentSidebarWorktreeId: folderWorkspaceKey(local.id),
+        folderWorkspaces: [local, remote],
+        visibleFolderWorkspaces: [local]
+      }
+      await render()
+      await act(async () => requestScrollToCurrentWorkspaceReveal())
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+      expect(state.revealWorktreeInSidebar).not.toHaveBeenCalled()
+      if (becomesVisible) {
+        args = { ...args, visibleFolderWorkspaces: [local, remote] }
+        await render()
+      }
+      await click('Adjust filters and reveal')
+      expect(args.revealWorkspaceFilters).toHaveBeenCalledTimes(becomesVisible ? 0 : 1)
+      if (!becomesVisible) {
+        expect(args.revealWorkspaceFilters).toHaveBeenCalledWith(
+          expect.objectContaining({ id: folderWorkspaceKey(local.id), hostId: 'ssh:dev' })
+        )
+      }
+      expect(state.revealWorktreeInSidebar).toHaveBeenCalledWith(folderWorkspaceKey(local.id), {
+        behavior: 'smooth',
+        highlight: true,
+        beginRename: false,
+        executionHostId: 'ssh:dev'
+      })
+    }
+  )
+
   it('preserves filters when the target becomes included while confirmation is open', async () => {
     await render()
     await act(async () => requestScrollToCurrentWorkspaceReveal())

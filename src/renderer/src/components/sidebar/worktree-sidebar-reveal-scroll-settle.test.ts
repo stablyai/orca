@@ -31,4 +31,19 @@ describe('isRevealScrollSettling', () => {
       isRevealScrollSettling({ now: REVEAL_SCROLL_SETTLE_TIMEOUT_MS, pending, scrollTop: 40 })
     ).toBe(false)
   })
+  it('keeps both completion and anchor restoration suppressed while native motion continues past the hint', () => {
+    const pending = createPendingRevealScroll(20_000, 0)
+    expect(isRevealScrollSettling({ now: 900, pending, scrollTop: 10_000 })).toBe(true)
+    expect(isRevealScrollSettling({ now: 1_010, pending, scrollTop: 11_000 })).toBe(true)
+    expect(isRevealScrollSettling({ now: 1_030, pending, scrollTop: 11_000 })).toBe(true)
+    expect(isRevealScrollSettling({ now: 1_050, pending, scrollTop: 11_100 })).toBe(true)
+    expect(isRevealScrollSettling({ now: 1_151, pending, scrollTop: 11_100 })).toBe(false)
+  })
+
+  it('bounds continuous movement even when the destination is unreachable', () => {
+    const pending = createPendingRevealScroll(20_000, 0)
+    expect(isRevealScrollSettling({ now: 1_990, pending, scrollTop: 11_100 })).toBe(false)
+    expect(isRevealScrollSettling({ now: 1_995, pending, scrollTop: 11_200 })).toBe(true)
+    expect(isRevealScrollSettling({ now: 2_000, pending, scrollTop: 11_300 })).toBe(false)
+  })
 })

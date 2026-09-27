@@ -1,4 +1,5 @@
 import React from 'react'
+import { selectWorktreeCardLayout } from './worktree-card-layout'
 
 import {
   getFlushWorktreeCardPaddingLeft,
@@ -69,46 +70,42 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showDeleteQuickAction
   } = card
 
-  // Why: pinned trees mix repos, so the repo icon shows regardless of groupBy's hideRepoBadge.
-  const showPinnedRepoIcon = inPinnedSection && !!repo
-  // Why: new card style retired the Compact/Detailed switch; repo identity uses the compact chip, not a lower pill.
-  const showRepoIdentityInTitle = newCardStyle || compactCards
-  const showInlineRepoBadge =
-    showRepoIdentityInTitle && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon
-  const showRepoBadgeInMetaRow =
-    !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
-  const showHostContextBadge = !compactCards && !!hostContextLabel
-  const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
-  const showBranch =
-    !isFolder &&
-    branch.length > 0 &&
-    !newCardStyle &&
-    (!compactCards || branch !== worktree.displayName)
-  // Why: rebases already surface in source control, so dense cards skip the persistent rebase chip.
-  const showConflictOperationBadge =
-    !!conflictOperation && conflictOperation !== 'unknown' && conflictOperation !== 'rebase'
-  const hasMetadataBadge = showConflictOperationBadge
+  const {
+    showPinnedRepoIcon,
+    showInlineRepoBadge,
+    showRepoBadgeInMetaRow,
+    showHostContextBadge,
+    showDetachedHeadInMetaRow,
+    showBranch,
+    showConflictOperationBadge,
+    showMetaRowDetails,
+    showTitleRowIndicators,
+    hasMetaRow,
+    titleOnlyCard
+  } = selectWorktreeCardLayout({
+    newCardStyle,
+    compactCards,
+    hasRepo: !!repo,
+    inPinnedSection: !!inPinnedSection,
+    hideRepoBadge: !!hideRepoBadge,
+    hostContextLabel,
+    isFolder,
+    detachedHead: detachedHeadDisplay !== null,
+    branch,
+    displayName: worktree.displayName,
+    folderMetaRowContent,
+    showIdentityInNewCard,
+    conflictOperation,
+    cacheVisible: cacheStartedAt != null,
+    hasDetails,
+    hasPorts,
+    showInlineAgentList,
+    showLineageChildChip,
+    hasRemoteBranchConflict: !!remoteBranchConflict
+  })
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
-  // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
   const showCombinedStatusSlot = showStatus
   const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
-  const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
-  const showTitleRowIndicators = (newCardStyle || compactCards) && (hasDetails || hasPorts)
-  // Why: grouped views can hide the repo badge; don't reserve a blank metadata lane unless there's real content.
-  const hasDetailedMetaRowContent = Boolean(
-    (showRepoBadgeInMetaRow && repo) ||
-    showHostContextBadge ||
-    folderMetaRowContent ||
-    showBranch ||
-    showIdentityInNewCard ||
-    showDetachedHeadInMetaRow ||
-    showConflictOperationBadge ||
-    cacheStartedAt != null ||
-    showMetaRowDetails
-  )
-  const hasMetaRow = compactCards
-    ? hasMetadataBadge || cacheStartedAt != null
-    : hasDetailedMetaRowContent
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()
@@ -257,9 +254,6 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const titleRowIndicators = showTitleRowIndicators ? (
     <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">{detailsAndPorts}</div>
   ) : null
-  const hasSecondaryCardContent =
-    hasMetaRow || !!remoteBranchConflict || showInlineAgentList || showLineageChildChip
-  const titleOnlyCard = !hasSecondaryCardContent
 
   return {
     showPinnedRepoIcon,

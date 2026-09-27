@@ -14,9 +14,14 @@ harness measures scale, listener census, and raw publication fanout only.
 
 ## Context
 
-Orca can display a large expanded worktree lineage inside one virtualized list
-row. Virtualizing the root row does not virtualize its descendants, so a
-100-worktree lineage can mount 100 `WorktreeCard` instances at once.
+The original sidebar placed a large expanded worktree lineage inside one
+virtualized list row, mounting every descendant card. The September 2026
+lineage virtualization change now mounts a viewport window of descendants
+inside the existing parent surfaces, plus their ancestors and current
+interaction/navigation targets. Hidden sibling subtrees occupy measured
+spacers. Wide lineages therefore retain far fewer `WorktreeCard` subscriptions;
+a deep chain still retains its ancestor path to preserve nested surfaces.
+The baseline measurements below describe the original renderer.
 
 Agent-status IPC events are bursty. The renderer already groups live events into
 a 33 ms window, but the original flush applied every queued event with a

@@ -1,3 +1,4 @@
+import { useSidebarCardGeometryInputs } from './use-sidebar-card-geometry-inputs'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -129,22 +130,44 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     onUserScrollIntent: markDirectScrollInput
   })
 
+  const layoutContext = useMemo(
+    () => JSON.stringify([groupBy, [...folderBackedProjectGroupIds]]),
+    [groupBy, folderBackedProjectGroupIds]
+  )
+  const hasCardCandidates = useMemo(
+    () => renderRows.some((row) => row.type === 'item' || row.type === 'lineage-group'),
+    [renderRows]
+  )
+  const resolveCardGeometry = useSidebarCardGeometryInputs({
+    hasCardCandidates,
+    newCardStyle,
+    compactPreference: settings?.compactWorktreeCards === true,
+    hasProjectGroups: projectGroups.length > 0,
+    hideRepoBadge: groupBy === 'repo'
+  })
   const virtualization = useWorktreeListVirtualizer({
+    resolveCardGeometry,
     renderRows,
     firstHeaderIndex,
     scrollRef,
     scrollOffsetRef,
-    suppressMeasurementAdjustmentUntilRef: scrollSuppression.suppressMeasurementAdjustmentUntilRef
+    scrollAnchorRef,
+    suppression: scrollSuppression,
+    newCardStyle,
+    layoutContext,
+    props,
+    draggingWorktreeId: runtime.worktreeDragState.draggingWorktreeId
   })
 
-  usePendingSidebarReveal({
+  const cancelMountedReveal = usePendingSidebarReveal({
+    scrollElement,
     pendingRevealWorktree: props.pendingRevealWorktree,
     pendingRevealSidebarRow: props.pendingRevealSidebarRow,
     clearPendingRevealWorktreeId: props.clearPendingRevealWorktreeId,
     clearPendingRevealSidebarRow: props.clearPendingRevealSidebarRow,
     agentSendTargetWorktreeId: props.agentSendTargetWorktreeId,
-    renderRows,
-    virtualizer: virtualization.virtualizer,
+    renderRows: virtualization.semanticRows,
+    virtualizer: virtualization.navigationVirtualizer,
     scrollRef,
     worktrees: props.worktrees,
     folderWorkspaces: props.folderWorkspaces,
@@ -163,18 +186,15 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     projectGrouping: props.projectGrouping,
     flashRevealedRow: reveal.flashRevealedRow,
     markRevealScroll: scrollSuppression.markRevealScroll,
-    schedulePendingRevealFrame: reveal.schedulePendingRevealFrame,
-    cancelPendingRevealFrames: reveal.cancelPendingRevealFrames
+    isRevealScrollSettling: scrollSuppression.isRevealScrollSettling,
+    wasRevealScrollInterrupted: scrollSuppression.wasRevealScrollInterrupted,
+    schedulePendingRevealFrame: reveal.schedulePendingRevealFrame
   })
 
   const { virtualItems, measureVirtualRowElement } = useVirtualRowMeasurementSync({
     renderRows,
     virtualization,
-    scrollRef,
-    scrollOffsetRef,
-    scrollAnchorRef,
-    hasDirectScrollInput: scrollSuppression.hasDirectScrollInput,
-    shouldSkipScrollAnchorRestore: scrollSuppression.shouldSkipScrollAnchorRestore
+    scrollRef
   })
 
   const { toggleGroupWithScrollAnchor, getLineageToggleHandler } = useGroupToggleWithScrollAnchor({
@@ -184,11 +204,11 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const { handleContainerKeyDown } = useWorktreeListKeyboardNavigation({
     rows,
-    renderRows,
+    renderRows: virtualization.semanticRows,
     activeWorktreeId,
     activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
     pinnedDisplayPolicy,
-    virtualizer: virtualization.virtualizer,
+    virtualizer: virtualization.navigationVirtualizer,
     scrollRef,
     activeModal: props.activeModal,
     markDirectScrollInput
@@ -247,8 +267,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     worktreeMap,
     groupBy,
     newCardStyle,
-    renderRows,
-    virtualItems,
+    renderRows: virtualization.semanticRows,
+    virtualItems: virtualization.retainedItems,
     scrollRef
   })
 
@@ -261,6 +281,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     (node: HTMLDivElement | null) => {
       if (node === null && scrollRef.current !== null) {
         // Why: drag previews, autoscroll frames, and reveal snapshots are tied to the scroll root; clear them before it unmounts.
+        cancelMountedReveal()
         cancelPendingRevealFrames()
         clearRevealHighlightFrame()
         clearRevealHighlightTimeout()
@@ -270,6 +291,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
       setScrollElement(node)
     },
     [
+      cancelMountedReveal,
       cancelPendingRevealFrames,
       clearRevealHighlightFrame,
       clearRevealHighlightTimeout,
@@ -289,12 +311,25 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     },
     [markDirectScrollInput]
   )
+  const handleRenameInput = useCallback(
+    (event: React.FormEvent<HTMLDivElement>) => {
+      if (
+        event.target instanceof Element &&
+        event.target.matches('[data-worktree-title-rename-input]')
+      ) {
+        // Native caret reveal owns scrolling once the user edits the title.
+        markDirectScrollInput()
+      }
+    },
+    [markDirectScrollInput]
+  )
   const handleScroll = useCallback(() => {
     markScrollMovement()
   }, [markScrollMovement])
 
   const rowContext = buildWorktreeVirtualRowContext({
     props,
+    scrollRef,
     renderRows,
     firstHeaderIndex,
     virtualization,
@@ -338,10 +373,14 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
           primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,
-          renderRows,
-          virtualItems
+          renderRows: virtualization.semanticRows,
+          virtualItems: virtualization.retainedItems
         })}
         onKeyDown={handleContainerKeyDown}
+        onFocusCapture={virtualization.retainFocusedRow}
+        onPointerDownCapture={virtualization.retainFocusedRow}
+        onContextMenuCapture={virtualization.retainFocusedRow}
+        onInputCapture={handleRenameInput}
         // Why: trackpad momentum fires sparse scroll events after the input stream quiets; suppress correction until the viewport stops.
         onScroll={handleScroll}
         onPointerDown={handleScrollPointerDown}
@@ -355,7 +394,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         <div
           role="presentation"
           className="relative w-full"
-          style={{ height: `${virtualization.virtualizer.getTotalSize()}px` }}
+          style={{ height: `${virtualization.total}px` }}
         >
           {renderWorktreeSidebarDropIndicators({
             headerDrag,

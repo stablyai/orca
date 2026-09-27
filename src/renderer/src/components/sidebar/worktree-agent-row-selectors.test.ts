@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentStatusEntry,
   MigrationUnsupportedPtyEntry
@@ -9,6 +9,7 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { getLiveEntriesFullRebuildCountForTests } from './worktree-agent-live-index-patch'
 import {
+  selectWorktreeAgentRowCandidateIds,
   EMPTY_LIVE_ENTRIES,
   EMPTY_MIGRATION_UNSUPPORTED_ENTRIES,
   EMPTY_RETAINED,
@@ -524,5 +525,123 @@ describe('inactive-card empty constants', () => {
         'missing'
       )
     ).toBe(EMPTY_RETAINED)
+  })
+})
+
+describe('cold card zero-agent membership', () => {
+  it('includes terminal, attributed orphan, retained and structured sources without treating empty buckets as candidates', () => {
+    const structuredTab: Tab = {
+      id: 'tab-2',
+      worktreeId: 'structured',
+      groupId: 'g',
+      contentType: 'agent-session',
+      entityId: 's',
+      label: 'Codex',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0,
+      isPinned: false,
+      agentSessionAgent: 'codex'
+    }
+    const state: Parameters<typeof selectWorktreeAgentRowCandidateIds>[0] = {
+      tabsByWorktree: { shell: [makeTab('shell-tab')], empty: [] },
+      unifiedTabsByWorktree: { structured: [structuredTab] },
+      agentStatusByPaneKey: {
+        [PANE_KEY_1]: makeEntry(PANE_KEY_1, 1, { state: 'working', worktreeId: 'orphan' }),
+        [PANE_KEY_2]: makeEntry(PANE_KEY_2, 1, { state: 'done' })
+      },
+      retainedAgentsByPaneKey: {
+        saved: makeRetained('saved:22222222-2222-4222-8222-222222222222', 'retained', 1)
+      },
+      migrationUnsupportedByPtyId: {}
+    }
+    expect(selectWorktreeAgentRowCandidateIds(state)).toEqual(
+      new Set(['shell', 'orphan', 'structured', 'retained'])
+    )
+    const removed = {
+      ...state,
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    }
+    expect(selectWorktreeAgentRowCandidateIds(removed).size).toBe(0)
+    expect(selectWorktreeAgentRowCandidateIds({ ...removed, tabsByWorktree: { empty: [] } })).toBe(
+      selectWorktreeAgentRowCandidateIds(removed)
+    )
+  })
+
+  it('keeps exact membership through 100 same-bucket pings with no added bucket-key walk', () => {
+    const state = {
+      tabsByWorktree: {},
+      agentStatusByPaneKey: {
+        [PANE_KEY_1]: makeEntry(PANE_KEY_1, 1, { state: 'working', worktreeId: 'orphan' })
+      },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {}
+    }
+    const before = getLiveEntriesFullRebuildCountForTests()
+    const initial = selectWorktreeAgentRowCandidateIds(state)
+    expect(getLiveEntriesFullRebuildCountForTests()).toBe(before + 1)
+    const keys = vi.spyOn(Map.prototype, 'keys')
+    const results: ReadonlySet<string>[] = []
+    for (let index = 0; index < 100; index++) {
+      results.push(
+        selectWorktreeAgentRowCandidateIds({
+          ...state,
+          agentStatusByPaneKey: {
+            [PANE_KEY_1]: {
+              ...state.agentStatusByPaneKey[PANE_KEY_1],
+              updatedAt: index + 2,
+              prompt: String(index)
+            }
+          }
+        })
+      )
+    }
+    const addedKeyWalks = keys.mock.calls.length
+    keys.mockRestore()
+    expect(results.every((value) => value === initial)).toBe(true)
+    expect(addedKeyWalks).toBe(0)
+    expect(getLiveEntriesFullRebuildCountForTests()).toBe(before + 1)
+    expect(
+      selectWorktreeAgentRowCandidateIds({
+        ...state,
+        agentStatusByPaneKey: {
+          [PANE_KEY_1]: { ...state.agentStatusByPaneKey[PANE_KEY_1], state: 'done' }
+        }
+      }).size
+    ).toBe(0)
+  })
+
+  it('shares migration attribution and conservatively keeps remote rows without local tabs', () => {
+    const remote = makeEntry(PANE_KEY_2, 1, {
+      worktreeId: 'remote',
+      connectionId: 'ssh:host',
+      state: 'done'
+    })
+    const state = {
+      tabsByWorktree: { migrated: [makeTab('tab-1')] },
+      agentStatusByPaneKey: { [PANE_KEY_2]: remote },
+      retainedAgentsByPaneKey: {},
+      migrationUnsupportedByPtyId: {
+        p: {
+          ptyId: 'p',
+          worktreeId: 'ignored-stale-id',
+          tabId: 'tab-1',
+          leafId: '22222222-2222-4222-8222-222222222222',
+          paneKey: PANE_KEY_1,
+          reason: 'legacy-numeric-pane-key' as const,
+          source: 'local' as const,
+          updatedAt: 1
+        }
+      }
+    }
+    expect(selectMigrationUnsupportedEntriesForWorktree(state, 'migrated')).toHaveLength(1)
+    expect(selectWorktreeAgentRowCandidateIds(state)).toEqual(new Set(['migrated', 'remote']))
+    expect(selectWorktreeAgentRowCandidateIds({ ...state, tabsByWorktree: {} })).toEqual(
+      new Set(['remote'])
+    )
   })
 })

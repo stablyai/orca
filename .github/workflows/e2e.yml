@@ -201,7 +201,8 @@ jobs:
           node config/scripts/ci-e2e-shard-plan.mjs --verify ci-shards/assignment.json ci-shards/selected-discovery.json
 
       - name: Run E2E tests (${{ matrix.shard_name }})
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --test-list=ci-shards/selected.txt
+        # ORCA_E2E_SIDEBAR_MOTION_XVFB is set inside this xvfb-run only; see tests/AGENTS.md.
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_SIDEBAR_MOTION_XVFB=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --test-list=ci-shards/selected.txt
 
       - name: Upload E2E shard assignment
         if: always()
@@ -307,7 +308,8 @@ jobs:
             echo "Changed specs are all owned by dedicated lanes."
             exit 0
           fi
-          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
+          # ORCA_E2E_SIDEBAR_MOTION_XVFB is set inside this xvfb-run only; see tests/AGENTS.md.
+          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_SIDEBAR_MOTION_XVFB=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
           # Second clause: a spec that reads ORCA_E2E_SSH_DOCKER test.skip()s itself without it, so
           # naming only one trigger silently skipped every other Docker-SSH spec in this lane.
           # The first clause stays because that spec needs Docker without referencing the variable.
@@ -323,7 +325,7 @@ jobs:
             pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
 
       - name: Upload Playwright traces
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-traces-changed

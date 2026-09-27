@@ -1,22 +1,22 @@
+// @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 
 function makeContainer(scrollTop: number, clientHeight: number) {
   const scrollTo = vi.fn()
-  const container = {
-    clientHeight,
-    scrollTop,
-    contains: () => true,
-    getBoundingClientRect: () => ({ top: 0, bottom: clientHeight }) as DOMRect,
-    scrollTo
-  }
-  return { container: container as unknown as HTMLElement, scrollTo }
+  const container = document.createElement('div')
+  container.scrollTop = scrollTop
+  Object.defineProperty(container, 'clientHeight', { value: clientHeight })
+  container.getBoundingClientRect = () => new DOMRect(0, 0, 300, clientHeight)
+  container.contains = () => true
+  container.scrollTo = scrollTo
+  return { container, scrollTo }
 }
 
 function makeElement(top: number, bottom: number): Element {
-  return {
-    getBoundingClientRect: () => ({ top, bottom }) as DOMRect
-  } as unknown as Element
+  const element = document.createElement('div')
+  element.getBoundingClientRect = () => new DOMRect(0, top, 300, bottom - top)
+  return element
 }
 
 describe('revealElementInScrollContainer', () => {
