@@ -34,10 +34,16 @@ vi.mock('../project-runtime-git-options', () => ({
   resolveLocalProjectRuntimesForRepos: mocks.projectRuntimes
 }))
 
-type Owner = Pick<Repo, 'connectionId' | 'executionHostId'>
+/**
+ * Widened past `Repo['executionHostId']` on purpose: the union names the stamps Orca writes, while a
+ * store carries whatever an older build, a hand-edited catalog or a partial migration left behind.
+ * Those are exactly the stamps authorization has to place, so the matrix must be able to build them.
+ */
+type Owner = { connectionId?: string | null; executionHostId?: string | null }
 const root = resolve('/owner-fixture')
 const linked = resolve('/linked-fixture')
 function repo(owner: Owner = {}, overrides: Partial<Repo> = {}): Repo {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only `executionHostId` leaves the union, and only to the malformed stamps above; every other field is a checked `Repo` field.
   return {
     id: 'repo',
     path: root,
@@ -46,7 +52,7 @@ function repo(owner: Owner = {}, overrides: Partial<Repo> = {}): Repo {
     addedAt: 0,
     ...owner,
     ...overrides
-  }
+  } as Repo
 }
 function group(owner: Owner = {}, overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {
@@ -65,6 +71,7 @@ function group(owner: Owner = {}, overrides: Partial<ProjectGroup> = {}): Projec
   }
 }
 function folder(owner: Owner = {}): FolderWorkspace {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same widened stamp as `repo`; all other fields are checked `FolderWorkspace` fields.
   return {
     id: 'folder',
     projectGroupId: 'group',
@@ -80,7 +87,7 @@ function folder(owner: Owner = {}): FolderWorkspace {
     createdAt: 0,
     updatedAt: 0,
     ...owner
-  }
+  } as FolderWorkspace
 }
 function storeFor(
   repos: Repo[] = [],
@@ -162,9 +169,9 @@ describe.each(deniedOwners)('$name filesystem ownership', ({ owner }) => {
     expect(isPathAllowed(join(root, 'file'), store)).toBe(false)
     registerWorktreeRootsForRepo(store, 'repo', [linked])
     registerCreatedWorktreeRoot(store, 'repo', linked)
-    expect(isRegisteredWorktreePath(linked)).toBe(false)
+    expect(isRegisteredWorktreePath(linked, store)).toBe(false)
     await rebuildAuthorizedRootsCache(store)
-    expect(isRegisteredWorktreePath(root)).toBe(false)
+    expect(isRegisteredWorktreePath(root, store)).toBe(false)
     expect(mocks.graph).not.toHaveBeenCalled()
     expect(mocks.stat).not.toHaveBeenCalled()
   })
@@ -207,7 +214,7 @@ describe.each(allowedOwners)('$name filesystem ownership', ({ owner }) => {
     registerWorktreeRootsForRepo(store, 'repo', [root])
     registerCreatedWorktreeRoot(store, 'repo', linked)
     invalidateAuthorizedRootsCache()
-    expect(isRegisteredWorktreePath(linked)).toBe(true)
+    expect(isRegisteredWorktreePath(linked, store)).toBe(true)
     expect(mocks.graph).not.toHaveBeenCalled()
     expect(mocks.stat).not.toHaveBeenCalled()
   })

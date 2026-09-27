@@ -1,15 +1,18 @@
 import { resolve } from 'node:path'
-import { getRepoExecutionHostId, getSshTargetIdForExecutionHost } from '../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
+import { hasRemoteFilesystemOwner } from './remote-filesystem-owner'
 
 export function getWorktreeRootOwnerKey(repo: Repo): string {
   return JSON.stringify([repo.id, resolve(repo.path), getRepoExecutionHostId(repo)])
 }
 
+// Why the shared predicate: an unplaceable host stamp must not register roots either — the same
+// allow-list, reached through `git worktree list` instead of the repo path.
 export function getLocalWorktreeRootOwners(repos: readonly Repo[]): Map<string, Repo> {
   return new Map(
     repos
-      .filter((repo) => !repo.connectionId && !getSshTargetIdForExecutionHost(repo.executionHostId))
+      .filter((repo) => !hasRemoteFilesystemOwner(repo))
       .map((repo) => [getWorktreeRootOwnerKey(repo), repo])
   )
 }
