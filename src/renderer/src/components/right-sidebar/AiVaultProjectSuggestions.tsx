@@ -45,6 +45,8 @@ export function AiVaultProjectSuggestions({
   const [unselected, setUnselected] = useState<ReadonlySet<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [failedNames, setFailedNames] = useState<string[]>([])
+  // Why: an added project leaves the list only when the catalog refresh lands; hide it now so it cannot be added twice.
+  const [addedPaths, setAddedPaths] = useState<ReadonlySet<string>>(new Set())
   const latestSources = useMemo(() => localSessionSources(sessions), [sessions])
   // Why a content key: every history refresh is a new array, and git discovery should rerun only
   // when the set of session folders actually changed.
@@ -74,6 +76,13 @@ export function AiVaultProjectSuggestions({
       .then((next) => {
         if (!cancelled) {
           setSuggestions(next)
+          // Why prune, not clear: an added path stays hidden until a refresh stops suggesting it,
+          // and a project removed later can be suggested again.
+          setAddedPaths((current) => {
+            const still = new Set(next.map((suggestion) => suggestion.path))
+            const kept = [...current].filter((path) => still.has(path))
+            return kept.length === current.size ? current : new Set(kept)
+          })
         }
       })
       .catch(() => {
@@ -87,10 +96,11 @@ export function AiVaultProjectSuggestions({
     // Why repoPathsKey/dismissed: a project added, moved or declined elsewhere must drop out of the card.
   }, [sourcesKey, repoPathsKey, dismissed])
 
-  if (suggestions.length === 0) {
+  const visible = suggestions.filter((s) => !addedPaths.has(s.path))
+  if (visible.length === 0) {
     return null
   }
-  const selected = suggestions.filter((s) => !unselected.has(s.path))
+  const selected = visible.filter((s) => !unselected.has(s.path))
 
   const toggle = (path: string): void => {
     setUnselected((current) => {
@@ -107,6 +117,7 @@ export function AiVaultProjectSuggestions({
   const addSelected = async (): Promise<void> => {
     setBusy(true)
     const failed: string[] = []
+    const added: string[] = []
     try {
       // Why per item: one repo that can't be added must not stop the rest.
       for (const suggestion of selected) {
@@ -118,12 +129,15 @@ export function AiVaultProjectSuggestions({
             )
           ) {
             failed.push(suggestion.name)
+          } else {
+            added.push(suggestion.path)
           }
         } catch {
           failed.push(suggestion.name)
         }
       }
     } finally {
+      setAddedPaths((current) => new Set([...current, ...added]))
       setFailedNames(failed)
       setBusy(false)
     }
@@ -144,12 +158,10 @@ export function AiVaultProjectSuggestions({
 
   return (
     <div className="border-b border-sidebar-border px-3 py-2 text-xs">
-      <div className="font-medium text-foreground">
-        {projectSuggestionsTitle(suggestions.length)}
-      </div>
+      <div className="font-medium text-foreground">{projectSuggestionsTitle(visible.length)}</div>
       <p className="mt-0.5 text-muted-foreground">{projectSuggestionsDescription()}</p>
       <ul className="mt-2 space-y-1.5">
-        {suggestions.map((suggestion) => (
+        {visible.map((suggestion) => (
           <li key={suggestion.path} className="flex items-start gap-2">
             <Checkbox
               className="mt-0.5"

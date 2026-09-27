@@ -76,14 +76,30 @@ describe('mergeFetchedProjectCompatibilityForHost', () => {
   })
 
   it('keeps a project that still has a runtime-host owner when its SSH setup is dropped', () => {
-    const runtimeSetup: ProjectHostSetup = { ...setup, id: 'rt-1', hostId: 'runtime:env-1' }
+    const runtimeRepo: Repo = {
+      ...repo,
+      id: 'repo-rt',
+      connectionId: null,
+      executionHostId: 'runtime:env-1'
+    }
+    const runtimeSetup: ProjectHostSetup = {
+      ...setup,
+      id: 'rt-1',
+      hostId: 'runtime:env-1',
+      repoId: 'repo-rt'
+    }
     const merged = mergeFetchedProjectCompatibilityForHost({
-      previous: { projects: [project], projectHostSetups: [setup, runtimeSetup] },
+      previous: {
+        projects: [{ ...project, sourceRepoIds: ['repo-1', 'repo-rt'] }],
+        projectHostSetups: [setup, runtimeSetup]
+      },
       fetched: { projects: [], projectHostSetups: [] },
-      repos: [repo],
+      repos: [repo, runtimeRepo],
       hostId: 'local'
     })
     expect(merged.projectHostSetups.map((s) => s.id)).toEqual(['rt-1'])
     expect(merged.projects.map((p) => p.id)).toEqual(['repo:repo-1'])
+    // Regression: the dropped SSH repo stayed in the project's identity.
+    expect(merged.projects[0]?.sourceRepoIds).toEqual(['repo-rt'])
   })
 })

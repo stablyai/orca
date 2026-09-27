@@ -10,7 +10,6 @@ import type { RepoSlice } from '../repos/repo-state'
 import {
   getProjectHostSetupOwnerKey,
   getReposById,
-  getSourceRepoIdsOutsideHost,
   mergePreviousProjectMetadata,
   mergeProjectCompatibilityProjects,
   mergeProjectHostSetupsByOwner,
@@ -222,7 +221,13 @@ export function mergeFetchedProjectCompatibilityForHost({
       previous.projects,
       mergeProjectCompatibilityProjects(
         preservedProjects.map((project) => {
-          const sourceRepoIds = getSourceRepoIdsOutsideHost(project, reposById, hostId)
+          // Why the ownership rule and not `host !== hostId`: a local refresh also owns direct-SSH
+          // repos, so keeping them here left a removed SSH repo in the project's identity.
+          const sourceRepoIds = project.sourceRepoIds.filter((repoId) =>
+            (reposById.get(repoId) ?? []).some(
+              (repo) => !hostBelongsToFetchedCatalog(getRepoExecutionHostId(repo))
+            )
+          )
           return sourceRepoIds.length === project.sourceRepoIds.length
             ? project
             : { ...project, sourceRepoIds }

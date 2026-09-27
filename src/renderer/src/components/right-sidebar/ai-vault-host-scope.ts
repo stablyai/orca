@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
 import {
+  isRuntimeOwnedSshTargetId,
   ALL_EXECUTION_HOSTS_SCOPE,
   getExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
@@ -109,7 +110,8 @@ export function buildSshAiVaultHostScopeOptions(args: {
   for (const [targetId, state] of args.sshConnectionStates ?? []) {
     // Why connected only: an SSH host's history is read through its live relay, so a
     // disconnected target could only ever answer with a scan issue.
-    if (state.status !== 'connected') {
+    // Why skip runtime-owned targets: they belong to a paired Orca server's session, not to this desktop.
+    if (state.status !== 'connected' || isRuntimeOwnedSshTargetId(targetId)) {
       continue
     }
     const id = toSshExecutionHostId(targetId)

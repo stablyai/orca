@@ -277,4 +277,19 @@ describe('buildAiVaultHostScopeOptions', () => {
       })
     ).toContainEqual({ id: 'ssh:ssh-gone', label: 'retired-box' })
   })
+
+  it('leaves out SSH targets owned by a paired Orca server', () => {
+    expect(
+      buildSshAiVaultHostScopeOptions({
+        sshTargetLabels: new Map([
+          ['ssh-2', 'build-box'],
+          ['runtime-ssh-env-1', 'server session']
+        ]),
+        sshConnectionStates: new Map([
+          ['ssh-2', { status: 'connected' as const }],
+          ['runtime-ssh-env-1', { status: 'connected' as const }]
+        ])
+      })
+    ).toEqual([{ id: 'ssh:ssh-2', label: 'build-box' }])
+  })
 })

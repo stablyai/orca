@@ -154,4 +154,43 @@ describe('AiVaultProjectSuggestions', () => {
       })
     )
   })
+
+  it('drops a project from the card as soon as it is added', async () => {
+    suggestProjects.mockResolvedValue([
+      { path: '/home/me/Projects/app', name: 'app', sessionCount: 3, agents: ['claude'] },
+      { path: '/home/me/Projects/web', name: 'web', sessionCount: 1, agents: ['codex'] }
+    ])
+    store.state.addRepoPath.mockResolvedValueOnce({ id: 'app' })
+    render(<AiVaultProjectSuggestions sessions={[makeSession()]} />)
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'web' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1 project' }))
+
+    expect(await screen.findByText('1 project found in your recent agent sessions')).toBeTruthy()
+    expect(screen.queryByRole('checkbox', { name: 'app' })).toBeNull()
+  })
+
+  it('suggests a project again after a refresh stopped suggesting it', async () => {
+    suggestProjects.mockResolvedValue([
+      { path: '/home/me/Projects/app', name: 'app', sessionCount: 3, agents: ['claude'] }
+    ])
+    store.state.addRepoPath.mockResolvedValueOnce({ id: 'app' })
+    const { rerender } = render(<AiVaultProjectSuggestions sessions={[makeSession()]} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Add 1 project' }))
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'app' })).toBeNull())
+
+    // The refresh after adding no longer suggests it; a later one (project removed) does again.
+    suggestProjects.mockResolvedValueOnce([])
+    rerender(
+      <AiVaultProjectSuggestions sessions={[makeSession({ cwd: '/home/me/Projects/app/x' })]} />
+    )
+    await waitFor(() => expect(suggestProjects).toHaveBeenCalledTimes(2))
+    suggestProjects.mockResolvedValueOnce([
+      { path: '/home/me/Projects/app', name: 'app', sessionCount: 3, agents: ['claude'] }
+    ])
+    rerender(
+      <AiVaultProjectSuggestions sessions={[makeSession({ cwd: '/home/me/Projects/app/y' })]} />
+    )
+    expect(await screen.findByRole('checkbox', { name: 'app' })).toBeTruthy()
+  })
 })
