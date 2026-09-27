@@ -7,11 +7,7 @@ export type DesktopNotificationSupportOptions = {
   env?: NodeJS.ProcessEnv
   isNotificationSupported?: () => boolean
   busSocketExists?: (busPath: string) => boolean
-  canonicalRuntimeDir?: string | null
 }
-
-const CANONICAL_USER_RUNTIME_DIR =
-  typeof process.getuid === 'function' ? `/run/user/${process.getuid()}` : null
 
 function hasReachableBusSocket(
   dir: string,
@@ -54,6 +50,11 @@ function isUsableDbusAddress(address?: string): boolean {
  *   "Failed to connect to proxy"
  *   "notify_notification_show: code=13 message='Unknown or unsupported transport'"
  * into the system journal on every agent event (#23220).
+ *
+ * GLib/GIO resolution semantics:
+ * When DBUS_SESSION_BUS_ADDRESS is set in the environment, GIO reads it verbatim and does not fall back.
+ * If it contains "disabled:" or an invalid transport, GIO fails immediately with code=13.
+ * Only when DBUS_SESSION_BUS_ADDRESS is completely unset does GIO fall back to `$XDG_RUNTIME_DIR/bus`.
  */
 export function isDesktopNotificationSupported(
   options: DesktopNotificationSupportOptions = {}
@@ -68,19 +69,12 @@ export function isDesktopNotificationSupported(
     const env = options.env ?? process.env
     const dbusAddress = env.DBUS_SESSION_BUS_ADDRESS
 
-    if (isUsableDbusAddress(dbusAddress)) {
-      return true
+    // If DBUS_SESSION_BUS_ADDRESS is present, GIO strictly evaluates it without fallback
+    if (dbusAddress !== undefined) {
+      return isUsableDbusAddress(dbusAddress)
     }
 
-    const canonicalDir =
-      options.canonicalRuntimeDir !== undefined
-        ? options.canonicalRuntimeDir
-        : CANONICAL_USER_RUNTIME_DIR
-
-    if (canonicalDir && hasReachableBusSocket(canonicalDir, options.busSocketExists)) {
-      return true
-    }
-
+    // Only when DBUS_SESSION_BUS_ADDRESS is unset does GIO fall back to $XDG_RUNTIME_DIR/bus
     if (env.XDG_RUNTIME_DIR && hasReachableBusSocket(env.XDG_RUNTIME_DIR, options.busSocketExists)) {
       return true
     }
