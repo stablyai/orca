@@ -18180,6 +18180,7 @@
           "disconnected": "Paused while offline",
           "manualMetered": "Paused on a metered network",
           "peerOffline": "Paused until the other computer is back",
+          "restrictedMidTransfer": "Paused after the network was restricted mid-transfer",
           "unknown": "Sync paused"
         },
         "error": {

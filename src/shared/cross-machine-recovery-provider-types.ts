@@ -23,7 +23,8 @@ export const CC_SYNC_PAUSE_REASONS = [
   'unknown-network',
   'disconnected',
   'manual-metered',
-  'peer-offline'
+  'peer-offline',
+  'restricted-mid-transfer'
 ] as const
 
 export const CC_SYNC_ERROR_CODES = [

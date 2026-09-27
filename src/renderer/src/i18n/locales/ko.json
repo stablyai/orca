@@ -18064,6 +18064,7 @@
           "disconnected": "오프라인 상태에서 일시 중지됨",
           "manualMetered": "데이터 통신 네트워크에서 일시 중지됨",
           "peerOffline": "다른 컴퓨터가 돌아올 때까지 일시 중지됨",
+          "restrictedMidTransfer": "전송 중 네트워크가 제한된 후 일시 중지됨",
           "unknown": "동기화 일시 중지됨"
         },
         "error": {

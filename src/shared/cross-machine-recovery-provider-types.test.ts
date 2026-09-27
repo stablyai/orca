@@ -138,6 +138,18 @@ describe('cc-sync provider parsers', () => {
     }
   })
 
+  it.each(['local', 'peer'])('keeps a %s restricted-mid-transfer pause', (endpoint) => {
+    const restricted = { reason: 'restricted-mid-transfer', endpoint, since: pause.since }
+    const result = parseCcSyncList({
+      version: 1,
+      ok: true,
+      generated_at: '2026-09-26T10:00:00Z',
+      local: { host_id: 'host-b', host_name: 'Desk' },
+      items: [item({ pause: restricted })]
+    })
+    expect(result.kind === 'success' ? result.value.items[0]?.pause : result).toEqual(restricted)
+  })
+
   it('degrades unknown enum arms to unknown instead of rejecting', () => {
     const result = parseCcSyncList({
       version: 1,

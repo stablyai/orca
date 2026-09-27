@@ -18163,6 +18163,7 @@
           "disconnected": "En pause hors ligne",
           "manualMetered": "En pause sur un réseau limité",
           "peerOffline": "En pause jusqu'au retour de l'autre ordinateur",
+          "restrictedMidTransfer": "En pause après une restriction du réseau en cours de transfert",
           "unknown": "Synchronisation en pause"
         },
         "error": {

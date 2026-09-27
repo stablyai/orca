@@ -11,6 +11,7 @@ export function recoveryTestItem(input: {
   sessions: SessionInput[]
   newerPartial?: CcSyncItem['newer_partial']
   notRestorable?: CcSyncItem['not_restorable']
+  pause?: CcSyncItem['pause']
 }): CcSyncItem {
   return {
     selector: `${input.host}/${input.workspace}`,
@@ -53,7 +54,7 @@ export function recoveryTestItem(input: {
       layout: 'client-view'
     },
     newer_partial: input.newerPartial ?? null,
-    pause: null,
+    pause: input.pause ?? null,
     local_checkout: null
   }
 }

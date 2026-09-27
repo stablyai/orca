@@ -383,3 +383,23 @@ it('counts one session in the singular', async () => {
   expect(row?.textContent).toContain('main · 1 session ·')
   expect(row?.textContent).not.toContain('1 sessions')
 })
+
+it.each(['local', 'peer'] as const)(
+  'labels a %s restricted-mid-transfer pause on its row',
+  async (endpoint) => {
+    bridge.list.mockResolvedValueOnce(
+      listResult([
+        recoveryTestItem({
+          host: 'laptop',
+          workspace: 'restricted',
+          sessions: [{ id: 'only', human: '2026-09-26T00:00:00Z' }],
+          pause: { reason: 'restricted-mid-transfer', endpoint, since: '2026-09-26T01:00:00Z' }
+        })
+      ])
+    )
+    await openDialog()
+    expect(itemRow('restricted-name').textContent).toContain(
+      'Paused after the network was restricted mid-transfer'
+    )
+  }
+)

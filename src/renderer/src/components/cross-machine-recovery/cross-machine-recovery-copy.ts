@@ -42,6 +42,11 @@ export function pauseReasonLabel(pause: CcSyncPause): string {
         'components.cross-machine-recovery.copy.pause.peerOffline',
         'Paused until the other computer is back'
       )
+    case 'restricted-mid-transfer':
+      return translate(
+        'components.cross-machine-recovery.copy.pause.restrictedMidTransfer',
+        'Paused after the network was restricted mid-transfer'
+      )
     case 'unknown':
       return translate('components.cross-machine-recovery.copy.pause.unknown', 'Sync paused')
   }

@@ -18064,6 +18064,7 @@
           "disconnected": "离线时已暂停",
           "manualMetered": "使用按流量计费的网络时已暂停",
           "peerOffline": "已暂停，直到另一台电脑恢复在线",
+          "restrictedMidTransfer": "传输时网络曾受限，已暂停",
           "unknown": "同步已暂停"
         },
         "error": {

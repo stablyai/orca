@@ -18064,6 +18064,7 @@
           "disconnected": "オフラインのため一時停止中",
           "manualMetered": "従量制ネットワークのため一時停止中",
           "peerOffline": "別のコンピュータが戻るまで一時停止中",
+          "restrictedMidTransfer": "転送中にネットワークが制限されたため一時停止中",
           "unknown": "同期は一時停止中"
         },
         "error": {

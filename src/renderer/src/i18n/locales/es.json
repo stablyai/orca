@@ -15163,6 +15163,7 @@
           "disconnected": "En pausa sin conexión",
           "manualMetered": "En pausa en una red de uso medido",
           "peerOffline": "En pausa hasta que vuelva el otro ordenador",
+          "restrictedMidTransfer": "En pausa tras una restricción de red durante la transferencia",
           "unknown": "Sincronización en pausa"
         },
         "error": {
