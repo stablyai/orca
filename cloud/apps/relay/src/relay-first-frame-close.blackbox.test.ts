@@ -210,10 +210,15 @@ it('releases admission after a director move redirect when the peer ignores clos
   expect(relay.connectionSnapshot()?.enforcedConnectionUnits).toBe(2)
 })
 
-// The bounded close is only a trade-off if the abandoned peer loses its rejection.
-// It does not: the close frame is flushed before the force-close timer can fire, and
-// TCP delivers those bytes ahead of the FIN, so the peer still reads code and reason.
-it('delivers the rejection code and a graceful FIN to a peer ignoring close', async () => {
+// A peer that keeps draining its socket does get the rejection: the close frame is written
+// before the force-close timer can fire, and TCP delivers those bytes ahead of the FIN.
+//
+// Scope, deliberately narrow: this peer reads every byte as it arrives, so the assertion below
+// speaks only for a responsive peer. It is not evidence that delivery survives backpressure —
+// `terminate()` destroys the socket a second later, and a frame still queued in the kernel or in
+// `ws`'s own buffer goes unsent. Treat the rejection as best effort; the bound on the close is
+// what the trade-off actually buys.
+it('delivers the rejection code and a graceful FIN to a peer that keeps reading', async () => {
   const { relay, port } = await fixture()
   const peer = await silentUpgrade(port, PHONE_TARGET)
   peer.socket.write(maskedTextFrame(JSON.stringify({ type: 'relay-auth', v: 1, mode: 'wrong' })))
