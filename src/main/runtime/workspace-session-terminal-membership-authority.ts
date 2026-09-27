@@ -1,4 +1,4 @@
-import { landsRecoveryImport } from '../../shared/cross-machine-recovery-session-ops'
+import { fencedHostTerminalTabs } from '../../shared/cross-machine-recovery-session-ops'
 import type { Tab, TabGroup } from '../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,
@@ -238,11 +238,11 @@ export function rebaseWorkspaceSessionTerminalMembership(
     const priorRevision = prior.terminalTopologyRevisionByRepoId[repoId] ?? 0
     const incomingRevision = incoming.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
     const fenced = revision > 0 && incomingRevision <= priorRevision
-    if (!fenced || landsRecoveryImport(incoming, prior, worktreeId)) {
+    const currentTabs = fenced ? fencedHostTerminalTabs(incoming, prior, worktreeId) : null
+    if (!currentTabs) {
       continue
     }
     rebasedMembership = true
-    const currentTabs = prior.tabsByWorktree[worktreeId] ?? []
     const candidateTabsById = new Map(
       (incoming.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )

@@ -99,7 +99,7 @@ export function recoveryImportDestination(
  * membership for. Imports land only on an empty destination, so that write carries the host's
  * own membership decision rather than a stale renderer replay the topology fence rejects.
  */
-export function landsRecoveryImport(
+function landsRecoveryImport(
   incoming: WorkspaceSessionState,
   prior: WorkspaceSessionState,
   worktreeId: string
@@ -110,6 +110,32 @@ export function landsRecoveryImport(
     importKey !== prior.recoveryImportKeyByWorktreeId?.[worktreeId] &&
     (prior.tabsByWorktree[worktreeId]?.length ?? 0) === 0
   )
+}
+
+/**
+ * The host terminal rows a fenced write to `worktreeId` rebases onto, or null when the write lands
+ * an import and so keeps its own membership. A write withdrawing the import key `prior` holds, as a
+ * failed apply's rollback does, withdraws that import's rows too: an import lands only dormant
+ * rows, so a live row the write drops stays with the host.
+ */
+export function fencedHostTerminalTabs(
+  incoming: WorkspaceSessionState,
+  prior: WorkspaceSessionState,
+  worktreeId: string
+): TerminalTab[] | null {
+  if (landsRecoveryImport(incoming, prior, worktreeId)) {
+    return null
+  }
+  const current = prior.tabsByWorktree[worktreeId] ?? []
+  const importKey = prior.recoveryImportKeyByWorktreeId?.[worktreeId]
+  if (
+    importKey === undefined ||
+    incoming.recoveryImportKeyByWorktreeId?.[worktreeId] === importKey
+  ) {
+    return current
+  }
+  const kept = new Set((incoming.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
+  return current.filter((tab) => tab.ptyId !== null || kept.has(tab.id))
 }
 
 /** Dormant imported bindings of one worktree, awaiting an explicit Resume. */

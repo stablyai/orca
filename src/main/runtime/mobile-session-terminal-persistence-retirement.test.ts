@@ -558,6 +558,46 @@ describe('recovery import landing in a fenced repo', () => {
     ).toEqual(['recovered'])
   })
 
+  it.each([
+    ['the renderer, which never carries the host fence', getDefaultWorkspaceSession()],
+    ['the headless runtime writer, which carries it', host]
+  ])('drops a failed import whose rollback is written by %s', (_writer, before) => {
+    const landed = sanitizeWorkspaceSessionTerminalRetirements(landImport(before, 'import-1'), host)
+
+    const rolledBack = sanitizeWorkspaceSessionTerminalRetirements(before, landed)
+
+    expect(rolledBack.recoveryImportKeyByWorktreeId?.[LANDING_ID]).toBeUndefined()
+    expect(rolledBack.tabsByWorktree[LANDING_ID] ?? []).toEqual([])
+    expect(rolledBack.terminalLayoutsByTabId.recovered).toBeUndefined()
+    expect(rolledBack.unifiedTabs?.[LANDING_ID] ?? []).toEqual([])
+    expect(rolledBack.tabGroups?.[LANDING_ID] ?? []).toEqual([])
+    expect(rolledBack.tabGroupLayouts?.[LANDING_ID]).toBeUndefined()
+  })
+
+  it('keeps a live host-admitted terminal when a failed import rollback races it', () => {
+    const landed = sanitizeWorkspaceSessionTerminalRetirements(
+      landImport(getDefaultWorkspaceSession(), 'import-1'),
+      host
+    )
+    const admitted: WorkspaceSessionState = {
+      ...landed,
+      terminalTopologyRevisionByRepoId: { [REPO_ID]: 4 },
+      tabsByWorktree: {
+        [LANDING_ID]: [
+          ...(landed.tabsByWorktree[LANDING_ID] ?? []),
+          { ...landingFragment().terminalTabs[0], id: 'host-admitted', ptyId: 'pty-live' }
+        ]
+      }
+    }
+
+    expect(
+      sanitizeWorkspaceSessionTerminalRetirements(
+        getDefaultWorkspaceSession(),
+        admitted
+      ).tabsByWorktree[LANDING_ID]?.map((tab) => tab.id)
+    ).toEqual(['host-admitted'])
+  })
+
   it('keeps host-admitted terminals when a landing races them', () => {
     const admitted = {
       ...host,

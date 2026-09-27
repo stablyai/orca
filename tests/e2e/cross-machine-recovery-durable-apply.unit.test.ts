@@ -174,6 +174,27 @@ describe('cross-machine recovery renderer apply over the durable write queue', (
     expect(session.sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
   })
 
+  it('writes back a failed import in a repo whose terminal topology the host fences', async () => {
+    const { durable, apply, persisted } = await durableSetup()
+    durable.store.setWorkspaceSession({
+      ...durable.store.getWorkspaceSession(),
+      terminalTopologyRevisionByRepoId: { repo1: 3 }
+    })
+    await durable.store.flushPendingOrThrowAsync()
+    const firstWrite = durable.authority.pause()
+    const imported = apply('import', importOp())
+    await failCoalescedWriteAfterFirstCommits(durable, firstWrite)
+
+    expect(await imported).toEqual({ requestId: 'import', error: 'disk full' })
+    await durable.store.flushPendingOrThrowAsync()
+    const session = persisted()
+    expect(session.recoveryImportKeyByWorktreeId?.[WT]).toBeUndefined()
+    expect(session.tabsByWorktree[WT] ?? []).toEqual([])
+    expect(session.unifiedTabs?.[WT] ?? []).toEqual([])
+    expect(session.tabGroups?.[WT] ?? []).toEqual([])
+    expect(session.sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
+  })
+
   it('writes back a failed claim whose own write committed before a coalesced write failed', async () => {
     const { durable, store, apply, persisted } = await durableSetup()
     store.setState({ sleepingAgentSessionsByPaneKey: { [PANE_KEY]: record } })
