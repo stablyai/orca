@@ -555,4 +555,36 @@ describe('RateLimitService', () => {
       vi.useRealTimers()
     }
   })
+
+  it('does not refresh the live-feed age for a stale post that only repeats the weekly value', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      await service.refresh()
+      const resetsAt = Math.floor(Date.now() / 1000) + 3600
+      const weeklyResetsAt = resetsAt + 3 * 24 * 3600
+
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 99, resets_at: resetsAt },
+        sevenDay: { used_percentage: 40, resets_at: weeklyResetsAt }
+      })
+      const updatedAt = service.getState().claude?.updatedAt
+
+      // Past the dedupe interval, an idle session re-posts a lower 5h value and the same weekly value.
+      await vi.advanceTimersByTimeAsync(2 * 60 * 1000)
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 91, resets_at: resetsAt },
+        sevenDay: { used_percentage: 40, resets_at: weeklyResetsAt }
+      })
+      expect(service.getState().claude?.session?.usedPercent).toBe(99)
+      expect(service.getState().claude?.updatedAt).toBe(updatedAt)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

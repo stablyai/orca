@@ -110,20 +110,25 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       current: ProviderRateLimits['session'] | undefined
     ): ReturnType<typeof mapClaudeUsageWindow> =>
       incoming && !isStaleClaudeUsageWindow(current, incoming, now) ? incoming : null
-    const freshSession = keepIfNewer(
-      mapClaudeUsageWindow(event.fiveHour ?? undefined, 300),
-      previous?.session
-    )
-    const freshWeekly = keepIfNewer(
-      mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080),
-      previous?.weekly
-    )
+    const incomingSession = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
+    const incomingWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
+    const freshSession = keepIfNewer(incomingSession, previous?.session)
+    const freshWeekly = keepIfNewer(incomingWeekly, previous?.weekly)
     if (!freshSession && !freshWeekly) {
       return
     }
     // Why: statusline payloads can carry a single window; an absent one means "no update", not "cleared" — keep the other bar populated.
     const session = freshSession ?? previous?.session ?? null
     const weekly = freshWeekly ?? previous?.weekly ?? null
+    // Why: a stale post whose other window merely repeats the current value is no progress and must not refresh the live-feed age.
+    const droppedStale = (incomingSession && !freshSession) || (incomingWeekly && !freshWeekly)
+    if (
+      droppedStale &&
+      isSameUsageWindow(previous?.session ?? null, session) &&
+      isSameUsageWindow(previous?.weekly ?? null, weekly)
+    ) {
+      return
+    }
     if (
       previous?.status === 'ok' &&
       previous.usageMetadata?.source === 'live-session' &&
