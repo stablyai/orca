@@ -15,16 +15,23 @@ import {
   registerWorktreeRootsForRepo
 } from './registered-worktree-roots-cache'
 
-const mocks = vi.hoisted(() => ({ graph: vi.fn(), stat: vi.fn(), realpath: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  graph: vi.fn(),
+  stat: vi.fn(),
+  realpath: vi.fn(),
+  workspaceRoot: vi.fn(),
+  pathSettings: vi.fn(),
+  projectRuntimes: vi.fn()
+}))
 vi.mock('node:fs/promises', () => ({ stat: mocks.stat, realpath: mocks.realpath }))
 vi.mock('../repo-worktrees', () => ({ listRepoWorktreeGraph: mocks.graph, isRepoRoot: vi.fn() }))
 vi.mock('./worktree-logic', () => ({
-  computeWorkspaceRoot: vi.fn(),
-  getWorktreePathSettings: vi.fn()
+  computeWorkspaceRoot: mocks.workspaceRoot,
+  getWorktreePathSettings: mocks.pathSettings
 }))
 vi.mock('../project-runtime-git-options', () => ({
   getWorktreeMirrorDistroForRuntime: vi.fn(),
-  resolveLocalProjectRuntimesForRepos: vi.fn()
+  resolveLocalProjectRuntimesForRepos: mocks.projectRuntimes
 }))
 
 type Owner = Pick<Repo, 'connectionId' | 'executionHostId'>
@@ -78,14 +85,15 @@ function folder(owner: Owner = {}): FolderWorkspace {
 function storeFor(
   repos: Repo[] = [],
   groups: ProjectGroup[] = [],
-  folders: FolderWorkspace[] = []
+  folders: FolderWorkspace[] = [],
+  settings: { workspaceDir?: string } = {}
 ): Store {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Authorization reads only these catalog and settings methods; every fixture omits workspaceDir.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Authorization reads only these catalog and settings methods; fixtures omit workspaceDir unless the case is about it.
   return {
     getRepos: () => repos,
     getProjectGroups: () => groups,
     getFolderWorkspaces: () => folders,
-    getSettings: () => ({})
+    getSettings: () => settings
   } as Store
 }
 
@@ -100,26 +108,21 @@ const deniedOwners: { name: string; owner: Owner }[] = [
   {
     name: 'runtime with legacy SSH',
     owner: { executionHostId: 'runtime:env', connectionId: 'host-a' }
-  }
+  },
+  // Host ids the shared parser rejects. Each must fail closed: an owner we cannot place is not
+  // evidence of a local one, and a bare `getSshTargetIdForExecutionHost` answers null for all five.
+  { name: 'empty SSH target', owner: { executionHostId: 'ssh:' } },
+  { name: 'undecodable SSH target', owner: { executionHostId: 'ssh:%zz' } },
+  { name: 'alias-delimiter SSH target', owner: { executionHostId: 'ssh:host-a|alias' } },
+  { name: 'wrong-case SSH prefix', owner: { executionHostId: 'SSH:host-a' } },
+  { name: 'unknown host kind', owner: { executionHostId: 'relay:host-a' } }
 ]
 const allowedOwners: { name: string; owner: Owner }[] = [
   { name: 'unscoped local', owner: {} },
   { name: 'explicit local', owner: { executionHostId: 'local' } },
+  { name: 'blank host stamp', owner: { executionHostId: '  ' } },
   { name: 'own-store runtime', owner: { executionHostId: 'runtime:env' } }
 ]
-
-it('denies every SSH-owned direct and folder-scope path in the fixture matrix', () => {
-  const stores = deniedOwners.flatMap(({ owner }) => [
-    storeFor([repo(owner)]),
-    storeFor([], [group(owner)]),
-    storeFor([], [], [folder(owner)]),
-    storeFor([], [group(owner)], [folder()]),
-    storeFor([repo(owner, { path: join(root, 'child') })], [group()], [folder()])
-  ])
-  const denied = stores.filter((store) => !isPathAllowed(join(root, 'file'), store)).length
-  console.log(JSON.stringify({ fixturePaths: stores.length, denied }))
-  expect(denied).toBe(stores.length)
-})
 
 beforeEach(() => {
   invalidateAuthorizedRootsCache()
@@ -128,6 +131,28 @@ beforeEach(() => {
   mocks.graph.mockResolvedValue([])
   mocks.stat.mockResolvedValue({})
   mocks.realpath.mockImplementation(async (path: string) => path)
+  mocks.projectRuntimes.mockReturnValue(new Map())
+  mocks.pathSettings.mockImplementation(
+    (_repo: Repo, settings: { workspaceDir: string }) => settings
+  )
+  mocks.workspaceRoot.mockImplementation(
+    (_repoPath: string, settings: { workspaceDir: string }) => settings.workspaceDir
+  )
+})
+
+describe.each(deniedOwners)('$name fixture matrix', ({ owner }) => {
+  it.each([
+    ['repo root', () => storeFor([repo(owner)])],
+    ['group scope', () => storeFor([], [group(owner)])],
+    ['folder scope', () => storeFor([], [], [folder(owner)])],
+    ['folder inheriting the group', () => storeFor([], [group(owner)], [folder()])],
+    [
+      'local-looking group and folder over a remote child repo',
+      () => storeFor([repo(owner, { path: join(root, 'child') })], [group()], [folder()])
+    ]
+  ])('denies the %s', (_case, build) => {
+    expect(isPathAllowed(join(root, 'file'), build())).toBe(false)
+  })
 })
 
 describe.each(deniedOwners)('$name filesystem ownership', ({ owner }) => {
@@ -225,4 +250,57 @@ it('preserves explicit local folder overrides and the legacy empty connection ov
       storeFor([], [group({ connectionId: 'host-a' })], [folder({ connectionId: '' })])
     )
   ).toEqual([root])
+})
+
+it('still grants a local directory that happens to share an SSH repo path', () => {
+  const store = storeFor([
+    repo({ executionHostId: 'ssh:host-a' }),
+    repo({}, { id: 'mine', path: root })
+  ])
+  expect(getAllowedRoots(store)).toEqual([root])
+  expect(isPathAllowed(join(root, 'file'), store)).toBe(true)
+})
+
+describe('workspace-directory fallback', () => {
+  const workspaceDir = resolve('/ws-fixture')
+
+  it('does not widen past the roots a local repo of its own would grant', () => {
+    const local = getAllowedRoots(storeFor([repo()], [], [], { workspaceDir }))
+    const sshOnly = getAllowedRoots(
+      storeFor([repo({ executionHostId: 'ssh:host-a' })], [], [], { workspaceDir })
+    )
+    expect(local).toEqual([root, workspaceDir])
+    // The SSH repo's own path is gone; nothing beyond the fallback the same config already granted.
+    expect(sshOnly).toEqual([workspaceDir])
+    expect(
+      isPathAllowed(
+        join(root, 'file'),
+        storeFor([repo({ connectionId: 'host-a' })], [], [], { workspaceDir })
+      )
+    ).toBe(false)
+  })
+
+  it.each([
+    ['POSIX absolute', '/ws-fixture'],
+    ['Windows drive', 'C:\\orca-ws'],
+    ['Windows UNC', '\\\\wsl$\\Ubuntu\\home\\me\\ws']
+  ])('grants a %s workspace directory with no local repo', (_case, dir) => {
+    expect(getAllowedRoots(storeFor([], [], [], { workspaceDir: dir }))).toHaveLength(1)
+  })
+
+  it.each([
+    ['bare name', 'orca-ws'],
+    ['parent traversal', '..'],
+    ['relative traversal', '../orca-ws']
+  ])('grants nothing for a repo-relative %s with no repo to anchor it', (_case, dir) => {
+    // `resolve` would anchor these to the main-process cwd, granting an unrelated tree.
+    expect(getAllowedRoots(storeFor([], [], [], { workspaceDir: dir }))).toEqual([])
+    expect(
+      getAllowedRoots(
+        storeFor([repo({ executionHostId: 'ssh:host-a' })], [], [], {
+          workspaceDir: dir
+        })
+      )
+    ).toEqual([])
+  })
 })
