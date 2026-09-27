@@ -14,5 +14,6 @@ describe('getUsageProviderAccountsSectionId', () => {
 
   it('does not invent an Accounts section for CLI-owned Kimi credentials', () => {
     expect(getUsageProviderAccountsSectionId('kimi')).toBeNull()
+    expect(getUsageProviderAccountsSectionId('deepseek')).toBeNull()
   })
 })
