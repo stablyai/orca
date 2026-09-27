@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
+import { installWebCrossMachineRecoveryBridge } from './worktree-jump-palette-test-fixtures'
 
 const contentProbe = vi.hoisted(() => ({
   renders: vi.fn(),
@@ -117,6 +118,7 @@ function activeContentSubscriptions(): number {
 
 describe('WorktreeJumpPalette mount gating', () => {
   beforeEach(() => {
+    installWebCrossMachineRecoveryBridge()
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     contentProbe.renders.mockClear()

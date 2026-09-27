@@ -90,6 +90,7 @@ describe('useIpcEvents updater integration', () => {
       api: {
         repos: { onChanged: () => () => {} },
         automations: { onChanged: () => () => {} },
+        crossMachineRecovery: { onApply: () => () => {} },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -292,6 +293,7 @@ describe('useIpcEvents updater integration', () => {
       api: {
         repos: makeEvents(),
         automations: makeEvents(),
+        crossMachineRecovery: makeEvents(),
         worktrees: makeEvents(),
         keybindings: makeEvents(),
         settings: makeEvents(),

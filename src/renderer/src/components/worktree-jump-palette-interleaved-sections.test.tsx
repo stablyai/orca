@@ -16,6 +16,7 @@ import {
   orderMultiPrimaryPaletteItems
 } from './cmd-j/palette-section-render-cap'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
+import { installWebCrossMachineRecoveryBridge } from './worktree-jump-palette-test-fixtures'
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
@@ -337,6 +338,7 @@ function getPrimaryRowsBySectionHeader(): { header: string; rowId: string }[] {
 
 describe('WorktreeJumpPalette interleaved primary sections', () => {
   beforeEach(() => {
+    installWebCrossMachineRecoveryBridge()
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
     useAppStore.setState(initialAppState, true)

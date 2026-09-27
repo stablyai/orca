@@ -11,6 +11,7 @@ import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
+  installWebCrossMachineRecoveryBridge,
   LEAF_ID,
   makeAgentEntry,
   makeGroup,
@@ -196,6 +197,7 @@ function getTabRowIds(): string[] {
 
 describe('WorktreeJumpPalette recent chats & terminals', () => {
   beforeEach(() => {
+    installWebCrossMachineRecoveryBridge()
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
     activateWorkspaceTabPaletteResult.mockClear()

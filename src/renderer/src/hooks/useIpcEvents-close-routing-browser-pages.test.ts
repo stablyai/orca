@@ -115,6 +115,7 @@ describe('useIpcEvents browser tab close routing', () => {
       api: {
         repos: { onChanged: () => () => {} },
         automations: { onChanged: () => () => {} },
+        crossMachineRecovery: { onApply: () => () => {} },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -341,6 +342,7 @@ describe('useIpcEvents browser tab close routing', () => {
       api: {
         repos: { onChanged: () => () => {} },
         automations: { onChanged: () => () => {} },
+        crossMachineRecovery: { onApply: () => () => {} },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},
@@ -562,6 +564,7 @@ describe('useIpcEvents browser tab close routing', () => {
       api: {
         repos: { onChanged: () => () => {} },
         automations: { onChanged: () => () => {} },
+        crossMachineRecovery: { onApply: () => () => {} },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},

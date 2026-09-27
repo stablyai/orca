@@ -125,6 +125,7 @@ describe('useIpcEvents updater integration', () => {
       api: {
         repos: { onChanged: () => () => {} },
         automations: { onChanged: () => () => {} },
+        crossMachineRecovery: { onApply: () => () => {} },
         worktrees: {
           onChanged: () => () => {},
           onBaseStatus: () => () => {},

@@ -5,8 +5,16 @@ import type { Worktree } from '../../../shared/worktree/types'
 import type { AgentStatusEntry, AgentStatusState } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { AppState } from '@/store/types'
+import { createWebCrossMachineRecoveryApi } from '@/web/preload-api/web-cross-machine-recovery-api'
 
 // Store fixtures shared by the Cmd+J palette suites (worktree list + recent chats & terminals).
+
+export function installWebCrossMachineRecoveryBridge(): void {
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: { crossMachineRecovery: createWebCrossMachineRecoveryApi() }
+  })
+}
 
 export function makeRepo(): Repo {
   return {

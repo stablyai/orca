@@ -9,7 +9,11 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
-import { makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
+import {
+  installWebCrossMachineRecoveryBridge,
+  makeRepo,
+  makeWorktree
+} from './worktree-jump-palette-test-fixtures'
 
 const { activateAndRevealWorktree } = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn(() => false)
@@ -191,6 +195,7 @@ function getWorktreeRows(): string[] {
 
 describe('WorktreeJumpPalette', () => {
   beforeEach(() => {
+    installWebCrossMachineRecoveryBridge()
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
     activateAndRevealWorktree.mockClear()

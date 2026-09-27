@@ -140,6 +140,7 @@ describe('useIpcEvents rate-limit hydration', () => {
       api: {
         repos: makeEvents(),
         automations: makeEvents(),
+        crossMachineRecovery: makeEvents(),
         worktrees: makeEvents(),
         keybindings: makeEvents(),
         settings: makeEvents(),

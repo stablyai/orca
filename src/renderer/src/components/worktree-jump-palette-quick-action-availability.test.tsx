@@ -7,6 +7,7 @@ import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-
 import { buildCmdJActionResults } from '@/components/cmd-j/palette-results'
 import { getCmdJQuickActions } from '@/components/cmd-j/quick-actions'
 import { useWorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
+import { installWebCrossMachineRecoveryBridge } from './worktree-jump-palette-test-fixtures'
 
 const mocks = vi.hoisted(() => ({ state: {} as Record<string, unknown> }))
 
@@ -69,6 +70,7 @@ function renderQuickActions(initialStatuses: Map<string, unknown>) {
 
 describe('worktree jump palette quick action availability', () => {
   beforeEach(() => {
+    installWebCrossMachineRecoveryBridge()
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     mocks.state = {
       activeView: 'terminal',

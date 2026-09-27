@@ -16,6 +16,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'browser.onNavigationUpdate',
   'browser.onOpenLinkInOrcaTab',
   'browser.onPaneFocus',
+  'crossMachineRecovery.onApply',
   'emulator.onAutoAttach',
   'emulator.onPaneFocus',
   'gh.onPRRefreshEvent',
@@ -105,6 +106,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
 ] as const
 
 const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
+  'crossMachineRecovery.onApply',
   'ui.onMobileMarkdownRequest',
   'automations.onChanged',
   'runtimeEnvironments.onStatusChanged',
@@ -382,11 +384,12 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
           )
       )
     ).toEqual([
+      'crossMachineRecovery.onApply',
       'ui.onMobileMarkdownRequest',
       'automations.onChanged',
       'runtimeEnvironments.onStatusChanged',
       'runtimeEnvironments.subscribe',
-      ...EXPECTED_CALLBACK_REGISTRATION_SEQUENCE.slice(3)
+      ...EXPECTED_CALLBACK_REGISTRATION_SEQUENCE.slice(4)
     ])
     const groupOrder = (names: readonly string[]): string[] =>
       registrationOrder.filter((entry) => names.includes(entry))

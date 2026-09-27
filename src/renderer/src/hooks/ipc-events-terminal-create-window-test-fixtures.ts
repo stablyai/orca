@@ -27,6 +27,7 @@ export function buildTerminalCreateWindow(args: {
     api: {
       repos: { onChanged: () => () => {} },
       automations: { onChanged: () => () => {} },
+      crossMachineRecovery: { onApply: () => () => {} },
       worktrees: {
         onChanged: () => () => {},
         onBaseStatus: () => () => {},

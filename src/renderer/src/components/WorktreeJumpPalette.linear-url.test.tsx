@@ -15,7 +15,12 @@ import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-tar
 import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from '@/lib/worktree-palette-query-bounds'
 import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
-import { makeRecentTabState, makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
+import {
+  installWebCrossMachineRecoveryBridge,
+  makeRecentTabState,
+  makeRepo,
+  makeWorktree
+} from './worktree-jump-palette-test-fixtures'
 
 const { lookupCmdJGitHubUrlWorkItem } = vi.hoisted(() => ({
   lookupCmdJGitHubUrlWorkItem: vi.fn()
@@ -229,6 +234,7 @@ function getCommandValue(): string {
 
 describe('WorktreeJumpPalette Linear URL intent', () => {
   beforeEach(() => {
+    installWebCrossMachineRecoveryBridge()
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCommandQuery = null
     requestCommandDialogClose = null
