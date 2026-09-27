@@ -245,7 +245,7 @@ index 18c275ccbe583f48ccb5c5f66cd26d0bd8621e39..2dc0ef346d3ce07b3d0b5f03fd72c4f5
      if (diff !== 0) {
        this._latestYDisp = newRow;
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
-index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4142cf7a3 100644
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..eca55a5e92f57780d851b426f633d42033b6079f 100644
 --- a/src/browser/input/CompositionHelper.ts
 +++ b/src/browser/input/CompositionHelper.ts
 @@ -1,17 +1,68 @@
@@ -335,7 +335,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
  
    /**
     * The position within the input textarea's value of the current composition.
-@@ -36,52 +96,219 @@ export class CompositionHelper {
+@@ -36,52 +96,227 @@ export class CompositionHelper {
     */
    private _compositionSuffix: string;
  
@@ -460,6 +460,14 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
 +    return this._gridPreedit?.resolve(this._gridPreeditAnchor, this._gridPreeditHidesTail);
 +  }
 +
++  /**
++   * Whether the open composition draws in the grid. Latched at `compositionstart`, so it can
++   * differ from `imePreeditInGrid` when the option changes mid-composition.
++   */
++  public get isGridPreeditActive(): boolean {
++    return this._gridPreedit !== undefined;
++  }
++
 +  // Keep the six-argument form callable: upstream's own CompositionHelper.test.ts constructs
 +  // this class directly, and `.npmignore` strips src/**/*.test.ts from the published tarball, so
 +  // the shipped patch has no hunk that could update that call. Dropping this overload fails the
@@ -566,7 +574,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
    }
  
    /**
-@@ -89,22 +316,136 @@ export class CompositionHelper {
+@@ -89,22 +324,136 @@ export class CompositionHelper {
     * @param ev The event.
     */
    public compositionupdate(ev: Pick<CompositionEvent, 'data'>): void {
@@ -712,7 +720,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
    }
  
    /**
-@@ -113,10 +454,33 @@ export class CompositionHelper {
+@@ -113,10 +462,33 @@ export class CompositionHelper {
     * @returns Whether the Terminal should continue processing the keydown event.
     */
    public keydown(ev: KeyboardEvent): boolean {
@@ -747,7 +755,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
          return false;
        }
        if (ev.keyCode === 16 || ev.keyCode === 17 || ev.keyCode === 18) {
-@@ -128,6 +492,10 @@ export class CompositionHelper {
+@@ -128,6 +500,10 @@ export class CompositionHelper {
        this._finalizeComposition(false);
      }
  
@@ -758,7 +766,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
      if (ev.keyCode === 229) {
        // If the "composition character" is used but gets to this point it means a non-composition
        // character (eg. numbers and punctuation) was pressed when the IME was active.
-@@ -138,6 +506,135 @@ export class CompositionHelper {
+@@ -138,6 +514,135 @@ export class CompositionHelper {
      return true;
    }
  
@@ -894,7 +902,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
    /**
     * Finalizes the composition, resuming regular input actions. This is called when a composition
     * is ending.
-@@ -146,23 +643,52 @@ export class CompositionHelper {
+@@ -146,23 +651,52 @@ export class CompositionHelper {
     *   compositionend event is triggered, such as enter, so that the composition is sent before
     *   the command is executed.
     */
@@ -958,7 +966,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
  
        // Since composition* events happen before the changes take place in the textarea on most
        // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
-@@ -172,35 +698,313 @@ export class CompositionHelper {
+@@ -172,35 +706,313 @@ export class CompositionHelper {
        // - The last compositionupdate event's data property does not always accurately describe
        //   the character, a counter example being Korean where an ending consonsant can move to
        //   the following character if the following input is a vowel.
@@ -1299,7 +1307,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
    }
  
    /**
-@@ -222,6 +1026,9 @@ export class CompositionHelper {
+@@ -222,6 +1034,9 @@ export class CompositionHelper {
  
          const diff = newValue.replace(oldValue, '');
  
@@ -1309,7 +1317,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
          this._dataAlreadySent = diff;
  
          if (newValue.length > oldValue.length) {
-@@ -236,6 +1043,430 @@ export class CompositionHelper {
+@@ -236,6 +1051,430 @@ export class CompositionHelper {
      }, 0);
    }
  
@@ -1347,10 +1355,10 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
 +      return;
 +    }
 +    const start = this._compositionPosition.start;
++    // A converting clause arrives as a non-collapsed selection whose end is the insertion point.
 +    const caret = this._textarea.selectionEnd;
-+    const collapsed = caret !== null && caret === this._textarea.selectionStart;
 +    // Only trust the selection once the textarea holds exactly the preedit it describes.
-+    const offset = collapsed && this._textarea.value.substring(start, start + preedit.text.length) === preedit.text
++    const offset = caret !== null && this._textarea.value.substring(start, start + preedit.text.length) === preedit.text
 +      ? caret - start
 +      : undefined;
 +    if (preedit.setCaret(offset)) {
@@ -1740,20 +1748,20 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
    /**
     * Positions the composition view on top of the cursor and the textarea just below it (so the
     * IME helper dialog is positioned correctly).
-@@ -243,9 +1474,29 @@ export class CompositionHelper {
+@@ -243,10 +1482,30 @@ export class CompositionHelper {
     *   necessary as the IME events across browsers are not consistently triggered.
     */
    public updateCompositionElements(dontRecurse?: boolean): void {
 -    if (!this._isComposing) {
 +    if (this._gridPreedit) {
 +      this._positionGridPreeditTextarea();
-       return;
-     }
-+    // Empty updates hide the overlay without ending the inferred transaction.
-+    if (!this._compositionView.classList.contains('active')) {
 +      return;
 +    }
-+
++    // Empty updates hide the overlay without ending the inferred transaction.
++    if (!this._compositionView.classList.contains('active')) {
+       return;
+     }
+ 
 +    const colors = this._themeService?.colors;
 +    this._compositionView.style.setProperty(
 +      '--xterm-composition-selection-background',
@@ -1768,10 +1776,11 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
 +    // already runs on every render — so keep the rendered tail current with the buffer. Comparing
 +    // cells adds no layout read.
 +    this._syncCompositionCells();
- 
++
      if (this._bufferService.buffer.isCursorInViewport) {
        const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
-@@ -254,31 +1505,425 @@ export class CompositionHelper {
+ 
+@@ -254,31 +1513,425 @@ export class CompositionHelper {
        const cursorTop = this._bufferService.buffer.y * this._renderService.dimensions.css.cell.height;
        const cursorLeft = cursorX * this._renderService.dimensions.css.cell.width;
  
@@ -1967,7 +1976,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
 +        spacing = nextSpacing;
 +        selected = nextSelected;
 +      }
-+    }
+     }
 +    emit(data.length);
 +    nodes.push(doc.createTextNode('‎'));
 +    preedit.replaceChildren(...nodes);
@@ -2092,7 +2101,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..375b21eafdf1fc4849293845314a8cb4
 +        continue;
 +      }
 +      cells.push({ codepoints: [code], width: Math.min(2, Math.max(1, width)), end: offset });
-     }
++    }
 +    this._cells = cells;
 +    this._width = cells.reduce((sum, cell) => sum + cell.width, 0);
 +  }

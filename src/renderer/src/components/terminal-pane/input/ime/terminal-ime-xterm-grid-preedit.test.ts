@@ -306,4 +306,40 @@ describe('in-grid IME preedit', () => {
     await settle()
     expect(renderedText(container, 0)).toBe('$')
   })
+
+  it('draws the cursor at the end of a converting clause the IME reports as a selection', async () => {
+    const { container, terminal } = openTerminal()
+    await write(terminal, '> ')
+    terminal.focus()
+    compose(terminal, '日本語')
+    const selectClause = async (start: number, end: number): Promise<void> => {
+      update(terminal, '日本語')
+      terminal.textarea!.setSelectionRange(start, end)
+      const rendered = nextRender(terminal)
+      await settle()
+      await rendered
+    }
+
+    await selectClause(0, 1)
+    expect(textBeforeCursor(container, 0)).toBe('> 日')
+    await selectClause(1, 2)
+    expect(textBeforeCursor(container, 0)).toBe('> 日本')
+    await selectClause(2, 2)
+    expect(textBeforeCursor(container, 0)).toBe('> 日本')
+  })
+
+  it('reports the path latched at compositionstart when the option flips mid-composition', async () => {
+    const grid = openTerminal()
+    compose(grid.terminal, '한')
+    grid.terminal.options.imePreeditInGrid = false
+    expect(isTerminalImePreeditInGrid(grid.terminal)).toBe(true)
+
+    const overlay = openTerminal({ inGrid: false })
+    compose(overlay.terminal, '한')
+    overlay.terminal.options.imePreeditInGrid = true
+    expect(isTerminalImePreeditInGrid(overlay.terminal)).toBe(false)
+
+    await commit(grid.terminal, '한')
+    expect(isTerminalImePreeditInGrid(grid.terminal)).toBe(false)
+  })
 })
