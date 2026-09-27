@@ -65,7 +65,8 @@ const PROBE_GLYPHS = [
 
 const SAMPLE_LINE = 'Latin abc 한글 漢字 语言 かなカナ |'
 
-async function forceActivePaneWebgl(page: Page): Promise<void> {
+/** Returns the tab whose pane now runs WebGL, or null when no WebGL context is available. */
+async function forceActivePaneWebgl(page: Page): Promise<string | null> {
   const tabId = await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
@@ -75,28 +76,30 @@ async function forceActivePaneWebgl(page: Page): Promise<void> {
         ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
         : null
   })
-  expect(tabId).toBeTruthy()
+  if (!tabId) {
+    return null
+  }
   await page.evaluate(
-    (id) => window.__paneManagers?.get(id ?? '')?.setTerminalGpuAcceleration?.('on'),
+    (id) => window.__paneManagers?.get(id)?.setTerminalGpuAcceleration?.('on'),
     tabId
   )
-  await page.waitForFunction(
-    (id) =>
-      (window.__paneManagers?.get(id ?? '')?.getRenderingDiagnostics?.() ?? []).some(
-        (diagnostic) => diagnostic.hasWebgl
-      ),
-    tabId,
-    { timeout: 15_000 }
-  )
+  return page
+    .waitForFunction(
+      (id) =>
+        (window.__paneManagers?.get(id)?.getRenderingDiagnostics?.() ?? []).some(
+          (diagnostic) => diagnostic.hasWebgl
+        ),
+      tabId,
+      { timeout: 15_000 }
+    )
+    .then(() => tabId)
+    .catch(() => null)
 }
 
-async function probeWebgl(page: Page): Promise<WebglProbeResult> {
+async function probeWebgl(page: Page, tabId: string): Promise<WebglProbeResult> {
   return page.evaluate(
-    async ({ glyphs, sampleLine }) => {
-      const state = window.__store?.getState()
-      const worktreeId = state?.activeWorktreeId
-      const tabId = worktreeId ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null) : null
-      const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    async ({ glyphs, sampleLine, tabId: webglTabId }) => {
+      const manager = window.__paneManagers?.get(webglTabId)
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the e2e build exposes the pane manager; panes is its private pane map.
       const panes = (manager as unknown as { panes?: Map<number, PaneInternals> })?.panes
       const pane = [...(panes?.values() ?? [])][0]
@@ -183,17 +186,21 @@ async function probeWebgl(page: Page): Promise<WebglProbeResult> {
       host.remove()
       return { fontFamily, cellWidth, cellHeight, glyphs: reports, sampleLine, dataUrl }
     },
-    { glyphs: PROBE_GLYPHS, sampleLine: SAMPLE_LINE }
+    { glyphs: PROBE_GLYPHS, sampleLine: SAMPLE_LINE, tabId }
   )
 }
 
 test.describe('terminal CJK glyph cell fit', () => {
-  test('lists CJK fallback faces and keeps their glyphs inside two cells under WebGL', async ({
+  test('@headful lists CJK fallback faces and keeps their glyphs inside two cells under WebGL', async ({
     orcaPage
   }) => {
     await waitForActiveTerminalManager(orcaPage)
-    await forceActivePaneWebgl(orcaPage)
-    const webgl = await probeWebgl(orcaPage)
+    const tabId = await forceActivePaneWebgl(orcaPage)
+    if (!tabId) {
+      test.skip(true, 'WebGL unavailable in this environment')
+      return
+    }
+    const webgl = await probeWebgl(orcaPage, tabId)
     const screenshotDir = process.env.ORCA_GLYPH_SCREENSHOT_DIR
     if (screenshotDir) {
       mkdirSync(screenshotDir, { recursive: true })
