@@ -20973,7 +20973,7 @@
     },
     {
       "id": "terminal-history.tombstone-rescan-ownership",
-      "title": "Shell-history cleanup coalesces scans while preserving deletion ownership",
+      "title": "Shell-history cleanup reuses one directory listing while preserving deletion ownership",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "desktop-runtime",
@@ -20983,10 +20983,10 @@
       "providers": ["local", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "wsl"],
-      "coverageNotes": "Actual macOS temp-filesystem deletion and fake WSL cleanup ownership. Live Windows, Linux and WSL execution untested; SSH and daemon replay unaffected.",
+      "coverageNotes": "Actual macOS temp-filesystem deletion and fake WSL cleanup ownership. Live Windows, Linux and WSL execution untested; SSH and daemon replay unaffected because every path here is host-local.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/23030"],
-      "invariant": "Only renamed tombstones are recursively removed, active plus retry admissions stay at 64, retries retain their delays and exhaustion behavior, and coalesced roots displaced by another root stay eligible for later completion scans.",
-      "oracle": "Drain 1,024 real directory entries in controlled batches with at most 32 directory scans and 64 active removals. Exercise queued late arrivals, mixed native/WSL roots, delayed failure retries, exhausted failures, cancellation and test-only flush without clock advancement.",
+      "invariant": "Only renamed tombstones are recursively removed, active plus retry admissions stay at 64, retries retain their delays and exhaustion behavior, a root displaced at the cap is admitted from another root's freed slot, and no tombstone is handed to removal twice per listing.",
+      "oracle": "Drain 1,024 real directory entries in controlled batches using at most 8 directory listings and 64 active removals. Exercise late arrivals discovered after the listing, both roots draining under one shared cap, a failing listing mid-drain, delayed failure retries, exhausted attempt budgets, and cancellation of an in-flight listing.",
       "commands": [
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/terminal-history-tombstone-scan-cost.test.ts src/main/terminal-history-async-delete.test.ts src/main/terminal-history-tombstone-retry.test.ts src/main/terminal-history-gc-fs-call-count.test.ts src/main/terminal-history-gc.test.ts src/main/terminal-history.test.ts"
       ],
@@ -21002,22 +21002,25 @@
         {
           "file": "src/main/terminal-history-tombstone-scan-cost.test.ts",
           "assertions": [
-            "drains 1024 tombstones without enumerating the backlog after every completion",
-            "keeps a second root eligible when another root consumes its rescan slots",
+            "drains 1024 tombstones without re-reading the directory per completion",
+            "picks up a tombstone created after the queued names were read",
+            "drains both roots within the shared admission cap without per-completion reads",
+            "keeps draining after a directory read fails mid-drain",
+            "drops an in-flight refill during fixture cleanup",
             "preserves delayed failure retries while successful removals replenish the queue",
-            "does not restart exhausted retries when a different root frees more slots"
+            "does not retry a tombstone past its attempt budget when another root frees slots"
           ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-25",
+          "date": "2026-09-26",
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/terminal-history-tombstone-scan-cost.test.ts src/main/terminal-history-async-delete.test.ts src/main/terminal-history-tombstone-retry.test.ts src/main/terminal-history-gc-fs-call-count.test.ts src/main/terminal-history-gc.test.ts src/main/terminal-history.test.ts",
           "result": "passed",
-          "durationSeconds": 1.89,
-          "summary": "86 tests across six suites passed; independent review reran 14 tests across three suites."
+          "durationSeconds": 1.95,
+          "summary": "86 tests across six suites passed, repeated three times with no flakes."
         }
       ],
       "runtimeBudget": {
@@ -21030,11 +21033,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The original production module enumerates 1,025 times for 1,024 tombstones and fails the unchanged bounded-scan oracle. Coalescing reduces the deterministic count to 17 while removing all entries."
+        "evidence": "Pre-change main lists the tombstone directory 1,026 times for 1,024 tombstones and fails the bounded-listing oracle. Reusing one listing reduces it to 6 while still removing every entry."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "1,025 to 17 controlled scans. Five local real-FS samples: median 1,025 to 176 scans and 714.85 to 91.53 ms cleanup. One completion-triggered unref immediate; no polling. Refill waits one event-loop turn and may defer to next startup if process exits."
+        "evidence": "Five real-filesystem samples per version, 1,024 tombstone directories each holding a meta.json, macOS arm64 / Node 24, identical harness. Median directory listings 1,026 to 6, names enumerated 494,348 to 1,077, blocking main-thread time in the rescan path 820 to 7 ms (the listings themselves 266 to 2.7 ms, and now off-thread), total drain 886 to 75 ms. The remaining ~70 ms is the recursive rm itself and is unchanged. Average concurrent removals 62 of 64, restored from the 46 an event-loop-deferred refill left idle. No polling, no new timers, and no work deferred past process exit."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history.",
@@ -21042,9 +21045,11 @@
       ],
       "knownGaps": [
         "No rendered UI latency measurement or physical Windows/Linux/WSL run.",
-        "Refill delay and unref immediate are explicit trade-offs; disk tombstones survive for next startup."
+        "One listing is retained per root while it drains, about 160 KB per 1,024 tombstones, shrinking as names are consumed.",
+        "A small backlog still costs roughly one listing per completion batch, of a directory that is nearly empty by then.",
+        "A tombstone that exhausts its retries stays on disk until the next startup, unchanged from before."
       ],
-      "demotionRule": "Keep experimental or demote if coalescing strands previously eligible roots, crosses the admission cap, rearms exhausted retries through another root, or touches a recreated live history path."
+      "demotionRule": "Keep experimental or demote if the reused listing strands a displaced root, crosses the admission cap, rearms an exhausted retry through another root, hands one tombstone to removal twice, or touches a recreated live history path."
     }
   ]
 }
