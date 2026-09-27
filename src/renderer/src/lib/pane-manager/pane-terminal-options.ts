@@ -1,6 +1,7 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { LIGHT_BG_MIN_CONTRAST } from '../../../../shared/terminal-themes/terminal-contrast-correction'
+import { buildFontFamily } from '../../../../shared/styles/monospace-font-family'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -45,9 +46,10 @@ export function buildDefaultTerminalOptions(): ITerminalOptions & ITerminalInitO
     // Why: xterm draws no cursor until its textarea gets a focus event or keystroke. Remounted panes keep DOM focus (no event), so TUIs on the hardware cursor (agy) lost it until the next keypress; let ?25h/?25l alone decide.
     showCursorImmediately: true,
     fontSize: 14,
-    // Cross-platform fallback chain; keep in sync with FALLBACK_FONTS in layout-serialization.ts.
-    fontFamily:
-      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace',
+    fontFamily: buildFontFamily(''),
+    // Why: one-cell glyphs drawn from a CJK/symbol fallback face (①, ※, Ⅻ) otherwise spill
+    // into the next cell under WebGL; wide, ASCII, emoji and Nerd glyphs are never rescaled.
+    rescaleOverlappingGlyphs: true,
     fontWeight: '300',
     fontWeightBold: '500',
     scrollback: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,

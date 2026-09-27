@@ -1,48 +1,180 @@
-import { describe, expect, it } from 'vitest'
-import { buildFontFamily } from './monospace-font-family'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  buildCjkFallbackFonts,
+  buildFontFamily,
+  resolvePreferredCjkScript
+} from './monospace-font-family'
 
-const FALLBACKS =
-  '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", monospace'
+vi.mock('../execution-host/execution-host', () => ({
+  getCurrentLocalPlatform: (): NodeJS.Platform => 'darwin'
+}))
+
+const LATIN_AND_SYMBOLS =
+  '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font"'
+const MAC_EN_CJK =
+  '"PingFang SC", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "PingFang TC", "PingFang HK", "Apple SD Gothic Neo"'
+const FALLBACKS = `${LATIN_AND_SYMBOLS}, ${MAC_EN_CJK}, monospace`
+const MAC_EN = { platform: 'darwin', locales: ['en-US'] } as const
 
 describe('buildFontFamily', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('quotes a single family ahead of the fallbacks, leaving out the one it names', () => {
-    expect(buildFontFamily('JetBrains Mono')).toBe(`"JetBrains Mono", ${FALLBACKS}`)
-    expect(buildFontFamily('menlo')).toBe(`"menlo", ${FALLBACKS.replace('"Menlo", ', '')}`)
-    expect(buildFontFamily('  ')).toBe(FALLBACKS)
+    expect(buildFontFamily('JetBrains Mono', MAC_EN)).toBe(`"JetBrains Mono", ${FALLBACKS}`)
+    expect(buildFontFamily('menlo', MAC_EN)).toBe(
+      `"menlo", ${FALLBACKS.replace('"Menlo", ', '')}`
+    )
+    expect(buildFontFamily('  ', MAC_EN)).toBe(FALLBACKS)
   })
 
   it('keeps every fallback for a plugin family', () => {
-    expect(buildFontFamily('Menlo (acme.fonts)')).toBe(`"Menlo (acme.fonts)", ${FALLBACKS}`)
+    expect(buildFontFamily('Menlo (acme.fonts)', MAC_EN)).toBe(
+      `"Menlo (acme.fonts)", ${FALLBACKS}`
+    )
   })
 
   it('quotes each family of a list and lists a fallback only once', () => {
-    expect(buildFontFamily('D2Coding, Consolas')).toBe(
+    expect(buildFontFamily('D2Coding, Consolas', MAC_EN)).toBe(
       `"D2Coding", "Consolas", ${FALLBACKS.replace('"Consolas", ', '')}`
     )
   })
 
   it('leaves a listed generic or vendor keyword bare', () => {
     const chainWithoutMonospace = FALLBACKS.replace(', monospace', '')
-    expect(buildFontFamily('Menlo, monospace')).toBe(
+    expect(buildFontFamily('Menlo, monospace', MAC_EN)).toBe(
       `"Menlo", monospace, ${chainWithoutMonospace.replace('"Menlo", ', '')}`
     )
-    expect(buildFontFamily('ui-monospace, Menlo')).toBe(
+    expect(buildFontFamily('ui-monospace, Menlo', MAC_EN)).toBe(
       `ui-monospace, "Menlo", ${FALLBACKS.replace('"Menlo", ', '')}`
     )
-    expect(buildFontFamily(`"Cascadia Mono", 'D2Coding' ,, monospace`)).toBe(
+    expect(buildFontFamily(`"Cascadia Mono", 'D2Coding' ,, monospace`, MAC_EN)).toBe(
       `"Cascadia Mono", "D2Coding", monospace, ${chainWithoutMonospace.replace('"Cascadia Mono", ', '')}`
     )
   })
 
   it('quotes a single keyword as typed, like any single family', () => {
     const chainWithoutMonospace = FALLBACKS.replace(', monospace', '')
-    expect(buildFontFamily('monospace')).toBe(`"monospace", ${chainWithoutMonospace}`)
-    expect(buildFontFamily('ui-monospace')).toBe(`"ui-monospace", ${chainWithoutMonospace}`)
+    expect(buildFontFamily('monospace', MAC_EN)).toBe(`"monospace", ${chainWithoutMonospace}`)
+    expect(buildFontFamily('ui-monospace', MAC_EN)).toBe(`"ui-monospace", ${chainWithoutMonospace}`)
   })
 
   it('strips a stray quote left at either end of an entry', () => {
-    expect(buildFontFamily(`D2Coding", "Consolas`)).toBe(
+    expect(buildFontFamily(`D2Coding", "Consolas`, MAC_EN)).toBe(
       `"D2Coding", "Consolas", ${FALLBACKS.replace('"Consolas", ', '')}`
     )
+  })
+
+  it('does not duplicate a CJK face the user picked as the primary font', () => {
+    const chain = buildFontFamily('Apple SD Gothic Neo', { platform: 'darwin', locales: ['ko'] })
+    expect(chain.startsWith('"Apple SD Gothic Neo", "SF Mono"')).toBe(true)
+    expect(chain.match(/Apple SD Gothic Neo/g)).toHaveLength(1)
+  })
+
+  it('keeps every Latin and symbol font ahead of the CJK faces', () => {
+    const chain = buildFontFamily('', { platform: 'win32', locales: ['ko-KR'] })
+    expect(chain).toBe(
+      `${LATIN_AND_SYMBOLS}, "Malgun Gothic", "Microsoft YaHei", "Yu Gothic", "Meiryo", "Microsoft JhengHei", monospace`
+    )
+  })
+
+  it('never lists another platform’s CJK faces', () => {
+    const mac = buildFontFamily('', { platform: 'darwin', locales: ['ko'] })
+    expect(mac).not.toContain('Malgun Gothic')
+    expect(mac).not.toContain('Noto Sans')
+    const windows = buildFontFamily('', { platform: 'win32', locales: ['ja'] })
+    expect(windows).not.toContain('Hiragino')
+    expect(windows).not.toContain('Noto Sans')
+    const linux = buildFontFamily('', { platform: 'linux', locales: ['zh-CN'] })
+    expect(linux).not.toContain('PingFang')
+    expect(linux).not.toContain('Microsoft YaHei')
+  })
+
+  it('reads the platform and navigator.languages when no options are given', () => {
+    vi.stubGlobal('navigator', { languages: ['en-US', 'ja-JP'], language: 'en-US' })
+    expect(buildFontFamily('')).toBe(
+      `${LATIN_AND_SYMBOLS}, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "PingFang SC", "PingFang TC", "PingFang HK", "Apple SD Gothic Neo", monospace`
+    )
+  })
+
+  it('falls back to navigator.language when navigator.languages is empty', () => {
+    vi.stubGlobal('navigator', { languages: [], language: 'zh-TW' })
+    expect(buildFontFamily('')).toContain(`${LATIN_AND_SYMBOLS}, "PingFang TC", "PingFang HK",`)
+  })
+})
+
+describe('resolvePreferredCjkScript', () => {
+  it.each([
+    [['ko-KR', 'en-US'], 'ko'],
+    [['ko'], 'ko'],
+    [['en-US', 'ja-JP'], 'ja'],
+    [['JA'], 'ja'],
+    [['zh-CN'], 'zh-Hans'],
+    [['zh'], 'zh-Hans'],
+    [['zh-Hans-SG'], 'zh-Hans'],
+    [['zh-TW'], 'zh-Hant'],
+    [['zh-HK'], 'zh-Hant'],
+    [['zh-Hant-MO'], 'zh-Hant'],
+    [['fr-FR', 'zh-TW', 'ko-KR'], 'zh-Hant']
+  ] as const)('maps %j to %s', (locales, script) => {
+    expect(resolvePreferredCjkScript(locales)).toBe(script)
+  })
+
+  it.each([
+    [[]],
+    [['en-US', 'fr']],
+    // Konkani, Javanese, Zhuang: prefixes that only look like ko/ja/zh.
+    [['kok', 'jv', 'jav', 'zha']],
+    [['']]
+  ] as const)('returns null for %j', (locales) => {
+    expect(resolvePreferredCjkScript(locales)).toBeNull()
+  })
+})
+
+describe('buildCjkFallbackFonts', () => {
+  it('orders Korean faces first for a Korean locale', () => {
+    expect(buildCjkFallbackFonts('linux', ['ko-KR']).slice(0, 5)).toEqual([
+      'Noto Sans Mono CJK KR',
+      'Noto Sans CJK KR',
+      'D2Coding',
+      'NanumGothicCoding',
+      'Sarasa Mono K'
+    ])
+    expect(buildCjkFallbackFonts('darwin', ['ko-KR'])[0]).toBe('Apple SD Gothic Neo')
+    expect(buildCjkFallbackFonts('win32', ['ko-KR'])[0]).toBe('Malgun Gothic')
+  })
+
+  it('orders Traditional Chinese faces first for zh-TW', () => {
+    expect(buildCjkFallbackFonts('darwin', ['zh-TW'])).toEqual([
+      'PingFang TC',
+      'PingFang HK',
+      'PingFang SC',
+      'Hiragino Sans',
+      'Hiragino Kaku Gothic ProN',
+      'Apple SD Gothic Neo'
+    ])
+  })
+
+  it('uses SC, JP, TC, KR order without a CJK locale', () => {
+    expect(buildCjkFallbackFonts('win32', ['en-US'])).toEqual([
+      'Microsoft YaHei',
+      'Yu Gothic',
+      'Meiryo',
+      'Microsoft JhengHei',
+      'Malgun Gothic'
+    ])
+  })
+
+  it('lists every face exactly once whatever the locale', () => {
+    for (const locales of [['ko'], ['ja'], ['zh-CN'], ['zh-TW'], ['en']]) {
+      const fonts = buildCjkFallbackFonts('linux', locales)
+      expect(new Set(fonts).size).toBe(fonts.length)
+      expect(fonts).toHaveLength(15)
+    }
+  })
+
+  it('falls back to the Linux list for other Unix platforms', () => {
+    expect(buildCjkFallbackFonts('freebsd', ['ja'])[0]).toBe('Noto Sans Mono CJK JP')
   })
 })
