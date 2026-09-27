@@ -11,6 +11,7 @@ import {
 
 const COLOR_SCHEME_REPLY = mode2031SequenceFor('dark')
 const OSC_COLOR_REPLY = '\x1b]11;rgb:00/00/00\x07'
+const XTVERSION_REPLY = '\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\'
 const CPR_REPLY = '\x1b[6;1R'
 const DA1_REPLY = '\x1b[?1;2c'
 // ECHOCTL carets every C0 control, so an OSC reply's trailing BEL prints as `^G`. This
@@ -50,19 +51,57 @@ describe('live query replies', () => {
     expect(needsCookedEchoSafeQueryReply(mode2031SequenceFor('light'))).toBe(true)
   })
 
-  it('writes an echo-risk reply in the calling turn', () => {
-    const { ingress, writes } = harness()
-    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
-    // No timer advance: the whole point is that there is nothing to wait for.
-    expect(writes).toEqual([OSC_COLOR_REPLY])
+  it.each([OSC_COLOR_REPLY, XTVERSION_REPLY])(
+    'writes an echo-risk reply in the calling turn',
+    (reply) => {
+      const { ingress, writes } = harness()
+      expect(ingress.answerLiveQueryReply(reply)).toBe(true)
+      // No timer advance: the whole point is that there is nothing to wait for.
+      expect(writes).toEqual([reply])
+      ingress.drainAndClose()
+    }
+  )
+
+  it.each([COLOR_SCHEME_REPLY, XTVERSION_REPLY])(
+    'answers repeated identical replies without collapsing them',
+    (reply) => {
+      const { ingress, writes } = harness()
+      expect(ingress.answerLiveQueryReply(reply)).toBe(true)
+      expect(ingress.answerLiveQueryReply(reply)).toBe(true)
+      expect(writes).toEqual([reply, reply])
+      ingress.drainAndClose()
+    }
+  )
+
+  it('reports a recognized reply when its immediate write fails', () => {
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: () => {
+        throw new Error('EIO')
+      },
+      onEmission: () => {}
+    })
+
+    expect(ingress.deliverLiveQueryReply(XTVERSION_REPLY)).toBe('write-failed')
     ingress.drainAndClose()
   })
 
-  it('answers repeated identical replies without collapsing them', () => {
-    const { ingress, writes } = harness()
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
-    expect(writes).toEqual([COLOR_SCHEME_REPLY, COLOR_SCHEME_REPLY])
+  it.each([0, 1])('claims a repeated payload when write %i fails', (failedWrite) => {
+    const writes: string[] = []
+    let writeIndex = 0
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => {
+        if (writeIndex++ === failedWrite) {
+          throw new Error('EIO')
+        }
+        writes.push(data)
+      },
+      onEmission: () => {}
+    })
+
+    expect(ingress.answerLiveQueryReply(XTVERSION_REPLY + XTVERSION_REPLY)).toBe(true)
+    expect(writes).toEqual([XTVERSION_REPLY])
     ingress.drainAndClose()
   })
 
@@ -91,6 +130,33 @@ describe('live query replies', () => {
       expect(visible(emissions), echoOf(OSC_COLOR_REPLY)).toBe('')
       ingress.drainAndClose()
     }
+  })
+
+  it('swallows a DCS reply echo under every POSIX shape', () => {
+    for (const echoOf of [caretEcho, (reply: string) => reply]) {
+      const { ingress, writes, emissions } = harness()
+      expect(ingress.answerLiveQueryReply(XTVERSION_REPLY)).toBe(true)
+      expect(writes).toEqual([XTVERSION_REPLY])
+      ingress.accept(echoOf(XTVERSION_REPLY))
+      expect(visible(emissions), echoOf(XTVERSION_REPLY)).toBe('')
+      ingress.drainAndClose()
+    }
+  })
+
+  it('swallows the ESC-stripped ConPTY echo of an XTVERSION reply', () => {
+    const writes: string[] = []
+    const emissions: PtyIngressEmission[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'windows-conpty',
+      write: (data) => void writes.push(data),
+      onEmission: (emission) => void emissions.push(emission)
+    })
+
+    expect(ingress.answerLiveQueryReply(XTVERSION_REPLY)).toBe(true)
+    expect(writes).toEqual([XTVERSION_REPLY])
+    ingress.accept(XTVERSION_REPLY.replaceAll('\x1b', ''))
+    expect(visible(emissions)).toBe('')
+    ingress.drainAndClose()
   })
 
   it('never holds a partial verbatim echo, so a torn query is still answered', () => {
@@ -147,7 +213,14 @@ describe('live query replies', () => {
     // CPR and DA1 need no echo containment, so the delivery declines them and the host
     // writes them itself — which is what keeps them behind the daemon's post-ready flush
     // gate instead of splicing into a buffered startup command.
-    for (const reply of [CPR_REPLY, DA1_REPLY, OSC_COLOR_REPLY + DA1_REPLY]) {
+    for (const reply of [
+      CPR_REPLY,
+      DA1_REPLY,
+      OSC_COLOR_REPLY + DA1_REPLY,
+      XTVERSION_REPLY + DA1_REPLY,
+      XTVERSION_REPLY.slice(0, -2),
+      '>|xterm.js(6.1.0-beta.287)'
+    ]) {
       expect(ingress.answerLiveQueryReply(reply)).toBe(false)
     }
     expect(writes).toEqual([])

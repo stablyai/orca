@@ -427,17 +427,38 @@ describe('Session', () => {
       expect(subprocess.written).toEqual(['first\n', 'second\n'])
     })
 
-    it('contains live color replies without releasing queued startup input', async () => {
-      const reply = '\x1b[?997;1n'
+    it.each([
+      ['color on POSIX', 'posix-pty', '\x1b[?997;1n'],
+      ['XTVERSION on POSIX', 'posix-pty', '\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\'],
+      ['XTVERSION on ConPTY', 'windows-conpty', '\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\'],
+      ['XTVERSION on WSL', 'windows-wsl', '\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\']
+    ] as const)(
+      'contains live %s replies without releasing queued startup input',
+      async (_name, ownerBackend, reply) => {
+        createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100, ownerBackend })
+        session.write('codex\n')
+
+        session.write(reply)
+        await vi.advanceTimersByTimeAsync(0)
+        expect(subprocess.written).toEqual([reply])
+
+        await vi.advanceTimersByTimeAsync(100)
+        expect(subprocess.written).toEqual([reply, 'codex\n'])
+      }
+    )
+
+    it('does not queue a failed live XTVERSION reply behind startup input', async () => {
+      const reply = '\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\'
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
       session.write('codex\n')
+      vi.spyOn(subprocess, 'write').mockImplementationOnce(() => {
+        throw new Error('EIO')
+      })
 
       session.write(reply)
-      await vi.advanceTimersByTimeAsync(0)
-      expect(subprocess.written).toEqual([reply])
-
       await vi.advanceTimersByTimeAsync(100)
-      expect(subprocess.written).toEqual([reply, 'codex\n'])
+
+      expect(subprocess.written).toEqual(['codex\n'])
     })
 
     it('uses the short settle path when marker and prompt bytes arrive together', () => {

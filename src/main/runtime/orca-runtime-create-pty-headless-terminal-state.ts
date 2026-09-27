@@ -40,11 +40,8 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
           ) {
             return
           }
-          // Why this write is safe pre-shell-ready: daemon Session.write
-          // QUEUES (never drops) input while the POSIX shell-ready gate is
-          // pending and flushes at the ready marker or the 15s
-          // SHELL_READY_TIMEOUT_MS bound (session.ts) — a spawn-time query
-          // reply is delayed at most that bound, not lost.
+          // Why this is safe pre-shell-ready: provider-side startup ingress sends
+          // echo-risk replies immediately while the launch command remains gated.
           this.ptyController?.write(ptyId, reply)
         }
       }
