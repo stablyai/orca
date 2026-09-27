@@ -53,6 +53,7 @@ import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
+import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -78,6 +79,7 @@ export function NativeChatResolvedView({
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
   const keybindings = useAppStore((s) => s.keybindings)
+  const imageRuntimeContext = useNativeChatImageRuntimeContext(terminalTabId)
   const session = useNativeChatRetainedSession({
     paneKey,
     agent,
@@ -409,6 +411,7 @@ export function NativeChatResolvedView({
             onLinkClick={onLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             failedDeliveryMessageIds={failedLaunchPromptMessageIds}
+            runtimeContext={imageRuntimeContext}
           />
         )}
       </div>
