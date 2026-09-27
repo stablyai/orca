@@ -132,6 +132,13 @@ test.describe('Native chat transcript anchoring', () => {
 
     try {
       await enableNativeChatSetting(orcaPage)
+      // This anchor scenario covers the supported manual-paging fallback; auto-paging is unit-covered.
+      await orcaPage.evaluate(() => {
+        Object.defineProperty(window, 'IntersectionObserver', {
+          value: undefined,
+          configurable: true
+        })
+      })
       await seedClaudeProviderSession(orcaPage, {
         paneKey: descriptor.paneKey,
         worktreeId: descriptor.worktreeId,
