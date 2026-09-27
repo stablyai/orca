@@ -153,6 +153,9 @@ export type AgentStatusSlice = {
   /** Capture resumable agent sessions across every worktree for crash recovery or quit; mode sets live/quit precedence. */
   captureAllSleepingAgentSessions: (mode: AllAgentSessionCaptureMode) => void
   clearSleepingAgentSession: (paneKey: string) => void
+  /** Flags records as pointing at an agent that exited to its shell, leaving the
+   *  record itself in place; see SleepingAgentSessionRecord.agentExited. */
+  markSleepingAgentSessionsAgentExited: (paneKeys: readonly string[]) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void

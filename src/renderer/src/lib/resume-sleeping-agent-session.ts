@@ -280,6 +280,11 @@ export function resumeSleepingAgentSessionsForWorktree(
       continue
     }
     const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)
+    if (record.agentExited === true) {
+      // Why: see SleepingAgentSessionRecord.agentExited — the agent behind this
+      // record exited to its shell, so activation must not launch it again.
+      continue
+    }
     if (isPassiveCompletedHibernationEvidence(record)) {
       // Why: completed-agent hibernation is passive history; activation should
       // only keep displayable evidence, never start new work from it.
