@@ -59,6 +59,13 @@ export function sshRouteError(
       stages
     )
   }
+  if (message.includes('SSH_AUTH_FAILED')) {
+    return new ConnectionRouteError(
+      'SSH server rejected the credentials. Check the username, password or private key.',
+      false,
+      stages
+    )
+  }
   if (message.includes('SSH_CONFIG_INVALID') || message.includes('SSH_CREDENTIAL_MISSING')) {
     return new ConnectionRouteError('SSH connection settings are incomplete.', false, stages)
   }

@@ -216,7 +216,7 @@ export default function SshConnectionScreen() {
     }
   }
 
-  async function remove() {
+  async function performDelete() {
     if (!profile) {
       return
     }
@@ -225,6 +225,35 @@ export default function SshConnectionScreen() {
     if (mounted.current) {
       router.back()
     }
+  }
+
+  async function remove() {
+    if (!profile) {
+      return
+    }
+    const dependents = profiles.filter((entry) => entry.jumpProfileId === profile.id)
+    if (dependents.length > 0) {
+      const names = dependents.map((entry) => entry.name).join(', ')
+      await new Promise<void>((resolve) => {
+        Alert.alert(
+          'Delete SSH connection?',
+          `${names} use it as their jump host and will connect directly afterwards.`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve() },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: () => {
+                resolve()
+                void performDelete()
+              }
+            }
+          ]
+        )
+      })
+      return
+    }
+    await performDelete()
   }
 
   return (

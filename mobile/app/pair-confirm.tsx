@@ -161,7 +161,7 @@ export default function PairConfirmScreen() {
       // pairing would keep the stale endpoint/relay. Close it so the
       // Refresh any cached client from the newly persisted pairing profile.
       refreshHostClient(hostId)
-      void clearRecalledPairingCode().catch(() => {})
+      await clearRecalledPairingCode().catch(() => {})
       const onboardingSteps = await loadMobileOnboardingSteps()
       if (!mountedRef.current) {
         return

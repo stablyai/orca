@@ -102,6 +102,26 @@ export default function EditHostScreen() {
     (nameChanged || endpointChanged) &&
     !saving
 
+  function clearRoute() {
+    if (savingRef.current || !host) {
+      return
+    }
+    setSaving(true)
+    savingRef.current = true
+    void updateHostConnectionRoute(host.id, null)
+      .then(() => {
+        refreshHostClient(host.id)
+        setHost((value) => (value ? { ...value, connectionRoute: undefined } : value))
+      })
+      .catch((reason: unknown) => {
+        setSaveError(reason instanceof Error ? reason.message : 'Cannot clear the SSH connection.')
+      })
+      .finally(() => {
+        savingRef.current = false
+        setSaving(false)
+      })
+  }
+
   async function handleSave() {
     if (!host || !hostId || !endpointEdit || savingRef.current) {
       return
@@ -232,26 +252,7 @@ export default function EditHostScreen() {
                 style={styles.secondaryButton}
                 accessibilityRole="button"
                 disabled={saving}
-                onPress={() => {
-                  setSaving(true)
-                  savingRef.current = true
-                  void updateHostConnectionRoute(host.id, null)
-                    .then(() => {
-                      refreshHostClient(host.id)
-                      setHost((value) => (value ? { ...value, connectionRoute: undefined } : value))
-                    })
-                    .catch((reason: unknown) => {
-                      setSaveError(
-                        reason instanceof Error
-                          ? reason.message
-                          : 'Cannot clear the SSH connection.'
-                      )
-                    })
-                    .finally(() => {
-                      savingRef.current = false
-                      setSaving(false)
-                    })
-                }}
+                onPress={() => clearRoute()}
               >
                 <Text style={styles.secondaryButtonText}>Use direct connection instead</Text>
               </Pressable>

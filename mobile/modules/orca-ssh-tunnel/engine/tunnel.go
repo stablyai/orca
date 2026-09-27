@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,6 +70,11 @@ func (t *Tunnel) Probe(raw string) (string, error) {
 		return errors.New("SSH_PROBE_COMPLETE")
 	}, func(_ string, _ net.Addr, key ssh.PublicKey) error {
 		result.JumpFingerprint = ssh.FingerprintSHA256(key)
+		// Why: the jump handshake authenticates with saved credentials, so its
+		// key must match the saved fingerprint before any secret is sent.
+		if result.JumpFingerprint != c.Jump.HostKeyFingerprint {
+			return errors.New("SSH_HOST_KEY_MISMATCH")
+		}
 		return nil
 	}, func(string, string) {})
 	if result.Fingerprint != "" {
@@ -228,6 +234,11 @@ func (t *Tunnel) handshake(c configuration, auth []ssh.AuthMethod, verifyTarget,
 		if err != nil {
 			if t.ctx.Err() != nil {
 				return nil, errors.New("SSH_CANCELLED")
+			}
+			// The host-key callback error is wrapped, so surface the mismatch
+			// code rather than a generic jump handshake failure.
+			if strings.Contains(err.Error(), "SSH_HOST_KEY_MISMATCH") {
+				return nil, errors.New("SSH_HOST_KEY_MISMATCH")
 			}
 			var authError *ssh.ServerAuthError
 			if errors.As(err, &authError) {

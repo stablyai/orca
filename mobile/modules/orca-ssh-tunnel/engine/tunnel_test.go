@@ -249,8 +249,9 @@ func TestEncryptedPrivateKey(t *testing.T) {
 	c.Passphrase = "passphrase"
 	tunnel := NewTunnel()
 	defer tunnel.Close()
-	if _, err := tunnel.Open(encode(c)); err != nil {
-		t.Fatal(err)
+	openTunnel(t, tunnel, encode(c))
+	if server.authCalls.Load() == 0 {
+		t.Fatal("encrypted key never authenticated")
 	}
 	c.Passphrase = "wrong"
 	if failure, _ := openFailure(t, NewTunnel(), encode(c)); failure != "SSH_KEY_INVALID" {
@@ -521,5 +522,23 @@ func TestProxyJumpUnreachableTargetFailsDistinctly(t *testing.T) {
 	}
 	if !codes["jump-dial"] || !codes["jump-authenticated"] || !codes["jump-resolve"] || !codes["failed"] {
 		t.Fatal("failure stage log incomplete", stages)
+	}
+}
+
+func TestProxyJumpProbeRejectsJumpKeyMismatchBeforeAuth(t *testing.T) {
+	target := newTestServer(t)
+	jump := newTestServer(t)
+	jump.handleChannels = jump.dialWhereverChannels
+	c := target.config()
+	c.Jump = &jumpConfiguration{
+		Host: "127.0.0.1", Port: jump.listener.Addr().(*net.TCPAddr).Port, Username: "test",
+		HostKeyFingerprint: "SHA256:wrong", Password: "test-password",
+	}
+	_, err := NewTunnel().Probe(encode(c))
+	if err == nil || !strings.Contains(err.Error(), "SSH_HOST_KEY_MISMATCH") {
+		t.Fatalf("mismatched jump probe accepted: %v", err)
+	}
+	if jump.authCalls.Load() != 0 {
+		t.Fatal("jump probe sent credentials to a mismatched key")
 	}
 }

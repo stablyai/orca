@@ -37,6 +37,7 @@ export async function writeSshRouteCredentials(
   if (count > MAX_CHUNKS) {
     throw new Error('SSH credential is too large')
   }
+  const previousCount = await chunkCount(id).catch(() => 0)
   await writePairingKeychainItem(key(id), String(count))
   try {
     for (let i = 0; i < count; i++) {
@@ -48,6 +49,12 @@ export async function writeSshRouteCredentials(
   } catch (error) {
     await deleteSshRouteCredentials(id).catch(() => {})
     throw error
+  } finally {
+    // Why: a shorter replacement leaves higher-numbered chunks of the old
+    // secret behind; sweep them so deletion never retains residue.
+    for (let i = count; i < previousCount; i++) {
+      await deletePairingKeychainItem(`${key(id)}.${i}`).catch(() => {})
+    }
   }
 }
 
