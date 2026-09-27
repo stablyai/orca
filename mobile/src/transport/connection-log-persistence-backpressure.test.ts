@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createConnectionLogStore } from './connection-log-buffer'
 import type { ConnectionLogEntry } from './types'
 
@@ -85,7 +85,7 @@ describe('connection log persistence backpressure', () => {
     expect(saved.at(-1)).toEqual(['a', ['1', '2']])
   })
 
-  it('saves the latest snapshot after an older in-flight revision exhausts its retries', async () => {
+  it('saves the latest snapshot after an older in-flight revision fails', async () => {
     let rejectSave: (error: Error) => void = () => {}
     let failing = false
     let persisted: readonly ConnectionLogEntry[] = []
@@ -118,7 +118,7 @@ describe('connection log persistence backpressure', () => {
     await drainMicrotasks()
     rejectSave(new Error('storage unavailable'))
     await drainMicrotasks()
-    expect(saved).toEqual([['1'], ['1'], ['2', '3']])
+    expect(saved).toEqual([['1'], ['2', '3']])
     const reloaded = createConnectionLogStore(2, persistence)
     await reloaded.hydrate('a')
     expect(reloaded.get('a')).toEqual(store.get('a'))
@@ -153,38 +153,114 @@ describe('connection log persistence backpressure', () => {
     }
   )
 
-  it('keeps retry opportunities from superseded snapshots until the newest one is durable', async () => {
+  it('attempts the newest snapshot instead of replaying superseded ones', async () => {
     let release: () => void = () => {}
-    let attempts = 0
-    let failThrough = 0
-    let durableIds: string[] = []
+    let hold = false
+    let failing = false
+    const attempted: string[][] = []
     const store = createConnectionLogStore(2, {
       load: async () => [],
       save: async (_host, entries) => {
-        const attempt = ++attempts
-        if (attempt === 1 && failThrough > 0) {
+        attempted.push(entries.map((item) => item.id))
+        if (hold) {
+          hold = false
           await new Promise<void>((resolve) => {
             release = resolve
           })
         }
-        if (attempt <= failThrough) {
+        if (failing) {
           throw new Error('storage temporarily unavailable')
+        }
+      }
+    })
+    await store.hydrate('a')
+    await drainMicrotasks()
+    attempted.length = 0
+    hold = true
+    failing = true
+    for (let i = 1; i <= 3; i++) {
+      store.append('a', entry(i))
+      await drainMicrotasks()
+    }
+    expect(attempted).toEqual([['1']])
+    release()
+    await drainMicrotasks()
+    // The superseded ['1'] snapshot is never replayed; only the newest one is attempted.
+    expect(attempted).toEqual([['1'], ['2', '3']])
+  })
+
+  it('bounds writes when a long stall unblocks against failing storage', async () => {
+    vi.useFakeTimers()
+    try {
+      let release: () => void = () => {}
+      let hold = false
+      let failing = false
+      let writes = 0
+      const store = createConnectionLogStore(200, {
+        load: async () => [],
+        save: async () => {
+          writes += 1
+          if (hold) {
+            hold = false
+            await new Promise<void>((resolve) => {
+              release = resolve
+            })
+          }
+          if (failing) {
+            throw new Error('storage unavailable')
+          }
+        }
+      })
+      await store.hydrate('a')
+      await drainMicrotasks()
+      writes = 0
+      hold = true
+      failing = true
+      for (let i = 0; i < 500; i++) {
+        store.append('a', entry(i))
+        await drainMicrotasks()
+      }
+      expect(writes).toBe(1)
+      release()
+      for (let i = 0; i < 20; i++) {
+        await drainMicrotasks()
+      }
+      // 500 stalled appends cost the held write plus one attempt at the newest snapshot.
+      expect(writes).toBe(2)
+      await vi.advanceTimersByTimeAsync(5_000)
+      // Draining the backoff adds that snapshot's single retry and nothing more.
+      expect(writes).toBe(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('flush persists the newest snapshot after a failed save and a quiet log', async () => {
+    let failing = true
+    let durableIds: string[] = []
+    let writes = 0
+    const store = createConnectionLogStore(200, {
+      load: async () => [],
+      save: async (_host, entries) => {
+        writes += 1
+        if (failing) {
+          throw new Error('storage unavailable')
         }
         durableIds = entries.map((item) => item.id)
       }
     })
     await store.hydrate('a')
     await drainMicrotasks()
-    attempts = 0
-    failThrough = 4
-    for (let i = 1; i <= 3; i++) {
-      store.append('a', entry(i))
-      await drainMicrotasks()
-    }
-    expect(attempts).toBe(1)
-    release()
+    store.append('a', entry(1))
+    store.append('a', entry(2))
     await drainMicrotasks()
-    expect(attempts).toBe(5)
-    expect(durableIds).toEqual(['2', '3'])
+    expect(durableIds).toEqual([])
+    failing = false
+    writes = 0
+    await store.flush()
+    expect(durableIds).toEqual(['1', '2'])
+    expect(writes).toBe(1)
+    await store.flush()
+    expect(writes).toBe(1)
   })
 })

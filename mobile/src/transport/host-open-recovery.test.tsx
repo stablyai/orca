@@ -31,6 +31,9 @@ vi.mock('./connection-revival-triggers', () => ({
     }
   }
 }))
+vi.mock('./connection-log-background-flush', () => ({
+  subscribeConnectionLogBackgroundFlush: () => () => {}
+}))
 
 import {
   useDisconnectHostClient,

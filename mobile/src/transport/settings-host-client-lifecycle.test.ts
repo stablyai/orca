@@ -44,6 +44,9 @@ vi.mock('./host-store', () => ({
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
 }))
+vi.mock('./connection-log-background-flush', () => ({
+  subscribeConnectionLogBackgroundFlush: () => () => {}
+}))
 
 type FakeClient = RpcClient & {
   closeMock: ReturnType<typeof vi.fn>
