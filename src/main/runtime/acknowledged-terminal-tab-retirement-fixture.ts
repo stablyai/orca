@@ -5,6 +5,8 @@ import { vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { RuntimeSyncWindowGraph } from '../../shared/runtime-types'
 import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
+import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
+import { DelayedAuthority } from '../persistence/loading-store/profile-state-delayed-authority-fixture'
 import { Store } from '../persistence/loading-store/store'
 import { OrcaRuntimeService } from './orca-runtime'
 import { buildHeadlessMobileSessionTerminalTabs } from './mobile-session-terminal-projection'
@@ -28,7 +30,13 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 
 export function createAcknowledgedTabRetirementFixture(bound = false) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-close-ack-'))
-  const store = new Store({ dataFile: join(directory, 'orca-data.json') })
+  const authority = new DelayedAuthority(
+    new ProfileStateSqliteAuthority(join(directory, 'profile-state.db'), 'ack-retirement')
+  )
+  const store = new Store({
+    dataFile: join(directory, 'orca-data.json'),
+    profileStateAuthority: authority
+  })
   store.addRepo({
     id: 'repo1',
     path: '/tmp/worktree',
@@ -150,7 +158,7 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
       ACK_TAB
     )
     store.setWorkspaceSession({ ...closed.session, terminalTopologyRevisionByRepoId: undefined })
-    store.flushOrThrow()
+    await store.flushPendingOrThrowAsync()
     entered.resolve()
     await acknowledgement.promise
   })
@@ -171,6 +179,7 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
   return {
     runtime,
     store,
+    authority,
     entered,
     acknowledgement,
     closeTerminalTab,
@@ -182,9 +191,8 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
     dispose: async () => {
       runtime.setNotifier(null)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
-      store.flush()
-      store.freezeWrites()
-      await store.waitForPendingWrite()
+      await store.flushPendingOrThrowAsync()
+      await store.freezeWritesAsync()
       setRuntimeDesktopSurface(null)
       rmSync(directory, { recursive: true, force: true })
     }

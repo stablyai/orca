@@ -338,3 +338,46 @@ describe('structuredAgentTurnLocalStartedAt with the host clock', () => {
     expect(structuredAgentTurnLocalStartedAt(timing, 3_600_000, 40_000)).toBe(3_600_000)
   })
 })
+
+describe('a rejected send', () => {
+  const rejected = (clientMessageId: string) => ({
+    clientMessageId,
+    fence: 5,
+    payloadFingerprint: 'fp',
+    dispatchState: 'rejected' as const,
+    providerItemId: null,
+    reason: 'provider_write_failed: claude: not signed in',
+    submittedAt: 1,
+    resolvedAt: 2
+  })
+
+  // The local clock saw the send go pending and stop, which would read as "Worked for 0s"; the
+  // host says the provider never got the message, so no turn ran and nothing may fold under it.
+  it('opened no turn, whatever the local clock observed', () => {
+    const settled = selectStructuredAgentSettledTurns([user('orca:dead')], [rejected('dead')])
+    expect(settled.get('orca:dead')).toBeNull()
+
+    const statuses = selectNativeChatTurnStatuses(
+      { 'orca:dead': { startedAt: 900, workedSeconds: 0 } },
+      { activeTurnKey: 'orca:dead', isWorking: false, thinking: false, settledByTurn: settled }
+    )
+    expect(statuses.completedByTurn['orca:dead']).toBeUndefined()
+    expect(statuses.active).toBeNull()
+  })
+
+  it('keeps the duration of a turn the journal does record for it', () => {
+    const settled = selectStructuredAgentSettledTurns(
+      [
+        user('orca:ran'),
+        lifecycle('t1', {
+          state: 'interrupted',
+          userItemId: 'orca:ran',
+          startedAt: 10_000,
+          completedAt: 14_000
+        })
+      ],
+      [rejected('ran')]
+    )
+    expect(settled.get('orca:ran')).toEqual({ startedAt: 10_000, workedSeconds: 4 })
+  })
+})

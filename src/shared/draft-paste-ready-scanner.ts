@@ -19,6 +19,12 @@ const DECTCEM_SHOW_CURSOR = '\x1b[?25h'
 // grok swaps it for `> ` on legacy Windows consoles, which is too generic to
 // match; those fall back to the quiet window and the caller's hard timeout.
 const GROK_COMPOSER_PROMPT = '❯'
+// Why: ZCode's composer box top-left corner (U+256D), painted once the input box mounts.
+// It is locale-independent — ZCode translates the placeholder and the mode label in the
+// box title, but not the frame — and its modal dialogs draw SQUARE corners, so this glyph
+// means the composer specifically. Anchored on the alternate-screen switch for the same
+// reason as grok: a powerline shell prompt can also draw `╭`.
+const ZCODE_COMPOSER_BOX_CORNER = '╭'
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
@@ -59,6 +65,15 @@ const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySi
     // `[ui] screen_mode = "minimal"`), where 1049h never arrives — anchoring the
     // fallback there too would leave the draft with no delivery path at all, and
     // the main-process caller drops the draft when readiness never resolves.
+    quietAnchor: DECSET_BRACKETED_PASTE
+  },
+  'zcode-composer-prompt': {
+    markerAnchor: DECSET_ALT_SCREEN,
+    markerAnchorEnd: DECRST_ALT_SCREEN,
+    marker: ZCODE_COMPOSER_BOX_CORNER,
+    // Why: ZCode animates its ASCII banner forever, so the quiet window never settles on
+    // its own — but keep it armed as the floor for a build that renders inline and never
+    // switches to the alternate screen, where the marker anchor would never arm.
     quietAnchor: DECSET_BRACKETED_PASTE
   },
   'render-quiet-after-bracketed-paste': {
@@ -111,6 +126,12 @@ export type DraftPasteReadyScanResult = {
  *     that keeps those launches on the pre-existing delivery path. The alt-screen
  *     anchor is revoked on `\x1b[?1049l`: leaving it hands the terminal back to
  *     the shell, so a glyph after that is the shell's prompt, not grok's composer.
+ *   - `zcode-composer-prompt`: ready when ZCode's composer box corner (`╭`) renders
+ *     after the alternate-screen switch. ZCode repaints its animated ASCII banner
+ *     indefinitely — the captured transcript is still repainting 30s after the composer
+ *     mounted — so the quiet window alone never settles and a launch draft would wait out
+ *     the whole hard timeout, exactly as grok did. Same alt-screen anchoring and
+ *     revocation as grok, because a powerline shell prompt can draw `╭` too.
  *   - `render-quiet-after-bracketed-paste` (default): no signal marker; arms the
  *     quiet window once DECSET 2004 is seen.
  *

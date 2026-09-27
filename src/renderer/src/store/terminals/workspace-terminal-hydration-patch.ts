@@ -174,6 +174,11 @@ export function targetScopedWorkspaceHydrationPatch(
       hydrated.activeTabIdByWorktree,
       workspaceKeys
     ),
+    pendingDirectSshLayoutEditsByTabId: Object.fromEntries(
+      Object.entries(state.pendingDirectSshLayoutEditsByTabId ?? {}).filter(
+        ([tabId]) => !deletedTargetTabIds.has(tabId)
+      )
+    ),
     tabsByWorktree: replaceHydratedRecordKeys(
       state.tabsByWorktree,
       hydrated.tabsByWorktree,

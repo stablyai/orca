@@ -56,9 +56,11 @@ export function createStore(settings: GlobalSettings) {
       return settings
     }),
     getCodexResetCreditAttemptLedger: vi.fn(() => structuredClone(resetLedger)),
-    replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn((next: CodexResetCreditAttemptLedger) => {
-      resetLedger = structuredClone(next)
-    })
+    replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn(
+      async (next: CodexResetCreditAttemptLedger) => {
+        resetLedger = structuredClone(next)
+      }
+    )
   }
 }
 

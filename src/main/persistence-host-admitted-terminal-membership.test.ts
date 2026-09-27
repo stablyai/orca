@@ -1,3 +1,9 @@
+import {
+  closeTestStores,
+  createStore,
+  makeTerminalTab,
+  testState
+} from './persistence-test-harness'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,7 +12,6 @@ import { getDefaultWorkspaceSession } from '../shared/constants'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import { retireTerminalSurfaceFromPersistence } from './runtime/mobile-session-terminal-persistence-retirement'
 import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
-import { createStore, makeTerminalTab, testState } from './persistence-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -47,7 +52,8 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-host-membership-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -57,7 +63,7 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
 
     // `orca terminal create`: the host mints a tab the renderer has never seen.
     expect(
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId: WORKTREE,
         tabId: 'host-tab',
         leafId: TEST_LEAF_2,
@@ -77,7 +83,7 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
     const store = await createStore()
     store.setWorkspaceSession(rendererSession())
 
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: OTHER_WORKTREE,
       tabId: 'host-tab-other',
       leafId: TEST_LEAF_2,
@@ -94,7 +100,7 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
     store.setWorkspaceSession(rendererSession())
 
     expect(
-      store.persistPtyBinding({
+      await store.persistPtyBinding({
         worktreeId: WORKTREE,
         tabId: 'host-tab',
         leafId: TEST_LEAF_2,
@@ -118,7 +124,7 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
     const store = await createStore()
     store.setWorkspaceSession(rendererSession())
 
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: WORKTREE,
       tabId: 'renderer-second-tab',
       leafId: TEST_LEAF_2,
@@ -135,7 +141,7 @@ describe('host-admitted terminal membership survives a stale renderer replay', (
   it('still lets the authoritative retirement path close the host-admitted tab', async () => {
     const store = await createStore()
     store.setWorkspaceSession(rendererSession())
-    store.persistPtyBinding({
+    await store.persistPtyBinding({
       worktreeId: WORKTREE,
       tabId: 'host-tab',
       leafId: TEST_LEAF_2,

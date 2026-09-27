@@ -579,6 +579,15 @@ describe('launch inputs that cross the wire', () => {
     expect(terminalOptions(runtime)).not.toHaveProperty('telemetry')
   })
 
+  it('keeps a structured preference when the cwd names the workspace root', async () => {
+    // The scope the handler resolves for the target carries the root the fixture reports.
+    const runtime = runtimeStub({})
+    const result = await launch({ ...EXISTING_LAUNCH, cwd: '/tmp/wt-7/' }, runtime)
+
+    expect(result.outcome.kind).toBe('structured')
+    expect(result.receipt).toMatchObject({ mode: 'structured' })
+  })
+
   it('routes a structured preference to a terminal when the launch names a cwd', async () => {
     const runtime = runtimeStub({})
     const result = await launch({ ...EXISTING_LAUNCH, cwd: '/repo/packages/api' }, runtime)
@@ -586,5 +595,19 @@ describe('launch inputs that cross the wire', () => {
     expect(result.outcome).toEqual({ kind: 'terminal', handle: 'term_1' })
     expect(result.receipt).toMatchObject({ preferred: 'structured', reason: 'tui_launch_command' })
     expect(createStructuredSession).not.toHaveBeenCalled()
+  })
+
+  it('ignores a caller-supplied root, so a subdirectory cannot claim to be one', async () => {
+    const runtime = runtimeStub({})
+    const result = await launch(
+      {
+        ...EXISTING_LAUNCH,
+        target: { ...EXISTING_LAUNCH.target, workspacePath: '/repo/packages/api' },
+        cwd: '/repo/packages/api'
+      },
+      runtime
+    )
+
+    expect(result.receipt).toMatchObject({ mode: 'terminal', reason: 'tui_launch_command' })
   })
 })

@@ -4,7 +4,9 @@ import type { ConnectionState } from './types'
 import { hostStatusProbe, readHostStatusGates } from './host-status-probe-operations'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
 import type { HostStatusReply } from './host-status-reply-schema'
-import { normalizeHostAppVersion, recordHostAppVersion } from './host-app-version-store'
+import { normalizeHostAppVersion } from './host-app-version'
+import { recordHostAppVersion } from './host-app-version-store'
+import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
 
 export type HostStatusGates = {
   hostCapabilities: string[]
@@ -93,6 +95,11 @@ export function useHostStatusGates(args: {
         const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
         if (hostId && desktopAppVersion) {
           void recordHostAppVersion(hostId, desktopAppVersion)
+        }
+        if (hostId) {
+          // Why also here: the web page never runs the connection layer's probe, and the host
+          // screen should not wait for it; the recorder is idempotent across the two feeds.
+          recordHostDescriptorFromStatus(hostId, status)
         }
         settle({
           hostCapabilities: status.capabilities ?? [],

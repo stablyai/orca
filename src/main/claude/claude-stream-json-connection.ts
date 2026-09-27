@@ -7,6 +7,7 @@ import {
   markClaudeStructuredChildSpawned
 } from '../claude-accounts/live-pty-gate'
 import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
+import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
 import {
   ClaudeControlRequestError,
   createClaudeControlSurface,
@@ -121,7 +122,12 @@ export async function openClaudeStreamJsonConnection(
       cwd: launch.cwd,
       // Why env is never omitted: the SDK inherits process.env when it is, which is
       // exactly the ambient ANTHROPIC_* auth leak this lane already shipped once.
-      env: buildClaudeChildProcessEnv(launch.env, { scrubConfiguredChildSessionStamps: true }),
+      // Orca's own CLAUDE_CONFIG_DIR is dropped for the same reason the launch drops the
+      // shell's: the record's pin in `launch.env` must be the only home the child sees.
+      env: buildClaudeChildProcessEnv(launch.env, {
+        inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
+        scrubConfiguredChildSessionStamps: true
+      }),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
       ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),
@@ -309,6 +315,11 @@ export async function openClaudeStreamJsonConnection(
       })
       inbox.fail(new Error('claude stream-json connection closed'))
       if (!proven) {
+        if (exited && tree.treeVerdict === 'live') {
+          console.warn('[claude-stream-json] root exited but a descendant survived the close:', {
+            pid: spawner.pid
+          })
+        }
         closePromise = null
         return false
       }

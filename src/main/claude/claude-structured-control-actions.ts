@@ -1,4 +1,5 @@
-import { applyClaudePromptAnswer, type ClaudePromptClaim } from './claude-structured-prompt-replies'
+import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
+import type { ClaudePromptClaim } from './claude-structured-prompt-replies'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
 import {
   settleCancelledClaudeDispatchWaiters,
@@ -83,17 +84,12 @@ export async function stopClaudeBackgroundTasks(
 export async function answerClaudePrompt(
   session: ClaudeSession,
   claim: ClaudePromptClaim,
-  optionId: string
+  reply: PermissionResult
 ): Promise<void> {
   if (!session.prompts.ownsClaim(claim)) {
     throw new Error(`claude is no longer waiting on ${claim.itemId}`)
   }
-  const response = applyClaudePromptAnswer(claim.found, optionId)
-  if (response === null) {
-    session.prompts.releaseClaim(claim)
-    return
-  }
   session.prompts.forget(claim.found.prompt)
-  claim.found.prompt.settle(response)
+  claim.found.prompt.settle(reply)
   session.translator?.journalPrompts.resolve(claim.found.prompt.promptKey)
 }

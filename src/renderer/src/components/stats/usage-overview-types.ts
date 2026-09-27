@@ -13,8 +13,13 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
+import type {
+  MuseUsageDailyPoint,
+  MuseUsageScanState,
+  MuseUsageSummary
+} from '../../../../shared/muse-usage-types'
 
-export type UsageProviderId = 'claude' | 'codex' | 'opencode'
+export type UsageProviderId = 'claude' | 'codex' | 'opencode' | 'muse'
 
 export type UsageProviderOverview = {
   id: UsageProviderId
@@ -46,6 +51,7 @@ export type UsageOverviewDailyPoint = {
   claudeTokens: number
   codexTokens: number
   openCodeTokens: number
+  museTokens: number
   intensity: 0 | 1 | 2 | 3 | 4
 }
 
@@ -86,5 +92,10 @@ export type UsageOverviewInput = {
     scanState: OpenCodeUsageScanState | null
     summary: OpenCodeUsageSummary | null
     daily: OpenCodeUsageDailyPoint[]
+  }
+  muse: {
+    scanState: MuseUsageScanState | null
+    summary: MuseUsageSummary | null
+    daily: MuseUsageDailyPoint[]
   }
 }

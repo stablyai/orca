@@ -39,7 +39,13 @@ export type AgentLaunchPrompt = {
  */
 export type AgentLaunchTarget =
   /** A workspace that already exists, addressed by any selector the runtime resolves. */
-  | { kind: 'existing'; worktree: string }
+  | {
+      kind: 'existing'
+      worktree: string
+      /** The workspace root the host resolved for that selector. Host-set, never accepted from a
+       *  caller: it decides whether a requested `cwd` names the root or somewhere else. */
+      workspacePath?: string
+    }
   /** A worktree this launch creates. `create` is the `worktree.create` request minus its agent
    *  fields — the launch owns those, so a caller cannot set a startup agent behind the router. */
   | { kind: 'create-worktree'; create: Readonly<Record<string, unknown>> }
@@ -52,7 +58,8 @@ export type AgentLaunchIntent = {
   agent: TuiAgent
   target: AgentLaunchTarget
   prompt?: AgentLaunchPrompt
-  /** Seeded launch options, narrowed by the host to what a structured create accepts. */
+  /** Seeded launch options: narrowed to what a structured create accepts, and read as the model,
+   *  effort and mode preferences of a terminal launch. */
   sessionOptions?: Readonly<Record<string, unknown>>
   reuseTerminal?: AgentLaunchReusedTerminal
   /**
@@ -83,12 +90,45 @@ export type AgentLaunchIntent = {
    * it cannot know.
    */
   launchSource?: string
+  /** The `tabId:leafId` a terminal launch creates its pane under, for a caller that places its own
+   *  tabs. Not a route input; refused when that pane is already live. */
+  paneKey?: string
+  /** The caller-minted id of the chat session a structured launch creates. Not a route input;
+   *  refused when that session already exists. */
+  sessionId?: string
 }
 
 /** The surface the host actually created. */
 export type AgentLaunchOutcome =
-  | { kind: 'structured'; sessionId: string; handle: string }
-  | { kind: 'terminal'; handle: string }
+  | {
+      kind: 'structured'
+      sessionId: string
+      handle: string
+      /** The host-owned id of the tab that shows this chat: the tab half of the reserved `paneKey`
+       *  when one was sent, else the one the host gave its tab. Identity, not placement, like the
+       *  terminal arm's `paneKey`. Absent from hosts that predate it. */
+      tabId?: string
+    }
+  | {
+      kind: 'terminal'
+      handle: string
+      /**
+       * The pane the host minted for this agent, as `tabId:leafId` — read it with `parsePaneKey`.
+       *
+       * Identity, not placement. The host already mints this pair, bakes it into the PTY's
+       * environment and hands it to its own reveal; a client that draws its own tabs previously had
+       * no way to learn it, because a `term_*` handle is a main-side mapping the renderer cannot
+       * resolve. Where that pane goes — which group, what order, whether it takes focus — stays
+       * with the client and never rides this wire.
+       *
+       * One field rather than a `tabId`/`leafId` pair, because the key already carries both and two
+       * copies of one fact can disagree.
+       *
+       * Absent when this launch minted no pane, such as a reused terminal that was already running,
+       * or when the runtime could not report the pane it created.
+       */
+      paneKey?: string
+    }
 /**
  * What became of the launch text.
  *
@@ -210,15 +250,26 @@ function isAgentLaunchOutcome(value: unknown): value is AgentLaunchOutcome {
     return false
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the assertion claims only that the keys may be present and unknown, which is true of any object.
-  const outcome = value as { kind?: unknown; handle?: unknown; sessionId?: unknown }
+  const outcome = value as {
+    kind?: unknown
+    handle?: unknown
+    sessionId?: unknown
+    paneKey?: unknown
+    tabId?: unknown
+  }
   if (typeof outcome.handle !== 'string' || outcome.handle.length === 0) {
     return false
   }
   return outcome.kind === 'terminal'
-    ? true
+    ? // Checked when present, ignored when absent: a row written before this field existed, or by a
+      // runtime that minted no pane, still reads. Deliberately not parsed — a read-side shape rule
+      // stricter than the write side turns one odd row into a refused replay.
+      outcome.paneKey === undefined || typeof outcome.paneKey === 'string'
     : outcome.kind === 'structured' &&
         typeof outcome.sessionId === 'string' &&
-        outcome.sessionId.length > 0
+        outcome.sessionId.length > 0 &&
+        // Optional on the same terms as the terminal arm's `paneKey`.
+        (outcome.tabId === undefined || typeof outcome.tabId === 'string')
 }
 
 function isAgentLaunchModeReceipt(value: unknown): value is AgentLaunchModeReceipt {

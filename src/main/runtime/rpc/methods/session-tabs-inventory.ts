@@ -101,8 +101,9 @@ export async function subscribeSessionTabsInventory(
   const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
   const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
   const inventoryController = new AbortController()
-  const abortInventory = (): void => inventoryController.abort()
-  context.signal?.addEventListener('abort', abortInventory, { once: true })
+  // For the stream's whole life, not just the census: a desktop unsubscribe arrives as this abort.
+  const onTransportAbort = (): void => runtime.cleanupSubscription(subscriptionId)
+  context.signal?.addEventListener('abort', onTransportAbort, { once: true })
   let initialized = false
   let closed = false
   const bufferedChanges: { snapshot: SessionTabsChange; changeSequence: number }[] = []
@@ -223,6 +224,7 @@ export async function subscribeSessionTabsInventory(
     subscriptionId,
     () => {
       closed = true
+      context.signal?.removeEventListener('abort', onTransportAbort)
       inventoryController.abort()
       unsubscribe()
       clearBufferedChanges()
@@ -235,7 +237,6 @@ export async function subscribeSessionTabsInventory(
     connectionId
   )
   if (closed) {
-    context.signal?.removeEventListener('abort', abortInventory)
     return
   }
   let collected: Awaited<ReturnType<typeof collectSessionTabsInventory>> | undefined
@@ -261,8 +262,6 @@ export async function subscribeSessionTabsInventory(
   } catch (error) {
     runtime.cleanupSubscription(subscriptionId)
     throw error
-  } finally {
-    context.signal?.removeEventListener('abort', abortInventory)
   }
   if (closed) {
     return

@@ -1,7 +1,4 @@
-import {
-  isProvenDeadProbe,
-  type AgentSessionOwnerProbe
-} from '../../../shared/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   AGENT_SESSION_LEASE_TTL_MS,
@@ -22,8 +19,6 @@ export class StructuredAgentSessionLeaseRenewer {
         records: readonly AgentSessionRecord[]
       ) => Promise<Map<string, AgentSessionOwnerProbe>>
       now: () => number
-      onRenewed?: (record: AgentSessionRecord) => Promise<void>
-      onDeadTuiOwner?: (record: AgentSessionRecord, probe: AgentSessionOwnerProbe) => Promise<void>
       onError?: (input: { sessionId: string; error: unknown }) => void
       intervalMs?: number
     }
@@ -55,13 +50,9 @@ export class StructuredAgentSessionLeaseRenewer {
           !record.lease.unreconciled &&
           record.lease.claimStatus === 'live' &&
           record.lease.ownerProcess !== null &&
-          // A native record parked in recovery has no transport the host can vouch
-          // for; renewing it keeps an orphan pid's lease reading as a healthy owner.
-          !(
-            record.lease.runtimeKind === 'native' &&
-            (record.lease.handoffStage === 'recovering' ||
-              record.lease.handoffStage === 'manual-recovery')
-          )
+          // A record parked in recovery has no transport the host can vouch for; renewing it
+          // keeps an orphan pid's lease reading as a healthy owner.
+          record.lease.handoffStage !== 'recovering'
       )
       const probes = await this.probe(records)
       const renewals: {
@@ -76,18 +67,6 @@ export class StructuredAgentSessionLeaseRenewer {
         if (!probe) {
           continue
         }
-        if (
-          record.lease.runtimeKind === 'tui' &&
-          isProvenDeadProbe(probe) &&
-          this.input.onDeadTuiOwner
-        ) {
-          try {
-            await this.input.onDeadTuiOwner(record, probe)
-          } catch (error) {
-            this.input.onError?.({ sessionId: record.sessionId, error })
-          }
-          continue
-        }
         renewals.push({
           sessionId: record.sessionId,
           fence: record.lease.runtimeFence,
@@ -100,19 +79,10 @@ export class StructuredAgentSessionLeaseRenewer {
       let results: PromiseSettledResult<AgentSessionRecord>[]
       try {
         const renewed = await this.input.store.renewLeases(renewals)
-        await Promise.all(
-          renewed.map(async (record) => {
-            await this.input.onRenewed?.(record)
-          })
-        )
         results = renewed.map((record) => ({ status: 'fulfilled', value: record }) as const)
       } catch {
         results = await Promise.allSettled(
-          renewals.map(async (renewal) => {
-            const renewed = await this.input.store.renewLease(renewal)
-            await this.input.onRenewed?.(renewed)
-            return renewed
-          })
+          renewals.map((renewal) => this.input.store.renewLease(renewal))
         )
       }
       results.forEach((result, index) => {

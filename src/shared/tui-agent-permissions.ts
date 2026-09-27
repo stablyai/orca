@@ -20,6 +20,9 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   continue: '--allow "*"',
   cursor: '--yolo',
   kimi: '--yolo',
+  muse: '--yolo',
+  // Why: ZCode gates tools by collaboration mode; `yolo` is its bypass-everything mode.
+  zcode: '--mode yolo',
   'mistral-vibe': '--agent auto-approve',
   'qwen-code': '--approval-mode yolo',
   rovo: '--yolo',

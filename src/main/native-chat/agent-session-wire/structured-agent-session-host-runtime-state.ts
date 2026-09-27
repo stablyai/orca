@@ -16,8 +16,6 @@ export class StructuredAgentSessionHostRuntimeState {
 
   constructor(
     private readonly deps: StructuredAgentSessionHostDeps,
-    onLeaseRenewed?: (record: AgentSessionRecord) => Promise<void>,
-    onDeadTuiOwner?: (record: AgentSessionRecord, probe: AgentSessionOwnerProbe) => Promise<void>,
     onEventSinkFailure?: (sessionId: string, error: unknown) => void
   ) {
     this.onEventSinkFailure = onEventSinkFailure
@@ -26,8 +24,6 @@ export class StructuredAgentSessionHostRuntimeState {
       probe: (record) => this.probeRecord(record),
       ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
       now: () => deps.now?.() ?? Date.now(),
-      ...(onLeaseRenewed ? { onRenewed: onLeaseRenewed } : {}),
-      ...(onDeadTuiOwner ? { onDeadTuiOwner } : {}),
       // Lease/ownership failures are transient and stay on the visible lease-error path.
       // Only deferred sink I/O failures are terminal and may force-close a provider.
       onError: ({ sessionId, error }) => deps.onEventSinkError?.({ sessionId, error })
@@ -42,37 +38,56 @@ export class StructuredAgentSessionHostRuntimeState {
     this.leaseRenewer.stop()
   }
 
+  /** The sink the session's current child writes through, created on first use. */
   eventSinkFor(sessionId: string): DeferredStructuredAgentSessionEventSink {
-    const existing = this.eventSinks.get(sessionId)
+    const existing = this.currentEventSink(sessionId)
     if (existing) {
-      // A sink failure is terminal for that sink instance. Reusing it on a
-      // recovery attach makes `drained()` return the old error forever and
-      // prevents the newly acquired journal from accepting provider events.
-      // Replace the cache entry before attach calls its drain barrier.
-      if (existing.state().failed) {
-        existing.close()
-        this.eventSinks.delete(sessionId)
-      } else {
-        return existing
-      }
+      return existing
     }
-    const created = createDeferredStructuredAgentSessionEventSink({
-      onError: (error) => {
-        this.deps.onEventSinkError?.({ sessionId, error })
-        this.onEventSinkFailure?.(sessionId, error)
-      }
-    })
+    const created = this.mintEventSink(sessionId)
     this.eventSinks.set(sessionId, created)
     return created
   }
 
-  discardEventSink(sessionId: string): void {
-    this.eventSinks.delete(sessionId)
+  /** The session's sink, if it has a usable one. A failed sink is terminal: reusing it would make
+   *  `drained()` return the old error forever, so it is dropped here instead. */
+  currentEventSink(sessionId: string): DeferredStructuredAgentSessionEventSink | undefined {
+    const existing = this.eventSinks.get(sessionId)
+    if (existing?.state().failed) {
+      existing.close()
+      this.eventSinks.delete(sessionId)
+      return undefined
+    }
+    return existing
   }
 
-  hasPendingStreamedEvents(sessionId: string): boolean {
-    const state = this.eventSinks.get(sessionId)?.state()
-    return state !== undefined && (state.failed || state.queuedOperations > 0)
+  /** A sink owned by one attach attempt. Uncached until `adoptEventSink`, so an attempt that fails
+   *  takes its queue with it rather than leaving it for the next attach to drain. */
+  mintEventSink(sessionId: string): DeferredStructuredAgentSessionEventSink {
+    const minted: DeferredStructuredAgentSessionEventSink =
+      createDeferredStructuredAgentSessionEventSink({
+        onError: (error) => {
+          this.deps.onEventSinkError?.({ sessionId, error })
+          // Only the session's own sink may force its provider down; an attempt's never is.
+          if (this.eventSinks.get(sessionId) === minted) {
+            this.onEventSinkFailure?.(sessionId, error)
+          }
+        }
+      })
+    return minted
+  }
+
+  /** The attempt's sink now serves the session; the one it replaces is closed. */
+  adoptEventSink(sessionId: string, sink: DeferredStructuredAgentSessionEventSink): void {
+    const replaced = this.eventSinks.get(sessionId)
+    if (replaced && replaced !== sink) {
+      replaced.close()
+    }
+    this.eventSinks.set(sessionId, sink)
+  }
+
+  discardEventSink(sessionId: string): void {
+    this.eventSinks.delete(sessionId)
   }
 
   flushEventSink(sessionId: string): Promise<void> {

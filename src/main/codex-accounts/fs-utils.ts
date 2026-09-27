@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { copyFileSync, existsSync, linkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { rename } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { setTimeout } from 'node:timers/promises'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { nodeFileContentsEqualSync } from '../../shared/node-file-content-equality'
 
@@ -168,7 +170,7 @@ function assertHardLinkPublicationSupported(sourcePath: string, targetPath: stri
   }
 }
 
-function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
+export function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
   try {
     linkSync(sourcePath, targetPath)
     return true
@@ -201,25 +203,54 @@ export function renameFileWithWindowsRetry(source: string, target: string): void
   runFileOperationWithWindowsRetry(() => renameSync(source, target))
 }
 
+export async function renameFileWithWindowsRetryAsync(
+  source: string,
+  target: string,
+  isCurrent: () => boolean = () => true
+): Promise<boolean> {
+  for (let attempt = 1; ; attempt++) {
+    if (!isCurrent()) {
+      return false
+    }
+    try {
+      await rename(source, target)
+      return true
+    } catch (error) {
+      if (!shouldRetryFileOperation(error, attempt)) {
+        throw error
+      }
+      await setTimeout(attempt * 50)
+    }
+  }
+}
+
 export function copyFileWithWindowsRetry(source: string, target: string): void {
   runFileOperationWithWindowsRetry(() => copyFileSync(source, target))
 }
 
 function runFileOperationWithWindowsRetry(operation: () => void): void {
-  const maxAttempts = process.platform === 'win32' ? 6 : 1
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = 1; ; attempt++) {
     try {
       operation()
       return
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code
-      if (attempt < maxAttempts && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) {
+      if (shouldRetryFileOperation(error, attempt)) {
         sleepSync(attempt * 50)
         continue
       }
       throw error
     }
   }
+}
+
+function shouldRetryFileOperation(error: unknown, attempt: number): boolean {
+  return (
+    process.platform === 'win32' &&
+    attempt < 6 &&
+    error instanceof Error &&
+    'code' in error &&
+    (error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY')
+  )
 }
 
 // Why: writeFileAtomically is a sync API called from sync paths, so the retry

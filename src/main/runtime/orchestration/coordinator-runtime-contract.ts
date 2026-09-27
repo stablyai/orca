@@ -1,3 +1,5 @@
+import type { DispatchPreambleSendOptions } from './preamble'
+
 /** The terminal/worktree capabilities the coordinator needs from the runtime it drives. */
 export type WorktreeDrift = {
   base: string
@@ -9,11 +11,7 @@ export type CoordinatorRuntime = {
   sendTerminalAgentPrompt(
     handle: string,
     prompt: string,
-    options?: {
-      acceptQueued?: boolean
-      observationTimeoutMs?: number
-      requestId?: string
-    }
+    options?: DispatchPreambleSendOptions
   ): Promise<unknown>
   listTerminals(
     worktreeSelector?: string,

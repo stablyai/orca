@@ -2,7 +2,14 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { useKeyboardAvoidingPadding, useKeyboardOcclusion } from './keyboard-occlusion.web'
+import {
+  currentSoftKeyboardHeight,
+  subscribeSoftKeyboard,
+  useKeyboardAvoidingPadding,
+  useKeyboardOcclusion,
+  useSoftKeyboard,
+  type SoftKeyboardState
+} from './keyboard-occlusion.web'
 
 /** The browser's own object, as much of it as this file reads: a target that resizes and scrolls. */
 class FakeVisualViewport extends EventTarget {
@@ -193,5 +200,153 @@ describe('the keyboard the browser reports', () => {
     expect(viewport?.counts).toEqual({ resize: 2, scroll: 2 })
     await act(async () => tree.unmount())
     expect(viewport?.counts).toEqual({ resize: 0, scroll: 0 })
+  })
+})
+
+/** The pair a sheet animates with: events rather than state, each with duration 0. */
+describe('the keyboard as events, for a sheet', () => {
+  it('shows by the uncovered strip and hides once when it closes', () => {
+    const calls: string[] = []
+    const unsubscribe = subscribeSoftKeyboard(
+      (height, duration) => calls.push(`show ${height} ${duration}`),
+      (duration) => calls.push(`hide ${duration}`)
+    )
+    viewport?.resizeTo(464)
+    viewport?.resizeTo(LAYOUT_HEIGHT)
+    viewport?.resizeTo(LAYOUT_HEIGHT)
+    expect(calls).toEqual(['show 336 0', 'hide 0'])
+    unsubscribe()
+    expect(viewport?.counts).toEqual({ resize: 0, scroll: 0 })
+  })
+
+  it('hides a keyboard that was already up when it subscribed', async () => {
+    viewport?.resizeTo(464)
+    const calls: string[] = []
+    const unsubscribe = subscribeSoftKeyboard(
+      (height) => calls.push(`show ${height}`),
+      (duration) => calls.push(`hide ${duration}`)
+    )
+    viewport?.resizeTo(LAYOUT_HEIGHT)
+    expect(calls).toEqual(['hide 0'])
+    unsubscribe()
+    // The hook seeds from the same strip, so it must come back down too.
+    viewport?.resizeTo(464)
+    await mount()
+    expect(lift).toBe(336)
+    await act(async () => viewport?.resizeTo(LAYOUT_HEIGHT))
+    expect(lift).toBe(0)
+  })
+
+  it('stays silent when nothing is covered, which is the shell shortening the WebView', () => {
+    const calls: string[] = []
+    const unsubscribe = subscribeSoftKeyboard(
+      () => calls.push('show'),
+      () => calls.push('hide')
+    )
+    viewport?.resizeTo(LAYOUT_HEIGHT)
+    expect(calls).toEqual([])
+    unsubscribe()
+  })
+
+  it('reads a keyboard already up, and 0 without a visual viewport', () => {
+    viewport?.resizeTo(464)
+    expect(currentSoftKeyboardHeight()).toBe(336)
+    Object.defineProperty(window, 'visualViewport', { value: undefined, configurable: true })
+    expect(currentSoftKeyboardHeight()).toBe(0)
+    expect(() =>
+      subscribeSoftKeyboard(
+        () => {},
+        () => {}
+      )()
+    ).not.toThrow()
+  })
+})
+
+const LAYOUT_WIDTH = 400
+let keyboardState: SoftKeyboardState = { height: 0, visible: false }
+
+function StateHarness(): null {
+  keyboardState = useSoftKeyboard()
+  return null
+}
+
+function resizeWindow(width: number, height: number): void {
+  Object.defineProperty(window, 'innerWidth', { value: width, configurable: true })
+  Object.defineProperty(window, 'innerHeight', { value: height, configurable: true })
+  window.dispatchEvent(new Event('resize'))
+}
+
+/** Tracked so a case that resizes the window is not also re-rendering an earlier case's harness,
+ *  which shares this file's one `keyboardState`. */
+const mountedStateHarnesses: ReturnType<typeof create>[] = []
+
+async function mountState(): Promise<ReturnType<typeof create>> {
+  let tree: ReturnType<typeof create> | null = null
+  await act(async () => {
+    tree = create(createElement(StateHarness))
+  })
+  if (tree === null) {
+    throw new Error('the harness did not mount')
+  }
+  mountedStateHarnesses.push(tree)
+  return tree
+}
+
+/**
+ * The shell shortens the WebView to sit above the IME, so by the time the page measures itself
+ * nothing is covered and `visualViewport` reads full height. The resize is what is left.
+ */
+describe('the keyboard the page cannot see, because the shell already moved it', () => {
+  beforeEach(() => {
+    act(() => {
+      for (const tree of mountedStateHarnesses.splice(0)) {
+        tree.unmount()
+      }
+    })
+    keyboardState = { height: 0, visible: false }
+    Object.defineProperty(window, 'innerWidth', { value: LAYOUT_WIDTH, configurable: true })
+    Object.defineProperty(window, 'innerHeight', { value: LAYOUT_HEIGHT, configurable: true })
+  })
+
+  it('reads no keyboard while the window keeps the height it mounted at', async () => {
+    await mountState()
+    expect(keyboardState).toEqual({ height: 0, visible: false })
+  })
+
+  it('calls the window shortened at an unchanged width the keyboard, and covers nothing by it', async () => {
+    await mountState()
+    await act(async () => resizeWindow(LAYOUT_WIDTH, LAYOUT_HEIGHT - 336))
+    expect(keyboardState).toEqual({ height: 0, visible: true })
+  })
+
+  it('drops the flag when the window gets its height back', async () => {
+    await mountState()
+    await act(async () => resizeWindow(LAYOUT_WIDTH, LAYOUT_HEIGHT - 336))
+    await act(async () => resizeWindow(LAYOUT_WIDTH, LAYOUT_HEIGHT))
+    expect(keyboardState.visible).toBe(false)
+  })
+
+  it('reads a rotation as a new window rather than a keyboard, because the width moved too', async () => {
+    await mountState()
+    await act(async () => resizeWindow(LAYOUT_HEIGHT, LAYOUT_WIDTH))
+    expect(keyboardState.visible).toBe(false)
+    // And the shorter window is now the one the next keyboard is measured against.
+    await act(async () => resizeWindow(LAYOUT_HEIGHT, LAYOUT_WIDTH - 200))
+    expect(keyboardState.visible).toBe(true)
+  })
+
+  it('takes a window that grew as the new resting height, not as a keyboard closing twice', async () => {
+    await mountState()
+    await act(async () => resizeWindow(LAYOUT_WIDTH, LAYOUT_HEIGHT + 60))
+    expect(keyboardState.visible).toBe(false)
+    await act(async () => resizeWindow(LAYOUT_WIDTH, LAYOUT_HEIGHT))
+    expect(keyboardState.visible).toBe(true)
+  })
+
+  it('stops listening on unmount', async () => {
+    const tree = await mountState()
+    await act(async () => tree.unmount())
+    await act(async () => resizeWindow(LAYOUT_WIDTH, LAYOUT_HEIGHT - 336))
+    expect(keyboardState.visible).toBe(false)
   })
 })

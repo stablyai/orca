@@ -3,7 +3,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
 import { TERMINAL_DOCUMENT_ELEMENT_STYLE, TERMINAL_DOCUMENT_MARKUP } from './terminal-webview-html'
-import { scopeStyleToHost } from './terminal-webview-html/document-style-scoping'
+import { scopeStyleToHost } from '../style-scoping/document-style-scoping'
 import { XTERM_ENGINE_CSS } from './terminal-webview-engine-css.generated'
 import { createTerminalDocument } from './document/create-terminal-document'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
@@ -14,7 +14,7 @@ import type { TerminalWebViewCommand } from './terminal-webview-messages'
  * Same program: the factory the WebView's script is generated from, called here with the page's
  * own hooks instead of the WebView's window (ruling 22). What the WebView's HTML gave the document
  * — the stylesheet, the elements it reads by id, the engine on `window`, a `postMessage` back to
- * React Native and the frames that arrive on it — this supplies instead, through the eight seams
+ * React Native and the frames that arrive on it — this supplies instead, through the ten seams
  * and the host element.
  *
  * A call is a document. Nothing here is shared between two of them and nothing is reset: each call
@@ -58,8 +58,18 @@ function ensureDocumentStyle() {
   style.id = STYLE_ELEMENT_ID
   const prefix = `.${HOST_CLASS}`
   const engine = scopeStyleToHost(XTERM_ENGINE_CSS, prefix)
-  style.textContent = `${engine}\n${scopeStyleToHost(TERMINAL_DOCUMENT_ELEMENT_STYLE, prefix)}`
+  const elements = scopeStyleToHost(TERMINAL_DOCUMENT_ELEMENT_STYLE, prefix)
+  style.textContent = `${engine}\n${elements}\n${hostFrameStyle(prefix)}`
   document.head.appendChild(style)
+}
+
+/**
+ * The overlays' frame. In the WebView `position: fixed` is the terminal frame; here it is the
+ * page, so they would draw over the header. The host becomes their containing block instead.
+ */
+function hostFrameStyle(prefix: string) {
+  return `${prefix} { position: relative; }
+${prefix} #selection-overlay, ${prefix} #scroll-indicator { position: absolute; }`
 }
 
 /**
@@ -129,7 +139,7 @@ function startDocumentOrGiveTheHostBack(
   }
 }
 
-/** The nine seams, as the page answers them. */
+/** The eleven seams, as the page answers them. */
 function startPageDocument(host: HTMLElement, receive: (message: Record<string, unknown>) => void) {
   // Written by this document's own reporter: `startHostNotify` installs it through the seam below,
   // which here is a `window` error listener, and every error it forwards is appended before the
@@ -175,6 +185,19 @@ function startPageDocument(host: HTMLElement, receive: (message: Record<string, 
     // Ruling 24: the WebView reads a global the engine bundle installs, because its script tag can
     // fail. Here the engine is the import above, so it is here or this module did not load.
     hasEngine: () => true,
+
+    // The window here is the whole page, header and dock included; the grid is shown in the host.
+    viewportRect: () => {
+      const box = host.getBoundingClientRect()
+      return { left: box.left, top: box.top, width: box.width, height: box.height }
+    },
+
+    // The host resizes without the window: a dock growing, a panel docking beside it.
+    observeViewport: (onChange) => {
+      const observer = new ResizeObserver(onChange)
+      observer.observe(host)
+      return () => observer.disconnect()
+    },
 
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the shape is xterm's own, except that `getCell` takes back the cell xterm allocated and the document declares only the members it reads on one.
     createTerminal: (options) => new Terminal(options) as unknown as TerminalDocumentTerminal,

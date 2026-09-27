@@ -32,9 +32,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       if (enrichedPayload.structuredHost) {
         continue
       }
-      const childOnlyBoundary = enrichedPayload.claudeLeadBoundaryChildOnly === true
       const {
-        claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
         promptInteractionKey: _promptInteractionKey,
         // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
         restoredUnconfirmed: _restoredUnconfirmed,
@@ -51,9 +49,10 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       const launchTokenHash = launchToken?.trim()
         ? createHash('sha256').update(launchToken.trim()).digest('hex')
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
+      // `payload.mainAgent` rides inside the payload; the legacy `claudeLeadBoundaryChildOnly` flag it
+      // replaced is read at hydrate and never written again.
       entries[paneKey] = {
         ...persistedPayload,
-        ...(childOnlyBoundary ? { claudeLeadBoundaryChildOnly: true } : {}),
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
       const commitment = this.toAuthorityEvidence(payload, launchTokenHash)

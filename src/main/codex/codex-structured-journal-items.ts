@@ -1,6 +1,7 @@
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity
+  AgentJournalItemIdentity,
+  AgentJournalProducerLinkage
 } from '../../shared/agent-session-journal-types'
 import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-terminal-settlement'
 import {
@@ -30,6 +31,7 @@ import type { CodexActiveJournalItem } from './codex-structured-journal-settleme
 import { readCodexJournalString } from './codex-structured-journal-translation-values'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 import { readCodexDispatchEcho } from './codex-structured-dispatch-echo'
+import type { CodexRowLinkage } from './codex-subagent-linkage'
 
 export class CodexJournalItems {
   readonly ordinals = new CodexTurnOrdinals()
@@ -42,7 +44,7 @@ export class CodexJournalItems {
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
       'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule'
-    > & { maxMetadataBytes?: number },
+    > & { maxMetadataBytes?: number; linkageFor: CodexRowLinkage },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void
   ) {
@@ -52,10 +54,9 @@ export class CodexJournalItems {
       maxRetainedBytes: deps.maxRetainedBytes,
       schedule: deps.schedule,
       maxMetadataBytes: deps.maxMetadataBytes,
-      identityFor: (threadId, params, item) => {
-        const turnId = readCodexTurnId(params) ?? this.activeTurn(threadId)
-        return this.identityFor(threadId, turnId, item)
-      }
+      turnIdFor: (threadId, params) => readCodexTurnId(params) ?? this.activeTurn(threadId),
+      identityFor: (threadId, turnId, item) => this.identityFor(threadId, turnId, item),
+      linkageFor: deps.linkageFor
     })
   }
 
@@ -117,7 +118,12 @@ export class CodexJournalItems {
       }
       return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
     }
-    const admission = this.appendTranslated(event.method, identity, translated)
+    const admission = this.appendTranslated(
+      event.method,
+      identity,
+      translated,
+      this.deps.linkageFor(event.threadId, turnId)
+    )
     if (!admission.accepted) {
       return { handled: true, admission }
     }
@@ -144,19 +150,22 @@ export class CodexJournalItems {
   private appendTranslated(
     method: string,
     identity: AgentJournalItemIdentity,
-    translated: ReturnType<typeof codexJournalItem>
+    translated: ReturnType<typeof codexJournalItem>,
+    linkage: AgentJournalProducerLinkage
   ): CodexJournalTranslationAdmission {
     if (!translated.body) {
       return CODEX_JOURNAL_ADMITTED
     }
     if (method === 'item/completed') {
-      const admission = appendCodexLifecycleItem(this.deps.sink, identity, translated.body)
+      const admission = appendCodexLifecycleItem(this.deps.sink, identity, translated.body, linkage)
       return admission.accepted ? publishCodexLifecycle(this.deps.sink) : admission
     }
     const options = requiresTerminalSettlement(translated.body) ? { lifecycle: true } : {}
+    const appendOptions = { ...options, ...linkage }
     const admission = this.deps.sink.tryAppendItem
-      ? this.deps.sink.tryAppendItem(identity, translated.body, options)
-      : (this.deps.sink.appendItem(identity, translated.body), CODEX_JOURNAL_ADMITTED)
+      ? this.deps.sink.tryAppendItem(identity, translated.body, appendOptions)
+      : (this.deps.sink.appendItem(identity, translated.body, appendOptions),
+        CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
       return admission
     }
@@ -174,7 +183,7 @@ export class CodexJournalItems {
     const retainedItem = codexCommandOutlivesTurn(item)
       ? (boundStreamItem(item) as CodexThreadItem)
       : item
-    this.streams.track(threadId, retainedItem, identity)
+    this.streams.track(threadId, turnId, retainedItem, identity)
     this.activeItems.set(codexStructuredItemKey(threadId, item.id), {
       threadId,
       turnId,
@@ -225,7 +234,8 @@ export class CodexJournalItems {
           const admission = appendCodexLifecycleItem(
             this.deps.sink,
             evicted.identity,
-            evictedActiveBody(translated)
+            evictedActiveBody(translated),
+            this.deps.linkageFor(evicted.threadId, evicted.turnId)
           )
           if (!admission.accepted) {
             return admission

@@ -10,6 +10,7 @@ import {
   canaryAuthority,
   entryAdmission,
   main,
+  selectorWaveDelta,
   validateSameCapWave,
   verifyCanaryAuthority
 } from './relay-production-same-cap-wave.mjs'
@@ -48,12 +49,19 @@ test('requires one canary or a bounded reviewed batch', () => {
     rollbackDigest,
     confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c28`
   }).cells, ['production-gce-c28'])
-  assert.throws(() => validateSameCapWave({
+  assert.deepEqual(validateSameCapWave({
     mode: 'canary-apply',
     cellIds: 'production-gce-c30',
     targetDigest,
     rollbackDigest,
     confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c30`
+  }).cells, ['production-gce-c30'])
+  assert.throws(() => validateSameCapWave({
+    mode: 'canary-apply',
+    cellIds: 'production-gce-c31',
+    targetDigest,
+    rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c31`
   }), /cells/)
 })
 
@@ -99,6 +107,11 @@ test('the wave workflow chains exactly ten serial cell jobs', () => {
   assert.doesNotMatch(dispatch, /\n  cell_11:/)
 })
 
+test('lists only C17 and C18 as migration-only now that C30 is promoted', () => {
+  assert.deepEqual(SAME_CAP_MIGRATION_ONLY_CELLS, ['production-gce-c17', 'production-gce-c18'])
+  assert.equal(SAME_CAP_CELLS.includes('production-gce-c30'), true)
+})
+
 test('rolls the migration-only cells but never mixes the two classes in one wave', () => {
   for (const cellId of SAME_CAP_MIGRATION_ONLY_CELLS) {
     assert.equal(SAME_CAP_CELLS.includes(cellId), true, cellId)
@@ -120,6 +133,27 @@ test('rolls the migration-only cells but never mixes the two classes in one wave
     confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${cellIds}`,
     canaryRunId: '42'
   }).cells, ['production-gce-c17', 'production-gce-c18'])
+  // C30 is general since its 2026-09-23 promotion, so it cannot share a wave with C17/C18.
+  assert.equal(entryAdmission('production-gce-c30'), 'general')
+  assert.equal(selectorWaveDelta('production-gce-c30'), 2)
+  const asiaGeneral = 'production-gce-c29,production-gce-c30'
+  assert.deepEqual(validateSameCapWave({
+    mode: 'batch-apply',
+    cellIds: asiaGeneral,
+    targetDigest,
+    rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${asiaGeneral}`,
+    canaryRunId: '42'
+  }).cells, ['production-gce-c29', 'production-gce-c30'])
+  const asiaMixed = 'production-gce-c30,production-gce-c17'
+  assert.throws(() => validateSameCapWave({
+    mode: 'batch-apply',
+    cellIds: asiaMixed,
+    targetDigest,
+    rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} ${asiaMixed}`,
+    canaryRunId: '42'
+  }), /all general or all migration-only/)
   // A mixed wave has no single selector delta for its later cells to offset from.
   const mixed = 'production-gce-c7,production-gce-c17'
   assert.throws(() => validateSameCapWave({

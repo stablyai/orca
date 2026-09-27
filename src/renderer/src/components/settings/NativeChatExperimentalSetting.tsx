@@ -2,6 +2,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { NativeChatShellEnvironmentSetting } from './NativeChatShellEnvironmentSetting'
 import { NativeChatSupportedAgents } from './NativeChatSupportedAgents'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSwitch } from './SettingsFormControls'
@@ -23,6 +24,8 @@ export function NativeChatExperimentalSetting({
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
   const defaultView: NativeChatDefaultView =
     settings.openAgentTabsInChatByDefault === true ? 'native-chat' : 'terminal-chat'
+  // Structured-only settings; terminal-backed chat never reads them.
+  const structuredChatActive = defaultView === 'native-chat' && structuredNativeChatEnabled
 
   return (
     <SearchableSetting
@@ -153,7 +156,7 @@ export function NativeChatExperimentalSetting({
           ) : null}
 
           {/* Only structured sessions have a resume cursor to continue from. */}
-          {defaultView === 'native-chat' && structuredNativeChatEnabled ? (
+          {structuredChatActive ? (
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 shrink space-y-0.5">
                 <Label>
@@ -165,7 +168,7 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.resumeCopy',
-                    'When Orca quits or installs an update, chats that were mid-turn are automatically resumed when Orca is reopened.'
+                    'When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.'
                   )}
                 </p>
               </div>
@@ -180,6 +183,13 @@ export function NativeChatExperimentalSetting({
                 }
               />
             </div>
+          ) : null}
+
+          {structuredChatActive ? (
+            <NativeChatShellEnvironmentSetting
+              settings={settings}
+              updateSettings={updateSettings}
+            />
           ) : null}
         </div>
       ) : null}

@@ -255,13 +255,30 @@ export async function settleAfterMount(page, navigations, expectNavigation, sign
 }
 
 /**
+ * How long a navigation an arm expects may go unrecorded before the wait calls it absent.
+ *
+ * Measured rather than chosen. Across the four arms that wait for one, three runs each on both
+ * engines, all 24 readings were satisfied on the loop's first check at 0 ms, and so were 24 more
+ * taken while two full `config/scripts` suites ran beside them: the record lands during the reads
+ * that precede this wait. The slowest whole case in that loaded set -- four arms, end to end -- was
+ * 2859 ms, so this is about fifteen loaded arms' worth of margin over a reading of zero, and a
+ * twelfth of the smallest budget (120 s) the cases that take this path declare.
+ *
+ * That gap is the point. A click carries a 2 s actionability window, and an arm whose click missed
+ * it is waiting for a record nobody will write; before this bound existed that arm spent the case's
+ * whole budget and failed as a bare timeout with the click's own error swallowed. Now it fails here,
+ * inside its own case, saying which arm, how long, what the click did and what the frame last read.
+ */
+const NAVIGATION_RECORD_MS = 10_000
+
+/**
  * The moment the arm's navigation exists, for an arm that expects one.
  *
- * No clock at all: the rig's `page.on('request')` subscription records a main-frame navigation as
- * the browser dispatches it, so the oracles are read after the thing under test rather than after a
- * wait, and the only bound is the case's own timeout through `ctx.signal`. The route beside it only
- * refuses the navigation; it stopped counting anything when the record moved off interception. An arm whose click missed its target prints
- * what it did record and lets the case fail as the timeout it is.
+ * No clock on the happy path: the rig's `page.on('request')` subscription records a main-frame
+ * navigation as the browser dispatches it, so the oracles are read after the thing under test rather
+ * than after a wait, and the first check of the loop is what every passing arm answers. The route
+ * beside it only refuses the navigation; it stopped counting anything when the record moved off
+ * interception.
  *
  * Measured, so it is not sold as more than it is: with this replaced by a no-op every arm still
  * passes, because the reads that follow are each a round trip and the record lands during them. It is
@@ -274,29 +291,43 @@ export async function waitForRecordedNavigation(
   matches,
   signal,
   reading,
-  sampleEveryMs = 5000
+  { sampleEveryMs = 5000, boundMs = NAVIGATION_RECORD_MS } = {}
 ) {
+  // The same evidence the images arm prints. A navigation arm that produced nothing is asking the
+  // same question of the same frame, and on CI this one fails on its own.
+  const read = async () =>
+    await describePreviewFrame(page, reading?.frame, reading?.browserVersion)
+      .then(async (frameReading) => {
+        const evidence = await reading?.describeRequests?.(reading?.frame)
+        return evidence ? `${frameReading} | ${evidence}` : frameReading
+      })
+      .catch((error) => `the reading itself failed: ${String(error).split('\n')[0]}`)
   // Sampled while waiting, for the same reason `untilAborted` samples: a reading taken at the abort
   // can lose its race with vitest's teardown and never reach the log.
   let latest = 'no reading was taken before the case ended'
-  let since = Date.now()
+  const started = Date.now()
+  let since = started
+  // What the click did is half the answer here, so it is named either way: an arm that clicked
+  // cleanly and got no navigation is the product's doing, one whose click threw is the rig's.
+  const absent = (waited, last) =>
+    `${reading?.arm ?? 'arm unknown'} waited ${String(waited)}ms for the navigation it expects ` +
+    `and recorded ${JSON.stringify(navigations)}; its action ` +
+    `${reading?.actError ? `failed with ${JSON.stringify(reading.actError)}` : 'reported no error'}` +
+    ` | ${last}`
   while (!navigations.some((one) => matches(one))) {
     if (signal?.aborted) {
-      console.error(
-        `[html-preview-render] the arm produced no navigation of the kind it expects; recorded ${JSON.stringify(navigations)}: ${reading?.arm ?? 'arm unknown'} | ${latest}`
-      )
+      console.error(`[html-preview-render] ${absent(Date.now() - started, latest)}`)
       return
+    }
+    const waited = Date.now() - started
+    if (waited > boundMs) {
+      // Read here and not from the sample: the bound is shorter than the sampling interval, so an
+      // arm that fails on it would otherwise print the placeholder instead of the frame.
+      throw new Error(`[html-preview-render] ${absent(waited, await read())}`)
     }
     if (Date.now() - since > sampleEveryMs) {
       since = Date.now()
-      latest = await describePreviewFrame(page, reading?.frame, reading?.browserVersion)
-        .then(async (frameReading) => {
-          // The same evidence the images arm prints. A navigation arm that produced nothing is
-          // asking the same question of the same frame, and on CI this one fails on its own.
-          const evidence = await reading?.describeRequests?.(reading?.frame)
-          return evidence ? `${frameReading} | ${evidence}` : frameReading
-        })
-        .catch((error) => `the reading itself failed: ${String(error).split('\n')[0]}`)
+      latest = await read()
     }
     await page.waitForTimeout(10)
   }

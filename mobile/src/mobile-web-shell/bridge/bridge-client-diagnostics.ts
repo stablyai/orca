@@ -29,3 +29,12 @@ export type BridgeRpcClientDiagnostic =
    * and nothing is retried: the listener would throw on the same frame again.
    */
   | { kind: 'inbound-listener-threw'; error: unknown }
+  /**
+   * A Back press the shell handed over that nothing in this document took.
+   *
+   * The claim and the press cross on separate frames, so a sheet that closed between the two leaves
+   * the shell holding a claim this page no longer has anything to spend. The press is handed back
+   * as a `navigate-back` rather than dropped — a key that does nothing is the failure this whole
+   * lane exists to remove — and this line is the only trace that the round trip was wasted.
+   */
+  | { kind: 'back-unclaimed' }

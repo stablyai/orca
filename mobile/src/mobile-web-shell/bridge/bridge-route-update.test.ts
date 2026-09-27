@@ -121,9 +121,9 @@ describe('a route update over a re-sent init', () => {
    */
   it('sends no second init to a page that never declared it accepts one', async () => {
     const pair = await openedOnTheSession()
-    expect(pair.readToShell().find((frame) => frame.type === 'ready')).toMatchObject({
-      accepts: [BRIDGE_ROUTE_UPDATE_ACCEPT]
-    })
+    expect(pair.readToShell().find((frame) => frame.type === 'ready')?.accepts).toContain(
+      BRIDGE_ROUTE_UPDATE_ACCEPT
+    )
     // This page, then the same document reloaded as a build that declares nothing -- which is what
     // a released page is. The host reads `accepts` off whichever `ready` it last answered.
     pair.host.receive(JSON.stringify({ v: 1, type: 'ready' }))

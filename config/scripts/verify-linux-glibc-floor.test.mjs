@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
@@ -373,6 +373,17 @@ describe('bundled native binary architecture', () => {
     // Still caught even when the slice being built is x64.
     expect(findArchViolation(file, 'x64')).toMatchObject({ actual: 'x64', expectedArch: 'arm64' })
     await rm(dir, { recursive: true, force: true })
+  })
+
+  // Release arm64 slices live in `linux-arm64-unpacked`; bundled ripgrep ships linux-x64 beside it.
+  it('reads arch tokens only below the slice root', async () => {
+    const root = join(await mkdtemp(join(tmpdir(), 'orca-elf-arch-')), 'linux-arm64-unpacked')
+    const dir = join(root, 'resources', 'ripgrep', 'linux-x64')
+    await mkdir(dir, { recursive: true })
+    const file = join(dir, 'rg')
+    await writeFile(file, elfHeader(ELF_MACHINE_BY_ARCH.x64))
+    expect(findArchViolation(file, 'arm64', root)).toBeNull()
+    await rm(dirname(root), { recursive: true, force: true })
   })
 
   it('flags an x86-64 binary in an arm64 slice', async () => {

@@ -138,7 +138,11 @@ async function startSttSession(
     isCurrent: () => state.worker === worker,
     onMessage: (event) => state.eventSink?.(event),
     onError: (error) => handleSttWorkerFailure(state, error),
-    onExit: () => handleSttWorkerFailure(state)
+    onExit: () => {
+      const stoppedSink = state.stopInFlight?.worker === worker ? null : state.eventSink
+      handleSttWorkerFailure(state)
+      stoppedSink?.({ type: 'stopped' })
+    }
   })
   initializeSttWorker(worker, {
     modelDir: state.modelManager.getModelDir(modelId),

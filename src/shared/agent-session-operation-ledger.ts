@@ -181,6 +181,20 @@ export function agentSessionOperationExpiry(
   )
 }
 
+/** The unexpired row a globally scoped id already holds, under whichever caller admitted it. */
+export function findAgentSessionGlobalOperationRow(
+  rows: ReadonlyMap<string, AgentSessionOperationRow>,
+  operationId: string,
+  now: number
+): AgentSessionOperationRow | undefined {
+  for (const row of rows.values()) {
+    if (row.expiresAt > now && row.operationId === operationId) {
+      return row
+    }
+  }
+  return undefined
+}
+
 export function pruneAgentSessionOperationRows(
   rows: ReadonlyMap<string, AgentSessionOperationRow>,
   now: number
@@ -243,15 +257,29 @@ export function evaluateAgentSessionOperation(args: {
   }
   return {
     decision: 'admit',
-    row: {
-      callerKey,
-      operationId,
-      fingerprint,
-      operationTimestamp,
-      recordedAt: now,
-      expiresAt: agentSessionOperationExpiry(operationTimestamp, now),
-      outcome: { status: 'pending' }
-    }
+    row: pendingAgentSessionOperationRow({ callerKey, operationId, fingerprint, now })
+  }
+}
+
+/** A `pending` row for this id, retained for the full replay window from `now`. */
+export function pendingAgentSessionOperationRow(args: {
+  callerKey: string
+  operationId: string
+  fingerprint: string
+  now: number
+}): AgentSessionOperationRow {
+  const operationTimestamp = parseAgentSessionOperationTimestamp(args.operationId)
+  if (operationTimestamp === null) {
+    throw new Error('agent_session_operation_invalid')
+  }
+  return {
+    callerKey: args.callerKey,
+    operationId: args.operationId,
+    fingerprint: args.fingerprint,
+    operationTimestamp,
+    recordedAt: args.now,
+    expiresAt: agentSessionOperationExpiry(operationTimestamp, args.now),
+    outcome: { status: 'pending' }
   }
 }
 

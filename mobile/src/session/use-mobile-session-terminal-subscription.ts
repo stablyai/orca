@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-ranges'
 import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
+import { deferFirstSubscribeUntilViewportMeasured } from './mobile-terminal-first-subscribe-viewport'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
 import { mobileTerminalSnapshotByteBudget } from './terminal-snapshot-byte-budget'
 import {
@@ -31,6 +32,7 @@ export function useMobileSessionTerminalSubscription(
     terminalDiagnosticsRef,
     viewportResubscribeBudgetRef,
     webReadyHandlesRef,
+    subscribedDocumentsRef,
     activeHandleRef,
     subscribeSeqRef,
     layoutSeqRef,
@@ -42,6 +44,7 @@ export function useMobileSessionTerminalSubscription(
     getTerminalRef,
     unsubscribeTerminal,
     unsubscribeTerminalRef,
+    measureViewportOnce,
     signalTerminalInventoryRecovery
   } = scope
   const subscribeToTerminal = useCallback(
@@ -82,6 +85,22 @@ export function useMobileSessionTerminalSubscription(
         }
       }
 
+      if (
+        deferFirstSubscribeUntilViewportMeasured({
+          handle,
+          covered,
+          viewportMeasured: viewportMeasuredRef.current,
+          subscribedDocuments: subscribedDocumentsRef.current,
+          subscribingHandles: subscribingHandlesRef.current,
+          subscribeSeq: subscribeSeqRef.current,
+          measure: measureViewportOnce,
+          subscribe: subscribeToTerminal
+        })
+      ) {
+        logSkippedGate('measuring-viewport')
+        return
+      }
+
       subscribingHandlesRef.current.add(handle)
       if (covered) {
         leaseOnlyHandlesRef.current.add(handle)
@@ -91,6 +110,10 @@ export function useMobileSessionTerminalSubscription(
       const seq = (subscribeSeqRef.current.get(handle) ?? 0) + 1
       subscribeSeqRef.current.set(handle, seq)
       diagnostics.streamArmed(handle, seq, viewportRef.current)
+      const sentViewport = nativeChatTerminalStream.mobileNativeChatSubscribeViewport(
+        covered,
+        viewportRef.current
+      )
 
       // Why: viewport is embedded in the subscribe params so the server auto-fits before serializing scrollback (no focus→safeFit race).
       const unsub = subscribeMobileTerminalSafely(
@@ -98,10 +121,7 @@ export function useMobileSessionTerminalSubscription(
         {
           terminal: handle,
           client: { id: clientId, type: 'mobile' as const },
-          viewport: nativeChatTerminalStream.mobileNativeChatSubscribeViewport(
-            covered,
-            viewportRef.current
-          ),
+          viewport: sentViewport,
           capabilities: nativeChatTerminalStream.mobileNativeChatTerminalCapabilities(covered),
           // Undefined on a phone, where no per-message cap exists; omitted rather than sent as
           // undefined so an older host sees the params it has always seen.
@@ -197,6 +217,7 @@ export function useMobileSessionTerminalSubscription(
               seq,
               hostCols,
               hostRows,
+              sentViewport: sentViewport ?? null,
               budget: viewportResubscribeBudgetRef.current,
               diagnostics,
               viewportRef,
@@ -277,6 +298,7 @@ export function useMobileSessionTerminalSubscription(
       clientId,
       getTerminalRef,
       markNativeChatInputLeaseReady,
+      measureViewportOnce,
       scheduleDelayedAction,
       showToast,
       signalTerminalInventoryRecovery

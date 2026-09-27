@@ -138,8 +138,9 @@ async function getCodexSessionFileAliasKey(filePath: string): Promise<string> {
 
 async function getPhysicalFileAliasKey(filePath: string): Promise<string> {
   try {
-    const fileStat = await stat(filePath)
-    if (fileStat.ino !== 0) {
+    // Windows file IDs can exceed the precision of JavaScript numbers.
+    const fileStat = await stat(filePath, { bigint: true })
+    if (fileStat.ino !== 0n) {
       return `${fileStat.dev}:${fileStat.ino}`
     }
   } catch {}

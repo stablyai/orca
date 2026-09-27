@@ -79,7 +79,7 @@ export function requeueStructuredAgentSessionSendRefusal(
   createOperationId: () => string,
   retainOperationId = false
 ): StructuredAgentSessionOutboxEntry {
-  const refusalState = agentSessionRefusalOperationState('agentSession.send', code)
+  const refusalState = agentSessionRefusalOperationState(code)
   if (
     refusalState !== 'settled-rejected' ||
     retainOperationId ||

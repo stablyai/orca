@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetAgentStatusEpochClockForTests } from '@/lib/agent-status-epoch-clock'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import {
@@ -15,6 +16,7 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 type MockState = {
   tabsByWorktree: Record<string, TerminalTab[]>
   browserTabsByWorktree: Record<string, { id: string }[]>
+  unifiedTabsByWorktree: Record<string, Tab[]>
   ptyIdsByTabId: Record<string, string[]>
   agentStatusEpoch: number
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
@@ -59,6 +61,27 @@ function makeAgentStatusEntry(args: {
   }
 }
 
+function makeUnifiedTab(args: {
+  id: string
+  worktreeId: string
+  contentType: Tab['contentType']
+  agentSessionAgent?: Tab['agentSessionAgent']
+}): Tab {
+  return {
+    id: args.id,
+    entityId: `entity-${args.id}`,
+    groupId: 'group-1',
+    worktreeId: args.worktreeId,
+    contentType: args.contentType,
+    label: args.id,
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0,
+    ...(args.agentSessionAgent ? { agentSessionAgent: args.agentSessionAgent } : {})
+  }
+}
+
 function SleepProbe({ worktreeId }: { worktreeId: string }) {
   return <span>{String(useIsSleepingWorktree(worktreeId))}</span>
 }
@@ -73,6 +96,7 @@ describe('useIsSleepingWorktree', () => {
     mockState = {
       tabsByWorktree: {},
       browserTabsByWorktree: {},
+      unifiedTabsByWorktree: {},
       ptyIdsByTabId: {},
       agentStatusEpoch: 0,
       agentStatusByPaneKey: {},
@@ -90,6 +114,82 @@ describe('useIsSleepingWorktree', () => {
     expect(renderToStaticMarkup(<SleepProbe worktreeId="repo1::/path/wt1" />)).toBe(
       '<span>true</span>'
     )
+  })
+
+  it('treats a worktree whose only surface is a structured chat as awake', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    mockState = {
+      ...mockState,
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          makeUnifiedTab({
+            id: 'chat-1',
+            worktreeId,
+            contentType: 'agent-session',
+            agentSessionAgent: 'claude'
+          })
+        ]
+      }
+    }
+
+    expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>false</span>')
+  })
+
+  it('keeps a structured chat awake once its turn has finished', () => {
+    // The reported bug: an idle structured session reports state 'done', which is exactly what
+    // isFreshNonDoneAgentStatus refuses, so the live-agent term cannot hold this workspace open.
+    const worktreeId = 'repo1::/path/wt1'
+    const paneKey = makePaneKey('chat-1', LEAF_ID)
+    mockState = {
+      ...mockState,
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          makeUnifiedTab({
+            id: 'chat-1',
+            worktreeId,
+            contentType: 'agent-session',
+            agentSessionAgent: 'codex'
+          })
+        ]
+      },
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'done', worktreeId })
+      }
+    }
+
+    expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>false</span>')
+  })
+
+  it('does not treat a non-chat unified tab as activity', () => {
+    // Negative control: the term keys on a structured chat, not on any unified tab existing.
+    const worktreeId = 'repo1::/path/wt1'
+    mockState = {
+      ...mockState,
+      unifiedTabsByWorktree: {
+        [worktreeId]: [makeUnifiedTab({ id: 'file-1', worktreeId, contentType: 'editor' })]
+      }
+    }
+
+    expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>true</span>')
+  })
+
+  it('does not treat a structured chat as activity for a different worktree', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    mockState = {
+      ...mockState,
+      unifiedTabsByWorktree: {
+        'repo1::/path/wt2': [
+          makeUnifiedTab({
+            id: 'chat-1',
+            worktreeId: 'repo1::/path/wt2',
+            contentType: 'agent-session',
+            agentSessionAgent: 'claude'
+          })
+        ]
+      }
+    }
+
+    expect(renderToStaticMarkup(<SleepProbe worktreeId={worktreeId} />)).toBe('<span>true</span>')
   })
 
   it('treats a worktree with a live PTY as awake', () => {

@@ -35,9 +35,8 @@ function contextWith(submissions: AgentJournalSubmission[]) {
   // The mutation reads only `journal.submissions`, `journal.resolveDispatch` and `fence`.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all three are supplied here; the rest of the host session is unreachable from this mutation.
   const session = { journal, fence: FENCE } as unknown as ReleaseSession
-  const publish = vi.fn()
-  const context: ReleaseContext = { sessions: new Map([['s-1', session]]), publish }
-  return { context, resolved, publish, journal }
+  const context: ReleaseContext = { sessions: new Map([['s-1', session]]) }
+  return { context, resolved, journal }
 }
 
 describe('releasing dispatches the provider can no longer answer', () => {
@@ -45,7 +44,7 @@ describe('releasing dispatches the provider can no longer answer', () => {
     const live = [submission({})]
     // POSITIVE CONTROL: this is the latch being dissolved.
     expect(projectStructuredAgentSessionStatus([], live, FENCE)).toBe('working')
-    const { context, resolved, publish } = contextWith(live)
+    const { context, resolved } = contextWith(live)
 
     await releaseStructuredAgentSessionUnansweredDispatches(context, {
       sessionId: 's-1',
@@ -62,14 +61,13 @@ describe('releasing dispatches the provider can no longer answer', () => {
         recovered: true
       }
     ])
-    expect(publish).toHaveBeenCalledOnce()
     expect(projectStructuredAgentSessionStatus([], [submission({ recovered: true })], FENCE)).toBe(
       'idle'
     )
   })
 
   it('never touches a pending send, whose dispatch may still be in flight', async () => {
-    const { context, resolved, publish } = contextWith([
+    const { context, resolved } = contextWith([
       submission({ clientMessageId: 'm-2', dispatchState: 'pending', reason: null })
     ])
 
@@ -79,7 +77,6 @@ describe('releasing dispatches the provider can no longer answer', () => {
     })
 
     expect(resolved).toEqual([])
-    expect(publish).not.toHaveBeenCalled()
   })
 
   it('leaves an already recovered unknown alone', async () => {

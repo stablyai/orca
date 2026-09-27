@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { colors } from '../theme/mobile-theme'
+import { connectionRetryAction } from '../transport/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
@@ -241,6 +242,13 @@ export function MobileSourceControlPanel({
     />
   )
 
+  // Why: a parked reconnect loop makes retry useless — revive the connection instead (issue #5049); loadStatus re-runs on reconnect.
+  const statusRetry = connectionRetryAction({
+    hostId,
+    needsReconnect: connState !== 'connected',
+    forceReconnect,
+    reload: () => void loadStatus()
+  })
   const statusGate =
     screenState.kind === 'loading' ? (
       <View style={styles.state}>
@@ -252,18 +260,8 @@ export function MobileSourceControlPanel({
           {screenState.kind === 'unavailable' ? 'Source Control Unavailable' : 'Unable to Load'}
         </Text>
         <Text style={styles.stateText}>{screenState.message}</Text>
-        {screenState.kind === 'error' ? (
-          <Pressable
-            style={styles.retryButton}
-            onPress={() => {
-              // Why: a parked reconnect loop makes retry useless — revive the connection instead (issue #5049); loadStatus re-runs on reconnect.
-              if (connState !== 'connected' && hostId) {
-                void forceReconnect(hostId)
-                return
-              }
-              void loadStatus()
-            }}
-          >
+        {screenState.kind === 'error' && statusRetry ? (
+          <Pressable style={styles.retryButton} onPress={statusRetry}>
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
         ) : null}

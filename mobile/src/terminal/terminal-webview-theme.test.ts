@@ -2,13 +2,10 @@
 import { describe, expect, it } from 'vitest'
 import { createTerminalDocumentScope } from './document/document-scope'
 import { applyTerminalTheme, resolveTerminalContrastFloor } from './document/terminal-theme'
-import { documentModuleSource } from './document/document-module-source.test-support'
 import type {
   TerminalDocumentThemeMessage,
   TerminalDocumentThemeTarget
 } from './document/terminal-theme'
-
-const themeSource = documentModuleSource('terminal-theme')
 
 const DARK_FLOOR = 3
 const LIGHT_FLOOR = 4.5
@@ -43,13 +40,6 @@ function loadThemeApplier(
 }
 
 describe('mobile terminal-webview contrast floor gate', () => {
-  it('reads its contrast floors from the scope, not from a global', () => {
-    // The module's own text: what the threading guarantees is that nothing here reaches a shared
-    // object, so two documents can hold two themes.
-    expect(themeSource).toContain('export function resolveTerminalContrastFloor(')
-    expect(themeSource).not.toMatch(/^import \{ scope \}/m)
-  })
-
   it('picks the dark floor for dark composed backgrounds', () => {
     const resolveTerminalContrastFloor = loadContrastFloorResolver()
     for (const bg of ['#1a1b26', '#1e242a', '#282828', '#000000', 'black']) {

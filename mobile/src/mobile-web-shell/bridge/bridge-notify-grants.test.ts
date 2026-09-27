@@ -5,6 +5,7 @@ import {
   BRIDGE_NAVIGATE_BACK_NOTIFY
 } from './bridge-envelope'
 import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge-haptics-notify'
+import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
 import { bridgeNotifyRefusal, type BridgeNotifyName } from './bridge-notify-grants'
 
 const GRANTED = [BRIDGE_FAULT_GRANT]
@@ -178,5 +179,26 @@ describe('a grant table missing a row', () => {
       [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT
     }
     expect(Object.keys(incomplete)).toHaveLength(7)
+  })
+})
+
+/**
+ * The page reporting on its own document.
+ *
+ * Ungranted for the same reason the param clear is: nothing here reaches the host or the device,
+ * and the shell acts on it only for a page whose `ready` declared it. It is still refused before
+ * `init`, because a frame from a document nothing has answered is not this document's word.
+ */
+describe('the page reporting its first frame', () => {
+  it('needs no grant once the session is open', () => {
+    expect(
+      bridgeNotifyRefusal({ name: BRIDGE_PAGE_PAINTED, initSent: true, granted: [] })
+    ).toBeNull()
+  })
+
+  it('is refused before the page has been told anything', () => {
+    expect(
+      bridgeNotifyRefusal({ name: BRIDGE_PAGE_PAINTED, initSent: false, granted: GRANTED })
+    ).toBe('before-ready')
   })
 })

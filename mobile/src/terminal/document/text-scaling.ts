@@ -77,11 +77,13 @@ export function applyTextScale(scope: TerminalDocumentScope, scale: number) {
     const cellW = getCellWidth(scope)
     const cellH = getCellHeight(scope)
     if (cellW > 0 && cellH > 0) {
-      const cols = Math.floor(window.innerWidth / cellW)
+      const cols = Math.floor(scope.viewportRect().width / cellW)
       if (cols < MIN_FIT_COLS) {
+        // Why: hidden (0 wide) or too narrow; the next box must refit at the new cell size.
+        scope.fittedBox = null
         return
       }
-      const rows = Math.max(8, Math.floor(window.innerHeight / cellH))
+      const rows = Math.max(8, Math.floor(scope.viewportRect().height / cellH))
       scope.term.resize(cols, rows)
       emitKeyboardAvoidanceMetrics(scope)
     }

@@ -9,11 +9,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  */
 type Doubles = {
   stored: boolean
+  buildKind: 'native' | 'ota'
   saves: { next: boolean; settle: () => void; fail: () => void }[]
   pushes: string[]
 }
 
-const doubles = vi.hoisted((): Doubles => ({ stored: false, saves: [], pushes: [] }))
+const doubles = vi.hoisted((): Doubles => ({
+  stored: false,
+  buildKind: 'native',
+  saves: [],
+  pushes: []
+}))
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -32,6 +38,7 @@ vi.mock('lucide-react-native', () => ({ LayoutTemplate: 'LayoutTemplate' }))
 vi.mock('../transport/host-store', () => ({ loadHosts: async () => [{ id: 'host-1' }] }))
 vi.mock('../storage/preferences', () => ({
   loadMobileWebShellEnabled: async () => doubles.stored,
+  mobileShellBuildKind: () => doubles.buildKind,
   saveMobileWebShellEnabled: (next: boolean) =>
     new Promise<void>((resolve, reject) => {
       doubles.saves.push({
@@ -78,8 +85,21 @@ async function toggle(tree: ReactTestRenderer, next: boolean): Promise<void> {
 describe('the hybrid shell developer row', () => {
   beforeEach(() => {
     doubles.stored = false
+    doubles.buildKind = 'native'
     doubles.saves.length = 0
     doubles.pushes.length = 0
+  })
+
+  // The row mounts in a development build and in an OTA build, so a label that said "dev" would be
+  // wrong in the build where it is the only way back to the native screens.
+  it.each([
+    ['native', 'Hybrid shell (development build)'],
+    ['ota', 'Hybrid shell (OTA build)']
+  ] as const)('names the %s build it is running in', async (buildKind, expected) => {
+    doubles.buildKind = buildKind
+    const tree = await mountRow()
+
+    expect(only(tree, 'mobile-web-shell-label').props.children).toBe(expected)
   })
 
   it('offers neither the new position nor the route until the write lands', async () => {

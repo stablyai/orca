@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import * as monaco from 'monaco-editor'
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { createStore } from 'zustand/vanilla'
 import { afterEach, expect, it } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'

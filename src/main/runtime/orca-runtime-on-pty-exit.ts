@@ -7,7 +7,6 @@ import {
   resolveUnreportedExitCause
 } from '../../shared/terminal-exit-cause'
 import { SSH_EXIT_UNCONFIRMED_REASON } from '../../shared/pty-liveness-verdict'
-import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import type { RetiredTerminalSurface } from './mobile-session-terminal-retirement'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
@@ -25,7 +24,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
        * as -1, so the numeric code alone cannot tell a dead process from a failed stop. */
       providerExitObserved?: boolean
     } = {}
-  ): void {
+  ): void | Promise<void> {
     const pty = this.ptysById.get(ptyId)
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
       return
@@ -76,7 +75,10 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     >()
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       for (const tab of snapshot.tabs) {
-        if (tab.type === 'terminal' && tab.ptyId === ptyId) {
+        if (
+          tab.type === 'terminal' &&
+          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
+        ) {
           exactSurfaceByKey.set(`${worktreeId}\0${tab.parentTabId}\0${tab.leafId}`, {
             worktreeId,
             parentTabId: tab.parentTabId,
@@ -120,7 +122,6 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       this.intentionalHandlelessPtyStops.has(ptyId) &&
       (intentionalStopIncarnation === null || intentionalStopIncarnation === incarnationId)
     advertisedUrlWatcher.unbindPty(ptyId)
-    agentSessionPtyWriteGate.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
     this.terminalViewSubscribers.clearSubscribers(ptyId)
@@ -141,11 +142,8 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
-    // Safe against respawn: `getPtyLifecycleGeneration` lazily mints from the
-    // monotonic `nextPtyLifecycleGeneration`, so a re-read after this delete
-    // returns a strictly newer number — never a reused one. Every comparison a
-    // stale frame makes therefore still fails, exactly as the advance above intends.
     this.ptyLifecycleGenerationById.delete(ptyId)
+    this.pendingPtySurfaceRetirementsByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
@@ -218,13 +216,24 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
     }
+    let retirement: Promise<void> | undefined
     if (preservesIntentionalHandlelessSurface || preservesAbnormalSshSurface) {
       // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
       this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
     } else {
       // Why: permanent process exit is absence, not a starting/sleeping tab.
       // Retire before publishing so paired clients never persist a ghost.
-      this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
+      const pendingRetirement = {}
+      this.pendingPtySurfaceRetirementsByPtyId.set(ptyId, pendingRetirement)
+      retirement = this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
+        .catch((error) => {
+          console.error('[runtime] failed to publish terminal retirement:', error)
+        })
+        .finally(() => {
+          if (this.pendingPtySurfaceRetirementsByPtyId.get(ptyId) === pendingRetirement) {
+            this.pendingPtySurfaceRetirementsByPtyId.delete(ptyId)
+          }
+        })
     }
 
     const exitedSurfaces: { handle: string; paneKey: string | null }[] = []
@@ -255,6 +264,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       }
     }
     this.pruneDisconnectedPtyRecords()
+    return retirement
   }
 
   private notifyPtyExitListeners(ptyId: string): void {

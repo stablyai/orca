@@ -7,7 +7,9 @@ describe('empty streamed deltas', () => {
     const prefix = 'empty-delta-retention-prefix'
     const streams = createCodexStructuredItemStreams({
       sink: { appendItem() {}, appendTombstone() {}, publish() {} },
+      turnIdFor: () => 'turn',
       identityFor: () => ({ provider: 'codex', threadId: 'thread', turnId: 'turn', ordinal: 0 }),
+      linkageFor: () => ({}),
       schedule: () => () => {}
     })
     const append = (delta: string) =>

@@ -24,11 +24,14 @@ export function opencodeDiscoveries(
           storageDir,
           dbPaths: dbPaths.filter((path) => !isOpenCodeV2DatabaseName(basename(path))),
           limitPerAgent: limit,
-          issues
+          issues,
+          signal: options.signal
         })
       ),
       // Current releases share opencode.db with v1; the worker checks for v2 tables.
-      paths.then((dbPaths) => discoverOpenCode2Sessions(storageDir, dbPaths, limit, issues))
+      paths.then((dbPaths) =>
+        discoverOpenCode2Sessions(storageDir, dbPaths, limit, issues, options.signal)
+      )
     ]
   })
 }
@@ -96,9 +99,10 @@ async function discoverOpenCode2Sessions(
   storageDir: string,
   dbPaths: readonly string[],
   limit: number,
-  issues: AiVaultScanIssue[]
+  issues: AiVaultScanIssue[],
+  signal?: AbortSignal
 ): Promise<SessionFileDiscovery> {
-  const files = await listOpenCode2SqliteSessionsViaWorker({ dbPaths, limit, issues })
+  const files = await listOpenCode2SqliteSessionsViaWorker({ dbPaths, limit, issues, signal })
   return {
     agent: 'opencode2' as const,
     rootDir: storageDir,

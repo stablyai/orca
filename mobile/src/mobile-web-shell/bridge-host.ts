@@ -4,11 +4,8 @@ import { createNativeVerbServer } from './bridge-host-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { createBridgeHostStreamFrames } from './bridge-host-stream-frames'
-import { readBridgeExternalLinkUrl } from './bridge/bridge-caps'
 import {
-  BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
-  BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION,
   readBridgeClientMessage,
   type BridgeClientMessage,
@@ -16,20 +13,17 @@ import {
   type BridgeInitRoute
 } from './bridge/bridge-envelope'
 import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
-import { createBridgeInitFrame } from './bridge/bridge-init-frame'
-import { BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
-import { bridgeNotifyRefusal } from './bridge/bridge-notify-grants'
+import { BRIDGE_SHELL_ACCEPTS, createBridgeInitFrame } from './bridge/bridge-init-frame'
 import { splitBridgeReply } from './bridge/bridge-reply-chunking'
-import { pageMayWriteStorageKey } from './page-storage-keys'
 import { createBridgeHostFrames } from './bridge-host-frames'
-import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
+import { createBridgeHostBack, type BridgeSessionBack } from './bridge-host-back'
+import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
+import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeHostOptions } from './bridge-host-contract'
 
 // Re-exported so a caller reaches the host and what it reports through one module.
 export type { BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
-
-type NotifyMessage = Extract<BridgeClientMessage, { type: 'notify' }>
 
 export type BridgeHost = {
   receive: (json: string) => void
@@ -46,6 +40,21 @@ export type BridgeHost = {
    * applied.
    */
   publishRoute: (next: BridgeInitRoute) => void
+  /** Hands this session moved safe-area insets over the same re-sent `init` a route update takes. */
+  publishSafeAreaInsets: (next: BridgeSafeAreaInsets) => void
+  /**
+   * Hands the page one Back press. False when this document never said it takes one, which is
+   * every page older than the frame; the caller then leaves the key to the navigator.
+   */
+  sendBack: () => boolean
+  /**
+   * What this session has established about the Back key, for the host that takes over.
+   *
+   * A host is rebuilt when the client under it changes and the page document does not move, so
+   * what the page declared and what it is holding outlive this object. Read at teardown and handed
+   * to the replacement; a caller that is ending the session simply drops it.
+   */
+  readSessionBack: () => BridgeSessionBack
   dispose: () => void
 }
 
@@ -77,7 +86,8 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     sendInit: () => {
       sendInit()
     },
-    onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue })
+    onRefused: (issue) => options.onDiagnostic?.({ kind: 'route-update-refused', issue }),
+    ...(options.safeAreaInsets === undefined ? {} : { safeAreaInsets: options.safeAreaInsets })
   })
   let closed = false
   // One document's turn at the bridge. `close` ends it and the next `ready` begins the next one;
@@ -91,7 +101,6 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   // Seeded from the session rather than started false: this host may be a rebuild taking over a
   // session that handshook with the one before it.
   let initSent = options.sessionEstablished
-  let notifyFailureReported = false
 
   const frames = createBridgeHostFrames({
     post: options.post,
@@ -153,12 +162,13 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
           buildId,
           connection: snapshot(),
           route,
+          safeAreaInsets: routes.safeAreaInsets(),
           pageRoutes,
           ...(parsedRouteGrants?.success === true
             ? { pageRouteGrants: parsedRouteGrants.data }
             : {}),
           granted,
-          accepts: [BRIDGE_ROUTE_PARAM_CLEAR],
+          accepts: BRIDGE_SHELL_ACCEPTS,
           host,
           ...options.readStorage()
         })
@@ -183,6 +193,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     sendReply,
     sendError,
     capExceeded: (message) => new BridgeCapExceededError(message),
+    readClientIdentity: () => options.readClientIdentity(),
     serveNative: createNativeVerbServer({
       granted,
       serveVerb: (verb, params) => options.serveNativeVerb(verb, params)
@@ -194,106 +205,28 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     subscriptions,
     sendError,
     granted,
+    readClientIdentity: () => options.readClientIdentity(),
     report: (diagnostic) => options.onDiagnostic?.(diagnostic)
   })
 
-  /** The client's own work runs inside these calls, and a throw from one would otherwise escape into
-   *  the native event handler that delivered the page's frame. Nothing is owed to the page here. */
-  function forwardNotify(message: NotifyMessage): void {
-    const refusal = bridgeNotifyRefusal({
-      name: message.name,
-      initSent,
-      granted
-    })
-    if (refusal !== null) {
-      options.onDiagnostic?.({ kind: 'notify-refused', name: message.name, why: refusal })
-      return
-    }
-    try {
-      if (message.name === BRIDGE_FAULT_GRANT) {
-        // Not the client's: a page that threw is this session's problem, and the desktop on the
-        // other end of the client has nothing to do with it.
-        options.onPageFault(message.error)
-        return
-      }
-      if (message.name === 'foreground') {
-        if (message.reason === undefined) {
-          client.notifyForeground()
-        } else {
-          client.notifyForeground(message.reason)
-        }
-        return
-      }
-      if (message.name === 'navigate') {
-        // Not routed to the client: this one never leaves the phone. The page asked for a screen
-        // it does not render, and the caller pushes it over the still-mounted view.
-        options.onNavigate(message.href)
-        return
-      }
-      if (message.name === BRIDGE_NAVIGATE_BACK_NOTIFY) {
-        // Local too, and the one notify with no argument: the shell pops what it pushed. A pop the
-        // shell did not make is reported rather than answered, because the page is told nothing
-        // either way and a Back button that does nothing is what would otherwise go unnoticed.
-        const outcome = options.onNavigateBack()
-        if (outcome !== 'popped') {
-          options.onDiagnostic?.({ kind: 'navigate-back-refused', why: outcome })
-        }
-        return
-      }
-      if (message.name === BRIDGE_EXTERNAL_LINK_GRANT) {
-        // Local as well: this one leaves the app entirely rather than reaching the desktop. Read
-        // rather than forwarded, because what the envelope accepted is the string and what it
-        // accepted it for is the parser's URL — a page posting an unnormalized one would otherwise
-        // hand the device handler something the check never looked at. Null cannot arrive here:
-        // the envelope refines on the same rule, and the branch is what says so.
-        const target = readBridgeExternalLinkUrl(message.url)
-        if (target !== null) {
-          options.onExternalLink(target)
-        }
-        return
-      }
-      if (message.name === 'storage') {
-        // Also local, and held to this host's own keys. The envelope allowlists the shape before
-        // this runs, which lets `orca:pins:<any host>` through: a page opened for one host must
-        // not rewrite another's pinned list, and the keys it was handed are the ones it may write.
-        // Three refusals in one, decided where the keys are (ruling 33.6): the oversize half has
-        // to be enforced here because a page served from an older desktop bundle does not read
-        // `storageOversize` and would write the key whole over what the device holds.
-        const held = options.readStorage()
-        if (!pageMayWriteStorageKey(message.key, host.id, routes.current(), held)) {
-          options.onDiagnostic?.({ kind: 'storage-refused', key: message.key })
-          return
-        }
-        options.onStorageWrite(message.key, message.value)
-        return
-      }
-      if (message.name === BRIDGE_HAPTICS_NOTIFY) {
-        // Local, and the only notify the shell answers with hardware. Nothing crosses back, which
-        // is the whole reason this is a notify: a reply would spend an in-flight slot per row tap.
-        options.onHaptic(message.kind)
-        return
-      }
-      if (message.name === BRIDGE_ROUTE_PARAM_CLEAR) {
-        // Local, and the one frame that writes to the shell's own route (ruling 34). Carried up
-        // rather than acted on here: the param lives on the native route the switch holds, and
-        // whether this still names it is that holder's comparison to make.
-        options.onRouteParamClear(message.param, message.value)
-        return
-      }
-      client.updateTerminalSubscriptionViewport(message.terminal, {
-        cols: message.cols,
-        rows: message.rows
-      })
-    } catch (error) {
-      // Once per session, for the reason a failing post is: a page nudging a broken listener nudges
-      // it again on every foreground.
-      if (notifyFailureReported) {
-        return
-      }
-      notifyFailureReported = true
-      options.onDiagnostic?.({ kind: 'notify-failed', error })
-    }
-  }
+  // The same three the outbound frames are gated on, read here as well: the Back caller spends the
+  // answer on a hardware key, and a `true` for a frame that never left is a dead press.
+  const deliverable = (): boolean => !closed && serving && initSent
+
+  const back = createBridgeHostBack({
+    send,
+    deliverable,
+    onClaim: (claimed) => options.onPageBackClaim(claimed),
+    ...(options.sessionBack === undefined ? {} : { established: options.sessionBack })
+  })
+
+  const forwardNotify = createBridgeNotifyForwarder({
+    options,
+    granted,
+    initSent: () => initSent,
+    route: () => routes.current(),
+    onBackClaim: back.readClaim
+  })
 
   /** Cancels everything the page had open. `notify` is false for the page's own `close`, which has
    *  already settled what it owned. */
@@ -317,11 +250,15 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     if (message.type === 'ready') {
       serving = true
       routes.readReady(message)
+      back.readReady(message.accepts ?? [])
       // Every time it is asked, not once: the page re-asks on a backoff, and each ask is answered
       // with the route the shell holds now. That is the whole repair path for a frame that never
       // arrived (ruling 34) — nothing here waits on one, and nothing retries one.
       sendInit()
-      options.onPageReady()
+      // Forwarded verbatim, including a name this shell has never implemented: what each report
+      // means is the caller's, and this host's job is that the list belongs to the document that
+      // just spoke rather than to the one before it.
+      options.onPageReady({ reports: message.reports ?? [], accepts: message.accepts ?? [] })
       return
     }
     if (!serving) {
@@ -363,6 +300,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
         // host, and a host that had shut itself would leave that `ready` retrying forever.
         settleAll(false)
         serving = false
+        back.drop()
         return
     }
   }
@@ -396,6 +334,11 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     publishRoute: (next) => {
       routes.publish(next, serving && initSent)
     },
+    publishSafeAreaInsets: (next) => {
+      routes.publishSafeAreaInsets(next, deliverable())
+    },
+    sendBack: back.send,
+    readSessionBack: back.read,
     dispose
   }
 }

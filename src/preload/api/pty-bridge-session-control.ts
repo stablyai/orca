@@ -1,5 +1,4 @@
 import { ipcRenderer } from 'electron'
-import type { AgentSessionPtyWriteRefusal } from '../../shared/agent-session-pty-write-admission'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type {
@@ -44,6 +43,8 @@ export const ptySessionControlApi = {
     // Why: closes the SIGKILL race (INVESTIGATION.md) — main sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before pty:spawn returns.
     tabId?: string
     leafId?: string
+    // Why: a pane with a live owner is otherwise reattached; a restart names the PTY main must stop first.
+    replacesPtyId?: string
     // Why: loose typing on purpose — renderer owns launch metadata, main owns whether the launch happened and validates (telemetry-plan.md §Agent launch semantics).
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
   }): Promise<{
@@ -75,17 +76,9 @@ export const ptySessionControlApi = {
   },
   writeAccepted: (id: string, data: string): Promise<boolean> =>
     ipcRenderer.invoke('pty:writeAccepted', { id, data }),
-  onWriteUnavailable: (
-    callback: (payload: {
-      id: string
-      /** Set only when a durable agent-session lease refused the write; absent otherwise. */
-      agentSessionRefusal?: AgentSessionPtyWriteRefusal
-    }) => void
-  ): (() => void) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      payload: { id: string; agentSessionRefusal?: AgentSessionPtyWriteRefusal }
-    ): void => callback(payload)
+  onWriteUnavailable: (callback: (payload: { id: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { id: string }): void =>
+      callback(payload)
     ipcRenderer.on('pty:writeUnavailable', handler)
     return () => ipcRenderer.removeListener('pty:writeUnavailable', handler)
   },

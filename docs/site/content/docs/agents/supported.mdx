@@ -16,7 +16,7 @@ Orca works with **any CLI agent** — the agent combobox just launches a process
 
 ## Permissions default
 
-For new launches, Orca pre-fills each supported CLI's permission-bypass flag — `--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex, `--yolo` for Gemini / Cursor / Crush / Kimi / Rovo Dev / Hermes / GitHub Copilot / Command Code, plus the equivalent flag for every other agent that exposes one. These flags allow an agent to act without confirming every shell command; review the trust boundary before using them.
+For new launches, Orca pre-fills each supported CLI's permission-bypass flag — `--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex, `--yolo` for Gemini / Cursor / Crush / Kimi / Muse / Rovo Dev / Hermes / GitHub Copilot / Command Code, `--mode yolo` for ZCode, plus the equivalent flag for every other agent that exposes one. These flags allow an agent to act without confirming every shell command; review the trust boundary before using them.
 
 Use **Settings → Agents → Agent Permissions** when you want to switch all uncustomized agents between **Yolo** and **Manual** launches. If you already overrode a specific agent's launch arguments or environment, Orca leaves that agent alone so the global switch doesn't erase your custom command.
 
@@ -47,6 +47,8 @@ To restore prompts for one agent only, edit that agent's default arguments or en
 | Cline              | Auto-setup                                                                                                                 | [Cline](https://docs.cline.bot/cline-cli/overview)                                                |
 | Codebuff           | Auto-setup                                                                                                                 | [Codebuff](https://www.codebuff.com/docs/help/quick-start)                                        |
 | Command Code       | Auto-setup, status                                                                                                         | [Command Code](https://commandcode.ai/docs/quickstart)                                            |
+| Muse               | macOS/Linux; trusts the workspace at launch                                                                                | [Meta](https://dev.meta.ai/docs/muse-code)                                                        |
+| ZCode              | Deep integration; needs a `zcode` CLI that ships the TUI (see note below)                                                  | [Z.ai](https://zcode.z.ai/en/docs)                                                                |
 | Continue           | Auto-setup                                                                                                                 | [Continue](https://docs.continue.dev/guides/cli)                                                  |
 | Cursor CLI         | Deep integration                                                                                                           | [Cursor](https://cursor.com/cli)                                                                  |
 | Devin              | Auto-setup                                                                                                                 | [Devin](https://devin.ai/cli)                                                                     |
@@ -59,3 +61,23 @@ To restore prompts for one agent only, edit that agent's default arguments or en
 | Hermes             | Auto-setup                                                                                                                 | [Nous](https://hermes-agent.nousresearch.com/docs/)                                               |
 | OpenClaw           | Auto-setup                                                                                                                 | [OpenClaw](https://github.com/openclaw/openclaw)                                                  |
 | Trae               | Auto-setup via `traecli` (TRAE CN CLI)                                                                                     | [Trae](https://www.trae.ai/)                                                                      |
+
+## ZCode: pick a CLI that ships the TUI
+
+Orca drives ZCode through the `zcode` terminal CLI, so `zcode` on your `PATH` has to be a build that
+includes ZCode's TUI.
+
+The ZCode **desktop app** bundles the agent runtime without it. Pointing `zcode` at
+`/Applications/ZCode.app/Contents/Resources/glm/zcode.cjs` starts, then fails to open a session with:
+
+```
+Cannot find package '@zcode/tui' imported from .../zcode.cjs
+```
+
+Orca's hooks still install correctly in that state, so the symptom looks like a broken integration when
+it is really a CLI that cannot render a session. Use a `zcode` that carries the TUI — build the CLI from
+[`zai-org/ZCode`](https://github.com/zai-org/ZCode) (`apps/zcode-cli`), or install a distribution that
+packages the runtime together with the TUI.
+
+Check what you have with `zcode --version`, and confirm `zcode` opens a session outside Orca before
+reporting a harness problem.

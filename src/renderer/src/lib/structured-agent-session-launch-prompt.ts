@@ -13,6 +13,7 @@ import {
   type StructuredAgentSessionLaunchPromptMutation
 } from '@/components/native-chat/structured-agent-session-outbox-storage'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type StructuredPromptDeliveryResult = {
   delivered: boolean
@@ -112,7 +113,7 @@ async function dispatchStructuredLaunchPrompt(
         requeueStructuredAgentSessionSendRefusal(
           current,
           result.refusal.code,
-          () => createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
+          () => createStructuredAgentSessionOperationId(createBrowserUuid),
           entry.lastAttemptAt !== null
         )
       )

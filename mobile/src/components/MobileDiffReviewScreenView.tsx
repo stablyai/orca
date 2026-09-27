@@ -97,7 +97,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             staleCommentIds={controller.staleCommentIds}
             onAddNote={controller.openComposer}
             onEditNote={controller.openEditComposer}
-            onRetry={controller.retryAction}
+            onRetry={controller.retryAction ?? undefined}
           />
           {controller.currentItem ? (
             <MobileDiffReviewFooter

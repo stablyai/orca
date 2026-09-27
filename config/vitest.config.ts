@@ -16,8 +16,13 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Bun's external-module cache otherwise loses Zod named exports across mocked graphs.
+    ...(process.versions.bun ? { server: { deps: { inline: ['zod'] } } } : {}),
     ...(process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
-      ? { sequence: { sequencer: TimingSequencer } }
+      ? {
+          sequence: { sequencer: TimingSequencer },
+          reporters: ['default', resolve('config/scripts/ci-unit-timing-reporter.mjs')]
+        }
       : {}),
     // Why: Node 26's undefined Web Storage globals prevent Vitest from installing happy-dom's.
     // Why --expose-gc: retention tests need a deterministic collection point to measure what a queue really holds.

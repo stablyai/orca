@@ -120,12 +120,13 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
   deleteAutomation(
     id: string,
     expectedOwner?: AutomationOwnerPrecondition
-  ): { removed: boolean; id: string } {
+  ): Promise<{ removed: boolean; id: string }> {
     return this.automation.withExternalProbePriority(() => {
       const selector = this.automationChangeSelector(id)
-      const result = this.automation.delete(id, expectedOwner as never)
-      this.publishAutomationDefinitionChange(selector, selector)
-      return result
+      return this.automation.delete(id, expectedOwner).then((result) => {
+        this.publishAutomationDefinitionChange(selector, selector)
+        return result
+      })
     })
   }
 

@@ -210,8 +210,13 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
                     session.pane.terminal.rows !== snapshot.rows
                   : session.pane.terminal.cols !== colsBeforeReplay ||
                     session.pane.terminal.rows !== rowsBeforeReplay
-                if (skippedAltFrame) {
-                  session.pulseVisibleLocalPtySizeForTuiRepaint(currentPtyId)
+                if (skippedAltFrame && !replayChangedDimensions) {
+                  // Why: the fit landed back on the capture grid, so no SIGWINCH repaints the skipped frame; the model still holds it.
+                  const restoreWasInFlight = session.hiddenOutputRestoreInFlight !== null
+                  session.markHiddenOutputRestoreNeeded()
+                  if (restoreWasInFlight) {
+                    session.hiddenOutputRestoreFreshSnapshotNeeded = true
+                  }
                   return
                 }
                 if (replayChangedDimensions && session.isRendererPtyResizeAuthoritative()) {

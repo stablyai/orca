@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
+import { registerAppMouseShortcuts } from './register-app-mouse-shortcuts'
 import { translate } from '@/i18n/i18n'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { isEditableTarget } from '../lib/editable-target'
@@ -312,10 +313,13 @@ export function useGlobalKeybindings(args: {
     // Why: a window blur mid-gesture must not leave the detector armed.
     const onBlur = (): void => doubleTapDetector.reset()
 
+    const unregisterMouseShortcuts = registerAppMouseShortcuts(() => shortcutStateRef.current)
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onKeyUp, { capture: true })
     window.addEventListener('blur', onBlur)
     return () => {
+      unregisterMouseShortcuts()
       unregisterAppCommandDispatcher()
       window.removeEventListener('keydown', onKeyDown, { capture: true })
       window.removeEventListener('keyup', onKeyUp, { capture: true })

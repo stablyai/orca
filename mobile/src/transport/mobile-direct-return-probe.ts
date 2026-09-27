@@ -2,7 +2,6 @@ import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
 import type { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import type { RpcClient } from './rpc-client'
 import type { ScheduleTimer } from './timer-scheduler'
-import type { HostProfile } from './types'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const DIRECT_PROBE_INTERVAL_MS = 15_000
@@ -20,11 +19,11 @@ export class DirectReturnProbe {
       now: () => number
       setTimer: ScheduleTimer
       clearTimer: typeof clearTimeout
-      openDirect: (endpoint: string) => RpcClient
+      openDirect: () => RpcClient
+      directPath: Exclude<MobileConnectionPath, 'relay'>
     },
     private readonly hooks: {
       hysteresis: MobileEndpointHysteresis
-      host: () => HostProfile
       canSchedule: () => boolean
       canAttempt: () => boolean
       beginOperation: () => void
@@ -75,7 +74,6 @@ export class DirectReturnProbe {
     let successful: Awaited<ReturnType<typeof openAuthenticatedDirectEndpoint>> = null
     try {
       successful = await openAuthenticatedDirectEndpoint(
-        this.hooks.host(),
         this.deps.openDirect,
         12_000,
         controller.signal
@@ -88,14 +86,14 @@ export class DirectReturnProbe {
         return
       }
       if (!this.hooks.hysteresis.recordDirectSuccess(this.deps.now())) {
-        successful.client.close()
+        successful.close()
         return
       }
       const candidate = successful
       // Migration owns the candidate, including closing it if cutover is canceled.
       successful = null
       try {
-        await this.hooks.migrate(candidate.client, candidate.path, () => this.stopped)
+        await this.hooks.migrate(candidate, this.deps.directPath, () => this.stopped)
       } catch (error) {
         if (this.stopped) {
           return
@@ -109,7 +107,7 @@ export class DirectReturnProbe {
       await this.hooks.onDirectMigrated()
     } finally {
       this.activeProbe = null
-      successful?.client.close()
+      successful?.close()
       // Why: a relay drop or backoff timer can arrive while the probe owns the
       // operation mutex; afterProbe releases it and replays deferred recovery.
       this.hooks.afterProbe()

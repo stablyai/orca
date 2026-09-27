@@ -36,10 +36,15 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
   },
   hostIdentity: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     minWidth: 0,
     marginRight: spacing.md
+  },
+  hostIdentityLine: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+  hostPlatformText: {
+    marginLeft: 16,
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 16
   },
   hostNameText: {
     flex: 1,

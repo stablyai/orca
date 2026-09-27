@@ -115,11 +115,9 @@ export function ClientHostedBrowserPagePane({
   }, [browserTab.id, isActive, onUpdatePageState])
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
+  const shortcutOwner = { browserTabId: browserTab.id, workspaceId, isActive, chromeShortcutScope }
   const { keepAddressBarFocusRef, startAddressBarFocusGrab } = useBrowserPageChromeFocus({
-    browserTabId: browserTab.id,
-    workspaceId,
-    isActive,
-    chromeShortcutScope,
+    ...shortcutOwner,
     addressBarInputRef,
     guestFocus
   })
@@ -148,15 +146,11 @@ export function ClientHostedBrowserPagePane({
   // one-way write that would burn the tour on a pane the user has not really seen.
   useClientHostedBrowserIntroTour(isActive && !attachmentError && placement !== null)
   useBrowserPageFindShortcuts({
-    browserTabId: browserTab.id,
-    workspaceId,
-    isActive,
-    chromeShortcutScope,
+    ...shortcutOwner,
     setFindOpen
   })
   useBrowserPageWebviewShortcuts({
-    browserTabId: browserTab.id,
-    isActive,
+    ...shortcutOwner,
     isActiveRef,
     webviewRef,
     paneZoomLevelRef: zoom.paneZoomLevelRef,

@@ -301,11 +301,12 @@ function requireDesiredStartupScript(script, config) {
   }
 }
 
-// The same-cap job targets this cell's backend service so the two declared-but-unapplied
-// settings land one cell at a time: an unindexed root plan pulls the whole MIG and template
-// resources in as dependencies, which standing image drift turns into a 29-cell roll. Each
-// attribute is optional because a cell that already has it plans no change for it.
-// Splitting the backend out here keeps `changes` the template-and-MIG count both callers read.
+// The same-cap job no longer targets this cell's backend service (the capacity role has no
+// compute.backendServices.update), so a wave plan carries no backend change and this reports an
+// empty list. It stays as the bound on any caller that does target one: exactly this cell's
+// backend, exactly the reviewed drain and request-logging attributes, each optional because a
+// cell that already has one plans no change for it. Splitting the backend out keeps `changes`
+// the template-and-MIG count both callers read.
 function takeCellBackendUpdate(changes, config) {
   const backends = changes.filter(
     ({ address }) => typeof address === 'string' && address.startsWith(`${CELL_BACKEND_RESOURCE}[`)
@@ -435,10 +436,12 @@ function cellPlan(plan, changes, config) {
   const obsoleteTemplates = changes.filter(
     ({ address, deposed }) => address === templateAddress && typeof deposed === 'string'
   )
+  // A failed wave apply leaves its predecessor deposed; the wave must plan its own cleanup.
   const allowsObsoleteTemplates =
-    config.mode === 'same-cap-image' &&
     obsoleteTemplates.length > 0 &&
-    obsoleteTemplates.every((change) => sameActions(change, ['delete']))
+    obsoleteTemplates.every((change) => sameActions(change, ['delete'])) &&
+    (config.mode === 'same-cap-image' ||
+      (config.mode === 'same-cap-cell' && obsoleteTemplates.length === 1))
   if (
     !template ||
     !manager ||
@@ -599,32 +602,36 @@ export function validateCapacityPlan(plan, config) {
       ...(config.mode === 'same-cap-image' ? { changeKind: 'none' } : {})
     }
   }
+  const templateAddress = `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]`
   const replacement = changes.some(
     ({ address, deposed, change }) =>
-      address === `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]` &&
+      address === templateAddress &&
       deposed === undefined &&
       JSON.stringify(change?.actions) === JSON.stringify(['create', 'delete'])
   )
   if (replacement) cellPlan(plan, changes, config)
   else convergenceCellPlan(plan, changes, config)
+  const obsoleteTemplates = changes.filter(
+    ({ address, deposed }) => address === templateAddress && typeof deposed === 'string'
+  )
   const obsoleteTemplateOnly = changes.every(
     ({ address, deposed, change }) =>
-      address === `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]` &&
+      address === templateAddress &&
       typeof deposed === 'string' &&
       JSON.stringify(change?.actions) === JSON.stringify(['delete'])
   )
+  // Same as the backend split: `changes` stays the template-and-MIG count the same-cap job gates
+  // on. same-cap-image keeps its own total and names obsolete deletes in changeKind instead.
+  const splitsObsoleteTemplates = config.mode === 'same-cap-cell' && obsoleteTemplates.length > 0
   return {
     mode: config.mode,
-    changes: changes.length,
+    changes: changes.length - (splitsObsoleteTemplates ? obsoleteTemplates.length : 0),
+    ...(splitsObsoleteTemplates ? { obsoleteTemplates: obsoleteTemplates.length } : {}),
     ...backend,
     ...(config.mode === 'same-cap-image'
       ? {
           changeKind: replacement
-            ? changes.some(
-                ({ address, deposed }) =>
-                  address === `google_compute_instance_template.relay_gce_cell[${JSON.stringify(config.cellId)}]` &&
-                  typeof deposed === 'string'
-              )
+            ? obsoleteTemplates.length > 0
               ? 'replacement-with-obsolete-template'
               : 'replacement'
             : obsoleteTemplateOnly

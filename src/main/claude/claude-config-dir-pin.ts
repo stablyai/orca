@@ -1,6 +1,28 @@
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
+/**
+ * The record owns a structured session's Claude home and `claudeConfigDirEnvPatch` is its sole
+ * emitter, so every base the child inherits (the shell snapshot, Orca's own process env) must
+ * arrive without one: a CLAUDE_CONFIG_DIR left there would flip the pin's comparison and force
+ * an explicit pin to the CLI default, which moves the CLI off its default Keychain item.
+ */
+export function withoutInheritedClaudeConfigDir(
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform
+): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (
+      value !== undefined &&
+      (platform === 'win32' ? key.toUpperCase() : key) !== 'CLAUDE_CONFIG_DIR'
+    ) {
+      next[key] = value
+    }
+  }
+  return next
+}
+
 /** The config dir the Claude CLI resolves for itself when nothing pins one. */
 export function defaultClaudeConfigDir(env: NodeJS.ProcessEnv = process.env): string {
   return env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')

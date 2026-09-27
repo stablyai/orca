@@ -52,16 +52,24 @@ function sessionReadFailure(err: unknown): Error {
  * SQLite work onto the main thread.
  */
 export class OpenCodeSqliteWorkerClient {
+  private readonly requestTimeoutMs: number | undefined
   private readonly requests: WorkerThreadRequestQueue<
     OpenCodeSqliteWorkerRequest,
     OpenCodeSqliteWorkerResponse
   >
 
-  constructor(options: { workerFactory: WorkerThreadFactory; log?: (message: string) => void }) {
+  constructor(options: {
+    workerFactory: WorkerThreadFactory
+    log?: (message: string) => void
+    idleTeardownMs?: number
+    requestTimeoutMs?: number
+  }) {
+    this.requestTimeoutMs = options.requestTimeoutMs
     const log = options.log ?? ((message: string) => console.warn(message))
     this.requests = new WorkerThreadRequestQueue({
       factory: options.workerFactory,
-      idleTeardownMs: IDLE_TEARDOWN_MS,
+      idleTeardownMs: options.idleTeardownMs ?? IDLE_TEARDOWN_MS,
+      queueCap: { maxQueuedCalls: 64, describeFull: () => 'OpenCode SQLite reader queue is full.' },
       maxConsecutiveDeaths: MAX_CONSECUTIVE_DEATHS,
       createUnavailableError: (message) => new OpenCodeSqliteWorkerUnavailableError(message),
       describeTimeout: (timeoutMs) => `OpenCode SQLite worker timed out after ${timeoutMs}ms`,
@@ -91,6 +99,7 @@ export class OpenCodeSqliteWorkerClient {
     limit: number
     issues: AiVaultScanIssue[]
     agent?: 'opencode2'
+    signal?: AbortSignal
   }): Promise<SessionFileCandidate[]> {
     if (args.dbPaths.length === 0) {
       return []
@@ -102,14 +111,18 @@ export class OpenCodeSqliteWorkerClient {
           id,
           kind: 'list',
           dbPaths: args.dbPaths,
-          limit: args.limit,
+          limit: Number.isFinite(args.limit) ? args.limit : null,
           ...(args.agent ? { agent: args.agent } : {})
         }),
-        LIST_TIMEOUT_MS
+        LIST_TIMEOUT_MS,
+        args.signal
       )) as OpenCodeSqliteListValue
       args.issues.push(...value.issues)
       return value.candidates
     } catch (err) {
+      if (args.signal?.aborted) {
+        throw err
+      }
       if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
         // Kinded: a whole source failed, not a transcript.
         args.issues.push({
@@ -144,22 +157,26 @@ export class OpenCodeSqliteWorkerClient {
    *   worker timeout/crash so the scanner records a per-session scan issue.
    */
   async parse(args: {
+    fullFirstUserPrompt?: boolean
     dbPath: string
     sessionId: string
     platform: NodeJS.Platform
     agent?: 'opencode2'
+    signal?: AbortSignal
   }): Promise<AiVaultSession | null> {
     try {
       const value = await this.dispatch(
         (id) => ({
           id,
           kind: 'parse',
+          ...(args.fullFirstUserPrompt ? { fullFirstUserPrompt: true } : {}),
           dbPath: args.dbPath,
           sessionId: args.sessionId,
           platform: args.platform,
           ...(args.agent ? { agent: args.agent } : {})
         }),
-        PARSE_TIMEOUT_MS
+        PARSE_TIMEOUT_MS,
+        args.signal
       )
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the worker's parse leg returns exactly this, built by the repo's own reader on the other side of a structured clone.
       return value as AiVaultSession | null
@@ -185,6 +202,7 @@ export class OpenCodeSqliteWorkerClient {
     sessionId: string
     platform: NodeJS.Platform
     agent?: 'opencode2'
+    signal?: AbortSignal
   }): Promise<OpenCodeSqliteCaptureValue> {
     try {
       const value = await this.dispatch(
@@ -196,7 +214,8 @@ export class OpenCodeSqliteWorkerClient {
           platform: args.platform,
           ...(args.agent ? { agent: args.agent } : {})
         }),
-        CAPTURE_TIMEOUT_MS
+        CAPTURE_TIMEOUT_MS,
+        args.signal
       )
       return parseOpenCodeSqliteCaptureValue(value)
     } catch (err) {
@@ -204,11 +223,21 @@ export class OpenCodeSqliteWorkerClient {
     }
   }
 
+  dispose(): void {
+    this.requests.dispose()
+  }
+
   private async dispatch(
     buildRequest: (id: number) => OpenCodeSqliteWorkerRequest,
-    timeoutMs: number
+    timeoutMs: number,
+    signal?: AbortSignal
   ): Promise<unknown> {
-    const response = await this.requests.dispatch(buildRequest, timeoutMs)
+    const deadline = this.requestTimeoutMs ?? timeoutMs
+    const response = await this.requests.dispatch(
+      (id) => ({ ...buildRequest(id), timeoutMs: deadline }),
+      deadline,
+      signal
+    )
     if (!response.ok) {
       throw new Error(response.error)
     }

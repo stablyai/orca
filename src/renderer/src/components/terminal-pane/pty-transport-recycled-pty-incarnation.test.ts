@@ -10,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   installIpcPtyWindow,
   restorePtySpecWindow,
-  type PtyExitPayload
+  type PtyExitPayload,
+  type PtyStreamPayload
 } from './pty-transport-test-harness'
 
 const RECYCLED_PTY_ID = 'ssh:target@@pty-1'
@@ -20,11 +21,16 @@ const FRESH_INCARNATION_ID = 'incarnation-of-the-shell-now-attaching'
 describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onExit: ((payload: PtyExitPayload) => void) | null = null
+  let onData: ((payload: PtyStreamPayload) => void) | null = null
 
   beforeEach(() => {
     vi.resetModules()
     onExit = null
+    onData = null
     installIpcPtyWindow(originalWindow, {
+      data: (callback) => {
+        onData = callback
+      },
       exit: (callback) => {
         onExit = callback
       }
@@ -80,6 +86,42 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
 
     expect(result).toMatchObject({ id: RECYCLED_PTY_ID, exitedBeforeAttach: true })
     expect(paneExit).toHaveBeenCalledWith(3)
+  })
+
+  it('delivers an authentication failure and exit after the main-side binding cleanup', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = vi.mocked(window.api.pty.spawn)
+    let release!: () => void
+    const cleanup = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    spawn.mockImplementationOnce(async () => {
+      onData?.({ id: RECYCLED_PTY_ID, data: 'Authentication failed: sign in again.\r\n' })
+      onExit?.({ id: RECYCLED_PTY_ID, code: 1, incarnationId: FRESH_INCARNATION_ID })
+      await cleanup
+      return { id: RECYCLED_PTY_ID, incarnationId: FRESH_INCARNATION_ID }
+    })
+    const output = vi.fn()
+    const exit = vi.fn()
+    const error = vi.fn()
+    const connected = vi.fn()
+    const transport = createIpcPtyTransport()
+    const pending = transport.connect({
+      url: '',
+      callbacks: {
+        onData: output,
+        onExit: exit,
+        onError: error,
+        onConnect: connected
+      }
+    })
+    release()
+    expect(await pending).toEqual({ id: RECYCLED_PTY_ID, exitedBeforeAttach: true })
+    expect(output).toHaveBeenCalledWith('Authentication failed: sign in again.\r\n')
+    expect(exit).toHaveBeenCalledWith(1)
+    expect(output.mock.invocationCallOrder[0]).toBeLessThan(exit.mock.invocationCallOrder[0])
+    expect(error).not.toHaveBeenCalled()
+    expect(connected).not.toHaveBeenCalled()
   })
 
   // Absence is unknown, never a mismatch — so an SSH host predating the field, and the relay's own

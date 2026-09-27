@@ -11,6 +11,7 @@ import { isTuiAgentEnabled, pickTuiAgent } from '../../shared/tui-agent-selectio
 import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-inputs'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import {
+  markAntigravityWorkspaceTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
@@ -200,6 +201,8 @@ export async function markLocalWorktreeTrusted(
     } else if (preset === 'codex') {
       // Why: the Codex write queues behind any in-flight hook grant, so the agent must not launch until it lands.
       await markCodexProjectTrusted(workspacePath)
+    } else if (preset === 'antigravity') {
+      markAntigravityWorkspaceTrusted(workspacePath)
     }
   } catch {
     // Best-effort: the user can still accept the agent trust prompt manually.

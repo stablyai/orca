@@ -25,14 +25,14 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   restoredUnconfirmed?: true
   /** User-hidden resume identity retained solely for destructive liveness checks. */
   retainedForLiveness?: true
-  /** Persisted proof that a lead boundary was held working only by child agents. */
-  claudeLeadBoundaryChildOnly?: true
 }
 
+// `claudeRunningNonAgentTask` is persisted on purpose: it is the one child-work fact the row's
+// `mainAgent` cannot express (a shell beside the agents), and hydration reads it to decide whether a
+// settled main agent may be seeded. It replaced the derived `claudeLeadBoundaryChildOnly` flag.
 export type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
   | 'authorityRestartId'
-  | 'claudeRunningNonAgentTask'
   | 'launchToken'
   | 'promptInteractionKey'
   | 'restoredUnconfirmed'

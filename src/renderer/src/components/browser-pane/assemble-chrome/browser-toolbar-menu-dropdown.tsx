@@ -30,6 +30,10 @@ type DetectedBrowserEntry = {
 }
 import { BROWSER_VIEWPORT_PRESETS } from '../../../../../shared/browser-viewport-presets'
 import { translate } from '@/i18n/i18n'
+import {
+  BrowserChromeFoldedMenuItems,
+  type BrowserChromeOverflowMenuProps
+} from './browser-chrome-folded-tools'
 
 type BrowserToolbarMenuDropdownProps = {
   menuOpen: boolean
@@ -45,6 +49,7 @@ type BrowserToolbarMenuDropdownProps = {
   onImportFromFile: () => void
   viewportPresetId: BrowserViewportPresetId | null
   onApplyViewportPreset: (nextId: BrowserViewportPresetId | null) => void
+  overflow: BrowserChromeOverflowMenuProps
 }
 
 export function BrowserToolbarMenuDropdown({
@@ -60,12 +65,14 @@ export function BrowserToolbarMenuDropdown({
   onImportFromBrowser,
   onImportFromFile,
   viewportPresetId,
-  onApplyViewportPreset
+  onApplyViewportPreset,
+  overflow
 }: BrowserToolbarMenuDropdownProps): React.JSX.Element {
   return (
     <DropdownMenu modal={false} open={menuOpen} onOpenChange={onMenuOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={overflow.triggerRef}
           size="icon"
           variant="ghost"
           className="h-8 w-8"
@@ -77,7 +84,15 @@ export function BrowserToolbarMenuDropdown({
           <Ellipsis className="size-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent
+        align="end"
+        className="w-56"
+        onCloseAutoFocus={overflow.onMenuCloseAutoFocus}
+      >
+        <BrowserChromeFoldedMenuItems
+          tools={overflow.tools}
+          deferUntilClose={overflow.deferUntilClose}
+        />
         {allProfiles.map((profile) => {
           const isSelectedProfile = profile.id === effectiveProfileId
           return (

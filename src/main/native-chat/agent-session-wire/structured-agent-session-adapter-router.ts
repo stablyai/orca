@@ -86,6 +86,20 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) =>
     this.owner(input.sessionId).cancelTurn(input)
 
+  changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) => {
+    const change = this.owner(input.sessionId).changeThreadGoal
+    if (!change) {
+      return Promise.resolve({ ok: false, rejected: 'Goals are unavailable for this provider.' })
+    }
+    return change(input)
+  }
+
+  supportsThreadGoal = (sessionId: string): boolean =>
+    this.liveOwnerOrNull(sessionId)?.supportsThreadGoal?.(sessionId) ?? false
+
+  recordsContextUsage = (sessionId: string): boolean =>
+    this.liveOwnerOrNull(sessionId)?.recordsContextUsage?.(sessionId) ?? false
+
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
   ) => {
@@ -105,6 +119,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     this.owner(input.sessionId).setOption(input)
+
+  awaitOptionWritable = (sessionId: string): Promise<void> =>
+    this.liveOwnerOrNull(sessionId)?.awaitOptionWritable?.(sessionId) ?? Promise.resolve()
 
   readOptions = (input: { sessionId: string; fence: number }) => {
     const reader = this.owner(input.sessionId).readOptions

@@ -1,4 +1,3 @@
-import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
 import { InvalidArgumentError, defineMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
@@ -243,18 +242,6 @@ export const TERMINAL_SEND_METHODS = [
             )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
-        if (isAgentSessionPtyWriteRefusedError(error)) {
-          // Why: name the owner and the stage instead of a bare not-writable, so a client can say
-          // who holds the session rather than retrying into a lease it will never win.
-          return {
-            send: {
-              handle: params.terminal,
-              accepted: false,
-              bytesWritten: 0,
-              agentSessionRefusal: error.refusal
-            }
-          }
-        }
         if (acceptedPromptCheckpoint) {
           return acceptedPromptCheckpoint
         }

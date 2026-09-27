@@ -1,11 +1,5 @@
 import { createCodexProviderActivityReader } from '../native-chat/agent-session-wire/provider-frame-activity'
 import { CODEX_TOKEN_USAGE_METHOD } from './codex-subagent-activity'
-import { CodexSubagentRoster } from './codex-subagent-roster'
-import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
-import { CodexJournalCompactions } from './codex-structured-journal-compactions'
-import { CodexJournalGoals } from './codex-structured-journal-goals'
-import { CodexJournalItems } from './codex-structured-journal-items'
-import { CodexJournalPrompts } from './codex-structured-journal-prompts'
 import {
   CODEX_JOURNAL_ADMITTED,
   type CodexJournalTranslationAdmission,
@@ -13,10 +7,9 @@ import {
   type CodexJournalTranslatorDeps
 } from './codex-structured-journal-contracts'
 import { settleCodexJournalSession } from './codex-structured-journal-settlement'
-import { createCodexOversizedNotificationSettler } from './codex-structured-journal-translation-frames'
 import { restoreCodexJournalThread } from './codex-structured-journal-translation-restore'
 import { CodexJournalTurnBoundaries } from './codex-structured-journal-translation-turn-boundaries'
-import { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
+import { createCodexJournalTranslatorWriters } from './codex-structured-journal-translation-writers'
 import { publishCodexTurnLifecycle } from './codex-structured-journal-translation-turns'
 import { readCodexProviderVerdict } from './codex-structured-journal-provider-verdicts'
 import { createCodexThreadItemRouter } from './codex-structured-journal-thread-item-routing'
@@ -43,31 +36,17 @@ export {
 export function createCodexJournalTranslator(
   deps: CodexJournalTranslatorDeps
 ): CodexJournalTranslator {
-  const activeTurns = new CodexJournalActiveTurns()
-  const compactions = new CodexJournalCompactions(deps.sink, (threadId) =>
-    activeTurns.current(threadId)
-  )
-  const genericFrames = new CodexJournalGenericFrames(deps, (threadId) =>
-    activeTurns.current(threadId)
-  )
-  const goals = new CodexJournalGoals(deps.sink)
-  const items = new CodexJournalItems(
-    deps,
-    (threadId) => activeTurns.current(threadId),
-    (threadId, turnId) => genericFrames.suppress(threadId, turnId)
-  )
-  const settleOversizedNotification = createCodexOversizedNotificationSettler(deps, items)
-  const prompts = new CodexJournalPrompts(
-    deps,
-    (threadId, itemId) => items.detailFor(threadId, itemId),
-    (threadId) => activeTurns.current(threadId)
-  )
-  const subagents = new CodexSubagentRoster({
-    sink: deps.sink,
-    primaryThreadId: () => deps.primaryThreadId?.() ?? null,
-    activeTurn: (threadId) => activeTurns.current(threadId),
-    ...(deps.subagentExecutions ? { executions: deps.subagentExecutions } : {})
-  })
+  const {
+    activeTurns,
+    subagents,
+    linkageFor,
+    genericFrames,
+    items,
+    compactions,
+    goals,
+    prompts,
+    settleOversizedNotification
+  } = createCodexJournalTranslatorWriters(deps)
   const flushStreams = (): CodexJournalTranslationAdmission =>
     items.streams.flush() ? CODEX_JOURNAL_ADMITTED : { accepted: false, reason: 'backpressure' }
   let readActivity = createCodexProviderActivityReader()
@@ -86,6 +65,7 @@ export function createCodexJournalTranslator(
     ...(deps.clearPromptTurn ? { clearPromptTurn: deps.clearPromptTurn } : {}),
     flushSuppression: () => genericFrames.flush(),
     resetActivity,
+    linkageFor,
     ...(deps.now ? { now: deps.now } : {})
   })
   let primaryThreadStoppedRunning = false
@@ -183,7 +163,8 @@ export function createCodexJournalTranslator(
             turnBoundaries.settled(threadId, turnId, {
               state: 'interrupted',
               completedAt: event.observedAt ?? deps.now?.() ?? Date.now()
-            })
+            }),
+          linkageFor
         })
         if (!admission.accepted) {
           return admission

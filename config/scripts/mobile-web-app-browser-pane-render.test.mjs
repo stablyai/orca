@@ -319,14 +319,14 @@ async function visibleLayerIndex(page) {
 /**
  * Waits for the page's own applied-frame signal: the double buffer's flip.
  *
- * `applyFrame` writes the next frame's URI onto the hidden layer as soon as the frame lands and
+ * The pacer writes the next frame's URI onto the hidden layer as soon as the frame lands and
  * only flips the opacity once the decode resolves, so "some painted layer carries a new digest" is
  * true before the frame is on screen. Measured here on 2026-09-20: the write landed at 80.7 ms
  * after the emit and the flip at 85.7 ms, a 5 ms window in which a wait on the digest returns and
  * the visible layer is still the previous frame. That is what made this file fail once in CI with
  * the second frame's digest equal to the first's and no console errors.
  *
- * The flip is one opacity write, at `settleBrowserFrameLayer`, and it is the behaviour under test
+ * The flip is one opacity write, at the pacer's `flip`, and it is the behaviour under test
  * rather than a proxy for it, so waiting on it can neither return early nor depend on how long a
  * decode takes. Asserting the exact layer, not merely a change, keeps a pane with nothing visible
  * from reading as a flip.
@@ -374,7 +374,7 @@ describePane('the browser pane in a page', () => {
       await waitForPaint(view.page, 1)
 
       const layers = await readPaintedLayers(view.page)
-      // Both layers, because a render repaints both from `renderedFrameSource`, and one visible.
+      // Both layers, because the first frame is painted on both, and one visible.
       // This does not prove the decode-then-flip ran: with the probe removed entirely, the first
       // frame still paints and a layer is still visible, because the visible layer starts at 0 and
       // never needed to move. The flip is the next case's to prove.
@@ -483,6 +483,36 @@ describePane('the browser pane in a page', () => {
       const acks = await view.page.evaluate(() => globalThis.__orcaRenderCheckAcks)
       expect(acks.length).toBeGreaterThan(0)
       expect(await view.csp()).toEqual([])
+      expect(view.consoleErrors).toEqual([])
+    } finally {
+      await view.context.close()
+    }
+  }, 120_000)
+
+  it('charges a JSON event to the window too, so one ack does not drive the ledger negative', async () => {
+    // The two emitters share one ledger and the `ack` arm subtracts whatever it finds on `unacked`.
+    // A JSON event that took a slot without paying for its bytes left `unackedBytes` below zero on
+    // the first ack, and the binary arm reads that floor: every later window check admitted frames
+    // the real `BridgeHostSubscriptions` would have refused.
+    const view = await openPane({ grants: [faultGrant, BINARY_GRANT] })
+    try {
+      await view.page.waitForFunction(() => globalThis.__orcaRenderCheckSubscribes.length > 0)
+      const ledger = await view.page.evaluate((protocolVersion) => {
+        const id = globalThis.__orcaRenderCheckSubscribes[0].id
+        globalThis.__orcaRenderCheckEmitEvent(id, { type: 'probe', payload: 'x'.repeat(4096) })
+        const charged = globalThis.__orcaRenderCheckWindow(id)
+        globalThis.orcaBridge.postMessage(
+          JSON.stringify({ v: protocolVersion, type: 'ack', id, seq: charged.frames })
+        )
+        return { charged, settled: globalThis.__orcaRenderCheckWindow(id) }
+      }, bridgeVersion)
+
+      // Charged on the way out, which is the precondition: a zero here would make the line below
+      // read as balanced when nothing was ever counted.
+      expect(ledger.charged.frames).toBe(1)
+      expect(ledger.charged.unackedBytes).toBeGreaterThan(4096)
+      // And returned whole by the ack, rather than past it.
+      expect(ledger.settled).toEqual({ frames: 0, unackedBytes: 0 })
       expect(view.consoleErrors).toEqual([])
     } finally {
       await view.context.close()

@@ -40,7 +40,7 @@ const SHELL_HOST = {
 }
 /** The manifest's own pairs, as the shell would send them. */
 const PAGE_ROUTE_GRANTS = [
-  { pathname: HOST_PATTERN, grants: ['navigate', 'storage', 'haptics'] },
+  { pathname: HOST_PATTERN, grants: ['navigate', 'storage', 'externalLink', 'haptics'] },
   { pathname: FILES_PATTERN, grants: ['navigate', 'storage', 'externalLink', 'haptics'] },
   {
     pathname: TASKS_PATTERN,

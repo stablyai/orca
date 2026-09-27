@@ -78,6 +78,7 @@ function resumableStateFactoryFor(
     case 'hermes':
     case 'cline':
     case 'kimi':
+    case 'muse':
     case 'opencode':
     case 'opencode2':
     case 'rovo':
@@ -113,12 +114,13 @@ export async function parseAgentSessionFileCached(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
   stats?: SessionParseStats,
-  requireRead?: SessionParseReadRequirement
+  requireRead?: SessionParseReadRequirement,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   // The whole lookup-read-store sequence runs in the lane: a concurrent parse of
   // the same path shares this entry's resume point and its message channel.
   return inSessionParseFileLane(candidate.file.path, () =>
-    parseCachedInLane(candidate, platform, stats, requireRead)
+    parseCachedInLane(candidate, platform, stats, requireRead, signal)
   )
 }
 
@@ -161,7 +163,8 @@ async function parseCachedInLane(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
   stats?: SessionParseStats,
-  requireRead?: SessionParseReadRequirement
+  requireRead?: SessionParseReadRequirement,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   const { file } = candidate
   if (
@@ -215,7 +218,7 @@ async function parseCachedInLane(
     return enriched.session
   }
 
-  const session = await readWholeTranscript({ candidate, platform, stats })
+  const session = await readWholeTranscript({ candidate, platform, stats, signal })
   // Whole-file agents merge the sibling here just like the resumable branch
   // does post-read; the raw fold stays in foldSession so a sibling-only change
   // re-merges without re-reading the transcript.

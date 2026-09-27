@@ -89,7 +89,13 @@ function installHost(options: {
     }
   }
   hostRef.current = {
-    deps: { store: { listRecords: () => options.records, getRecord: () => null } },
+    deps: {
+      store: {
+        listRecords: () => options.records,
+        getRecord: () => null,
+        getSessionTabId: (sessionId: string) => (visible.has(sessionId) ? `tab-${sessionId}` : null)
+      }
+    },
     hasSession: (sessionId: string) => held.has(sessionId),
     getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [...visible] }),
     setSessionTabVisibility: async (sessionId: string, isVisible: boolean) => {

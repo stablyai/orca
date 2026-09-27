@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { homedir } from 'node:os'
 import { join, sep } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -488,20 +489,17 @@ describe('listAiVaultSessions host routing', () => {
         })
     )
     registerAiVaultHandlers()
-    const event = { sender: { id: 7 } }
+    const event = { sender: Object.assign(new EventEmitter(), { id: 7 }) }
     const pending = getIpcHandler('aiVault:listSessions')(event, {
       executionHostScope: 'ssh:dev-box',
       requestToken: 'scan-1'
     })
     await vi.waitFor(() => expect(relaySignal).toBeDefined())
 
-    await getIpcHandler('aiVault:cancelListSessions')(event, {
-      requestToken: 'scan-1'
-    })
+    await getIpcHandler('aiVault:cancelListSessions')(event, { requestToken: 'scan-1' })
 
     expect(relaySignal?.aborted).toBe(true)
-    // Resolved, not rejected: Electron logs every rejected handler, and a
-    // superseded scan is normal control flow rather than a failure.
+    // Superseded scans resolve because Electron logs every rejected handler.
     await expect(pending).resolves.toMatchObject({ cancelled: true, sessions: [] })
   })
 })

@@ -61,6 +61,8 @@ export const beforeEach = importedValues.exportedBeforeEach
 export const beginWatcherInstall = importedValues.exportedBeginWatcherInstall
 export const buildAgentPromptPasteBytes = importedValues.exportedBuildAgentPromptPasteBytes
 export const buildPreview = importedValues.exportedBuildPreview
+export const cancelLegacyWorkerTerminalRecoveryRetriesForTests =
+  importedValues.exportedCancelLegacyWorkerTerminalRecoveryRetriesForTests
 export const clearConfiguredWorktreeSharedDirectoriesCacheForTests =
   importedValues.exportedClearConfiguredWorktreeSharedDirectoriesCacheForTests
 export const clearSubmodulePathsCacheForTests =

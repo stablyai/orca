@@ -13,6 +13,7 @@ import { exposeMessages } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { BareRecipientResolution, SendRecipientWarning } from './recipient-routing'
 import type { SendParams } from '../schemas'
+import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -94,6 +95,7 @@ export async function sendGroupMessage(args: {
   db: OrchestrationDb
   from: string
   groupAddress: string
+  sender: OrchestrationCallerIdentity
   senderPaneKey: string | undefined
   senderRunId: string | undefined
   explicitRunId: string | undefined
@@ -108,6 +110,7 @@ export async function sendGroupMessage(args: {
     db,
     from,
     groupAddress,
+    sender,
     senderPaneKey,
     senderRunId,
     explicitRunId,
@@ -117,7 +120,7 @@ export async function sendGroupMessage(args: {
   } = args
   // Audience follows the sender's binding, never a caller-supplied message Run or payload.
   function resolveAudienceRunId(): string {
-    const coordinated = senderPaneKey ? db.getCurrentRunForPane(senderPaneKey) : undefined
+    const coordinated = db.getCurrentRunForCoordinator(sender)
     const runId =
       coordinated?.id ??
       db.getActiveDispatchForIdentity(from, senderPaneKey)?.run_id ??

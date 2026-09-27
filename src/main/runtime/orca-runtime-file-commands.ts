@@ -17,7 +17,6 @@ import { RuntimeGitHubIssueCommentCommands } from './runtime-github-issue-commen
 import { RuntimeGitHubProjectCommands } from './runtime-github-project-commands'
 import { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
 import { RuntimeRepositoryIssueCommand } from './runtime-repository-issue-command'
-import type { AgentSessionPtyWriteAdmittance } from './agent-session-pty-write-gate'
 import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-publication'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
@@ -203,11 +202,6 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
-
-  protected readonly orchestrationPointerAdmissionByPtyId = new Map<
-    string,
-    AgentSessionPtyWriteAdmittance
-  >()
 
   protected readonly clientHostedBrowserRows = new ClientHostedBrowserRowPublisher({
     listClientPages: (worktreeId) => getRuntimeBrowserPageRegistry(this).listPages(worktreeId),

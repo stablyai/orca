@@ -12,8 +12,10 @@ import {
   resolveResumeGroupHeader,
   resumeWorkspaceKind,
   type ResumeCandidate,
+  type ResumeFailure,
   type ResumeWorkspaceGroup
 } from './native-chat-resume-on-restart-grouping'
+import type { ResumeFailureAction } from './native-chat-resume-failure-guidance'
 
 export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
 
@@ -31,6 +33,12 @@ export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
  */
 
 type StoreState = ReturnType<typeof useAppStore.getState>
+
+/** Lets a row that an earlier resume could not carry on show what went wrong and what to do. */
+type FailureProps = {
+  failureFor?: (sessionId: string) => ResumeFailure | undefined
+  onFailureAction?: (action: ResumeFailureAction, sessionId: string) => void
+}
 
 function resolveWorkspaceWorktree(store: StoreState, workspaceId: string) {
   return (
@@ -110,14 +118,16 @@ function WorkspaceGroup({
   listedAt,
   busy,
   selected,
-  onToggle
+  onToggle,
+  failureFor,
+  onFailureAction
 }: {
   group: ResumeWorkspaceGroup
   listedAt: number
   busy: boolean
   selected: ReadonlySet<string>
   onToggle: (sessionId: string, checked: boolean) => void
-}): React.JSX.Element {
+} & FailureProps): React.JSX.Element {
   const name = useWorkspaceName(group.workspaceId)
   const first = group.candidates[0]
   const kind = first ? resumeWorkspaceKind(first) : 'git-worktree'
@@ -141,6 +151,8 @@ function WorkspaceGroup({
             checked={selected.has(candidate.sessionId)}
             disabled={busy}
             onCheckedChange={(checked) => onToggle(candidate.sessionId, checked)}
+            failure={failureFor?.(candidate.sessionId)}
+            onFailureAction={onFailureAction}
           />
         ))}
       </ul>
@@ -153,14 +165,16 @@ export function ResumeOnRestartGroups({
   listedAt,
   busy,
   selected,
-  onToggle
+  onToggle,
+  failureFor,
+  onFailureAction
 }: {
   candidates: readonly ResumeCandidate[]
   listedAt: number
   busy: boolean
   selected: ReadonlySet<string>
   onToggle: (sessionId: string, checked: boolean) => void
-}): React.JSX.Element {
+} & FailureProps): React.JSX.Element {
   const workspaces = groupResumeCandidates(candidates)
   const repoIdFor = useRepoIdByWorkspace(workspaces.map((group) => group.workspaceId))
   const repoGroups = groupResumeWorkspacesByRepo(workspaces, repoIdFor)
@@ -178,6 +192,8 @@ export function ResumeOnRestartGroups({
                 busy={busy}
                 selected={selected}
                 onToggle={onToggle}
+                failureFor={failureFor}
+                onFailureAction={onFailureAction}
               />
             ))}
           </div>

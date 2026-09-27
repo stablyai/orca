@@ -33,6 +33,12 @@ import {
   claudeUserMessageWasProvablyUnwritten
 } from './claude-agent-sdk-user-message-queue'
 import { AgentSessionPreDispatchError } from '../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
+import {
+  claudeStartupFailureReason,
+  claudeStartupHoldsWrites,
+  failClaudeStartupGate,
+  holdClaudeStartupWrite
+} from './claude-structured-session-startup-gate'
 
 const MAX_ACTIVE_DISPATCH_WAITERS = 64
 
@@ -220,6 +226,7 @@ export function settleCancelledClaudeDispatchWaiters(
  *  Retired rather than dropped: their identities stay joinable, bounded by
  *  `MAX_RETIRED_DISPATCH_WAITERS`. */
 export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
+  failClaudeStartupGate(session, new Error('claude stream-json ended before startup completed'))
   for (const waiter of session.dispatchWaiters.splice(0)) {
     retireWaiter(session, waiter)
     waiter.resolve(null)
@@ -229,7 +236,8 @@ export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
   input: { clientMessageId?: string; body: AgentJournalMessageItem; requestedAt?: number },
-  beforeDispatch?: () => Promise<void>
+  beforeDispatch?: () => Promise<void>,
+  onSettledLate?: ClaudeLateDispatchSettlement
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
   try {
@@ -240,12 +248,18 @@ export async function dispatchClaudeTurn(
   if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
     return { state: 'rejected', reason: DISPATCH_REJECTED_QUEUE_FULL }
   }
+  const startupFailure = claudeStartupFailureReason(session)
+  if (startupFailure) {
+    return { state: 'rejected', reason: startupFailure }
+  }
   // Read the sent content, not the journal blocks: only the mapped trailing prompt decides
   // whether Claude runs a command, so the two cannot disagree about which frame settles this.
   const acceptsResult = claudeDispatchInvokesSlashCommand(content)
   const sentUuid = randomUUID()
   const arm = () => {
     ++session.dispatchSequence
+    // A context report asked for before this send may land after it and misstate the context.
+    session.translator?.markContextActivity()
     return waitForReplay(
       session,
       acceptsResult,
@@ -254,6 +268,21 @@ export async function dispatchClaudeTurn(
       input.clientMessageId ?? null,
       input.requestedAt ?? null
     )
+  }
+  const message = {
+    type: 'user',
+    uuid: sentUuid,
+    message: { role: 'user', content },
+    parent_tool_use_id: null,
+    session_id: session.providerSessionId
+  }
+  if (claudeStartupHoldsWrites(session)) {
+    return holdClaudeStartupWrite(session, {
+      message,
+      arm,
+      ...(beforeDispatch ? { beforeDispatch } : {}),
+      ...(onSettledLate ? { settleLate: onSettledLate } : {})
+    })
   }
   const pending = { replay: beforeDispatch ? undefined : arm() }
   const authorize = beforeDispatch
@@ -266,13 +295,6 @@ export async function dispatchClaudeTurn(
       }
     : undefined
   try {
-    const message = {
-      type: 'user',
-      uuid: sentUuid,
-      message: { role: 'user', content },
-      parent_tool_use_id: null,
-      session_id: session.providerSessionId
-    }
     await (authorize
       ? session.connection.send(message, authorize)
       : session.connection.send(message))

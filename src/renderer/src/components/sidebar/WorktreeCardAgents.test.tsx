@@ -132,7 +132,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     childAgentCount,
     childAgentsExpanded,
     onToggleChildAgents,
-    reserveDisclosureGutter,
+    disclosureInGutter,
     onActivate
   }: {
     agent: { paneKey: string }
@@ -143,7 +143,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     childAgentCount?: number
     childAgentsExpanded?: boolean
     onToggleChildAgents?: () => void
-    reserveDisclosureGutter?: boolean
+    disclosureInGutter?: boolean
     onActivate: (tabId: string, paneKey: string) => void
   }) => {
     capturedRowActivations.push({ paneKey: agent.paneKey, onActivate })
@@ -155,7 +155,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
         data-disabled-reason={sendTargetDisabledReason}
         data-has-send-handler={typeof onSendTargetClick === 'function' ? 'true' : 'false'}
         data-pane-key={agent.paneKey}
-        data-reserve-disclosure-gutter={reserveDisclosureGutter ? 'true' : 'false'}
+        data-disclosure-in-gutter={disclosureInGutter ? 'true' : 'false'}
       >
         {agent.paneKey}
         {typeof childAgentCount === 'number' && childAgentCount > 0 ? (
@@ -438,7 +438,8 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('role="tree"')
     expect(markup).toContain('data-pane-key="tab-parent:1"')
     expect(markup).toContain('data-pane-key="tab-child:1"')
-    expect(markup).toContain('data-pane-key="tab-child:1" data-reserve-disclosure-gutter="false"')
+    expect(markup).toContain('data-pane-key="tab-parent:1" data-disclosure-in-gutter="true"')
+    expect(markup).toContain('data-pane-key="tab-child:1" data-disclosure-in-gutter="false"')
     expect(markup).toContain('aria-label="Hide 1 child agent"')
     expect(markup).toContain('aria-expanded="true"')
   })

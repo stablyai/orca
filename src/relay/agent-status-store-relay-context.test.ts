@@ -7,6 +7,10 @@ import { makeStructuredAgentStatusSubject } from '../shared/agent-status-subject
 const SHARED_CORE_FILES = [
   'agent-status-child-work.ts',
   'agent-status-child-work-codec.ts',
+  'agent-status-child-work-activity-codec.ts',
+  'agent-status-child-work-legality.ts',
+  'agent-status-child-work-value-guards.ts',
+  'agent-status-child-work-view.ts',
   'agent-status-child-work-admission.ts',
   'agent-status-child-work-admission-core.ts',
   'agent-status-child-work-admission-operations.ts',

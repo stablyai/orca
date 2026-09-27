@@ -5,7 +5,8 @@ import type { CodexUsageDailyAggregate, CodexUsagePersistedFile, CodexUsageSessi
 // Why: v5 keys Codex ownership on raw token_count identity without session id
 // so forks that rewrite session_meta still match. Older caches used session-
 // scoped keys and can double-count after fork/resume (#8006).
-export const CODEX_USAGE_SCHEMA_VERSION = 5
+// v6 adds per-request long-context token counts, which older rows cannot be backfilled with.
+export const CODEX_USAGE_SCHEMA_VERSION = 6
 
 export const codexUsageProvider = {
   id: 'codex',

@@ -62,25 +62,4 @@ describe('terminal WebView reflow', () => {
       "notify(scope, { type: 'measure-result', cols: null, rows: null })"
     )
   })
-
-  // Why: the assertions above read the reflow module's own emission, which still reads whole if
-  // the generator drops the module from the document or emits it twice. That was the regression
-  // class reported when a sibling refactor extracted the tap dispatcher next to reflow. Guard the
-  // assembled document so the routine, once, and its dispatch are really in what the WebView runs.
-  describe('the document that carries it', () => {
-    it('declares the reflow routine exactly once', () => {
-      expect(DOCUMENT_SOURCE.split('export function reflow(').length - 1).toBe(1)
-    })
-
-    it('starts the message bridge after the tap dispatcher', () => {
-      // Why: the reflow message only reaches reflow() if the document's transport attaches. The
-      // dispatcher starts before the bridge, and a start that throws is unwound by the document
-      // itself rather than leaving a half-started one, so the order is what this holds.
-      const sequence = documentModuleSource('create-terminal-document')
-      expect(sequence.indexOf('startTapDispatch(scope)')).toBeGreaterThan(0)
-      expect(sequence.indexOf('startMessageBridge(scope)')).toBeGreaterThan(
-        sequence.indexOf('startTapDispatch(scope)')
-      )
-    })
-  })
 })

@@ -9,6 +9,7 @@ import { routeAllMailboxPages } from '../schemas'
 import { resolveRunScope } from '../runs/run-scope'
 import type { CheckParams } from '../schemas'
 import type { z } from 'zod'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 
@@ -18,6 +19,7 @@ export async function checkRunMailbox(args: {
   db: OrchestrationDb
   handle: string
   paneKey: string | undefined
+  callerSession: OrchestrationSessionCaller | undefined
   typeFilter: MessageType[] | undefined
   signal: AbortSignal | undefined
   legacyCoordinatorRunId: string | undefined
@@ -31,6 +33,7 @@ export async function checkRunMailbox(args: {
     db,
     handle,
     paneKey,
+    callerSession,
     typeFilter,
     signal,
     legacyCoordinatorRunId,
@@ -52,6 +55,7 @@ export async function checkRunMailbox(args: {
     runId: params.run,
     callerTerminalHandle: handle,
     callerPaneKey: paneKey,
+    callerSession,
     requireCurrentConsumer: true,
     legacyCoordinatorRunId,
     callerEvidence: orchestrationCompatibilityEvidence
@@ -73,6 +77,7 @@ export async function checkRunMailbox(args: {
     runId: run.id,
     callerTerminalHandle: handle,
     callerPaneKey: paneKey,
+    callerSession,
     requireCurrentConsumer: true,
     legacyCoordinatorRunId,
     callerEvidence: orchestrationCompatibilityEvidence

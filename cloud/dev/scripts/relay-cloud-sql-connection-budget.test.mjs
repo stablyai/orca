@@ -7,12 +7,12 @@ import {
 } from './relay-cloud-sql-connection-budget.mjs'
 
 test('production shared consumers keep allowance and reserve below the ceiling', () => {
-  // cells: 20 pools at 10 (200) + the three asia-east2 pools at 16 (48).
+  // cells: 20 pools at 10 (200) + the four asia-east2 pools at 16 (64).
   const report = readRelayCloudSqlConnectionBudget()
 
-  assert.deepEqual(report.consumers, { cells: 248, directors: 15, auth: 20, api: 50 })
-  assert.deepEqual(report.asia, { cells: 3, poolMax: 16 })
-  assert.equal(report.configuredMaximum, 333)
+  assert.deepEqual(report.consumers, { cells: 264, directors: 15, auth: 20, api: 50 })
+  assert.deepEqual(report.asia, { cells: 4, poolMax: 16 })
+  assert.equal(report.configuredMaximum, 349)
   assert.equal(report.rolloutOverlap.relayDirectorCandidate, 30)
   assert.equal(report.rolloutOverlap.apiCandidate, 65)
   assert.equal(report.rolloutOverlap.authCandidate, 35)
@@ -22,10 +22,10 @@ test('production shared consumers keep allowance and reserve below the ceiling',
   assert.equal(report.maintenanceAdminAllowance, 5)
   assert.equal(report.explicitReserve, 10)
   assert.equal(report.usableCeiling, 490)
-  assert.equal(report.operatingMaximum, 403)
-  assert.equal(report.remainingWithinUsableCeiling, 87)
-  assert.equal(report.budgetedTotal, 413)
-  assert.equal(report.unallocated, 87)
+  assert.equal(report.operatingMaximum, 419)
+  assert.equal(report.remainingWithinUsableCeiling, 71)
+  assert.equal(report.budgetedTotal, 429)
+  assert.equal(report.unallocated, 71)
   assert.equal(report.withinBudget, true)
 })
 
@@ -79,6 +79,33 @@ test('excludes fenced cell pools and reads per-cell pool overrides', () => {
   assert.equal(report.consumers.cells, 14)
   assert.equal(report.operatingMaximum, 46)
   assert.equal(report.budgetedTotal, 47)
+})
+
+test('refuses an Asia cell whose pool differs from its siblings', () => {
+  const budget = (c30PoolMax) => readRelayCloudSqlConnectionBudget({
+    appConsumers: { authInstances: 1, authPoolMax: 10, apiInstances: 1, apiPoolMax: 5, maxConnections: 500 },
+    sources: {
+      productionTfvars: `
+        relay_max_instances = 1
+        relay_gce_fenced_cells = []
+        relay_gce_cells = {
+${['c27', 'c28', 'c29', 'c30'].map((hostname) => `          "production-gce-${hostname}" = {
+            region = "asia-east2"
+            database_pool_max = ${hostname === 'c30' ? c30PoolMax : 16}
+          }`).join('\n')}
+        }
+      `,
+      terraformVariables: [
+        'variable "relay_director_database_pool_max" { default = 3 }',
+        'variable "push_max_instances" { default = 1 }',
+        'variable "push_database_pool_max" { default = 2 }'
+      ].join('\n'),
+      relayConfig: 'export const RELAY_DATABASE_POOL_MAX = 10'
+    },
+    maxConnections: 500
+  })
+  assert.deepEqual(budget(16).asia, { cells: 4, poolMax: 16 })
+  assert.throws(() => budget(10), /Asia Relay cells must use one checked pool maximum/)
 })
 
 test('dedicated push scaling does not consume shared capacity', () => {

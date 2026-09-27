@@ -1,3 +1,4 @@
+import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
 import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
@@ -101,7 +102,7 @@ function createHarness(
     badgeColor: '#000000',
     addedAt: 1
   }
-  const store = {
+  const store = withDurableRuntimeStore({
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
     getAllWorktreeMeta: () => ({}),
@@ -117,7 +118,7 @@ function createHarness(
         throw flushError
       }
     })
-  }
+  })
   const acknowledged = makeDeferred()
   let closeTerminalTabError: Error | null = null
   let closeTerminalTabAction: (() => void | Promise<void>) | null = null
@@ -201,7 +202,7 @@ function createHarness(
     }
   }
   graph.syncFixtureGraph()
-  return {
+  return withDurableRuntimeStore({
     runtime,
     acknowledged,
     closeTerminal,
@@ -264,7 +265,7 @@ function createHarness(
         }
       }
     }
-  }
+  })
 }
 
 function createPtyBackedPublishedSurfaceHarness(): CloseContinuityHarness {

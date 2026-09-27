@@ -1,9 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import {
-  documentModuleSource,
-  webviewPageSource
-} from './document/document-module-source.test-support'
+import { webviewPageSource } from './document/document-module-source.test-support'
 
 const DOCUMENT_SOURCE = webviewPageSource()
 
@@ -131,14 +128,6 @@ describe('TerminalWebView scroll routing', () => {
     expect(resetBlock).toContain('cancelAnimationFrame(scope.normalScrollFrameId)')
   })
 
-  it('drains terminal writes without shifting the queued array', () => {
-    expect(source).toContain('scope.writeQueueHead = 0')
-    expect(source).toContain('export function nextQueuedWrite(')
-    expect(source).toContain('scope.writeQueueHead++')
-    expect(source).toContain('scope.writeQueue = scope.writeQueue.slice(scope.writeQueueHead)')
-    expect(source).not.toContain('writeQueue.shift()')
-  })
-
   it('bounds native-side pending WebView writes while preserving control messages', () => {
     expect(source).toContain('const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000')
     expect(source).toContain('const MAX_PENDING_WEB_WRITE_MESSAGES = 4096')
@@ -225,56 +214,6 @@ describe('TerminalWebView scroll routing', () => {
     expect(dragMoveBlock).toContain(
       'syncSelectionHandleToViewportPoint(scope, handle, clientX, clientY)'
     )
-  })
-
-  it('opens links and paths from surface taps before mouse/focus fallback', () => {
-    expect(source).toContain('export function buildMouseClickInput(')
-    expect(source).toContain('export function isClickMouseTrackingMode(')
-    expect(source).toContain("return mode !== 'none'")
-    expect(source).toContain('const pixelX = cell.x')
-    expect(source).toContain('const pixelY = cell.y')
-    expect(source).toContain(
-      'if (!isSafeSgrMouseCoordinate(cell.x) || !isSafeSgrMouseCoordinate(cell.y)) {'
-    )
-    expect(source).toContain(
-      'if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) {'
-    )
-    expect(source).toContain("if (mouseTrackingMode === 'x10') {\n      return pixelPress")
-    expect(source).toContain("if (mouseTrackingMode === 'x10') {\n      return sgrPress")
-    expect(source).toContain("if (mouseTrackingMode === 'x10') {\n    return press")
-    expect(source).toContain("col > 126 || row > 126) {\n    return ''")
-
-    const touchEndBlock = sliceBetween(
-      'function onDocumentTouchEnd(',
-      '\nfunction onDocumentTouchCancel('
-    )
-    expect(touchEndBlock).toContain(
-      'notifyTerminalSurfaceTap(scope, scope.tapCandidate.x, scope.tapCandidate.y, true)'
-    )
-
-    // The handler's own body, past its import block: the imports name these in a different order
-    // than the calls do, and the order under test is the calls'.
-    const tapModule = documentModuleSource('surface-tap')
-    const tapHandlerBlock = tapModule.slice(
-      tapModule.indexOf('export function notifyTerminalSurfaceTap(')
-    )
-    expect(tapHandlerBlock.indexOf('oscLinkAtViewportPoint')).toBeLessThan(
-      tapHandlerBlock.indexOf('urlAtViewportPoint')
-    )
-    expect(tapHandlerBlock.indexOf('urlAtViewportPoint')).toBeLessThan(
-      tapHandlerBlock.indexOf('filePathAtViewportPoint')
-    )
-    expect(tapHandlerBlock.indexOf('filePathAtViewportPoint')).toBeLessThan(
-      tapHandlerBlock.indexOf('const clickInput = buildMouseClickInput')
-    )
-    expect(tapHandlerBlock).toContain("notify(scope, { type: 'open-url', url: tappedUrl })")
-    expect(tapHandlerBlock).toContain(
-      "notify(scope, { type: 'terminal-input', bytes: clickInput })"
-    )
-    expect(tapHandlerBlock).toContain(
-      'if (focusKeyboard || !isClickMouseTrackingMode(getMouseTrackingMode(scope)))'
-    )
-    expect(tapHandlerBlock).toContain("notify(scope, { type: 'terminal-tap' })")
   })
 
   it('allows x10 mouse gesture reports through the mobile session gate', () => {

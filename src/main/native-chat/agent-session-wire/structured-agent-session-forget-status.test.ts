@@ -138,6 +138,7 @@ async function workingSession(): Promise<{
         },
         fence: 1,
         hasProviderChild: true,
+        providerChildPhase: 'ready',
         acquisitionGeneration: null
       }
     ]
@@ -171,11 +172,15 @@ function attachContext(
     bind: () => undefined,
     close: () => undefined
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial context double; the attach reads only the members defined here.
   return {
     deps: { store: { getRecord: () => null }, claimKeyId: 'key-1', journalRoot: root },
     runtimeState: {
       resolveRecovery: async () => undefined,
       eventSinkFor: () => eventSink,
+      currentEventSink: () => eventSink,
+      mintEventSink: () => eventSink,
+      adoptEventSink: () => undefined,
       probeOwner: async () => ({ outcome: 'pid-absent' }),
       discardEventSink: () => undefined
     },

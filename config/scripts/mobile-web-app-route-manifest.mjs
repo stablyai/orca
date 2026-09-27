@@ -51,8 +51,24 @@ export async function collectMobileWebAppRoutes(appDir, routeRoot = MOBILE_WEB_A
   if (routes.length === 0) {
     throw new Error(`[mobile-web-app] no routes under ${join(appDir, routeRoot)}`)
   }
-  return routes.sort((left, right) => (left.key < right.key ? -1 : 1))
+  const rootLayout = await pageRootLayout(appDir)
+  return (rootLayout ? [...routes, rootLayout] : routes).sort((left, right) =>
+    left.key < right.key ? -1 : 1
+  )
 }
+
+/**
+ * The page's root layout: the web sibling of `app/_layout.tsx`, never the native file, which owns
+ * pairing and push. Without one expo-router mounts `DefaultNavigator`, an all-edges SafeAreaView.
+ */
+async function pageRootLayout(appDir) {
+  const entries = await readdir(appDir, { withFileTypes: true })
+  const files = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name))
+  const override = files.has(ROOT_LAYOUT) ? webSiblingOf(ROOT_LAYOUT, files) : undefined
+  return override ? { key: `./${ROOT_LAYOUT}`, module: join(appDir, override) } : null
+}
+
+const ROOT_LAYOUT = '_layout.tsx'
 
 /**
  * The URL pattern expo-router gives a route key, or null for a file that is not a screen.
@@ -111,11 +127,18 @@ routeContext.id = 'orca-mobile-web-app-routes'`
  * build rather than emitting a page that mounts with the export silently gone.
  */
 export function renderMobileWebAppRouteManifest(routes) {
-  const entryLines = routes.map(
-    ({ key, module }) =>
-      `  [${JSON.stringify(key)}]: { default: lazy(() => import(${JSON.stringify(module)})) }`
-  )
+  const entryLines = routes.map(({ key, module }) => {
+    // The layout commits with the screen below it still behind its own chunk, so it is not what
+    // says the page has something to show.
+    // Optional because the closure builds call this with the page-route list, whose entries carry
+    // no key: that manifest is never loaded, since a route module imports nothing from it.
+    const resolved = key?.endsWith('/_layout.tsx')
+      ? `import(${JSON.stringify(module)})`
+      : `import(${JSON.stringify(module)}).then(withRouteScreenPaintReport)`
+    return `  [${JSON.stringify(key)}]: { default: lazy(() => ${resolved}) }`
+  })
   return `import { lazy } from "react"
+import { withRouteScreenPaintReport } from "./src/mobile-web-shell/bridge/page-first-paint"
 const modules = {
 ${entryLines.join(',\n')}
 }

@@ -5,6 +5,7 @@ import {
   RELAY_CELL_BACKEND_TIMEOUT_SECONDS,
   RELAY_CELL_CONNECTION_DRAIN_SECONDS,
   RELAY_CELL_LOG_SAMPLE_RATE,
+  parseRelayAsiaTopologyPlanArguments,
   validateRelayAsiaTopologyPlan
 } from './validate-relay-asia-topology-plan.mjs'
 
@@ -88,6 +89,121 @@ test('accepts the exact additive staging Asia topology', () => {
   assert.deepEqual(validateRelayAsiaTopologyPlan({ resource_changes: resources }, config), {
     environment: 'staging', cells: ['staging-gce-c4'], changes: 7
   })
+})
+
+const productionImage = image.replace('onorca-cloud-staging/', 'onorca-cloud/')
+const productionConfig = {
+  environment: 'production', cells: ['production-gce-c30'], image: productionImage
+}
+
+// C30 joins a live Asia region: the network is a no-op and the existing C27 route is preserved.
+function productionC30Plan() {
+  const plan = JSON.parse(JSON.stringify(resources)
+    .replaceAll('onorca-cloud-staging/', 'onorca-cloud/')
+    .replaceAll('orca-cloud-staging-relay-gce', 'orca-cloud-relay-gce')
+    .replaceAll('staging-gce-c4', 'production-gce-c30')
+    .replaceAll('relay-gce-c4', 'relay-gce-c30')
+    .replaceAll('cell-c4', 'cell-c30')
+    .replaceAll('c4.relay-staging.onorca.dev', 'c30.relay.onorca.dev')
+    .replaceAll("'10'", "'16'"))
+  for (const network of plan.slice(0, 3)) {
+    network.change.actions = ['no-op']
+    network.change.before = structuredClone(network.change.after)
+  }
+  const existingHost = { hosts: ['c27.relay.onorca.dev'], path_matcher: 'cell-c27' }
+  const existingMatcher = {
+    name: 'cell-c27',
+    default_service: 'projects/p/global/backendServices/orca-cloud-relay-gce-c27'
+  }
+  const urlMap = plan.at(-1).change
+  urlMap.before = { host_rule: [existingHost], path_matcher: [existingMatcher], fingerprint: 'old' }
+  urlMap.after.host_rule.unshift(structuredClone(existingHost))
+  urlMap.after.path_matcher.unshift(structuredClone(existingMatcher))
+  return plan
+}
+
+test('accepts the additive production C30 wave at the 16-connection Asia pool', () => {
+  assert.deepEqual(
+    validateRelayAsiaTopologyPlan({ resource_changes: productionC30Plan() }, productionConfig),
+    { environment: 'production', cells: ['production-gce-c30'], changes: 4 }
+  )
+  const staleShape = productionC30Plan()
+  staleShape[3].change.after.metadata_startup_script =
+    staleShape[3].change.after.metadata_startup_script.replace("'16'", "'10'")
+  assert.throws(
+    () => validateRelayAsiaTopologyPlan({ resource_changes: staleShape }, productionConfig),
+    /reviewed Asia cell shape/
+  )
+  const wrongZone = productionC30Plan()
+  wrongZone[4].change.after.zone = 'asia-east2-b'
+  assert.throws(
+    () => validateRelayAsiaTopologyPlan({ resource_changes: wrongZone }, productionConfig),
+    /fixed-one Asia MIG shape/
+  )
+  const liveCellTouched = productionC30Plan()
+  liveCellTouched.push(create('google_compute_instance_template.relay_gce_cell["production-gce-c27"]'))
+  assert.throws(
+    () => validateRelayAsiaTopologyPlan({ resource_changes: liveCellTouched }, productionConfig),
+    /outside the planned wave/
+  )
+})
+
+// The URL map pulls every cell's backend, MIG and template into a targeted plan.
+const liveCellResources = ['instance_template', 'instance_group_manager', 'backend_service']
+  .flatMap((kind) => ['production-gce-c1', 'production-gce-c27', 'production-gce-c28', 'production-gce-c29']
+    .map((cellId) => `google_compute_${kind}.relay_gce_cell["${cellId}"]`))
+
+test('accepts live cells the URL map pulls in only while they stay unchanged', () => {
+  const plan = productionC30Plan()
+  for (const address of liveCellResources) plan.push({ address, change: { actions: ['no-op'] } })
+  assert.equal(
+    validateRelayAsiaTopologyPlan({ resource_changes: plan }, productionConfig).changes,
+    4
+  )
+  for (const address of liveCellResources) {
+    for (const action of [['update'], ['delete'], ['create', 'delete'], ['delete', 'create']]) {
+      const drifted = productionC30Plan()
+      drifted.push({ address, change: { actions: action } })
+      assert.throws(
+        () => validateRelayAsiaTopologyPlan({ resource_changes: drifted }, productionConfig),
+        new RegExp(`${address.replaceAll(/[.[\]]/g, '\\$&')} changes a live cell outside the planned wave`)
+      )
+    }
+  }
+})
+
+test('accepts only a reviewed Asia topology wave', () => {
+  const argv = (environment, cellIds, planImage) => [
+    '--plan-json', 'plan.json', '--environment', environment, '--cell-ids', cellIds,
+    '--region', 'asia-east2', '--image', planImage
+  ]
+  for (const cellIds of [
+    'production-gce-c27,production-gce-c28,production-gce-c29',
+    'production-gce-c29,production-gce-c27,production-gce-c28',
+    'production-gce-c30'
+  ]) {
+    assert.doesNotThrow(
+      () => parseRelayAsiaTopologyPlanArguments(argv('production', cellIds, productionImage)),
+      cellIds
+    )
+  }
+  for (const cellIds of [
+    'production-gce-c27',
+    'production-gce-c27,production-gce-c30',
+    'production-gce-c27,production-gce-c28,production-gce-c29,production-gce-c30',
+    'production-gce-c30,production-gce-c30',
+    'production-gce-c31'
+  ]) {
+    assert.throws(
+      () => parseRelayAsiaTopologyPlanArguments(argv('production', cellIds, productionImage)),
+      /exact reviewed Asia topology set/,
+      cellIds
+    )
+  }
+  assert.throws(
+    () => parseRelayAsiaTopologyPlanArguments(argv('staging', 'production-gce-c30', image)),
+    /exact reviewed Asia topology set/
+  )
 })
 
 test('accepts an idempotent empty plan', () => {

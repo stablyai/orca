@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import type {
-  AgentSessionHandoffStatus,
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
@@ -120,7 +119,7 @@ describe('AgentSessionSubscribers', () => {
       { fence: 1 }
     )
     subscribers.publish(SESSION, journal)
-    subscribers.handoff(SESSION, 1, { owner: 'native' } as AgentSessionHandoffStatus)
+    subscribers.backgroundTasks(SESSION, null, 1)
     subscribers.reset(SESSION, journal, 'epoch_changed', 1)
 
     expect(events.map((event) => ('hostNow' in event ? event.hostNow : null))).toEqual([
@@ -205,13 +204,6 @@ describe('AgentSessionSubscribers', () => {
     subscribers.publish(SESSION, journal)
     subscribers.reset(SESSION, journal, 'epoch_changed', 1)
     subscribers.snapshot(SESSION, journal, 1)
-    subscribers.handoff(SESSION, 1, {
-      owner: 'native',
-      direction: null,
-      phase: 'idle',
-      stage: null,
-      operationId: null
-    })
 
     expect(published).toEqual([SESSION, SESSION, SESSION])
   })
@@ -281,51 +273,6 @@ describe('AgentSessionSubscribers', () => {
     expect(statuses.at(-1)).toEqual({
       type: 'status',
       session: expect.objectContaining({ status: 'idle' })
-    })
-  })
-
-  it('publishes handoff-only changes without serializing a transcript snapshot', async () => {
-    const journal = await journals.open({
-      identity: {
-        sessionId: SESSION,
-        workspaceId: 'workspace-1',
-        hostId: 'local',
-        agent: 'codex',
-        providerHandle: { kind: 'codex', threadId: 'thread-1' }
-      },
-      journalDir: join(root, 'journal')
-    })
-    const subscribers = new AgentSessionSubscribers()
-    const events: AgentSessionSubscribeEvent[] = []
-    subscribers.open({
-      id: 'subscriber-1',
-      sessionId: SESSION,
-      journal,
-      fence: 1,
-      emit: (event) => events.push(event)
-    })
-    const handoff: AgentSessionHandoffStatus = {
-      owner: 'native',
-      direction: 'to-tui',
-      phase: 'switching',
-      stage: 'preparing',
-      operationId: 'handoff-1'
-    }
-
-    subscribers.handoff(SESSION, 2, handoff)
-
-    expect(events.at(-1)).toEqual({
-      type: 'batch',
-      sessionId: SESSION,
-      batch: {
-        cursor: journal.cursor(),
-        items: [],
-        removedItemIds: [],
-        submissions: []
-      },
-      fence: 2,
-      hostNow: expect.any(Number),
-      handoff
     })
   })
 

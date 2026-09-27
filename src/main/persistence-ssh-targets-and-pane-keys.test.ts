@@ -1,11 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
-import { SshConnectionStore } from './ssh/ssh-connection-store'
-import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import {
+  closeTestStores,
   testState,
   createStore,
   writeDataFile,
@@ -13,6 +7,14 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { rmSync, mkdtempSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
+import { SshConnectionStore } from './ssh/ssh-connection-store'
+import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
@@ -63,7 +65,8 @@ describe('Store', () => {
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 2. Load from existing valid file ─────────────────────────────────

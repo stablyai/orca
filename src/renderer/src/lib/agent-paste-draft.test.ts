@@ -340,7 +340,7 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
 
     // Only the hard timeout (and failed process check) resolves it — to false.
-    await vi.advanceTimersByTimeAsync(8000)
+    await vi.advanceTimersByTimeAsync(20_000)
     await flushMicrotasks(5)
     await vi.advanceTimersByTimeAsync(1000)
     await expect(promise).resolves.toBe(false)
@@ -355,15 +355,17 @@ describe('pasteDraftWhenAgentReady', () => {
       foregroundProcess: 'opencode',
       hasChildProcesses: false
     })
+    const onUnconfirmedDelivery = vi.fn()
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
-      agent: 'opencode'
+      agent: 'opencode',
+      onUnconfirmedDelivery
     })
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
-    await vi.advanceTimersByTimeAsync(8000)
+    await vi.advanceTimersByTimeAsync(20_000)
 
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
@@ -371,6 +373,8 @@ describe('pasteDraftWhenAgentReady', () => {
       'pty-1',
       PASTED_ISSUE_URL
     )
+    // The composer was never observed; the caller must be able to hedge its success notice.
+    expect(onUnconfirmedDelivery).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the existing fallback budget for unrelated markerless agents', async () => {

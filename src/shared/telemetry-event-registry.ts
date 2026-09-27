@@ -16,10 +16,12 @@ import {
   codexTrustGrantSchema,
   daemonAdoptedSchema,
   daemonAuditEligibilitySchema,
+  daemonFolderAccessNoticeSchema,
   daemonLifecycleSchema,
-  daemonPtyCwdDeniedSchema,
+  daemonPtyCwdVerdictSchema,
   daemonStartFailedSchema,
   mainThreadHangDetectedSchema,
+  profileStateAuthoritySelectedSchema,
   remoteOutboundBudgetCloseSchema,
   runtimeRpcStartFailedSchema,
   settingsChangedSchema
@@ -125,10 +127,13 @@ export const eventSchemas = {
   main_thread_hang_detected: mainThreadHangDetectedSchema,
   daemon_lifecycle: daemonLifecycleSchema,
   daemon_adopted: daemonAdoptedSchema,
-  daemon_pty_cwd_denied: daemonPtyCwdDeniedSchema,
+  daemon_pty_cwd_denied: daemonPtyCwdVerdictSchema,
+  daemon_pty_cwd_readable: daemonPtyCwdVerdictSchema,
+  daemon_folder_access_notice: daemonFolderAccessNoticeSchema,
   daemon_audit_eligibility: daemonAuditEligibilitySchema,
   runtime_rpc_start_failed: runtimeRpcStartFailedSchema,
   remote_outbound_budget_close: remoteOutboundBudgetCloseSchema,
+  profile_state_authority_selected: profileStateAuthoritySelectedSchema,
 
   codex_trust_grant: codexTrustGrantSchema,
 

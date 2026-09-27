@@ -99,7 +99,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // snapshot above then lists them for the CLI and mobile without a second store.
     structuredAgentStatusSink: {
       publish: (summary, subject) => agentHookServer.ingestStructuredStatus(summary, subject),
-      forget: (subject) => agentHookServer.dropStructuredStatus(subject)
+      forget: (subject) => agentHookServer.dropStructuredStatus(subject),
+      publishChildWork: (subject, evidence, provider) =>
+        agentHookServer.ingestStructuredChildWork(subject, evidence, provider)
     },
     // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
     // read, so a row observed under one process otherwise acquires whatever the pane owns now.
@@ -134,6 +136,15 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         launchAgent: 'codex',
         workspacePath
       }),
+    // Why throw like prepare does: a null from an uninitialized service would
+    // map to the system home and key a catalog read to the wrong account.
+    resolveCodexStructuredLaunchHome: ({ launchEnv }) => {
+      const runtimeHome = state.codexRuntimeHome
+      if (!runtimeHome) {
+        throw new Error('Codex runtime home service is not initialized')
+      }
+      return runtimeHome.resolveHostCodexHomePathForLaunchReadOnly(launchEnv)
+    },
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(state.store?.getSettings()) ? agentHookServer.buildPtyEnv() : {},
     orchestrationEnvironmentTransport,

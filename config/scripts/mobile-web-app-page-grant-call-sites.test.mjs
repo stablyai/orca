@@ -1,11 +1,14 @@
 /**
- * The six grants that were pinned only by the list they were copied from (ruling 33.3).
+ * The eight grants this file pins, in six rows covering them (ruling 33.3).
  *
- * `haptics`, `screencastBinary` and the four audio grants already have call-site censuses of their
- * own; these six did not, so removing any of them from a manifest entry reddened nothing. Each row
- * below gets its own named case, and each case's control is the same rule driven over the entry
- * that route would have had with the grant struck out.
+ * `haptics`, `screencastBinary`, `externalNavigation` and the three audio grants already have
+ * censuses of their own; these eight did not, so removing any of them from a manifest entry
+ * reddened nothing. Each row below gets its own named case, and each case's control is the same
+ * rule driven over the entry that route would have had with the grant struck out.
  */
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { mobileWebAppRouteClosure } from './build-mobile-web-app-bundle.mjs'
@@ -15,8 +18,10 @@ import {
   pageRouteModulesCoverTheManifest
 } from './mobile-web-app-page-route-modules.mjs'
 import { MOBILE_WEB_PAGE_ROUTES } from './mobile-web-page-routes.mjs'
+import { spelledCountsAgainstTables } from './spelled-count-census.mjs'
 import {
   PAGE_GRANT_CALL_SITES,
+  createGrantCallSiteReader,
   grantCallSites,
   grantsMissingForRow,
   grantsNeeded,
@@ -30,6 +35,7 @@ const SESSION = '/h/[hostId]/session/[worktreeId]'
 
 /** Memoised: every case below walks all eight, and a closure is a bundle the walk builds. */
 const closures = new Map()
+const readGrantModule = createGrantCallSiteReader()
 
 function closureOf(pathname) {
   const mod = PAGE_ROUTE_MODULES.get(pathname)
@@ -41,28 +47,102 @@ function closureOf(pathname) {
   return held
 }
 
+const scriptsDir = import.meta.dirname
+
+const sessionGrants = MOBILE_WEB_PAGE_ROUTES.filter((route) => route.pathname === SESSION).flatMap(
+  (route) => route.grants
+)
+const pinnedHere = PAGE_GRANT_CALL_SITES.flatMap((row) => row.grants)
+const pinnedHereForSession = pinnedHere.filter((grant) => sessionGrants.includes(grant))
+const sessionOptionalGrants = MOBILE_WEB_PAGE_ROUTES.filter(
+  (route) => route.pathname === SESSION
+).flatMap((route) => route.optionalGrants ?? [])
+const pinnedElsewhere = sessionGrants.filter((grant) => !pinnedHere.includes(grant))
+const censusedElsewhere = [...sessionGrants, ...sessionOptionalGrants].filter(
+  (grant) => !pinnedHere.includes(grant)
+)
+
 /**
- * The one place a page route reaches a seam it does not declare, recorded rather than exempted.
+ * The split both this file and its census state in prose, counted off the two tables instead.
  *
- * `app/h/_layout.tsx` wraps every `/h` route in `HostProtocolGate`, whose `ProtocolBlockScreen`
- * offers an Update Orca link through `openExternalLink`. Six routes declare `externalLink` and two
- * do not, so on those two the wall's link posts a notify the shell refuses — a dead tap with
- * nothing on screen. Pre-existing on main and not C7.7's to change: widening two other routes'
- * grants is a capability decision, and this lane reports rather than fixes it.
+ * The rows here pin some of the session route's grants and named censuses pin the rest; the
+ * sentences that say how many were written when a fourteenth grant existed and did not move when
+ * #22072 removed it.
  *
- * Exact, so it reds in both directions: adding the grant to either route empties an entry here and
- * a new gap anywhere adds one.
+ * Two counts, and which one a row takes is what its sentence is about. Exactly one row takes the
+ * intersection: the `.mjs` sentence for how many of the session route's grants these rows cover,
+ * which a row pinning a grant no route declares -- the shell can serve a verb before a screen asks
+ * for it -- would otherwise make the census demand a comment overstate the session route's list.
+ *
+ * Of the rows that could take either, every other one counts the rows here, the title about
+ * reaching them through the session route included. That title names the session route but is not
+ * a claim about it: the assertion under it compares `grantsNeeded` with every row's grants, so it
+ * has to move when the rows move and not when the route does. A census holding it at the
+ * intersection would have kept the title below the assertion it heads. The remaining rows count
+ * neither: they read the route's own list, or the grants on it that no row pins.
+ *
+ * The rows read the whole file, titles included: a count in a JSDoc and the same count in an `it`
+ * title go stale together, and pinning only the first leaves a green suite describing itself
+ * wrongly to whoever reads the run.
  */
-const KNOWN_UNDECLARED = new Map([
-  [
-    'externalLink',
-    ['/h/[hostId] needs externalLink', '/h/[hostId]/agent-history/[worktreeId] needs externalLink']
+const SPELLED_COUNTS = {
+  'mobile-web-app-page-grant-call-sites.mjs': [
+    { precedes: 'grants', counted: sessionGrants.length },
+    { precedes: 'audio grants', counted: sessionGrants.filter(isAudio).length },
+    { precedes: 'rows pin', counted: PAGE_GRANT_CALL_SITES.length },
+    { precedes: 'of the session', counted: pinnedHereForSession.length },
+    { precedes: 'have censuses of their own', counted: pinnedElsewhere.length },
+    // One more than the row above: C8.1's optional grant is censused elsewhere as well, and the
+    // sentence here counts what has a census rather than what the route requires.
+    { precedes: 'are not repeated here', counted: censusedElsewhere.length }
+  ],
+  'mobile-web-app-page-grant-call-sites.test.mjs': [
+    // Both the header's "eight grants this file pins" and the title's "eight grants".
+    { precedes: 'grants', counted: pinnedHere.length },
+    { precedes: 'rows covering', counted: PAGE_GRANT_CALL_SITES.length },
+    { precedes: 'audio grants', counted: sessionGrants.filter(isAudio).length },
+    { precedes: 'did not', counted: pinnedHere.length },
+    { precedes: 'through the session route', counted: pinnedHere.length }
   ]
-])
+}
+
+function isAudio(grant) {
+  return grant.startsWith('native.audio.')
+}
 
 describe('the call-site reader', () => {
   const navigate = PAGE_GRANT_CALL_SITES[0]
   const storage = PAGE_GRANT_CALL_SITES[1]
+
+  it('spells the split off the two tables, in this file and in the one it reads', async () => {
+    for (const [name, rows] of Object.entries(SPELLED_COUNTS)) {
+      const source = await readFile(join(scriptsDir, name), 'utf8')
+      for (const { precedes, spelled, counts } of spelledCountsAgainstTables(source, rows)) {
+        expect(spelled, `${name}: ${precedes}`).toEqual(counts)
+      }
+    }
+  })
+
+  it('reuses parsed references across rows while observing source and row changes', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-grant-reader-'))
+    const file = join(directory, 'route.tsx')
+    const readModule = createGrantCallSiteReader()
+    const closure = { local: ['route.tsx'] }
+    const source = 'export const view = <View />; useRouteHandoff()'
+    try {
+      await writeFile(file, source)
+      expect(grantCallSites(directory, closure, navigate, readModule)).toEqual(['route.tsx'])
+      expect(grantCallSites(directory, closure, storage, readModule)).toEqual([])
+      expect(readModule(source, 'route.tsx', { ...navigate, callee: 'absent' })).toBe(false)
+      await writeFile(file, 'export const view = <View />; // useRouteHandoff()')
+      expect(grantCallSites(directory, closure, navigate, readModule)).toEqual([])
+      await writeFile(file, "import storage from '@react-native-async-storage/async-storage'")
+      expect(grantCallSites(directory, closure, storage, readModule)).toEqual(['route.tsx'])
+      expect(grantCallSites(directory, closure, navigate, readModule)).toEqual([])
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
 
   it('counts a call and not an import that never calls it', () => {
     expect(
@@ -127,7 +207,12 @@ describe('the call-site reader', () => {
       'native.media.read',
       'native.media.release'
     ])
-    for (const owned of ['haptics', 'screencastBinary', 'native.audio.start']) {
+    for (const owned of [
+      'haptics',
+      'screencastBinary',
+      'externalNavigation',
+      'native.audio.start'
+    ]) {
       expect(grants).not.toContain(owned)
     }
   })
@@ -150,10 +235,16 @@ describeClosure(
      */
     it.each(PAGE_GRANT_CALL_SITES.map((row) => [row.grants.join(' + '), row]))(
       'declares %s on every registered route whose own call sites reach it',
-      async (name, row) => {
+      async (_name, row) => {
         expect(
-          await grantsMissingForRow(mobileDir, MOBILE_WEB_PAGE_ROUTES, closureOf, row)
-        ).toEqual(KNOWN_UNDECLARED.get(name) ?? [])
+          await grantsMissingForRow(
+            mobileDir,
+            MOBILE_WEB_PAGE_ROUTES,
+            closureOf,
+            row,
+            readGrantModule
+          )
+        ).toEqual([])
       }
     )
 
@@ -168,17 +259,19 @@ describeClosure(
     it.each(PAGE_GRANT_CALL_SITES.map((row) => [row.grants.join(' + '), row]))(
       'reds the session route when it is registered without %s',
       async (_name, row) => {
-        const needed = grantsNeeded(mobileDir, await closureOf(SESSION))
+        const needed = grantsNeeded(mobileDir, await closureOf(SESSION), readGrantModule)
         expect(needed, 'the session route reaches this row').toEqual(
           expect.arrayContaining(row.grants)
         )
         const entry = (grants) => [{ pathname: SESSION, grants }]
         // Declaring everything it reaches passes, so each case is a rule and not a wall.
-        expect(await grantsMissingForRow(mobileDir, entry(needed), closureOf, row)).toEqual([])
+        expect(
+          await grantsMissingForRow(mobileDir, entry(needed), closureOf, row, readGrantModule)
+        ).toEqual([])
         const without = needed.filter((grant) => !row.grants.includes(grant))
-        expect(await grantsMissingForRow(mobileDir, entry(without), closureOf, row)).toEqual(
-          row.grants.map((grant) => `${SESSION} needs ${grant}`)
-        )
+        expect(
+          await grantsMissingForRow(mobileDir, entry(without), closureOf, row, readGrantModule)
+        ).toEqual(row.grants.map((grant) => `${SESSION} needs ${grant}`))
       }
     )
 
@@ -186,12 +279,12 @@ describeClosure(
       const closure = await closureOf(SESSION)
       // The precondition an assertion about a closure needs: the walk read a page, not nothing.
       expect(closure.local.length).toBeGreaterThan(250)
-      expect(grantsNeeded(mobileDir, closure)).toEqual(
+      expect(grantsNeeded(mobileDir, closure, readGrantModule)).toEqual(
         PAGE_GRANT_CALL_SITES.flatMap((row) => row.grants)
       )
       for (const row of PAGE_GRANT_CALL_SITES) {
         expect(
-          grantCallSites(mobileDir, closure, row).length,
+          grantCallSites(mobileDir, closure, row, readGrantModule).length,
           row.grants.join(' + ')
         ).toBeGreaterThan(0)
       }
@@ -203,10 +296,10 @@ describeClosure(
       const reaching = { reader: [], media: [] }
       for (const pathname of PAGE_ROUTE_MODULES.keys()) {
         const closure = await closureOf(pathname)
-        if (grantCallSites(mobileDir, closure, readerRow).length > 0) {
+        if (grantCallSites(mobileDir, closure, readerRow, readGrantModule).length > 0) {
           reaching.reader.push(pathname)
         }
-        if (grantCallSites(mobileDir, closure, mediaRow).length > 0) {
+        if (grantCallSites(mobileDir, closure, mediaRow, readGrantModule).length > 0) {
           reaching.media.push(pathname)
         }
       }

@@ -51,7 +51,7 @@ function realAdapter(
   events: ClaudeStructuredSessionEvent[] = [],
   cwd = process.cwd()
 ): ClaudeStructuredSessionAdapter {
-  return new ClaudeStructuredSessionAdapter({
+  const adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: command,
       options: { ...CLAUDE_STRUCTURED_BASE_OPTIONS, sessionId: providerSessionId },
@@ -59,13 +59,21 @@ function realAdapter(
       claudeConfigDir,
       providerSessionId,
       resumeLeafUuid: null,
-      resumed: false
+      resumesTranscript: false,
+      continuesChain: false
     }),
     onEvent: (event) => events.push(event),
     readProcessStartTime: async () => 1,
-    now: () => 2,
-    initTimeoutMs: 5_000
+    now: () => 2
   })
+  // These proofs read startup facts, which land after the session is published.
+  const acquire = adapter.acquire
+  adapter.acquire = async (input) => {
+    const acquisition = await acquire(input)
+    await adapter.drainStartup(input.identity.sessionId)
+    return acquisition
+  }
+  return adapter
 }
 
 function identity(providerSessionId: string): AgentSessionJournalIdentity {
@@ -297,16 +305,20 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI handshake', ()
   it('turns a real silent unauthenticated startup into sign-in guidance', async () => {
     const claudeConfigDir = await mkdtemp(join(tmpdir(), 'orca-claude-no-auth-'))
     const providerSessionId = randomUUID()
-    const adapter = realAdapter(providerSessionId, claudeConfigDir)
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = realAdapter(providerSessionId, claudeConfigDir, events)
 
     try {
-      await expect(
-        adapter.acquire({
-          identity: identity(providerSessionId),
-          fence: 1,
-          spawnToken: 'real-cli-no-auth'
-        })
-      ).rejects.toThrow(/not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s)
+      await adapter.acquire({
+        identity: identity(providerSessionId),
+        fence: 1,
+        spawnToken: 'real-cli-no-auth'
+      })
+      await adapter.drainObservedExits()
+      expect(events.find((event) => event.type === 'ended')).toMatchObject({
+        reason: expect.stringMatching(/not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s),
+        startupUnproven: true
+      })
     } finally {
       await adapter.closeAll()
       await rm(claudeConfigDir, { recursive: true, force: true })

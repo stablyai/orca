@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { BackHandler, Platform } from 'react-native'
+import { useCallback, useState } from 'react'
+import { useBackClaim } from '../navigation/use-back-claim'
 
 export type MobileFilePreviewBack = {
   /** Whether the screen is asking about an unsaved draft instead of leaving. */
@@ -23,17 +23,9 @@ export type MobileFilePreviewBack = {
  * (`b7c06900e2`) fixed that by giving the mapper hooks a dependency array, and the drawer render
  * check now holds it on WebKit as well as Chromium.
  *
- * Hardware back is registered natively only. React Native Web's `BackHandler.addEventListener`
- * logs "BackHandler is not supported on web and should not be used." and returns an inert
- * subscription, so on web this guard never armed regardless, and skipping it states the
- * degradation instead of hiding it. Android back inside the page therefore pops the native stack
- * without this prompt — the page's own Back control is where the prompt lives.
- *
- * Skipping it here does not keep that line off the console on its own: `mounted-bottom-drawer.tsx`
- * registered one of its own whenever a drawer was visible and interactive, so the prompt opening
- * put it there anyway. That registration is platform-gated now too, at the drawer, which is where
- * it belongs; the files render check holds both by asserting the line's absence after the prompt
- * is open.
+ * The claim runs on both platforms through one seam: the hardware key natively, and the shell's
+ * key inside the page. `leave` is the route handoff's own `back`, which asks the shell to pop the
+ * screen the page was pushed onto, so the prompt and what follows it mean the same thing on either.
  */
 export function useMobileFilePreviewBack(options: {
   hasUnsavedDraft: boolean
@@ -75,13 +67,7 @@ export function useMobileFilePreviewBack(options: {
     leave()
   }, [leave])
 
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      return
-    }
-    const subscription = BackHandler.addEventListener('hardwareBackPress', requestBack)
-    return () => subscription.remove()
-  }, [requestBack])
+  useBackClaim(requestBack)
 
   return { confirmingDiscard, requestBack, stay, discard }
 }

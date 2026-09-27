@@ -1,4 +1,11 @@
-import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -23,6 +30,23 @@ function copiedNames(files, entryName) {
 }
 
 describe('copyScriptWithLocalModules', () => {
+  it('preserves parent paths for modules shared with the runtime', () => {
+    const sourceDir = sourceTree({ 'runtime.ts': 'export const value = 42\n' })
+    mkdirSync(join(sourceDir, 'scripts'))
+    writeFileSync(
+      join(sourceDir, 'scripts', 'entry.mjs'),
+      "export { value } from '../runtime.ts'\n"
+    )
+    const destinationRoot = mkdtempSync(join(fixtureDir, 'dest-'))
+    copyScriptWithLocalModules(
+      join(sourceDir, 'scripts', 'entry.mjs'),
+      join(destinationRoot, 'scripts')
+    )
+    expect(readFileSync(join(destinationRoot, 'runtime.ts'), 'utf8')).toBe(
+      'export const value = 42\n'
+    )
+  })
+
   it('takes the entry script itself', () => {
     expect(copiedNames({ 'entry.mjs': 'export const a = 1\n' }, 'entry.mjs')).toEqual(['entry.mjs'])
   })

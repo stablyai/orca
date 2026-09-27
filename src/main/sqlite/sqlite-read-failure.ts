@@ -13,10 +13,10 @@ const SQLITE_CANTOPEN = 14
 const CONTENTION_MESSAGE = /SQLITE_(?:BUSY|LOCKED)|database (?:is )?(?:busy|locked)/i
 
 function primaryErrcode(error: unknown): number | null {
-  if (!error || typeof error !== 'object' || !('errcode' in error)) {
+  if (!error || typeof error !== 'object') {
     return null
   }
-  const errcode = (error as { errcode?: unknown }).errcode
+  const errcode = 'errcode' in error ? error.errcode : 'errno' in error ? error.errno : undefined
   return typeof errcode === 'number' && Number.isFinite(errcode) ? errcode & 0xff : null
 }
 

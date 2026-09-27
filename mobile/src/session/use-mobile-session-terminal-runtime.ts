@@ -76,6 +76,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const viewportResubscribeBudgetRef = useRef(new TerminalViewportResubscribeBudget())
   // Why: don't subscribe until the WebView fires web-ready — iOS may defer JS in hidden WebViews and init() messages would queue unrendered.
   const webReadyHandlesRef = useRef<Set<string>>(new Set())
+  // Why: a document's first subscribe waits for the viewport measure (see mobile-terminal-first-subscribe-viewport.ts).
+  const subscribedDocumentsRef = useRef<Set<string>>(new Set())
   const activeHandleRef = useRef<string | null>(null)
   const bufferedTerminalDraftState = useBufferedTerminalDrafts({ activeHandle, activeHandleRef })
   const reconcileBufferedDraftsRef = useRef(bufferedTerminalDraftState.reconcileTerminalTabs)
@@ -180,6 +182,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     terminalDiagnosticsRef,
     viewportResubscribeBudgetRef,
     webReadyHandlesRef,
+    subscribedDocumentsRef,
     activeHandleRef,
     activeSessionTabTypeRef,
     pendingActiveSessionTabIdRef,

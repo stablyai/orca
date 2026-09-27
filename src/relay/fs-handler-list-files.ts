@@ -23,14 +23,21 @@ import {
 } from '../shared/quick-open-filter'
 import {
   absorbPendingRipgrepSpawnError,
-  isRipgrepUnavailableAfterLaunchFailure,
+  classifyRipgrepLaunchFailure,
   isRipgrepUnavailableExit,
   isTransientRipgrepSpawnError,
   killSpawnedRipgrepProcess,
   RipgrepLaunchFailureError,
+  ripgrepMissingCwdError,
   RipgrepUnavailableError
 } from '../shared/ripgrep-process-availability'
 import { QuickOpenPathRanker } from '../shared/quick-open-path-search'
+import { buildRelayCommandEnv } from './relay-command-env'
+import {
+  pathRipgrepCommand,
+  resolveRelayRipgrepCommand,
+  retryRipgrepOnPathAfterLaunchFailure
+} from './relay-bundled-ripgrep'
 
 export const LIST_FILES_TIMEOUT_MS = 25_000
 
@@ -96,16 +103,19 @@ export function listFilesWithRg(
         let processErrorObserved = false
         let unavailableExitObserved = false
         let launchFailureCheck: Promise<void> | null = null
-        // --no-messages: permission-denied noise on the remote (e.g. .ssh,
-        // root-owned mounts) would otherwise flood stderr.
-        // cwd: rootPath — root-relative exclude globs like `!packages/app/**`
-        // are evaluated against rg's working directory, not the absolute
-        // search target. Without cwd, nested-worktree exclusions silently
-        // stop working.
+        // Suppress permission noise; cwd anchors root-relative exclusion globs.
+        const command = resolveRelayRipgrepCommand()
+        // Why not spawn a bare name when this is null: on Windows CreateProcessW searches the
+        // spawn cwd -- the user's repo -- before PATH. "No rg here" is what the chain handles.
+        if (command === null) {
+          throw new RipgrepUnavailableError()
+        }
+        const env = buildRelayCommandEnv()
         let child: ChildProcess
         try {
-          child = spawn('rg', ['--no-messages', ...args], {
+          child = spawn(command, ['--no-messages', ...args], {
             cwd: rootPath,
+            env,
             stdio: ['ignore', 'pipe', 'pipe'],
             windowsHide: true
           })
@@ -122,8 +132,8 @@ export function listFilesWithRg(
             clearTimeout(timer)
             timer = null
           }
-          child.stdout!.off('data', handleStdoutData)
-          child.stderr!.off('data', handleStderrData)
+          child.stdout?.off('data', handleStdoutData)
+          child.stderr?.off('data', handleStderrData)
           child.off('error', handleError)
           child.off('close', handleClose)
           absorbPendingRipgrepSpawnError(child, {
@@ -155,17 +165,28 @@ export function listFilesWithRg(
           if (launchFailureCheck) {
             return
           }
-          launchFailureCheck = isRipgrepUnavailableAfterLaunchFailure(rootPath).then(
-            (unavailable) => {
-              rejectPass(unavailable ? new RipgrepUnavailableError() : error)
+          launchFailureCheck = retryRipgrepOnPathAfterLaunchFailure(command, rootPath, error).then(
+            async (retryOnPath) => {
+              if (retryOnPath) {
+                // Why: runPass retries a launch failure once, and the retry resolves to PATH rg.
+                rejectPass(new RipgrepLaunchFailureError('bundled rg failed to start'))
+                return
+              }
+              // Why distinguish: RipgrepUnavailableError is what engages the git/readdir chain,
+              // and that chain cannot help when the root itself is gone.
+              rejectPass(
+                (await classifyRipgrepLaunchFailure(
+                  rootPath,
+                  [command, pathRipgrepCommand()],
+                  env
+                )) === 'cwd-unreachable'
+                  ? ripgrepMissingCwdError(rootPath)
+                  : new RipgrepUnavailableError()
+              )
             }
           )
         }
-        children.push({
-          child,
-          isDone: () => passDone,
-          reject: rejectPass
-        })
+        children.push({ child, isDone: () => passDone, reject: rejectPass })
 
         timer = setTimeout(() => {
           // Discard residual buffer on abnormal exit — a truncated byte
@@ -247,9 +268,9 @@ export function listFilesWithRg(
           }
         }
 
-        child.stdout!.setEncoding('utf-8')
-        child.stdout!.on('data', handleStdoutData)
-        child.stderr!.on('data', handleStderrData)
+        child.stdout?.setEncoding('utf-8')
+        child.stdout?.on('data', handleStdoutData)
+        child.stderr?.on('data', handleStderrData)
         child.once('error', handleError)
         child.once('close', handleClose)
       })

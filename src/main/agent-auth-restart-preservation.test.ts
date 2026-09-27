@@ -151,12 +151,14 @@ describe('preserveAgentAuthBeforeRestart', () => {
     )
   })
 
-  it('flushes the store when auth services are missing', async () => {
+  it('checkpoints admitted state without waiting for ongoing edits when auth services are missing', async () => {
     const flushPendingOrThrowAsync = vi.fn()
 
     await preserveAgentAuthBeforeRestart({ store: { flushPendingOrThrowAsync } })
 
-    expect(flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
+    expect(flushPendingOrThrowAsync).toHaveBeenCalledExactlyOnceWith({
+      drainToStableGeneration: false
+    })
   })
 
   it('logs secret-free warnings and does not throw when sync fails', async () => {

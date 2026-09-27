@@ -41,7 +41,7 @@ type RestartResumeHostBindings = {
 export function structuredAgentSessionRestartResumeSurfaces(
   host: RestartResumeHostBindings,
   now: () => number
-): Omit<StructuredAgentSessionRestartResumeSurfaces, 'publish'> {
+): StructuredAgentSessionRestartResumeSurfaces {
   return {
     revealSession: host.revealSession,
     hold: host.hold,

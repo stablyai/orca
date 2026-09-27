@@ -21,16 +21,13 @@ import {
 } from './mailbox-pointer-eligibility'
 import { resolveStructuredPointerOperation } from './structured-pointer-operation-id'
 import {
-  decideStructuredPointerDelivery,
   decideStructuredSessionPointerDelivery,
   retainReasonForDispatch,
-  retainWaitsForJournalEdge,
   structuredDispatchDelivered,
   type StructuredDispatchState,
   type StructuredPointerRetainReason,
   type StructuredSessionGateFacts
 } from './structured-session-pointer-delivery'
-import type { AgentSessionPtyWriteRefusal } from '../../../shared/agent-session-pty-write-admission'
 
 export type StructuredPointerTarget = {
   sessionId: string
@@ -40,8 +37,6 @@ export type StructuredPointerTarget = {
    * the operation-ledger budget — so a worker between dispatches is nudged, not dropped.
    */
   dispatchId: string | null
-  /** Present only for an adopted pane, where a PTY write was refused in favour of this owner. */
-  refusal?: AgentSessionPtyWriteRefusal
 }
 
 type ParkedPointerDelivery = {
@@ -73,10 +68,6 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   /**
    * The session a mailbox must be nudged through, or null when a live PTY can take the bytes.
-   *
-   * Two shapes reach here. A NATIVE-BORN worker carries no refusal: it never had a PTY. An
-   * ADOPTED one does — its pane is bound to a session a native owner holds, so the PTY write is
-   * refused and the refusal is what proves the owner is settled enough to redirect to.
    *
    * The mailbox is a `dispatch:` address or the worker's own bearer handle; the second is how
    * agents mail each other outside a dispatch, and no other lane can serve it.
@@ -194,15 +185,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   ): Promise<void> {
     const sessionId = target.sessionId
     const session = this.deps.host.readGateFacts(sessionId)
-    // `target.refusal` is the snapshot the resolver already admitted, so this branch re-runs the
-    // owner test on frozen input and can only agree with it. What actually fences an owner that
-    // changed since resolution is `expectedRuntimeFence` below: a handoff bumps the lease fence,
-    // so the send is refused rather than landing in a lease on its way back to a TUI. The branch
-    // stays because the policy module is the one place that decides, and a later caller may pass
-    // an owner it did not pre-screen.
-    const decision = target.refusal
-      ? decideStructuredPointerDelivery({ session, refusal: target.refusal })
-      : decideStructuredSessionPointerDelivery({ session })
+    const decision = decideStructuredSessionPointerDelivery({ session })
     if (!decision.deliver) {
       this.retain(mailboxHandle, sessionId, decision.retain, reservedTypes)
       return
@@ -255,7 +238,14 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     db.deleteStructuredPointerOperation(mailboxHandle)
   }
 
-  /** No `markAsUndelivered` is owed: rows are marked delivered only after an accepted dispatch. */
+  /**
+   * No `markAsUndelivered` is owed: rows are marked delivered only after an accepted dispatch.
+   *
+   * Every reason parks for the session's next journal edge. `unknown` may mean the nudge already
+   * sits in the provider's input queue, so an immediate retry can stack duplicate nudges;
+   * `session-not-attached` and `dispatch-rejected` park because nothing else notices the re-attach
+   * or the moved lease, and the dispatch preamble tells workers not to poll.
+   */
   private retain(
     mailboxHandle: string,
     sessionId: string,
@@ -263,8 +253,6 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     reservedTypes: ReadonlySet<string> | undefined
   ): void {
     this.deps.onRetain?.({ mailboxHandle, sessionId, reason })
-    if (retainWaitsForJournalEdge(reason)) {
-      this.parkedUntilJournalEdge.set(mailboxHandle, { sessionId, reservedTypes })
-    }
+    this.parkedUntilJournalEdge.set(mailboxHandle, { sessionId, reservedTypes })
   }
 }

@@ -7,7 +7,6 @@ import { parseAntigravitySessionContent } from './session-scanner-antigravity-pa
 import { isAntigravityTranscriptPath } from './session-scanner-antigravity-paths'
 import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
-import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
 import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
@@ -15,8 +14,18 @@ import { parseCursorSessionContent } from './session-scanner-cursor-parser'
 import { parseHermesSessionContent } from './session-scanner-hermes-parser'
 import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
+import {
+  ompParser,
+  openClawParser,
+  parseMuseRemoteContent,
+  piParser,
+  primeAgentParser,
+  remoteOmpSessionsSegments,
+  remotePathSegments,
+  remotePiSessionsSegments,
+  remotePrimeAgentSessionsSegments
+} from './remote-session-scanner-source-parsers'
 import type { FileWithMtime } from './session-scanner-types'
-import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexedTitleReader } from './remote-session-scanner-codex-index'
 import { remoteClineSource } from './remote-session-scanner-cline-source'
 import { remoteDevinSource } from './remote-session-scanner-devin-source'
@@ -105,6 +114,16 @@ export function remoteSessionSources(
       hostPlatform,
       remotePrimeAgentSessionsSegments(),
       primeAgentParser
+    ),
+    jsonlSource(
+      'muse',
+      remoteHome,
+      hostPlatform,
+      ['.local', 'share', 'muse', 'sessions'],
+      parseMuseRemoteContent,
+      // Why: each session dir holds session.jsonl plus .log/.sqlite3 sidecars;
+      // match only the transcript (same predicate as local discovery).
+      (path) => remotePathSegments(path).at(-1) === 'session.jsonl'
     ),
     jsonlSource(
       'droid',
@@ -259,63 +278,4 @@ function parserOptions(context: RemoteScannerContext): RemoteParserOptions {
     executionHostId: context.executionHostId,
     executionHostPlatform: context.hostPlatform.os
   }
-}
-
-function piParser(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('pi', file, content, platform, options, signal)
-}
-
-function ompParser(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('omp', file, content, platform, options, signal)
-}
-
-function primeAgentParser(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('prime-agent', file, content, platform, options, signal)
-}
-
-function openClawParser(
-  file: FileWithMtime,
-  content: RemoteSessionContent,
-  platform: NodeJS.Platform,
-  options: RemoteParserOptions,
-  signal?: AbortSignal
-): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('openclaw', file, content, platform, options, signal)
-}
-
-function remotePathSegments(path: string): string[] {
-  return path.replace(/\\/g, '/').split('/').filter(Boolean)
-}
-
-function remotePiSessionsSegments(): string[] {
-  return normalizeAgentSessionsDir('/.pi/agent/sessions', '.pi').split('/').filter(Boolean)
-}
-
-function remoteOmpSessionsSegments(): string[] {
-  return normalizeAgentSessionsDir('/.omp/agent/sessions', '.omp').split('/').filter(Boolean)
-}
-
-// Why: remote roots are posix regardless of the client platform, so these stay literal
-// rather than round-tripping through a local-platform path join that would emit
-// backslashes on a Windows client and collapse into a single bogus segment.
-function remotePrimeAgentSessionsSegments(): string[] {
-  return ['.prime', 'agent', 'sessions']
 }

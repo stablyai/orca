@@ -14,18 +14,20 @@ export const ORCHESTRATION_RUN_METHODS = [
   defineMethod({
     name: 'orchestration.runCreate',
     params: RunCreateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
-      const paneKey = resolveOrchestrationCaller(runtime, {
+    handler: (params, { orchestrationCompatibilityEvidence, orchestrationCaller, runtime }) => {
+      const caller = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
         callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller,
         requireStablePane: true
       })
       const db = runtime.getOrchestrationDb()
-      const priorRun = db.getCurrentRunForPane(paneKey)
+      const priorRun = db.getCurrentRunForCoordinator(caller)
       const run = db.createRun({
         objective: params.objective,
-        coordinatorHandle: params.from,
-        coordinatorPaneKey: paneKey
+        coordinatorHandle: caller.terminalHandle,
+        coordinatorPaneKey: caller.paneKey,
+        coordinatorOrcaSessionId: caller.orcaSessionId
       })
       runtime.cancelMessageWaiters(params.from)
       if (priorRun) {
@@ -43,19 +45,22 @@ export const ORCHESTRATION_RUN_METHODS = [
         runtime,
         legacyCoordinatorAuthority,
         orchestrationCompatibilityEvidence,
-        orchestrationCompatibilityCallerAuthority: callerAuthority
+        orchestrationCompatibilityCallerAuthority: callerAuthority,
+        orchestrationCaller
       }
     ) => {
-      const paneKey = resolveOrchestrationCaller(runtime, {
+      const caller = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
         callerEvidence: orchestrationCompatibilityEvidence,
         callerAuthority,
+        callerSession: orchestrationCaller,
         requireStablePane: true,
         evidenceAssertedByCaller: true
       })
       if (
         params.takeoverLegacy &&
-        (callerAuthority?.terminalHandle !== params.from || callerAuthority.paneKey !== paneKey)
+        (callerAuthority?.terminalHandle !== params.from ||
+          callerAuthority.paneKey !== caller.paneKey)
       ) {
         throw new OrchestrationError(
           'legacy_read_only',
@@ -65,11 +70,12 @@ export const ORCHESTRATION_RUN_METHODS = [
       }
       assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
       const db = runtime.getOrchestrationDb()
-      const priorRun = db.getCurrentRunForPane(paneKey)
+      const priorRun = db.getCurrentRunForCoordinator(caller)
       const run = db.bindRun({
         runId: params.id,
-        coordinatorHandle: params.from,
-        coordinatorPaneKey: paneKey,
+        coordinatorHandle: caller.terminalHandle,
+        coordinatorPaneKey: caller.paneKey,
+        coordinatorOrcaSessionId: caller.orcaSessionId,
         takeoverLegacy: params.takeoverLegacy,
         legacyCoordinatorAuthority
       })
@@ -90,13 +96,14 @@ export const ORCHESTRATION_RUN_METHODS = [
   defineMethod({
     name: 'orchestration.runCurrent',
     params: RunCurrentParams,
-    handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
-      const paneKey = resolveOrchestrationCaller(runtime, {
+    handler: (params, { orchestrationCompatibilityEvidence, orchestrationCaller, runtime }) => {
+      const caller = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
         callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller,
         requireStablePane: true
       })
-      const run = runtime.getOrchestrationDb().getCurrentRunForPane(paneKey)
+      const run = runtime.getOrchestrationDb().getCurrentRunForCoordinator(caller)
       return { run: run ? exposeRun(run) : null }
     }
   }),

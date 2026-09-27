@@ -127,29 +127,27 @@ afterEach(async () => {
 })
 
 describe('recovery exits', () => {
-  it('keeps an ownerless unproven acquisition in manual recovery across restart', async () => {
+  it('releases an ownerless unproven acquisition, so the next start goes ahead', async () => {
     acquire.mockRejectedValueOnce(new Error('simulated crash before identity commit'))
     await expect(host.attach(CALLER, hostTestAttachParams(null))).rejects.toThrow(
       'agent_session_acquisition_exit_unproven'
     )
+    // No owner was recorded, and the adapter closed the stdio of anything it spawned.
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'reserved',
-      handoffStage: 'manual-recovery',
+      claimStatus: 'released',
+      handoffStage: null,
       handoffOperationId: null,
       ownerProcess: null,
-      runtimeFence: 1,
-      reservedSpawnToken: 'spawn-a'
+      runtimeFence: 2,
+      reservedSpawnToken: null,
+      deathEvidence: null
     })
 
     await reopenStore()
     openHost({ mintSpawnToken: () => 'spawn-b' })
 
-    const refused = await host.attach(CALLER, hostTestAttachParams(1))
-    expect(refused).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_ownership_unknown' }
-    })
-    expect(acquire).toHaveBeenCalledOnce()
+    expect(await host.attach(CALLER, hostTestAttachParams(2))).toMatchObject({ ok: true })
+    expect(acquire).toHaveBeenCalledTimes(2)
   })
 
   it('releases an unproven acquisition whose owner later dies, without replaying it as a handoff', async () => {

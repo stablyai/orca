@@ -4,6 +4,7 @@ import type { DiffSource, OpenFile } from '../types/open-file'
 import { buildDiffEditorFileId, withDiffContentReloadRequest } from '../file-ids/editor-file-ids'
 import { resolveDiffRuntimeEnvironmentId } from '../git/diff-runtime-owner'
 import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
+import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import {
   getReplaceablePreviewFileId,
   openWorkspaceEditorItem,
@@ -16,7 +17,7 @@ export function createOpenUnstagedDiff(
 ): Pick<EditorSlice, 'openDiff'> {
   return {
     openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
-      const isPreview = options?.preview ?? false
+      const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
       let editorItemTargetGroupId = options?.targetGroupId
       let editorItemFileId = ''
       set((s) => {

@@ -20,7 +20,6 @@ function reserveRequest(): AgentSessionReserveRequest {
     },
     provider: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/accounts/created' },
-    runtimeKind: 'native',
     expectedFence: null,
     spawnToken: 'spawn-created',
     claimKeyId: 'key-1',

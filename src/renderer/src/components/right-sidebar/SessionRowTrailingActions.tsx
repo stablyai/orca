@@ -88,7 +88,7 @@ export function SessionRowTrailingActions({
   onOpenCwd?: () => void
   // Null when Delete is offered; otherwise the tooltip explaining why it isn't.
   deleteBlockedReason: string | null
-  onRequestDelete: () => void
+  onRequestDelete?: () => void
 }) {
   const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo)
 

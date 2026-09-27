@@ -338,7 +338,8 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
       fetchSshMainModelReattachSnapshot,
       shouldApplyStructuralPayload,
       coldRestoreStartup,
-      reattachPayloadApplied: !shouldApplyStructuralPayload
+      reattachPayloadApplied: !shouldApplyStructuralPayload,
+      skippedAltFrameCaptureCols: null
     }
     const { applyReattachPayload, fitAfterReattachRestore } = createReattachPayloadHandlers(
       session,

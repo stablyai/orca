@@ -271,6 +271,31 @@ describe('resolveTerminalTabStripDropTarget', () => {
 })
 
 describe('detachTerminalPaneToTab', () => {
+  it.each([LEAF_1, LEAF_2])('moves chat mode only with its owning leaf %s', (chatLeafId) => {
+    const store = createStore({ ...splitLayout(), chatLeafId })
+    detachTerminalPaneToTab({
+      getStore: () => store,
+      manager: {
+        getPanes: () => [{ id: 1 }, { id: 2 }],
+        getLeafId: () => LEAF_2,
+        detachPaneForExternalMove: () => true
+      },
+      persistLayoutSnapshot: vi.fn(),
+      sourcePaneId: 2,
+      sourceTabId: SOURCE_TAB_ID,
+      targetGroupId: TARGET_GROUP_ID,
+      worktreeId: WORKTREE_ID
+    })
+    const options = vi.mocked(store.createTab).mock.calls[0]?.[3]
+    expect(options?.viewMode ?? 'terminal').toBe(chatLeafId === LEAF_2 ? 'chat' : 'terminal')
+    expect(store.terminalLayoutsByTabId['tab-detached']?.chatLeafId).toBe(
+      chatLeafId === LEAF_2 ? LEAF_2 : undefined
+    )
+    expect(store.terminalLayoutsByTabId[SOURCE_TAB_ID]?.chatLeafId).toBe(
+      chatLeafId === LEAF_1 ? LEAF_1 : undefined
+    )
+  })
+
   it('creates a new terminal tab with the detached leaf layout and PTY id', () => {
     const store = createStore()
     const manager = {
@@ -330,7 +355,7 @@ describe('detachTerminalPaneToTab', () => {
       targetTabId: 'tab-detached'
     })
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-detached')
-    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', WORKTREE_ID)
     expect(persistLayoutSnapshot).toHaveBeenCalled()
   })
 

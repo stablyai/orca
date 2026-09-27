@@ -13,6 +13,7 @@ import {
   useAiVaultSessionRefresh
 } from './ai-vault-session-refresh'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT, type AiVaultSessionLimit } from './ai-vault-session-limit'
+import { withNonSecureContextCrypto } from '@/lib/non-secure-context-crypto-stub'
 
 const EMPTY_RESULT: AiVaultListResult = {
   sessions: [],
@@ -799,5 +800,30 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
     await flushMicrotasks()
 
     expect(listSessionsMock.mock.calls.length).toBe(callsWhileHealthy)
+  })
+})
+
+// Regression for #18096: over plain HTTP the browser hides crypto.randomUUID, so minting
+// the request token with a raw call threw during render and the panel showed "The right
+// sidebar hit an error". The fallback must still be a well-formed v4 UUID.
+describe('useAiVaultSessionRefresh in a non-secure context', () => {
+  it('mints a request token when crypto.randomUUID is unavailable', async () => {
+    await withNonSecureContextCrypto(async () => {
+      await renderHook()
+      await flushMicrotasks()
+
+      expect(lastCallArgs()).toMatchObject({
+        requestToken: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+        )
+      })
+    })
+  })
+
+  // Guards the stub itself: an own-property stub of randomUUID is unrestorable, so a
+  // leaky teardown would silently strip the real method from every later test in the file.
+  it('leaves the real crypto.randomUUID in place afterwards', () => {
+    // oxlint-disable-next-line no-restricted-properties -- asserting the restore this case exists for
+    expect(typeof globalThis.crypto.randomUUID).toBe('function')
   })
 })

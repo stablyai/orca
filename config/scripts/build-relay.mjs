@@ -24,6 +24,7 @@ import {
   RELAY_BUILD_PLATFORMS,
   RELAY_VERSION_FILENAME,
   RELAY_WINDOWS_PROCESS_TREE_FILENAME,
+  RELAY_OPENCODE_SQLITE_READER_FILENAME,
   relayOptionalArtifactFilenames,
   isWindowsRelayPlatform,
   relayArtifactFilenames
@@ -35,6 +36,13 @@ const ROOT = join(__dirname, '..', '..')
 const RELAY_ENTRY = join(ROOT, 'src', 'relay', 'relay.ts')
 const WATCHER_ENTRY = join(ROOT, 'src', 'main', 'ipc', 'parcel-watcher-process-entry.ts')
 const AI_VAULT_SERVICE_ENTRY = join(ROOT, 'src', 'relay', 'ai-vault-service-entry.ts')
+const OPENCODE_SQLITE_READER_ENTRY = join(
+  ROOT,
+  'src',
+  'main',
+  'ai-vault',
+  'session-scanner-opencode-sqlite-process-entry.ts'
+)
 const WSL_TRANSCRIPT_FS_PROCESS_ENTRY = join(
   ROOT,
   'src',
@@ -178,6 +186,19 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     define: {
       'process.env.NODE_ENV': '"production"'
     }
+  })
+
+  await build({
+    entryPoints: [OPENCODE_SQLITE_READER_ENTRY],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, RELAY_OPENCODE_SQLITE_READER_FILENAME),
+    external: ['electron', 'bun:sqlite'],
+    sourcemap: false,
+    minify: true,
+    define: { 'process.env.NODE_ENV': '"production"' }
   })
 
   // Why beside the service: the spawn resolves this child next to its own

@@ -27,18 +27,37 @@ import { useShellSwitchDecision } from './shell-switch-decision'
  * arrives as two.
  */
 export default function MobileWebPageCatchAllScreen() {
-  const params = useLocalSearchParams<{
-    hostId?: string | string[]
-    page?: string | string[]
-  }>()
+  const params = useLocalSearchParams<Record<string, string | string[]>>()
   const hostId = firstParam(params.hostId)
   const segments = Array.isArray(params.page) ? params.page : params.page ? [params.page] : []
   const refusal = <PageRouteUnavailableScreen hostId={hostId} />
 
+  /**
+   * The query, carried to the page the way every named switch carries its own.
+   *
+   * `useLocalSearchParams` merges this route's params into the search params, so everything that
+   * is not one of the two segments the pathname above is built from is the deep link's query —
+   * which is the only way this switch can find it, having no screen to name the keys of. Dropped,
+   * `/h/x/session/y?tab=files` opens the page on the session with no tab.
+   *
+   * `firstParam` per key, because `init.route.params` is one value per name: a repeated key would
+   * otherwise cross as `a,b`. An empty value is kept rather than dropped — a named switch drops
+   * its own because it knows what its screen makes of one, and this switch knows no screen.
+   *
+   * `#` is dropped with them: expo-router parks the URL fragment under that key before it reads
+   * the search string, and a fragment is not a query — the route the page is given carries none.
+   */
+  const query = Object.fromEntries(
+    Object.entries(params)
+      .filter(([key]) => key !== 'hostId' && key !== 'page' && key !== '#')
+      .map(([key, value]) => [key, firstParam(value)])
+  )
+
   const route =
     hostId && segments.length > 0
       ? shellScreenRoute({
-          pathname: `/h/${encodeURIComponent(hostId)}/${segments.map(encodeURIComponent).join('/')}`
+          pathname: `/h/${encodeURIComponent(hostId)}/${segments.map(encodeURIComponent).join('/')}`,
+          ...(Object.keys(query).length === 0 ? {} : { params: query })
         })
       : null
 

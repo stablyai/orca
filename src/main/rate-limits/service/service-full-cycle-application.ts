@@ -1,5 +1,6 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
+import { settleSiblingProviderResult } from './service-sibling-provider-result'
 import type { ProviderRateLimits } from './service-types'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
@@ -34,7 +35,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      cursorResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -191,25 +193,29 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const grokResult = await grokResultPromise
+    const [grokSettled, cursorSettled] = await Promise.all([grokResultPromise, cursorResultPromise])
     if (signal.aborted) {
       return
     }
-    const grok =
-      grokResult.status === 'fulfilled'
-        ? grokResult.value
-        : ({
-            provider: 'grok',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
+    const grok = settleSiblingProviderResult('grok', grokSettled)
+    const cursor = settleSiblingProviderResult('cursor', cursorSettled)
+    // Why: the stale policy keeps a recent snapshot through a failed refresh, but
+    // a snapshot belonging to a different Cursor account must not survive the
+    // switch — the Accounts pane would name the new account beside the old
+    // account's figures. Only a known-and-changed identity clears it, so an
+    // errored refresh that reports no account still keeps its own last reading.
+    const previousCursorAccount = previousState.cursor?.usageMetadata?.authProvenance
+    const cursorAccount = cursor.usageMetadata?.authProvenance
+    const cursorAccountChanged =
+      previousCursorAccount !== undefined &&
+      cursorAccount !== undefined &&
+      previousCursorAccount !== cursorAccount
     this.trackActiveFailureStreak('grok', grok)
+    this.trackActiveFailureStreak('cursor', cursor)
     this.updateState({
       ...this.state,
-      grok: this.applyStalePolicy(grok, previousState.grok)
+      grok: this.applyStalePolicy(grok, previousState.grok),
+      cursor: cursorAccountChanged ? cursor : this.applyStalePolicy(cursor, previousState.cursor)
     })
   }
 }

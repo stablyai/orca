@@ -33,7 +33,12 @@ const EXPECTED_EVENTS = FILE_COUNT * EVENTS_PER_FILE
 const TOKENS_PER_EVENT = 200
 
 const WORKTREES: UsageScanWorktreeRef[] = [
-  { repoId: 'repo-1', worktreeId: 'wt-1', path: '/tmp/orca-usage-oracle-project', displayName: 'demo' }
+  {
+    repoId: 'repo-1',
+    worktreeId: 'wt-1',
+    path: '/tmp/orca-usage-oracle-project',
+    displayName: 'demo'
+  }
 ]
 
 let corpusRoot = ''

@@ -179,3 +179,56 @@ describe('selectStructuredAgentTurnActivity', () => {
     expect(selectStructuredAgentTurnActivity([turnStart, diagnostic], null)).toBeNull()
   })
 })
+
+describe('selectStructuredAgentTurnActivity — which agent it answers for', () => {
+  /** A row a subagent produced, which shares the session's journal. */
+  function childItem(sequence: number, body: AgentJournalItemBody): AgentJournalRenderItem {
+    return { ...item(sequence, body), agentId: 'task-1', producerKind: 'agent' }
+  }
+
+  const childRunningBash = childItem(2, {
+    kind: 'tool-call',
+    name: 'shell',
+    input: { command: 'pnpm test' },
+    state: 'running'
+  })
+
+  it("does not let a child's tool label suppress the provider's line for the parent", () => {
+    // The provider line is the SESSION'S OWN; a child running a tool of the same
+    // name must not make it read as a repeat and blank the indicator.
+    expect(
+      selectStructuredAgentTurnActivity([turnStart, childRunningBash], 'turn-1', {
+        turnId: 'turn-1',
+        text: 'pnpm test'
+      })
+    ).toEqual({ kind: 'description', text: 'pnpm test' })
+  })
+
+  it("does not let a child's tool label suppress the parent's own status line", () => {
+    expect(
+      selectStructuredAgentTurnActivity(
+        [turnStart, childRunningBash, item(3, { kind: 'status', text: 'pnpm test' })],
+        'turn-1'
+      )
+    ).toEqual({ kind: 'description', text: 'pnpm test' })
+  })
+
+  it("still suppresses a line repeating the session's OWN running tool", () => {
+    // The scoping must not disable the de-duplication it was narrowing.
+    expect(
+      selectStructuredAgentTurnActivity(
+        [
+          turnStart,
+          item(2, {
+            kind: 'tool-call',
+            name: 'shell',
+            input: { command: 'pnpm test' },
+            state: 'running'
+          })
+        ],
+        'turn-1',
+        { turnId: 'turn-1', text: 'pnpm test' }
+      )
+    ).toBeNull()
+  })
+})

@@ -9,6 +9,10 @@ export function getStatusPluginFactorySource(options: {
   expectedAgent?: 'opencode' | 'opencode2'
 }): string[] {
   const expectedAgent = options.expectedAgent ?? (options.emitNextEvents ? 'opencode2' : 'opencode')
+  // Why: opencode and opencode2 share one config dir, so both plugin files load in
+  // either binary. Distinct ids keep the loader from reporting a duplicate-id
+  // collision as an 'orca-opencode-status' plugin failure.
+  const pluginID = expectedAgent === 'opencode2' ? 'orca-opencode2-status' : 'orca-opencode-status'
   return [
     ...(options.emitNextEvents ? getOpenCode2EventNormalizationSource() : []),
     '// Why: accept the factory argument as an optional opaque parameter instead',
@@ -285,7 +289,7 @@ export function getStatusPluginFactorySource(options: {
     '// export an object with server()"). `setup()` does not satisfy it. Keep the named',
     '// export so the factory-based loader still finds the same instance.',
     'export default {',
-    '  id: "orca-opencode-status",',
+    `  id: "${pluginID}",`,
     '  server: OrcaOpenCodeStatusPlugin,',
     ...(options.emitNextEvents ? ['  setup: setupOpenCode2Status,'] : []),
     '};',

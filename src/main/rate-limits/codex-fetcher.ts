@@ -5,7 +5,7 @@ import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-lo
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   CODEX_DISABLE_PLUGINS_ARGS,
-  CODEX_RATE_LIMIT_APP_SERVER_ARGS
+  CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
 } from '../codex-cli/codex-read-only-app-server-args'
 import { resolveCodexCommand } from '../codex-cli/command'
 // Why: import from the shared module, not the codex-cli re-export, so a test that
@@ -104,7 +104,7 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }
-  const codexArgs = [...CODEX_RATE_LIMIT_APP_SERVER_ARGS]
+  const codexArgs = [...CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS]
   const wslCodex = options?.codexHomePath
     ? buildWslCodexCommand(options.codexHomePath, codexArgs, true)
     : null

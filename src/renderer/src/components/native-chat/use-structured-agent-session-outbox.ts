@@ -16,9 +16,10 @@ import {
   readMountedStructuredAgentSessionOutbox
 } from './structured-agent-session-outbox-dispatch'
 import { getStructuredAgentLaunchPromptDispatch } from '@/lib/structured-agent-session-launch-prompt'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function structuredSessionOperationId(): string {
-  return createStructuredAgentSessionOperationId(() => crypto.randomUUID())
+  return createStructuredAgentSessionOperationId(createBrowserUuid)
 }
 
 const UNCONFIRMED_PROBE_BASE_DELAY_MS = 1_000

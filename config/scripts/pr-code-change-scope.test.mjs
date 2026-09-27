@@ -129,6 +129,9 @@ describe('per-job path classification', () => {
     expectClassification(['src/shared/git-binary-compatibility.test.ts'], {
       git_compatibility: true
     })
+    expectClassification(['.github/actions/prepare-git-compatibility/action.yml'], {
+      git_compatibility: true
+    })
   })
 
   it('runs the Codex index-heal contract only when the heal or its transport changes', () => {
@@ -195,6 +198,7 @@ describe('per-job path classification', () => {
 
   it('runs Linux packaging when an artifact contract changes', () => {
     for (const file of [
+      '.github/actions/prepare-linux-package-fixture/action.yml',
       'config/docker/cli-launch-contract/Dockerfile',
       'config/docker/cli-launch-contract/run-cli-case.sh',
       'config/docker/headless-pairing/Dockerfile',
@@ -205,6 +209,29 @@ describe('per-job path classification', () => {
       'config/scripts/static-appimage-package-contract.cjs'
     ]) {
       expectClassification([file], { package: true })
+    }
+  })
+
+  it('runs Linux packaging for the daemon shutdown descendant oracle and its production paths', () => {
+    for (const file of [
+      'config/docker/daemon-shutdown-descendants/Dockerfile',
+      'config/docker/daemon-shutdown-descendants/bundle-entry.ts',
+      'config/docker/daemon-shutdown-descendants/fixture.cjs',
+      'config/docker/daemon-shutdown-descendants/run-case.sh',
+      'config/scripts/run-daemon-shutdown-descendants-docker.mjs'
+    ]) {
+      expectClassification([file], { package: true })
+    }
+    for (const file of [
+      'src/main/daemon/terminal-host.ts',
+      'src/main/daemon/terminal-session-teardown.ts',
+      'src/main/daemon/terminal-host-session-shutdown.ts',
+      'src/main/daemon/terminal-descendant-shutdown.ts',
+      'src/main/pty-descendant-termination.ts',
+      'src/main/pty-descendant-exit-verification.ts',
+      'src/main/pty-process-table-parser.ts'
+    ]) {
+      expectClassification([file], { package: true, package_windows: true })
     }
   })
 
@@ -277,7 +304,7 @@ describe('per-job path classification', () => {
   })
 
   it('needs no package.json prefix, because package.json already forces every job', () => {
-    // build:mobile-web:app is defined there, so the job has to run on an edit to it. A prefix
+    // build:mobile-web is defined there, so the job has to run on an edit to it. A prefix
     // that broad is not how: GLOBAL_FORCE_FILES already covers the file.
     expect(classifyPrJobs(['package.json']).mobile_web_app).toBe(true)
   })
@@ -468,6 +495,20 @@ describe('per-job path classification', () => {
 })
 
 describe('PR Checks skip wiring', () => {
+  it('runs the candidate daemon shutdown Docker oracle in the existing Linux package job', () => {
+    const steps = prWorkflow.jobs.package.steps
+    const install = steps.findIndex(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const oracle = steps.findIndex(
+      (step) => step.name === 'Verify Linux daemon shutdown descendant cleanup'
+    )
+    expect(install).toBeGreaterThan(-1)
+    expect(oracle).toBeGreaterThan(install)
+    expect(steps[oracle].run).toBe('node config/scripts/run-daemon-shutdown-descendants-docker.mjs')
+    expect(steps[oracle].env.ORCA_BACKGROUND_LAUNCH).toBe('1')
+  })
+
   it('classifies the PR range with a tested script and expands renames', () => {
     const classify = prWorkflow.jobs.code_paths.steps.find(
       (step) => step.name === 'Classify changed paths'
@@ -477,9 +518,12 @@ describe('PR Checks skip wiring', () => {
     expect(classify.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
     expect(classify.run).toContain('node config/scripts/pr-code-change-scope.mjs')
     expect(classify.run).toContain('tee -a "$GITHUB_OUTPUT"')
-    for (const jobName of ['should_run', 'native_cache_changed', ...expensiveJobs]) {
+    expect(prWorkflow.jobs.code_paths.outputs.should_run).toBe(
+      '${{ steps.filter.outputs.should_run }}'
+    )
+    for (const jobName of ['native_cache_changed', ...expensiveJobs]) {
       expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(
-        `\${{ steps.filter.outputs.${jobName} }}`
+        `\${{ steps.readiness.outputs.reused != 'true' && steps.filter.outputs.${jobName} }}`
       )
     }
   })
@@ -509,9 +553,16 @@ describe('PR Checks skip wiring', () => {
     expect(installStep.run).toContain('--frozen-lockfile')
   })
 
-  it('keeps the cheap root-directory guard on docs-only PRs', () => {
-    expect(prWorkflow.jobs.root_directory_guard.if).toBeUndefined()
-    expect(prWorkflow.jobs.root_directory_guard.needs).toBeUndefined()
+  it('keeps the root and README guards on docs-only PRs without another runner', () => {
+    const detector = prWorkflow.jobs.code_paths
+    expect(detector.if).toBeUndefined()
+    expect(detector.needs).toBeUndefined()
+    for (const name of ['Reject new root-level files and folders', 'Check README local links']) {
+      const step = detector.steps.find((candidate) => candidate.name === name)
+      expect(step).toBeDefined()
+      expect(step.if).toBeUndefined()
+    }
+    expect(prWorkflow.jobs.root_directory_guard).toBeUndefined()
   })
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {
@@ -550,12 +601,12 @@ describe('PR Checks skip wiring', () => {
     )
     expect(prWorkflow.jobs.verify.needs[0]).toBe('code_paths')
     expect(verifyStep.env.SHOULD_RUN).toBe('${{ needs.code_paths.outputs.should_run }}')
-    expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
+    expect(verifyStep.run).toContain('"$CODE_PATHS" != "success"')
     expect(verifyStep.run).toContain('# Require success when the PR has code-relevant changes')
     expect(verifyStep.run).toContain('expected skipped')
     expect(verifyStep.run).toContain('expected success')
     for (const job of prWorkflow.jobs.verify.needs) {
-      if (job === 'code_paths' || job === 'root_directory_guard') {
+      if (job === 'code_paths') {
         continue
       }
       const envVar = `${job.replaceAll('-', '_').toUpperCase()}_SHOULD_RUN`
